@@ -1,7 +1,7 @@
 import type { MouseEventHandler, ReactNode } from 'react'
 import type { AvailabilityState } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface PageHeaderProps {
   title: string
@@ -98,7 +98,7 @@ export function RouteStateNotice({ title, state, message, evidence, actionLabel 
         <strong>{title}</strong>
       </div>
       <p>{message}</p>
-      {evidence ? <code>{evidence}</code> : null}
+      {evidence ? <code className="aui-technical-detail">{presentableSignal(evidence)}</code> : null}
       {actionLabel ? <button className="aui-button" type="button" disabled>{actionLabel}</button> : null}
     </div>
   )
@@ -109,7 +109,7 @@ export function RouteBadge({ route, compact = false }: RouteBadgeProps) {
     <span className={compact ? 'aui-route-badge aui-route-badge-compact' : 'aui-route-badge'} aria-label={`${route.item.label} route badge`}>
       <StatusBadge state={route.state} />
       <PrivacyBadge privacy={route.item.privacyClass} />
-      {compact ? null : <EvidenceBadge label={route.providerLabel} />}
+
     </span>
   )
 }
@@ -137,7 +137,7 @@ export function AdminActionButton({
   )
 }
 
-export function CapabilityDrawer({ route, title = 'Capability details' }: CapabilityDrawerProps) {
+export function CapabilityDrawer({ route, title = 'Route details' }: CapabilityDrawerProps) {
   return (
     <details className="aui-capability-drawer">
       <summary>{title}</summary>
@@ -159,17 +159,16 @@ export function CapabilityDrawer({ route, title = 'Capability details' }: Capabi
           </div>
         </section>
         <section aria-label={`${route.item.label} capability blockers`}>
-          <h4>Capability evidence</h4>
+          <h4>Routing</h4>
           <dl>
             <div><dt>Routeable</dt><dd>{route.routeable ? 'yes' : 'no'}</dd></div>
             <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
-            <div><dt>Sources</dt><dd>{route.evidenceSources.join(', ') || 'none'}</dd></div>
-            <div><dt>Blockers</dt><dd>{route.blockers.join(', ') || 'none'}</dd></div>
+            <div><dt>Issues</dt><dd>{presentableSignal(route.blockers.join(', ') || 'none')}</dd></div>
           </dl>
         </section>
         <section aria-label={`${route.item.label} provider candidates`}>
-          <h4>Providers</h4>
+          <h4>Options</h4>
           {route.candidateProviders.length > 0 ? (
             <ul className="aui-provider-list">
               {route.candidateProviders.map((provider) => (
@@ -181,7 +180,7 @@ export function CapabilityDrawer({ route, title = 'Capability details' }: Capabi
               ))}
             </ul>
           ) : (
-            <p>No candidate provider was reported by the capability graph.</p>
+            <p>No alternate provider is available.</p>
           )}
         </section>
       </div>
@@ -214,7 +213,7 @@ export function StateSurface({ title, state, description, evidence, actionLabel 
   return (
     <section className="aui-state-surface" aria-live={state === 'loading' ? 'polite' : undefined}>
       <PageHeader
-        eyebrow="Backend state"
+        eyebrow="System state"
         title={title}
         description={description}
         badges={state === 'loading' || state === 'error'
@@ -243,11 +242,11 @@ function stateSurfaceNoticeState(state: StateSurfaceProps['state']): RouteNotice
 }
 
 function stateSurfaceMessage(state: StateSurfaceProps['state'], fallback: string): string {
-  if (state === 'loading') return 'Loading route evidence from AuroraClient.'
-  if (state === 'error') return 'AuroraClient error.'
-  if (state === 'offline') return 'Backend route evidence is offline.'
-  if (state === 'denied') return 'Permission denied by backend policy or Auth.'
-  if (state === 'privacy-blocked') return 'Privacy policy or native permission blocks this route.'
+  if (state === 'loading') return 'Loading route.'
+  if (state === 'error') return 'Aurora is unavailable.'
+  if (state === 'offline') return 'This route is offline.'
+  if (state === 'denied') return 'Permission is required for this route.'
+  if (state === 'privacy-blocked') return 'Privacy or native permission is required for this route.'
   return fallback
 }
 

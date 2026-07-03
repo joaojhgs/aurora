@@ -13,7 +13,7 @@ import type {
   JsonValue
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface ConfigEditorViewProps {
   client: AuroraClient
@@ -40,7 +40,7 @@ export async function buildConfigEditorModel(client: AuroraClient, route?: Route
       validationErrors: [],
       secretsRedacted: true,
       evidence: route.providerLabel,
-      error: route.blockers.join(', ') || route.explanation
+      error: presentableSignal(route.blockers.join(', ') || route.explanation)
     }
   }
 
@@ -200,18 +200,18 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
           <h1 id="config-editor-title"><Settings size={24} aria-hidden /> Configuration</h1>
           <p>Schema-backed values, redacted secrets, validation, diff preview, reload impact, rollback, and audit receipts.</p>
         </div>
-        <div className="aui-assistant-badges" aria-label="Config route evidence">
+        <div className="aui-assistant-badges" aria-label="Config route status">
           <StatusBadge state={route.state} />
           <PrivacyBadge privacy={route.item.privacyClass} />
-          <EvidenceBadge label={model.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
           <EvidenceBadge label={model.evidence} />
         </div>
       </header>
 
-      {model.state === 'loading' ? <ConfigNotice title="Loading config" text="Waiting for AuroraClient config responses." /> : null}
+      {model.state === 'loading' ? <ConfigNotice title="Loading config" text="Waiting for Aurora config responses." /> : null}
       {model.state === 'empty' ? <ConfigNotice title="No config fields" text="Config schema metadata returned no editable fields." /> : null}
       {model.state === 'denied' || model.state === 'unavailable' || model.state === 'error'
-        ? <ConfigNotice title="Config editor unavailable" text={model.error ?? route.explanation} />
+        ? <ConfigNotice title="Config editor unavailable" text={presentableSignal(model.error ?? route.explanation)} />
         : null}
       {model.validationErrors.length > 0 ? (
         <div className="aui-config-alert" role="alert">

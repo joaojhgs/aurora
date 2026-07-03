@@ -10,7 +10,7 @@ import type {
   ToolApprovalScope
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export type AdminPluginsLoadState =
   | 'loading'
@@ -115,8 +115,8 @@ export async function buildAdminPluginsSnapshot(
     return {
       ...loadingPluginsSnapshot,
       loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
-      warnings: route.blockers,
-      error: route.blockers.join(', ') || route.explanation,
+      warnings: route.blockers.map(presentableSignal),
+      error: presentableSignal(route.blockers.join(', ') || route.explanation),
       evidenceSource: route.providerLabel
     }
   }
@@ -141,7 +141,7 @@ export async function buildAdminPluginsSnapshot(
       error: toolsResponse && !toolsResponse.ok
         ? toolsResponse.error.message
         : warnings.join(' ') || 'Tooling catalog and registry methods are unavailable.',
-      evidenceSource: 'AuroraClient SDK error'
+      evidenceSource: 'Aurora request error'
     }
   }
 
@@ -167,7 +167,7 @@ export async function buildAdminPluginsSnapshot(
     actions: actionPreviews,
     warnings: allWarnings,
     error: allWarnings[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response'
   }
 }
 
@@ -203,16 +203,16 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
           <p className="aui-kicker">Admin</p>
           <h1 id="admin-plugins-title"><Plug size={24} aria-hidden /> Plugins, MCP, and tools</h1>
           <p>
-            Plugin, MCP, and aggregate tool inventory is rendered from AuroraClient. Reload, install, and sharing
+            Plugin, MCP, and aggregate tool inventory is rendered from Aurora. Reload, install, and sharing
             mutations stay AdminAction-gated and disabled when the backend contract is not advertised.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="Plugin admin backend evidence">
+        <div className="aui-admin-badges" aria-label="Plugin admin service status">
           {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
           <StatusBadge state={route.state} />
           <PrivacyBadge privacy={route.item.privacyClass} />
           <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
         </div>
       </header>
 
@@ -324,10 +324,10 @@ function PluginsStatusPanel({
   message: string | null
 }) {
   if (snapshot.loadState === 'loading') {
-    return <div className="aui-admin-notice" aria-live="polite"><RefreshCw size={18} aria-hidden />Loading Tooling catalog through AuroraClient.</div>
+    return <div className="aui-admin-notice" aria-live="polite"><RefreshCw size={18} aria-hidden />Loading Tooling catalog through Aurora.</div>
   }
   if (route.disabled) {
-    return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{route.blockers.join(', ') || route.explanation}</div>
+    return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{presentableSignal(route.blockers.join(', ') || route.explanation)}</div>
   }
   if (snapshot.loadState === 'empty') {
     return <div className="aui-admin-notice" role="status"><Plug size={18} aria-hidden />No Tooling catalog entries were returned.</div>
@@ -734,5 +734,5 @@ const loadingPluginsSnapshot: AdminPluginsSnapshot = {
   actions: [],
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }

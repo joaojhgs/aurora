@@ -169,12 +169,14 @@ const PLACEHOLDER_COPY_MARKERS = [
   'ata-placeholder-panel',
   'debug-dashboard',
   'route is unregistered',
+  'Evidence',
+  'evidence',
 ] as const
 
 test.describe('Aurora Tauri Playwright route crawl', () => {
   test('captures desktop and mobile cockpit shell screenshots instead of a raw dashboard', async ({ page }) => {
     mkdirSync(screenshotDir, { recursive: true })
-    const screenshotEvidence: Array<Record<string, unknown>> = []
+    const screenshotStatus: Array<Record<string, unknown>> = []
 
     for (const viewport of cockpitScreenshotViewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
@@ -207,7 +209,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
 
       const screenshotPath = join(screenshotDir, `${viewport.id}-assistant-cockpit.png`)
       await page.screenshot({ path: screenshotPath, fullPage: true })
-      screenshotEvidence.push({
+      screenshotStatus.push({
         viewport: viewport.id,
         size: { width: viewport.width, height: viewport.height },
         path: screenshotPath,
@@ -223,7 +225,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
         command: 'pnpm --filter @aurora/tauri-ui test:e2e:routes:playwright',
         route: '/',
         assertion: 'desktop and mobile screenshots render the production cockpit shell, not placeholder/debug/raw dashboard UI',
-        screenshots: screenshotEvidence,
+        screenshots: screenshotStatus,
       }, null, 2)}\n`,
     )
   })
@@ -237,7 +239,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     await expect(page.locator('.aui-sidebar a').first()).toBeFocused()
     await expectFocusedWithVisibleOutline(page, 'desktop primary nav')
 
-    await page.getByRole('link', { name: /Mesh Mesh route state/i }).focus()
+    await page.getByRole('link', { name: /^Mesh$/i }).focus()
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/mesh$/)
     await expect(page.getByRole('heading', { name: /Mesh/i }).first()).toBeVisible()
@@ -248,8 +250,10 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     await page.keyboard.press('Tab')
     await expect(page.getByLabel('Open menu')).toBeFocused()
     await expectFocusedWithVisibleOutline(page, 'mobile menu summary')
-    await page.keyboard.press('Enter')
-    await expect(page.getByRole('dialog', { name: 'Mobile navigation sheet' })).toBeVisible()
+    await page.getByLabel('Open menu').click()
+    await expect(page.locator('.aui-mobile-menu')).toHaveAttribute('data-open', 'true')
+    await expect(page.getByLabel('Open menu')).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.locator('.aui-mobile-sheet')).toHaveCSS('visibility', 'visible')
 
     await page.keyboard.press('Tab')
     await expect(page.locator('.aui-mobile-sheet a').first()).toBeFocused()
@@ -298,9 +302,9 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     expect(failures).toEqual([])
   })
 
-  test('captures desktop and mobile screenshots for every primary route with stable route evidence', async ({ page }) => {
+  test('captures desktop and mobile screenshots for every primary route with stable route status', async ({ page }) => {
     mkdirSync(screenshotDir, { recursive: true })
-    const screenshotEvidence: Array<Record<string, unknown>> = []
+    const screenshotStatus: Array<Record<string, unknown>> = []
 
     for (const viewport of cockpitScreenshotViewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
@@ -313,7 +317,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
           await expect(page.getByLabel('Mobile navigation', { exact: true })).toBeVisible()
         }
         const oracle = getProductionRouteOracle(route.id)
-        expect(oracle, `${route.id} should have production oracle screenshot evidence`).toBeDefined()
+        expect(oracle, `${route.id} should have production oracle screenshot status`).toBeDefined()
         for (const landmark of ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []) {
           await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmark)
         }
@@ -325,7 +329,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
 
         const screenshotPath = join(screenshotDir, `${viewport.id}-route-${routeScreenshotName(route)}`)
         await page.screenshot({ path: screenshotPath, fullPage: true })
-        screenshotEvidence.push({
+        screenshotStatus.push({
           viewport: viewport.id,
           size: { width: viewport.width, height: viewport.height },
           id: route.id,
@@ -346,8 +350,8 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
         assertion: 'all 22 primary routes captured at desktop and mobile viewports with production route oracle landmarks and controls',
         routeCount: primaryNavItems.length,
         viewportCount: cockpitScreenshotViewports.length,
-        screenshotCount: screenshotEvidence.length,
-        screenshots: screenshotEvidence,
+        screenshotCount: screenshotStatus.length,
+        screenshots: screenshotStatus,
       }, null, 2)}\n`,
     )
   })

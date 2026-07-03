@@ -224,9 +224,9 @@ export function RouteSheet({
         <RouteSheetDecision model={model} />
       </header>
 
-      {model.loadState === 'loading' ? <RouteSheetNotice icon="loading" message="Loading route policy from AuroraClient." /> : null}
+      {model.loadState === 'loading' ? <RouteSheetNotice icon="loading" message="Loading route policy from Aurora." /> : null}
       {model.loadState === 'error' ? (
-        <RouteSheetNotice icon="error" message={model.error ?? 'AuroraClient route policy evaluation failed.'} role="alert" />
+        <RouteSheetNotice icon="error" message={model.error ?? 'Aurora route policy evaluation failed.'} role="alert" />
       ) : null}
 
       {model.evaluation ? (
@@ -287,11 +287,11 @@ export function buildRouteSheetViewModel(input: {
 
 export function routeSheetErrorMessage(error: unknown): string {
   const auroraError = error as Partial<AuroraError>
-  if (auroraError.code === 'timeout') return 'AuroraClient timed out while loading route policy.'
+  if (auroraError.code === 'timeout') return 'Aurora timed out while loading route policy.'
   if (auroraError.code === 'auth' || auroraError.code === 'permission') return 'Route policy is unavailable because authentication or permissions failed.'
   if (auroraError.code === 'privacy_blocked') return 'Route policy is unavailable because backend privacy policy blocked the request.'
   if (error instanceof Error && error.message) return error.message
-  return 'AuroraClient route policy evaluation failed.'
+  return 'Aurora route policy evaluation failed.'
 }
 
 function RouteSheetDecision({ model }: { model: RouteSheetViewModel }) {
@@ -315,8 +315,8 @@ function RoutePreviewGrid({ evaluation, primaryReason }: { evaluation: RoutePoli
       <div><dt>Privacy class</dt><dd>{preview.privacyClass}</dd></div>
       <div><dt>Payload</dt><dd><code>{stringifyPreview(preview.payloadPreview)}</code></dd></div>
       <div><dt>Policy reason</dt><dd>{primaryReason}</dd></div>
-      <div><dt>Audit</dt><dd>{preview.auditReceiptTarget ?? 'audit receipt pending backend evidence'}</dd></div>
-      <div><dt>Secrets</dt><dd>{preview.secretsRedacted ? 'redacted by backend/SDK evidence' : 'redaction not reported'}</dd></div>
+      <div><dt>Audit</dt><dd>{preview.auditReceiptTarget ?? 'audit receipt pending service status'}</dd></div>
+      <div><dt>Secrets</dt><dd>{preview.secretsRedacted ? 'redacted by backend/Aurora status' : 'redaction not reported'}</dd></div>
     </dl>
   )
 }
@@ -403,7 +403,7 @@ export function routeSheetPolicySignals(
       state: consentBlocked ? 'blocked' : 'not-required',
       detail: consentBlocked
         ? 'Consent is missing and must be collected before this payload can leave the local node.'
-        : 'No missing consent blocker is present in backend route policy evidence.'
+        : 'No missing consent blocker is present in backend route policy status.'
     },
     {
       id: 'privacy-indicator',
@@ -411,13 +411,13 @@ export function routeSheetPolicySignals(
       state: privacyIndicatorBlocked ? 'blocked' : 'not-required',
       detail: privacyIndicatorBlocked
         ? 'The required privacy indicator has not been shown yet.'
-        : 'No missing privacy-indicator blocker is present in backend route policy evidence.'
+        : 'No missing privacy-indicator blocker is present in backend route policy status.'
     },
     {
       id: 'native-permission',
       label: 'Native permission',
       state: nativeBlocker ? 'blocked' : 'not-required',
-      detail: nativeBlocker?.message ?? 'No missing native platform permission is present in route policy evidence.'
+      detail: nativeBlocker?.message ?? 'No missing native platform permission is present in route policy status.'
     },
     {
       id: 'admin-action',
@@ -498,7 +498,7 @@ function routeSheetPrimaryReason(
   adminActionState: AdminActionRouteState
 ): string {
   if (error) return error
-  if (!evaluation) return 'Route policy has not returned backend evidence yet.'
+  if (!evaluation) return 'Route policy has not returned service status yet.'
   if (adminActionState === 'required') return 'AdminAction confirmation is required before this manage/admin-critical route can run.'
   if (adminActionState === 'drafted') return 'AdminAction draft exists but confirmation is still pending.'
   if (adminActionState === 'error') return 'AdminAction failed; retry or choose a different route.'

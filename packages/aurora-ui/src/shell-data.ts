@@ -161,7 +161,7 @@ export function snapshotFromGraph(
     nodeName: graph.localNodeName || 'Aurora node',
     localPeerId: graph.localPeerId,
     transportKind,
-    evidenceSource: transportKind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response',
+    evidenceSource: transportKind === 'mock' ? 'Demo transport' : 'Aurora service response',
     generatedAt: graph.generatedAt,
     secretsRedacted: graph.secretsRedacted,
     routeCount: routes.length,
@@ -193,12 +193,12 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     section.items.map((item) => ({
       item: navItemSnapshot(item),
       state: 'unsupported' as const,
-      explanation: 'Capability state could not be loaded from AuroraClient.',
-      providerLabel: 'No backend evidence',
+      explanation: 'Capability state could not be loaded from Aurora.',
+      providerLabel: 'Unavailable',
         blockers: ['sdk_error'],
-        repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+        repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
         candidateProviders: [],
-        evidenceSources: ['AuroraClient error'],
+        evidenceSources: ['Aurora service error'],
         selectorRequired: false,
         approvalRequired: false,
         routeable: false,
@@ -209,12 +209,12 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
   const assistantCancellationRoute: RouteAvailability = {
     item: navItemSnapshot(auroraAssistantCancellationItem),
     state: 'unsupported',
-    explanation: 'Capability state could not be loaded from AuroraClient.',
-    providerLabel: 'No backend evidence',
+    explanation: 'Capability state could not be loaded from Aurora.',
+    providerLabel: 'Unavailable',
     blockers: ['sdk_error'],
-    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
     candidateProviders: [],
-    evidenceSources: ['AuroraClient error'],
+    evidenceSources: ['Aurora service error'],
     selectorRequired: false,
     approvalRequired: false,
     routeable: false,
@@ -227,7 +227,7 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     loadState: 'error',
     nodeName: 'Aurora unavailable',
     transportKind,
-    evidenceSource: 'AuroraClient error',
+    evidenceSource: 'Aurora service error',
     routeCount: routes.length,
     blockedCount: routes.length,
     error: errorMessage(error),
@@ -275,7 +275,7 @@ function emptyAssistantVoiceRoutes(): AssistantVoiceRoutes {
 }
 
 function errorAssistantVoiceRoutes(): AssistantVoiceRoutes {
-  return unsupportedAssistantVoiceRoutes('AuroraClient error')
+  return unsupportedAssistantVoiceRoutes('Aurora service error')
 }
 
 function unsupportedAssistantVoiceRoutes(evidence: string): AssistantVoiceRoutes {
@@ -292,10 +292,10 @@ function unsupportedVoiceRoute(item: AuroraNavItem, evidence: string): RouteAvai
   return {
     item: navItemSnapshot(item),
     state: item.fallbackState,
-    explanation: 'Voice capability state could not be loaded from AuroraClient.',
+    explanation: 'Voice capability state could not be loaded from Aurora services.',
     providerLabel: `${item.expectedTask} pending`,
     blockers: ['sdk_error'],
-    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    repairActions: [repairAction('retry', 'Retry service request', '/', true, 'The shell needs a fresh Aurora service response.')],
     candidateProviders: [],
     evidenceSources: [evidence],
     selectorRequired: false,
@@ -346,7 +346,7 @@ function routeExplanation(state: AvailabilityState, explanation: CapabilityExpla
   if (state === 'degraded') return 'The route is partially usable with backend-reported limitations.'
   if (state === 'pending') return 'The route is waiting on pairing, approval, consent, or an in-flight backend correlation.'
   if (state === 'denied') return 'Backend policy denied this route for the current principal or peer.'
-  if (state === 'stale') return 'Provider evidence is stale and cannot be used for execution.'
+  if (state === 'stale') return 'Provider state is stale and cannot be used for execution.'
   if (state === 'privacy-blocked') return 'A selector, consent, privacy indicator, or approval is required before use.'
   return 'The route is unsupported in this backend or deployment mode.'
 }
@@ -460,7 +460,7 @@ function repairActionsFor(
   const repairText = (explanation.nextRepairAction ?? '').toLowerCase()
 
   if (blockerText.includes('auth') || blockerText.includes('permission') || explanation.requiredPermissions.length > 0) {
-    add(repairAction('authenticate', 'Authenticate', '/onboarding', Boolean(item.adminGated), 'Current principal or session lacks required backend permission evidence.'))
+    add(repairAction('authenticate', 'Authenticate', '/onboarding', Boolean(item.adminGated), 'Current principal or session lacks required backend permission state.'))
     add(repairAction('grant-permission', 'Grant permission', '/admin/access', !Boolean(item.adminGated), 'Required permissions must be granted through admin access controls.'))
   }
   if (blockerText.includes('peer') || blockerText.includes('pair') || blockerText.includes('stale')) {
@@ -473,7 +473,7 @@ function repairActionsFor(
     add(repairAction('configure-route', 'Configure route', '/mesh', false, 'A backend-accepted selector or route policy is required.'))
   }
   if (blockerText.includes('native') || item.capabilityModule === 'Native') {
-    add(repairAction('grant-native', 'Grant native permission', '/settings/native', false, 'Native manifest or platform permission evidence is missing.'))
+    add(repairAction('grant-native', 'Grant native permission', '/settings/native', false, 'Native manifest or platform permission state is missing.'))
   }
   if (item.id === 'plugins' || item.id === 'tools' || blockerText.includes('plugin')) {
     add(repairAction('install-plugin', 'Install plugin', '/admin/plugins', Boolean(item.adminGated), 'Plugin/tool catalog support must be installed and enabled.'))
@@ -482,7 +482,7 @@ function repairActionsFor(
     add(repairAction('inspect', 'Inspect blocker', item.href, true, explanation.nextRepairAction))
   }
   if (actions.length === 0) {
-    add(repairAction('wait', 'Await backend contract', item.href, true, `${item.expectedTask} owns this production wiring.`))
+    add(repairAction('wait', 'Await service contract', item.href, true, `${item.expectedTask} owns this production route.`))
   }
   return actions
 }

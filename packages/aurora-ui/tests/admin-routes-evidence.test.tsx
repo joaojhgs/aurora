@@ -1,14 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AuroraClient, MockAuroraTransport } from '@aurora/client'
+import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
 import { ConfigEditorView, buildConfigEditorModel } from '../src/config-editor-view'
 import { AdminContractsView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 import { buildShellSnapshot, type RouteAvailability } from '../src/shell-data'
 import { productionSurfaceContracts } from '../src/production-surface-contracts'
 
-describe('admin route checkpoint evidence', () => {
+describe('admin route checkpoint status', () => {
   it('keeps sensitive admin read pages routeable while mutation surfaces stay AdminAction-scoped', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const readRouteIds = ['admin', 'services', 'access', 'tokens', 'devices', 'config', 'contracts', 'plugins', 'pairing', 'backups', 'scheduler', 'audit']
 
     for (const id of readRouteIds) {
@@ -35,7 +35,7 @@ describe('admin route checkpoint evidence', () => {
   })
 
   it('renders disabled config mutation controls when the config read route is denied', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const deniedRoute: RouteAvailability = {
       ...route(snapshot.routes, 'config'),
@@ -53,8 +53,8 @@ describe('admin route checkpoint evidence', () => {
     expect(markup).toContain('disabled=""')
   })
 
-  it('renders contract detail evidence from the SDK registry and capability catalog', async () => {
-    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('renders contract detail status from the SDK registry and capability catalog', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminContractsView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
@@ -70,7 +70,7 @@ describe('admin route checkpoint evidence', () => {
     transport.register('Config.Validate', () => ({
       errors: ['services.gateway.api.port must be between 1 and 65535']
     }))
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const snapshot = await buildShellSnapshot(client)
     const configRoute = { ...route(snapshot.routes, 'config'), disabled: false, state: 'available-local' as const }
     const model = await buildConfigEditorModel(client, configRoute)

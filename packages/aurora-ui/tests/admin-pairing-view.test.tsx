@@ -153,7 +153,7 @@ function pairingRoute(): RouteAvailability {
   return {
     item: navItemSnapshot(item),
     state: 'available-local',
-    explanation: 'Pairing route available from mock evidence.',
+    explanation: 'Pairing route available from mock status.',
     providerLabel: 'mock Auth.ListPendingPairings',
     blockers: [],
     repairActions: [],

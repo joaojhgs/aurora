@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   capabilityCatalogFixture,
   cloneFixture,
@@ -12,13 +12,13 @@ import {
 import { AdminContractsView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 
 describe('admin contracts view', () => {
-  it('renders /admin/contracts browser evidence from live SDK registry and capability catalog data', async () => {
+  it('renders /admin/contracts browser status from live SDK registry and capability catalog data', async () => {
     const transport = MockAuroraTransport.empty()
       .register('Gateway.GetServices', liveServicesFixture())
       .register('Gateway.GetRegistry', liveRegistryFixture())
       .register('Gateway.GetCapabilityCatalog', liveCapabilityCatalogFixture())
 
-    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport }))
     const markup = renderToStaticMarkup(<AdminContractsView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
@@ -31,7 +31,7 @@ describe('admin contracts view', () => {
       conformanceStatus: 'conformant',
       capabilityPermissions: ['Weather.use']
     })
-    expect(snapshot.contracts[0]?.exportEvidence).toContain('Gateway.GetCapabilityCatalog action weather-forecast')
+    expect(snapshot.contracts[0]?.exportState).toContain('Gateway.GetCapabilityCatalog action weather-forecast')
 
     expect(markup).toContain('Contract registry browser grouped by service module with method detail controls')
     expect(markup).toContain('Search contracts')
@@ -40,7 +40,7 @@ describe('admin contracts view', () => {
     expect(markup).toContain('Weather module / 1 contracts')
     expect(markup).toContain('Weather.Forecast')
     expect(markup).toContain('/api/Weather/Forecast')
-    expect(markup).toContain('OpenAPI/export evidence')
+    expect(markup).toContain('OpenAPI/export state')
     expect(markup).toContain('Generated Gateway/OpenAPI path /api/Weather/Forecast')
     expect(markup).toContain('Live-registry status')
     expect(markup).toContain('Contract conformance')

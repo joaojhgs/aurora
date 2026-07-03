@@ -19,7 +19,7 @@ import type {
 } from '@aurora/client'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
 import { RouteSheet } from './route-sheet'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface AssistantViewProps {
   client: AuroraClient
@@ -355,7 +355,7 @@ export function AssistantView({
     setAttachments((current) =>
       current.map((attachment) =>
         pending.some((candidate) => candidate.id === attachment.id)
-          ? { ...attachment, status: 'uploading', progress: 48, message: 'Uploading context metadata through AuroraClient' }
+          ? { ...attachment, status: 'uploading', progress: 48, message: 'Uploading context metadata through Aurora' }
           : attachment
       )
     )
@@ -670,7 +670,7 @@ export function AssistantView({
             review, tool approvals, voice state, and context attachments stay ahead of backend status.
           </p>
         </div>
-        <div className="aui-assistant-badges" aria-label="Assistant backend evidence">
+        <div className="aui-assistant-badges" aria-label="Assistant service status">
           <StatusBadge state={route.state} />
           <PrivacyBadge privacy={route.item.privacyClass} />
           <EvidenceBadge label={route.providerLabel} />
@@ -703,7 +703,7 @@ export function AssistantView({
           onNewConversation={startNewConversation}
         />
 
-        <div className="aui-chat-workspace" data-first-viewport-task="assistant-chat-composer">
+        <div className="aui-chat-workspace" data-first-viewport-work="assistant-chat-composer">
           <div className="aui-chat-panel" aria-label="Assistant conversation thread" aria-live="polite">
             {session.messages.length === 0 ? (
               <div className="aui-chat-empty">
@@ -765,9 +765,9 @@ export function AssistantView({
             <div><dt>Model</dt><dd>{modelLabel ?? (lastResult ? 'not reported' : 'pending backend response')}</dd></div>
             <div><dt>Context</dt><dd>{contextSummary.ready} ready, {contextSummary.blocked} blocked</dd></div>
           </dl>
-          <p>{route.explanation}</p>
+          <p>{presentableSignal(route.explanation)}</p>
           {remotePrivacyWarning ? <p className="aui-privacy-route-warning" role="status">{remotePrivacyWarning}</p> : null}
-          {route.disabled ? <p role="alert">Assistant send is disabled: {route.blockers.join(', ') || 'capability unavailable'}.</p> : null}
+          {route.disabled ? <p role="alert">Assistant send is disabled: {presentableSignal(route.blockers.join(', ') || 'capability unavailable')}.</p> : null}
           {lastError ? <p role="alert">{lastError}</p> : null}
           <RouteSheet
             client={client}
@@ -804,7 +804,7 @@ export function AssistantView({
             <p className="aui-kicker">Context intake</p>
             <h2 id="assistant-context-title">Attachments and shared content</h2>
           </div>
-          <div className="aui-assistant-badges" aria-label="Context route and privacy evidence">
+          <div className="aui-assistant-badges" aria-label="Context route and privacy status">
             <PrivacyBadge privacy={privacyClass} />
             <EvidenceBadge label={route.providerLabel} />
             <EvidenceBadge label={sourceLabel(sourceChannel)} />
@@ -888,7 +888,7 @@ export function AssistantView({
         </div>
 
         <p className="aui-attachment-note">
-          Native mobile share payloads remain disabled until the Android and iOS native manifests advertise them; staged items still use the backend ingestion contract through AuroraClient.
+          Native mobile share payloads remain disabled until the Android and iOS native manifests advertise them; staged items still use the backend ingestion contract through Aurora.
         </p>
 
         {attachments.length === 0 ? (
@@ -919,7 +919,7 @@ export function AssistantView({
 
 function assistantVoicePlatformTruth(model: AssistantVoiceModel): string {
   if (model.transport === 'tauri-local') {
-    return 'Desktop voice uses Tauri/native manifest evidence; browser mic claims are not shown for this transport.'
+    return 'Desktop voice uses Tauri/native manifest status; browser mic claims are not shown for this transport.'
   }
   if (model.transport === 'native-mobile') {
     return 'Mobile voice uses native microphone permission state from the SDK manifest plus explicit raw-audio consent.'
@@ -935,7 +935,7 @@ function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
       </p>
       <dl>
         <div><dt>Selected model</dt><dd>{health.selectedModel ?? 'model pending'}</dd></div>
-        <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'no model configured / awaiting backend model evidence'}</dd></div>
+        <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'no model configured / awaiting backend model status'}</dd></div>
         <div><dt>Route</dt><dd>{health.routeLabel}</dd></div>
         <div><dt>Sidecar</dt><dd>{health.sidecarHealth}</dd></div>
         <div><dt>Gateway</dt><dd>{health.gatewayHealth}</dd></div>
@@ -953,7 +953,7 @@ export function buildAssistantRuntimeStrip(
   return {
     selectedModel: runtimeHealth?.selectedModel ?? modelLabel,
     routeLabel: runtimeHealth?.routeLabel ?? `${route.providerLabel} / ${route.state}`,
-    sidecarHealth: runtimeHealth?.sidecarHealth ?? (transportKind === 'mock' ? 'demo fixture only' : 'not reported by this shell'),
+    sidecarHealth: runtimeHealth?.sidecarHealth ?? (transportKind === 'mock' ? 'demo demo only' : 'not reported by this shell'),
     gatewayHealth: runtimeHealth?.gatewayHealth ?? `${transportKind} transport`
   }
 }
@@ -1103,7 +1103,7 @@ function VoiceModePanel({
           <p className="aui-kicker">Voice</p>
           <h2 id="assistant-voice-title">Voice modes</h2>
         </div>
-        <div className="aui-assistant-badges" aria-label="Voice evidence">
+        <div className="aui-assistant-badges" aria-label="Voice status">
           <PrivacyBadge privacy={model.privacyClass} />
           <EvidenceBadge label={model.transport} />
           <EvidenceBadge label={model.consentGranted ? 'consent granted' : 'consent required'} />
@@ -1123,7 +1123,7 @@ function VoiceModePanel({
               <PrivacyBadge privacy={chip.privacyClass} />
               <EvidenceBadge label={chip.providerLabel} />
             </div>
-            <small>{chip.blockers.length > 0 ? chip.blockers.join(', ') : chip.evidence.join(', ')}</small>
+            <small>{presentableSignal(chip.blockers.length > 0 ? chip.blockers.join(', ') : chip.evidence.join(', '))}</small>
           </article>
         ))}
       </div>
@@ -1159,7 +1159,7 @@ function VoiceModePanel({
             {model.controls.map((control) => (
               <li key={control.id}>
                 <StatusBadge state={control.state} />
-                <span>{control.reason}</span>
+                <span>{presentableSignal(control.reason)}</span>
               </li>
             ))}
           </ul>
@@ -1337,7 +1337,7 @@ export function assistantErrorMessage(error: AuroraError | Error): string {
   if ('code' in error && error.code === 'timeout') return 'Aurora timed out before returning a final assistant response.'
   if ('code' in error && (error.code === 'auth' || error.code === 'permission')) return 'Assistant request denied by authentication or permissions.'
   if ('code' in error && (error.code === 'unavailable_service' || error.code === 'unsupported_feature')) return 'Assistant service is unavailable in this backend or deployment mode.'
-  if ('code' in error && error.code === 'privacy_blocked') return 'Assistant route is blocked by privacy policy until required consent or selector evidence exists.'
+  if ('code' in error && error.code === 'privacy_blocked') return 'Assistant route is blocked by privacy policy until required consent or selector status exists.'
   if ('code' in error && error.code === 'transport_loss') return 'Assistant stream disconnected before Aurora sent a final event.'
   return error.message || 'Assistant request failed.'
 }
@@ -1359,14 +1359,14 @@ export function assistantControlsForRoute(
     return {
       canSend,
       canCancel: false,
-      cancelReason: 'unsupported: missing Orchestrator.Interrupt capability evidence'
+      cancelReason: 'unsupported: missing Orchestrator.Interrupt capability status'
     }
   }
   if (cancellationRoute.disabled) {
     return {
       canSend,
       canCancel: false,
-      cancelReason: cancellationRoute.blockers.join(', ') || 'unsupported by backend capability state'
+      cancelReason: presentableSignal(cancellationRoute.blockers.join(', ') || 'unsupported by backend capability state')
     }
   }
   return {
@@ -1494,11 +1494,11 @@ function missingVoiceRoute(
       privacyClass,
       fallbackState: 'unsupported' as const,
       adminGated: false,
-      expectedTask: 'UIA-004'
+      expectedTask: 'service contract'
     },
     state: 'unsupported',
-    explanation: `${capability} capability evidence is not available in the SDK snapshot.`,
-    providerLabel: 'UIA-004 pending',
+    explanation: `${capability} capability status is not available in the SDK snapshot.`,
+    providerLabel: 'service contract pending',
     blockers: ['capability_not_advertised'],
     repairActions: [],
     candidateProviders: [],
@@ -1627,11 +1627,11 @@ function wakeDetail(nativePlatform: string, wakeControl: RouteAvailability, wake
     return 'iOS wake/background assistant behavior remains foreground-only or app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, deep links, or notifications; system assistant ownership is unavailable.'
   }
   if (nativePlatform.toLowerCase().includes('android')) {
-    return 'Android wake/background behavior requires foreground service and native plugin evidence.'
+    return 'Android wake/background behavior requires foreground service and native plugin status.'
   }
-  if (!wakeControl.disabled) return 'Wake control is foreground-capable through backend route evidence.'
+  if (!wakeControl.disabled) return 'Wake control is foreground-capable through backend route status.'
   if (!wakeProcess.disabled) return 'Wake audio processing exists, but foreground/background control is not advertised.'
-  return 'Wakeword remains unsupported until backend and native capture capability evidence exists.'
+  return 'Wakeword remains unsupported until backend and native capture capability status exists.'
 }
 
 function remoteAudioRouteFor(...routes: RouteAvailability[]): RouteAvailability {
@@ -1653,7 +1653,7 @@ function voiceAction(
       label,
       state: route.state,
       enabled: false,
-      reason: route.blockers.join(', ') || route.explanation,
+      reason: presentableSignal(route.blockers.join(', ') || route.explanation),
       route
     }
   }
@@ -1700,9 +1700,9 @@ function voiceEventRows(
         : null
   const rows = [
     { id: 'partial', label: 'Partial transcription', state: transcription.disabled ? 'unsupported' : 'pending', detail: 'Incremental text remains tied to backend stream events.' },
-    { id: 'final', label: 'Final transcription', state: transcription.disabled ? 'unsupported' : transcription.state, detail: 'Final text must come from Transcription backend evidence.' },
-    { id: 'tts-started', label: 'TTS started', state: 'pending', detail: 'Playback start waits for TTS.Started evidence.' },
-    { id: 'tts-stopped', label: 'TTS stopped', state: 'pending', detail: 'Stop/cancel controls require TTS.Stopped or interrupt evidence.' },
+    { id: 'final', label: 'Final transcription', state: transcription.disabled ? 'unsupported' : transcription.state, detail: 'Final text must come from Transcription service status.' },
+    { id: 'tts-started', label: 'TTS started', state: 'pending', detail: 'Playback start waits for TTS.Started status.' },
+    { id: 'tts-stopped', label: 'TTS stopped', state: 'pending', detail: 'Stop/cancel controls require TTS.Stopped or interrupt status.' },
     { id: 'timeout', label: 'Timeout', state: 'degraded', detail: 'Timeouts remain visible as retryable voice session outcomes.' },
     { id: 'cancelled', label: 'Cancelled', state: 'pending', detail: 'Cancellation must revoke or stop the current audio session.' },
     { id: 'remote-denied', label: 'Remote denial', state: 'denied', detail: 'Policy, selector, or peer denial is shown without silent fallback.' },
@@ -1758,7 +1758,7 @@ function voiceEvidenceDetail(event: VoiceRuntimeEvent): string {
   const peer = event.targetPeerId ?? event.sourcePeerId ?? 'local'
   const session = event.sessionId ?? 'no-session'
   const correlation = event.correlationId ?? 'no-correlation'
-  return `${event.topic ?? event.kind} evidence from ${peer}; session ${session}; correlation ${correlation}; privacy ${event.privacyClass}${text}${reason}`
+  return `${event.topic ?? event.kind} status from ${peer}; session ${session}; correlation ${correlation}; privacy ${event.privacyClass}${text}${reason}`
 }
 
 function waveformBars(captureStatus: VoiceCaptureStatus): number[] {

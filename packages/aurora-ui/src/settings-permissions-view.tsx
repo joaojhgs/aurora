@@ -12,7 +12,7 @@ import type {
   PrivacyClass
 } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export type SettingsMutationState = 'idle' | 'optimistic' | 'rollback-error' | 'disabled'
 
@@ -131,14 +131,14 @@ function RouteSettingsSurface({
           <h1 id="settings-permissions-title">Settings and permissions</h1>
           <p>
             Route privacy defaults, voice defaults, assistant behavior, theme/accessibility/local storage posture, and
-            fallback behavior are rendered from AuroraClient capability evidence. Native permission details live on
+            fallback behavior are rendered from Aurora capability state. Native permission details live on
             /settings/native.
           </p>
         </div>
-        <div className="aui-settings-badges" aria-label="Settings evidence">
+        <div className="aui-settings-badges" aria-label="Settings status">
           <EvidenceBadge label={snapshot.evidenceSource} />
           <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
         </div>
       </header>
 
@@ -168,7 +168,7 @@ function RouteSettingsSurface({
           <PanelTitle
             icon={<Volume2 size={18} aria-hidden />}
             title="Voice behavior"
-            description="Push-to-talk, wake behavior, and spoken replies are shown from Assistant voice route evidence plus native microphone constraints; switches are disabled until Config/AdminAction support exists."
+            description="Push-to-talk, wake behavior, and spoken replies are shown from Assistant voice route status plus native microphone constraints; switches are disabled until Config/AdminAction support exists."
             id="voice-behavior-title"
           />
           <div className="aui-settings-controls">
@@ -182,7 +182,7 @@ function RouteSettingsSurface({
           <PanelTitle
             icon={<Mic size={18} aria-hidden />}
             title="Assistant behavior"
-            description="Assistant defaults stay tied to route evidence and explicit controls; native foreground/background constraints live on /settings/native."
+            description="Assistant defaults stay tied to route status and explicit controls; native foreground/background constraints live on /settings/native."
             id="assistant-behavior-title"
           />
           <div className="aui-route-defaults">
@@ -225,7 +225,7 @@ function RouteSettingsSurface({
         <PanelTitle
           icon={<RefreshCw size={18} aria-hidden />}
           title="Route and fallback policy"
-          description="Fallback success is shown only when route/capability evidence supports it; explicit selector failures remain hard failures."
+          description="Fallback success is shown only when route/capability status supports it; explicit selector failures remain hard failures."
           id="route-policy-title"
         />
         <div className="aui-route-defaults">
@@ -268,7 +268,7 @@ function NativeSettingsSurface({
             deployments show unsupported status instead of pretending native permission state exists.
           </p>
         </div>
-        <div className="aui-settings-badges" aria-label="Native settings evidence">
+        <div className="aui-settings-badges" aria-label="Native settings status">
           <EvidenceBadge label={snapshot.evidenceSource} />
           <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
           <EvidenceBadge label={model.nativeRoute?.providerLabel ?? 'Native.GetCapabilityManifest'} />
@@ -340,7 +340,7 @@ function NativeSettingsSurface({
                   <span>{integration.detail}</span>
                 </div>
                 <StatusBadge state={integrationStatusState(integration.status)} />
-                <code>{integration.evidence.join(', ') || 'native manifest'}</code>
+                <code>{presentableSignal(integration.evidence.join(', ') || 'native manifest')}</code>
               </article>
             ))}
             {model.nativeReleaseGates.map((gate) => (
@@ -370,7 +370,7 @@ function NativeSettingsSurface({
             {model.nativeDeviceMatrix.map((row) => (
               <div key={row.id}>
                 <dt>{row.target}</dt>
-                <dd>{row.status}: {row.evidence}</dd>
+                <dd>{row.status}: {presentableSignal(row.evidence)}</dd>
               </div>
             ))}
           </dl>
@@ -389,7 +389,7 @@ function NativeSettingsSurface({
             {model.nativeLimitations.map((limitation) => (
               <div key={limitation.id}>
                 <dt>{limitation.label}</dt>
-                <dd>{limitation.detail} Evidence: {limitation.evidence}</dd>
+                <dd>{limitation.detail} State: {presentableSignal(limitation.evidence)}</dd>
               </div>
             ))}
           </dl>
@@ -413,7 +413,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
   const selectorHardBlocked = selectorRequired.filter((route) => route.disabled || route.state === 'denied' || route.state === 'privacy-blocked')
   const denied = snapshot.routes.filter((route) => route.state === 'denied')
   const privacyBlocked = snapshot.routes.filter((route) => route.state === 'privacy-blocked')
-  const errorText = snapshot.loadState === 'error' ? snapshot.error ?? 'AuroraClient settings evidence failed to load.' : null
+  const errorText = snapshot.loadState === 'error' ? snapshot.error ?? 'Aurora settings status failed to load.' : null
   const routeAdminRequired = Boolean(settingsRoute?.requiresAdminAction)
   const mutationAdminRequired = true
   const settingsDisabled = !settingsRoute || settingsRoute.disabled || snapshot.loadState !== 'ready'
@@ -426,7 +426,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
       privacyControl({
         id: 'prefer-local',
         label: 'Prefer local processing',
-        description: 'Keep service choices on the local node unless route evidence and policy allow remote use.',
+        description: 'Keep service choices on the local node unless route status and policy allow remote use.',
         state: snapshot.loadState === 'loading' ? 'pending' : settingsRoute?.state ?? 'unsupported',
         privacyClass: 'sensitive',
         providerLabel: settingsRoute?.providerLabel ?? 'Config.Get pending',
@@ -507,7 +507,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         : 'Settings route access is read-only; AdminAction draft, confirmation, and audit are required before settings mutations.'
       : 'No AdminAction requirement was reported for this settings route.',
     fallbackLabel: degraded.length > 0
-      ? 'Fallback is visible as degraded capability evidence.'
+      ? 'Fallback is visible as degraded capability status.'
       : 'No fallback route is currently reported by the capability graph.',
     error: errorText
   }
@@ -521,7 +521,7 @@ function assistantBehaviorDefaults(snapshot: AuroraShellSnapshot): SettingsPermi
       label: 'Assistant route default',
       value: assistantRoute?.providerLabel ?? 'Orchestrator.ExternalUserInput pending',
       state: assistantRoute?.state ?? 'unsupported',
-      detail: 'Assistant requests use route policy evidence before any provider or peer is selected.'
+      detail: 'Assistant requests use route policy status before any provider or peer is selected.'
     },
     {
       id: 'cancellation',
@@ -539,7 +539,7 @@ function assistantBehaviorDefaults(snapshot: AuroraShellSnapshot): SettingsPermi
         snapshot.assistantVoiceRoutes.wakeProcess.state,
         snapshot.assistantVoiceRoutes.ttsSynthesize.state
       ]),
-      detail: 'Raw-audio capture and wake behavior are disabled unless route evidence and consent/native gates allow them.'
+      detail: 'Raw-audio capture and wake behavior are disabled unless route status and consent/native gates allow them.'
     }
   ]
 }
@@ -567,7 +567,7 @@ function userExperienceDefaults(
     {
       id: 'local-storage',
       label: 'Local storage default',
-      value: snapshot.secretsRedacted ? 'redacted non-secret UI preferences' : 'redaction unknown',
+      value: snapshot.secretsRedacted ? 'redacted non-secret UI preferences' : 'redaction pending',
       state: snapshot.secretsRedacted ? 'available-local' : 'degraded',
       detail: 'Local storage is limited to non-secret UI state; credentials and native secure storage are shown on /settings/native.'
     }
@@ -588,7 +588,7 @@ function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
           <EvidenceBadge label={item.defaultLabel} />
           <EvidenceBadge label={item.providerLabel} />
         </div>
-        <small>{item.blockers.length > 0 ? item.blockers.join(', ') : 'No blocker reported.'}</small>
+        <small>{presentableSignal(item.blockers.length > 0 ? item.blockers.join(', ') : 'No blocker reported.')}</small>
       </div>
       <button type="button" disabled>
         {item.enabled ? 'Config/AdminAction required' : 'Unavailable'}
@@ -613,9 +613,9 @@ function NativeIntegrationRow({ integration }: { integration: SettingsNativeInte
           {integration.invocation ? <EvidenceBadge label={integration.invocation} /> : null}
           {integration.requiresConfirmation ? <EvidenceBadge label="confirmation required" /> : null}
         </div>
-        <small>{integration.blockers.length > 0 ? integration.blockers.join(', ') : 'No blocker reported.'}</small>
+        <small>{presentableSignal(integration.blockers.length > 0 ? integration.blockers.join(', ') : 'No blocker reported.')}</small>
         <dl className="aui-settings-facts">
-          <div><dt>Backend method</dt><dd>{integration.backendMethod ?? 'backend evidence required'}</dd></div>
+          <div><dt>Backend method</dt><dd>{integration.backendMethod ?? 'service status required'}</dd></div>
           <div><dt>Permission</dt><dd>{integration.permission ?? 'none'}</dd></div>
           <div><dt>System assistant role</dt><dd>{integration.siriReplacement ? 'claimed' : 'false'}</dd></div>
         </dl>
@@ -644,7 +644,7 @@ function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
           <PrivacyBadge privacy={control.privacyClass} />
           <EvidenceBadge label={control.providerLabel} />
         </div>
-        <small>{control.blockers.length > 0 ? control.blockers.join(', ') : 'No blocker reported.'}</small>
+        <small>{presentableSignal(control.blockers.length > 0 ? control.blockers.join(', ') : 'No blocker reported.')}</small>
       </div>
       <button type="button" disabled={control.disabled || control.requiresAdminAction}>
         {control.requiresAdminAction ? 'AdminAction required' : control.enabled ? 'Enabled' : 'Unavailable'}
@@ -665,9 +665,9 @@ function NativePermissionRow({ permission }: { permission: SettingsNativePermiss
         <div className="aui-settings-inline">
           <StatusBadge state={permission.state} />
           <EvidenceBadge label={permission.capabilityEnabled ? 'capability enabled' : 'capability disabled'} />
-          <EvidenceBadge label={permission.evidence.join(', ') || 'no evidence'} />
+          <EvidenceBadge label={permission.evidence.join(', ') || 'no status'} />
         </div>
-        <small>{permission.blockers.length > 0 ? permission.blockers.join(', ') : 'No blocker reported.'}</small>
+        <small>{presentableSignal(permission.blockers.length > 0 ? permission.blockers.join(', ') : 'No blocker reported.')}</small>
       </div>
       <button type="button" disabled={!permission.requestEnabled}>
         {permission.requestEnabled ? 'Request permission' : permission.granted ? 'Granted' : 'Request unavailable'}
@@ -745,7 +745,7 @@ function voiceBehaviorCards(snapshot: AuroraShellSnapshot): SettingsVoiceBehavio
       privacyClass: 'raw-audio',
       detail: snapshot.nativePlatform === 'ios'
         ? 'iOS wake behavior stays in app-owned foreground surfaces; Aurora does not claim always-on background wake or system assistant ownership.'
-        : 'Wake processing and wake control require native microphone evidence plus WakeWord route availability before they can be enabled.',
+        : 'Wake processing and wake control require native microphone status plus WakeWord route availability before they can be enabled.',
       extraEvidence: [...microphoneEvidence, ...voice.wakeControl.evidenceSources],
       extraBlockers: [...voice.wakeControl.blockers, microphoneState === 'available-local' ? '' : 'native microphone gate not satisfied'].filter(Boolean)
     }),
@@ -1179,7 +1179,7 @@ function nativePermissionDetail(
 ): string {
   if (name === 'aurora.iosKeychain' || name === 'ios.keychain.secureCredentialStorage') {
     return capabilityEnabled || granted
-      ? 'Tokens, mesh credentials, and admin unlock secrets use iOS Keychain evidence from the native manifest.'
+      ? 'Tokens, mesh credentials, and admin unlock secrets use iOS Keychain status from the native manifest.'
       : 'iOS Keychain requires the Tauri iOS native plugin and Xcode-built app target.'
   }
   if (name === 'aurora.iosBiometricUnlock' || name === 'ios.biometric.adminUnlock') {
@@ -1191,7 +1191,7 @@ function nativePermissionDetail(
     return 'Siri/Shortcuts/App Intents integration is app-owned and scoped to concrete Aurora actions.'
   }
   if (name === 'aurora.iosMicrophoneCapture' || name === 'ios.voiceForegroundCapture') {
-    return 'iOS microphone capture is foreground-only and requires AVAudioSession record permission, raw-audio consent, backend audio evidence, and a visible stop/revoke path.'
+    return 'iOS microphone capture is foreground-only and requires AVAudioSession record permission, raw-audio consent, backend audio status, and a visible stop/revoke path.'
   }
   if (name === 'ios.notifications') {
     return 'iOS notifications require user authorization and can return users to Aurora, but they cannot provide always-on assistant wake.'
@@ -1216,7 +1216,7 @@ function nativePermissionDetail(
   if (name.startsWith('aurora.android.') || name.startsWith('android.')) {
     return requestEnabled
       ? 'Android native manifest advertises a supported request command for this permission or role.'
-      : 'Android native status is shown only from RoleManager, permission, foreground service, Keystore, biometric, share, or deep-link manifest evidence.'
+      : 'Android native status is shown only from RoleManager, permission, foreground service, Keystore, biometric, share, or deep-link manifest status.'
   }
   if (name.startsWith('aurora.') || name.startsWith('native.') || name.startsWith('desktop.')) {
     return 'Tauri desktop native status is shown only from the manifest for permissions, tray, notifications, dialogs, audio, local file access, secure storage, or updater capability.'

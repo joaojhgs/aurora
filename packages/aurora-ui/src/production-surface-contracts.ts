@@ -133,7 +133,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
       source('capability-graph', 'admin posture and capability summary', ['Gateway.GetCapabilityCatalog']),
-      source('sdk-method', 'registry and deployment evidence', ['Gateway.GetRegistry', 'Gateway.GetDeploymentTopology'])
+      source('sdk-method', 'registry and deployment state', ['Gateway.GetRegistry', 'Gateway.GetDeploymentTopology'])
     ],
     highestPrivacyClass: 'admin-critical',
     mutatingMethodType: 'none',
@@ -219,7 +219,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'none',
     adminActionRequired: false,
     fixturePolicy: 'test-only',
-    degradedState: 'Audit export is disabled when audit records or redacted support evidence are unavailable.',
+    degradedState: 'Audit export is disabled when audit records or redacted support state are unavailable.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
   },
   {
@@ -263,7 +263,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'manage',
     adminActionRequired: true,
     fixturePolicy: 'test-only',
-    degradedState: 'Device deletion renders as pending/rollback until refreshed backend evidence confirms the mutation.',
+    degradedState: 'Device deletion renders as pending/rollback until refreshed backend state confirms the mutation.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
   },
   {
@@ -347,7 +347,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'manage',
     adminActionRequired: true,
     fixturePolicy: 'test-only',
-    degradedState: 'Create, verify, restore, and rollback controls are disabled without backup capability and AdminAction evidence.',
+    degradedState: 'Create, verify, restore, and rollback controls are disabled without backup capability and AdminAction state.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
   },
   {
@@ -356,7 +356,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['models'],
     routeOracles: [routeOracle('models', ['Models and runtime'], ['Provider route policy'])],
     mockReferenceFiles: ['components/aurora/models/models-view.tsx'],
-    mockUxAnchors: ['Models and runtime', 'Runtime evidence', 'Provider route policy', 'Benchmark snapshot'],
+    mockUxAnchors: ['Models and runtime', 'Runtime state', 'Provider route policy', 'Benchmark snapshot'],
     componentFiles: ['models-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
@@ -391,7 +391,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'manage',
     adminActionRequired: true,
     fixturePolicy: 'test-only',
-    degradedState: 'Presence never counts as pairing success; pending/denied/stale states stay visible until Auth/Gateway evidence changes.',
+    degradedState: 'Presence never counts as pairing success; pending/denied/stale states stay visible until Auth/Gateway state changes.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
   },
   {
@@ -404,7 +404,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     componentFiles: ['mesh-diagnostics-view.tsx', 'mesh-diagnostics-resource.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
-      source('sdk-method', 'mesh, WebRTC, topology, and redacted support evidence', ['Gateway.GetMeshStatus', 'Gateway.GetWebRTCDiagnostics', 'Gateway.GetDeploymentTopology', 'Gateway.GetSupportBundle']),
+      source('sdk-method', 'mesh, WebRTC, topology, and redacted support state', ['Gateway.GetMeshStatus', 'Gateway.GetWebRTCDiagnostics', 'Gateway.GetDeploymentTopology', 'Gateway.GetSupportBundle']),
       source('capability-graph', 'provider candidates and route blockers', ['Gateway.GetCapabilityCatalog'])
     ],
     highestPrivacyClass: 'sensitive',
@@ -449,7 +449,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'none',
     adminActionRequired: false,
     fixturePolicy: 'test-only',
-    degradedState: 'Resource rows expose unsupported/degraded reasons and never execute from diagnostic graph-only evidence.',
+    degradedState: 'Resource rows expose unsupported/degraded reasons and never execute from diagnostic graph-only state.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
   },
   {
@@ -470,7 +470,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'manage',
     adminActionRequired: true,
     fixturePolicy: 'test-only',
-    degradedState: 'Settings toggles are disabled until backend capability and AdminAction evidence is available.',
+    degradedState: 'Settings toggles are disabled until backend capability and AdminAction state is available.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
   },
   {
@@ -505,13 +505,13 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     truthSources: [
       source('sdk-method', 'session and pairing state', ['Auth.WhoAmI', 'Auth.PairingStart', 'Auth.PairingConnect', 'Auth.PairingExchange', 'Auth.ListPendingPairings']),
       source('admin-action', 'pairing approve and deny review', ['Auth.PairingApprove', 'Auth.PairingDeny', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm']),
-      source('native-manifest', 'deployment-mode native evidence', ['Native.GetCapabilityManifest'])
+      source('native-manifest', 'deployment-mode native state', ['Native.GetCapabilityManifest'])
     ],
     highestPrivacyClass: 'credential',
     mutatingMethodType: 'manage',
     adminActionRequired: true,
     fixturePolicy: 'test-only',
-    degradedState: 'Mock transport is labeled as degraded development fallback; pairing success waits for Auth evidence.',
+    degradedState: 'Mock transport is labeled as degraded development fallback; pairing success waits for Auth state.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx', 'apps/aurora-web/app/aurora-client.test.ts', 'apps/aurora-tauri/src/aurora-client.test.tsx']
   }
 ]

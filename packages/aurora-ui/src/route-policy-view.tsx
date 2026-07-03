@@ -11,7 +11,7 @@ import type {
   RouteExplainRequest,
   RoutePolicyEvaluation
 } from '@aurora/client'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
 
 export type RoutePolicyLoadState = 'loading' | 'ready' | 'degraded' | 'denied' | 'unavailable' | 'error'
@@ -113,7 +113,7 @@ const loadingSnapshot: RoutePolicySnapshot = {
   generatedAt: null,
   secretsRedacted: true,
   routeState: 'pending',
-  routeReason: 'Loading route policy capability through AuroraClient.',
+  routeReason: 'Loading route policy capability through Aurora.',
   policyCapabilityState: 'pending',
   policyCapabilityReason: 'Loading Gateway.ExplainRoute and capability catalog.',
   configCapabilityState: 'pending',
@@ -129,7 +129,7 @@ const loadingSnapshot: RoutePolicySnapshot = {
   persistedReceipt: null,
   error: null,
   warnings: [],
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }
 
 export function RoutePolicyResource({ client, route }: RoutePolicyResourceProps) {
@@ -250,7 +250,7 @@ export async function buildRoutePolicySnapshot(
     generatedAt: catalog?.generated_at ?? null,
     secretsRedacted: catalog?.secrets_redacted ?? (scenarios.some((scenario) => scenario.evaluation?.preview.secretsRedacted) || true),
     routeState: route.disabled ? route.state : 'available-local',
-    routeReason: route.disabled ? route.explanation : 'Mesh route policy screen is backed by AuroraClient route explain and capability catalog responses.',
+    routeReason: route.disabled ? presentableSignal(route.explanation) : 'Mesh route policy screen is backed by Aurora route explain and capability catalog responses.',
     policyCapabilityState: policyCapability ? capabilityAvailability(policyCapability) : allFailed ? 'unsupported' : 'degraded',
     policyCapabilityReason: policyCapability
       ? capabilityReason(policyCapability)
@@ -263,9 +263,9 @@ export async function buildRoutePolicySnapshot(
     scenarios,
     selectedScenarioId,
     persistedReceipt,
-    error: allFailed ? 'Route explain dry-runs are unavailable through AuroraClient.' : null,
+    error: allFailed ? 'Route explain dry-runs are unavailable through Aurora.' : null,
     warnings: failures,
-    evidenceSource: catalog ? 'AuroraClient capability catalog and Gateway.ExplainRoute' : 'AuroraClient route explain results'
+    evidenceSource: catalog ? 'Aurora capability catalog and Gateway.ExplainRoute' : 'Aurora route explain results'
   }
 }
 
@@ -312,7 +312,7 @@ function routePolicyRouteKey(route: RouteAvailability): string {
     route.state,
     route.disabled ? 'disabled' : 'enabled',
     route.requiresAdminAction ? 'admin' : 'user',
-    route.explanation
+    presentableSignal(route.explanation)
   ].join('|')
 }
 
@@ -340,9 +340,9 @@ export function RoutePolicyView({
           <h1 id="route-policy-title">Route policy and explain</h1>
           <p>Dry-run backend route decisions before changing peer fallback, explicit selector, trust, and latency-sensitive policy.</p>
         </div>
-        <div className="aui-mesh-badges" aria-label="Route policy evidence">
+        <div className="aui-mesh-badges" aria-label="Route policy status">
           <StatusBadge state={snapshot.loadState === 'loading' ? 'pending' : snapshot.routeState} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
           <EvidenceBadge label={snapshot.evidenceSource} />
         </div>
       </header>
@@ -562,8 +562,8 @@ export function routePolicyScenarios(): RoutePolicyScenario[] {
   return [
     scenario('assistant_prompt', 'Assistant prompt', 'Prompt routing must keep personal text off fallback paths unless policy allows it.', 'Orchestrator.UserInput', 'Orchestrator', 'UserInput', { text: 'summarize my calendar' }, null, 'personal', ['personal']),
     scenario('tool_call', 'Tool call', 'Duplicated local and remote tools require provider identity, safety class, and approval state.', 'Tooling.ExecuteTool', 'Tooling', 'ExecuteTool', { global_tool_id: 'mesh:workstation:shell.run', args_hash: 'sha256:redacted' }, { tool_id: 'mesh:workstation:shell.run' }, 'admin-critical', ['admin-critical']),
-    scenario('rag_query', 'Remote RAG namespace', 'RAG/data queries need namespace and privacy policy evidence; raw cross-peer SQL remains blocked.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'home-lab' }, { resource_id: 'rag:home-lab' }, 'sensitive', ['sensitive']),
-    scenario('audio_session', 'Remote STT session', 'Audio sessions require consent and privacy indicator evidence before raw audio leaves the node.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
+    scenario('rag_query', 'Remote RAG namespace', 'RAG/data queries need namespace and privacy policy status; raw cross-peer SQL remains blocked.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'home-lab' }, { resource_id: 'rag:home-lab' }, 'sensitive', ['sensitive']),
+    scenario('audio_session', 'Remote STT session', 'Audio sessions require consent and privacy indicator status before raw audio leaves the node.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
     scenario('model_runtime', 'Model runtime', 'Model selection can choose local, peer, or cloud fallback only when privacy class permits it.', 'Orchestrator.GetModelRuntime', 'Orchestrator', 'GetModelRuntime', { requested_runtime: 'balanced' }, { resource_id: 'model:balanced' }, 'personal', ['personal']),
     scenario('scheduler_job', 'Scheduler delegation', 'Delegated jobs need namespace, owner, target selector, and correlation policy.', 'Scheduler.ScheduleJob', 'Scheduler', 'ScheduleJob', { namespace: 'household', owner_peer_id: 'local', target_selector: { peer_id: 'studio-peer' } }, { peer_id: 'studio-peer', resource_id: 'scheduler:household' }, 'admin-critical', ['admin-critical']),
     scenario('admin_action', 'Admin action', 'Admin-critical mutations must preserve AdminAction and audit receipt requirements.', 'Config.Set', 'Config', 'Set', { key_path: 'services.tts.mesh_sharing', value: { require_explicit_selector: true } }, null, 'admin-critical', ['admin-critical'])
@@ -584,7 +584,7 @@ export function routePolicyDraftChange(draft: RoutePolicyDraft): { key_path: str
 }
 
 export function routePolicyErrorMessage(error: unknown): string {
-  if (!error) return 'AuroraClient route policy request failed.'
+  if (!error) return 'Aurora route policy request failed.'
   if (error instanceof Error) return error.message
   if (typeof error === 'object' && error !== null && 'message' in error) return String((error as { message?: unknown }).message)
   return String(error)
@@ -635,7 +635,7 @@ function capabilityAvailability(action: CapabilityCatalogResponse['actions'][num
 
 function capabilityReason(action: CapabilityCatalogResponse['actions'][number]): string {
   const blockers = [...action.route_blockers, ...action.policy.denial_reasons]
-  if (blockers.length > 0) return blockers.join(', ')
+  if (blockers.length > 0) return presentableSignal(blockers.join(', '))
   if (action.policy.approval_required) return `${action.topic} requires AdminAction/approval before mutation.`
   return `${action.topic} is ${action.bindability} via ${action.provider_kind}.`
 }

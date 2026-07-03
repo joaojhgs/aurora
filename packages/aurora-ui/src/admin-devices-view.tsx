@@ -143,11 +143,11 @@ const loadingSnapshot: AdminDevicesSnapshot = {
   devices: [],
   pendingPairings: [],
   listState: 'pending',
-  listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through AuroraClient.',
+  listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through Aurora.',
   tokenState: 'pending',
-  tokenReason: 'Loading token/session evidence through AuroraClient.',
+  tokenReason: 'Loading token/session status through Aurora.',
   pairingState: 'pending',
-  pairingReason: 'Loading Auth.ListPendingPairings through AuroraClient.',
+  pairingReason: 'Loading Auth.ListPendingPairings through Aurora.',
   deleteState: 'pending',
   deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
   meshPeerState: 'pending',
@@ -158,7 +158,7 @@ const loadingSnapshot: AdminDevicesSnapshot = {
   nativeCapabilities: [],
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }
 
 export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
@@ -283,7 +283,7 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
       meshPeerActionReason: message,
       error: message,
       warnings: failures,
-      evidenceSource: 'AuroraClient SDK error'
+      evidenceSource: 'Aurora request error'
     }
   }
 
@@ -313,7 +313,7 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
     listState: listCapability?.availability ?? (denied ? 'denied' : 'unsupported'),
     listReason: listCapability ? capabilityReason(listCapability) : 'Auth.ListDevices is not advertised by the capability catalog.',
     tokenState: tokenCapability?.availability ?? (tokensResponse ? 'available-local' : denied ? 'denied' : 'unsupported'),
-    tokenReason: tokenCapability ? capabilityReason(tokenCapability) : 'Auth.ListTokens token/session evidence is not advertised by the capability catalog.',
+    tokenReason: tokenCapability ? capabilityReason(tokenCapability) : 'Auth.ListTokens token/session status is not advertised by the capability catalog.',
     pairingState: pairingCapability?.availability ?? (pairingsResponse ? 'available-local' : denied ? 'denied' : 'unsupported'),
     pairingReason: pairingCapability ? capabilityReason(pairingCapability) : 'Auth.ListPendingPairings is not advertised by the capability catalog.',
     deleteState: deleteCapability?.availability ?? (denied ? 'denied' : 'unsupported'),
@@ -329,7 +329,7 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
       .sort(),
     warnings: failures,
     error: failures.find((message) => !message.includes('native manifest')) ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response'
   }
 }
 
@@ -356,13 +356,13 @@ export function AdminDevicesView({
           <p className="aui-kicker">Admin</p>
           <h1 id="admin-devices-title">Devices and sessions</h1>
           <p>
-            Registered devices, token-backed active sessions, trust state, and platform capabilities are loaded through AuroraClient.
+            Registered devices, token-backed active sessions, trust state, and platform capabilities are loaded through Aurora.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="Device backend evidence">
+        <div className="aui-admin-badges" aria-label="Device service status">
           {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
           <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
           <PrivacyBadge privacy="credential" />
         </div>
       </header>
@@ -372,7 +372,7 @@ export function AdminDevicesView({
       <div className="aui-admin-metrics" aria-label="Device/session summary">
         <Metric label="Devices" value={String(snapshot.devices.length)} detail={`${totals.trusted} trusted`} />
         <Metric label="Pending" value={String(totals.pending + snapshot.pendingPairings.length)} detail={`${snapshot.pendingPairings.length} pairing requests`} />
-        <Metric label="Sessions" value={String(totals.activeSessions)} detail="token-backed evidence" />
+        <Metric label="Sessions" value={String(totals.activeSessions)} detail="token-backed status" />
         <Metric label="Tokens" value={String(totals.tokens)} detail={`${totals.expiredTokens} expired`} />
       </div>
 
@@ -433,7 +433,7 @@ export function AdminDevicesView({
                   <th>Sessions</th>
                   <th>Platform</th>
                   <th>Mesh peer</th>
-                  <th>Evidence</th>
+                  <th>State</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -457,9 +457,9 @@ export function AdminDevicesView({
                       <strong>{device.activeSessionCount}</strong>
                       <p className="aui-muted">{device.tokenCount} token records</p>
                       <details className="aui-service-details">
-                        <summary>Token evidence</summary>
+                        <summary>Token state</summary>
                         {device.activeTokens.length === 0 ? (
-                          <p>No active token evidence was returned for this device.</p>
+                          <p>No active token state was returned for this device.</p>
                         ) : (
                           <ul className="aui-device-token-list">
                             {device.activeTokens.map((token) => (
@@ -815,7 +815,7 @@ function DeviceStatusPanel({
     return (
       <div className="aui-admin-notice" aria-live="polite">
         <ShieldCheck size={18} aria-hidden />
-        <span>AdminAction submitted for {optimisticDeviceId}; refreshing device evidence before committing the row removal.</span>
+        <span>AdminAction submitted for {optimisticDeviceId}; refreshing device state before committing the row removal.</span>
       </div>
     )
   }
@@ -831,7 +831,7 @@ function DeviceStatusPanel({
     return (
       <div className="aui-admin-notice" aria-live="polite">
         <Activity size={18} aria-hidden />
-        <span>Loading devices, token-backed sessions, capabilities, and native manifest through AuroraClient.</span>
+        <span>Loading devices, token-backed sessions, capabilities, and native manifest through Aurora.</span>
       </div>
     )
   }
@@ -847,7 +847,7 @@ function DeviceStatusPanel({
   return (
     <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
       <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'Device/session evidence is degraded. Unsupported or denied controls remain disabled.'}</span>
+      <span>{snapshot.error ?? 'Device/session status is degraded. Unsupported or denied controls remain disabled.'}</span>
     </div>
   )
 }
@@ -937,7 +937,7 @@ function errorState(error: unknown): AvailabilityState {
 function deviceMutationErrorMessage(error: unknown): string {
   if (error instanceof AuroraError) return error.message
   if (error instanceof Error) return error.message
-  return 'Unknown AuroraClient error'
+  return 'Unknown Aurora unavailable'
 }
 
 function isAvailabilityState(value: string): value is AvailabilityState {

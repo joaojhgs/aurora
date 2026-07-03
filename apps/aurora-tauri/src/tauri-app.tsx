@@ -27,6 +27,8 @@ import {
   SettingsPermissionsView,
   StateSurface,
   ToolApprovalPanel,
+  getAuroraSurfaceProfile,
+  shouldShowForSurface,
   auroraNavSections,
   buildShellSnapshot,
   errorShellSnapshot,
@@ -262,6 +264,12 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
   const sidecarEvidence = sidecar
     ? redactDiagnosticText(`${sidecar.mode ?? 'unknown'}; gateway=${sidecar.gatewayUrl ?? 'not configured'}; running=${String(sidecar.running)}`)
     : 'native sidecar status unavailable in this runtime'
+  const surfaceProfile = getAuroraSurfaceProfile({
+    runtimeMode: runtime.mode,
+    transportKind: snapshot.transportKind,
+    nativePlatform: snapshot.nativePlatform,
+    userAgent: typeof window === 'undefined' ? undefined : window.navigator.userAgent,
+  })
   const nativeContext: NativeContext = {
     runtimeMode: runtime.mode,
     localMode,
@@ -272,6 +280,7 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
     iosInvocationStatus,
     iosLocalLightStatus,
     androidBaseline,
+    surfaceProfile,
   };
 
   return (
@@ -299,7 +308,7 @@ async function runRuntimeReadinessProbes(runtime: AuroraTauriRuntime): Promise<T
   const statusSidecar = await runtime.sidecarStatus();
   const readySidecar = statusSidecar ?? startedSidecar;
   if (!readySidecar) {
-    throw new Error("Tauri local sidecar status command did not return readiness evidence");
+    throw new Error("Tauri local sidecar status command did not return readiness status");
   }
   assertReadySidecar(readySidecar);
 
@@ -381,6 +390,7 @@ interface NativeContext {
   localMode: boolean;
   sidecar: TauriSidecarStatus | null;
   sidecarEvidence: string;
+  surfaceProfile: ReturnType<typeof getAuroraSurfaceProfile>;
   nativePermissions: TauriNativePermissionStatus | null;
   nativeFeatures: Record<string, TauriNativeFeatureStatus | null>;
   iosInvocationStatus: TauriIosInvocationStatus | null;
@@ -437,24 +447,30 @@ function TauriNativeSettingsPage({
   snapshot: AuroraShellSnapshot
   nativeContext: NativeContext
 }) {
-  const rows = nativeCommandEvidenceRows(nativeContext)
+  const rows = nativeCommandRows(nativeContext)
+  const showDesktopCommands = shouldShowForSurface(nativeContext.surfaceProfile, 'desktopCommands')
   return (
     <div className="ata-page-stack">
       <SettingsPermissionsView snapshot={snapshot} surface="native" currentPath="/settings/native" />
-      <section className="ata-panel" aria-labelledby="tauri-native-command-evidence-title">
-        <h2 id="tauri-native-command-evidence-title">Desktop Tauri command evidence</h2>
-        <p>
-          Tauri-local native status is shown only from local Tauri command probes. Desktop-thin runtimes are supported remote Gateway clients and report native command evidence as unavailable instead of pretending local permission state exists.
-        </p>
-        <dl className="ata-facts">
-          {rows.map((row) => (
-            <div key={row.command}>
-              <dt>{row.label}</dt>
-              <dd><code>{row.command}</code> · {row.status} · {row.source}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
+      {showDesktopCommands ? (
+        <section className="ata-panel" aria-labelledby="tauri-native-command-title">
+          <h2 id="tauri-native-command-title">Desktop controls</h2>
+          <p>Local desktop controls are shown only when Aurora is running inside the Tauri desktop shell with the local sidecar enabled.</p>
+          <dl className="ata-facts">
+            {rows.map((row) => (
+              <div key={row.command}>
+                <dt>{row.label}</dt>
+                <dd><code>{row.command}</code> · {row.status} · {row.source}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : (
+        <section className="ata-panel" aria-labelledby="tauri-native-thin-title">
+          <h2 id="tauri-native-thin-title">Native controls</h2>
+          <p>{nativeContext.surfaceProfile.label} uses remote or platform-managed capabilities. Local desktop sidecar controls are hidden on this surface.</p>
+        </section>
+      )}
     </div>
   )
 }
@@ -469,12 +485,12 @@ function isTauriRouteId(routeId: string): routeId is TauriRouteId {
 
 function AdminOverviewResource({ client }: { client: AuroraTauriClient }) {
   const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
-  const [error, setError] = useState<unknown>(new Error('Loading admin overview manifest from AuroraClient.'))
+  const [error, setError] = useState<unknown>(new Error('Loading admin overview.'))
 
   useEffect(() => {
     let cancelled = false
     setManifest(null)
-    setError(new Error('Loading admin overview manifest from AuroraClient.'))
+    setError(new Error('Loading admin overview.'))
     void client.adminOverview.getManifest().then(
       (next) => {
         if (!cancelled) {
@@ -557,8 +573,8 @@ function TauriDiagnosticsPage({
                 ? "pending"
                 : "available-remote"
         }
-        description="Aurora desktop uses the official Tauri shell while keeping service truth behind AuroraClient."
-        evidence={nativeContext.sidecarEvidence}
+        description="Aurora desktop uses the official Tauri shell while keeping service state behind the Gateway boundary."
+        evidence={shouldShowForSurface(nativeContext.surfaceProfile, 'sidecar') ? nativeContext.sidecarEvidence : null}
         actionLabel={redactDiagnosticText(nativeContext.sidecar?.lastError) || null}
       />
       <section className="ata-panel">
@@ -569,9 +585,10 @@ function TauriDiagnosticsPage({
             <dd>{runtimeModeLabel(nativeContext.runtimeMode)}</dd>
           </div>
           <div>
-            <dt>SDK transport</dt>
+            <dt>Transport</dt>
             <dd>{transportKindLabel(snapshot.transportKind, nativeContext.runtimeMode)}</dd>
           </div>
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'sidecar') ? (
           <div>
             <dt>Sidecar supervisor</dt>
             <dd>
@@ -582,6 +599,7 @@ function TauriDiagnosticsPage({
                   : "not used in thin mode"}
             </dd>
           </div>
+          ) : null}
           <div>
             <dt>Native manifest</dt>
             <dd>
@@ -600,16 +618,20 @@ function TauriDiagnosticsPage({
               {nativeFeatureLabel(nativeContext.nativeFeatures.notifications)}
             </dd>
           </div>
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'ios') ? (
           <div>
             <dt>iOS microphone capture</dt>
             <dd>{nativeFeatureLabel(nativeContext.nativeFeatures.iosVoice)}</dd>
           </div>
+          ) : null}
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'ios') ? (
           <div>
             <dt>iOS background voice</dt>
             <dd>
               {nativeFeatureLabel(nativeContext.nativeFeatures.iosBackground)}
             </dd>
           </div>
+          ) : null}
           <div>
             <dt>Dialogs</dt>
             <dd>{nativeFeatureLabel(nativeContext.nativeFeatures.dialogs)}</dd>
@@ -618,36 +640,48 @@ function TauriDiagnosticsPage({
             <dt>Audio bridge</dt>
             <dd>{nativeFeatureLabel(nativeContext.nativeFeatures.audio)}</dd>
           </div>
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'ios') ? (
           <div>
             <dt>iOS Keychain</dt>
             <dd>
               {nativeFeatureLabel(nativeContext.nativeFeatures.iosKeychain)}
             </dd>
           </div>
+          ) : null}
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'ios') ? (
           <div>
             <dt>Face ID / Touch ID</dt>
             <dd>
               {nativeFeatureLabel(nativeContext.nativeFeatures.iosBiometrics)}
             </dd>
           </div>
+          ) : null}
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'ios') ? (
           <div>
             <dt>iOS invocation</dt>
             <dd>{iosInvocationLabel(nativeContext.iosInvocationStatus)}</dd>
           </div>
+          ) : null}
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'ios') ? (
           <div>
             <dt>iOS local-light inference</dt>
             <dd>
               {localLightInferenceLabel(nativeContext.iosLocalLightStatus)}
             </dd>
           </div>
+          ) : null}
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'android') ? (
           <div>
             <dt>Android baseline</dt>
             <dd>{androidBaselineLabel(nativeContext.androidBaseline)}</dd>
           </div>
+          ) : null}
+          {shouldShowForSurface(nativeContext.surfaceProfile, 'android') ? (
           <div>
-            <dt>Assistant role probe</dt>
+            <dt>Assistant role</dt>
             <dd>{assistantRoleProbeLabel(nativeContext.androidBaseline)}</dd>
           </div>
+          ) : null}
           <div>
             <dt>Denied native defaults</dt>
             <dd>
@@ -677,13 +711,12 @@ function MissingTauriRoute({ route }: { route: RouteAvailability }) {
         title={`${route.item.label} route registry error`}
         state="denied"
         description="The Tauri shell could not find a production route component for this nav item."
-        evidence={`${route.providerLabel}; blockers=${route.blockers.join(', ') || 'none'}`}
+        evidence={null}
         actionLabel="Route registry repair required"
       />
       <section className="ata-panel">
         <h2>{route.item.label} route is unregistered</h2>
         <dl className="ata-facts">
-          <div><dt>Expected task</dt><dd>{route.item.expectedTask}</dd></div>
           <div><dt>Privacy class</dt><dd>{route.item.privacyClass}</dd></div>
           <div><dt>Routeable</dt><dd>{route.routeable ? 'yes' : 'no'}</dd></div>
           <div><dt>Route id</dt><dd>{route.item.id}</dd></div>
@@ -709,8 +742,8 @@ function fallbackRoute(item: AuroraNavItem): RouteAvailability {
   return {
     item: navItemSnapshot(item),
     state: item.fallbackState,
-    explanation: "Capability state is loading from AuroraClient.",
-    providerLabel: "pending backend evidence",
+    explanation: "Capability state is loading.",
+    providerLabel: "pending",
     blockers: ["loading"],
     repairActions: [],
     candidateProviders: [],
@@ -736,7 +769,7 @@ function normalizePath(path: string): string {
     : withoutHash;
 }
 
-function nativeCommandEvidenceRows(nativeContext: NativeContext): Array<{ label: string; command: string; status: string; source: string }> {
+function nativeCommandRows(nativeContext: NativeContext): Array<{ label: string; command: string; status: string; source: string }> {
   return [
     {
       label: 'Native permissions',
@@ -744,10 +777,10 @@ function nativeCommandEvidenceRows(nativeContext: NativeContext): Array<{ label:
       status: nativeContext.nativePermissions ? `${nativeContext.nativePermissions.platform}; denied=${nativeContext.nativePermissions.deniedByDefault.length}` : 'not available',
       source: nativeContext.nativePermissions?.evidenceSource ?? commandUnavailableSource(nativeContext),
     },
-    nativeFeatureEvidenceRow('Tray', 'aurora_tray_status', nativeContext.nativeFeatures.tray, nativeContext),
-    nativeFeatureEvidenceRow('Notifications', 'aurora_notification_status', nativeContext.nativeFeatures.notifications, nativeContext),
-    nativeFeatureEvidenceRow('Dialogs', 'aurora_dialog_status', nativeContext.nativeFeatures.dialogs, nativeContext),
-    nativeFeatureEvidenceRow('Audio bridge', 'aurora_audio_bridge_status', nativeContext.nativeFeatures.audio, nativeContext),
+    nativeFeatureRow('Tray', 'aurora_tray_status', nativeContext.nativeFeatures.tray, nativeContext),
+    nativeFeatureRow('Notifications', 'aurora_notification_status', nativeContext.nativeFeatures.notifications, nativeContext),
+    nativeFeatureRow('Dialogs', 'aurora_dialog_status', nativeContext.nativeFeatures.dialogs, nativeContext),
+    nativeFeatureRow('Audio bridge', 'aurora_audio_bridge_status', nativeContext.nativeFeatures.audio, nativeContext),
     {
       label: 'Sidecar',
       command: 'aurora_sidecar_status',
@@ -757,7 +790,7 @@ function nativeCommandEvidenceRows(nativeContext: NativeContext): Array<{ label:
   ]
 }
 
-function nativeFeatureEvidenceRow(
+function nativeFeatureRow(
   label: string,
   command: string,
   feature: TauriNativeFeatureStatus | null | undefined,
@@ -772,18 +805,18 @@ function nativeFeatureEvidenceRow(
 }
 
 function commandUnavailableSource(nativeContext: NativeContext): string {
-  return nativeContext.localMode ? 'Tauri command returned no evidence' : 'unavailable outside desktop-local Tauri runtime'
+  return nativeContext.localMode ? 'Tauri command unavailable' : 'not used on this surface'
 }
 
 function runtimeModeLabel(mode: string): string {
-  if (mode === 'mock') return 'mock (degraded development fixture only)'
+  if (mode === 'mock') return 'Demo mode'
   if (mode === 'desktop-local') return 'desktop-local (Tauri sidecar supervised local stack)'
   if (mode === 'desktop-thin') return 'desktop-thin (remote Gateway, no local sidecar)'
   return mode
 }
 
 function transportKindLabel(transportKind: string, runtimeMode: string): string {
-  if (runtimeMode === 'mock') return 'mock (SDK fixture transport; development fallback only)'
+  if (runtimeMode === 'mock') return 'Demo mode'
   if (transportKind === 'pending' && runtimeMode === 'desktop-local') return 'tauri (pending local Gateway readiness)'
   if (transportKind === 'pending' && runtimeMode === 'desktop-thin') return 'http (pending remote Gateway readiness)'
   return transportKind
@@ -809,7 +842,7 @@ function iosInvocationLabel(
 function localLightInferenceLabel(
   status: AndroidLocalLightInferenceStatus | null | undefined,
 ): string {
-  if (!status) return "local-light inference provider pending native evidence.";
+  if (!status) return "local-light inference provider pending native support.";
   return `${status.platform} ${status.providerId} ${status.state}; backend model catalog required=${String(status.backendModelCatalogRequired)}`;
 }
 

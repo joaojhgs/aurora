@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AuroraClient, MockAuroraTransport } from '@aurora/client'
+import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
 import {
   buildDataPolicySnapshot,
   buildMemoryViewModel,
@@ -12,7 +12,7 @@ import {
 
 describe('Memory and data policy production stories', () => {
   it('renders Memory & Knowledge cards, search, history, provenance, and gated actions', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const memoryRoute = await enabledRoute(client, 'memory')
     const model = await buildMemoryViewModel(client, memoryRoute, {
       namespace: 'peer-studio-gpu.memories',
@@ -37,7 +37,7 @@ describe('Memory and data policy production stories', () => {
     const transport = new MockAuroraTransport()
       .register('DB.GetMessages', () => ({ messages: [], total: 0, has_more: false }))
       .register('DB.RAGListNamespaces', () => ({ namespaces: [] }))
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const memoryRoute = await enabledRoute(client, 'memory')
     const model = await buildMemoryViewModel(client, memoryRoute)
 
@@ -51,7 +51,7 @@ describe('Memory and data policy production stories', () => {
   })
 
   it('renders data-policy privacy controls, namespace visibility, AdminAction gates, and audit link separately from /memory search', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const dataRoute = await enabledRoute(client, 'data')
     const snapshot = await buildDataPolicySnapshot(client, dataRoute)
 
@@ -70,7 +70,7 @@ describe('Memory and data policy production stories', () => {
   })
 })
 
-async function enabledRoute(client: AuroraClient, id: string): Promise<RouteAvailability> {
+async function enabledRoute(client: Aurora, id: string): Promise<RouteAvailability> {
   const snapshot = await buildShellSnapshot(client)
   const route = snapshot.routes.find((candidate) => candidate.item.id === id)
   if (!route) throw new Error(`missing route ${id}`)

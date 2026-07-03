@@ -73,9 +73,9 @@ export interface AdminContractRow extends MethodDescriptor {
   liveRegistryStatus: 'live-registry' | 'registry-only' | 'capability-only'
   conformanceStatus: 'conformant' | 'internal-only' | 'missing-capability' | 'gateway-builtin'
   generatedRoutePath: string | null
-  openApiEvidence: string
-  exportEvidence: string
-  schemaEvidence: string
+  openApiState: string
+  exportState: string
+  schemaState: string
   capabilityPermissions: string[]
 }
 
@@ -110,7 +110,7 @@ const loadingSnapshot: AdminServicesSnapshot = {
   contracts: [],
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }
 
 export function AdminServicesResource({ client, onPreviewAdminAction }: AdminServicesResourceProps) {
@@ -152,9 +152,9 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
     return {
       ...loadingSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
-      error: failures.join(' ') || 'Aurora services and contract evidence are unavailable.',
+      error: failures.join(' ') || 'Aurora services and contract status are unavailable.',
       warnings: failures,
-      evidenceSource: 'AuroraClient SDK error'
+      evidenceSource: 'Aurora request error'
     }
   }
 
@@ -177,7 +177,7 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
     contracts,
     warnings: failures,
     error: failures[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response'
   }
 }
 
@@ -190,10 +190,10 @@ export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServi
       <AdminEvidenceHeader
         title="Services"
         titleId="admin-services-title"
-        description="Service registry health, route evidence, and AdminAction service controls are rendered from AuroraClient SDK responses. Method contract browsing lives on /admin/contracts."
+        description="Service registry health, route status, and AdminAction service controls are rendered from Aurora SDK responses. Method contract browsing lives on /admin/contracts."
         snapshot={snapshot}
         state={state}
-        badgeLabel="Admin services backend evidence"
+        badgeLabel="Admin services service status"
       />
 
       <StatusPanel snapshot={snapshot} />
@@ -238,10 +238,10 @@ export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapsh
       <AdminEvidenceHeader
         title="Contracts registry"
         titleId="admin-contracts-title"
-        description="Method exposure, generated Gateway routes, schemas, permissions, and conformance evidence are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services."
+        description="Method exposure, generated Gateway routes, schemas, permissions, and conformance status are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services."
         snapshot={snapshot}
         state={state}
-        badgeLabel="Admin contracts backend evidence"
+        badgeLabel="Admin contracts service status"
       />
 
       <StatusPanel snapshot={snapshot} />
@@ -284,7 +284,7 @@ function AdminEvidenceHeader({
         {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
         <EvidenceBadge label={snapshot.evidenceSource} />
         <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
-        <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+        <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
       </div>
     </header>
   )
@@ -295,7 +295,7 @@ function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
     return (
       <div className="aui-admin-notice" aria-live="polite">
         <Activity size={18} aria-hidden />
-        <span>Loading services, contracts, and capability catalog through AuroraClient.</span>
+        <span>Loading services, contracts, and capability catalog through Aurora.</span>
       </div>
     )
   }
@@ -311,7 +311,7 @@ function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
   return (
     <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
       <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'Some backend evidence is unavailable. Unsupported controls remain disabled.'}</span>
+      <span>{snapshot.error ?? 'Some service status is unavailable. Unsupported controls remain disabled.'}</span>
     </div>
   )
 }
@@ -337,7 +337,7 @@ function ServicesTable({
         <div className="aui-table-scroll">
           <table className="aui-table">
             <caption className="aui-sr-only">
-              Services table with health, route evidence, capabilities, heartbeat, instance, and AdminAction controls
+              Services table with health, route state, capabilities, heartbeat, instance, and AdminAction controls
             </caption>
             <thead>
               <tr>
@@ -388,7 +388,7 @@ function ServiceTableRow({
               <div><dt>Version</dt><dd>{service.version}</dd></div>
               <div><dt>Last seen</dt><dd>{service.lastSeen}</dd></div>
               <div><dt>Provider</dt><dd>{service.providerLabel}</dd></div>
-              <div><dt>Route evidence</dt><dd>{service.routeReason}</dd></div>
+              <div><dt>Route state</dt><dd>{service.routeReason}</dd></div>
               <div><dt>Capabilities</dt><dd>{service.capabilities.length}</dd></div>
               <div><dt>Control posture</dt><dd>{controlPosture(service.controls)}</dd></div>
               <div><dt>Errors/logs</dt><dd>{serviceLogsAndErrorsLabel(service)}</dd></div>
@@ -707,12 +707,12 @@ function ContractDetail({ contract }: { contract: AdminContractRow }) {
         <div><dt>Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
         <div><dt>Capability permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
         <div><dt>Generated route path</dt><dd><code>{contract.generatedRoutePath ?? 'not HTTP-exposed'}</code></dd></div>
-        <div><dt>OpenAPI/export evidence</dt><dd>{contract.openApiEvidence}</dd></div>
-        <div><dt>Export evidence</dt><dd>{contract.exportEvidence}</dd></div>
+        <div><dt>OpenAPI/export state</dt><dd>{contract.openApiState}</dd></div>
+        <div><dt>Export state</dt><dd>{contract.exportState}</dd></div>
         <div><dt>Live-registry status</dt><dd>{contract.liveRegistryStatus}</dd></div>
         <div><dt>Contract conformance</dt><dd>{contract.conformanceStatus}</dd></div>
         <div><dt>Capability route status</dt><dd>{contract.routeReason}</dd></div>
-        <div><dt>Schema evidence</dt><dd>{contract.schemaEvidence}</dd></div>
+        <div><dt>Schema state</dt><dd>{contract.schemaState}</dd></div>
       </dl>
       <div className="aui-schema-grid" aria-label="Input and output schema detail">
         <SchemaBlock title="Input schema" schema={contract.inputSchema} />
@@ -789,9 +789,9 @@ function buildContractRows(
         liveRegistryStatus: (capability ? 'live-registry' : 'registry-only') as AdminContractRow['liveRegistryStatus'],
         conformanceStatus: contractConformance(method, capability),
         generatedRoutePath: method.routePath,
-        openApiEvidence: openApiEvidence(method),
-        exportEvidence: exportEvidence(method, capability),
-        schemaEvidence: schemaEvidence(method, capability),
+        openApiState: openApiEvidence(method),
+        exportState: exportEvidence(method, capability),
+        schemaState: schemaEvidence(method, capability),
         capabilityPermissions: capability?.requiredPermissions ?? []
       }
     })

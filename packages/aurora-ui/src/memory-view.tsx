@@ -12,7 +12,7 @@ import type {
 } from '@aurora/client'
 import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface MemoryViewProps {
   client: AuroraClient
@@ -203,7 +203,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
           <h1 id="memory-title">{'Memory & Knowledge'}</h1>
           <p>{statusCopy}</p>
         </div>
-        <div className="aui-assistant-badges" aria-label="Memory backend evidence">
+        <div className="aui-assistant-badges" aria-label="Memory service status">
           <StatusBadge state={route.state} />
           <PrivacyBadge privacy={selectedPrivacy} />
           <EvidenceBadge label={route.providerLabel} />
@@ -385,7 +385,7 @@ function MemorySummaryGrid({ model }: { model: MemoryViewModel }) {
         ? 'Embedding health reported'
         : model.loadState === 'loading'
           ? 'Embedding health loading'
-          : 'No embedding evidence reported'
+          : 'No embedding status reported'
   const embeddingCopy = missingEmbeddings.length > 0
     ? `Configure or reconnect the embedding provider for ${missingEmbeddings.map((namespace) => namespace.info.namespace).join(', ')} and rerun DB.RAGListNamespaces before enabling semantic search.`
     : legacyEmbeddings.length > 0
@@ -528,9 +528,9 @@ function buildActionStates(route: RouteAvailability, namespace: MemoryNamespaceV
       disabled: routeBlocked || !namespace?.selectable,
       label: 'Search',
       reason: routeBlocked
-        ? `Route unavailable: ${route.blockers.join(', ') || route.state}`
+        ? `Route unavailable: ${presentableSignal(route.blockers.join(', ') || route.state)}`
         : namespace?.selectable
-          ? 'Search uses DB.RAGSearchRemote through AuroraClient.'
+          ? 'Search uses DB.RAGSearchRemote through Aurora.'
           : namespace?.repairCopy ?? 'Namespace is not selectable.'
           ,
       requiresAdminAction: false
@@ -582,7 +582,7 @@ function errorModel(
 }
 
 function memoryStatusCopy(model: MemoryViewModel): string {
-  if (model.loadState === 'loading') return 'Loading conversation and namespace evidence from AuroraClient.'
+  if (model.loadState === 'loading') return 'Loading conversation and namespace status from Aurora.'
   if (model.loadState === 'error') return model.error ?? 'Memory data could not be loaded.'
   if (!model.selectedNamespace) return 'No memory namespace was reported by the backend.'
   if (model.searchDecision === 'denied') return 'Backend policy denied this namespace search.'
@@ -594,6 +594,6 @@ function memoryErrorMessage(error: AuroraError): string {
   if (error.code === 'auth' || error.code === 'permission') return 'Memory request denied by authentication or permissions.'
   if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'Memory and RAG contracts are unavailable in this backend.'
   if (error.code === 'privacy_blocked') return 'Memory access is blocked until selector, consent, or policy approval exists.'
-  if (error.code === 'timeout') return 'Memory request timed out before backend evidence arrived.'
+  if (error.code === 'timeout') return 'Memory request timed out before service status arrived.'
   return error.message || 'Memory request failed.'
 }

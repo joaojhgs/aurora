@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   normalizeSchedulerJob,
   normalizeToolCatalog,
@@ -49,7 +49,7 @@ function toolsRoute(): RouteAvailability {
 }
 
 function renderToolsPanel() {
-  const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  const client = new Aurora({ transport: new MockAuroraTransport() })
   const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
   const schedulerJobs = schedulerJobsFixture.jobs.map(normalizeSchedulerJob)
   return renderToStaticMarkup(
@@ -83,7 +83,7 @@ describe('ToolApprovalPanel tools and automations stories', () => {
     expect(markup).toContain('active automations')
   })
 
-  it('covers search/category filters, tool details, schema form, dry-run, execution, approval, audit, and result evidence', () => {
+  it('covers search/category filters, tool details, schema form, dry-run, execution, approval, audit, and result status', () => {
     const markup = renderToolsPanel()
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: 'mock' })
     const categories = buildToolCategories(tools)

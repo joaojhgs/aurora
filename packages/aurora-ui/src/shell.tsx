@@ -1,10 +1,10 @@
-import type { MouseEvent, ReactNode } from 'react'
+import { useCallback, useState, type MouseEvent, type ReactNode } from 'react'
 import { Lock, Menu, PanelRight, Sparkles } from 'lucide-react'
 import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from './nav'
 import type { AuroraNavItem } from './nav'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { CapabilityDrawer } from './state-surface'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface AppShellProps {
   snapshot: AuroraShellSnapshot
@@ -17,12 +17,17 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
   const activePath = normalizePath(currentPath)
   const activeRoute = snapshot.routes.find((route) => route.item.href === activePath)
   const modeLabel = shellModeLabel(snapshot.transportKind)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const handleMobileMenuToggle = useCallback(() => setMobileMenuOpen((open) => !open), [])
+  const handleMobileNavigate = useCallback((href: string) => {
+    setMobileMenuOpen(false)
+    onNavigate?.(href)
+  }, [onNavigate])
   return (
     <div className="aui-shell">
       <aside className="aui-sidebar" aria-label="Primary navigation">
         <BrandHeader snapshot={snapshot} />
-        <ShellNavigation activePath={activePath} routes={snapshot.routes} {...(onNavigate ? { onNavigate } : {})} />
-        <QuickDiagnosticsIndicator snapshot={snapshot} {...(onNavigate ? { onNavigate } : {})} />
+        <ShellNavigation activePath={activePath} routes={snapshot.routes} {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})} />
         <div className="aui-sidebar-card">
           <span className="aui-avatar">AD</span>
           <div>
@@ -33,15 +38,20 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
       </aside>
       <div className="aui-main-column">
         <header className="aui-topbar">
-          <details className="aui-mobile-menu">
-            <summary aria-label="Open menu"><Menu size={20} /></summary>
+          <div className="aui-mobile-menu" data-open={mobileMenuOpen ? 'true' : 'false'}>
+            <button
+              type="button"
+              aria-label="Open menu"
+              aria-expanded={mobileMenuOpen}
+              onClick={handleMobileMenuToggle}
+            ><Menu size={20} /></button>
             <MobileNavigationSheet
               snapshot={snapshot}
               activePath={activePath}
               routes={snapshot.routes}
-              {...(onNavigate ? { onNavigate } : {})}
+              {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
             />
-          </details>
+          </div>
           <div className="aui-status-row" aria-label="Aurora shell status">
             <ShellStatus label="Mode"><EvidenceBadge label={modeLabel} /></ShellStatus>
             <ShellStatus label="Route">
@@ -50,9 +60,7 @@ export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: 
             <ShellStatus label="Privacy">
               {activeRoute ? <PrivacyBadge privacy={activeRoute.item.privacyClass} /> : <EvidenceBadge label="privacy pending" />}
             </ShellStatus>
-            <ShellStatus label="Health"><EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} selectable`} /></ShellStatus>
-            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
-            <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native deferred'} />
+            <ShellStatus label="Routes"><EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} ready`} /></ShellStatus>
           </div>
           <details className="aui-activity-drawer">
             <summary aria-label="Toggle activity rail"><PanelRight size={20} /></summary>
@@ -87,13 +95,13 @@ function MobileNavigationSheet({
     <div className="aui-mobile-sheet" role="dialog" aria-labelledby="aui-mobile-sheet-title">
       <BrandHeader snapshot={snapshot} />
       <div className="aui-mobile-sheet-body">
-        <p className="aui-mobile-sheet-title" id="aui-mobile-sheet-title">Mobile navigation sheet</p>
+        <p className="aui-mobile-sheet-title" id="aui-mobile-sheet-title">Navigation</p>
         <MobileSheetRouteSummary route={activeRoute} snapshot={snapshot} />
         <ShellNavigation activePath={activePath} routes={routes} compact {...(onNavigate ? { onNavigate } : {})} />
       </div>
       <div className="aui-mobile-sheet-footer" aria-label="Mobile identity">
         <span className="aui-avatar">AD</span>
-        <div><strong>admin</strong><span>Capability gated · {shellModeLabel(snapshot.transportKind)}</span></div>
+        <div><strong>admin</strong><span>{shellModeLabel(snapshot.transportKind)}</span></div>
       </div>
     </div>
   )
@@ -111,12 +119,12 @@ function MobileSheetRouteSummary({
       <div>
         <span className="aui-kicker">Current route</span>
         <strong>{route?.item.label ?? 'Route pending'}</strong>
-        <small>{route?.explanation ?? 'Waiting for route evidence from AuroraClient.'}</small>
+        <small>{route ? presentableSignal(route.explanation) : 'Waiting for Aurora.'}</small>
       </div>
       <div className="aui-mobile-sheet-summary-badges" aria-label="Current mobile route state">
         {route ? <StatusBadge state={route.state} /> : <EvidenceBadge label="pending" />}
         {route ? <PrivacyBadge privacy={route.item.privacyClass} /> : null}
-        <EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} selectable`} />
+        <EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} ready`} />
       </div>
     </section>
   )
@@ -191,7 +199,7 @@ export function ShellNavigation({
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]))
   return (
-    <nav className={compact ? 'aui-nav aui-nav-compact' : 'aui-nav'}>
+    <nav className={compact ? 'aui-nav aui-nav-compact' : 'aui-nav'} aria-label={compact ? 'Mobile sheet route navigation' : 'Primary route navigation'}>
       {auroraNavSections.map((section) => (
         <section key={section.label}>
           <h2>{section.label}</h2>
@@ -245,12 +253,11 @@ function RouteCard({ route }: { route: RouteAvailability }) {
         <h3>{route.item.label}</h3>
         <StatusBadge state={route.state} />
       </div>
-      <p>{route.explanation}</p>
+      <p>{presentableSignal(route.explanation)}</p>
       <dl>
         <div><dt>Provider</dt><dd>{route.providerLabel}</dd></div>
         <div><dt>Privacy</dt><dd><PrivacyBadge privacy={route.item.privacyClass} /></dd></div>
-        <div><dt>Task</dt><dd>{route.item.expectedTask}</dd></div>
-        <div><dt>AdminAction</dt><dd>{route.requiresAdminAction ? 'required for mutation' : 'not required'}</dd></div>
+        <div><dt>Approval</dt><dd>{route.requiresAdminAction ? 'required for changes' : 'not required'}</dd></div>
       </dl>
       <CapabilityDrawer route={route} />
     </article>
@@ -294,14 +301,14 @@ function BrandHeader({ snapshot }: { snapshot: AuroraShellSnapshot }) {
 
 function ActivityRail({ snapshot }: { snapshot: AuroraShellSnapshot }) {
   return (
-    <aside className="aui-activity" aria-label="Shell diagnostics">
-      <p className="aui-kicker">Evidence</p>
-      <h2>Runtime snapshot</h2>
+    <aside className="aui-activity" aria-label="Aurora activity">
+      <p className="aui-kicker">Activity</p>
+      <h2>System</h2>
       <dl>
-        <div><dt>Source</dt><dd>{snapshot.evidenceSource}</dd></div>
-        <div><dt>Peer</dt><dd>{snapshot.localPeerId ?? 'not reported'}</dd></div>
-        <div><dt>Generated</dt><dd>{snapshot.generatedAt ?? 'pending'}</dd></div>
-        <div><dt>Blocked routes</dt><dd>{snapshot.blockedCount}</dd></div>
+        <div><dt>Connection</dt><dd>{shellModeLabel(snapshot.transportKind)}</dd></div>
+        <div><dt>Peer</dt><dd>{snapshot.localPeerId ?? 'local node pending'}</dd></div>
+        <div><dt>Updated</dt><dd>{snapshot.generatedAt ?? 'pending'}</dd></div>
+        <div><dt>Needs setup</dt><dd>{snapshot.blockedCount}</dd></div>
       </dl>
       {snapshot.error ? <p role="alert">{snapshot.error}</p> : null}
     </aside>
@@ -328,8 +335,8 @@ function QuickDiagnosticsIndicator({
       onClick={(event) => handleShellNavigation(event, '/diagnostics', onNavigate)}
     >
       <span>
-        <strong>Diagnostics</strong>
-        <small>{snapshot.blockedCount} blocked / {snapshot.routeCount} routes</small>
+        <strong>System</strong>
+        <small>{snapshot.blockedCount > 0 ? `${snapshot.blockedCount} routes need setup` : 'All routes ready'}</small>
       </span>
       <span className="aui-quick-diagnostics-badges">
         <StatusBadge state={state} />
@@ -343,7 +350,7 @@ function shellModeLabel(transportKind: string): string {
   if (transportKind === 'tauri-local') return 'Desktop local'
   if (transportKind === 'tauri-thin') return 'Desktop thin'
   if (transportKind === 'native-mobile') return 'Mobile thin'
-  if (transportKind === 'mock') return 'Demo fixture'
+  if (transportKind === 'mock') return 'Demo mode'
   if (transportKind === 'http') return 'Web thin'
   return transportKind
 }

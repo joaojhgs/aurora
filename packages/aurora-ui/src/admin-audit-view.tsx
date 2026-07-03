@@ -126,9 +126,9 @@ const loadingSnapshot: AdminAuditSnapshot = {
   total: 0,
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls',
+  evidenceSource: 'pending Aurora service calls',
   exportState: 'pending',
-  exportReason: 'Audit export waits for redacted Auth.AuditLog evidence.'
+  exportReason: 'Audit export waits for redacted Auth.AuditLog status.'
 }
 
 const approvalLifecycleEvents = [
@@ -190,8 +190,8 @@ export async function buildAdminAuditSnapshot(
         error: errorMessage(auditResult.error),
         warnings: [errorMessage(auditResult.error)],
         exportState: 'unsupported',
-        exportReason: 'Export is disabled until Auth.AuditLog returns redacted audit evidence.',
-        evidenceSource: 'AuroraClient SDK error'
+        exportReason: 'Export is disabled until Auth.AuditLog returns redacted audit status.',
+        evidenceSource: 'Aurora request error'
       }
     }
 
@@ -209,7 +209,7 @@ export async function buildAdminAuditSnapshot(
       total: auditResult.data.total,
       warnings: unsupportedFilterWarnings(effectiveFilters, backendFilter),
       error: null,
-      evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient Auth.AuditLog response',
+      evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora Auth.AuditLog response',
       exportState: rows.length > 0 ? 'available-local' : 'unsupported',
       exportReason: rows.length > 0
         ? 'Export includes the redacted normalized rows, payload hashes, receipts, and support-bundle correlation IDs.'
@@ -226,7 +226,7 @@ export async function buildAdminAuditSnapshot(
       warnings: [errorMessage(error)],
       exportState: 'unsupported',
       exportReason: 'Export is disabled until Auth.AuditLog is available.',
-      evidenceSource: 'AuroraClient transport error'
+      evidenceSource: 'Aurora transport error'
     }
   }
 }
@@ -263,13 +263,13 @@ export function AdminAuditView({
           <p className="aui-kicker">Admin</p>
           <h1 id="admin-audit-title">Audit log</h1>
           <p>
-            Audit search, mesh trace filters, event receipts, redacted payload previews, and export are loaded through AuroraClient.
+            Audit search, mesh trace filters, event receipts, redacted payload previews, and export are loaded through Aurora.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="Audit backend evidence">
+        <div className="aui-admin-badges" aria-label="Audit service status">
           {isStatusBadgeState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
           <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
           <PrivacyBadge privacy="admin-critical" />
         </div>
       </header>
@@ -560,7 +560,7 @@ function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
     return (
       <div className="aui-admin-notice" aria-live="polite">
         <Activity size={18} aria-hidden />
-        <span>Loading audit events and redaction metadata through AuroraClient.</span>
+        <span>Loading audit events and redaction metadata through Aurora.</span>
       </div>
     )
   }
@@ -576,7 +576,7 @@ function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   return (
     <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
       <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'Audit evidence is degraded or unavailable. Export remains disabled until redacted SDK data is present.'}</span>
+      <span>{snapshot.error ?? 'Audit status is degraded or unavailable. Export remains disabled until redacted SDK data is present.'}</span>
     </div>
   )
 }

@@ -14,7 +14,7 @@ import type {
   WebRTCDiagnosticsResponse,
   WebRTCPeerDiagnostic
 } from '@aurora/client'
-import { EvidenceBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
 
 export type MeshDiagnosticsLoadState = 'loading' | 'ready' | 'empty' | 'degraded' | 'denied' | 'unavailable' | 'error'
@@ -185,7 +185,7 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   appLayerE2eeEnabled: false,
   secretsRedacted: true,
   signalingState: 'pending',
-  signalingEvidence: 'Loading Gateway.GetWebRTCDiagnostics through AuroraClient.',
+  signalingEvidence: 'Loading Gateway.GetWebRTCDiagnostics through Aurora.',
   signalingRepair: 'Wait for Gateway diagnostics to resolve.',
   diagnosticsCapabilityState: 'pending',
   diagnosticsCapabilityReason: 'Loading capability catalog for Gateway.GetWebRTCDiagnostics.',
@@ -194,7 +194,7 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   pairingPeerCount: 0,
   pendingRpcCount: 0,
   supportBundleState: 'pending',
-  supportBundleReason: 'Loading Gateway.GetSupportBundle redaction preview through AuroraClient.',
+  supportBundleReason: 'Loading Gateway.GetSupportBundle redaction preview through Aurora.',
   supportBundleGeneratedAt: null,
   supportBundleCorrelationId: null,
   supportBundleAuditReceipt: null,
@@ -222,7 +222,7 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   recentErrors: [],
   warnings: [],
   errors: [],
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }
 
 export async function buildMeshDiagnosticsSnapshot(
@@ -261,7 +261,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     ...signalingWarnings(webRtc),
     ...(mesh?.compatibility_failures ?? []).map((failure) => `${failure.peer_id} ${failure.module} ${failure.direction}: ${failure.reason}`),
     ...(input.route.disabled ? [input.route.explanation] : [])
-  ].map(redactDiagnosticText)
+  ].map((message) => redactDiagnosticText(presentableSignal(message)))
   const loadState: MeshDiagnosticsLoadState = denied
     ? 'denied'
     : errors.length > 0
@@ -320,7 +320,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     })),
     warnings,
     errors,
-    evidenceSource: errors.length ? 'partial AuroraClient diagnostics responses' : 'AuroraClient Gateway diagnostics, mesh status, and capability catalog'
+    evidenceSource: errors.length ? 'partial Aurora diagnostics responses' : 'Aurora Gateway diagnostics, mesh status, and capability catalog'
   }
 }
 
@@ -329,15 +329,15 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
     <section className="aui-mesh-diagnostics" aria-labelledby="mesh-diagnostics-title">
       <header className="aui-mesh-diagnostics-header">
         <div>
-          <p className="aui-kicker">DIAG-004</p>
+          <p className="aui-kicker">service contract</p>
           <h1 id="mesh-diagnostics-title">Diagnostics</h1>
           <p>
-            WebRTC and ICE diagnostics, live probes, redaction preview, support-bundle export, traces, and route failures are rendered from AuroraClient diagnostics.
+            WebRTC and ICE diagnostics, live probes, redaction preview, support-bundle export, traces, and route failures are rendered from Aurora diagnostics.
           </p>
         </div>
         <div className="aui-mesh-badges" aria-label="Mesh diagnostics state">
           <StatusBadge state={snapshot.loadState === 'ready' ? 'available-remote' : stateForLoad(snapshot.loadState)} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
           <EvidenceBadge label={snapshot.supportBundleState === 'available-local' ? 'support bundle ready' : 'support bundle gated'} />
           <EvidenceBadge label={snapshot.evidenceSource} />
           {onRefresh ? <button className="aui-action-chip" type="button" onClick={onRefresh}><RefreshCw size={14} aria-hidden />Refresh</button> : null}
@@ -347,7 +347,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
       <div className="aui-diagnostics-overview" aria-label="Diagnostics overview">
         <MetricCard icon={<Activity size={20} aria-hidden />} label="services observed" value={String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount)} detail="Gateway.GetSupportBundle service list" />
         <MetricCard icon={<FileArchive size={20} aria-hidden />} label="event stream" value={String(snapshot.supportBundleRecentEventCount)} detail="redacted EventStream metadata" />
-        <MetricCard icon={<Gauge size={20} aria-hidden />} label="route diagnostics" value={String(snapshot.supportBundleRouteCount || snapshot.routeRows.length)} detail="mesh and Gateway route evidence" />
+        <MetricCard icon={<Gauge size={20} aria-hidden />} label="route diagnostics" value={String(snapshot.supportBundleRouteCount || snapshot.routeRows.length)} detail="mesh and Gateway route state" />
         <MetricCard icon={<RadioTower size={20} aria-hidden />} label="live probes" value={String(snapshot.liveProbes.length)} detail="registry, WebRTC, mesh, support bundle" />
         <MetricCard icon={<Bug size={20} aria-hidden />} label="reported errors" value={String(snapshot.recentErrors.length + snapshot.errors.length)} detail="redacted before render" />
       </div>
@@ -471,7 +471,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
             <Metric label="signaling peer" value={snapshot.localSignalingPeerId ?? 'not reported'} />
             <Metric label="auth" value={snapshot.requireAuth ? 'required' : 'not required'} />
             <Metric label="app-layer E2EE" value={snapshot.appLayerE2eeEnabled ? 'enabled' : 'not enabled'} />
-            <Metric label="evidence" value={snapshot.signalingEvidence} />
+            <Metric label="state" value={snapshot.signalingEvidence} />
           </dl>
           <p className="aui-mesh-diagnostics-note">{snapshot.signalingRepair}</p>
         </section>
@@ -501,7 +501,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
 
       {snapshot.warnings.length > 0 ? (
         <section className="aui-mesh-panel" aria-labelledby="mesh-warning-title">
-          <PanelTitle icon={<AlertTriangle size={18} aria-hidden />} title="Repair evidence" description="Unsupported, stale, denied, or compatibility-blocked diagnostics remain visible." />
+          <PanelTitle icon={<AlertTriangle size={18} aria-hidden />} title="Repair state" description="Unsupported, stale, denied, or compatibility-blocked diagnostics remain visible." />
           <ul className="aui-mesh-warnings">{snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
         </section>
       ) : null}
@@ -705,7 +705,7 @@ function buildFrontendLogRows(bundle: GatewaySupportBundleResponse | null, webRt
       name: 'Frontend errors/logs',
       state: event.status === 'failed' || event.status === 'error' ? 'degraded' : 'available-local',
       source: redactDiagnosticText(event.topic ?? event.kind ?? 'Gateway event stream'),
-      detail: redactDiagnosticText(`${event.status ?? 'status unknown'}; ${safeDiagnosticDetails(event.payload_summary)}; ${event.secrets_redacted ? 'secrets redacted' : 'redaction not confirmed'}`)
+      detail: redactDiagnosticText(`${event.status ?? 'status unknown'}; ${safeDiagnosticDetails(event.payload_summary)}; ${event.secrets_redacted ? 'secrets protected' : 'redaction not confirmed'}`)
     }))
   }
   return [{
@@ -892,7 +892,7 @@ function signalingRepair(webrtc: WebRTCDiagnosticsResponse | null, error: string
   if (!webrtc.started) return 'Start the WebRTC mesh runtime before diagnosing peers.'
   if (!webrtc.signaling.connected) return 'Check signaling broker reachability and room configuration.'
   if (!webrtc.signaling.encrypted_presence || webrtc.signaling.public_broker_warning) return 'Review signaling privacy settings before exposing peer presence.'
-  return 'Signaling is connected with backend-reported privacy evidence.'
+  return 'Signaling is connected with backend-reported privacy status.'
 }
 
 function capabilityState(action: CapabilityActionInfo | null, error: string | null): AvailabilityState {
@@ -907,7 +907,7 @@ function capabilityReason(action: CapabilityActionInfo | null, error: string | n
   if (error) return `Capability catalog unavailable: ${error}`
   if (!action) return 'Gateway.GetWebRTCDiagnostics is not advertised by the capability catalog.'
   const blockers = [...action.route_blockers, ...action.policy.denial_reasons]
-  return blockers.length > 0 ? blockers.join(', ') : `${action.provider_kind} provider ${action.provider_id}; bindability ${action.bindability}`
+  return blockers.length > 0 ? presentableSignal(blockers.join(', ')) : `${action.provider_kind} provider ${action.provider_id}; bindability ${action.bindability}`
 }
 
 function capabilityWarnings(action: CapabilityActionInfo | null): string[] {
@@ -953,7 +953,7 @@ function stateForLoad(loadState: MeshDiagnosticsLoadState): AvailabilityState {
 }
 
 function pairingState(peer: WebRTCPeerDiagnostic): string {
-  if (peer.pending_pairing_task) return 'pending pairing task'
+  if (peer.pending_pairing_task) return 'pending pairing work'
   if (peer.pairing_active) return 'pairing active'
   if (peer.auth_timeout_pending) return 'auth timeout pending'
   return 'not pairing'

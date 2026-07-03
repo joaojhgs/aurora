@@ -12,7 +12,7 @@ import type {
   NativeCapabilityManifest,
   PrivacyClass
 } from '@aurora/client'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface ModelsViewProps {
   client: AuroraClient
@@ -93,7 +93,7 @@ const emptyModel: ModelsViewModel = {
   availableCount: 0,
   remoteCount: 0,
   mobileLocalLightState: 'unsupported',
-  mobileLocalLightReason: 'Native manifest evidence is not loaded.',
+  mobileLocalLightReason: 'Native manifest status is not loaded.',
   secretsRedacted: true,
   error: null,
   providers: [],
@@ -189,19 +189,19 @@ export function ModelsView({
           <p className="aui-kicker">Models</p>
           <h1 id="aui-models-title">Models and runtime</h1>
           <p>
-            Provider health, route, privacy, hardware, and benchmark states are loaded through AuroraClient.
+            Provider health, route, privacy, hardware, and benchmark states are loaded through Aurora.
           </p>
         </div>
         <div className="aui-model-badges" aria-label="Model catalog summary">
           <EvidenceBadge label={`${model.providerCount} providers`} />
           <EvidenceBadge label={`${model.availableCount} routeable`} />
           <EvidenceBadge label={`${model.remoteCount} remote`} />
-          <EvidenceBadge label={model.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
         </div>
       </header>
 
       {model.loadState === 'loading' ? (
-        <ModelNotice icon="loading" message="Loading model runtime catalog from AuroraClient." />
+        <ModelNotice icon="loading" message="Loading model runtime catalog from Aurora." />
       ) : null}
       {model.loadState === 'error' ? (
         <ModelNotice icon="error" message={model.error ?? 'Model runtime catalog could not be loaded.'} role="alert" />
@@ -238,12 +238,12 @@ export function ModelsView({
           <div className="aui-model-layout">
             <ModelProviderTable providers={model.providers} />
             <aside className="aui-model-summary" aria-label="Runtime summary">
-              <h2>Runtime evidence</h2>
+              <h2>Runtime state</h2>
               <dl>
                 <div><dt>Generated</dt><dd>{model.generatedAt ?? 'pending'}</dd></div>
                 <div><dt>Selected provider</dt><dd>{model.selectedProviderId ?? 'not selected'}</dd></div>
                 <div><dt>Mobile local-light</dt><dd><StatusBadge state={model.mobileLocalLightState} /></dd></div>
-                <div><dt>Native evidence</dt><dd>{model.mobileLocalLightReason}</dd></div>
+                <div><dt>Native state</dt><dd>{model.mobileLocalLightReason}</dd></div>
               </dl>
               <ModelBenchmarkSnapshot rows={model.benchmarkRows} />
               <ModelSetupActions providers={model.providers} />
@@ -434,7 +434,7 @@ function ModelRoutePolicyPanel({ providers }: { providers: ModelProviderViewMode
               <div><dt>Route</dt><dd>{provider.routeLabel}</dd></div>
               <div><dt>Privacy</dt><dd><PrivacyBadge privacy={provider.privacyClass} /></dd></div>
               <div><dt>Selectable</dt><dd>{provider.canSelect ? `yes; writes ${provider.selectConfigValue ?? 'unknown'} through Config.Set AdminAction` : provider.selectReason}</dd></div>
-              <div><dt>Blockers</dt><dd>{provider.blockers.length > 0 ? provider.blockers.join(', ') : 'none reported'}</dd></div>
+              <div><dt>Blockers</dt><dd>{presentableSignal(provider.blockers.length > 0 ? provider.blockers.join(', ') : 'none reported')}</dd></div>
             </dl>
           </article>
         ))}
@@ -497,7 +497,7 @@ function ModelSetupActions({ providers }: { providers: ModelProviderViewModel[] 
         <ModelAction icon="download" label="Download model" enabled={Boolean(downloadProvider?.canDownload)} reason={downloadProvider?.downloadReason ?? 'No provider available for model download.'} />
       </div>
       <p className="aui-model-selection-confirmation">
-        Provider selection confirmation: {selected ? `${selected.name} is selected by backend catalog evidence.` : 'no provider selected by backend catalog evidence.'}
+        Provider selection confirmation: {selected ? `${selected.name} is selected by backend catalog status.` : 'no provider selected by backend catalog status.'}
       </p>
       <a href="/" className="aui-model-repair-link">Open Assistant model repair</a>
     </section>
@@ -652,7 +652,7 @@ function providerModel(
     canBenchmark: provider.benchmark.status === 'running',
     benchmarkReason: provider.benchmark.status === 'running'
       ? provider.benchmark.reason ?? 'Benchmark is running through backend operation state.'
-      : 'Benchmark action stays disabled until backend operation evidence exists.'
+      : 'Benchmark action stays disabled until backend operation status exists.'
   }
 }
 
@@ -725,7 +725,7 @@ function routeQualityLabel(
   const policy = candidate?.disabledReasons?.length
     ? `blocked by ${candidate.disabledReasons.join(', ')}`
     : provider.enabled
-      ? 'routeable from catalog evidence'
+      ? 'routeable from catalog status'
       : 'disabled by backend catalog'
   return `${routeKind}; ${availability}; ${policy}`
 }
@@ -776,7 +776,7 @@ function benchmarkSnapshotRows(providers: ModelProviderViewModel[]): ModelBenchm
     {
       label: 'Measured providers',
       value: `${completed.length}/${providers.length}`,
-      detail: completed.length > 0 ? completed.map((provider) => provider.name).join(', ') : 'No completed benchmark evidence was returned by the backend catalog.',
+      detail: completed.length > 0 ? completed.map((provider) => provider.name).join(', ') : 'No completed benchmark status was returned by the backend catalog.',
       state: completed.length > 0 ? 'available-local' : 'pending'
     },
     {
@@ -788,7 +788,7 @@ function benchmarkSnapshotRows(providers: ModelProviderViewModel[]): ModelBenchm
     {
       label: 'Missing measurements',
       value: `${unavailable.length}`,
-      detail: unavailable.length > 0 ? unavailable.map((provider) => provider.name).join(', ') : 'All providers have benchmark evidence.',
+      detail: unavailable.length > 0 ? unavailable.map((provider) => provider.name).join(', ') : 'All providers have benchmark status.',
       state: unavailable.length > 0 ? 'degraded' : 'available-local'
     }
   ]
@@ -847,7 +847,7 @@ function modelCategoryRows(
     {
       id: 'benchmarkable-providers',
       label: 'Benchmarkable providers',
-      value: `${benchmarkable.length} with benchmark evidence`,
+      value: `${benchmarkable.length} with benchmark status`,
       detail: benchmarkable.length > 0
         ? benchmarkable.map((provider) => `${provider.name}: ${provider.benchmark}`).join(', ')
         : 'No benchmarkable providers or completed benchmark measurements were returned.',
@@ -897,12 +897,12 @@ function selectReason(
   candidate: CapabilityProviderCandidate | undefined,
   availability: AvailabilityState
 ): string {
-  if (selected) return 'Selected provider is reported by backend catalog evidence.'
+  if (selected) return 'Selected provider is reported by backend catalog status.'
   if (provider.provider_type !== 'local') return 'Only local executable providers can be selected from this cockpit; remote/cloud/native providers require their own policy flow.'
   const configValue = modelProviderConfigValue(provider)
   if (!configValue) return 'Backend provider is not mapped to services.orchestrator.llm.provider; selection stays disabled with repair required.'
   if (!provider.enabled) return provider.health_reason ?? 'Backend catalog reports this provider disabled.'
-  if (!['available-local', 'degraded'].includes(availability)) return `Local provider is ${availability}; capability catalog must report executable local evidence before selection.`
+  if (!['available-local', 'degraded'].includes(availability)) return `Local provider is ${availability}; capability catalog must report executable local status before selection.`
   if (candidate && !candidate.selectable) return 'Capability catalog marks this local provider as not selectable.'
   if (candidate && candidate.providerKind !== 'local') return 'Capability catalog did not report this provider as a local executable provider.'
   return `Selectable local provider; choosing it writes ${configValue} to services.orchestrator.llm.provider through Config.Set AdminAction.`
@@ -953,5 +953,5 @@ function sortedUnique(values: Array<string | null | undefined>): string[] {
 
 function modelErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message
-  return 'AuroraClient model runtime request failed.'
+  return 'Aurora model runtime request failed.'
 }

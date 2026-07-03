@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   type ConfigDiffPreviewResponse,
   type ConfigFieldMetadata,
@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe('AdminConfigView', () => {
   it('renders schema-backed typed controls, reload impact, staged review, and redacts backend secret values', async () => {
-    const client = new AuroraClient({ transport: configTransport() })
+    const client = new Aurora({ transport: configTransport() })
     const model = await buildAdminConfigModel(client, configRoute())
     const markup = renderToStaticMarkup(<AdminConfigView client={client} route={configRoute()} initialModel={model} />)
 
@@ -51,7 +51,7 @@ describe('AdminConfigView', () => {
   it('does not submit Config.Set until a staged change is reviewed and explicitly confirmed', async () => {
     const calls: string[] = []
     const transport = configTransport(calls)
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const model = await buildAdminConfigModel(client, configRoute())
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -113,7 +113,7 @@ function configRoute(): RouteAvailability {
   return {
     item: navItemSnapshot(item),
     state: 'available-local',
-    explanation: 'Config route available from mock evidence.',
+    explanation: 'Config route available from mock status.',
     providerLabel: 'mock Config.GetSchemaMetadata',
     blockers: [],
     repairActions: [],

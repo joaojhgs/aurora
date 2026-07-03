@@ -103,17 +103,17 @@ const loadingSnapshot: AdminTokensSnapshot = {
   tokens: [],
   listState: "pending",
   listReason:
-    "Loading Auth.ListTokens and token capability evidence through AuroraClient.",
+    "Loading Auth.ListTokens and token capability status through Aurora.",
   revokeState: "pending",
   revokeReason:
-    "Loading Auth.RevokeToken capability evidence through AuroraClient.",
+    "Loading Auth.RevokeToken capability status through Aurora.",
   createState: "unsupported",
   createReason:
     "Auth.CreateToken is not exposed by the SDK/contracts in this checkout; creation remains a disabled preview.",
   secretsRedacted: true,
   warnings: [],
   error: null,
-  evidenceSource: "pending AuroraClient SDK calls",
+  evidenceSource: "pending Aurora service calls",
   oneTimeReveal: null,
 };
 
@@ -176,7 +176,7 @@ export async function buildAdminTokensSnapshot(
           ? `${unavailableMessage} ${failures.join(" ")}`
           : unavailableMessage,
       warnings: failures,
-      evidenceSource: "AuroraClient SDK error",
+      evidenceSource: "Aurora request error",
     };
   }
 
@@ -218,8 +218,8 @@ export async function buildAdminTokensSnapshot(
     error: failures[0] ?? null,
     evidenceSource:
       client.transport.kind === "mock"
-        ? "SDK mock transport fixture"
-        : "AuroraClient backend response",
+        ? "Demo transport"
+        : "Aurora service response",
     oneTimeReveal: null,
   };
 }
@@ -247,7 +247,7 @@ export function AdminTokensView({
             AdminAction boundary.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="Token backend evidence">
+        <div className="aui-admin-badges" aria-label="Token service status">
           {isAvailabilityState(snapshot.loadState) ? (
             <StatusBadge state={snapshot.loadState} />
           ) : (
@@ -259,8 +259,8 @@ export function AdminTokensView({
           <EvidenceBadge
             label={
               snapshot.secretsRedacted
-                ? "secrets redacted"
-                : "redaction unknown"
+                ? "secrets protected"
+                : "redaction pending"
             }
           />
           <PrivacyBadge privacy="credential" />
@@ -307,7 +307,7 @@ function TokensStatusPanel({ snapshot }: { snapshot: AdminTokensSnapshot }) {
       <div className="aui-admin-notice" aria-live="polite">
         <Activity size={18} aria-hidden />
         <span>
-          Loading token metadata and capability evidence through AuroraClient.
+          Loading token metadata and capability state through Aurora.
         </span>
       </div>
     );
@@ -326,7 +326,7 @@ function TokensStatusPanel({ snapshot }: { snapshot: AdminTokensSnapshot }) {
       <Lock size={18} aria-hidden />
       <span>
         {snapshot.error ??
-          "Token evidence is degraded. Secret values remain hidden and unsafe actions stay disabled."}
+          "Token status is degraded. Secret values remain hidden and unsafe actions stay disabled."}
       </span>
     </div>
   );

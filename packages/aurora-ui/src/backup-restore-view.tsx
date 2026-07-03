@@ -15,7 +15,7 @@ import type {
   BackupVerifyResponse
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface BackupRestoreViewProps {
   client: AuroraClient
@@ -169,12 +169,12 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           <h1 id="backups-title">Backups & Restore</h1>
           <p>Create redacted backup manifests, verify integrity, download manifest summaries, and preview restore impact before destructive actions.</p>
         </div>
-        <div className="aui-assistant-badges" aria-label="Backup backend evidence">
+        <div className="aui-assistant-badges" aria-label="Backup service status">
           <StatusBadge state={route.state} />
           <PrivacyBadge privacy="admin-critical" />
           <EvidenceBadge label={route.providerLabel} />
           <EvidenceBadge label={client.transport.kind} />
-          <EvidenceBadge label={list?.secrets_redacted === false ? 'redaction unknown' : 'secrets redacted'} />
+          <EvidenceBadge label={list?.secrets_redacted === false ? 'redaction pending' : 'secrets protected'} />
         </div>
       </header>
 
@@ -204,12 +204,12 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           <PanelTitle icon="state" title="Availability" id="backup-state-title" />
           <dl className="aui-backup-facts">
             <div><dt>State</dt><dd>{loadState}</dd></div>
-            <div><dt>Route</dt><dd>{route.explanation}</dd></div>
+            <div><dt>Route</dt><dd>{presentableSignal(route.explanation)}</dd></div>
             <div><dt>AdminAction</dt><dd>required for create, verify, restore dry-run and rollback dry-run</dd></div>
-            <div><dt>Mutation gate</dt><dd>{mutationRouteReady ? 'enabled through AuroraClient AdminAction draft/confirm/audit' : disabledReason}</dd></div>
-            <div><dt>Blockers</dt><dd>{route.blockers.join(', ') || loadError || 'none'}</dd></div>
+            <div><dt>Mutation gate</dt><dd>{mutationRouteReady ? 'enabled through Aurora AdminAction draft/confirm/audit' : disabledReason}</dd></div>
+            <div><dt>Blockers</dt><dd>{presentableSignal(route.blockers.join(', ') || loadError || 'none')}</dd></div>
           </dl>
-          {route.disabled ? <p role="alert">Backup operations are disabled until backend Backup.List capability evidence and Backup.* AdminAction contracts are available.</p> : null}
+          {route.disabled ? <p role="alert">Backup operations are disabled until backend Backup.List capability state and Backup.* AdminAction contracts are available.</p> : null}
           {loadError ? <p role="alert">{loadError}</p> : null}
           {route.repairActions.length > 0 ? (
             <ul className="aui-backup-list" aria-label="Backup repair actions">
@@ -223,13 +223,13 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
         <section className="aui-backup-panel aui-backup-wide" aria-labelledby="backup-list-title">
           <PanelTitle icon="list" title="Manifests" id="backup-list-title" />
           <BackupManifestTable backups={list?.backups ?? []} selectedBackupId={selectedBackup?.backup_id ?? ''} onSelect={setSelectedBackupId} />
-          {loadState === 'loading' ? <p aria-live="polite">Loading backup manifests from AuroraClient...</p> : null}
+          {loadState === 'loading' ? <p aria-live="polite">Loading backup manifests from Aurora...</p> : null}
           {loadState === 'empty' ? <p>No backup manifests were returned by the Backup service.</p> : null}
         </section>
 
         <section className="aui-backup-panel" aria-labelledby="backup-ops-title">
           <PanelTitle icon="restore" title="Verify & restore" id="backup-ops-title" />
-          <p>These controls never call Backup.* directly; AuroraClient creates and confirms an AdminAction before submitting.</p>
+          <p>These controls never call Backup.* directly; Aurora creates and confirms an AdminAction before submitting.</p>
           <form className="aui-backup-form" onSubmit={submitVerify}><button type="submit" disabled={!canUseSelected}>Verify via AdminAction</button></form>
           <form className="aui-backup-form" onSubmit={submitRestoreDryRun}><button type="submit" disabled={!canUseSelected}>Preview restore impact</button></form>
           <p role="alert">Destructive restore is intentionally unavailable here; only dry-run impact preview is enabled until the backend exposes a confirmed destructive restore contract.</p>
@@ -276,7 +276,7 @@ function BackupManifestTable({ backups, selectedBackupId, onSelect }: { backups:
               <td>{backup.status}</td>
               <td>{backup.components.map((component) => `${component.component}:${component.status}`).join(', ')}</td>
               <td>{backup.storage.kind} · {backup.encrypted ? 'encrypted' : 'not encrypted'} · {backup.storage.encryption}</td>
-              <td><code>{backup.manifest_digest}</code><small>Schema {backup.schema_version}; {backup.secrets_redacted ? 'secrets redacted' : 'redaction unknown'}; {backup.audit_receipt ?? 'no audit receipt'}</small></td>
+              <td><code>{backup.manifest_digest}</code><small>Schema {backup.schema_version}; {backup.secrets_redacted ? 'secrets protected' : 'redaction pending'}; {backup.audit_receipt ?? 'no audit receipt'}</small></td>
             </tr>
           ))}
         </tbody>
@@ -345,8 +345,8 @@ function loadStateFromError(error: AuroraError): BackupLoadState {
 
 function backupDisabledReason(route: RouteAvailability, loadError: string | null): string {
   if (loadError) return loadError
-  if (route.blockers.length > 0) return route.blockers.join(', ')
-  if (!route.routeable) return 'Backup route is not routeable from current capability evidence.'
+  if (route.blockers.length > 0) return presentableSignal(route.blockers.join(', '))
+  if (!route.routeable) return 'Backup route is not routeable from current capability status.'
   if (route.disabled) return 'Backup backend contract is not advertised by the current SDK/capability graph.'
   return 'Backup AdminAction mutation contract is not ready.'
 }

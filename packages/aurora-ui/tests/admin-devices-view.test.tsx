@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   defaultMockAuroraFixtures,
   meshPeerListFixture
@@ -16,7 +16,7 @@ import {
 
 describe('AdminDevicesView production device and pairing controls', () => {
   it('links devices and pending pairings to mesh peers without exposing pairing secrets', async () => {
-    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminDevicesView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
@@ -40,7 +40,7 @@ describe('AdminDevicesView production device and pairing controls', () => {
   })
 
   it('builds device revoke, pairing approve/deny, and mesh trust action drafts locked until explicit confirmation', async () => {
-    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')
     expect(device).toBeTruthy()
 
@@ -98,16 +98,16 @@ describe('AdminDevicesView production device and pairing controls', () => {
 
 
   it('proves prior device AdminAction drafts are not pre-confirmed for submission', async () => {
-    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')
     expect(device?.deleteAction).toEqual(expect.objectContaining({ reauthConfirmed: false }))
     expect(buildDeviceDeleteAdminAction(device!, 'retire lost laptop').reauthConfirmed).toBe(false)
   })
 
-  it('disables device trust action evidence when mesh mutation capabilities are unavailable', async () => {
+  it('disables device trust action status when mesh mutation capabilities are unavailable', async () => {
     const transport = new MockAuroraTransport()
     transport.lose('Auth.MeshListPeers', 'mesh peer service unavailable')
-    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport }))
     const markup = renderToStaticMarkup(<AdminDevicesView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('degraded')

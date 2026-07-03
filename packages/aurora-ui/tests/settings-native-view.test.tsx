@@ -11,8 +11,8 @@ import {
 import {
   SettingsPermissionsView,
   SettingsNativeView,
-  buildNativePlatformEvidenceArtifact,
-  buildNativePlatformEvidenceJson,
+  buildNativePlatformStatusArtifact,
+  buildNativePlatformStatusJson,
   buildSettingsPermissionsModel,
   snapshotFromGraph
 } from '../src/index'
@@ -130,7 +130,7 @@ describe('settings/native route separation', () => {
   })
 })
 
-it('builds stable JSON evidence for desktop local, web fallback, Android preflight, and iOS preflight without unsupported-available claims', () => {
+it('builds stable JSON status for desktop local, web fallback, Android preflight, and iOS preflight without unsupported-available claims', () => {
   const desktop = snapshotFor(nativeCapabilityManifestFixture, 'tauri-local')
   const webGraph = buildCapabilityGraph({
     catalog: capabilityGraphCatalogFixture,
@@ -142,44 +142,44 @@ it('builds stable JSON evidence for desktop local, web fallback, Android preflig
   const android = snapshotFor(androidNativeCapabilityManifestFixture, 'native-mobile')
   const ios = snapshotFor(iosNativeCapabilityManifestFixture, 'native-mobile')
 
-  const json = buildNativePlatformEvidenceJson({
+  const json = buildNativePlatformStatusJson({
     'desktop-local': desktop,
     'web-fallback': web,
     'android-preflight': android,
     'ios-preflight': ios
   })
-  const evidence = JSON.parse(json) as {
+  const status = JSON.parse(json) as {
     kind: string
-    artifacts: Array<ReturnType<typeof buildNativePlatformEvidenceArtifact>>
+    artifacts: Array<ReturnType<typeof buildNativePlatformStatusArtifact>>
   }
 
-  expect(evidence.kind).toBe('aurora-native-platform-evidence')
-  expect(evidence.artifacts.map((artifact) => artifact.id)).toEqual([
+  expect(status.kind).toBe('aurora-native-platform-status')
+  expect(status.artifacts.map((artifact) => artifact.id)).toEqual([
     'desktop-local',
     'web-fallback',
     'android-preflight',
     'ios-preflight'
   ])
-  expect(evidence.artifacts.every((artifact) => artifact.unsupportedAvailableClaims.length === 0)).toBe(true)
-  expect(evidence.artifacts.find((artifact) => artifact.id === 'desktop-local')).toEqual(expect.objectContaining({
+  expect(status.artifacts.every((artifact) => artifact.unsupportedAvailableClaims.length === 0)).toBe(true)
+  expect(status.artifacts.find((artifact) => artifact.id === 'desktop-local')).toEqual(expect.objectContaining({
     transportKind: 'tauri-local',
     nativePlatform: 'tauri-desktop',
     nativeAvailable: true,
     localPythonRequired: true
   }))
-  expect(evidence.artifacts.find((artifact) => artifact.id === 'web-fallback')).toEqual(expect.objectContaining({
+  expect(status.artifacts.find((artifact) => artifact.id === 'web-fallback')).toEqual(expect.objectContaining({
     transportKind: 'http',
     nativeAvailable: false,
     thinClientUsable: true,
     localPythonRequired: false
   }))
-  expect(evidence.artifacts.find((artifact) => artifact.id === 'android-preflight')).toEqual(expect.objectContaining({
+  expect(status.artifacts.find((artifact) => artifact.id === 'android-preflight')).toEqual(expect.objectContaining({
     transportKind: 'native-mobile',
     nativePlatform: 'android',
     thinClientUsable: true,
     localPythonRequired: false
   }))
-  expect(evidence.artifacts.find((artifact) => artifact.id === 'ios-preflight')).toEqual(expect.objectContaining({
+  expect(status.artifacts.find((artifact) => artifact.id === 'ios-preflight')).toEqual(expect.objectContaining({
     transportKind: 'native-mobile',
     nativePlatform: 'ios',
     thinClientUsable: true,

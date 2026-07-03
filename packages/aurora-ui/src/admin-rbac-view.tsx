@@ -141,10 +141,10 @@ const loadingSnapshot: AdminRbacSnapshot = {
   permissions: [],
   audit: [],
   mutationState: 'pending',
-  mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through AuroraClient.',
+  mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through Aurora.',
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }
 
 export function AdminRbacResource({ client, onPreviewAdminAction }: AdminRbacResourceProps) {
@@ -194,7 +194,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
       mutationReason: failures.join(' ') || unavailableMessage,
       error: denied ? failures.join(' ') || unavailableMessage : unavailableMessage,
       warnings: failures,
-      evidenceSource: 'AuroraClient SDK error'
+      evidenceSource: 'Aurora request error'
     }
   }
 
@@ -224,7 +224,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
     mutationReason: mutationCapability ? capabilityReason(mutationCapability) : 'Auth.PatchPermissions is not advertised by the capability catalog.',
     warnings: failures,
     error: failures[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response'
   }
 }
 
@@ -238,13 +238,13 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
           <p className="aui-kicker">Admin</p>
           <h1 id="admin-rbac-title">Access and RBAC</h1>
           <p>
-            Principals, derived role summaries, effective permission previews, and audit evidence are loaded through AuroraClient; Auth.ListRoles is shown as a backend gap when absent.
+            Principals, derived role summaries, effective permission previews, and audit state are loaded through Aurora; Auth.ListRoles is shown as a backend gap when absent.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="RBAC backend evidence">
+        <div className="aui-admin-badges" aria-label="RBAC service status">
           {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
           <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
           <PrivacyBadge privacy="admin-critical" />
         </div>
       </header>
@@ -353,7 +353,7 @@ function RbacStatusPanel({ snapshot }: { snapshot: AdminRbacSnapshot }) {
     return (
       <div className="aui-admin-notice" aria-live="polite">
         <Activity size={18} aria-hidden />
-        <span>Loading RBAC principals, permissions, capabilities, and audit events through AuroraClient.</span>
+        <span>Loading RBAC principals, permissions, capabilities, and audit events through Aurora.</span>
       </div>
     )
   }
@@ -369,7 +369,7 @@ function RbacStatusPanel({ snapshot }: { snapshot: AdminRbacSnapshot }) {
   return (
     <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
       <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'RBAC evidence is degraded. Unsupported or denied controls remain disabled.'}</span>
+      <span>{snapshot.error ?? 'RBAC status is degraded. Unsupported or denied controls remain disabled.'}</span>
     </div>
   )
 }

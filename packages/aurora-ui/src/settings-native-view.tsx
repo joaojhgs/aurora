@@ -69,20 +69,23 @@ export function buildNativePlatformEvidenceJson(
 ): string {
   const artifacts = (['desktop-local', 'web-fallback', 'android-preflight', 'ios-preflight'] as const)
     .map((id) => buildNativePlatformEvidenceArtifact(id, snapshots[id]))
-  return JSON.stringify({ kind: 'aurora-native-platform-evidence', artifacts }, null, 2)
+  return JSON.stringify({ kind: 'aurora-native-platform-status', artifacts }, null, 2)
 }
 
+export const buildNativePlatformStatusArtifact = buildNativePlatformEvidenceArtifact
+export const buildNativePlatformStatusJson = buildNativePlatformEvidenceJson
+
 function platformEvidenceLabel(id: NativePlatformEvidenceArtifact['id']): string {
-  if (id === 'desktop-local') return 'Desktop Tauri local native evidence'
-  if (id === 'web-fallback') return 'Web browser fallback evidence'
-  if (id === 'android-preflight') return 'Android mobile thin preflight evidence'
-  return 'iOS mobile thin preflight evidence'
+  if (id === 'desktop-local') return 'Desktop Tauri local native status'
+  if (id === 'web-fallback') return 'Web browser fallback status'
+  if (id === 'android-preflight') return 'Android mobile thin preflight status'
+  return 'iOS mobile thin preflight status'
 }
 
 function platformEvidenceNotes(id: NativePlatformEvidenceArtifact['id'], snapshot: AuroraShellSnapshot): string[] {
   if (id === 'desktop-local') {
     return [
-      'Desktop native claims require Tauri manifest evidence.',
+      'Desktop native claims require Tauri manifest status.',
       snapshot.nativeAvailable ? `Native platform reported: ${snapshot.nativePlatform}.` : 'Native manifest missing.'
     ]
   }

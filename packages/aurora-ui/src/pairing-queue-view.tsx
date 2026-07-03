@@ -15,7 +15,7 @@ import {
   type TokenRevokeResponse
 } from '@aurora/client'
 import { StateSurface } from './state-surface'
-import { StatusBadge } from './status-badges'
+import { StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
 
 export type PairingQueueLoadState = 'loading' | 'ready' | 'error'
@@ -538,7 +538,7 @@ export function PairingQueueSurface({
       {copiedRequestId ? <p className="aui-message" role="status">Pairing code copied from controlled Admin pairing surface; secrets stay scoped to clipboard and are not logged.</p> : null}
       {model.disabledReason ? <p className="aui-message">{model.disabledReason}</p> : null}
       {model.error ? <p className="aui-message aui-message-danger" role="alert">{model.error}</p> : null}
-      {model.state === 'loading' ? <p className="aui-message" aria-live="polite">Loading pairing queue from AuroraClient.</p> : null}
+      {model.state === 'loading' ? <p className="aui-message" aria-live="polite">Loading pairing queue from Aurora.</p> : null}
       {model.state !== 'loading' && !model.disabledReason && !model.error && model.entries.length === 0 ? (
         <p className="aui-message">No pending device or peer pairing requests were reported by Auth.</p>
       ) : null}
@@ -615,7 +615,7 @@ export function buildPairingQueueModel({
       total: 0,
       expiredCount: 0,
       secretsRedacted: true,
-      disabledReason: `Capability unavailable: ${route.explanation}`,
+      disabledReason: `Capability unavailable: ${presentableSignal(route.explanation)}`,
       error: null
     }
   }
@@ -638,8 +638,8 @@ export function buildPairingQueueModel({
       state,
       description: state === 'denied'
         ? 'Auth denied pairing queue access for the current principal.'
-        : 'Pairing queue could not be loaded from AuroraClient; no local fallback state is shown.',
-      evidence: `${routeEvidence(route)}; AuroraClient error`,
+        : 'Pairing queue could not be loaded from Aurora; no local fallback state is shown.',
+      evidence: `${routeEvidence(route)}; Aurora unavailable`,
       entries: [],
       total: 0,
       expiredCount: 0,
@@ -785,7 +785,7 @@ export function pairingErrorMessage(error: unknown): string {
     if (error.code === 'permission' || error.code === 'auth') return `Permission denied by Auth: ${error.message}`
     if (error.code === 'unavailable_service') return `Auth service unavailable: ${error.message}`
     if (error.code === 'unsupported_feature') return `Pairing backend unsupported by this deployment: ${error.message}`
-    if (error.code === 'timeout') return `AuroraClient request timed out: ${error.message}`
+    if (error.code === 'timeout') return `Aurora request timed out: ${error.message}`
     return error.message
   }
   return error instanceof Error ? error.message : 'Unknown pairing queue error'

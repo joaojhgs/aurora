@@ -12,7 +12,7 @@ import type {
   ToolApprovalScope
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export interface ToolApprovalPanelProps {
   client: AuroraClient
@@ -217,10 +217,10 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
           <p className="aui-kicker">Tools</p>
           <h1 id="tool-approval-title">Tools & Automations</h1>
           <p>
-            Tool registry, approval cards, MCP/provider status, scheduler jobs, and execution logs stay bound to SDK evidence.
+            Tool registry, approval cards, MCP/provider status, scheduler jobs, and execution logs stay bound to Aurora state.
           </p>
         </div>
-        <div className="aui-assistant-badges" aria-label="Tooling backend evidence">
+        <div className="aui-assistant-badges" aria-label="Tooling service status">
           <StatusBadge state={route.state} />
           <PrivacyBadge privacy={route.item.privacyClass} />
           <EvidenceBadge label={route.providerLabel} />
@@ -234,7 +234,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
 
       {route.disabled ? (
         <div className="aui-tool-alert" role="alert">
-          Tooling is capability-gated: {route.blockers.join(', ') || 'no executable Tooling catalog entry'}.
+          Tooling is capability-gated: {presentableSignal(route.blockers.join(', ') || 'no executable Tooling catalog entry')}.
         </div>
       ) : null}
       {state.error ? <div className="aui-tool-alert" role="alert">{state.error}</div> : null}
@@ -273,7 +273,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
               ))}
             </div>
           </div>
-          {state.loading ? <p className="aui-tool-empty">Loading Tooling catalog through AuroraClient...</p> : null}
+          {state.loading ? <p className="aui-tool-empty">Loading Tooling catalog through Aurora...</p> : null}
           {!state.loading && state.tools.length === 0 ? (
             <p className="aui-tool-empty">No tools were returned by the SDK Tooling catalog.</p>
           ) : null}
@@ -298,7 +298,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         </section>
 
         <aside className="aui-tool-summary" aria-label="Tool approval summary">
-          {selectedTool ? <ToolDetailDrawer tool={selectedTool} /> : null}
+          <ToolDetailDrawer tool={selectedTool ?? null} />
           <section className="aui-tool-mcp" aria-label="MCP server status">
             <h2>MCP server status</h2>
             <dl>
@@ -309,11 +309,11 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
           </section>
           <h2>Execution boundary</h2>
           <dl>
-            <div><dt>Backend truth</dt><dd>Tooling.GetToolCatalog via AuroraClient</dd></div>
+            <div><dt>Backend truth</dt><dd>Tooling.GetToolCatalog via Aurora</dd></div>
             <div><dt>Approval controller</dt><dd>client.approvals request/confirm</dd></div>
             <div><dt>Admin mutation</dt><dd>AdminAction when method_type manage/admin-critical</dd></div>
             <div><dt>Safe local path</dt><dd>Read-only local tools without approval/AdminAction use Tooling.ExecuteTool; otherwise show backend repair state.</dd></div>
-            <div><dt>Result evidence</dt><dd>provider, route path, audit receipt, correlation ID</dd></div>
+            <div><dt>Result record</dt><dd>provider, route path, audit receipt, correlation ID</dd></div>
             <div><dt>Route state</dt><dd>{route.state}</dd></div>
           </dl>
         </aside>
@@ -329,7 +329,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
           <span className="aui-action-chip">Scheduler.ListJobs</span>
         </div>
         {state.schedulerError ? <div className="aui-tool-alert" role="alert">{state.schedulerError}</div> : null}
-        {state.schedulerLoading ? <p className="aui-tool-empty">Loading scheduler jobs through AuroraClient...</p> : null}
+        {state.schedulerLoading ? <p className="aui-tool-empty">Loading scheduler jobs through Aurora...</p> : null}
         {!state.schedulerLoading && state.schedulerJobs.length === 0 && !state.schedulerError ? (
           <p className="aui-tool-empty">No scheduler jobs were returned by Scheduler.ListJobs.</p>
         ) : null}
@@ -392,20 +392,20 @@ export function submitToolDenialAction({
 }
 
 
-function ToolDetailDrawer({ tool }: { tool: ToolApprovalCardModel }) {
-  const fields = toolSchemaFields(tool)
-  const selectedProvider = tool.providers.find((provider) => provider.selectable) ?? tool.providers[0]
+function ToolDetailDrawer({ tool }: { tool: ToolApprovalCardModel | null }) {
+  const fields = tool ? toolSchemaFields(tool) : []
+  const selectedProvider = tool ? tool.providers.find((provider) => provider.selectable) ?? tool.providers[0] : null
   return (
     <section className="aui-tool-detail-drawer" aria-labelledby="tool-detail-drawer-title">
       <p className="aui-kicker">Selected tool</p>
       <h2 id="tool-detail-drawer-title">Tool detail drawer</h2>
-      <p>{tool.name}</p>
+      <p>{tool ? tool.name : 'Select a tool to review schema, provider, approval, and execution boundaries.'}</p>
       <dl>
-        <div><dt>Schema</dt><dd>{tool.argsSchema ? 'args_schema from Tooling.GetToolCatalog' : 'No schema reported by backend'}</dd></div>
-        <div><dt>Permissions</dt><dd>{tool.requiredPermissions.join(', ') || 'No explicit permissions reported'}</dd></div>
-        <div><dt>Provider</dt><dd>{selectedProvider?.label ?? tool.providerLabel} ({selectedProvider?.providerKind ?? tool.providerKind})</dd></div>
-        <div><dt>Risk</dt><dd>{tool.riskClass}{tool.requiresAdminAction ? '; AdminAction required' : ''}</dd></div>
-        <div><dt>Examples</dt><dd>{exampleSummary(tool)}</dd></div>
+        <div><dt>Schema</dt><dd>{tool ? tool.argsSchema ? 'args_schema from Tooling.GetToolCatalog' : 'No schema reported by backend' : 'Waiting for Tooling.GetToolCatalog'}</dd></div>
+        <div><dt>Permissions</dt><dd>{tool ? tool.requiredPermissions.join(', ') || 'No explicit permissions reported' : 'Select a tool to inspect required permissions'}</dd></div>
+        <div><dt>Provider</dt><dd>{tool ? `${selectedProvider?.label ?? tool.providerLabel} (${selectedProvider?.providerKind ?? tool.providerKind})` : 'No provider selected'}</dd></div>
+        <div><dt>Risk</dt><dd>{tool ? `${tool.riskClass}${tool.requiresAdminAction ? '; AdminAction required' : ''}` : 'Pending catalog selection'}</dd></div>
+        <div><dt>Examples</dt><dd>{tool ? exampleSummary(tool) : 'No tool selected'}</dd></div>
       </dl>
       <form className="aui-tool-param-form" aria-label="Generated parameter form">
         <strong>Generated parameter form</strong>
@@ -750,7 +750,7 @@ function stateCopy(tool: ToolApprovalCardModel): string {
   if (tool.state === 'expired') return 'Approval expired; request a fresh backend approval.'
   if (tool.state === 'replay-rejected') return `Replay rejected: ${tool.denialReason ?? 'backend replay protection blocked it'}.`
   if (tool.state === 'unavailable') return `Unavailable: ${tool.disabledReason ?? 'service unavailable'}. Disabled until provider/service repair completes.`
-  if (tool.state === 'executed') return 'Tool result includes audit and correlation evidence.'
+  if (tool.state === 'executed') return 'Tool result includes audit and correlation status.'
   if (tool.requiresAdminAction) return 'AdminAction confirmation required before approval or execution.'
   if (tool.approvalRequired) return 'Approval required before execution.'
   return 'No approval required by current backend policy.'

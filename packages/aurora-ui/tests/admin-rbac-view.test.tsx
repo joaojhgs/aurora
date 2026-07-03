@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AuroraClient, MockAuroraTransport } from '@aurora/client'
+import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
 import {
   AdminRbacView,
   buildAdminRbacSnapshot,
@@ -8,8 +8,8 @@ import {
 } from '../src/index'
 
 describe('AdminRbacView', () => {
-  it('renders roles, principals, permission matrix, audit evidence, and the honest Auth.ListRoles backend gap', async () => {
-    const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('renders roles, principals, permission matrix, audit status, and the honest Auth.ListRoles backend gap', async () => {
+    const snapshot = await buildAdminRbacSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminRbacView snapshot={snapshot} />)
 
     expect(snapshot.principals.length).toBeGreaterThan(0)

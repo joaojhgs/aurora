@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   type AuditLogRequest,
 } from "@aurora/client";
@@ -21,7 +21,7 @@ describe("AdminAuditView", () => {
     });
 
     const snapshot = await buildAdminAuditSnapshot(
-      new AuroraClient({ transport }),
+      new Aurora({ transport }),
       {
         actor: "principal-admin",
         action: "Gateway.GetSupportBundle",
@@ -49,11 +49,11 @@ describe("AdminAuditView", () => {
     expect(markup).not.toContain("corr-admin-002");
   });
 
-  it("exports only redacted audit evidence and strips secret payload token and raw values", async () => {
+  it("exports only redacted audit status and strips secret payload token and raw values", async () => {
     const transport = MockAuroraTransport.empty();
     transport.register("Auth.AuditLog", () => auditFixture());
     const snapshot = await buildAdminAuditSnapshot(
-      new AuroraClient({ transport }),
+      new Aurora({ transport }),
     );
     const exportJson = JSON.stringify(buildAuditExport(snapshot.rows));
     const renderedJson = JSON.stringify(

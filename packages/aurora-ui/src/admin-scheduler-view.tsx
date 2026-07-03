@@ -14,7 +14,7 @@ import type {
 } from '@aurora/client'
 import { SCHEDULER_METHODS, routePath } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 
 export type SchedulerLoadState =
   | 'loading'
@@ -107,8 +107,8 @@ export async function buildAdminSchedulerSnapshot(
     return {
       ...loadingSchedulerSnapshot,
       loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
-      error: route.blockers.join(', ') || route.explanation,
-      warnings: route.blockers,
+      error: presentableSignal(route.blockers.join(', ') || route.explanation),
+      warnings: route.blockers.map(presentableSignal),
       evidenceSource: route.providerLabel
     }
   }
@@ -134,7 +134,7 @@ export async function buildAdminSchedulerSnapshot(
       loadState: denied ? 'denied' : 'service-unavailable',
       error: warnings.join(' ') || 'Scheduler jobs and registry methods are unavailable.',
       warnings,
-      evidenceSource: 'AuroraClient SDK error'
+      evidenceSource: 'Aurora request error'
     }
   }
 
@@ -155,7 +155,7 @@ export async function buildAdminSchedulerSnapshot(
     totals: schedulerTotals(rows),
     warnings: [...warnings, ...permissionWarnings],
     error: warnings[0] ?? permissionWarnings[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response',
+    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response',
     secretsRedacted: catalog?.secrets_redacted ?? true
   }
 }
@@ -242,15 +242,15 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
           <p className="aui-kicker">Admin</p>
           <h1 id="admin-scheduler-title"><CalendarClock size={24} aria-hidden /> Scheduler jobs</h1>
           <p>
-            Jobs, ownership namespaces, delegated permissions, approval policy, target peer, and audit receipts are loaded through AuroraClient.
+            Jobs, ownership namespaces, delegated permissions, approval policy, target peer, and audit receipts are loaded through Aurora.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="Scheduler backend evidence">
+        <div className="aui-admin-badges" aria-label="Scheduler service status">
           {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
           <StatusBadge state={route.state} />
           <PrivacyBadge privacy="admin-critical" />
           <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
         </div>
       </header>
 
@@ -313,10 +313,10 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
             <AlertTriangle size={18} aria-hidden />
           </div>
           <dl className="aui-scheduler-facts">
-            <div><dt>Route</dt><dd>{route.explanation}</dd></div>
+            <div><dt>Route</dt><dd>{presentableSignal(route.explanation)}</dd></div>
             <div><dt>AdminAction</dt><dd>{route.requiresAdminAction ? 'required for schedule, cancel, pause, and resume' : 'not required by route metadata'}</dd></div>
-            <div><dt>Target selector</dt><dd>{selectedTarget ? selectedTarget.reason : 'no selector evidence'}</dd></div>
-            <div><dt>Blockers</dt><dd>{route.blockers.join(', ') || snapshot.error || 'none'}</dd></div>
+            <div><dt>Target selector</dt><dd>{selectedTarget ? selectedTarget.reason : 'no selector status'}</dd></div>
+            <div><dt>Blockers</dt><dd>{presentableSignal(route.blockers.join(', ') || snapshot.error || 'none')}</dd></div>
           </dl>
         </section>
       </div>
@@ -344,8 +344,8 @@ function SchedulerStatusPanel({
   route: RouteAvailability
   operation: SchedulerOperationState | null
 }) {
-  if (snapshot.loadState === 'loading') return <div className="aui-admin-notice" aria-live="polite"><CalendarClock size={18} aria-hidden />Loading scheduler jobs through AuroraClient.</div>
-  if (route.disabled) return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{route.blockers.join(', ') || route.explanation}</div>
+  if (snapshot.loadState === 'loading') return <div className="aui-admin-notice" aria-live="polite"><CalendarClock size={18} aria-hidden />Loading scheduler jobs through Aurora.</div>
+  if (route.disabled) return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{presentableSignal(route.blockers.join(', ') || route.explanation)}</div>
   if (snapshot.loadState === 'empty') return <div className="aui-admin-notice" role="status"><CalendarClock size={18} aria-hidden />No scheduler jobs were returned for this namespace.</div>
   if (snapshot.error) return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{snapshot.error}</div>
   if (operation) {
@@ -690,7 +690,7 @@ const loadingSchedulerSnapshot: AdminSchedulerSnapshot = {
   createControl: {
     available: false,
     state: 'unsupported',
-    reason: 'pending AuroraClient SDK calls',
+    reason: 'pending Aurora service calls',
     requiresAdminAction: true,
     targetOptions: []
   },
@@ -702,6 +702,6 @@ const loadingSchedulerSnapshot: AdminSchedulerSnapshot = {
   },
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls',
+  evidenceSource: 'pending Aurora service calls',
   secretsRedacted: true
 }

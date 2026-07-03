@@ -31,12 +31,12 @@ interface ActivityItem {
 
 export function AdminOverviewView({ client }: AdminOverviewViewProps) {
   const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
-  const [error, setError] = useState<unknown>(new Error('Loading admin overview manifest from AuroraClient.'))
+  const [error, setError] = useState<unknown>(new Error('Loading admin overview manifest from Aurora.'))
 
   useEffect(() => {
     let cancelled = false
     setManifest(null)
-    setError(new Error('Loading admin overview manifest from AuroraClient.'))
+    setError(new Error('Loading admin overview manifest from Aurora.'))
     void buildAdminOverviewSnapshot(client).then(
       (next) => {
         if (!cancelled) {
@@ -69,7 +69,7 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
       <section className="aui-admin-overview" aria-labelledby="admin-overview-title">
         <AdminOverviewHeader
           title="Admin overview"
-          description="AuroraClient could not load the admin overview manifest. Controls stay disabled until backend evidence is available."
+          description="Aurora could not load the admin overview manifest. Controls stay disabled until service status is available."
           transportKind={transportKind}
           generatedAt="pending"
           secretsRedacted
@@ -117,7 +117,7 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
           <EvidenceBadge label={`${manageMethods.length} manage methods`} />
         </div>
         <p>
-          Manage/admin-critical operations are visible for audit planning only. They remain disabled here until a dedicated AdminAction flow provides draft, confirm, submit, rollback, and error evidence.
+          Manage/admin-critical operations are visible for audit planning only. They remain disabled here until a dedicated AdminAction flow provides draft, confirm, submit, rollback, and error state.
         </p>
         {manageMethods.length > 0 ? (
           <div className="aui-admin-action-list">
@@ -180,7 +180,7 @@ function AdminOverviewMetrics({
         <small>
           {manifest.deploymentTopology
             ? deploymentModeLabel(manifest.deploymentTopology)
-            : 'topology evidence unavailable'}
+            : 'topology status unavailable'}
         </small>
       </div>
     </section>
@@ -207,9 +207,9 @@ function AdminOverviewHeader({
         <h1 id="admin-overview-title">{title}</h1>
         <p>{description}</p>
       </div>
-      <div className="aui-admin-badges" aria-label="Admin overview evidence">
+      <div className="aui-admin-badges" aria-label="Admin overview status">
         <EvidenceBadge label={transportKind} />
-        <EvidenceBadge label={secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+        <EvidenceBadge label={secretsRedacted ? 'secrets protected' : 'redaction pending'} />
         <EvidenceBadge label={generatedAt} />
       </div>
     </header>
@@ -229,7 +229,7 @@ function PosturePanel({ manifest, posture }: { manifest: AdminOverviewManifest; 
       </div>
       <dl className="aui-admin-facts">
         <div><dt>Service mode</dt><dd>{manifest.serviceMode}</dd></div>
-        <div><dt>Runtime</dt><dd>{topology ? deploymentModeLabel(topology) : 'BE-016 topology unavailable'}</dd></div>
+        <div><dt>Runtime</dt><dd>{topology ? deploymentModeLabel(topology) : 'service contract topology unavailable'}</dd></div>
         <div><dt>Registry digest</dt><dd>{manifest.registryDigest || 'not reported'}</dd></div>
         <div><dt>Services</dt><dd>{manifest.totals.services}</dd></div>
         <div><dt>Methods</dt><dd>{manifest.totals.externalMethods} external / {manifest.totals.internalMethods} internal</dd></div>
@@ -275,9 +275,9 @@ function DeploymentTopologyPanel({
             <div><dt>Bus backend</dt><dd>{topology.bus_backend}</dd></div>
             <div><dt>Redis</dt><dd>{redisHealthLabel(topology)}</dd></div>
             <div><dt>BullMQ</dt><dd>{busHealthLabel(topology)}</dd></div>
-            <div><dt>Registry freshness</dt><dd>{staleServices.length > 0 ? `${staleServices.length} stale services` : 'fresh topology evidence'}</dd></div>
+            <div><dt>Registry freshness</dt><dd>{staleServices.length > 0 ? `${staleServices.length} stale services` : 'fresh topology status'}</dd></div>
             <div><dt>Container hints</dt><dd>{containerHintLabel(topology)}</dd></div>
-            <div><dt>Redaction</dt><dd>{topology.secrets_redacted ? 'secrets redacted by backend' : 'redaction not confirmed'}</dd></div>
+            <div><dt>Redaction</dt><dd>{topology.secrets_redacted ? 'secrets protected by backend' : 'redaction not confirmed'}</dd></div>
           </dl>
 
           {degradedReasons.length > 0 ? (
@@ -327,7 +327,7 @@ function DeploymentTopologyPanel({
       ) : (
         <div className="aui-admin-empty" role="status">
           <h3>Deployment topology unavailable</h3>
-          <p>{manifest.deploymentTopologyError ?? 'Gateway.GetDeploymentTopology did not return BE-016 evidence.'}</p>
+          <p>{manifest.deploymentTopologyError ?? 'Gateway.GetDeploymentTopology did not return service contract status.'}</p>
           <a className="aui-action-chip" href="/diagnostics">Open diagnostics</a>
         </div>
       )}
@@ -344,8 +344,8 @@ function DeploymentTopologyPanel({
           disabled={!controlsSupported}
           title={
             controlsSupported
-              ? 'BE-015 process controls are present, but this overview remains read-only.'
-              : 'Process restart/control requires BE-015 capability and AdminAction wiring.'
+              ? 'service contract process controls are present, but this overview remains read-only.'
+              : 'Process restart/control requires service contract capability and AdminAction wiring.'
           }
         >
           Process controls {controlsSupported ? 'read-only here' : 'unsupported'}
@@ -524,7 +524,7 @@ function clientBoundaryLabel(transportKind: string, topology: DeploymentTopology
   if (transportKind === 'tauri') return `Desktop local through SDK; ${deploymentModeLabel(topology)}`
   if (transportKind === 'mesh') return `Mesh transport through SDK; ${deploymentModeLabel(topology)}`
   if (transportKind === 'http') return `Supported remote Gateway client through SDK HTTP transport; ${deploymentModeLabel(topology)}`
-  if (transportKind === 'mock') return `Fixture transport; ${deploymentModeLabel(topology)}`
+  if (transportKind === 'mock') return `Demo transport; ${deploymentModeLabel(topology)}`
   return `${transportKind} transport; ${deploymentModeLabel(topology)}`
 }
 
@@ -560,7 +560,7 @@ function degradedReasonCopy(reason: string): string {
   if (normalized.includes('bullmq_queue_lag_unknown')) return 'BullMQ queue lag is unavailable; use diagnostics before trusting process-mode throughput.'
   if (normalized.includes('process_registry_stale')) return 'Service registry heartbeat is stale; inspect /admin/services and /admin/contracts before taking action.'
   if (normalized.includes('thread_mode_no_process_controls')) return 'Thread mode runs in one Python process; process restart controls are intentionally disabled.'
-  if (normalized.includes('mesh_peer_topology_untrusted')) return 'Remote peer topology is not trusted; require authenticated peer evidence before displaying details.'
+  if (normalized.includes('mesh_peer_topology_untrusted')) return 'Remote peer topology is not trusted; require authenticated peer status before displaying details.'
   return 'Inspect diagnostics and the process-mode runbook before taking operator action.'
 }
 

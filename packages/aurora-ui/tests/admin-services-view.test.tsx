@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   capabilityCatalogFixture,
   cloneFixture,
@@ -12,8 +12,8 @@ import {
 import { AdminServicesView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 
 describe('AdminServicesView', () => {
-  it('renders service status, routes, detail logs/errors posture, and restart/reload controls from real contract evidence', async () => {
-    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: servicesTransport() }))
+  it('renders service status, routes, detail logs/errors posture, and restart/reload controls from real contract status', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: servicesTransport() }))
     const config = snapshot.services.find((service) => service.module === 'Config')
 
     expect(snapshot.loadState).toBe('ready')

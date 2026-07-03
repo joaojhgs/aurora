@@ -142,7 +142,7 @@ export async function buildDataPolicySnapshot(client: AuroraClient, route: Route
     namespaces,
     conversations,
     checks,
-    error: allUnavailable ? 'Data policy evidence is unavailable through AuroraClient.' : null,
+    error: allUnavailable ? 'Data policy status is unavailable through Aurora.' : null,
     warnings,
     secretsRedacted: catalogResponse?.secrets_redacted ?? true
   }
@@ -157,12 +157,12 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         <div>
           <p className="aui-kicker">Memory data policy</p>
           <h1 id="data-policy-title">Data policy and retention</h1>
-          <p>Review settings-style privacy controls for retention defaults, namespace visibility, raw audio/transcript storage, remote fallback rules, data flows, and audit evidence before data leaves Aurora.</p>
+          <p>Review settings-style privacy controls for retention defaults, namespace visibility, raw audio/transcript storage, remote fallback rules, data flows, and audit state before data leaves Aurora.</p>
         </div>
-        <div className="aui-mesh-badges" aria-label="Data policy evidence">
+        <div className="aui-mesh-badges" aria-label="Data policy status">
           <StatusBadge state={dataPolicyStatusState(snapshot.loadState)} />
           <PrivacyBadge privacy={totals.highestPrivacy} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
           <EvidenceBadge label={snapshot.generatedAt ?? 'Gateway catalog timestamp pending'} />
         </div>
       </header>
@@ -175,7 +175,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       </dl>
 
       {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{snapshot.error}</p> : null}
-      {snapshot.loadState === 'loading' ? <p className="aui-message">Loading data policy from AuroraClient.</p> : null}
+      {snapshot.loadState === 'loading' ? <p className="aui-message">Loading data policy from Aurora.</p> : null}
       {snapshot.loadState === 'empty' ? <p className="aui-message">No namespaces or transcript records were returned by the backend.</p> : null}
       {snapshot.warnings.length > 0 ? (
         <ul className="aui-mesh-warnings" aria-label="Data policy warnings">
@@ -226,7 +226,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
             <DataPolicyToggle label="Raw audio storage" value="Off by default" detail="Raw audio is transient unless the selected route, consent, privacy indicator, and backend policy allow retention." />
             <DataPolicyToggle label="Transcript storage" value={`${snapshot.conversations.length} recent transcript record(s)`} detail="Conversation text is loaded via DB.GetMessages and inherits each record privacy class; retention changes require AdminAction audit." />
             <DataPolicyToggle label="Remote/mesh fallback" value={totals.remoteFallback} detail="Remote RAG and audio routes require explicit selector, consent/privacy indicators where applicable, and cannot silently fall back to cloud." />
-            <DataPolicyToggle label="Namespace visibility" value={totals.visibilityPolicy} detail="Denied, stale, and secret namespaces stay visible as policy evidence but are not actionable data sources." />
+            <DataPolicyToggle label="Namespace visibility" value={totals.visibilityPolicy} detail="Denied, stale, and secret namespaces stay visible as policy status but are not actionable data sources." />
           </div>
         </section>
       </div>
@@ -283,10 +283,10 @@ function dataPolicyStatusState(state: DataPolicyLoadState) {
 
 function dataPolicyDefinitions(): Omit<DataPolicyCheck, 'evaluation' | 'error'>[] {
   return [
-    policyCheck('rag-search', 'RAG search policy', 'Namespace search needs privacy class, selector, and backend route evidence.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'main.rag' }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false),
+    policyCheck('rag-search', 'RAG search policy', 'Namespace search needs privacy class, selector, and backend route status.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'main.rag' }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false),
     policyCheck('raw-audio', 'Raw audio route', 'Raw audio cannot leave the device without consent and a visible privacy indicator.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'policy-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], false, false, false),
     policyCheck('transcript-storage', 'Transcript storage', 'Transcript retention follows DB.GetMessages policy and per-record privacy classes.', 'DB.GetMessages', 'DB', 'GetMessages', { limit: 6, message_type: 'TEXT' }, null, 'personal', ['personal'], true, true, false),
-    policyCheck('remote-fallback', 'Remote mesh fallback', 'Remote fallback is policy-controlled and requires explicit peer/resource selector evidence.', 'DB.RAGSearchRemote', 'DB', 'RAGSearchRemote', { query: 'remote namespace', namespace: 'peer-studio-gpu.memories' }, { peer_id: 'peer-studio-gpu', resource_namespace: 'peer-studio-gpu.memories' }, 'personal', ['personal'], true, true, false),
+    policyCheck('remote-fallback', 'Remote mesh fallback', 'Remote fallback is policy-controlled and requires explicit peer/resource selector status.', 'DB.RAGSearchRemote', 'DB', 'RAGSearchRemote', { query: 'remote namespace', namespace: 'peer-studio-gpu.memories' }, { peer_id: 'peer-studio-gpu', resource_namespace: 'peer-studio-gpu.memories' }, 'personal', ['personal'], true, true, false),
     policyCheck('export-import-delete', 'Export/delete/import policy', 'Data mutations require namespace support plus AdminAction/audit before payload movement.', 'DB.RAGExportNamespace', 'DB', 'RAGExportNamespace', { namespace: 'main.rag', include_tombstones: false }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false)
   ]
 }
@@ -345,8 +345,8 @@ function dataPolicyTotals(namespaces: DBRAGNamespaceInfo[], conversations: Norma
     auditTargets,
     policyDecisions,
     audioPolicy: rawAudio?.evaluation?.allowed ? 'raw audio route allowed by policy' : 'raw audio transient until consent/indicator/backend policy allow retention',
-    remoteFallback: remoteFallback?.evaluation?.allowed ? 'remote fallback allowed with selector evidence' : 'remote fallback blocked unless selector/backend policy allow it',
-    visibilityPolicy: deniedNamespaces > 0 ? 'Denied/stale namespaces visible as policy evidence' : 'All namespaces actionable by current policy',
+    remoteFallback: remoteFallback?.evaluation?.allowed ? 'remote fallback allowed with selector status' : 'remote fallback blocked unless selector/backend policy allow it',
+    visibilityPolicy: deniedNamespaces > 0 ? 'Denied/stale namespaces visible as policy status' : 'All namespaces actionable by current policy',
     exportableNamespaces: namespaces.filter((namespace) => namespace.policy.export_supported).length,
     deleteableNamespaces: namespaces.filter((namespace) => namespace.policy.delete_supported).length,
     importableNamespaces: namespaces.filter((namespace) => namespace.policy.import_supported).length,

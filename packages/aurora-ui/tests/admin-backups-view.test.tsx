@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AuroraClient, AuroraError, MockAuroraTransport, backupListFixture } from '@aurora/client'
+import { AuroraClient as Aurora, AuroraError, MockAuroraTransport, backupListFixture } from '@aurora/client'
 import { BackupRestoreView, backupErrorMessage } from '../src/backup-restore-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
@@ -20,13 +20,13 @@ describe('BackupRestoreView', () => {
     expect(markup).toContain('Manifest integrity')
     expect(markup).toContain('Schema aurora.backup.v1')
     expect(markup).toContain('not encrypted')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
     expect(markup).toContain('Destructive restore is intentionally unavailable')
     expect(markup).toContain('warning-only')
     expect(markup).toContain('backup-20260625T120000Z-config-rag')
   })
 
-  it('keeps create and restore controls disabled with honest repair state when backend contract evidence is missing', () => {
+  it('keeps create and restore controls disabled with honest repair state when backend contract status is missing', () => {
     const route = backupRoute({
       state: 'unsupported',
       routeable: false,
@@ -46,7 +46,7 @@ describe('BackupRestoreView', () => {
     )
 
     expect(markup).toContain('Create is disabled: capability_not_advertised')
-    expect(markup).toContain('Backup operations are disabled until backend Backup.List capability evidence')
+    expect(markup).toContain('Backup operations are disabled until backend Backup.List capability state')
     expect(markup).toContain('Expose Backup contracts')
     expect(markup).toContain('Backend has not advertised Backup.List or Backup.* AdminAction contracts.')
     expect(markup).toContain('<button type="submit" disabled="">Create via AdminAction</button>')
@@ -69,8 +69,8 @@ describe('BackupRestoreView', () => {
   })
 })
 
-function client(): AuroraClient {
-  return new AuroraClient({ transport: new MockAuroraTransport() })
+function client(): Aurora {
+  return new Aurora({ transport: new MockAuroraTransport() })
 }
 
 function backupRoute(overrides: Partial<RouteAvailability> = {}): RouteAvailability {
@@ -79,7 +79,7 @@ function backupRoute(overrides: Partial<RouteAvailability> = {}): RouteAvailabil
   return {
     item: navItemSnapshot(item),
     state: 'available-local',
-    explanation: 'Backup route available from mock evidence.',
+    explanation: 'Backup route available from mock status.',
     providerLabel: 'mock Backup.List',
     blockers: [],
     repairActions: [],

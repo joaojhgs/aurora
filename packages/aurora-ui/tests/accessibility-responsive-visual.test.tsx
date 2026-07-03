@@ -6,7 +6,7 @@ import { JSDOM } from 'jsdom'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   buildAdminOverviewManifest,
   capabilityCatalogFixture,
@@ -45,19 +45,19 @@ const viewports: Viewport[] = [
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   assistant: {
-    desktop: '34f8f2b71fe5',
-    tablet: 'f6ee79538a1f',
-    mobile: '6f0b846468b8'
+    desktop: 'eb868a89d5a0',
+    tablet: '6415cb65deb1',
+    mobile: 'a276a6c5806a'
   },
   admin: {
-    desktop: 'e7501414fff1',
-    tablet: '95adc6ca7f77',
-    mobile: '73abc26bd729'
+    desktop: '8edc763d9f76',
+    tablet: 'df5b0e9fa5fd',
+    mobile: 'c97b7dc02049'
   },
   'mobile-settings': {
-    desktop: '93769eefe5a5',
-    tablet: '8e6c9944af4f',
-    mobile: '8a658dfc26b3'
+    desktop: 'e01ecfaa199f',
+    tablet: '961d217329d0',
+    mobile: '990dab7842d4'
   }
 }
 
@@ -103,22 +103,22 @@ describe('Accessibility, responsive, and visual regression suite', () => {
         hasMobileNav: surface.html.includes('aria-label="Mobile navigation"'),
         hasMain: surface.html.includes('<main class="aui-content" id="content">'),
         hasStatusLanguage: /available-local|available-remote|privacy-blocked|degraded|denied|stale|unsupported/.test(text),
-        hasBackendEvidence: /SDK|AuroraClient|Gateway|secrets redacted|capability/.test(text)
+        hasBackendStatus: /SDK|Aurora|Gateway|secrets protected|capability/.test(text)
       }
       expect(shellChecks, `${surface.id}/${surface.viewport.id}`).toEqual({
         hasPrimaryNav: true,
         hasMobileNav: true,
         hasMain: true,
         hasStatusLanguage: true,
-        hasBackendEvidence: true
+        hasBackendStatus: true
       })
       if (surface.id === 'assistant') {
-        expect(surface.html, `assistant composer marker/${surface.viewport.id}`).toContain('data-first-viewport-task="assistant-chat-composer"')
-        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before route evidence/${surface.viewport.id}`)
+        expect(surface.html, `assistant composer marker/${surface.viewport.id}`).toContain('data-first-viewport-work="assistant-chat-composer"')
+        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before route status/${surface.viewport.id}`)
           .toBeLessThan(surface.html.indexOf('aria-label="Assistant route and privacy details"'))
-        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before voice evidence/${surface.viewport.id}`)
+        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before voice status/${surface.viewport.id}`)
           .toBeLessThan(surface.html.indexOf('aria-labelledby="assistant-voice-title"'))
-        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before attachment evidence/${surface.viewport.id}`)
+        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before attachment status/${surface.viewport.id}`)
           .toBeLessThan(surface.html.indexOf('aria-labelledby="assistant-context-title"'))
       }
       expect(text, `${surface.id}/${surface.viewport.id}`).not.toMatch(/mock transport selected for production/i)
@@ -140,7 +140,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
       viewports,
       surfaces: responsiveReport,
       cssBreakpoints: ['1100px', '860px', '680px'],
-      focusEvidence: ':focus-visible'
+      focusStatus: ':focus-visible'
     })
   })
 
@@ -164,7 +164,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(stateCoverage).toContain('unsupported')
     expect(stateCoverage).toContain('AdminAction')
     expect(stateCoverage).toContain('Native unsupported')
-    expect(stateCoverage).toContain('secrets redacted')
+    expect(stateCoverage).toContain('secrets protected')
 
     writeJsonReport('visual-regression.json', {
       command: 'pnpm --filter @aurora/ui test:accessibility',
@@ -183,9 +183,9 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     const snapshot = await buildQaSnapshot()
     const text = textContent(renderShell(snapshot, 'mobile-settings', viewports[2]!))
 
-    expect(text).toContain('secrets redacted')
+    expect(text).toContain('secrets protected')
     expect(text).toContain('explicit selector failures remain hard failures')
-    expect(text).toContain('AuroraClient capability evidence')
+    expect(text).toContain('Aurora capability state')
     expect(text).not.toMatch(/api[_ -]?key|password|token value|credential hash/i)
 
     writeJsonReport('security-privacy-negative-cases.json', {
@@ -193,7 +193,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
       negativeCases: [
         'no secret-like token values rendered in settings/mobile surface',
         'fallback is not presented as success for explicit selector failures',
-        'native capabilities stay unsupported without SDK native manifest evidence',
+        'native capabilities stay unsupported without SDK native manifest status',
         'admin-critical settings remain AdminAction-gated'
       ],
       owner: 'aurora-frontend-engineer',
@@ -214,11 +214,11 @@ async function renderQaSurfaces(): Promise<SurfaceRender[]> {
 async function buildQaSnapshot(): Promise<AuroraShellSnapshot> {
   const transport = new MockAuroraTransport()
   transport.register('Gateway.GetCapabilityCatalog', () => qaCapabilityCatalog())
-  return buildShellSnapshot(new AuroraClient({ transport }))
+  return buildShellSnapshot(new Aurora({ transport }))
 }
 
 function renderShell(snapshot: AuroraShellSnapshot, surface: SurfaceId, viewport: Viewport): string {
-  const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  const client = new Aurora({ transport: new MockAuroraTransport() })
   const path = surface === 'assistant' ? '/assistant' : surface === 'admin' ? '/admin' : '/settings'
   const content =
     surface === 'assistant' ? (

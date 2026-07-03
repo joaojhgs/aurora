@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, nativeCapabilityManifestFixture, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient as Aurora, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, nativeCapabilityManifestFixture, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -77,7 +77,7 @@ class RecordingMockAuroraTransport extends MockAuroraTransport {
   }
 }
 
-function testRuntime(client: AuroraClient, modePreferenceStore?: AuroraTauriRuntime['modePreferenceStore']): AuroraTauriRuntime {
+function testRuntime(client: Aurora, modePreferenceStore?: AuroraTauriRuntime['modePreferenceStore']): AuroraTauriRuntime {
   return {
     client,
     mode: 'mock',
@@ -680,18 +680,11 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).toContain('Native boundary')
     expect(markup).toContain('Runtime mode')
     expect(markup).toContain('Audio bridge')
-    expect(markup).toContain('iOS microphone capture')
-    expect(markup).toContain('iOS background voice')
-    expect(markup).toContain('iOS Keychain')
-    expect(markup).toContain('Face ID / Touch ID')
-    expect(markup).toContain('Siri/Shortcuts/App Intents integration')
-    expect(markup).toContain('local-light inference')
-    expect(markup).toContain('no system assistant role claim')
-    expect(markup).toContain('Android baseline')
-    expect(markup).toContain('Assistant role probe')
+    expect(markup).not.toContain('iOS microphone capture')
+    expect(markup).not.toContain('Android baseline')
+    expect(markup).not.toContain('Assistant role probe')
     expect(markup).toContain('Denied native defaults')
-    expect(markup).toContain('mock (degraded development fixture only)')
-    expect(markup).toContain('not used in thin mode')
+    expect(markup).toContain('Demo mode')
   })
 
   it('renders the models page for the models route', () => {
@@ -701,7 +694,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     const markup = renderToStaticMarkup(<AuroraTauriApp />)
 
     expect(markup).toContain('Models and runtime')
-    expect(markup).toContain('Loading model runtime catalog from AuroraClient')
+    expect(markup).toContain('Loading model runtime catalog from Aurora')
     expect(markup).not.toContain('Native boundary')
   })
 
@@ -856,7 +849,7 @@ describe('Tauri CI/E2E route gates', () => {
   })
 
   it('e2e:routes renders the memory cockpit with summaries, search, provenance, and gated actions', async () => {
-    const runtime = testRuntime(new AuroraClient({ transport: memoryGatewayTransport() }))
+    const runtime = testRuntime(new Aurora({ transport: memoryGatewayTransport() }))
     window.history.replaceState({}, '', '/memory')
     const memory = await mountOutcomeApp(runtime)
     try {
@@ -911,7 +904,7 @@ describe('Tauri CI/E2E route gates', () => {
     emptyTransport.register('DB.GetMessages', () => ({ messages: [], total: 0, has_more: false }))
     emptyTransport.register('DB.RAGListNamespaces', () => ({ namespaces: [] }))
     window.history.replaceState({}, '', '/memory')
-    const emptyMemory = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: emptyTransport })))
+    const emptyMemory = await mountOutcomeApp(testRuntime(new Aurora({ transport: emptyTransport })))
     try {
       await waitUntil(() => {
         expect(emptyMemory.container.textContent).toContain('No collections reported')
@@ -926,7 +919,7 @@ describe('Tauri CI/E2E route gates', () => {
 
     const errorTransport = memoryGatewayTransport().fail('DB.RAGListNamespaces', 'permission', 'DB permission denied')
     window.history.replaceState({}, '', '/memory')
-    const errorMemory = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: errorTransport })))
+    const errorMemory = await mountOutcomeApp(testRuntime(new Aurora({ transport: errorTransport })))
     try {
       await waitUntil(() => {
         expect(errorMemory.container.textContent).toContain('Memory request denied by authentication or permissions')
@@ -937,7 +930,7 @@ describe('Tauri CI/E2E route gates', () => {
       errorMemory.container.remove()
     }
 
-    const staleMemory = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: memoryGatewayTransport() })))
+    const staleMemory = await mountOutcomeApp(testRuntime(new Aurora({ transport: memoryGatewayTransport() })))
     try {
       await waitUntil(() => {
         expect(staleMemory.container.textContent).toContain('stale: peer-cabin-node.archive')
@@ -976,8 +969,8 @@ describe('Tauri CI/E2E route gates', () => {
   })
 
 
-  it('e2e:routes renders data policy retention and audit evidence instead of the memory search page', async () => {
-    const runtime = testRuntime(new AuroraClient({ transport: memoryGatewayTransport() }))
+  it('e2e:routes renders data policy retention and audit status instead of the memory search page', async () => {
+    const runtime = testRuntime(new Aurora({ transport: memoryGatewayTransport() }))
     window.history.replaceState({}, '', '/memory/policy')
     const dataPolicy = await mountOutcomeApp(runtime)
     try {
@@ -1003,7 +996,7 @@ describe('Tauri CI/E2E route gates', () => {
 
   it('e2e:routes covers tools catalog search detail validation approval and execution error paths', async () => {
     const transport = toolsGatewayTransport()
-    const runtime = testRuntime(new AuroraClient({ transport }))
+    const runtime = testRuntime(new Aurora({ transport }))
     window.history.replaceState({}, '', '/tools')
     const tools = await mountOutcomeApp(runtime)
     try {
@@ -1062,7 +1055,7 @@ describe('Tauri CI/E2E route gates', () => {
   it('e2e:routes covers mesh status load, pairing entry, actions, route preview, and diagnostics errors', async () => {
     const meshTransport = new RecordingMockAuroraTransport()
     window.history.replaceState({}, '', '/mesh')
-    const mesh = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: meshTransport })))
+    const mesh = await mountOutcomeApp(testRuntime(new Aurora({ transport: meshTransport })))
     try {
       await waitUntil(() => {
         expect(mesh.container.textContent).toContain('Mesh peers')
@@ -1100,7 +1093,7 @@ describe('Tauri CI/E2E route gates', () => {
 
     const diagnosticsTransport = new RecordingMockAuroraTransport().fail(GATEWAY_METHODS.getWebRTCDiagnostics, 'unavailable_service', 'diagnostics down')
     window.history.replaceState({}, '', '/diagnostics')
-    const diagnostics = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: diagnosticsTransport })))
+    const diagnostics = await mountOutcomeApp(testRuntime(new Aurora({ transport: diagnosticsTransport })))
     try {
       await waitUntil(() => {
         expect(diagnostics.container.textContent).toContain('Diagnostics')
@@ -1123,7 +1116,7 @@ describe('Tauri CI/E2E route gates', () => {
   it('e2e:assistant sends a text prompt to local Gateway and renders response or precise backend error', async () => {
     const successTransport = assistantGatewayTransport()
     const successRuntime: AuroraTauriRuntime = {
-      ...testRuntime(new AuroraClient({ transport: successTransport })),
+      ...testRuntime(new Aurora({ transport: successTransport })),
       mode: 'desktop-local',
       sidecarStatus: async () => ({
         running: true,
@@ -1166,7 +1159,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
 
     const failureTransport = assistantGatewayAuthFailureTransport()
-    const failureRuntime = testRuntime(new AuroraClient({ transport: failureTransport }))
+    const failureRuntime = testRuntime(new Aurora({ transport: failureTransport }))
     window.history.replaceState({}, '', '/')
     const failure = await mountOutcomeApp(failureRuntime)
     try {
@@ -1190,13 +1183,13 @@ describe('Tauri CI/E2E route gates', () => {
 
   it('e2e:assistant covers live stream, fallback banner, stop/retry, route sheet, tool approval, and no-model state', async () => {
     const fallbackTransport = assistantGatewayTransport('Fallback final response from local Orchestrator.')
-    const fallbackRuntime = testRuntime(new AuroraClient({ transport: fallbackTransport }))
+    const fallbackRuntime = testRuntime(new Aurora({ transport: fallbackTransport }))
     window.localStorage.clear()
     window.history.replaceState({}, '', '/')
     const fallback = await mountOutcomeApp(fallbackRuntime)
     try {
       await waitUntil(() => {
-        expect(fallback.container.textContent).toContain('no model configured / awaiting backend model evidence')
+        expect(fallback.container.textContent).toContain('no model configured / awaiting backend model status')
         expect(fallback.container.textContent).toContain('Assistant route preview')
       })
       await submitAssistantPrompt(fallback.container, 'exercise fallback path')
@@ -1217,7 +1210,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
 
     const streamTransport = assistantGatewayStreamingTransport()
-    const streamRuntime = testRuntime(new AuroraClient({ transport: streamTransport }))
+    const streamRuntime = testRuntime(new Aurora({ transport: streamTransport }))
     window.localStorage.clear()
     window.history.replaceState({}, '', '/')
     const live = await mountOutcomeApp(streamRuntime)
@@ -1346,7 +1339,7 @@ describe('Tauri CI/E2E route gates', () => {
         selectedProvider = 'local:Orchestrator:llama-cpp'
         return { success: true, previous_value: 'openai' }
       })
-    const runtime = testRuntime(new AuroraClient({ transport }))
+    const runtime = testRuntime(new Aurora({ transport }))
     window.history.replaceState({}, '', '/models')
 
     const { container, root } = await mountOutcomeApp(runtime)
@@ -1391,7 +1384,7 @@ describe('Tauri CI/E2E route gates', () => {
       provider_index: {},
       unavailable: [],
     }))
-    const runtime = testRuntime(new AuroraClient({ transport }))
+    const runtime = testRuntime(new Aurora({ transport }))
     window.history.replaceState({}, '', '/models')
 
     const { container, root } = await mountOutcomeApp(runtime)
@@ -1408,7 +1401,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:runtime renders mobile local-light unsupported evidence without claiming native model support', async () => {
+  it('e2e:runtime renders mobile local-light unsupported status without claiming native model support', async () => {
     const transport = new RecordingMockAuroraTransport()
     transport.register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => {
       const nativeProvider = cloneFixture(modelRuntimeCatalogFixture.providers.find((provider) => provider.provider_id === 'native:mobile-local-light')!)
@@ -1420,7 +1413,7 @@ describe('Tauri CI/E2E route gates', () => {
         unavailable: ['native:mobile-local-light'],
       }
     })
-    const runtime = testRuntime(new AuroraClient({ transport }))
+    const runtime = testRuntime(new Aurora({ transport }))
     window.history.replaceState({}, '', '/models')
 
     const { container, root } = await mountOutcomeApp(runtime)
@@ -1451,7 +1444,7 @@ describe('Tauri CI/E2E route gates', () => {
         return true
       },
     }
-    const runtime = testRuntime(new AuroraClient({ transport: new MockAuroraTransport() }), modePreferenceStore)
+    const runtime = testRuntime(new Aurora({ transport: new MockAuroraTransport() }), modePreferenceStore)
     window.history.replaceState({}, '', '/onboarding')
 
     const { container, root } = await mountOutcomeApp(runtime)
@@ -1486,7 +1479,7 @@ describe('Tauri CI/E2E route gates', () => {
         return false
       },
     }
-    const runtime = testRuntime(new AuroraClient({ transport: new MockAuroraTransport() }), modePreferenceStore)
+    const runtime = testRuntime(new Aurora({ transport: new MockAuroraTransport() }), modePreferenceStore)
     window.history.replaceState({}, '', '/onboarding')
 
     const { container, root } = await mountOutcomeApp(runtime)
@@ -1521,7 +1514,7 @@ describe('Tauri CI/E2E route gates', () => {
         return true
       },
     }
-    const runtime = testRuntime(new AuroraClient({ transport: new MockAuroraTransport() }), modePreferenceStore)
+    const runtime = testRuntime(new Aurora({ transport: new MockAuroraTransport() }), modePreferenceStore)
     window.history.replaceState({}, '', '/onboarding')
 
     const { container, root } = await mountOutcomeApp(runtime)
@@ -1577,7 +1570,7 @@ describe('Tauri CI/E2E route gates', () => {
   it('e2e:runtime captures healthy, degraded, and error diagnostics probe states', async () => {
     const healthyTransport = new RecordingMockAuroraTransport()
     window.history.replaceState({}, '', '/diagnostics')
-    const healthy = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: healthyTransport })))
+    const healthy = await mountOutcomeApp(testRuntime(new Aurora({ transport: healthyTransport })))
     try {
       await waitUntil(() => {
         expect(healthy.container.textContent).toContain('Service probes')
@@ -1601,7 +1594,7 @@ describe('Tauri CI/E2E route gates', () => {
       .fail(GATEWAY_METHODS.getSupportBundle, 'unavailable_service', 'support bundle down')
       .fail(GATEWAY_METHODS.getWebRTCDiagnostics, 'unavailable_service', 'diagnostics down')
     window.history.replaceState({}, '', '/diagnostics')
-    const error = await mountOutcomeApp(testRuntime(new AuroraClient({ transport: errorTransport })))
+    const error = await mountOutcomeApp(testRuntime(new Aurora({ transport: errorTransport })))
     try {
       await waitUntil(() => {
         expect(error.container.textContent).toContain('Degraded diagnostics inputs')
@@ -1618,7 +1611,7 @@ describe('Tauri CI/E2E route gates', () => {
 
   it('e2e:outcomes drives real navigation, SDK calls, visible errors, and render artifacts', async () => {
     const transport = new RecordingMockAuroraTransport()
-    const runtime = testRuntime(new AuroraClient({ transport }))
+    const runtime = testRuntime(new Aurora({ transport }))
     window.history.replaceState({}, '', '/')
 
     const { container, root } = await mountOutcomeApp(runtime)
@@ -1629,7 +1622,7 @@ describe('Tauri CI/E2E route gates', () => {
         expect(requestMethods(transport)).toContain('Gateway.GetRegistry')
       })
       expect(container.querySelector('[aria-label="Primary navigation"]')).not.toBeNull()
-      expect(container.querySelector('[aria-label="Aurora shell status"]')?.textContent).toContain('Health')
+      expect(container.querySelector('[aria-label="Aurora shell status"]')?.textContent).toContain('Routes')
       writeOutcomeArtifact('assistant-loaded', container.innerHTML)
 
       await navigateByHref(container, '/mesh')
@@ -1653,14 +1646,14 @@ describe('Tauri CI/E2E route gates', () => {
         method: 'Gateway.GetCapabilityCatalog',
       })
     })
-    const failingRuntime = testRuntime(new AuroraClient({ transport: failingTransport }))
+    const failingRuntime = testRuntime(new Aurora({ transport: failingTransport }))
     window.history.replaceState({}, '', '/')
 
     const failure = await mountOutcomeApp(failingRuntime)
     try {
       await waitUntil(() => {
         expect(failure.container.textContent).toContain('Aurora unavailable')
-        expect(failure.container.textContent).toContain('Capability state could not be loaded from AuroraClient.')
+        expect(failure.container.textContent).toContain('Capability state could not be loaded from Aurora.')
       })
       expect(requestMethods(failingTransport)).toContain('Gateway.GetCapabilityCatalog')
       writeOutcomeArtifact('gateway-error-visible', failure.container.innerHTML)
@@ -1683,7 +1676,7 @@ describe('Tauri CI/E2E route gates', () => {
       details: { healthPath: '/api/health' },
     }
     const runtime: AuroraTauriRuntime = {
-      ...testRuntime(new AuroraClient({ transport })),
+      ...testRuntime(new Aurora({ transport })),
       mode: 'desktop-local',
       startSidecar: async () => {
         sidecarCalls.push('start')
@@ -1737,7 +1730,7 @@ describe('Tauri CI/E2E route gates', () => {
       details: { healthPath: '/api/health' },
     }
     const runtime: AuroraTauriRuntime = {
-      ...testRuntime(new AuroraClient({ transport })),
+      ...testRuntime(new Aurora({ transport })),
       mode: 'desktop-local',
       startSidecar: async () => readySidecar,
       sidecarStatus: async () => readySidecar,
@@ -1761,7 +1754,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:runtime renders desktop-local sidecar status from Tauri command evidence', async () => {
+  it('e2e:runtime renders desktop-local sidecar status from Tauri command status', async () => {
     const transport = new RecordingMockAuroraTransport()
     transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
     const readySidecar = {
@@ -1773,7 +1766,7 @@ describe('Tauri CI/E2E route gates', () => {
       details: { healthPath: '/api/health', command: 'aurora_sidecar_status' },
     }
     const runtime: AuroraTauriRuntime = {
-      ...testRuntime(new AuroraClient({ transport })),
+      ...testRuntime(new Aurora({ transport })),
       mode: 'desktop-local',
       startSidecar: async () => readySidecar,
       sidecarStatus: async () => readySidecar,
@@ -1796,12 +1789,12 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:runtime covers desktop native settings evidence and browser fallback unsupported evidence', async () => {
+  it('e2e:runtime covers desktop native settings status and browser fallback unsupported status', async () => {
     const desktopTransport = new RecordingMockAuroraTransport()
     desktopTransport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
       .register('Native.GetCapabilityManifest', () => cloneFixture(nativeCapabilityManifestFixture))
     const desktopRuntime: AuroraTauriRuntime = {
-      ...testRuntime(new AuroraClient({ transport: desktopTransport })),
+      ...testRuntime(new Aurora({ transport: desktopTransport })),
       mode: 'desktop-local',
       sidecarStatus: async () => ({
         running: true,
@@ -1866,7 +1859,7 @@ describe('Tauri CI/E2E route gates', () => {
         expect(desktop.container.textContent).toContain('Tauri audio capture')
         expect(desktop.container.textContent).toContain('Tauri local file read')
         expect(desktop.container.textContent).toContain('Tauri updater')
-        expect(desktop.container.textContent).toContain('Desktop Tauri command evidence')
+        expect(desktop.container.textContent).toContain('Desktop controls')
         expect(desktop.container.textContent).toContain('aurora_native_permission_status')
         expect(desktop.container.textContent).toContain('aurora_tray_status')
         expect(desktop.container.textContent).toContain('aurora_notification_status')
@@ -1881,7 +1874,7 @@ describe('Tauri CI/E2E route gates', () => {
 
     const browserTransport = new MockAuroraTransport().lose('Native.GetCapabilityManifest')
     const browserRuntime: AuroraTauriRuntime = {
-      ...testRuntime(new AuroraClient({ transport: browserTransport })),
+      ...testRuntime(new Aurora({ transport: browserTransport })),
       mode: 'desktop-thin',
       sidecarStatus: async () => null,
       startSidecar: async () => null,
@@ -1894,7 +1887,7 @@ describe('Tauri CI/E2E route gates', () => {
         expect(browser.container.textContent).toContain('Native platform settings')
         expect(browser.container.textContent).toContain('native unsupported')
         expect(browser.container.textContent).toContain('No native permission manifest is available for this deployment mode.')
-        expect(browser.container.textContent).toContain('unavailable outside desktop-local Tauri runtime')
+        expect(browser.container.textContent).toContain('Local desktop sidecar controls are hidden on this surface')
       })
       expect(browser.container.textContent).not.toContain('Tauri tray status')
       expect(browser.container.textContent).not.toContain('Request permission')

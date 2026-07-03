@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   type GetRegistryResponse,
   type ToolCatalogResponse
@@ -14,8 +14,8 @@ import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
 describe('AdminPluginsView', () => {
-  it('renders plugin/MCP catalog health, provider status, errors, logs, and AdminAction-ready reload only with route evidence', async () => {
-    const client = new AuroraClient({
+  it('renders plugin/MCP catalog health, provider status, errors, logs, and AdminAction-ready reload only with route status', async () => {
+    const client = new Aurora({
       transport: pluginsTransport(liveRegistryFixture())
     })
     const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())
@@ -90,7 +90,7 @@ describe('AdminPluginsView', () => {
         (method) => method.bus_topic !== 'Tooling.ReloadPlugins'
       )
     }))
-    const client = new AuroraClient({
+    const client = new Aurora({
       transport: pluginsTransport({
         ...liveRegistryFixture(),
         modules: registry
@@ -128,7 +128,7 @@ describe('AdminPluginsView', () => {
         (method) => !(method.bus_topic ?? '').startsWith('Gateway.AdminAction')
       )
     }))
-    const client = new AuroraClient({
+    const client = new Aurora({
       transport: pluginsTransport({
         ...liveRegistryFixture(),
         modules: registry
@@ -153,7 +153,7 @@ function pluginsRoute(): RouteAvailability {
   return {
     item: navItemSnapshot(item),
     state: 'available-local',
-    explanation: 'Tooling catalog route available from mock evidence.',
+    explanation: 'Tooling catalog route available from mock status.',
     providerLabel: 'mock Tooling.GetToolCatalog',
     blockers: [],
     repairActions: [],

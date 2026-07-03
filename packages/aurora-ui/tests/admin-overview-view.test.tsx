@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AuroraClient, MockAuroraTransport } from '@aurora/client'
+import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
 import { AdminOverviewContent, buildAdminOverviewSnapshot } from '../src/index'
 
 describe('AdminOverviewContent', () => {
-  it('renders deployment posture, health totals, capability gaps, audit shortcuts, and backend catalog evidence from the SDK manifest', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  it('renders deployment posture, health totals, capability gaps, audit shortcuts, and backend catalog status from the SDK manifest', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const manifest = await buildAdminOverviewSnapshot(client)
     const markup = renderToStaticMarkup(
       <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} />

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   MockAuroraTransport,
   SCHEDULER_METHODS,
   capabilityCatalogFixture,
@@ -30,7 +30,7 @@ afterEach(() => {
 
 describe('AdminSchedulerView', () => {
   it('renders scheduler jobs with recurrence, next/run history, tool integration, and disabled missing edit contract', async () => {
-    const client = new AuroraClient({ transport: schedulerTransport() })
+    const client = new Aurora({ transport: schedulerTransport() })
     const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute())
     const markup = renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute()} initialSnapshot={snapshot} />)
 
@@ -61,7 +61,7 @@ describe('AdminSchedulerView', () => {
 
   it('executes scheduler mutations through AdminAction draft, confirm, and audited backend submit', async () => {
     const calls: string[] = []
-    const client = new AuroraClient({ transport: schedulerTransport(calls) })
+    const client = new Aurora({ transport: schedulerTransport(calls) })
     const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute())
     calls.splice(0)
     const container = document.createElement('div')
@@ -95,14 +95,13 @@ describe('AdminSchedulerView', () => {
       'Gateway.AdminActionConfirm',
       SCHEDULER_METHODS.cancel,
       SCHEDULER_METHODS.listJobs,
-      'Gateway.GetRegistry',
-      'Gateway.GetCapabilityCatalog'
+      'Gateway.GetRegistry'
     ])
     expect(container.textContent).toContain('scheduler.cancel.audit')
   })
 
   it('disables create and mutation controls when Scheduler.manage is missing from advertised contracts', async () => {
-    const client = new AuroraClient({ transport: schedulerTransport([], registryWithoutSchedulerManage()) })
+    const client = new Aurora({ transport: schedulerTransport([], registryWithoutSchedulerManage()) })
     const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute())
     const markup = renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute()} initialSnapshot={snapshot} />)
 
@@ -126,7 +125,7 @@ function schedulerRoute(): RouteAvailability {
   return {
     item: navItemSnapshot(item),
     state: 'available-local',
-    explanation: 'Scheduler route available from live registry and capability catalog evidence.',
+    explanation: 'Scheduler route available from live registry and capability catalog status.',
     providerLabel: 'mock Scheduler.ListJobs',
     blockers: [],
     repairActions: [],

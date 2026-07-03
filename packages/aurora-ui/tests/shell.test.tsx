@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
-  AuroraClient,
+  AuroraClient as Aurora,
   AuroraError,
   MockAuroraTransport,
   ORCHESTRATOR_METHODS,
@@ -200,7 +200,7 @@ describe('Aurora production shell', () => {
   })
 
   it('preserves shared page header badges, route state notices, and action primitives', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const memoryRoute = route(snapshot, 'memory')
     const markup = renderToStaticMarkup(
       <div>
@@ -208,7 +208,7 @@ describe('Aurora production shell', () => {
           id="memory-route-title"
           eyebrow="Operator route"
           title="Memory"
-          description="Route-specific controls keep common status, privacy, evidence, and permission signals visible."
+          description="Route-specific controls keep common status, privacy, status, and permission signals visible."
           badgesLabel="Memory route badges"
           badges={<>
             <StatusBadge state="pending" />
@@ -216,9 +216,9 @@ describe('Aurora production shell', () => {
             <EvidenceBadge label="Gateway.GetRegistry" />
           </>}
         />
-        <RouteStateNotice state="loading" title="Loading memory" message="Loading namespace evidence from AuroraClient." evidence="DB.ListNamespaces" />
+        <RouteStateNotice state="loading" title="Loading memory" message="Loading namespace status from Aurora." evidence="DB.ListNamespaces" />
         <RouteStateNotice state="empty" title="No namespaces" message="The backend returned no namespaces." />
-        <RouteStateNotice state="error" title="Gateway unavailable" message="AuroraClient returned an SDK error." evidence="Gateway unavailable" />
+        <RouteStateNotice state="error" title="Gateway unavailable" message="Aurora returned an SDK error." evidence="Gateway unavailable" />
         <RouteStateNotice state="permission" title="Permission required" message="AdminAction or Auth permission is required." actionLabel="Request permission" />
         <RouteBadge route={memoryRoute} />
         <AdminActionButton required label="Apply admin change" disabledReason="Requires Gateway.manage AdminAction." />
@@ -245,17 +245,17 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('aui-route-badge')
     expect(markup).toContain('Apply admin change')
     expect(markup).toContain('data-admin-action-required="true"')
-    expect(markup).toContain('Capability details')
+    expect(markup).toContain('Route details')
     expect(markup).toContain('Repair actions')
     expect(markup).toContain('aui-surface-skeleton')
     expect(markup).toContain('No memory namespaces')
   })
 
-  it('builds route availability from AuroraClient capability catalog', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('builds route availability from Aurora capability catalog', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
 
     expect(snapshot.loadState).toBe('ready')
-    expect(snapshot.evidenceSource).toContain('SDK')
+    expect(snapshot.evidenceSource).toContain('Demo transport')
     expect(snapshot.routes.some((route) => route.state === 'available-local')).toBe(true)
     expect(snapshot.routes.some((route) => route.state === 'privacy-blocked')).toBe(true)
     for (const id of ['access', 'tokens', 'devices', 'config', 'plugins', 'pairing', 'backups', 'scheduler', 'settings']) {
@@ -271,7 +271,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps read-only sensitive admin routes routeable without route-level AdminAction while mutations stay gated', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const adminReadRouteIds = ['admin', 'services', 'access', 'tokens', 'devices', 'config', 'contracts', 'plugins', 'pairing', 'backups', 'scheduler', 'audit']
     const sensitiveReadRouteIds = [...adminReadRouteIds, 'settings']
 
@@ -304,7 +304,7 @@ describe('Aurora production shell', () => {
     }
   })
 
-  it('documents every production surface with backend or explicit degraded evidence', () => {
+  it('documents every production surface with backend or explicit degraded status', () => {
     const requiredSurfaceIds = [
       'assistant-route-sheet',
       'admin-overview',
@@ -396,12 +396,12 @@ describe('Aurora production shell', () => {
           surface.truthSources.some((source) =>
             ['admin-action', 'capability-graph', 'native-manifest', 'unsupported-degraded'].includes(source.kind)
           ),
-        `${surface.id} descriptor or explicit gated/degraded evidence`
+        `${surface.id} descriptor or explicit gated/degraded status`
       ).toBe(true)
     }
   })
 
-  it('locks the original mock reference corpus and shell structure as production UX evidence', () => {
+  it('locks the original mock reference corpus and shell structure as production UX status', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const mockRoot = join(repoRoot, 'modules/ui-mock-reference')
     const uiSrcRoot = join(repoRoot, 'packages/aurora-ui/src')
@@ -419,22 +419,22 @@ describe('Aurora production shell', () => {
 
     const shellSource = readFileSync(join(uiSrcRoot, 'shell.tsx'), 'utf8')
     expect(shellSource).toContain('Primary navigation')
-    expect(shellSource).toContain('Mobile navigation sheet')
+    expect(shellSource).toContain('Navigation')
     expect(shellSource).toContain('Mobile navigation')
     expect(shellSource).toContain('MobileBottomTabs')
     expect(shellSource).toContain('MobileSheetRouteSummary')
     expect(shellSource).toContain('Toggle activity rail')
     expect(shellSource).toContain('Route')
     expect(shellSource).toContain('Privacy')
-    expect(shellSource).toContain('Health')
+    expect(shellSource).toContain('Routes')
     expect(shellSource).toContain('aui-nav-status-chip')
-    expect(shellSource).toContain('Quick diagnostics')
+    expect(shellSource).toContain('Aurora activity')
   })
 
   it('keeps mock-driven interaction anchors in production component source', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const uiSrcRoot = join(repoRoot, 'packages/aurora-ui/src')
-    const genericEvidenceOnly = /\b(catalog|status|loading|backend|AuroraClient|SDK|route evidence)\b/i
+    const genericStatusOnly = /\b(catalog|status|loading|backend|Aurora|SDK|route status)\b/i
 
     for (const surface of productionSurfaceContracts) {
       const sourceText = surface.componentFiles
@@ -443,7 +443,7 @@ describe('Aurora production shell', () => {
 
       expect(surface.mockUxAnchors.length, `${surface.id} mock UX anchors`).toBeGreaterThanOrEqual(3)
       expect(
-        surface.mockUxAnchors.some((anchor) => !genericEvidenceOnly.test(anchor)),
+        surface.mockUxAnchors.some((anchor) => !genericStatusOnly.test(anchor)),
         `${surface.id} cannot be documented only by backend/status/catalog labels`
       ).toBe(true)
 
@@ -456,7 +456,7 @@ describe('Aurora production shell', () => {
     }
   })
 
-  it('keeps production UI screens behind AuroraClient and away from mock fixtures as live truth', () => {
+  it('keeps production UI screens behind Aurora and away from mock fixtures as live truth', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const scannedFiles = [
       ...filesUnder(join(repoRoot, 'packages/aurora-ui/src'), /\.(ts|tsx)$/),
@@ -491,7 +491,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders accessible navigation and route state without direct backend calls', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(
       <AppShell snapshot={snapshot} currentPath="/admin">
         <RouteMatrix routes={snapshot.routes} />
@@ -499,7 +499,7 @@ describe('Aurora production shell', () => {
     )
 
     expect(markup).toContain('Primary navigation')
-    expect(markup).toContain('Mobile navigation sheet')
+    expect(markup).toContain('Navigation')
     expect(markup).toContain('Mobile navigation')
     expect(markup).toContain('Current mobile route')
     expect(markup).toContain('data-mobile-tab="assistant"')
@@ -510,22 +510,20 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Toggle activity rail')
     expect(markup).toContain('aui-activity-drawer-panel')
     expect(markup).toContain('aria-current="page"')
-    expect(markup).toContain('aria-label="Quick diagnostics"')
-    expect(markup).toContain('aui-quick-diagnostics')
-    expect(markup).toContain('blocked /')
+    expect(markup).toContain('aria-label="Aurora activity"')
     expect(markup).toContain('aui-nav-status-chip')
     expect(markup).toContain('aria-label="Mode"')
     expect(markup).toContain('aria-label="Route"')
     expect(markup).toContain('aria-label="Privacy"')
-    expect(markup).toContain('aria-label="Health"')
-    expect(markup).toContain('AdminAction')
+    expect(markup).toContain('aria-label="Routes"')
+    expect(markup).toContain('Approval')
     expect(markup).toContain('privacy-blocked')
-    expect(markup).toContain('Capability details')
+    expect(markup).toContain('Route details')
     expect(markup).toContain('Repair actions')
   })
 
-  it('keeps mock-derived mobile tabs bound to truthful route state evidence', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('keeps mock-derived mobile tabs bound to truthful route state status', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(
       <AppShell snapshot={snapshot} currentPath="/mesh">
         <RouteMatrix routes={snapshot.routes} />
@@ -540,7 +538,7 @@ describe('Aurora production shell', () => {
     }
     expect(markup).toContain('Current mobile route')
     expect(markup).toContain('Mesh')
-    expect(markup).toContain('Capability gated · Demo fixture')
+    expect(markup).toContain('Demo mode')
   })
 
   it('keeps desktop, tablet, and mobile responsive shell rules explicit', () => {
@@ -555,7 +553,7 @@ describe('Aurora production shell', () => {
   it('maps capability graph states into disabled routes and repair actions', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Gateway.GetCapabilityCatalog', () => stateMatrixCatalog())
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport }))
 
     const services = route(snapshot, 'services')
     const config = route(snapshot, 'config')
@@ -576,13 +574,13 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Grant permission')
     expect(markup).toContain('Configure route')
     expect(markup).toContain('Pair or reconnect peer')
-    expect(markup).toContain('Providers')
+    expect(markup).toContain('Options')
   })
 
   it('keeps local selector-required routes clickable with route-selection UX', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Gateway.GetCapabilityCatalog', () => localSelectorRequiredRouteCatalog())
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport }))
 
     const scheduler = route(snapshot, 'scheduler')
     expect(scheduler).toEqual(expect.objectContaining({
@@ -663,10 +661,10 @@ describe('Aurora production shell', () => {
       />
     )
     expect(markup).toContain('Gateway unavailable')
-    expect(markup).toContain('AuroraClient error')
+    expect(markup).toContain('Aurora is unavailable')
   })
 
-  it('builds model runtime provider state from SDK catalog, capability graph, and native evidence', () => {
+  it('builds model runtime provider state from SDK catalog, capability graph, and native status', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
@@ -703,7 +701,7 @@ describe('Aurora production shell', () => {
       }),
       expect.objectContaining({
         label: 'Benchmarkable providers',
-        value: '2 with benchmark evidence'
+        value: '2 with benchmark status'
       }),
       expect.objectContaining({
         label: 'Mesh/remote providers',
@@ -718,9 +716,9 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         availability: 'available-local',
         canSelect: false,
-        selectReason: expect.stringContaining('Selected provider is reported by backend catalog evidence'),
+        selectReason: expect.stringContaining('Selected provider is reported by backend catalog status'),
         privacyClass: 'public',
-        routeQuality: expect.stringContaining('local; available-local; routeable from catalog evidence'),
+        routeQuality: expect.stringContaining('local; available-local; routeable from catalog status'),
         latencyContext: expect.stringContaining('1200 ms latency; 8192 token context; 2048 token generation limit'),
         modelIdentity: expect.stringContaining('llama-3-8b-instruct; local-filesystem; user-provided')
       })
@@ -768,7 +766,7 @@ describe('Aurora production shell', () => {
     expect(nativeModel.mobileLocalLightReason).toContain('android-native-local-light-adapter')
   })
 
-  it('marks an unselected executable local model provider selectable through Config.Set AdminAction evidence', () => {
+  it('marks an unselected executable local model provider selectable through Config.Set AdminAction status', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
@@ -818,7 +816,7 @@ describe('Aurora production shell', () => {
       registry: gatewayRegistryFixture,
       transportKind: 'mock'
     })
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const markup = renderToStaticMarkup(
       <ModelsView
         client={client}
@@ -850,7 +848,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('0 active operations')
     expect(markup).toContain('No import/download operation is active')
     expect(markup).toContain('Benchmarkable providers')
-    expect(markup).toContain('2 with benchmark evidence')
+    expect(markup).toContain('2 with benchmark status')
     expect(markup).toContain('Mesh/remote providers')
     expect(markup).toContain('2 remote-capable')
     expect(markup).toContain('Mobile local-light availability')
@@ -872,7 +870,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Runtime warnings')
     expect(markup).toContain('Measured providers')
     expect(markup).toContain('Missing measurements')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
     expect(markup).toContain('AdminAction model import contract is not active')
     expect(markup).toContain('Benchmark action stays disabled')
     expect(markup).toContain('Select studio-gpu peer: Only local executable providers can be selected from this cockpit')
@@ -888,8 +886,8 @@ describe('Aurora production shell', () => {
     expect(errorMarkup).toContain('model catalog unavailable')
   })
 
-  it('renders settings, privacy defaults, native permissions, and AdminAction state from SDK evidence', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('renders settings, privacy defaults, native permissions, and AdminAction state from SDK status', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const model = buildSettingsPermissionsModel(snapshot)
     const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} />)
 
@@ -915,7 +913,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Native permission details live on /settings/native')
     expect(markup).toContain('Route and fallback policy')
     expect(markup).toContain('AdminAction required')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
     expect(markup).not.toContain('Native permissions and capabilities')
 
     const nativeMarkup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
@@ -926,7 +924,7 @@ describe('Aurora production shell', () => {
   it('renders iOS App Intents as app-owned Shortcuts integration without claiming system assistant ownership', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport }))
     const model = buildSettingsPermissionsModel(snapshot)
     const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
@@ -998,7 +996,7 @@ describe('Aurora production shell', () => {
         'aurora.notifications': true
       }
     }))
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport }))
     Object.assign(route(snapshot, 'settings'), {
       state: 'available-local',
       disabled: false,
@@ -1024,7 +1022,7 @@ describe('Aurora production shell', () => {
     const nativeMarkup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
     expect(nativeMarkup).toContain('Request unavailable')
     expect(nativeMarkup).toContain('Granted')
-    expect(markup).toContain('Fallback is visible as degraded capability evidence.')
+    expect(markup).toContain('Fallback is visible as degraded capability status.')
   })
 
   it('renders Android local-light inference as a degraded native provider in settings', () => {
@@ -1050,7 +1048,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Native manifest reports a degraded or partial platform path for this feature.')
   })
 
-  it('renders Android assistant role qualification and fallback entrypoints from native manifest evidence', () => {
+  it('renders Android assistant role qualification and fallback entrypoints from native manifest status', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
@@ -1152,10 +1150,10 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.')
   })
 
-  it('renders iOS Siri/Shortcuts/App Intents integration and preflight evidence from the native manifest', async () => {
+  it('renders iOS Siri/Shortcuts/App Intents integration and preflight status from the native manifest', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Native.GetCapabilityManifest', () => iosNativeCapabilityManifestFixture)
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport }))
     const model = buildSettingsPermissionsModel(snapshot)
     const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
@@ -1171,7 +1169,7 @@ describe('Aurora production shell', () => {
   })
 
   it('does not count routeable local selector preferences as hard-blocked settings routes', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     for (const candidate of snapshot.routes) {
       Object.assign(candidate, {
         state: 'available-local' as const,
@@ -1179,7 +1177,7 @@ describe('Aurora production shell', () => {
         routeable: true,
         selectorRequired: false,
         blockers: [],
-        evidenceSources: ['controlled local route evidence']
+        evidenceSources: ['controlled local route status']
       })
     }
     Object.assign(route(snapshot, 'tools'), {
@@ -1224,7 +1222,7 @@ describe('Aurora production shell', () => {
     expect(nativeMarkup).toContain('No native permission manifest is available')
   })
 
-  it('renders iOS Keychain, biometric admin unlock, and Siri limitation copy from native manifest evidence', async () => {
+  it('renders iOS Keychain, biometric admin unlock, and Siri limitation copy from native manifest status', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Native.GetCapabilityManifest', () => ({
       platform: 'ios',
@@ -1243,7 +1241,7 @@ describe('Aurora production shell', () => {
         'ios.siriReplacement': false
       }
     }))
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport }))
     const model = buildSettingsPermissionsModel(snapshot)
     const markup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
@@ -1261,7 +1259,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders assistant text chat with route, model, privacy, loading and disabled states', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const assistantRoute = route(snapshot, 'assistant')
     const enabledRoute = {
       ...assistantRoute,
@@ -1273,7 +1271,7 @@ describe('Aurora production shell', () => {
     }
     const markup = renderToStaticMarkup(
       <AssistantView
-        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        client={new Aurora({ transport: new MockAuroraTransport() })}
         route={enabledRoute}
         voiceRoutes={snapshot.assistantVoiceRoutes}
         nativeAvailable={snapshot.nativeAvailable}
@@ -1393,7 +1391,7 @@ describe('Aurora production shell', () => {
 
     const disabledMarkup = renderToStaticMarkup(
       <AssistantView
-        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        client={new Aurora({ transport: new MockAuroraTransport() })}
         route={assistantRoute}
         voiceRoutes={snapshot.assistantVoiceRoutes}
       />
@@ -1404,7 +1402,7 @@ describe('Aurora production shell', () => {
   })
 
   it('warns before private remote fallback and keeps raw audio plus tool payloads redacted', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const privateRemoteRoute = enabledRoute(route(snapshot, 'assistant'), {
       state: 'available-remote',
@@ -1428,7 +1426,7 @@ describe('Aurora production shell', () => {
         client={client}
         route={privateRemoteRoute}
         voiceRoutes={snapshot.assistantVoiceRoutes}
-        recentVoiceEvents={voiceEvidenceEvents()}
+        recentVoiceEvents={voiceStatusEvents()}
         initialSession={{
           sessionId: 'assistant-privacy-session',
           messages: [{
@@ -1470,7 +1468,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders the assistant state matrix for empty, no-model, selector, stream, tool, retry, cancel, offline, and auth states', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const assistantRoute = enabledRoute(route(snapshot, 'assistant'), {
       providerLabel: `local / ${ORCHESTRATOR_METHODS.externalUserInput}`,
@@ -1498,7 +1496,7 @@ describe('Aurora production shell', () => {
     )
     expect(emptyMarkup).toContain('Start with a prompt')
     expect(emptyMarkup).toContain('model pending')
-    expect(emptyMarkup).toContain('no model configured / awaiting backend model evidence')
+    expect(emptyMarkup).toContain('no model configured / awaiting backend model status')
     expect(emptyMarkup).toContain('<dt>Selector</dt><dd>required</dd>')
     expect(emptyMarkup).toContain('offline sidecar: Python Aurora node not running')
     expect(emptyMarkup).toContain('assistant conversation remains the primary page')
@@ -1565,7 +1563,7 @@ describe('Aurora production shell', () => {
       permissions: { microphone: true },
       capabilities: { voiceCapture: true }
     }))
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const snapshot = await buildShellSnapshot(client)
     const assistantRoute = enabledRoute(route(snapshot, 'assistant'), {
       providerLabel: `local / ${ORCHESTRATOR_METHODS.externalUserInput}`
@@ -1652,7 +1650,7 @@ describe('Aurora production shell', () => {
       nativeCapabilities: snapshot.nativeCapabilities,
       captureStatus: 'listening',
       consentGranted: true,
-      voiceEvents: voiceEvidenceEvents()
+      voiceEvents: voiceStatusEvents()
     })
     expect(voiceModel.controls.map((control) => control.label)).toEqual(expect.arrayContaining([
       'Start transcription',
@@ -1672,7 +1670,7 @@ describe('Aurora production shell', () => {
         nativePlatform={snapshot.nativePlatform}
         nativePermissions={snapshot.nativePermissions}
         nativeCapabilities={snapshot.nativeCapabilities}
-        recentVoiceEvents={voiceEvidenceEvents()}
+        recentVoiceEvents={voiceStatusEvents()}
         initialSession={{
           sessionId: 'assistant-integration-session',
           messages: [{
@@ -1700,7 +1698,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders backup dashboard with SDK manifests, AdminAction controls, download, and rollback visibility', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const backups = route(snapshot, 'backups')
     const markup = renderToStaticMarkup(
@@ -1718,11 +1716,11 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('backup-20260625T120000Z-config-rag')
     expect(markup).toContain('config:included')
     expect(markup).toContain('models:unsupported')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
   })
 
   it('renders backup empty, denied, degraded, unavailable, and SDK error states', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const backups = route(snapshot, 'backups')
 
@@ -1754,7 +1752,7 @@ describe('Aurora production shell', () => {
     expect(backupErrorMessage(new AuroraError({ code: 'transport_loss', message: 'lost' }))).toContain('retry')
   })
 
-  it('builds assistant voice routes from capability graph and native manifest evidence', async () => {
+  it('builds assistant voice routes from capability graph and native manifest status', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog())
     transport.register('Native.GetCapabilityManifest', () => ({
@@ -1762,7 +1760,7 @@ describe('Aurora production shell', () => {
       permissions: { microphone: true },
       capabilities: { voiceCapture: true }
     }))
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const snapshot = await buildShellSnapshot(client)
 
     expect(snapshot.assistantVoiceRoutes.transcription.state).toBe('available-local')
@@ -1796,17 +1794,17 @@ describe('Aurora production shell', () => {
       nativeCapabilities: snapshot.nativeCapabilities,
       captureStatus: 'listening',
       consentGranted: true,
-      voiceEvents: voiceEvidenceEvents()
+      voiceEvents: voiceStatusEvents()
     })
 
     expect(eventDrivenModel.events.find((event) => event.id === 'partial')).toEqual(expect.objectContaining({
       state: 'available-local',
-      detail: expect.stringContaining('STTCoordinator.Partial evidence')
+      detail: expect.stringContaining('STTCoordinator.Partial status')
     }))
     expect(eventDrivenModel.events.find((event) => event.id === 'final')?.detail).toContain('session voice-session-1')
     expect(eventDrivenModel.events.find((event) => event.id === 'tts-started')).toEqual(expect.objectContaining({
       state: 'available-local',
-      detail: expect.stringContaining('TTS.Started evidence')
+      detail: expect.stringContaining('TTS.Started status')
     }))
     expect(eventDrivenModel.events.find((event) => event.id === 'remote-denied')).toEqual(expect.objectContaining({
       state: 'denied',
@@ -1817,7 +1815,7 @@ describe('Aurora production shell', () => {
   it('keeps remote STT consent-gated, denial visible, and revoked consent blocking dispatch', async () => {
     const transport = new MockAuroraTransport()
     transport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('remote-stt'))
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const snapshot = await buildShellSnapshot(client)
     const assistantRoute = enabledRoute(route(snapshot, 'assistant'))
 
@@ -1851,14 +1849,14 @@ describe('Aurora production shell', () => {
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('remote-denied'))
-    const deniedSnapshot = await buildShellSnapshot(new AuroraClient({ transport: deniedTransport }))
+    const deniedSnapshot = await buildShellSnapshot(new Aurora({ transport: deniedTransport }))
     expect(deniedSnapshot.assistantVoiceRoutes.transcription.state).toBe('denied')
   })
 
   it('covers peer disconnect, local permission loss, and mobile foreground-only voice limits', async () => {
     const staleTransport = new MockAuroraTransport()
     staleTransport.register('Gateway.GetCapabilityCatalog', () => voiceModeCatalog('stale-remote'))
-    const staleClient = new AuroraClient({ transport: staleTransport })
+    const staleClient = new Aurora({ transport: staleTransport })
     const staleSnapshot = await buildShellSnapshot(staleClient)
     const staleModel = buildAssistantVoiceModel({
       client: staleClient,
@@ -1879,7 +1877,7 @@ describe('Aurora production shell', () => {
       permissions: { microphone: false },
       capabilities: { voiceCapture: false }
     }))
-    const mobileClient = new AuroraClient({ transport: mobileTransport })
+    const mobileClient = new Aurora({ transport: mobileTransport })
     const mobileSnapshot = await buildShellSnapshot(mobileClient)
     const mobileModel = buildAssistantVoiceModel({
       client: mobileClient,
@@ -1912,7 +1910,7 @@ describe('Aurora production shell', () => {
         'ios.siriReplacement': false
       }
     }))
-    const mobileClient = new AuroraClient({ transport: mobileTransport })
+    const mobileClient = new Aurora({ transport: mobileTransport })
     const snapshot = await buildShellSnapshot(mobileClient)
     const settings = buildSettingsPermissionsModel(snapshot)
     const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'ios-mobile-thin' })
@@ -2017,8 +2015,8 @@ describe('Aurora production shell', () => {
     expect(outcomes.get(1)?.reason_code).toBe('unsupported_type')
   })
 
-  it('renders onboarding modes, endpoint validation, login, pairing, and fallback states from SDK evidence', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  it('renders onboarding modes, endpoint validation, login, pairing, and fallback states from SDK status', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const model = buildOnboardingViewModel({ client, snapshot })
     const markup = renderToStaticMarkup(<OnboardingView client={client} snapshot={snapshot} />)
@@ -2076,7 +2074,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Android')
     expect(markup).toContain('iOS')
     expect(markup).toContain('Siri/Shortcuts/App Intents')
-    expect(markup).toContain('fixture/demo only')
+    expect(markup).toContain('demo only')
     expect(markup).toContain('Gateway or local node URL')
     expect(markup).toContain('Login or restore')
     expect(markup).toContain('Pairing code')
@@ -2099,7 +2097,7 @@ describe('Aurora production shell', () => {
   })
 
   it('maps auth session matrix into onboarding availability without inventing success', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
 
     expect(buildOnboardingViewModel({ client, snapshot }).authState).toBe('pending')
@@ -2127,7 +2125,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps invalid endpoints and SDK errors visible in onboarding state', async () => {
-    const client = new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry') })
+    const client = new Aurora({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry') })
     const snapshot = await buildShellSnapshot(client)
     const model = buildOnboardingViewModel({ client, snapshot, endpoint: 'ftp://not-supported' })
 
@@ -2136,13 +2134,13 @@ describe('Aurora production shell', () => {
     expect(model.endpointEvidence).toContain('could not load')
 
     const markup = renderToStaticMarkup(<OnboardingView client={client} snapshot={snapshot} />)
-    expect(markup).toContain('AuroraClient error')
-    expect(markup).toContain('Capability state could not be loaded from AuroraClient')
+    expect(markup).toContain('Aurora could not load the capability snapshot')
+    expect(markup).toContain('Capability state could not be loaded from Aurora')
     expect(markup).toContain('Recovery: use an http:// or https:// Gateway URL, then retry authentication after the capability snapshot loads.')
   })
 
-  it('builds assistant route policy and user-facing SDK error messages from backend evidence', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('builds assistant route policy and user-facing SDK error messages from backend status', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const assistantRoute = route(snapshot, 'assistant')
     const policy = routePolicyFromRoute(assistantRoute)
 
@@ -2153,17 +2151,17 @@ describe('Aurora production shell', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'down' }))).toContain('unavailable')
   })
 
-  it('wires admin services and contract explorer from AuroraClient SDK resources', async () => {
-    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminServicesTransport() }))
+  it('wires admin services and contract explorer from Aurora SDK resources', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: adminServicesTransport() }))
     const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.services.map((service) => service.module)).toContain('Gateway')
     expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Gateway.GetServices')
     expect(markup).toContain('Services')
-    expect(markup).toContain('SDK mock transport fixture')
+    expect(markup).toContain('Demo transport')
     expect(markup).toContain('Gateway.GetServices')
-    expect(markup).toContain('Services table with health, route evidence, capabilities, heartbeat, instance, and AdminAction controls')
+    expect(markup).toContain('Services table with health, route state, capabilities, heartbeat, instance, and AdminAction controls')
     expect(markup).toContain('Heartbeat')
     expect(markup).toContain('Methods')
     expect(markup).toContain('Details: routes, methods, and backend exposure')
@@ -2174,7 +2172,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps service control actions capability-driven and AdminAction-gated', async () => {
-    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminServicesTransport() }))
+    const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: adminServicesTransport() }))
     const supervisor = snapshot.services.find((service) => service.module === 'Supervisor')
     const gateway = snapshot.services.find((service) => service.module === 'Gateway')
 
@@ -2200,36 +2198,36 @@ describe('Aurora production shell', () => {
         contracts: [],
         warnings: [],
         error: null,
-        evidenceSource: 'pending AuroraClient SDK calls'
+        evidenceSource: 'pending Aurora SDK calls'
       }} />
     )
     expect(loadingMarkup).toContain('Loading services')
 
-    const emptySnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: emptyAdminTransport() }))
+    const emptySnapshot = await buildAdminServicesSnapshot(new Aurora({ transport: emptyAdminTransport() }))
     expect(emptySnapshot.loadState).toBe('empty')
     expect(renderToStaticMarkup(<AdminServicesView snapshot={emptySnapshot} />)).toContain('No service registry')
 
     const deniedTransport = adminServicesTransport()
     deniedTransport.fail('Gateway.GetCapabilityCatalog', 'permission', 'Capability catalog denied')
-    const deniedSnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: deniedTransport }))
+    const deniedSnapshot = await buildAdminServicesSnapshot(new Aurora({ transport: deniedTransport }))
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminServicesView snapshot={deniedSnapshot} />)).toContain('Capability catalog denied')
 
     const degradedTransport = adminServicesTransport()
     degradedTransport.lose('Gateway.GetServices', 'Gateway service list unavailable')
-    const degradedSnapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: degradedTransport }))
+    const degradedSnapshot = await buildAdminServicesSnapshot(new Aurora({ transport: degradedTransport }))
     expect(degradedSnapshot.loadState).toBe('degraded')
     expect(renderToStaticMarkup(<AdminServicesView snapshot={degradedSnapshot} />)).toContain('Gateway service list unavailable')
 
     const unavailableSnapshot = await buildAdminServicesSnapshot(
-      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetServices').lose('Gateway.GetRegistry').lose('Gateway.GetCapabilityCatalog') })
+      new Aurora({ transport: MockAuroraTransport.empty().lose('Gateway.GetServices').lose('Gateway.GetRegistry').lose('Gateway.GetCapabilityCatalog') })
     )
     expect(unavailableSnapshot.loadState).toBe('service-unavailable')
-    expect(renderToStaticMarkup(<AdminServicesView snapshot={unavailableSnapshot} />)).toContain('AuroraClient SDK error')
+    expect(renderToStaticMarkup(<AdminServicesView snapshot={unavailableSnapshot} />)).toContain('Aurora request error')
   })
 
-  it('preserves denied, degraded, stale, privacy-blocked, and unsupported contract evidence', async () => {
-    const snapshot = await buildAdminServicesSnapshot(new AuroraClient({ transport: adminStateMatrixTransport() }))
+  it('preserves denied, degraded, stale, privacy-blocked, and unsupported contract status', async () => {
+    const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: adminStateMatrixTransport() }))
     const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
 
     expect(snapshot.services.map((service) => service.routeState)).toEqual(
@@ -2241,8 +2239,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('internal-only')
   })
 
-  it('wires plugins, MCP, provider grouping, risk metadata, and policy controls from AuroraClient', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  it('wires plugins, MCP, provider grouping, risk metadata, and policy controls from Aurora', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const shell = await buildShellSnapshot(client)
     const pluginsRoute = enabledRoute(route(shell, 'plugins'))
     const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute)
@@ -2284,7 +2282,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps plugin reload, install, and sharing mutations AdminAction-gated by advertised registry methods', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const shell = await buildShellSnapshot(client)
     const pluginsRoute = enabledRoute(route(shell, 'plugins'))
     const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute)
@@ -2305,7 +2303,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders plugin admin loading, empty, denied, degraded, unavailable, and error states', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const shell = await buildShellSnapshot(client)
     const pluginsRoute = enabledRoute(route(shell, 'plugins'))
     expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={{
@@ -2317,33 +2315,33 @@ describe('Aurora production shell', () => {
       actions: [],
       warnings: [],
       error: null,
-      evidenceSource: 'pending AuroraClient SDK calls'
+      evidenceSource: 'pending Aurora SDK calls'
     }} />)).toContain('Loading Tooling catalog')
 
     const emptyTransport = new MockAuroraTransport()
     emptyTransport.register('Tooling.GetToolCatalog', () => ({ tools: [], secrets_redacted: true }))
-    const emptySnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: emptyTransport }), pluginsRoute)
+    const emptySnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: emptyTransport }), pluginsRoute)
     expect(emptySnapshot.loadState).toBe('empty')
     expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={emptySnapshot} />)).toContain('No Tooling catalog entries')
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.fail('Tooling.GetToolCatalog', 'permission', 'tool catalog denied')
-    const deniedSnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: deniedTransport }), pluginsRoute)
+    const deniedSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: deniedTransport }), pluginsRoute)
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={deniedSnapshot} />)).toContain('tool catalog denied')
 
     const degradedTransport = new MockAuroraTransport()
     degradedTransport.lose('Gateway.GetRegistry', 'registry unavailable')
-    const degradedSnapshot = await buildAdminPluginsSnapshot(new AuroraClient({ transport: degradedTransport }), pluginsRoute)
+    const degradedSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: degradedTransport }), pluginsRoute)
     expect(degradedSnapshot.loadState).toBe('degraded')
     expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={degradedSnapshot} />)).toContain('registry unavailable')
 
     const unavailableSnapshot = await buildAdminPluginsSnapshot(
-      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Tooling.GetToolCatalog').lose('Gateway.GetRegistry') }),
+      new Aurora({ transport: MockAuroraTransport.empty().lose('Tooling.GetToolCatalog').lose('Gateway.GetRegistry') }),
       pluginsRoute
     )
     expect(unavailableSnapshot.loadState).toBe('service-unavailable')
-    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={unavailableSnapshot} />)).toContain('AuroraClient SDK error')
+    expect(renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute} initialSnapshot={unavailableSnapshot} />)).toContain('Aurora request error')
 
     const disabledRoute = { ...pluginsRoute, disabled: true, state: 'denied' as const, blockers: ['missing:Tooling.manage'] }
     const disabledSnapshot = await buildAdminPluginsSnapshot(client, disabledRoute)
@@ -2351,8 +2349,8 @@ describe('Aurora production shell', () => {
     expect(renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)).toContain('missing:Tooling.manage')
   })
 
-  it('wires scheduler jobs, ownership states, and delegated target evidence from AuroraClient', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  it('wires scheduler jobs, ownership states, and delegated target status from Aurora', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const shell = await buildShellSnapshot(client)
     const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
       providerLabel: 'local / Scheduler.ListJobs',
@@ -2387,7 +2385,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps scheduler create and job mutations AdminAction-gated by advertised registry methods', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const shell = await buildShellSnapshot(client)
     const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
       providerLabel: 'local / Scheduler.ListJobs',
@@ -2412,7 +2410,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders scheduler disabled and SDK error states without fake local state', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const shell = await buildShellSnapshot(client)
     const schedulerRoute = enabledRoute(route(shell, 'scheduler'), {
       providerLabel: 'local / Scheduler.ListJobs',
@@ -2425,24 +2423,24 @@ describe('Aurora production shell', () => {
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.fail('Scheduler.ListJobs', 'permission', 'scheduler list denied')
-    const deniedSnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: deniedTransport }), schedulerRoute)
+    const deniedSnapshot = await buildAdminSchedulerSnapshot(new Aurora({ transport: deniedTransport }), schedulerRoute)
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={deniedSnapshot} />)).toContain('scheduler list denied')
 
     const emptyTransport = new MockAuroraTransport()
     emptyTransport.register('Scheduler.ListJobs', () => ({ jobs: [], total: 0 }))
-    const emptySnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: emptyTransport }), schedulerRoute)
+    const emptySnapshot = await buildAdminSchedulerSnapshot(new Aurora({ transport: emptyTransport }), schedulerRoute)
     expect(emptySnapshot.loadState).toBe('empty')
     expect(renderToStaticMarkup(<AdminSchedulerView client={client} route={schedulerRoute} initialSnapshot={emptySnapshot} />)).toContain('No scheduler jobs')
 
     const customTransport = new MockAuroraTransport()
     customTransport.register('Scheduler.ListJobs', () => schedulerJobsFixture)
-    const customSnapshot = await buildAdminSchedulerSnapshot(new AuroraClient({ transport: customTransport }), schedulerRoute)
+    const customSnapshot = await buildAdminSchedulerSnapshot(new Aurora({ transport: customTransport }), schedulerRoute)
     expect(customSnapshot.jobs).toHaveLength(schedulerJobsFixture.jobs.length)
   })
 
-  it('wires RBAC principals, roles, permissions, and audit evidence from AuroraClient', async () => {
-    const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('wires RBAC principals, roles, permissions, and audit status from Aurora', async () => {
+    const snapshot = await buildAdminRbacSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminRbacView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
@@ -2470,7 +2468,7 @@ describe('Aurora production shell', () => {
   })
 
   it('builds RBAC permission patch AdminAction payloads with effective diffs and cascade notes', async () => {
-    const snapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildAdminRbacSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const principal = snapshot.principals.find((row) => row.id === 'principal-assistant')
     expect(principal).toBeTruthy()
     expect(principal?.patchPreview.cascade.join(' ')).toContain('effective-permission')
@@ -2496,24 +2494,24 @@ describe('Aurora production shell', () => {
     const emptyTransport = new MockAuroraTransport()
     emptyTransport.register('Auth.ListPrincipals', () => ({ principals: [] }))
     emptyTransport.register('Auth.AuditLog', () => ({ events: [], total: 0 }))
-    const emptySnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: emptyTransport }))
+    const emptySnapshot = await buildAdminRbacSnapshot(new Aurora({ transport: emptyTransport }))
     expect(emptySnapshot.loadState).toBe('empty')
     expect(renderToStaticMarkup(<AdminRbacView snapshot={emptySnapshot} />)).toContain('No principals')
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.fail('Auth.ListPrincipals', 'permission', 'Auth RBAC denied')
-    const deniedSnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: deniedTransport }))
+    const deniedSnapshot = await buildAdminRbacSnapshot(new Aurora({ transport: deniedTransport }))
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminRbacView snapshot={deniedSnapshot} />)).toContain('Auth RBAC denied')
 
     const degradedTransport = new MockAuroraTransport()
     degradedTransport.lose('Auth.AuditLog', 'audit backend unavailable')
-    const degradedSnapshot = await buildAdminRbacSnapshot(new AuroraClient({ transport: degradedTransport }))
+    const degradedSnapshot = await buildAdminRbacSnapshot(new Aurora({ transport: degradedTransport }))
     expect(degradedSnapshot.loadState).toBe('degraded')
     expect(renderToStaticMarkup(<AdminRbacView snapshot={degradedSnapshot} />)).toContain('audit backend unavailable')
 
     const unavailableSnapshot = await buildAdminRbacSnapshot(
-      new AuroraClient({
+      new Aurora({
         transport: MockAuroraTransport.empty()
           .lose('Auth.ListPrincipals')
           .lose('Auth.AuditLog')
@@ -2538,8 +2536,8 @@ describe('Aurora production shell', () => {
     expect(rollbackMarkup).toContain('Rollback required after AdminAction submit failed')
   })
 
-  it('wires audit log details, mesh filters, redaction, and export from AuroraClient', async () => {
-    const snapshot = await buildAdminAuditSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('wires audit log details, mesh filters, redaction, and export from Aurora', async () => {
+    const snapshot = await buildAdminAuditSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminAuditView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
@@ -2566,7 +2564,7 @@ describe('Aurora production shell', () => {
   })
 
   it('filters audit events by peer/provider, route, approval mode, namespace, audio, scheduler, correlation, and denial reason', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
 
     const schedulerSnapshot = await buildAdminAuditSnapshot(client, {
       peerOrProvider: 'peer-kitchen',
@@ -2598,18 +2596,18 @@ describe('Aurora production shell', () => {
 
     const emptyTransport = new MockAuroraTransport()
     emptyTransport.register('Auth.AuditLog', () => ({ events: [], total: 0 }))
-    const emptySnapshot = await buildAdminAuditSnapshot(new AuroraClient({ transport: emptyTransport }))
+    const emptySnapshot = await buildAdminAuditSnapshot(new Aurora({ transport: emptyTransport }))
     expect(emptySnapshot.loadState).toBe('empty')
     expect(renderToStaticMarkup(<AdminAuditView snapshot={emptySnapshot} />)).toContain('No audit rows match')
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.fail('Auth.AuditLog', 'permission', 'audit access denied')
-    const deniedSnapshot = await buildAdminAuditSnapshot(new AuroraClient({ transport: deniedTransport }))
+    const deniedSnapshot = await buildAdminAuditSnapshot(new Aurora({ transport: deniedTransport }))
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminAuditView snapshot={deniedSnapshot} />)).toContain('audit access denied')
 
     const unavailableSnapshot = await buildAdminAuditSnapshot(
-      new AuroraClient({ transport: MockAuroraTransport.empty().lose('Auth.AuditLog', 'audit service unavailable') })
+      new Aurora({ transport: MockAuroraTransport.empty().lose('Auth.AuditLog', 'audit service unavailable') })
     )
     expect(unavailableSnapshot.loadState).toBe('service-unavailable')
     expect(renderToStaticMarkup(<AdminAuditView snapshot={unavailableSnapshot} />)).toContain('audit service unavailable')
@@ -2628,8 +2626,8 @@ describe('Aurora production shell', () => {
     expect(degradedMarkup).toContain('partial redacted detail fields')
   })
 
-  it('wires scoped tokens, one-time reveal rules, and revoke AdminAction evidence from AuroraClient', async () => {
-    const snapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('wires scoped tokens, one-time reveal rules, and revoke AdminAction status from Aurora', async () => {
+    const snapshot = await buildAdminTokensSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminTokensView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
@@ -2647,7 +2645,7 @@ describe('Aurora production shell', () => {
   })
 
   it('builds token revoke mutations as AdminAction requests without secret payloads', async () => {
-    const snapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildAdminTokensSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const token = snapshot.tokens.find((row) => row.id === 'token-studio-mac-active')
     expect(token).toBeTruthy()
 
@@ -2664,39 +2662,39 @@ describe('Aurora production shell', () => {
       loadState: 'loading',
       tokens: [],
       listState: 'pending',
-      listReason: 'Loading Auth.ListTokens and token capability evidence through AuroraClient.',
+      listReason: 'Loading Auth.ListTokens and token capability status through Aurora.',
       revokeState: 'pending',
-      revokeReason: 'Loading Auth.RevokeToken capability evidence through AuroraClient.',
+      revokeReason: 'Loading Auth.RevokeToken capability status through Aurora.',
       createState: 'unsupported',
       createReason: 'Auth.CreateToken is not exposed by the SDK/contracts in this checkout; creation remains a disabled preview.',
       secretsRedacted: true,
       warnings: [],
       error: null,
-      evidenceSource: 'pending AuroraClient SDK calls',
+      evidenceSource: 'pending Aurora SDK calls',
       oneTimeReveal: null
     }} />)
     expect(loadingMarkup).toContain('Loading token metadata')
 
     const emptyTransport = new MockAuroraTransport()
     emptyTransport.register('Auth.ListTokens', () => ({ tokens: [] }))
-    const emptySnapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: emptyTransport }))
+    const emptySnapshot = await buildAdminTokensSnapshot(new Aurora({ transport: emptyTransport }))
     expect(emptySnapshot.loadState).toBe('empty')
     expect(renderToStaticMarkup(<AdminTokensView snapshot={emptySnapshot} />)).toContain('No scoped tokens')
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.fail('Auth.ListTokens', 'permission', 'token access denied')
-    const deniedSnapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: deniedTransport }))
+    const deniedSnapshot = await buildAdminTokensSnapshot(new Aurora({ transport: deniedTransport }))
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminTokensView snapshot={deniedSnapshot} />)).toContain('token access denied')
 
     const degradedTransport = new MockAuroraTransport()
     degradedTransport.lose('Gateway.GetCapabilityCatalog', 'token capability catalog unavailable')
-    const degradedSnapshot = await buildAdminTokensSnapshot(new AuroraClient({ transport: degradedTransport }))
+    const degradedSnapshot = await buildAdminTokensSnapshot(new Aurora({ transport: degradedTransport }))
     expect(degradedSnapshot.loadState).toBe('degraded')
     expect(renderToStaticMarkup(<AdminTokensView snapshot={degradedSnapshot} />)).toContain('token capability catalog unavailable')
 
     const unavailableSnapshot = await buildAdminTokensSnapshot(
-      new AuroraClient({
+      new Aurora({
         transport: MockAuroraTransport.empty()
           .lose('Auth.ListTokens')
           .lose('Gateway.GetCapabilityCatalog')
@@ -2706,8 +2704,8 @@ describe('Aurora production shell', () => {
     expect(renderToStaticMarkup(<AdminTokensView snapshot={unavailableSnapshot} />)).toContain('Auth token SDK resources are unavailable')
   })
 
-  it('wires device/session management from AuroraClient Auth resources', async () => {
-    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('wires device/session management from Aurora Auth resources', async () => {
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminDevicesView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('ready')
@@ -2727,7 +2725,7 @@ describe('Aurora production shell', () => {
   })
 
   it('builds device delete mutations as AdminAction requests', async () => {
-    const snapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')
     expect(device).toBeTruthy()
 
@@ -2746,24 +2744,24 @@ describe('Aurora production shell', () => {
     const emptyTransport = new MockAuroraTransport()
     emptyTransport.register('Auth.ListDevices', () => ({ devices: [] }))
     emptyTransport.register('Auth.ListTokens', () => ({ tokens: [] }))
-    const emptySnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: emptyTransport }))
+    const emptySnapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: emptyTransport }))
     expect(emptySnapshot.loadState).toBe('empty')
     expect(renderToStaticMarkup(<AdminDevicesView snapshot={emptySnapshot} />)).toContain('No registered devices')
 
     const deniedTransport = new MockAuroraTransport()
     deniedTransport.fail('Auth.ListDevices', 'permission', 'device access denied')
-    const deniedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: deniedTransport }))
+    const deniedSnapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: deniedTransport }))
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(renderToStaticMarkup(<AdminDevicesView snapshot={deniedSnapshot} />)).toContain('device access denied')
 
     const degradedTransport = new MockAuroraTransport()
     degradedTransport.lose('Auth.ListTokens', 'token service unavailable')
-    const degradedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: degradedTransport }))
+    const degradedSnapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: degradedTransport }))
     expect(degradedSnapshot.loadState).toBe('degraded')
     expect(renderToStaticMarkup(<AdminDevicesView snapshot={degradedSnapshot} />)).toContain('token service unavailable')
 
     const unavailableSnapshot = await buildAdminDevicesSnapshot(
-      new AuroraClient({
+      new Aurora({
         transport: MockAuroraTransport.empty()
           .lose('Auth.ListDevices')
           .lose('Auth.ListTokens')
@@ -2774,7 +2772,7 @@ describe('Aurora production shell', () => {
     expect(renderToStaticMarkup(<AdminDevicesView snapshot={unavailableSnapshot} />)).toContain('Auth device/session SDK resources are unavailable')
 
     const optimisticMarkup = renderToStaticMarkup(
-      <AdminDevicesView snapshot={await buildAdminDevicesSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))} optimisticDeviceId="device-studio-mac" />
+      <AdminDevicesView snapshot={await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))} optimisticDeviceId="device-studio-mac" />
     )
     expect(optimisticMarkup).toContain('AdminAction submitted for device-studio-mac')
 
@@ -2785,14 +2783,14 @@ describe('Aurora production shell', () => {
 
     const gatedTransport = new MockAuroraTransport()
     gatedTransport.register('Gateway.GetCapabilityCatalog', () => deviceCatalogWithoutDelete())
-    const gatedSnapshot = await buildAdminDevicesSnapshot(new AuroraClient({ transport: gatedTransport }))
+    const gatedSnapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: gatedTransport }))
     expect(gatedSnapshot.deleteState).toBe('unsupported')
     expect(gatedSnapshot.devices.every((device) => device.deleteAction === null)).toBe(true)
     expect(renderToStaticMarkup(<AdminDevicesView snapshot={gatedSnapshot} />)).toContain('Auth.DeleteDevice is not advertised')
   })
 
-  it('renders config editor schema, rollback, and AdminAction controls from SDK evidence', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  it('renders config editor schema, rollback, and AdminAction controls from SDK status', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const configRoute = enabledRoute(route(snapshot, 'config'))
     const model = await buildConfigEditorModel(client, configRoute)
@@ -2811,12 +2809,12 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Config.Set')
     expect(markup).toContain('Apply through AdminAction')
     expect(markup).toContain('Rollback')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
     expect(markup).not.toContain('secret-token')
   })
 
   it('keeps config editor denied states disabled without local-only fallback', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const configRoute = { ...route(snapshot, 'config'), disabled: true, state: 'denied' as const, blockers: ['missing:Config.manage'] }
     const model = await buildConfigEditorModel(client, configRoute)
@@ -2929,15 +2927,15 @@ describe('Aurora production shell', () => {
 
   it('renders pairing view initial loading state from an enabled SDK route', () => {
     const markup = renderToStaticMarkup(
-      <PairingQueueView client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={pairingRoute()} />
+      <PairingQueueView client={new Aurora({ transport: MockAuroraTransport.empty() })} route={pairingRoute()} />
     )
 
     expect(markup).toContain('Loading pairing queue')
     expect(markup).toContain('AdminAction required for approve/deny')
   })
 
-  it('builds mesh peer lifecycle snapshots from SDK mesh, Auth, WebRTC, and capability evidence', async () => {
-    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+  it('builds mesh peer lifecycle snapshots from SDK mesh, Auth, WebRTC, and capability status', async () => {
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
 
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.localPeerId).toBe(meshStatusFixture.local.peer_id)
@@ -2990,7 +2988,7 @@ describe('Aurora production shell', () => {
 
   it('renders mesh peer lifecycle UI without local-only trust or secret leakage', async () => {
     const route = meshRoute()
-    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), route)
     const markup = renderToStaticMarkup(
       <MeshPeersView
         snapshot={snapshot}
@@ -3003,9 +3001,9 @@ describe('Aurora production shell', () => {
     expect(snapshot.fixtureOnly).toBe(true)
     expect(snapshot.evidenceSource).toContain('sample peers are not live truth')
     expect(markup).toContain('Mesh peers')
-    expect(markup).toContain('Demo fixture peer data')
+    expect(markup).toContain('Demo transport')
     expect(markup).toContain('sample peers are not live truth')
-    expect(markup).toContain('SDK fixture, not live truth')
+    expect(markup).toContain('Demo, not live truth')
     expect(markup).toContain('Topology')
     expect(markup).toContain('Trust queue')
     expect(markup).toContain('Pair new peer')
@@ -3039,7 +3037,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction remove')
     expect(markup).toContain('Approve peer')
     expect(markup).toContain('Deny peer')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
     expect(markup).toContain('Gateway.GetMeshStatus')
     expect(markup).not.toContain('mesh-pairing-secret')
   })
@@ -3085,28 +3083,28 @@ describe('Aurora production shell', () => {
 
   it('maps mesh disabled, denied, degraded, and loading states without faking backend truth', async () => {
     const disabledSnapshot = await buildMeshPeersSnapshot(
-      new AuroraClient({ transport: new MockAuroraTransport() }),
+      new Aurora({ transport: new MockAuroraTransport() }),
       meshRoute({ disabled: true, state: 'unsupported', explanation: 'Gateway.GetMeshStatus is not routeable.' })
     )
     expect(disabledSnapshot.loadState).toBe('service-unavailable')
     expect(disabledSnapshot.error).toContain('Capability unavailable')
 
     const deniedSnapshot = await buildMeshPeersSnapshot(
-      new AuroraClient({ transport: new MockAuroraTransport().fail('Auth.MeshListPeers', 'permission', 'Auth denied') }),
+      new Aurora({ transport: new MockAuroraTransport().fail('Auth.MeshListPeers', 'permission', 'Auth denied') }),
       meshRoute()
     )
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(deniedSnapshot.error).toContain('denied')
 
     const degradedSnapshot = await buildMeshPeersSnapshot(
-      new AuroraClient({ transport: new MockAuroraTransport().lose('Gateway.GetWebRTCDiagnostics', 'diagnostics down') }),
+      new Aurora({ transport: new MockAuroraTransport().lose('Gateway.GetWebRTCDiagnostics', 'diagnostics down') }),
       meshRoute()
     )
     expect(degradedSnapshot.loadState).toBe('degraded')
     expect(degradedSnapshot.warnings.join(' ')).toContain('diagnostics down')
 
     const deviceDegradedSnapshot = await buildMeshPeersSnapshot(
-      new AuroraClient({ transport: new MockAuroraTransport().fail('Auth.ListDevices', 'unavailable_service', 'devices down') }),
+      new Aurora({ transport: new MockAuroraTransport().fail('Auth.ListDevices', 'unavailable_service', 'devices down') }),
       meshRoute()
     )
     expect(deviceDegradedSnapshot.loadState).toBe('degraded')
@@ -3114,14 +3112,14 @@ describe('Aurora production shell', () => {
     expect(deviceDegradedSnapshot.peers.length).toBeGreaterThan(0)
 
     const loadingMarkup = renderToStaticMarkup(
-      <MeshPeersResource client={new AuroraClient({ transport: MockAuroraTransport.empty() })} route={meshRoute()} />
+      <MeshPeersResource client={new Aurora({ transport: MockAuroraTransport.empty() })} route={meshRoute()} />
     )
     expect(loadingMarkup).toContain('Loading mesh peers')
   })
 
   it('explains how to pair from an empty mesh state', async () => {
     const route = meshRoute()
-    const snapshot = await buildMeshPeersSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), route)
     const emptySnapshot = {
       ...snapshot,
       loadState: 'empty' as const,
@@ -3147,8 +3145,8 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('refresh diagnostics')
   })
 
-  it('builds WebRTC ICE diagnostics from SDK WebRTC, mesh, and capability evidence', async () => {
-    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+  it('builds WebRTC ICE diagnostics from SDK WebRTC, mesh, and capability status', async () => {
+    const snapshot = await buildMeshDiagnosticsSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
 
     expect(snapshot.loadState).toBe('degraded')
     expect(snapshot.localMeshPeerId).toBe('local-peer')
@@ -3186,7 +3184,7 @@ describe('Aurora production shell', () => {
 
   it('renders diagnostics live probes, redaction preview, timeline, and support-bundle export workflow', async () => {
     const route = meshRoute()
-    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const snapshot = await buildMeshDiagnosticsSnapshot(new Aurora({ transport: new MockAuroraTransport() }), route)
     const markup = renderToStaticMarkup(
       <MeshDiagnosticsView
         snapshot={snapshot}
@@ -3223,7 +3221,7 @@ describe('Aurora production shell', () => {
 
   it('renders WebRTC ICE diagnostics without leaking secret transport state', async () => {
     const route = meshRoute()
-    const snapshot = await buildMeshDiagnosticsSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route)
+    const snapshot = await buildMeshDiagnosticsSnapshot(new Aurora({ transport: new MockAuroraTransport() }), route)
     const markup = renderToStaticMarkup(<MeshDiagnosticsView snapshot={snapshot} route={route} />)
 
     expect(markup).toContain('WebRTC and ICE diagnostics')
@@ -3234,11 +3232,11 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('DataChannel')
     expect(markup).toContain('Route quality')
     expect(markup).toContain('rpc_timeout')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
     expect(markup).not.toContain('mesh-pairing-secret')
   })
 
-  it('redacts diagnostic credentials, API keys, and raw-audio payload evidence before rendering', () => {
+  it('redacts diagnostic credentials, API keys, and raw-audio payload status before rendering', () => {
     const route = meshRoute({ disabled: true, explanation: 'authorization=Bearer route-secret raw audio payload=bytes' })
     const webrtc = cloneFixture(webrtcDiagnosticsFixture)
     webrtc.recent_errors = [
@@ -3278,7 +3276,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('[redacted]')
   })
 
-  it('maps WebRTC diagnostics empty, denied, and SDK error states with repair evidence', async () => {
+  it('maps WebRTC diagnostics empty, denied, and SDK error states with repair status', async () => {
     const noPeers = cloneFixture(webrtcDiagnosticsFixture)
     noPeers.peers = []
     noPeers.connected_peer_count = 0
@@ -3295,14 +3293,14 @@ describe('Aurora production shell', () => {
     expect(emptySnapshot.warnings.join(' ')).toContain('WebRTC runtime is not started')
 
     const deniedSnapshot = await buildMeshDiagnosticsSnapshot(
-      new AuroraClient({ transport: new MockAuroraTransport().fail('Gateway.GetWebRTCDiagnostics', 'permission', 'Gateway denied') }),
+      new Aurora({ transport: new MockAuroraTransport().fail('Gateway.GetWebRTCDiagnostics', 'permission', 'Gateway denied') }),
       meshRoute()
     )
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(deniedSnapshot.errors.join(' ')).toContain('Gateway denied')
 
     const unavailableSnapshot = await buildMeshDiagnosticsSnapshot(
-      new AuroraClient({
+      new Aurora({
         transport: MockAuroraTransport.empty()
           .fail('Gateway.GetWebRTCDiagnostics', 'unavailable_service', 'diagnostics down')
           .fail('Gateway.GetMeshStatus', 'unavailable_service', 'mesh down')
@@ -3358,8 +3356,8 @@ describe('Aurora production shell', () => {
     expect(meshPeerErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
   })
 
-  it('builds route policy explain state matrix through AuroraClient route APIs', async () => {
-    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+  it('builds route policy explain state matrix through Aurora route APIs', async () => {
+    const snapshot = await buildRoutePolicySnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
 
     expect(snapshot.loadState).toBe('degraded')
     expect(snapshot.scenarios.map((scenario) => scenario.scenario.id)).toEqual([
@@ -3381,7 +3379,7 @@ describe('Aurora production shell', () => {
 
   it('builds the route policy matrix with one shared capability catalog request', async () => {
     const transport = new RecordingMockAuroraTransport()
-    await buildRoutePolicySnapshot(new AuroraClient({ transport }), meshRoute())
+    await buildRoutePolicySnapshot(new Aurora({ transport }), meshRoute())
 
     const methods = transport.requests.map((request) => request.method)
     expect(methods.filter((method) => method === 'Gateway.GetCapabilityCatalog')).toHaveLength(1)
@@ -3389,7 +3387,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders route policy editor and exact explain blockers without local-only success claims', async () => {
-    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), meshRoute())
+    const snapshot = await buildRoutePolicySnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
     const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
 
     expect(markup).toContain('Route policy and explain')
@@ -3404,9 +3402,9 @@ describe('Aurora production shell', () => {
     expect(markup).not.toContain('mesh-pairing-secret')
   })
 
-  it('renders data policy retention, namespace visibility, storage toggles, data flows, and audit evidence', async () => {
-    const shell = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
-    const snapshot = await buildDataPolicySnapshot(new AuroraClient({ transport: new MockAuroraTransport() }), route(shell, 'data'))
+  it('renders data policy retention, namespace visibility, storage toggles, data flows, and audit status', async () => {
+    const shell = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildDataPolicySnapshot(new Aurora({ transport: new MockAuroraTransport() }), route(shell, 'data'))
     const markup = renderToStaticMarkup(<DataPolicyView snapshot={snapshot} />)
 
     expect(markup).toContain('Data policy and retention')
@@ -3430,7 +3428,7 @@ describe('Aurora production shell', () => {
     const transport = new MockAuroraTransport()
       .fail('Gateway.ExplainRoute', 'unavailable_service', 'route explain down')
       .fail('Gateway.GetCapabilityCatalog', 'permission', 'catalog denied')
-    const snapshot = await buildRoutePolicySnapshot(new AuroraClient({ transport }), meshRoute())
+    const snapshot = await buildRoutePolicySnapshot(new Aurora({ transport }), meshRoute())
     const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
 
     expect(snapshot.loadState).toBe('denied')
@@ -3464,7 +3462,7 @@ describe('Aurora production shell', () => {
   })
 
   it('renders admin overview posture, services, capability gaps, activity, and AdminAction boundary from SDK manifest', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const manifest = await buildAdminOverviewSnapshot(client)
     const markup = renderToStaticMarkup(
       <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} />
@@ -3483,7 +3481,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction controller')
     expect(markup).toContain('Manage/admin-critical operations')
     expect(markup).toContain('privacy-blocked')
-    expect(markup).toContain('secrets redacted')
+    expect(markup).toContain('secrets protected')
     expect(markup).toContain('Deployment topology')
     expect(markup).toContain('local thread-mode app')
     expect(markup).toContain('thread_mode_no_process_controls')
@@ -3504,7 +3502,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('AdminAction draft/confirm/audit is required')
   })
 
-  it('renders process-mode deployment topology with Redis and BullMQ evidence', () => {
+  it('renders process-mode deployment topology with Redis and BullMQ status', () => {
     const manifest = adminOverviewStateMatrixManifest(processTopologyFixture())
     const markup = renderToStaticMarkup(<AdminOverviewContent manifest={manifest} transportKind="http" />)
 
@@ -3554,7 +3552,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('mesh peer-only shell')
     expect(markup).toContain('privacy-blocked')
     expect(markup).toContain('mesh_peer_topology_untrusted')
-    expect(markup).toContain('require authenticated peer evidence')
+    expect(markup).toContain('require authenticated peer status')
   })
 
   it('renders missing deployment topology without inventing process health', () => {
@@ -3566,12 +3564,12 @@ describe('Aurora production shell', () => {
 
     expect(markup).toContain('Deployment topology unavailable')
     expect(markup).toContain('deployment topology unavailable')
-    expect(markup).toContain('BE-016 topology unavailable')
+    expect(markup).toContain('service contract topology unavailable')
     expect(markup).toContain('Open diagnostics')
   })
 
   it('renders admin SDK errors as unavailable disabled state without inventing service health', async () => {
-    const client = new AuroraClient({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry', 'registry offline') })
+    const client = new Aurora({ transport: MockAuroraTransport.empty().lose('Gateway.GetRegistry', 'registry offline') })
     await expect(buildAdminOverviewSnapshot(client)).rejects.toThrow(/registry offline/)
 
     const markup = renderToStaticMarkup(
@@ -3581,20 +3579,20 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Service overview unavailable')
     expect(markup).toContain('registry offline')
     expect(markup).toContain('Open diagnostics')
-    expect(markup).toContain('AuroraClient could not load')
+    expect(markup).toContain('Aurora could not load')
   })
 
   it('renders admin overview as a synchronous client resource loader before hydration', () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const markup = renderToStaticMarkup(<AdminOverviewView client={client} />)
 
     expect(markup).toContain('Service overview unavailable')
-    expect(markup).toContain('Loading admin overview manifest from AuroraClient')
-    expect(markup).toContain('AuroraClient could not load')
+    expect(markup).toContain('Loading admin overview')
+    expect(markup).toContain('Aurora could not load')
   })
 
-  it('keeps assistant stop capability disabled until Orchestrator.Interrupt evidence exists', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+  it('keeps assistant stop capability disabled until Orchestrator.Interrupt status exists', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const assistantRoute = route(snapshot, 'assistant')
     const controlsWithoutInterrupt = assistantControlsForRoute(assistantRoute, undefined, true)
 
@@ -3654,8 +3652,8 @@ describe('Aurora production shell', () => {
     expect(applyAssistantTerminalUpdate(cancelled, completed)).toEqual(cancelled)
   })
 
-  it('renders tool approval cards and result evidence from the SDK tool catalog', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+  it('renders tool approval cards and result status from the SDK tool catalog', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
@@ -3710,7 +3708,7 @@ describe('Aurora production shell', () => {
   })
 
   it('exposes one safe local tool execution path without pretending approval is required', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
@@ -3747,7 +3745,7 @@ describe('Aurora production shell', () => {
   })
 
   it('covers provider selector, scoped approvals, dry-run-only, denied, expired, replay, and unavailable states', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
@@ -3767,7 +3765,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps high-risk tools disabled until AdminAction confirmation exists', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
@@ -3788,7 +3786,7 @@ describe('Aurora production shell', () => {
   })
 
   it('shows sensitive tool approval UI without direct execution', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
@@ -3808,7 +3806,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps tool approval unavailable when the route is capability-blocked', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const toolsRoute = {
       ...route(snapshot, 'tools'),
@@ -3825,7 +3823,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('unsupported')
   })
 
-  it('submits tool denial through the SDK backend path and returns correlation evidence', async () => {
+  it('submits tool denial through the SDK backend path and returns correlation status', async () => {
     let confirmationPayload: unknown = null
     const transport = new MockAuroraTransport({ fixtures: false }).register('Tooling.ConfirmExecution', (request) => {
       confirmationPayload = request.payload
@@ -3838,7 +3836,7 @@ describe('Aurora production shell', () => {
         error: null
       }
     })
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const tool = normalizeToolCatalog(toolCatalogFixture).find((candidate) => candidate.id === 'tool:local:filesystem.writeConfig')
     if (!tool) throw new Error('missing local dangerous tool fixture')
 
@@ -3860,7 +3858,7 @@ describe('Aurora production shell', () => {
   })
 
   it('surfaces SDK denial failures from the tool denial action', async () => {
-    const client = new AuroraClient({
+    const client = new Aurora({
       transport: new MockAuroraTransport({ fixtures: false }).register('Tooling.ConfirmExecution', {
         ok: false,
         approval_token: null,
@@ -3888,7 +3886,7 @@ describe('Aurora production shell', () => {
     const evaluation = allowedRouteEvaluation()
     const markup = renderToStaticMarkup(
       <RouteSheet
-        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        client={new Aurora({ transport: new MockAuroraTransport() })}
         initialEvaluation={evaluation}
         payload={{ message: 'summarize deployment', token: 'secret-token' }}
       />
@@ -3941,10 +3939,10 @@ describe('Aurora production shell', () => {
 
     const markup = renderToStaticMarkup(
       <>
-        <RouteSheet client={new AuroraClient({ transport: new MockAuroraTransport() })} initialEvaluation={denied} />
-        <RouteSheet client={new AuroraClient({ transport: new MockAuroraTransport() })} initialEvaluation={unavailable} />
+        <RouteSheet client={new Aurora({ transport: new MockAuroraTransport() })} initialEvaluation={denied} />
+        <RouteSheet client={new Aurora({ transport: new MockAuroraTransport() })} initialEvaluation={unavailable} />
         <RouteSheet
-          client={new AuroraClient({ transport: new MockAuroraTransport() })}
+          client={new Aurora({ transport: new MockAuroraTransport() })}
           initialEvaluation={allowedRouteEvaluation()}
           requiresAdminAction
         />
@@ -4024,7 +4022,7 @@ describe('Aurora production shell', () => {
 
     const markup = renderToStaticMarkup(
       <RouteSheet
-        client={new AuroraClient({ transport: new MockAuroraTransport() })}
+        client={new Aurora({ transport: new MockAuroraTransport() })}
         initialEvaluation={evaluation}
         requiresAdminAction
       />
@@ -4039,15 +4037,15 @@ describe('Aurora production shell', () => {
   })
 
   it('surfaces RouteSheet loading and SDK error states without fixture route candidates', () => {
-    const loadingMarkup = renderToStaticMarkup(<RouteSheet client={new AuroraClient({ transport: new MockAuroraTransport() })} />)
+    const loadingMarkup = renderToStaticMarkup(<RouteSheet client={new Aurora({ transport: new MockAuroraTransport() })} />)
     const errorMessage = routeSheetErrorMessage(new AuroraError({ code: 'privacy_blocked', message: 'blocked' }))
 
-    expect(loadingMarkup).toContain('Loading route policy from AuroraClient')
+    expect(loadingMarkup).toContain('Loading route policy from Aurora')
     expect(errorMessage).toContain('privacy policy')
   })
 
   it('includes the shared RouteSheet guard in assistant route details', async () => {
-    const snapshot = await buildShellSnapshot(new AuroraClient({ transport: new MockAuroraTransport() }))
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const assistantRoute = route(snapshot, 'assistant')
     const enabledRoute = {
       ...assistantRoute,
@@ -4059,16 +4057,16 @@ describe('Aurora production shell', () => {
     }
 
     const markup = renderToStaticMarkup(
-      <AssistantView client={new AuroraClient({ transport: new MockAuroraTransport() })} route={enabledRoute} />
+      <AssistantView client={new Aurora({ transport: new MockAuroraTransport() })} route={enabledRoute} />
     )
 
     expect(markup).toContain('Assistant route preview')
     expect(markup).toContain('The SDK evaluates where this prompt can run before dispatch.')
-    expect(markup).toContain('Loading route policy from AuroraClient')
+    expect(markup).toContain('Loading route policy from Aurora')
   })
 
   it('renders memory namespaces, conversation history, provenance, and AdminAction-gated controls', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const memoryRoute = enabledRoute(route(snapshot, 'memory'))
     const model = await buildMemoryViewModel(client, memoryRoute, {
@@ -4111,7 +4109,7 @@ describe('Aurora production shell', () => {
     const transport = new MockAuroraTransport()
       .register('DB.GetMessages', () => ({ messages: [], total: 0, has_more: false }))
       .register('DB.RAGListNamespaces', () => ({ namespaces: [] }))
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const snapshot = await buildShellSnapshot(client)
     const memoryRoute = enabledRoute(route(snapshot, 'memory'))
     const model = await buildMemoryViewModel(client, memoryRoute)
@@ -4132,7 +4130,7 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps local export/import/delete controls disabled behind AdminAction policy', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const memoryRoute = enabledRoute(route(snapshot, 'memory'))
     const memoryModel = await buildMemoryViewModel(client, memoryRoute, {
@@ -4156,7 +4154,7 @@ describe('Aurora production shell', () => {
   })
 
   it('shows denied and stale memory namespace states without labeling them local', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildShellSnapshot(client)
     const memoryRoute = enabledRoute(route(snapshot, 'memory'))
     const denied = await buildMemoryViewModel(client, memoryRoute, {
@@ -4182,7 +4180,7 @@ describe('Aurora production shell', () => {
 
   it('keeps memory SDK errors visible as route-scoped disabled state', async () => {
     const transport = new MockAuroraTransport().fail('DB.RAGListNamespaces', 'permission', 'DB permission denied')
-    const client = new AuroraClient({ transport })
+    const client = new Aurora({ transport })
     const snapshot = await buildShellSnapshot(client)
     const memoryRoute = enabledRoute(route(snapshot, 'memory'))
     const model = await buildMemoryViewModel(client, memoryRoute, { query: 'anything' })
@@ -4580,7 +4578,7 @@ function streamUpdate(textDelta: string) {
   }
 }
 
-function voiceEvidenceEvents(): VoiceRuntimeEvent[] {
+function voiceStatusEvents(): VoiceRuntimeEvent[] {
   const audit = {
     correlationId: 'corr-voice-1',
     eventKind: 'voice.event',
@@ -5158,10 +5156,10 @@ function rbacLoadingSnapshot() {
     permissions: [],
     audit: [],
     mutationState: 'pending' as const,
-    mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through AuroraClient.',
+    mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through Aurora.',
     warnings: [],
     error: null,
-    evidenceSource: 'pending AuroraClient SDK calls'
+    evidenceSource: 'pending Aurora SDK calls'
   }
 }
 
@@ -5195,9 +5193,9 @@ function auditLoadingSnapshot() {
     total: 0,
     warnings: [],
     error: null,
-    evidenceSource: 'pending AuroraClient SDK calls',
+    evidenceSource: 'pending Aurora SDK calls',
     exportState: 'pending' as const,
-    exportReason: 'Audit export waits for redacted Auth.AuditLog evidence.'
+    exportReason: 'Audit export waits for redacted Auth.AuditLog status.'
   }
 }
 
@@ -5209,18 +5207,18 @@ function devicesLoadingSnapshot() {
     devices: [],
     pendingPairings: [],
     listState: 'pending' as const,
-    listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through AuroraClient.',
+    listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through Aurora.',
     tokenState: 'pending' as const,
-    tokenReason: 'Loading token/session evidence through AuroraClient.',
+    tokenReason: 'Loading token/session status through Aurora.',
     pairingState: 'pending' as const,
-    pairingReason: 'Loading Auth.ListPendingPairings through AuroraClient.',
+    pairingReason: 'Loading Auth.ListPendingPairings through Aurora.',
     deleteState: 'pending' as const,
     deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
     nativePlatform: null,
     nativeCapabilities: [],
     warnings: [],
     error: null,
-    evidenceSource: 'pending AuroraClient SDK calls'
+    evidenceSource: 'pending Aurora SDK calls'
   }
 }
 
