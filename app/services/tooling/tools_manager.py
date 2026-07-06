@@ -76,6 +76,7 @@ class ToolsManager:
             # Import core tools
             from app.services.tooling.tools.pomodoro_tool import (
                 pomodoro_status_tool,
+                pomodoro_transition_tool,
                 start_pomodoro_tool,
                 stop_pomodoro_tool,
             )
@@ -84,6 +85,11 @@ class ToolsManager:
                 cancel_scheduled_task_tool,
                 list_scheduled_tasks_tool,
                 schedule_task_tool,
+                scheduler_break_reminder_tool,
+                scheduler_daily_greeting_tool,
+                scheduler_hourly_time_announcement_tool,
+                scheduler_motivational_message_tool,
+                scheduler_water_reminder_tool,
             )
             from app.services.tooling.tools.stop_tts import stop_tts_tool
             from app.services.tooling.tools.upsert_memory import upsert_memory_tool
@@ -98,9 +104,15 @@ class ToolsManager:
                 schedule_task_tool,
                 list_scheduled_tasks_tool,
                 cancel_scheduled_task_tool,
+                scheduler_daily_greeting_tool,
+                scheduler_break_reminder_tool,
+                scheduler_water_reminder_tool,
+                scheduler_motivational_message_tool,
+                scheduler_hourly_time_announcement_tool,
                 start_pomodoro_tool,
                 stop_pomodoro_tool,
                 pomodoro_status_tool,
+                pomodoro_transition_tool,
             ]
 
             self.tools.extend(core_tools)

@@ -45,6 +45,10 @@ class Envelope(BaseModel):
     attempts: int = 0
     max_attempts: int = 3
     principal_id: str | None = None
+    effective_perms: list[str] | None = None
+    identity_source: str | None = None
+    method_type: str | None = None
+    caller_peer_id: str | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -117,6 +121,10 @@ class MessageBus(Protocol):
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -150,6 +158,10 @@ class MessageBus(Protocol):
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.

@@ -52,7 +52,13 @@ class ScriptedPeerBridge:
         *,
         timeout: float,
         correlation_id: str | None = None,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
     ) -> QueryResult:
+        _ = (principal_id, effective_perms, identity_source, method_type, caller_peer_id)
         self.calls.append((peer_id, method, correlation_id))
         outcomes = self._outcomes.get(peer_id)
         outcome = outcomes.popleft() if outcomes else QueryResult(ok=True, data={"peer": peer_id})

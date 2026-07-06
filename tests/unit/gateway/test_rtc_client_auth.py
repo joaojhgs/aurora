@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,7 +8,7 @@ import pytest
 
 from app.services.db.models import Token
 from app.services.gateway.acl.identity import ANONYMOUS, Identity
-from app.services.gateway.mesh.models import PeerManifest
+from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.webrtc.rtc_client import RTCClient
 
 
@@ -307,6 +308,51 @@ async def test_rtc_client_incoming_manifest_registers_stable_remote_peer(mock_de
     client._peer_registry.update_manifest.assert_awaited()
     assert client._peer_stable_ids["session-peer"] == "stable-remote-peer"
     assert client._stable_peer_sessions["stable-remote-peer"] == "session-peer"
+
+
+
+
+@pytest.mark.asyncio
+async def test_rtc_client_manifest_with_shared_tooling_requests_catalog_sync(mock_deps):
+    """Negotiated peers that both share Tooling trigger immediate catalog sync."""
+    from app.shared.contracts.models.tooling import (
+        ToolingMethods,
+        ToolingRemoteCatalogRefreshRequested,
+    )
+
+    settings, bus, registry, auth_service = mock_deps
+    bus.publish = AsyncMock()
+    client = RTCClient(settings, bus, registry, auth_service)
+    tooling_cfg = SimpleNamespace(
+        share=True,
+        prefer="network",
+        min_version=None,
+        required_capabilities=[],
+        max_concurrent=10,
+    )
+    client._mesh_config = SimpleNamespace(
+        services={"Tooling": tooling_cfg},
+        version_policy="compatible",
+    )
+    client._peer_registry = AsyncMock()
+    client._peer_send_fns["session-peer"] = MagicMock()
+
+    manifest = PeerManifest(
+        peer_id="stable-remote-peer",
+        node_name="remote-node",
+        shared_services=[PeerServiceInfo(module="Tooling")],
+    )
+    await client._on_peer_manifest(
+        "session-peer",
+        {"type": "manifest", **manifest.model_dump(mode="json")},
+    )
+
+    bus.publish.assert_awaited_once()
+    topic, payload = bus.publish.await_args.args[:2]
+    assert topic == ToolingMethods.REMOTE_CATALOG_REFRESH_REQUESTED
+    assert isinstance(payload, ToolingRemoteCatalogRefreshRequested)
+    assert payload.peer_id is None
+    assert payload.reason == "peer_manifest_tooling_shared"
 
 
 @pytest.mark.asyncio

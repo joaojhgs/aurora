@@ -64,6 +64,11 @@ class PeerBridge:
         payload: BaseModel | dict,
         timeout: float = 30.0,
         correlation_id: str | None = None,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
     ) -> QueryResult:
         """Send an RPC call to a remote peer and wait for the response.
 
@@ -93,6 +98,13 @@ class PeerBridge:
             "correlation_id": req_id,
             "method": topic,
             "params": params,
+            "identity": {
+                "principal_id": principal_id,
+                "effective_perms": effective_perms,
+                "source": identity_source,
+                "method_type": method_type,
+                "caller_peer_id": caller_peer_id,
+            },
         }
 
         # Create a future for the response

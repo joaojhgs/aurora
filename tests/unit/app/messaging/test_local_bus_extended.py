@@ -340,3 +340,41 @@ class TestLocalBusEdgeCases:
         assert env.origin == "external"
         assert env.priority == 25
         assert env.type == "test.metadata"
+
+    @pytest.mark.asyncio
+    async def test_request_preserves_ingress_identity_metadata(self, local_bus):
+        """Request envelopes carry authenticated principal and permission metadata."""
+        received_env = []
+
+        async def handler(env: Envelope):
+            received_env.append(env)
+            await local_bus.publish(
+                env.reply_to,
+                QueryResult(ok=True, data={"seen": True}),
+                event=False,
+                correlation_id=env.correlation_id,
+            )
+
+        local_bus.subscribe("test.identity", handler)
+
+        result = await local_bus.request(
+            "test.identity",
+            BusCommand(action="check_identity"),
+            origin="external",
+            principal_id="principal-1",
+            effective_perms=["Tooling.ExecuteTool"],
+            identity_source="webrtc_rpc",
+            method_type="use",
+            caller_peer_id="peer-1",
+            correlation_id="corr-identity",
+        )
+
+        assert result.ok is True
+        assert len(received_env) == 1
+        env = received_env[0]
+        assert env.principal_id == "principal-1"
+        assert env.effective_perms == ["Tooling.ExecuteTool"]
+        assert env.identity_source == "webrtc_rpc"
+        assert env.method_type == "use"
+        assert env.caller_peer_id == "peer-1"
+        assert env.correlation_id == "corr-identity"

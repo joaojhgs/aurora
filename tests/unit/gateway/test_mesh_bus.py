@@ -37,8 +37,9 @@ def routing_table():
 
 @pytest.fixture
 def peer_bridge():
-    pb = AsyncMock()
+    pb = MagicMock()
     pb.call = AsyncMock(return_value=QueryResult(ok=True, data={"result": "remote"}))
+    pb.fire_event = MagicMock()
     return pb
 
 
@@ -177,6 +178,36 @@ class TestMeshBusPublish:
         routing_table.resolve.return_value = RouteDecision(target="local", module="TTS")
         await mesh_bus.publish("TTS.Request", FakePayload(), event=False)
         inner_bus.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_local_command_preserves_auth_metadata_on_inner_publish(
+        self, mesh_bus, inner_bus, routing_table
+    ):
+        """Local MeshBus command routes must preserve Gateway/Mesh auth metadata."""
+
+        routing_table.resolve.return_value = RouteDecision(target="local", module="TTS")
+
+        await mesh_bus.publish(
+            "TTS.Request",
+            FakePayload(),
+            event=False,
+            origin="external",
+            principal_id="principal-1",
+            effective_perms=["TTS.Request"],
+            identity_source="mesh_peer",
+            method_type="use",
+            caller_peer_id="peer-1",
+            correlation_id="corr-local-auth",
+        )
+
+        inner_bus.publish.assert_awaited_once()
+        _, kwargs = inner_bus.publish.await_args
+        assert kwargs["principal_id"] == "principal-1"
+        assert kwargs["effective_perms"] == ["TTS.Request"]
+        assert kwargs["identity_source"] == "mesh_peer"
+        assert kwargs["method_type"] == "use"
+        assert kwargs["caller_peer_id"] == "peer-1"
+        assert kwargs["correlation_id"] == "corr-local-auth"
 
     @pytest.mark.asyncio
     async def test_command_passes_selector_to_routing(self, mesh_bus, routing_table):

@@ -81,6 +81,11 @@ class _PeerBridgeLike(Protocol):
         *,
         timeout: float,
         correlation_id: str | None = None,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
     ) -> QueryResult: ...
 
     def fire_event(
@@ -147,6 +152,10 @@ class MeshBus:
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish with mesh routing.
@@ -184,6 +193,10 @@ class MeshBus:
                 max_attempts=max_attempts,
                 reply_to=reply_to,
                 principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
                 correlation_id=event_correlation_id,
             )
             # Forward events to connected peers when mesh=True and module is shared
@@ -228,6 +241,10 @@ class MeshBus:
                 max_attempts=max_attempts,
                 reply_to=reply_to,
                 principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
                 correlation_id=trace_id,
             )
             return
@@ -241,6 +258,11 @@ class MeshBus:
                     message,
                     timeout=self._remote_timeout,
                     correlation_id=trace_id,
+                    principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
                 )
             except Exception as e:
                 log_warning(f"MeshBus: Remote publish to {route.peer_id} failed: {e}")
@@ -280,6 +302,10 @@ class MeshBus:
                     max_attempts=max_attempts,
                     reply_to=reply_to,
                     principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
                     correlation_id=trace_id,
                 )
                 return
@@ -291,6 +317,11 @@ class MeshBus:
                         message,
                         timeout=self._remote_timeout,
                         correlation_id=trace_id,
+                        principal_id=principal_id,
+                        effective_perms=effective_perms,
+                        identity_source=identity_source,
+                        method_type=method_type,
+                        caller_peer_id=caller_peer_id,
                     )
                 except Exception as e2:
                     log_warning(f"MeshBus: Fallback remote publish failed: {e2}")
@@ -317,6 +348,10 @@ class MeshBus:
                     max_attempts=max_attempts,
                     reply_to=reply_to,
                     principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
                     correlation_id=trace_id,
                 )
                 return
@@ -340,6 +375,10 @@ class MeshBus:
             max_attempts=max_attempts,
             reply_to=reply_to,
             principal_id=principal_id,
+            effective_perms=effective_perms,
+            identity_source=identity_source,
+            method_type=method_type,
+            caller_peer_id=caller_peer_id,
             correlation_id=trace_id,
         )
 
@@ -356,6 +395,10 @@ class MeshBus:
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Request with mesh routing.
@@ -393,6 +436,10 @@ class MeshBus:
                 ttl_ms=ttl_ms,
                 max_attempts=max_attempts,
                 principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
                 correlation_id=trace_id,
             )
 
@@ -405,6 +452,11 @@ class MeshBus:
                     message,
                     timeout=timeout,
                     correlation_id=trace_id,
+                    principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
                 )
                 if result.ok:
                     return result
@@ -439,6 +491,10 @@ class MeshBus:
                     ttl_ms=ttl_ms,
                     max_attempts=max_attempts,
                     principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
                     correlation_id=trace_id,
                 )
             elif fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
@@ -449,6 +505,11 @@ class MeshBus:
                         message,
                         timeout=timeout,
                         correlation_id=trace_id,
+                        principal_id=principal_id,
+                        effective_perms=effective_perms,
+                        identity_source=identity_source,
+                        method_type=method_type,
+                        caller_peer_id=caller_peer_id,
                     )
                 except Exception as e2:
                     log_warning(f"MeshBus: Fallback remote request failed: {e2}")
@@ -462,6 +523,10 @@ class MeshBus:
                         ttl_ms=ttl_ms,
                         max_attempts=max_attempts,
                         principal_id=principal_id,
+                        effective_perms=effective_perms,
+                        identity_source=identity_source,
+                        method_type=method_type,
+                        caller_peer_id=caller_peer_id,
                         correlation_id=trace_id,
                     )
 
@@ -484,6 +549,10 @@ class MeshBus:
             ttl_ms=ttl_ms,
             max_attempts=max_attempts,
             principal_id=principal_id,
+            effective_perms=effective_perms,
+            identity_source=identity_source,
+            method_type=method_type,
+            caller_peer_id=caller_peer_id,
             correlation_id=trace_id,
         )
 

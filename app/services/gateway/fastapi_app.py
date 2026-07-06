@@ -27,6 +27,7 @@ from app.services.gateway.dependencies import get_rtc_client
 from app.shared.contracts.models.aurora import AuroraEventStreamEvent, AuroraMethods
 from app.shared.contracts.models.gateway import GatewayListEventsRequest, GatewayMethods
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
@@ -483,7 +484,13 @@ _SAFE_ASSISTANT_KINDS = {
     "assistant.completed",
     "assistant.failed",
     "tool.requested",
+    "tool.running",
     "tool.completed",
+    "tool.failed",
+    "tool.requires_action",
+    "tts.audio_chunk",
+    "tts.audio.chunk",
+    "tts.chunk",
 }
 
 
@@ -514,7 +521,10 @@ def _authorize_event_stream_request(
     topic_set = set(topics)
     assistant_scoped = (
         correlation_id is not None
-        and (not topic_set or topic_set == {OrchestratorMethods.RESPONSE})
+        and (
+            not topic_set
+            or topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK}
+        )
         and (not categories or categories <= {"assistant"})
         and (not kinds or kinds <= _SAFE_ASSISTANT_KINDS)
     )
@@ -605,7 +615,7 @@ def _degraded_event(message: str) -> AuroraEventStreamEvent:
 
 
 def _sse_payload(event: AuroraEventStreamEvent) -> str:
-    payload = event.model_dump(mode="json")
+    payload = event.model_dump(mode="json", exclude_none=True)
     data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     event_name = event.kind or event.category
     return f"id: {event.event_id}\nevent: {event_name}\ndata: {data}\n\n"

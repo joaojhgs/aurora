@@ -284,6 +284,10 @@ class LocalBus:
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -322,6 +326,10 @@ class LocalBus:
             max_attempts=max_attempts if reliable else 1,
             reply_to=reply_to,
             principal_id=principal_id,
+            effective_perms=effective_perms,
+            identity_source=identity_source,
+            method_type=method_type,
+            caller_peer_id=caller_peer_id,
             correlation_id=correlation_id,
         )
 
@@ -364,6 +372,10 @@ class LocalBus:
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -444,6 +456,10 @@ class LocalBus:
                 max_attempts=max_attempts,
                 reply_to=reply_topic,
                 principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
                 correlation_id=request_correlation_id,
             )
 

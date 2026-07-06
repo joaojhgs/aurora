@@ -345,6 +345,10 @@ class BullMQBus:
                         reply_to=data.get("reply_to"),
                         correlation_id=data.get("correlation_id"),
                         principal_id=data.get("principal_id"),
+                        effective_perms=data.get("effective_perms"),
+                        identity_source=data.get("identity_source"),
+                        method_type=data.get("method_type"),
+                        caller_peer_id=data.get("caller_peer_id"),
                     )
                     await self._deliver_event(actual_topic, env)
                 except Exception as e:
@@ -393,6 +397,10 @@ class BullMQBus:
                     reply_to=job_data.get("reply_to"),
                     correlation_id=job_data.get("correlation_id"),
                     principal_id=job_data.get("principal_id"),
+                    effective_perms=job_data.get("effective_perms"),
+                    identity_source=job_data.get("identity_source"),
+                    method_type=job_data.get("method_type"),
+                    caller_peer_id=job_data.get("caller_peer_id"),
                 )
 
                 # Find matching handlers (direct + wildcard)
@@ -549,6 +557,10 @@ class BullMQBus:
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -599,6 +611,10 @@ class BullMQBus:
                 "origin": origin,
                 "reply_to": reply_to,
                 "principal_id": principal_id,
+                "effective_perms": effective_perms,
+                "identity_source": identity_source,
+                "method_type": method_type,
+                "caller_peer_id": caller_peer_id,
                 "correlation_id": correlation_id,
                 "priority": priority,
                 "attempts": 0,
@@ -665,6 +681,10 @@ class BullMQBus:
             "origin": origin,
             "reply_to": reply_to,
             "principal_id": principal_id,
+            "effective_perms": effective_perms,
+            "identity_source": identity_source,
+            "method_type": method_type,
+            "caller_peer_id": caller_peer_id,
             "correlation_id": correlation_id,
         }
 
@@ -706,6 +726,10 @@ class BullMQBus:
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -782,6 +806,10 @@ class BullMQBus:
                 max_attempts=max_attempts,
                 reply_to=reply_topic,
                 principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
                 correlation_id=request_correlation_id,
             )
 

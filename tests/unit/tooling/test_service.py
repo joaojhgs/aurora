@@ -10,8 +10,11 @@ from app.services.tooling.service import ToolingService
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
+    ToolingGetToolCatalogRequest,
     ToolingGetToolsResponse,
     ToolingMethods,
+    ToolingPrepareExecutionRequest,
+    ToolingRemoteCatalogAnnounced,
     ToolingToolInfo,
     ToolingToolProvenance,
 )
@@ -48,7 +51,85 @@ def tooling_service(mock_bus):
 
         service = ToolingService()
         service.tools_manager = mock_manager
+        service._config.aupdate_config = AsyncMock(return_value=True)
         yield service
+
+
+def test_remote_catalog_mutation_contracts_are_internal_only():
+    """Remote catalog mutation methods are bus-internal and not externally callable."""
+
+    methods = [
+        ToolingService._on_remote_catalog_announced,
+        ToolingService._on_remote_catalog_delta_announced,
+        ToolingService._on_remote_catalog_removed,
+        ToolingService._on_remote_catalog_refresh_requested,
+    ]
+
+    for method in methods:
+        metadata = getattr(method, "_contract_metadata", {})
+        assert metadata.get("exposure") == "internal"
+
+
+@pytest.mark.asyncio
+async def test_prepare_execution_honors_explicit_internal_delegated_permissions(tooling_service):
+    """System-origin scheduler calls may deliberately carry delegated caller permissions."""
+
+    tool = Mock()
+    tool.name = "restricted_switch"
+    tool.description = "Restricted switch"
+    tool.args_schema = {"type": "object", "properties": {"target": {"type": "string"}}}
+    tool.required_permissions = ["Device.Control"]
+    tool.source = "core"
+    tool.safety_class = "standard"
+    tool.confirmation_required = False
+    tooling_service.tools_manager.get_tool_by_name = Mock(return_value=tool)
+
+    denied = await tooling_service._on_prepare_execution(
+        ToolingPrepareExecutionRequest(
+            tool_name="restricted_switch",
+            arguments={"target": "lamp"},
+            caller_permissions=[],
+        ),
+        envelope=Envelope(type=ToolingMethods.PREPARE_EXECUTION, payload={}, origin="system"),
+    )
+    assert denied.ok is False
+    assert denied.policy_decision.reason == "permission_denied"
+
+    allowed = await tooling_service._on_prepare_execution(
+        ToolingPrepareExecutionRequest(
+            tool_name="restricted_switch",
+            arguments={"target": "lamp"},
+            caller_permissions=["Device.Control"],
+        ),
+        envelope=Envelope(type=ToolingMethods.PREPARE_EXECUTION, payload={}, origin="system"),
+    )
+    assert allowed.ok is True
+
+
+@pytest.mark.asyncio
+async def test_prepare_execution_rejects_schema_unavailable(tooling_service):
+    """Scheduled prepare cannot persist an unhashable unknown tool schema."""
+
+    tool = Mock()
+    tool.name = "unknown_schema_tool"
+    tool.description = "Tool without schema"
+    tool.args_schema = None
+    tool.required_permissions = []
+    tool.source = "core"
+    tool.safety_class = "standard"
+    tool.confirmation_required = False
+    tooling_service.tools_manager.get_tool_by_name = Mock(return_value=tool)
+
+    response = await tooling_service._on_prepare_execution(
+        ToolingPrepareExecutionRequest(
+            tool_name="unknown_schema_tool",
+            arguments={"anything": "goes"},
+        )
+    )
+
+    assert response.ok is False
+    assert response.policy_decision.reason == "schema_unavailable"
+
 
 
 def _mock_call_text(*mocks: Mock) -> str:
@@ -240,6 +321,7 @@ class TestToolingServiceQueries:
         from app.shared.contracts.models.tooling import ToolingGetToolsRequest
 
         risky_tool = Mock()
+        risky_tool.source = "core"
         risky_tool.name = "send_admin_report"
         risky_tool.description = "Send an admin report externally"
         risky_tool.args_schema = None
@@ -275,10 +357,9 @@ class TestToolingServiceQueries:
     async def test_get_tool_catalog_aggregates_local_and_remote_safe_tools(
         self, tooling_service, mock_bus
     ):
-        """Aggregate catalog includes local and eligible remote safe tools."""
+        """Aggregate catalog includes local tools and cached negotiated remote tools."""
         from langchain_core.tools import tool
 
-        from app.messaging import QueryResult
         from app.shared.contracts.models.tooling import ToolingGetToolCatalogRequest
 
         @tool
@@ -287,7 +368,6 @@ class TestToolingServiceQueries:
             return input
 
         tooling_service.tools_manager.get_tools = Mock(return_value=[local_lookup])
-        candidate = _provider_candidate("raspi-lab", eligible=True)
         remote_tool = _tool_info(
             name="raspi-lab_switch_on",
             local_name="switch_on",
@@ -297,54 +377,123 @@ class TestToolingServiceQueries:
             source_type="mesh_peer",
             execution_location="remote",
         )
-        mock_bus.request = AsyncMock(
-            return_value=QueryResult(
-                ok=True,
-                data=ToolingGetToolsResponse(tools=[remote_tool], count=1).model_dump(mode="json"),
-            )
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id="raspi-lab",
+            service_instance_id="remote:raspi-lab:Tooling",
+            provider_id="raspi-lab",
+            catalog_epoch=1,
+            generated_at="2026-07-05T00:00:00Z",
+            full_schema_hash="hash",
+            tools=[remote_tool],
+            shared_by_policy=True,
         )
 
-        with patch.object(tooling_service, "_remote_tooling_candidates", return_value=[candidate]):
+        with patch.object(
+            tooling_service, "_load_remote_catalog_snapshots", AsyncMock(return_value=[snapshot])
+        ):
             response = await tooling_service._on_get_tool_catalog(
                 ToolingGetToolCatalogRequest(query=None, top_k=10)
             )
 
         assert response.count == 2
-        assert [tool.name for tool in response.tools] == ["local_lookup", "raspi-lab_switch_on"]
+        assert [tool.name for tool in response.tools] == [
+            "local_lookup",
+            "raspi-lab_switch_on",
+        ]
+        assert response.blocked_count == 1
+        assert response.blocked_tools[0].reason_code == "approval_required"
+        assert response.blocked_tools[0].tool.name == "raspi-lab_switch_on"
         assert response.providers[0].provider_kind == "local"
         assert response.providers[1].provider_peer_id == "raspi-lab"
         assert response.providers[1].eligible is True
-        remote_request = mock_bus.request.await_args.args[1]
-        assert remote_request.mesh_selector.peer_id == "raspi-lab"
-        assert remote_request.mesh_selector.service_instance_id == "remote:raspi-lab:Tooling"
-
-    @pytest.mark.asyncio
-    async def test_get_tool_catalog_reports_blocked_provider(self, tooling_service, mock_bus):
-        """Ineligible remote providers are returned with actionable reason codes."""
-        from app.shared.contracts.models.tooling import ToolingGetToolCatalogRequest
-
-        candidate = _provider_candidate(
-            "busy-peer",
-            eligible=False,
-            reason_code="provider_at_capacity",
-            reason="provider is at capacity",
-        )
-
-        with patch.object(tooling_service, "_remote_tooling_candidates", return_value=[candidate]):
-            response = await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
-
-        assert response.count == 0
-        assert response.providers[1].provider_peer_id == "busy-peer"
-        assert response.providers[1].eligible is False
-        assert response.providers[1].reason_code == "provider_at_capacity"
-        assert response.providers[1].cache_status == "blocked"
+        assert response.providers[1].cache_status == "hit"
         mock_bus.request.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_tool_catalog_blocks_unsafe_tools_from_bindable_subset(
+    async def test_get_tool_catalog_reports_blocked_provider(self, tooling_service, mock_bus):
+        """Cached providers that are not shared by policy are returned as ineligible."""
+        from app.shared.contracts.models.tooling import ToolingGetToolCatalogRequest
+
+        remote_tool = _tool_info(
+            name="busy-peer_hidden_tool",
+            local_name="hidden_tool",
+            provider_peer_id="busy-peer",
+            provider_service_instance_id="remote:busy-peer:Tooling",
+            namespace="busy-peer",
+            source_type="mesh_peer",
+            execution_location="remote",
+        )
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id="busy-peer",
+            service_instance_id="remote:busy-peer:Tooling",
+            provider_id="busy-peer",
+            catalog_epoch=1,
+            generated_at="2026-07-05T00:00:00Z",
+            full_schema_hash="hash",
+            tools=[remote_tool],
+            shared_by_policy=False,
+        )
+
+        with patch.object(
+            tooling_service, "_load_remote_catalog_snapshots", AsyncMock(return_value=[snapshot])
+        ):
+            response = await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
+
+        assert response.count == 0
+        assert response.blocked_count == 0
+        assert response.providers[1].provider_peer_id == "busy-peer"
+
+    @pytest.mark.asyncio
+    async def test_get_tool_catalog_excludes_removed_remote_snapshots(
         self, tooling_service, mock_bus
     ):
-        """Unsafe and approval-required tools are non-bindable catalog entries."""
+        """Removed remote catalogs disappear from the aggregate catalog cache."""
+        from app.shared.contracts.models.tooling import (
+            ToolingGetToolCatalogRequest,
+            ToolingRemoteCatalogRemoved,
+        )
+
+        remote_tool = _tool_info(
+            name="removed-peer_hidden_tool",
+            local_name="hidden_tool",
+            provider_peer_id="removed-peer",
+            provider_service_instance_id="remote:removed-peer:Tooling",
+            namespace="removed-peer",
+            source_type="mesh_peer",
+            execution_location="remote",
+        )
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id="removed-peer",
+            service_instance_id="remote:removed-peer:Tooling",
+            provider_id="removed-peer",
+            catalog_epoch=1,
+            generated_at="2026-07-05T00:00:00Z",
+            full_schema_hash="hash",
+            tools=[remote_tool],
+            shared_by_policy=True,
+        )
+        tooling_service._remote_catalog_snapshots[(snapshot.peer_id, snapshot.service_instance_id)] = (
+            snapshot,
+            0.0,
+        )
+        await tooling_service._on_remote_catalog_removed(
+            ToolingRemoteCatalogRemoved(
+                peer_id="removed-peer",
+                service_instance_id="remote:removed-peer:Tooling",
+                reason="peer_disconnected",
+            )
+        )
+
+        response = await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
+
+        assert all(tool.provider_peer_id != "removed-peer" for tool in response.tools)
+        assert all(provider.provider_peer_id != "removed-peer" for provider in response.providers)
+
+    @pytest.mark.asyncio
+    async def test_get_tool_catalog_exposes_unsafe_tools_for_runtime_approval(
+        self, tooling_service, mock_bus
+    ):
+        """Unsafe and approval-required tools stay visible but carry approval metadata."""
         from app.shared.contracts.models.tooling import ToolingGetToolCatalogRequest
 
         safe_tool = _tool_info(name="safe_lookup", local_name="safe_lookup")
@@ -368,7 +517,14 @@ class TestToolingServiceQueries:
 
         response = await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
 
-        assert [tool.name for tool in response.tools] == ["safe_lookup"]
+        assert sorted(tool.name for tool in response.tools) == [
+            "safe_lookup",
+            "send_email",
+            "switch_on",
+        ]
+        assert [tool.name for tool in response.tools[:1]] == [
+            "safe_lookup",
+        ]
         assert response.blocked_count == 2
         assert {blocked.reason_code for blocked in response.blocked_tools} == {
             "confirmation_required",
@@ -449,35 +605,32 @@ class TestToolingServiceQueries:
     async def test_get_tool_catalog_reports_remote_timeout_without_losing_local_tools(
         self, tooling_service, mock_bus
     ):
-        """A slow remote provider is degraded while local catalog entries still return."""
+        """Remote cache failures are not live-fanned-out and do not hide local tools."""
         from app.shared.contracts.models.tooling import ToolingGetToolCatalogRequest
 
         local_tool = _tool_info(name="local_lookup", local_name="local_lookup")
         tooling_service._on_get_tools = AsyncMock(
             return_value=ToolingGetToolsResponse(tools=[local_tool], count=1)
         )
-        candidate = _provider_candidate("slow-peer", eligible=True)
-        mock_bus.request = AsyncMock(side_effect=TimeoutError())
 
-        with patch.object(tooling_service, "_remote_tooling_candidates", return_value=[candidate]):
+        with patch.object(
+            tooling_service, "_load_remote_catalog_snapshots", AsyncMock(side_effect=TimeoutError())
+        ):
             response = await tooling_service._on_get_tool_catalog(
                 ToolingGetToolCatalogRequest(provider_timeout_seconds=0.1)
             )
 
         assert [tool.name for tool in response.tools] == ["local_lookup"]
-        assert response.providers[1].provider_peer_id == "slow-peer"
-        assert response.providers[1].eligible is False
-        assert response.providers[1].reason_code == "provider_timeout"
+        assert [provider.provider_peer_id for provider in response.providers] == ["local"]
+        mock_bus.request.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_tool_catalog_uses_remote_cache_until_manifest_changes(
         self, tooling_service, mock_bus
     ):
-        """Remote discovery is cached per peer query and invalidated by manifest timestamp."""
-        from app.messaging import QueryResult
+        """Catalog reads use negotiated cache and never live-fanout to remote peers."""
         from app.shared.contracts.models.tooling import ToolingGetToolCatalogRequest
 
-        candidate = _provider_candidate("raspi-lab", eligible=True, last_manifest=10.0)
         remote_tool = _tool_info(
             name="raspi-lab_lookup",
             local_name="lookup",
@@ -487,27 +640,27 @@ class TestToolingServiceQueries:
             source_type="mesh_peer",
             execution_location="remote",
         )
-        mock_bus.request = AsyncMock(
-            return_value=QueryResult(
-                ok=True,
-                data=ToolingGetToolsResponse(tools=[remote_tool], count=1).model_dump(mode="json"),
-            )
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id="raspi-lab",
+            service_instance_id="remote:raspi-lab:Tooling",
+            provider_id="raspi-lab",
+            catalog_epoch=10,
+            generated_at="2026-07-05T00:00:00Z",
+            full_schema_hash="hash",
+            tools=[remote_tool],
+            shared_by_policy=True,
         )
 
-        with patch.object(tooling_service, "_remote_tooling_candidates", return_value=[candidate]):
+        with patch.object(
+            tooling_service, "_load_remote_catalog_snapshots", AsyncMock(return_value=[snapshot])
+        ):
             await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
             cached_response = await tooling_service._on_get_tool_catalog(
                 ToolingGetToolCatalogRequest()
             )
 
-        assert mock_bus.request.await_count == 1
+        mock_bus.request.assert_not_called()
         assert cached_response.providers[1].cache_status == "hit"
-
-        candidate.peer.last_manifest = 11.0
-        with patch.object(tooling_service, "_remote_tooling_candidates", return_value=[candidate]):
-            await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
-
-        assert mock_bus.request.await_count == 2
 
     @pytest.mark.asyncio
     async def test_get_tools_namespaces_remote_provider_collisions(self, tooling_service):
@@ -661,6 +814,7 @@ class TestToolingServiceToolExecution:
 
         # Create a mock tool that can accept ainvoke
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.ainvoke = AsyncMock(return_value="Result: test")
 
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
@@ -678,14 +832,76 @@ class TestToolingServiceToolExecution:
         assert response.status == "success"
 
     @pytest.mark.asyncio
+    async def test_execute_tool_enforces_tool_specific_required_permissions(
+        self, tooling_service
+    ):
+        """Runtime execution denies tools when caller lacks declared tool permissions."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_tool = Mock()
+        mock_tool.source = "core"
+        mock_tool.safety_class = "standard"
+        mock_tool.confirmation_required = False
+        mock_tool.required_permissions = ["Tooling.RestrictedUse"]
+        mock_tool.ainvoke = AsyncMock(return_value="should-not-run")
+
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["restricted_lookup"])
+
+        response = await tooling_service._on_execute_tool(
+            ToolingExecuteToolRequest(
+                tool_name="restricted_lookup",
+                arguments={},
+                caller_permissions=[ToolingMethods.EXECUTE_TOOL],
+            )
+        )
+
+        assert response.ok is False
+        assert response.status == "denied"
+        assert response.error_code == "permission_denied"
+        mock_tool.ainvoke.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_prepare_execution_enforces_tool_specific_required_permissions(
+        self, tooling_service
+    ):
+        """Prepare/approval paths fail closed for missing tool-specific permissions."""
+        from app.shared.contracts.models.tooling import ToolingPrepareExecutionRequest
+
+        mock_tool = Mock()
+        mock_tool.source = "core"
+        mock_tool.safety_class = "standard"
+        mock_tool.confirmation_required = False
+        mock_tool.required_permissions = ["Tooling.RestrictedUse"]
+
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["restricted_lookup"])
+
+        response = await tooling_service._on_prepare_execution(
+            ToolingPrepareExecutionRequest(
+                tool_name="restricted_lookup",
+                arguments={},
+                caller_permissions=[ToolingMethods.EXECUTE_TOOL],
+            )
+        )
+
+        assert response.ok is False
+        assert response.policy_decision.reason == "permission_denied"
+
+    @pytest.mark.asyncio
     async def test_remote_dangerous_tool_requires_resource_before_invocation(
         self, tooling_service, mock_bus
     ):
         """Remote dangerous tools are denied before invocation without a resource."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
 
         mock_bus.request = AsyncMock()
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.safety_class = "dangerous"
         mock_tool.confirmation_required = False
         mock_tool.ainvoke = AsyncMock(return_value="should-not-run")
@@ -730,6 +946,7 @@ class TestToolingServiceToolExecution:
 
         mock_bus.request = AsyncMock()
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.safety_class = "sensitive"
         mock_tool.confirmation_required = True
         mock_tool.ainvoke = AsyncMock(return_value="should-not-run")
@@ -761,10 +978,15 @@ class TestToolingServiceToolExecution:
     @pytest.mark.asyncio
     async def test_execute_tool_audit_redacts_argument_values(self, tooling_service, mock_bus):
         """Audit records carry argument hashes without raw secret values."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
 
         mock_bus.request = AsyncMock()
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.ainvoke = AsyncMock(return_value="ok")
 
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
@@ -788,11 +1010,66 @@ class TestToolingServiceToolExecution:
         assert details["status"] == "success"
 
     @pytest.mark.asyncio
+    async def test_argument_visibility_keeps_safe_user_text_visible_and_secrets_hidden(
+        self, tooling_service, mock_bus
+    ):
+        """Prepare/execute responses expose safe initiating-user previews without secrets."""
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
+
+        mock_bus.request = AsyncMock()
+        mock_tool = Mock()
+        mock_tool.source = "core"
+        mock_tool.args_schema = {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "api_key": {"type": "string"},
+                "raw_audio": {"type": "string", "x-aurora-visibility": "raw_never"},
+            },
+        }
+        mock_tool.ainvoke = AsyncMock(return_value={"ok": True})
+
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["search_tool"])
+
+        request = ToolingExecuteToolRequest(
+            tool_name="search_tool",
+            arguments={
+                "query": "latest news in Egypt",
+                "api_key": "super-secret-key",
+                "raw_audio": "base64-audio",
+            },
+            caller_peer_id="workstation",
+            caller_principal_id="peer-principal",
+            correlation_id="corr-visible",
+        )
+
+        prepared = await tooling_service._on_prepare_execution(request)
+        response = await tooling_service._on_execute_tool(request)
+
+        assert prepared.display_args_preview["query"] == "latest news in Egypt"
+        assert prepared.display_args_preview["api_key"] == "<redacted>"
+        assert prepared.display_args_preview["raw_audio"] == "<redacted>"
+        assert prepared.argument_visibility["query"] == "display"
+        assert prepared.argument_visibility["api_key"] == "secret"
+        assert prepared.argument_visibility["raw_audio"] == "raw_never"
+        assert response.ok is True
+        assert response.display_args_preview == prepared.display_args_preview
+        assert response.args_hash == prepared.args_hash
+        assert "super-secret-key" not in json.dumps(response.model_dump(), default=str)
+        assert "base64-audio" not in json.dumps(response.model_dump(), default=str)
+
+    @pytest.mark.asyncio
     async def test_execute_tool_success_logs_redacted_context(self, tooling_service, mock_bus):
         """Success execution logs omit raw arguments and raw result values."""
         from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
 
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.ainvoke = AsyncMock(return_value={"token": "secret-result-value"})
 
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
@@ -828,13 +1105,13 @@ class TestToolingServiceToolExecution:
 
         mock_bus.request = AsyncMock()
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.safety_class = "dangerous"
         mock_tool.confirmation_required = False
         mock_tool.ainvoke = AsyncMock(return_value="should-not-run")
 
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
-
         request = ToolingExecuteToolRequest(
             tool_name="switch_on",
             arguments={"api_key": "denied-secret-argument", "target": "lamp"},
@@ -864,9 +1141,14 @@ class TestToolingServiceToolExecution:
         self, tooling_service, mock_bus
     ):
         """Execution failure logs omit raw args and exception text that may echo args."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
 
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.ainvoke = AsyncMock(
             side_effect=ValueError("failure echoed failure-secret-argument")
         )
@@ -890,8 +1172,11 @@ class TestToolingServiceToolExecution:
 
         assert response.ok is False
         assert response.status == "failed"
-        assert response.error == "Tool execution failed: ValueError"
+        assert response.error == "Tool execution failed: ValueError: failure echoed <redacted>"
         assert "failure-secret-argument" not in response.error
+        assert response.data["error_details"]["error_type"] == "ValueError"
+        assert response.data["error_details"]["message"] == "failure echoed <redacted>"
+        assert response.data["error_details"]["trace"]
         logged_text = _mock_call_text(log_debug, log_error)
         assert "failure-secret-argument" not in logged_text
         assert "argument_hash" in logged_text
@@ -903,13 +1188,25 @@ class TestToolingServiceToolExecution:
         self, tooling_service, mock_bus
     ):
         """Test namespaced discovery names resolve to provider-local tool names."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
 
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.ainvoke = AsyncMock(return_value="ok")
 
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        await tooling_service._on_set_sharing_policy(
+            ToolingSetSharingPolicyRequest(
+                policy=ToolingSharingPolicy(policy_mode="unrestricted_except_blocked"),
+                actor_principal_id="test-admin",
+                confirmation_text="ALLOW NON-BLOCKED TOOLS",
+            )
+        )
 
         request = ToolingExecuteToolRequest(
             tool_name="raspi-lab_switch_on",
@@ -928,13 +1225,25 @@ class TestToolingServiceToolExecution:
     @pytest.mark.asyncio
     async def test_execute_tool_accepts_global_tool_id(self, tooling_service, mock_bus):
         """Test stable global tool IDs resolve to provider-local tool names."""
-        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
 
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.ainvoke = AsyncMock(return_value="ok")
 
         tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+        await tooling_service._on_set_sharing_policy(
+            ToolingSetSharingPolicyRequest(
+                policy=ToolingSharingPolicy(policy_mode="unrestricted_except_blocked"),
+                actor_principal_id="test-admin",
+                confirmation_text="ALLOW NON-BLOCKED TOOLS",
+            )
+        )
 
         request = ToolingExecuteToolRequest(
             tool_name="raspi-lab:remote_raspi-lab_Tooling:tool:switch_on",
@@ -981,6 +1290,7 @@ class TestToolingServiceToolExecution:
 
         # Create a mock tool that raises an error on ainvoke
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.ainvoke = AsyncMock(side_effect=ValueError("Tool execution error"))
 
         tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
@@ -1006,12 +1316,57 @@ class TestToolingSharingPolicyAndApproval:
         safety_class: str = "standard",
         confirmation_required: bool = False,
         result: str = "ok",
+        required_permissions: list[str] | None = None,
     ) -> Mock:
         mock_tool = Mock()
+        mock_tool.source = "core"
         mock_tool.safety_class = safety_class
         mock_tool.confirmation_required = confirmation_required
+        mock_tool.required_permissions = required_permissions or []
         mock_tool.ainvoke = AsyncMock(return_value=result)
         return mock_tool
+
+    @pytest.mark.asyncio
+    async def test_set_sharing_policy_persists_through_config_service(self, tooling_service):
+        """Policy changes must survive restart through ConfigService-backed persistence."""
+        from app.shared.contracts.models.tooling import (
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
+
+        tooling_service._config.aupdate_config = AsyncMock(return_value=True)
+        policy = ToolingSharingPolicy(default_share=True, default_approval_mode="ask_each_time")
+
+        response = await tooling_service._on_set_sharing_policy(
+            ToolingSetSharingPolicyRequest(policy=policy, actor_principal_id="admin")
+        )
+
+        assert response.ok is True
+        tooling_service._config.aupdate_config.assert_awaited_once_with(
+            "services.tooling.approval_policy",
+            policy.model_dump(mode="json"),
+            timeout=20.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_set_sharing_policy_failure_preserves_live_policy(self, tooling_service):
+        """A failed durable policy write must not switch runtime enforcement."""
+        from app.shared.contracts.models.tooling import (
+            ToolingSetSharingPolicyRequest,
+            ToolingSharingPolicy,
+        )
+
+        previous = tooling_service._sharing_policy
+        tooling_service._config.aupdate_config = AsyncMock(return_value=False)
+        new_policy = ToolingSharingPolicy(default_share=False, default_approval_mode="deny_all")
+
+        response = await tooling_service._on_set_sharing_policy(
+            ToolingSetSharingPolicyRequest(policy=new_policy, actor_principal_id="admin")
+        )
+
+        assert response.ok is False
+        assert response.policy == previous
+        assert tooling_service._sharing_policy == previous
 
     async def _set_single_rule_policy(
         self,
@@ -1126,6 +1481,175 @@ class TestToolingSharingPolicyAndApproval:
         assert response.ok is False
         assert response.status == "denied"
         assert response.error_code == "approval_token_required"
+        mock_tool.ainvoke.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_prepare_execution_rejects_missing_and_wrong_typed_arguments(
+        self, tooling_service, mock_bus
+    ):
+        """PrepareExecution validates schema before a scheduler can persist a job."""
+        from app.shared.contracts.models.tooling import ToolingPrepareExecutionRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool()
+        mock_tool.args_schema = {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"},
+                "level": {"type": "integer"},
+            },
+            "required": ["target", "level"],
+            "additionalProperties": False,
+        }
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        missing = await tooling_service._on_prepare_execution(
+            ToolingPrepareExecutionRequest(tool_name="switch_on", arguments={"target": "lamp"})
+        )
+        wrong_type = await tooling_service._on_prepare_execution(
+            ToolingPrepareExecutionRequest(
+                tool_name="switch_on", arguments={"target": "lamp", "level": "high"}
+            )
+        )
+        unknown = await tooling_service._on_prepare_execution(
+            ToolingPrepareExecutionRequest(
+                tool_name="switch_on",
+                arguments={"target": "lamp", "level": 1, "extra": "bad"},
+            )
+        )
+
+        assert missing.ok is False
+        assert "level" in missing.policy_decision.reason
+        assert "required property" in missing.policy_decision.reason
+        assert wrong_type.ok is False
+        assert "level" in wrong_type.policy_decision.reason
+        assert "integer" in wrong_type.policy_decision.reason
+        assert unknown.ok is False
+        assert "Additional properties" in unknown.policy_decision.reason
+
+    @pytest.mark.asyncio
+    async def test_prepare_execution_rejects_deep_json_schema_violations(
+        self, tooling_service, mock_bus
+    ):
+        """PrepareExecution validates nested objects, array items, and enum constraints."""
+        from app.shared.contracts.models.tooling import ToolingPrepareExecutionRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool()
+        mock_tool.args_schema = {
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {"type": "string", "enum": ["append", "replace"]},
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {"name": {"type": "string"}},
+                                "required": ["name"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["mode", "items"],
+                    "additionalProperties": False,
+                }
+            },
+            "required": ["payload"],
+            "additionalProperties": False,
+        }
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        bad_enum = await tooling_service._on_prepare_execution(
+            ToolingPrepareExecutionRequest(
+                tool_name="switch_on",
+                arguments={"payload": {"mode": "delete", "items": [{"name": "a"}]}},
+            )
+        )
+        bad_nested = await tooling_service._on_prepare_execution(
+            ToolingPrepareExecutionRequest(
+                tool_name="switch_on",
+                arguments={"payload": {"mode": "append", "items": [{"extra": "nope"}]}},
+            )
+        )
+
+        assert bad_enum.ok is False
+        assert "payload.mode" in bad_enum.policy_decision.reason
+        assert "delete" in bad_enum.policy_decision.reason
+        assert bad_nested.ok is False
+        assert "payload.items.0" in bad_nested.policy_decision.reason
+        assert "name" in bad_nested.policy_decision.reason
+
+    @pytest.mark.asyncio
+    async def test_prepare_and_execute_reject_schema_hash_mismatch(
+        self, tooling_service, mock_bus
+    ):
+        """Scheduler bindings fail closed when catalog schema hash drifts."""
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingPrepareExecutionRequest,
+        )
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool()
+        mock_tool.args_schema = {
+            "type": "object",
+            "properties": {"target": {"type": "string"}},
+            "required": ["target"],
+        }
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        prepare = await tooling_service._on_prepare_execution(
+            ToolingPrepareExecutionRequest(
+                tool_name="switch_on",
+                arguments={"target": "lamp"},
+                expected_args_schema_hash="stale-schema-hash",
+            )
+        )
+        execute = await tooling_service._on_execute_tool(
+            ToolingExecuteToolRequest(
+                tool_name="switch_on",
+                arguments={"target": "lamp"},
+                expected_args_schema_hash="stale-schema-hash",
+            )
+        )
+
+        assert prepare.ok is False
+        assert prepare.policy_decision.reason == "schema_hash_mismatch"
+        assert execute.ok is False
+        assert execute.error == "schema_hash_mismatch"
+        mock_tool.ainvoke.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_revalidates_arguments_before_invocation(
+        self, tooling_service, mock_bus
+    ):
+        """ExecuteTool rechecks args so stale prepared payloads cannot invoke tools."""
+        from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
+
+        mock_bus.request = AsyncMock()
+        mock_tool = self._mock_tool()
+        mock_tool.args_schema = {
+            "type": "object",
+            "properties": {"target": {"type": "string"}},
+            "required": ["target"],
+            "additionalProperties": False,
+        }
+        tooling_service.tools_manager.get_all_tool_names = Mock(return_value=["switch_on"])
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=mock_tool)
+
+        response = await tooling_service._on_execute_tool(
+            ToolingExecuteToolRequest(tool_name="switch_on", arguments={"target": 42})
+        )
+
+        assert response.ok is False
+        assert response.status == "failed"
+        assert response.error_code == "invalid_arguments"
         mock_tool.ainvoke.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1362,7 +1886,11 @@ class TestToolingSharingPolicyAndApproval:
         token = await self._approved_token(tooling_service, request)
         await tooling_service._on_execute_tool(request.model_copy(update={"approval_token": token}))
 
-        event_names = [call.args[1].event for call in mock_bus.request.await_args_list]
+        event_names = [
+            call.args[1].event
+            for call in mock_bus.request.await_args_list
+            if len(call.args) > 1 and hasattr(call.args[1], "event")
+        ]
         assert "tooling.policy.set" in event_names
         assert "tooling.approval.requested" in event_names
         assert "tooling.approval.approved" in event_names
@@ -1426,5 +1954,58 @@ class TestToolingServiceMCPReload:
         # Verify reload was called
         tooling_service.tools_manager.reload_mcp_tools.assert_called_once()
 
-        # Verify event was published
-        mock_bus.publish.assert_called_once()
+        # Verify reload and re-announced local catalog events were published.
+        assert mock_bus.publish.call_count == 2
+        assert mock_bus.publish.call_args_list[0].args[0] == ToolingMethods.TOOLS_RELOADED
+        assert mock_bus.publish.call_args_list[1].args[0] == ToolingMethods.REMOTE_CATALOG_ANNOUNCED
+
+
+@pytest.mark.asyncio
+async def test_remote_catalog_snapshot_normalizes_remote_tools_as_untrusted_mesh(tooling_service):
+    """Receiver-owned catalog cache never trusts a peer's local sentinel metadata."""
+
+    announced_tool = _tool_info(
+        name="lookup",
+        local_name="lookup",
+        provider_peer_id="local",
+        provider_service_instance_id="local:Tooling",
+        namespace="local",
+        source_type="local",
+        execution_location="local",
+    ).model_copy(update={"trust_tier": "trusted", "source": "core"})
+    snapshot = ToolingRemoteCatalogAnnounced(
+        peer_id="raspi-lab",
+        service_instance_id="remote:raspi-lab:Tooling",
+        provider_id="raspi-lab",
+        catalog_epoch=42,
+        generated_at="2026-07-05T00:00:00Z",
+        full_schema_hash="",
+        tools=[announced_tool],
+        shared_by_policy=True,
+    )
+
+    await tooling_service._on_remote_catalog_announced(snapshot)
+    normalized_snapshot = tooling_service._remote_catalog_snapshots[
+        ("raspi-lab", "remote:raspi-lab:Tooling")
+    ][0]
+
+    with patch.object(
+        tooling_service,
+        "_load_remote_catalog_snapshots",
+        AsyncMock(return_value=[normalized_snapshot]),
+    ):
+        catalog = await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
+
+    assert catalog.count == 1
+    assert catalog.blocked_count == 1
+    assert catalog.blocked_tools[0].reason_code == "approval_required"
+    remote = catalog.tools[0]
+    assert catalog.blocked_tools[0].tool.name == remote.name
+    assert remote.name == "raspi-lab_lookup"
+    assert remote.provider_peer_id == "raspi-lab"
+    assert remote.provider_service_instance_id == "remote:raspi-lab:Tooling"
+    assert remote.source_type == "mesh_peer"
+    assert remote.source == "mesh_peer"
+    assert remote.trust_tier == "untrusted"
+    assert remote.execution_location == "remote"
+    assert remote.global_tool_id == "raspi-lab:remote_raspi-lab_Tooling:tool:lookup"

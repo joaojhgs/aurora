@@ -22,6 +22,18 @@
           "type": "boolean",
           "description": "Enable debug mode for verbose logging",
           "default": false
+        },
+        "assistant": {
+          "type": "object",
+          "description": "Assistant UI behavior settings",
+          "additionalProperties": false,
+          "properties": {
+            "automatic_tts_readback": {
+              "type": "boolean",
+              "description": "Automatically play TTS for assistant replies initiated from typed UI prompts. Voice-origin prompts always keep voice-to-voice readback.",
+              "default": false
+            }
+          }
         }
       }
     },
@@ -84,8 +96,12 @@
                     "origins": {
                       "type": "array",
                       "description": "Allowed CORS origins",
-                      "items": { "type": "string" },
-                      "default": ["*"]
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": [
+                        "*"
+                      ]
                     },
                     "allow_credentials": {
                       "type": "boolean",
@@ -119,13 +135,21 @@
                 },
                 "version_policy": {
                   "type": "string",
-                  "enum": ["exact", "compatible", "any"],
+                  "enum": [
+                    "exact",
+                    "compatible",
+                    "any"
+                  ],
                   "description": "How strictly to enforce version matching",
                   "default": "compatible"
                 },
                 "peer_selection": {
                   "type": "string",
-                  "enum": ["lowest_latency", "round_robin", "random"],
+                  "enum": [
+                    "lowest_latency",
+                    "round_robin",
+                    "random"
+                  ],
                   "description": "Strategy for choosing among multiple peers",
                   "default": "lowest_latency"
                 },
@@ -199,8 +223,12 @@
                 "stun_servers": {
                   "type": "array",
                   "description": "STUN server URLs for NAT traversal",
-                  "items": { "type": "string" },
-                  "default": ["stun:stun.l.google.com:19302"]
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": [
+                    "stun:stun.l.google.com:19302"
+                  ]
                 },
                 "turn_servers": {
                   "type": "array",
@@ -218,7 +246,9 @@
                 "brokers": {
                   "type": "array",
                   "description": "MQTT broker WebSocket URLs",
-                  "items": { "type": "string" },
+                  "items": {
+                    "type": "string"
+                  },
                   "default": [
                     "wss://broker.emqx.io:8084/mqtt",
                     "wss://test.mosquitto.org:8081/mqtt"
@@ -246,7 +276,10 @@
             "api_keys": {
               "type": "array",
               "description": "List of valid API keys (sensitive; prefer AURORA_GATEWAY_API_KEYS in .env)",
-              "items": { "type": "string", "format": "password" },
+              "items": {
+                "type": "string",
+                "format": "password"
+              },
               "default": []
             },
             "token_expiry_days": {
@@ -276,7 +309,9 @@
             "default_pairing_permissions": {
               "type": "array",
               "description": "Default permissions assigned to new devices during pairing",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "default": []
             },
             "webrtc_auth_timeout_seconds": {
@@ -314,7 +349,9 @@
               "description": "Enable TTS service",
               "default": false
             },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "mesh_sharing": {
+              "$ref": "#/$defs/mesh_sharing"
+            },
             "hardware_acceleration": {
               "type": "boolean",
               "description": "Enable hardware acceleration for TTS",
@@ -357,9 +394,31 @@
           "properties": {
             "language": {
               "type": "string",
-              "enum": ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"],
+              "enum": [
+                "",
+                "en",
+                "pt",
+                "es",
+                "fr",
+                "de",
+                "it",
+                "ja",
+                "ko",
+                "zh"
+              ],
               "description": "Language for speech recognition (empty for auto-detect)",
-              "ui_choices": ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"],
+              "ui_choices": [
+                "",
+                "en",
+                "pt",
+                "es",
+                "fr",
+                "de",
+                "it",
+                "ja",
+                "ko",
+                "zh"
+              ],
               "default": "en"
             },
             "coordinator": {
@@ -372,13 +431,15 @@
                   "description": "Enable STT coordinator",
                   "default": false
                 },
-                "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+                "mesh_sharing": {
+                  "$ref": "#/$defs/mesh_sharing"
+                },
                 "session_timeout_s": {
                   "type": "number",
                   "minimum": 1.0,
                   "maximum": 300.0,
                   "description": "Session timeout in seconds",
-                  "default": 10.0
+                  "default": 30.0
                 },
                 "multi_turn_enabled": {
                   "type": "boolean",
@@ -431,13 +492,22 @@
                   "additionalProperties": false,
                   "properties": {
                     "device_index": {
-                      "type": ["integer", "null"],
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
                       "description": "Audio input device index (null for default)",
                       "default": null
                     },
                     "sample_rate": {
                       "type": "integer",
-                      "enum": [8000, 16000, 22050, 44100, 48000],
+                      "enum": [
+                        8000,
+                        16000,
+                        22050,
+                        44100,
+                        48000
+                      ],
                       "description": "Audio sample rate in Hz",
                       "default": 16000
                     },
@@ -457,7 +527,11 @@
                     },
                     "format": {
                       "type": "string",
-                      "enum": ["int16", "int32", "float32"],
+                      "enum": [
+                        "int16",
+                        "int32",
+                        "float32"
+                      ],
                       "description": "Audio sample format",
                       "default": "int16"
                     }
@@ -475,15 +549,23 @@
                   "description": "Enable wake word detection",
                   "default": false
                 },
-                "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+                "mesh_sharing": {
+                  "$ref": "#/$defs/mesh_sharing"
+                },
                 "backend": {
                   "type": "string",
-                  "enum": ["oww", "pvp"],
+                  "enum": [
+                    "oww",
+                    "pvp"
+                  ],
                   "description": "Wake word backend: 'oww' (OpenWakeWord) or 'pvp' (Porcupine)",
                   "default": "oww"
                 },
                 "model_path": {
-                  "type": ["string", "null"],
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "description": "Path to wake word model file",
                   "default": null
                 },
@@ -496,7 +578,10 @@
                 },
                 "inference_framework": {
                   "type": "string",
-                  "enum": ["onnx", "tflite"],
+                  "enum": [
+                    "onnx",
+                    "tflite"
+                  ],
                   "description": "Inference framework for wake word detection",
                   "default": "onnx"
                 }
@@ -512,7 +597,9 @@
                   "description": "Enable transcription service",
                   "default": false
                 },
-                "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+                "mesh_sharing": {
+                  "$ref": "#/$defs/mesh_sharing"
+                },
                 "vad_enabled": {
                   "type": "boolean",
                   "description": "Enable voice activity detection",
@@ -551,19 +638,34 @@
                     },
                     "model_size": {
                       "type": "string",
-                      "enum": ["tiny", "base", "small", "medium", "large"],
+                      "enum": [
+                        "tiny",
+                        "base",
+                        "small",
+                        "medium",
+                        "large"
+                      ],
                       "description": "Whisper model size for realtime transcription",
                       "default": "tiny"
                     },
                     "device": {
                       "type": "string",
-                      "enum": ["cpu", "cuda", "auto"],
+                      "enum": [
+                        "cpu",
+                        "cuda",
+                        "auto"
+                      ],
                       "description": "Device for realtime model",
                       "default": "cpu"
                     },
                     "compute_type": {
                       "type": "string",
-                      "enum": ["int8", "int16", "float16", "float32"],
+                      "enum": [
+                        "int8",
+                        "int16",
+                        "float16",
+                        "float32"
+                      ],
                       "description": "Compute type for realtime model",
                       "default": "int8"
                     }
@@ -581,19 +683,34 @@
                     },
                     "model_size": {
                       "type": "string",
-                      "enum": ["tiny", "base", "small", "medium", "large"],
+                      "enum": [
+                        "tiny",
+                        "base",
+                        "small",
+                        "medium",
+                        "large"
+                      ],
                       "description": "Whisper model size for accurate transcription",
                       "default": "base"
                     },
                     "device": {
                       "type": "string",
-                      "enum": ["cpu", "cuda", "auto"],
+                      "enum": [
+                        "cpu",
+                        "cuda",
+                        "auto"
+                      ],
                       "description": "Device for accurate model",
                       "default": "cpu"
                     },
                     "compute_type": {
                       "type": "string",
-                      "enum": ["int8", "int16", "float16", "float32"],
+                      "enum": [
+                        "int8",
+                        "int16",
+                        "float16",
+                        "float32"
+                      ],
                       "description": "Compute type for accurate model",
                       "default": "int8"
                     }
@@ -618,7 +735,9 @@
               "description": "Enable orchestrator service",
               "default": true
             },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "mesh_sharing": {
+              "$ref": "#/$defs/mesh_sharing"
+            },
             "hardware_acceleration": {
               "type": "boolean",
               "description": "Enable hardware acceleration for LLM",
@@ -631,9 +750,19 @@
               "properties": {
                 "provider": {
                   "type": "string",
-                  "enum": ["openai", "huggingface_endpoint", "huggingface_pipeline", "llama_cpp"],
+                  "enum": [
+                    "openai",
+                    "huggingface_endpoint",
+                    "huggingface_pipeline",
+                    "llama_cpp"
+                  ],
                   "description": "LLM provider to use",
-                  "ui_choices": ["llama_cpp", "openai", "huggingface_endpoint", "huggingface_pipeline"],
+                  "ui_choices": [
+                    "llama_cpp",
+                    "openai",
+                    "huggingface_endpoint",
+                    "huggingface_pipeline"
+                  ],
                   "default": "openai"
                 },
                 "third_party": {
@@ -658,7 +787,15 @@
                             "model": {
                               "type": "string",
                               "description": "OpenAI model to use",
-                              "ui_choices": ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo", "gpt-4.1", "gpt-5-mini", "gpt-5-nano"],
+                              "ui_choices": [
+                                "gpt-4o",
+                                "gpt-4",
+                                "gpt-3.5-turbo",
+                                "gpt-4-turbo",
+                                "gpt-4.1",
+                                "gpt-5-mini",
+                                "gpt-5-nano"
+                              ],
                               "default": "gpt-4o"
                             },
                             "temperature": {
@@ -755,16 +892,34 @@
                             },
                             "torch_dtype": {
                               "type": "string",
-                              "enum": ["auto", "float32", "float16", "bfloat16"],
+                              "enum": [
+                                "auto",
+                                "float32",
+                                "float16",
+                                "bfloat16"
+                              ],
                               "description": "PyTorch data type",
-                              "ui_choices": ["auto", "float32", "float16", "bfloat16"],
+                              "ui_choices": [
+                                "auto",
+                                "float32",
+                                "float16",
+                                "bfloat16"
+                              ],
                               "default": "auto"
                             },
                             "device": {
                               "type": "string",
-                              "enum": ["cpu", "cuda", "auto"],
+                              "enum": [
+                                "cpu",
+                                "cuda",
+                                "auto"
+                              ],
                               "description": "Device to run the model on",
-                              "ui_choices": ["cpu", "cuda", "auto"]
+                              "ui_choices": [
+                                "cpu",
+                                "cuda",
+                                "auto"
+                              ]
                             },
                             "pipeline_kwargs": {
                               "type": "object",
@@ -858,9 +1013,21 @@
                             },
                             "chat_format": {
                               "type": "string",
-                              "enum": ["chatml", "chatml-function-calling", "llama-2", "alpaca", "vicuna"],
+                              "enum": [
+                                "chatml",
+                                "chatml-function-calling",
+                                "llama-2",
+                                "alpaca",
+                                "vicuna"
+                              ],
                               "description": "Chat format template to use",
-                              "ui_choices": ["chatml", "chatml-function-calling", "llama-2", "alpaca", "vicuna"],
+                              "ui_choices": [
+                                "chatml",
+                                "chatml-function-calling",
+                                "llama-2",
+                                "alpaca",
+                                "vicuna"
+                              ],
                               "default": "chatml-function-calling"
                             }
                           }
@@ -883,7 +1050,9 @@
               "description": "Enable database service",
               "default": true
             },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
+            "mesh_sharing": {
+              "$ref": "#/$defs/mesh_sharing"
+            },
             "embeddings": {
               "type": "object",
               "description": "Embeddings configuration",
@@ -908,8 +1077,12 @@
               "description": "Enable tooling service",
               "default": true
             },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" },
-            "approval_policy": { "$ref": "#/$defs/tooling_approval_policy" },
+            "mesh_sharing": {
+              "$ref": "#/$defs/mesh_sharing"
+            },
+            "approval_policy": {
+              "$ref": "#/$defs/tooling_approval_policy"
+            },
             "hardware_acceleration": {
               "type": "object",
               "description": "Hardware acceleration for OCR features",
@@ -944,7 +1117,9 @@
                     "^[a-zA-Z][a-zA-Z0-9_-]*$": {
                       "type": "object",
                       "description": "MCP server configuration",
-                      "required": ["transport"],
+                      "required": [
+                        "transport"
+                      ],
                       "additionalProperties": false,
                       "properties": {
                         "enabled": {
@@ -954,9 +1129,19 @@
                         },
                         "transport": {
                           "type": "string",
-                          "enum": ["stdio", "streamable_http", "sse", "websocket"],
+                          "enum": [
+                            "stdio",
+                            "streamable_http",
+                            "sse",
+                            "websocket"
+                          ],
                           "description": "Transport protocol for MCP communication",
-                          "ui_choices": ["stdio", "streamable_http", "sse", "websocket"]
+                          "ui_choices": [
+                            "stdio",
+                            "streamable_http",
+                            "sse",
+                            "websocket"
+                          ]
                         },
                         "command": {
                           "type": "string",
@@ -965,7 +1150,9 @@
                         "args": {
                           "type": "array",
                           "description": "Arguments to pass to the command (used with stdio transport)",
-                          "items": { "type": "string" },
+                          "items": {
+                            "type": "string"
+                          },
                           "default": []
                         },
                         "url": {
@@ -976,13 +1163,21 @@
                         "headers": {
                           "type": "object",
                           "description": "Custom HTTP headers for authentication and configuration",
-                          "patternProperties": { "^.+$": { "type": "string" } },
+                          "patternProperties": {
+                            "^.+$": {
+                              "type": "string"
+                            }
+                          },
                           "default": {}
                         },
                         "env": {
                           "type": "object",
                           "description": "Environment variables for the MCP server process (used with stdio transport)",
-                          "patternProperties": { "^.+$": { "type": "string" } },
+                          "patternProperties": {
+                            "^.+$": {
+                              "type": "string"
+                            }
+                          },
                           "default": {}
                         },
                         "cwd": {
@@ -999,17 +1194,47 @@
                       },
                       "allOf": [
                         {
-                          "if": { "properties": { "transport": { "const": "stdio" } } },
+                          "if": {
+                            "properties": {
+                              "transport": {
+                                "const": "stdio"
+                              }
+                            }
+                          },
                           "then": {
-                            "required": ["command", "args"],
-                            "not": { "required": ["url"] }
+                            "required": [
+                              "command",
+                              "args"
+                            ],
+                            "not": {
+                              "required": [
+                                "url"
+                              ]
+                            }
                           }
                         },
                         {
-                          "if": { "properties": { "transport": { "enum": ["streamable_http", "sse", "websocket"] } } },
+                          "if": {
+                            "properties": {
+                              "transport": {
+                                "enum": [
+                                  "streamable_http",
+                                  "sse",
+                                  "websocket"
+                                ]
+                              }
+                            }
+                          },
                           "then": {
-                            "required": ["url"],
-                            "not": { "required": ["command", "args"] }
+                            "required": [
+                              "url"
+                            ],
+                            "not": {
+                              "required": [
+                                "command",
+                                "args"
+                              ]
+                            }
                           }
                         }
                       ]
@@ -1175,7 +1400,9 @@
               "description": "Enable scheduler service",
               "default": true
             },
-            "mesh_sharing": { "$ref": "#/$defs/mesh_sharing" }
+            "mesh_sharing": {
+              "$ref": "#/$defs/mesh_sharing"
+            }
           }
         },
         "config": {
@@ -1211,31 +1438,51 @@
           "default": 10
         },
         "allowed_peers": {
-          "type": ["array", "null"],
-          "items": { "type": "string" },
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
           "description": "Specific stable mesh peer IDs allowed to call this shared service. Null allows any authenticated peer.",
           "default": null
         },
         "prefer": {
           "type": "string",
-          "enum": ["local", "network", "network_only", "local_only"],
+          "enum": [
+            "local",
+            "network",
+            "network_only",
+            "local_only"
+          ],
           "description": "Routing preference",
           "default": "local"
         },
         "fallback": {
           "type": "string",
-          "enum": ["local", "network", "error", "none"],
+          "enum": [
+            "local",
+            "network",
+            "error",
+            "none"
+          ],
           "description": "Fallback strategy",
           "default": "local"
         },
         "min_version": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Minimum compatible remote service version required when routing to this service.",
           "default": null
         },
         "required_capabilities": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Remote service capabilities required before this service may be selected as a mesh provider.",
           "default": []
         },
@@ -1271,6 +1518,17 @@
           "description": "Default approval behavior when no scoped rule matches",
           "default": "approve_all_local_safe"
         },
+        "policy_mode": {
+          "type": "string",
+          "enum": [
+            "enforce",
+            "dry_run_only",
+            "deny_all",
+            "unrestricted_except_blocked"
+          ],
+          "description": "Global Tooling policy mode. unrestricted_except_blocked bypasses approval prompts only for non-blocked tools and remains admin/operator controlled.",
+          "default": "enforce"
+        },
         "default_token_ttl_seconds": {
           "type": "integer",
           "minimum": 1,
@@ -1281,14 +1539,18 @@
           "type": "array",
           "description": "First-match scoped sharing and approval rules. Unset fields act as wildcards.",
           "default": [],
-          "items": { "$ref": "#/$defs/tooling_approval_policy_rule" }
+          "items": {
+            "$ref": "#/$defs/tooling_approval_policy_rule"
+          }
         }
       }
     },
     "tooling_approval_policy_rule": {
       "type": "object",
       "description": "Scoped Tooling approval policy rule",
-      "required": ["rule_id"],
+      "required": [
+        "rule_id"
+      ],
       "additionalProperties": false,
       "properties": {
         "rule_id": {
@@ -1314,38 +1576,146 @@
           ],
           "default": "ask_each_time"
         },
-        "tool_name": { "type": ["string", "null"], "default": null },
-        "global_tool_id": { "type": ["string", "null"], "default": null },
+        "tool_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "global_tool_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "execution_location": {
-          "type": ["string", "null"],
-          "enum": ["local", "remote", null],
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "local",
+            "remote",
+            null
+          ],
           "default": null
         },
         "source_type": {
-          "type": ["string", "null"],
-          "enum": ["core", "plugin", "mcp", "toolkit", "unknown", null],
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "core",
+            "plugin",
+            "mcp",
+            "toolkit",
+            "unknown",
+            null
+          ],
           "default": null
         },
-        "toolkit_name": { "type": ["string", "null"], "default": null },
+        "toolkit_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "safety_class": {
-          "type": ["string", "null"],
-          "enum": ["standard", "sensitive", "dangerous", null],
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "standard",
+            "sensitive",
+            "dangerous",
+            null
+          ],
           "default": null
         },
         "operation_class": {
-          "type": ["string", "null"],
-          "enum": ["read", "write", "external", "admin", "hardware", "data-egress", null],
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "read",
+            "write",
+            "external",
+            "admin",
+            "hardware",
+            "data-egress",
+            null
+          ],
           "default": null
         },
-        "resource_namespace": { "type": ["string", "null"], "default": null },
-        "hardware_target": { "type": ["string", "null"], "default": null },
-        "data_scope": { "type": ["string", "null"], "default": null },
-        "caller_peer_id": { "type": ["string", "null"], "default": null },
-        "caller_principal_id": { "type": ["string", "null"], "default": null },
-        "caller_device_id": { "type": ["string", "null"], "default": null },
-        "provider_peer_id": { "type": ["string", "null"], "default": null },
-        "provider_service_instance_id": { "type": ["string", "null"], "default": null },
-        "route_privacy_class": { "type": ["string", "null"], "default": null },
+        "resource_namespace": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hardware_target": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "data_scope": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "caller_peer_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "caller_principal_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "caller_device_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "provider_peer_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "provider_service_instance_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "route_privacy_class": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "token_ttl_seconds": {
           "type": "integer",
           "minimum": 1,

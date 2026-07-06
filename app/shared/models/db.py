@@ -265,6 +265,11 @@ class CronJob:
     callback_module: str
     callback_function: str
     callback_args: dict[str, Any] | None = None
+    action_kind: str | None = None
+    action_spec: dict[str, Any] | None = None
+    action_spec_version: int = 1
+    prepared_binding: dict[str, Any] | None = None
+    policy_decision_id: str | None = None
     is_active: bool = True
     status: JobStatus = JobStatus.PENDING
     last_run_time: datetime | None = None
@@ -351,6 +356,13 @@ class CronJob:
             "callback_module": self.callback_module,
             "callback_function": self.callback_function,
             "callback_args": callback_args_safe,
+            "action_kind": self.action_kind,
+            "action_spec": json.dumps(self.action_spec) if self.action_spec else None,
+            "action_spec_version": self.action_spec_version,
+            "prepared_binding": json.dumps(self.prepared_binding)
+            if self.prepared_binding
+            else None,
+            "policy_decision_id": self.policy_decision_id,
             "is_active": self.is_active,
             "status": self.status.value,
             "last_run_time": self.last_run_time.isoformat() if self.last_run_time else None,
@@ -375,6 +387,13 @@ class CronJob:
             callback_module=data["callback_module"],
             callback_function=data["callback_function"],
             callback_args=json.loads(data["callback_args"]) if data["callback_args"] else None,
+            action_kind=data.get("action_kind"),
+            action_spec=json.loads(data["action_spec"]) if data.get("action_spec") else None,
+            action_spec_version=data.get("action_spec_version") or 1,
+            prepared_binding=(
+                json.loads(data["prepared_binding"]) if data.get("prepared_binding") else None
+            ),
+            policy_decision_id=data.get("policy_decision_id"),
             is_active=data["is_active"],
             status=JobStatus(data["status"]),
             last_run_time=(

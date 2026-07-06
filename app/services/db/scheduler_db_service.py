@@ -45,7 +45,7 @@ class SchedulerDatabaseService:
         """Add a new job to the database"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
-                job_dict = job.to_dict()
+                job_dict = await self._filter_existing_columns(db, job.to_dict())
                 placeholders = ", ".join(["?" for _ in job_dict])
                 columns = ", ".join(job_dict.keys())
                 values = list(job_dict.values())
@@ -71,7 +71,7 @@ class SchedulerDatabaseService:
         try:
             job.updated_at = datetime.now()
             async with aiosqlite.connect(self.db_path) as db:
-                job_dict = job.to_dict()
+                job_dict = await self._filter_existing_columns(db, job.to_dict())
                 set_clause = ", ".join([f"{k} = ?" for k in job_dict if k != "id"])
                 values = [v for k, v in job_dict.items() if k != "id"] + [job.id]
 
@@ -90,6 +90,23 @@ class SchedulerDatabaseService:
         except Exception as e:
             log_error(f"Error updating job: {e}")
             return False
+
+    async def _filter_existing_columns(
+        self, db: aiosqlite.Connection, values: dict[str, object]
+    ) -> dict[str, object]:
+        """Filter serialized CronJob values to columns available in this DB.
+
+        Some older unit fixtures create a minimal `cron_jobs` table manually. Real
+        databases receive typed-action columns through migrations; this keeps legacy
+        fixtures readable without preventing typed fields from being persisted when
+        the migrated columns exist.
+        """
+        cursor = await db.execute("PRAGMA table_info(cron_jobs)")
+        rows = await cursor.fetchall()
+        columns = {row[1] for row in rows}
+        if not columns:
+            return values
+        return {key: value for key, value in values.items() if key in columns}
 
     async def get_job(self, job_id: str) -> CronJob | None:
         """Get a job by ID"""

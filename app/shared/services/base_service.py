@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.messaging.bus_init import get_bus_singleton
 
 
@@ -500,6 +500,8 @@ class BaseService(ABC):
                     # Use method_id as topic (e.g., "TTS.Request", "Config.Get")
                     topic = metadata.get("bus_topic") or metadata.get("method_id")
                     input_model = metadata.get("input_model")
+                    required_perms = tuple(metadata.get("required_perms") or ())
+                    contract_method_type = metadata.get("method_type")
 
                     if topic:
                         # Create a wrapper to handle the envelope and types
@@ -507,10 +509,35 @@ class BaseService(ABC):
                             method=attr,
                             model=input_model,
                             method_name=attr_name,
+                            required_perms=required_perms,
+                            contract_method_type=contract_method_type,
                             pass_envelope=_wants_envelope(attr),  # noqa: B008
                         ):
                             async def wrapper(envelope: Envelope) -> None:
                                 try:
+                                    if not self._envelope_authorized(
+                                        envelope,
+                                        required_perms=list(required_perms),
+                                        method_type=contract_method_type,
+                                        method_name=method_name,
+                                    ):
+                                        if envelope.reply_to:
+                                            from app.shared.contracts.models.common import (
+                                                ErrorOutput,
+                                            )
+
+                                            await self.bus.publish(
+                                                envelope.reply_to,
+                                                ErrorOutput(
+                                                    error="Forbidden",
+                                                    code="FORBIDDEN",
+                                                ),
+                                                event=False,
+                                                origin=self.module,
+                                                correlation_id=envelope.correlation_id,
+                                            )
+                                        return
+
                                     # 1. Unpack and validate input
                                     if model:
                                         try:
@@ -613,6 +640,53 @@ class BaseService(ABC):
 
             except Exception as e:
                 log_error(f"Error setting up subscription for {attr_name}: {e}")
+
+    def _envelope_authorized(
+        self,
+        envelope: Any,
+        *,
+        required_perms: list[str],
+        method_type: str | None,
+        method_name: str,
+    ) -> bool:
+        """Enforce external bus permissions at service boundary.
+
+        Gateway/WebRTC/mesh callers are pre-checked at ingress, but the service
+        wrapper is the authoritative last gate for any message that reaches a
+        contract method. Internal/system messages keep existing bus semantics.
+        """
+        if not required_perms:
+            return True
+
+        identity_source = getattr(envelope, "identity_source", None)
+        origin = getattr(envelope, "origin", "internal")
+        externalish = origin == "external" or identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+        if not externalish:
+            return True
+
+        effective = set(getattr(envelope, "effective_perms", None) or [])
+        if not effective:
+            log_warning(
+                f"{self.module}.{method_name} denied external request without effective_perms"
+            )
+            return False
+
+        from app.shared.auth.permissions import check_access
+
+        allowed = check_access(effective, required_perms, method_type=method_type)
+        if not allowed:
+            log_warning(
+                f"{self.module}.{method_name} denied external request: "
+                f"required={required_perms} method_type={method_type} "
+                f"effective={sorted(effective)}"
+            )
+        return allowed
 
     def _unsubscribe_registered_contracts(self) -> None:
         """Unsubscribe all auto-registered method contracts."""

@@ -95,6 +95,36 @@ class RPCHandler:
         else:
             log_debug(f"RPCHandler: Ignoring message type: {msg_type}")
 
+
+    def _normalize_forwarded_tooling_catalog_event(
+        self, topic: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Bind forwarded Tooling catalog events to the authenticated source peer.
+
+        Providers announce their local catalog with local sentinel ids. Once the
+        event crosses the mesh boundary, the receiver must key the snapshot by
+        the authenticated remote peer instead of trusting the payload's claimed
+        provider identity.
+        """
+
+        if topic not in {
+            ToolingMethods.REMOTE_CATALOG_ANNOUNCED,
+            ToolingMethods.REMOTE_CATALOG_DELTA_ANNOUNCED,
+            ToolingMethods.REMOTE_CATALOG_REMOVED,
+        } or not isinstance(params, dict):
+            return params
+
+        source_peer_id = self._peer_id or str(params.get("peer_id") or "unknown-peer")
+        normalized = dict(params)
+        # Never trust peer/provider/service ids inside a mesh-forwarded catalog
+        # payload. Those fields define the cache key and policy scope, so the
+        # receiver must bind them to the authenticated DataChannel peer even if
+        # the sender claims another non-local identity.
+        normalized["peer_id"] = source_peer_id
+        normalized["provider_id"] = source_peer_id
+        normalized["service_instance_id"] = f"remote:{source_peer_id}:Tooling"
+        return normalized
+
     async def _handle_event(self, msg: dict[str, Any]) -> None:
         """Handle a forwarded event from a remote peer.
 
@@ -123,6 +153,8 @@ class RPCHandler:
             f"RPCHandler: Received forwarded event {topic} correlation_id={correlation_id or 'n/a'}"
         )
         try:
+            if isinstance(params, dict):
+                params = self._normalize_forwarded_tooling_catalog_event(topic, params)
             payload: Any = params
             if isinstance(params, dict) and self._registry:
                 payload = await self._reconstruct_event_model(topic, params)
@@ -133,6 +165,8 @@ class RPCHandler:
                 event=True,
                 origin="mesh_forwarded",
                 principal_id=identity.principal_id,
+                identity_source="mesh_peer",
+                caller_peer_id=self._peer_id,
                 correlation_id=correlation_id,
             )
         except Exception as e:
@@ -327,7 +361,10 @@ class RPCHandler:
                     typed_params = params
                 elif topic in {
                     SchedulerMethods.SCHEDULE,
+                    SchedulerMethods.SCHEDULE_ACTION,
                     SchedulerMethods.CANCEL,
+                    SchedulerMethods.PAUSE,
+                    SchedulerMethods.RESUME,
                     SchedulerMethods.LIST_JOBS,
                 }:
                     params = {
@@ -335,7 +372,7 @@ class RPCHandler:
                         "caller_peer_id": self._peer_id,
                         "caller_principal_id": identity.principal_id,
                     }
-                    if topic == SchedulerMethods.SCHEDULE:
+                    if topic in {SchedulerMethods.SCHEDULE, SchedulerMethods.SCHEDULE_ACTION}:
                         params["correlation_id"] = correlation_id
                     typed_params = params
             if meta.input_model and isinstance(params, dict) and callable(meta.input_model):
@@ -353,6 +390,10 @@ class RPCHandler:
                 timeout=30.0,
                 origin="external",
                 principal_id=identity.principal_id,
+                effective_perms=list(identity.effective_perms),
+                identity_source="webrtc_rpc",
+                method_type=meta.method_type or "use",
+                caller_peer_id=self._peer_id,
                 correlation_id=correlation_id,
             )
 

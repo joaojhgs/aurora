@@ -13,6 +13,7 @@ from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
 from app.services.gateway.config import MeshConfig, MeshServiceConfig
 from app.services.gateway.webrtc.rpc import RPCHandler
+from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
 
 
 @pytest.fixture
@@ -25,11 +26,16 @@ def mock_bus():
 @pytest.fixture
 def mock_registry():
     registry = AsyncMock()
-    # Simulate a registered method
-    registry.find_method.return_value = MagicMock(
+    method = MethodInfo(
+        name="Synthesize",
         bus_topic="TTS.Synthesize",
         required_perms=["TTS.*"],
+        method_type="use",
     )
+    registry.get_service = AsyncMock(
+        return_value=ServiceAnnouncement(module="TTS", version="test", methods=[method])
+    )
+    registry.get_external_methods = AsyncMock(return_value=[])
     return registry
 
 
@@ -100,6 +106,47 @@ class TestSharingGate:
             sent_data = json.loads(mock_send_fn.call_args[0][0])
             # Either result or error — if sharing gate passed, it tries the bus
             assert sent_data.get("type") in ("result", "error")
+
+    @pytest.mark.asyncio
+    async def test_shared_service_forwards_authenticated_peer_permissions(
+        self, mock_bus, mock_registry, mock_send_fn, limited_identity
+    ):
+        """Mesh RPC must preserve peer identity/perms for downstream bus enforcement."""
+        mesh_config = MeshConfig(
+            enabled=True,
+            services={
+                "TTS": MeshServiceConfig(share=True, max_concurrent=5),
+            },
+        )
+        handler = RPCHandler(
+            mock_bus,
+            mock_registry,
+            mock_send_fn,
+            lambda: limited_identity,
+            mesh_config=mesh_config,
+            peer_id="peer-limited",
+        )
+
+        await handler.on_message(
+            json.dumps(
+                {
+                    "type": "call",
+                    "id": "req-auth-meta",
+                    "method": "TTS.Synthesize",
+                    "params": {"text": "Hello"},
+                    "correlation_id": "corr-auth-meta",
+                }
+            )
+        )
+
+        mock_bus.request.assert_awaited_once()
+        _, _, kwargs = mock_bus.request.mock_calls[0]
+        assert kwargs["origin"] == "external"
+        assert kwargs["principal_id"] == "limited-peer"
+        assert kwargs["effective_perms"] == ["TTS.*"]
+        assert kwargs["identity_source"] == "webrtc_rpc"
+        assert kwargs["caller_peer_id"] == "peer-limited"
+        assert kwargs["correlation_id"] == "corr-auth-meta"
 
     @pytest.mark.asyncio
     async def test_non_shared_service_blocks_call(

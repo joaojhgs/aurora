@@ -526,7 +526,12 @@ class RouteGenerator:
         timeout = self._request_timeout
         topic = method_info.bus_topic or f"{module_name}.{method_info.name}"
 
-        async def handler(request: Any = None, principal_id: str | None = None) -> dict[str, Any]:
+        async def handler(
+            request: Any = None,
+            principal_id: str | None = None,
+            effective_perms: list[str] | None = None,
+            identity_source: str | None = None,
+        ) -> dict[str, Any]:
             """Handle API request by forwarding to service via bus."""
             from fastapi import HTTPException
 
@@ -568,6 +573,9 @@ class RouteGenerator:
                     timeout=timeout,
                     origin="external",
                     principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source or "gateway_http",
+                    method_type=method_info.method_type or "use",
                     correlation_id=payload.get("correlation_id")
                     if isinstance(payload, dict)
                     else None,
@@ -676,6 +684,10 @@ class RouteGenerator:
 
                 # Extract principal_id from the resolved Identity
                 pid = getattr(_auth, "principal_id", None) if _auth else None
+                effective_perms = (
+                    list(getattr(_auth, "effective_perms", []) or []) if _auth else []
+                )
+                identity_source = getattr(_auth, "source", None) if _auth else None
 
                 # Use exclude_unset=True to only send fields that were explicitly
                 # provided, allowing the service's model to use its own defaults
@@ -691,7 +703,12 @@ class RouteGenerator:
                         headers=http_request.headers,
                     )
 
-                result = await inner_handler(payload, principal_id=pid)
+                result = await inner_handler(
+                    payload,
+                    principal_id=pid,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                )
                 # Return the raw result dict - don't filter through response model
                 # This preserves all fields from the service response
                 if result is None:

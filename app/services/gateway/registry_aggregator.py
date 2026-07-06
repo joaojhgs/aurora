@@ -28,6 +28,36 @@ if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
 
 
+def _announcement_contract_fingerprint(announcement: ServiceAnnouncement) -> dict[str, Any]:
+    """Return the route-bearing parts of a service announcement.
+
+    Services periodically re-announce themselves so a restarted Gateway can
+    rediscover them. Those heartbeats carry fresh timestamps, instance IDs, and
+    sometimes rebuilt JSON-schema dictionaries; none of that changes the route
+    inventory. Only the module/version/capability set and method identities
+    should trigger route regeneration.
+    """
+    return {
+        "module": announcement.module,
+        "version": announcement.version,
+        "capabilities": tuple(sorted(announcement.capabilities)),
+        "methods": tuple(
+            sorted(
+                (
+                    method.name,
+                    method.bus_topic,
+                    method.exposure,
+                    method.input_model,
+                    method.output_model,
+                    tuple(sorted(method.required_perms)),
+                    method.method_type,
+                )
+                for method in announcement.methods
+            )
+        ),
+    }
+
+
 class RegistryAggregator:
     """Aggregates service registries from multiple sources.
 
@@ -197,6 +227,9 @@ class RegistryAggregator:
                 old_announcement = self._services.get(module_name)
                 self._services[module_name] = announcement
                 self._last_seen[module_name] = datetime.utcnow()
+                changed = old_announcement is None or _announcement_contract_fingerprint(
+                    old_announcement
+                ) != _announcement_contract_fingerprint(announcement)
 
             # Log and notify
             if old_announcement is None:
@@ -207,7 +240,8 @@ class RegistryAggregator:
             else:
                 log_debug(f"Service re-announced: {module_name}")
 
-            await self._notify_change()
+            if changed:
+                await self._notify_change()
 
         except Exception as e:
             log_error(f"Error handling service announcement: {e}")

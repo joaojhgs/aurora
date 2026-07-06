@@ -11,14 +11,17 @@ import hashlib
 import json
 import math
 import os
+import re
 import time
 import uuid
 from collections import deque
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging.audio_messages import AudioTopics
 from app.messaging.bus import Envelope
 from app.services.gateway.admin_action import AdminActionManager
 from app.shared.config.keys import ConfigKeys
@@ -71,7 +74,9 @@ from app.shared.contracts.models.gateway import (
 )
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.scheduler import SchedulerMethods
+from app.shared.contracts.models.stt import STTMethods, TranscriptionMethods, WakeWordMethods
 from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.registry import method_contract
 from app.shared.mesh.tracing import get_payload_correlation_id
 from app.shared.services.base_service import BaseService
@@ -111,6 +116,12 @@ _DIAGNOSTIC_REDACT_KEY_PARTS = (
     "token",
     "transcript",
     "url",
+)
+_LIVE_SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]{12,}"),
+    re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
+    re.compile(r"\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b"),
 )
 
 
@@ -268,6 +279,241 @@ def _event_from_envelope(envelope: Envelope) -> GatewayEventStreamEvent:
     )
 
 
+
+def _live_display_payload(topic: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a minimal live-only payload for interactive UI projection.
+
+    Gateway history and support bundles keep using ``redacted_payload``. This
+    live payload is only put on the in-process ``Aurora.EventStream`` broadcast
+    so local/web SDK subscribers can render chat transcripts and assistant
+    replies. Never include raw audio, credentials, tool arguments, file content,
+    or broad arbitrary payloads here.
+    """
+    if topic == OrchestratorMethods.RESPONSE:
+        result: dict[str, Any] = {}
+        _copy_string(payload, result, "kind")
+        _copy_string(payload, result, "text")
+        _copy_string(payload, result, "delta")
+        _copy_string(payload, result, "session_id")
+        _copy_string(payload, result, "request_id")
+        _copy_string(payload, result, "correlation_id")
+        _copy_string(payload, result, "message_id")
+        _copy_bool(payload, result, "is_final")
+        sequence = payload.get("sequence")
+        if isinstance(sequence, int) and sequence >= 0:
+            result["sequence"] = sequence
+        metadata = _safe_live_metadata(payload.get("metadata"))
+        if metadata:
+            result["metadata"] = metadata
+        tool = _safe_live_tool(payload.get("tool"))
+        if tool:
+            result["tool"] = tool
+        return result or None
+    if topic == TTSMethods.AUDIO_CHUNK:
+        result = {}
+        _copy_string(payload, result, "stream_id")
+        _copy_string(payload, result, "audio_data")
+        _copy_string(payload, result, "format")
+        _copy_string(payload, result, "reason")
+        _copy_string(payload, result, "correlation_id")
+        _copy_bool(payload, result, "is_final")
+        for key in ("sequence", "sample_rate", "channels", "source_sequence"):
+            value = payload.get(key)
+            if isinstance(value, int) and value >= 0:
+                result[key] = value
+        _copy_float(payload, result, "duration_ms")
+        return result or None
+    if topic in {STTMethods.USER_SPEECH_CAPTURED, STTMethods.FINAL, STTMethods.PARTIAL, TranscriptionMethods.RESULT}:
+        result = {}
+        _copy_string(payload, result, "session_id")
+        _copy_string(payload, result, "stream_id")
+        _copy_string(payload, result, "text")
+        _copy_string(payload, result, "transcript")
+        _copy_string(payload, result, "transcription")
+        _copy_string(payload, result, "transcription_type")
+        _copy_string(payload, result, "source")
+        _copy_string(payload, result, "timestamp")
+        _copy_bool(payload, result, "is_final")
+        _copy_float(payload, result, "confidence")
+        return result or None
+    if topic == WakeWordMethods.DETECTED:
+        result = {}
+        _copy_string(payload, result, "wake_word")
+        _copy_string(payload, result, "wakeWord")
+        _copy_string(payload, result, "timestamp")
+        _copy_float(payload, result, "confidence")
+        return result or None
+    if topic == STTMethods.SESSION_STARTED:
+        result = {}
+        _copy_string(payload, result, "session_id")
+        _copy_string(payload, result, "source")
+        _copy_string(payload, result, "wake_word")
+        _copy_string(payload, result, "wakeWord")
+        return result or None
+    if topic == STTMethods.AUDIO_LEVEL:
+        result = {}
+        _copy_string(payload, result, "session_id")
+        _copy_string(payload, result, "stream_id")
+        _copy_float(payload, result, "level")
+        _copy_float(payload, result, "peak")
+        _copy_bool(payload, result, "redacted")
+        bars = payload.get("bars")
+        if isinstance(bars, list):
+            safe_bars = [float(item) for item in bars if isinstance(item, int | float) and math.isfinite(float(item))]
+            if safe_bars:
+                result["bars"] = safe_bars[:96]
+        return result or None
+    return None
+
+
+def _copy_string(source: dict[str, Any], target: dict[str, Any], key: str) -> None:
+    value = source.get(key)
+    if isinstance(value, str) and value.strip():
+        target[key] = value
+
+
+def _copy_bool(source: dict[str, Any], target: dict[str, Any], key: str) -> None:
+    value = source.get(key)
+    if isinstance(value, bool):
+        target[key] = value
+
+
+def _copy_float(source: dict[str, Any], target: dict[str, Any], key: str) -> None:
+    value = source.get(key)
+    if isinstance(value, int | float) and math.isfinite(float(value)):
+        target[key] = float(value)
+
+
+def _safe_live_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    safe_keys = {
+        "source",
+        "stream",
+        "model",
+        "provider",
+        "provider_label",
+        "route",
+        "route_label",
+        "tts_status",
+        "tts_stream_id",
+        "tool_name",
+        "tool_status",
+    }
+    result: dict[str, Any] = {}
+    for key in safe_keys:
+        item = value.get(key)
+        if isinstance(item, str | bool) or (isinstance(item, int | float) and math.isfinite(float(item))):
+            result[key] = item
+    return result
+
+
+def _safe_live_string(value: Any, *, limit: int = 500) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.replace("\n", " ").strip()
+    for pattern in _LIVE_SECRET_VALUE_PATTERNS:
+        text = pattern.sub("<redacted>", text)
+    return text[:limit] if text else None
+
+
+_LIVE_PREVIEW_SECRET_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "auth",
+    "bearer",
+    "cookie",
+    "credential",
+    "jwt",
+    "password",
+    "redis_url",
+    "secret",
+    "signature",
+    "token",
+)
+
+
+def _is_live_preview_secret_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return any(part in normalized for part in _LIVE_PREVIEW_SECRET_KEY_PARTS)
+
+
+def _safe_live_preview_copy(value: Any, *, key: str = "", depth: int = 0) -> Any:
+    """Copy already-sanitized live tool previews without diagnostic over-redaction.
+
+    Diagnostics intentionally hash broad keys such as ``query`` and ``result``.
+    Assistant tool rows need the backend-redacted preview that Orchestrator
+    already produced, while still guarding obvious credential keys and values.
+    """
+
+    if depth > 4:
+        return "<truncated>"
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="python")
+    if _is_binary_summary(value):
+        return value
+    if _is_live_preview_secret_key(key):
+        digest = hashlib.sha256(repr(value).encode("utf-8", errors="replace")).hexdigest()
+        return {"redacted": True, "sha256": digest}
+    if isinstance(value, dict):
+        preview: dict[str, Any] = {}
+        for index, (nested_key, nested) in enumerate(value.items()):
+            if index >= 16:
+                preview["…"] = "<truncated>"
+                break
+            preview[str(nested_key)] = _safe_live_preview_copy(
+                nested, key=str(nested_key), depth=depth + 1
+            )
+        return preview
+    if isinstance(value, list | tuple | set):
+        items = [
+            _safe_live_preview_copy(item, key=key, depth=depth + 1)
+            for item in list(value)[:12]
+        ]
+        if len(value) > 12:
+            items.append("<truncated>")
+        return items
+    if isinstance(value, str):
+        return _safe_live_string(value, limit=1_000)
+    if isinstance(value, int | float):
+        return value if math.isfinite(float(value)) else None
+    if isinstance(value, bool) or value is None:
+        return value
+    return _safe_live_string(value, limit=500)
+
+
+def _safe_live_tool(value: Any) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="python")
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, Any] = {}
+    for key in (
+        "tool_call_id",
+        "tool_name",
+        "display_name",
+        "status",
+        "summary",
+        "risk_class",
+        "target",
+        "provider_id",
+        "policy_decision_id",
+        "error",
+    ):
+        item = _safe_live_string(value.get(key))
+        if item:
+            safe[key] = item
+    data_leaves = value.get("data_leaves_device")
+    if isinstance(data_leaves, bool):
+        safe["data_leaves_device"] = data_leaves
+    for key in ("redacted_args_preview", "result_preview", "error_details"):
+        item = value.get(key)
+        safe_item = _safe_live_preview_copy(item, key=key)
+        if safe_item not in (None, "", {}, []):
+            safe[key] = safe_item
+    return safe
+
+
 def _event_category(topic: str, payload: dict[str, Any]) -> str:
     if topic in {
         GatewayMethods.SERVICE_ANNOUNCE,
@@ -305,7 +551,8 @@ def _event_category(topic: str, payload: dict[str, Any]) -> str:
     if topic in {ToolingMethods.EXECUTE_TOOL}:
         return "tool_execution"
     if (
-        topic.startswith("AudioSession.")
+        topic.startswith("Audio.")
+        or topic.startswith("AudioSession.")
         or topic.startswith("STTCoordinator.")
         or topic.startswith("Transcription.")
         or topic.startswith("WakeWord.")
@@ -325,6 +572,39 @@ def _event_kind(topic: str, payload: dict[str, Any]) -> str:
     explicit = _first_string(payload, "kind", "event_kind", "eventKind", "type")
     if explicit:
         return explicit
+    if topic == WakeWordMethods.DETECTED:
+        return "voice.wakeword.detected"
+    if topic == STTMethods.SESSION_STARTED:
+        return "voice.session.started"
+    if topic == STTMethods.SESSION_ENDED:
+        return "voice.session.ended"
+    if topic == STTMethods.AUDIO_LEVEL:
+        return "voice.audio.level"
+    transcription_type = _first_string(payload, "transcription_type", "type")
+    if topic in {STTMethods.PARTIAL} or (
+        topic == TranscriptionMethods.RESULT
+        and transcription_type
+        and transcription_type.lower() in {"partial", "realtime"}
+    ):
+        return "voice.transcription.partial"
+    if topic in {STTMethods.USER_SPEECH_CAPTURED, STTMethods.FINAL, TranscriptionMethods.RESULT}:
+        return "voice.transcription.final"
+    if topic == STTMethods.TIMEOUT:
+        return "voice.timeout"
+    if topic in {STTMethods.ERROR, TranscriptionMethods.ERROR}:
+        return "voice.error"
+    if topic == TTSMethods.STARTED:
+        return "tts.started"
+    if topic == TTSMethods.STOPPED:
+        return "tts.stopped"
+    if topic == TTSMethods.PAUSED:
+        return "tts.paused"
+    if topic == TTSMethods.RESUMED:
+        return "tts.resumed"
+    if topic == TTSMethods.ERROR:
+        return "tts.error"
+    if topic == TTSMethods.AUDIO_CHUNK:
+        return "tts.audio_chunk"
     category = _event_category(topic, payload)
     status = _event_status(topic, payload)
     action = _event_action(topic, payload)
@@ -387,17 +667,45 @@ def _event_severity(topic: str, payload: dict[str, Any]) -> str:
 
 def _payload_dict(payload: Any) -> dict[str, Any]:
     if hasattr(payload, "model_dump"):
-        value = payload.model_dump(mode="json")
+        value = _json_safe_value(payload.model_dump(mode="python"))
     elif isinstance(payload, dict):
-        value = payload
+        value = _json_safe_value(payload)
     else:
-        value = {"value": str(payload)}
+        value = {"value": _json_safe_value(payload)}
     return value if isinstance(value, dict) else {"value": value}
 
 
 def _model_dump(value: Any) -> Any:
     if hasattr(value, "model_dump"):
-        return value.model_dump(mode="json")
+        return _json_safe_value(value.model_dump(mode="python"))
+    return _json_safe_value(value)
+
+
+def _json_safe_value(value: Any) -> Any:
+    """Return a JSON-safe value without exposing raw binary payloads.
+
+    Event-stream diagnostics intentionally never include raw audio, tokens, or file
+    contents. Pydantic's JSON mode attempts to UTF-8 decode bytes, which is both
+    unsafe for raw PCM and can crash on arbitrary binary audio frames. Summarize
+    bytes with length and digest so support bundles remain correlatable without
+    leaking microphone data.
+    """
+    if isinstance(value, bytes | bytearray | memoryview):
+        raw = bytes(value)
+        return {
+            "redacted": True,
+            "kind": "binary",
+            "byte_length": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {str(key): _json_safe_value(nested) for key, nested in value.items()}
+    if isinstance(value, list | tuple | set):
+        return [_json_safe_value(item) for item in value]
     return value
 
 
@@ -412,7 +720,9 @@ def _details_dict(details: Any) -> dict[str, Any]:
 
 def _diagnostic_redacted_copy(value: Any) -> Any:
     if hasattr(value, "model_dump"):
-        value = value.model_dump(mode="json")
+        value = _json_safe_value(value.model_dump(mode="python"))
+    else:
+        value = _json_safe_value(value)
     if isinstance(value, dict):
         return {
             str(key): _diagnostic_redacted_value(str(key), nested) for key, nested in value.items()
@@ -427,10 +737,22 @@ def _diagnostic_redacted_value(key: str, value: Any) -> Any:
         details = _details_dict(value)
         if details:
             return _diagnostic_redacted_copy(details)
+    if _is_binary_summary(value):
+        return value
     if _is_diagnostic_secret_key(key):
         digest = hashlib.sha256(repr(value).encode("utf-8", errors="replace")).hexdigest()
         return {"redacted": True, "sha256": digest}
     return _diagnostic_redacted_copy(value)
+
+
+def _is_binary_summary(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("redacted") is True
+        and value.get("kind") == "binary"
+        and isinstance(value.get("byte_length"), int)
+        and isinstance(value.get("sha256"), str)
+    )
 
 
 def _is_diagnostic_secret_key(key: str) -> bool:
@@ -1110,14 +1432,17 @@ class GatewayService(BaseService):
 
     async def _capture_gateway_event(self, envelope: Envelope) -> None:
         """Capture bus events into a redacted normalized stream."""
-        if envelope.type == AuroraMethods.EVENT_STREAM:
+        if envelope.type in {AuroraMethods.EVENT_STREAM, AudioTopics.STREAM_MICROPHONE}:
             return
+        payload = _payload_dict(envelope.payload)
         event = _event_from_envelope(envelope)
         self._event_stream.appendleft(event)
+        live_payload = _live_display_payload(envelope.type, payload)
+        live_event = event.model_copy(update={"payload": live_payload}) if live_payload else event
         with contextlib.suppress(Exception):
             await self.bus.publish(
                 AuroraMethods.EVENT_STREAM,
-                event,
+                live_event,
                 event=True,
                 mesh=False,
                 origin="internal",
@@ -1471,6 +1796,10 @@ class GatewayService(BaseService):
             auth_d = auth_conf.model_dump(mode="python")
 
             api_d = dict(gw_d.get("api") or {})
+            if os.environ.get("AURORA_TAURI_MANAGED_SIDECAR") == "1":
+                api_d["host"] = os.environ.get("AURORA_GATEWAY_HOST", api_d.get("host", "127.0.0.1"))
+                if os.environ.get("AURORA_GATEWAY_PORT"):
+                    api_d["port"] = int(os.environ["AURORA_GATEWAY_PORT"])
             if "token_secret" in api_d:
                 api_d["token_secret"] = _config_secret_plain(api_d.get("token_secret"))
 
@@ -1898,6 +2227,10 @@ class GatewayService(BaseService):
                 from app.shared.contracts.models.mesh import (
                     MeshPeerUpdateConnectionRequest,
                 )
+                from app.shared.contracts.models.tooling import (
+                    ToolingMethods,
+                    ToolingRemoteCatalogRemoved,
+                )
 
                 await bus_for_callbacks.request(
                     AuthMethods.MESH_UPDATE_PEER_CONNECTION,
@@ -1907,6 +2240,15 @@ class GatewayService(BaseService):
                         connection_status="disconnected",
                     ),
                     timeout=5.0,
+                )
+                await bus_for_callbacks.publish(
+                    ToolingMethods.REMOTE_CATALOG_REMOVED,
+                    ToolingRemoteCatalogRemoved(
+                        peer_id=p_id,
+                        reason="mesh_peer_removed",
+                    ),
+                    event=True,
+                    origin="internal",
                 )
 
             async def _on_peer_status_changed(p_id: str, p_name: str, p_status: str) -> None:

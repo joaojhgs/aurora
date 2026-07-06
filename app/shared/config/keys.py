@@ -691,6 +691,7 @@ class _ServicesToolingApprovalPolicyConfigPath(ConfigPath):
     default_approval_mode: ConfigPath
     default_share: ConfigPath
     default_token_ttl_seconds: ConfigPath
+    policy_mode: ConfigPath
     rules: ConfigPath
 
     def __new__(cls) -> _ServicesToolingApprovalPolicyConfigPath:
@@ -699,6 +700,7 @@ class _ServicesToolingApprovalPolicyConfigPath(ConfigPath):
             "services.tooling.approval_policy.default_approval_mode"
         )
         self.default_share = ConfigPath("services.tooling.approval_policy.default_share")
+        self.policy_mode = ConfigPath("services.tooling.approval_policy.policy_mode")
         self.default_token_ttl_seconds = ConfigPath(
             "services.tooling.approval_policy.default_token_ttl_seconds"
         )
@@ -956,6 +958,15 @@ class _ServicesTtsConfigPath(ConfigPath):
         return self
 
 
+class _UiAssistantConfigPath(ConfigPath):
+    automatic_tts_readback: ConfigPath
+
+    def __new__(cls) -> _UiAssistantConfigPath:
+        self = super().__new__(cls, "ui.assistant")
+        self.automatic_tts_readback = ConfigPath("ui.assistant.automatic_tts_readback")
+        return self
+
+
 class _ServicesConfigPath(ConfigPath):
     auth: _ServicesAuthConfigPath
     config: _ServicesConfigConfigPath
@@ -992,12 +1003,14 @@ class _SystemConfigPath(ConfigPath):
 
 class _UiConfigPath(ConfigPath):
     activate: ConfigPath
+    assistant: _UiAssistantConfigPath
     dark_mode: ConfigPath
     debug: ConfigPath
 
     def __new__(cls) -> _UiConfigPath:
         self = super().__new__(cls, "ui")
         self.activate = ConfigPath("ui.activate")
+        self.assistant = _UiAssistantConfigPath()
         self.dark_mode = ConfigPath("ui.dark_mode")
         self.debug = ConfigPath("ui.debug")
         return self

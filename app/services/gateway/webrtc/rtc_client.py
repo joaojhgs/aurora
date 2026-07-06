@@ -671,6 +671,44 @@ class RTCClient:
         self._peer_bridge = peer_bridge
         log_info("RTCClient: Mesh P2P configured")
 
+
+    def _local_shares_tooling(self) -> bool:
+        if not self._mesh_config:
+            return False
+        service_cfg = getattr(self._mesh_config, "services", {}).get("Tooling")
+        return bool(service_cfg and getattr(service_cfg, "share", False))
+
+    @staticmethod
+    def _manifest_shares_tooling(manifest: Any) -> bool:
+        return any(service.module == "Tooling" for service in getattr(manifest, "shared_services", []))
+
+    async def _request_tooling_catalog_sync(self, peer_id: str, *, reason: str) -> None:
+        """Ask the local Tooling service to re-announce its catalog over mesh.
+
+        The forwarded catalog event is normalized by RPCHandler on the receiving
+        peer, so local sentinel provider ids do not leak into remote caches.
+        """
+
+        if not self._local_shares_tooling():
+            return
+        try:
+            from app.messaging.priority_helpers import get_system_priority
+            from app.shared.contracts.models.tooling import (
+                ToolingMethods,
+                ToolingRemoteCatalogRefreshRequested,
+            )
+
+            await self._bus.publish(
+                ToolingMethods.REMOTE_CATALOG_REFRESH_REQUESTED,
+                ToolingRemoteCatalogRefreshRequested(peer_id=None, reason=reason),
+                event=True,
+                priority=get_system_priority(),
+                origin="internal",
+            )
+            log_debug(f"RTCClient: Requested Tooling catalog sync after {reason} with {peer_id}")
+        except Exception as exc:
+            log_warning(f"RTCClient: Tooling catalog sync request failed for {peer_id}: {exc}")
+
     async def _send_manifest(self, peer_id: str) -> None:
         """Send our local manifest to a peer after authentication.
 
@@ -727,6 +765,12 @@ class RTCClient:
             ack_msg = manifest_ack_to_dict(ack)
             self.send_to_peer(stable_peer_id, json.dumps(ack_msg))
             log_debug(f"RTCClient: Sent manifest ACK to peer {stable_peer_id}")
+
+        if self._manifest_shares_tooling(manifest) and self._local_shares_tooling():
+            await self._request_tooling_catalog_sync(
+                stable_peer_id,
+                reason="peer_manifest_tooling_shared",
+            )
 
     async def _on_manifest_ack(self, peer_id: str, data: dict) -> None:
         """Process an incoming manifest ACK from a peer.

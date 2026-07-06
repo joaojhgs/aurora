@@ -10,6 +10,13 @@ from pydantic import AnyUrl, Field, SecretStr, constr
 from app.shared.config.models_base import BaseConfigModel
 
 
+class Assistant(BaseConfigModel):
+    automatic_tts_readback: bool | None = False
+    """
+    Automatically play TTS for assistant replies initiated from typed UI prompts. Voice-origin prompts always keep voice-to-voice readback.
+    """
+
+
 class Ui(BaseConfigModel):
     activate: bool | None = False
     """
@@ -22,6 +29,10 @@ class Ui(BaseConfigModel):
     debug: bool | None = False
     """
     Enable debug mode for verbose logging
+    """
+    assistant: Assistant | None = None
+    """
+    Assistant UI behavior settings
     """
 
 
@@ -764,7 +775,7 @@ class Coordinator(BaseConfigModel):
     Enable STT coordinator
     """
     mesh_sharing: MeshSharing | None = None
-    session_timeout_s: float | None = Field(10.0, ge=1.0, le=300.0)
+    session_timeout_s: float | None = Field(30.0, ge=1.0, le=300.0)
     """
     Session timeout in seconds
     """
@@ -921,6 +932,12 @@ class ToolingApprovalPolicy(BaseConfigModel):
     ) = "approve_all_local_safe"
     """
     Default approval behavior when no scoped rule matches
+    """
+    policy_mode: (
+        Literal["enforce", "dry_run_only", "deny_all", "unrestricted_except_blocked"] | None
+    ) = "enforce"
+    """
+    Global Tooling policy mode. unrestricted_except_blocked bypasses approval prompts only for non-blocked tools and remains admin/operator controlled.
     """
     default_token_ttl_seconds: int | None = Field(300, ge=1)
     """

@@ -11,6 +11,7 @@ from app.shared.contracts.models.scheduler import (
     SchedulerCancelJobRequest,
     SchedulerListJobsRequest,
     SchedulerMethods,
+    SchedulerScheduleActionRequest,
     SchedulerScheduleJobRequest,
 )
 from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
@@ -118,6 +119,10 @@ async def test_handle_call_success(rpc_handler, mock_registry, mock_bus):
         timeout=30.0,
         origin="external",
         principal_id="peer-user",
+        effective_perms=["user"],
+        identity_source="webrtc_rpc",
+        method_type="use",
+        caller_peer_id=None,
         correlation_id="req-123",
     )
 
@@ -223,6 +228,25 @@ async def test_handle_call_uses_explicit_correlation_id(
             },
         ),
         (
+            SchedulerMethods.SCHEDULE_ACTION,
+            "ScheduleAction",
+            SchedulerScheduleActionRequest,
+            {
+                "name": "spoof typed schedule",
+                "schedule": "* * * * *",
+                "action_spec": {
+                    "kind": "tooling.execute",
+                    "binding": {"tool_name": "reminder"},
+                    "arguments": {"message": "hello"},
+                    "caller_peer_id": "victim-peer",
+                    "caller_principal_id": "victim-principal",
+                },
+                "caller_peer_id": "victim-peer",
+                "caller_principal_id": "victim-principal",
+                "correlation_id": "spoofed-correlation",
+            },
+        ),
+        (
             SchedulerMethods.CANCEL,
             "Cancel",
             SchedulerCancelJobRequest,
@@ -288,8 +312,11 @@ async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
     assert isinstance(typed_request, input_model)
     assert typed_request.caller_peer_id == "real-peer"
     assert typed_request.caller_principal_id == "peer-user"
-    if topic == SchedulerMethods.SCHEDULE:
+    if topic in {SchedulerMethods.SCHEDULE, SchedulerMethods.SCHEDULE_ACTION}:
         assert typed_request.correlation_id == "rpc-456"
+    if topic == SchedulerMethods.SCHEDULE_ACTION:
+        assert typed_request.action_spec.caller_peer_id == "victim-peer"
+        assert typed_request.action_spec.caller_principal_id == "victim-principal"
 
 
 @pytest.mark.asyncio
@@ -756,3 +783,59 @@ async def test_handle_call_datetime_in_response(rpc_handler, mock_registry, mock
     assert response["type"] == "result"
     assert response["id"] == "dt-1"
     assert response["result"]["expires_at"] == "2025-07-01T12:00:00"
+
+
+@pytest.mark.parametrize(
+    "claimed_peer_id,claimed_provider_id,claimed_service_instance_id",
+    [
+        ("local", "local", "local:Tooling"),
+        ("victim-peer", "victim-provider", "remote:victim-peer:Tooling"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_forwarded_tooling_catalog_event_is_bound_to_authenticated_peer(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+    claimed_peer_id,
+    claimed_provider_id,
+    claimed_service_instance_id,
+):
+    """Mesh-forwarded catalog identity is always rewritten to the source peer."""
+
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        peer_id="stable-remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": ToolingMethods.REMOTE_CATALOG_ANNOUNCED,
+                "params": {
+                    "peer_id": claimed_peer_id,
+                    "service_instance_id": claimed_service_instance_id,
+                    "provider_id": claimed_provider_id,
+                    "catalog_epoch": 1,
+                    "generated_at": "2026-07-05T00:00:00Z",
+                    "full_schema_hash": "hash",
+                    "tools": [],
+                    "shared_by_policy": True,
+                },
+                "correlation_id": "catalog-sync-1",
+            }
+        )
+    )
+
+    mock_bus.publish.assert_awaited_once()
+    _, payload = mock_bus.publish.await_args.args[:2]
+    assert payload["peer_id"] == "stable-remote-peer"
+    assert payload["provider_id"] == "stable-remote-peer"
+    assert payload["service_instance_id"] == "remote:stable-remote-peer:Tooling"
+    assert mock_bus.publish.await_args.kwargs["caller_peer_id"] == "stable-remote-peer"
+    assert mock_bus.publish.await_args.kwargs["origin"] == "mesh_forwarded"
