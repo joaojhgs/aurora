@@ -46,6 +46,18 @@ Gateway event streams expose selected backend events through SDK-compatible shap
 
 UI code should consume events through `AuroraClient`, not raw SSE or Tauri commands.
 
+### Assistant token/tool/TTS stream contract
+
+Assistant generation uses the typed bus first, then the Gateway live-event bridge, then the SDK stream helpers. Frontend code must not infer assistant state from logs or private service objects.
+
+- `Orchestrator.Response` publishes `AssistantStreamEvent` payloads with `kind`, `delta`, cumulative `text`, `sequence`, `session_id`, `request_id`, `correlation_id`, `metadata`, and an optional redacted `tool` state.
+- Token updates use `assistant.delta`; terminal states use `assistant.completed` or `assistant.failed`.
+- Tool updates use `tool.requested`, `tool.running`, `tool.completed`, `tool.failed`, and `tool.requires_action`; args/results exposed to clients must be safe previews, never raw secrets.
+- Low-latency TTS uses `TTS.StreamStart`, `TTS.StreamChunk`, and `TTS.StreamEnd` commands plus `TTS.AudioChunk` events. `TTSStreamStartRequest.play_on_server` controls whether the TTS service also speaks through the local audio output.
+- Gateway event subscriptions for assistant response streams may include both `Orchestrator.Response` and `TTS.AudioChunk` when correlated to an `Orchestrator.use` request.
+
+Desktop daemon/STT-origin voice requests start streamed TTS with server playback enabled. Web, thin, and mobile UI read-aloud paths should consume `TTS.AudioChunk` through the SDK and play client-side unless a platform-specific native bridge explicitly owns playback.
+
 ## SDK conformance
 
 `SDK Backend Contract Conformance` checks prevent silent drift between backend contracts and TypeScript fixtures. The conformance docs live in [`SDK_BACKEND_CONFORMANCE_CI.md`](SDK_BACKEND_CONFORMANCE_CI.md).
@@ -63,3 +75,51 @@ pnpm --filter @aurora/client test:resilience
 - Use `docs/SERVICE_METHODS_REFERENCE.md` for human-readable service method summaries.
 - Use subsystem docs for policy/architecture details.
 - Do not create one-off method report docs. If a report is generated, publish it as a CI artifact or local `.artifacts/` output.
+
+
+## Scheduler typed actions and Tooling policy contracts
+
+New scheduler integrations should call `Scheduler.ScheduleAction`, not write
+callback strings. The request contains a discriminated `SchedulerActionSpec`:
+
+- `tts.speak` publishes the typed TTS request at fire time.
+- `orchestrator.user_input` publishes local scheduler-origin input only for
+  supported local contexts.
+- `tooling.execute` first calls `Tooling.PrepareExecution` at schedule time and
+  later calls `Tooling.ExecuteTool` at fire time.
+
+For Tooling actions, `PrepareExecution` is the gate that resolves the local or
+mesh provider, validates arguments against the current tool schema, returns a
+normalized `SchedulerToolBinding`, and reports policy/approval state. The
+scheduler persists the returned provider IDs, `global_tool_id`,
+`args_schema_hash`, policy decision, resource selector, and correlation ID with
+the job. `ExecuteTool` re-checks the stored schema hash and arguments before the
+tool is invoked, so schema drift, removed remote tools, revoked grants, and
+malformed payloads fail closed.
+
+Runtime approval state is DB-backed: config defaults describe static policy
+(`approve_all_local_safe`, `ask_each_time`, `deny_all`, `dry_run_only`,
+`unrestricted_except_blocked`), while grants, revocations, pending runtime
+approvals, and remote Tooling catalog snapshots are durable runtime records.
+Recurring schedules that need approval use a durable `scheduled_execution`
+grant; one-shot UI tokens are never stored as the authority for future firings.
+Mesh Tooling catalogs are negotiated and cached by Tooling on peer
+connect/reconnect/re-announcement. Orchestrator, Scheduler, SDK, and admin
+surfaces must read that cache and still call `PrepareExecution` before creating
+a job; they must not live-fanout to every peer on the user hot path.
+
+### Tooling source-first management console
+
+Aurora's `/tools` UI is the operator-facing control center for tool catalog policy. It is source-first rather than tool-card-first: core tools, MCP servers, plugins, mesh peers, unknown/quarantined sources, and blocked sources are grouped in a source rail, and individual tools expand only after a source is selected. The page consumes the Aurora SDK only; it does not call Python services directly.
+
+Backend authority stays in Tooling/Auth/Config contracts:
+
+- `Tooling.GetPolicySummary` reports global policy mode, default approval behavior, counts, and redaction state.
+- `Tooling.ListToolSources` and `Tooling.GetToolSourceDetail` expose grouped source rows, selected-source tools, grants, policy rules, pending approvals, and mesh cache metadata.
+- `Tooling.SetPolicyMode`, `Tooling.UpsertSourcePolicy`, and `Tooling.UpsertToolPolicyOverride` are manage methods guarded by `Tooling.manage`; dangerous unrestricted mode requires the confirmation text `ALLOW NON-BLOCKED TOOLS`.
+- `Tooling.ListPendingApprovals` and `Tooling.ListPolicyAuditEvents` provide redacted management queues/history. Assistant inline approval remains separate: it resumes one exact paused tool call in the assistant thread, while `/tools` manages durable policy/grants.
+- `Tooling.TestMCPSource`, `Tooling.CreateMCPSource`, `Tooling.TestPluginSource`, and `Tooling.CreatePluginSource` provide UI-safe onboarding contracts. Until a concrete backend installer/connector is available, these contracts return explicit unsupported results with secrets redacted.
+
+Mesh tool catalogs shown here come from negotiated/cached Tooling announcements. The UI must not fan out to peers during prompt or page render; it displays epoch/hash/stale/unshared/removed state from the local Tooling cache. Newly announced child tools require review unless the operator explicitly enabled future-tool trust.
+
+Surface behavior is resolved through `getAuroraSurfaceProfile`: desktop-local may show local sidecar affordances, desktop/web thin show Gateway-backed controls only, and Android/iOS/mobile must not claim a Python sidecar. Demo/mock data must be labeled as fixture/demo.

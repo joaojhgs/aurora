@@ -39,6 +39,17 @@ See [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md).
 
 The SDK preserves method IDs, bus topics, selector/audit metadata, redaction information, and backend evidence. Tauri IPC and mock transports are not independent sources of truth for service state.
 
+## Assistant streaming and voice playback
+
+Assistant screens consume `AuroraClient.assistant.streamMessage(...)` and `streamVoiceAssistantResponses(...)`. Those helpers subscribe to `Orchestrator.Response` for token/tool state and `TTS.AudioChunk` for streamed speech, then normalize everything into `AssistantStreamUpdate`. Shared UI components should render only SDK updates.
+
+Platform playback rules:
+
+- Desktop local daemon/STT requests keep wakeword and background capture in Python services. The orchestrator starts `TTS.StreamStart` with `play_on_server=true`, so the local TTS service speaks even if the WebView is minimized.
+- Desktop thin, web thin, and mobile push-to-talk/read-aloud paths use client playback from `TTS.AudioChunk` events unless a native bridge later advertises a tested playback surface.
+- UI-origin text messages do not auto-read responses unless runtime config enables the UI assistant readback preference.
+- Tool-call cards must use redacted stream previews from the SDK; no component may display raw tool args, tokens, audio, or unredacted support data.
+
 ## Tauri desktop modes
 
 | Mode | Behavior |
@@ -97,3 +108,21 @@ pnpm --filter @aurora/tauri-ui ios:policy
 ```
 
 Run `pnpm --filter @aurora/tauri-ui dev:smoke` in a GUI-capable environment when validating the desktop-local sidecar/WebView path. Run iOS build/preflight commands only on macOS with Xcode.
+
+- Assistant streaming requests pass `clientTtsPlayback` through the SDK to keep desktop-local server playback distinct from web/thin/mobile client playback.
+
+### Tooling source-first management console
+
+Aurora's `/tools` UI is the operator-facing control center for tool catalog policy. It is source-first rather than tool-card-first: core tools, MCP servers, plugins, mesh peers, unknown/quarantined sources, and blocked sources are grouped in a source rail, and individual tools expand only after a source is selected. The page consumes the Aurora SDK only; it does not call Python services directly.
+
+Backend authority stays in Tooling/Auth/Config contracts:
+
+- `Tooling.GetPolicySummary` reports global policy mode, default approval behavior, counts, and redaction state.
+- `Tooling.ListToolSources` and `Tooling.GetToolSourceDetail` expose grouped source rows, selected-source tools, grants, policy rules, pending approvals, and mesh cache metadata.
+- `Tooling.SetPolicyMode`, `Tooling.UpsertSourcePolicy`, and `Tooling.UpsertToolPolicyOverride` are manage methods guarded by `Tooling.manage`; dangerous unrestricted mode requires the confirmation text `ALLOW NON-BLOCKED TOOLS`.
+- `Tooling.ListPendingApprovals` and `Tooling.ListPolicyAuditEvents` provide redacted management queues/history. Assistant inline approval remains separate: it resumes one exact paused tool call in the assistant thread, while `/tools` manages durable policy/grants.
+- `Tooling.TestMCPSource`, `Tooling.CreateMCPSource`, `Tooling.TestPluginSource`, and `Tooling.CreatePluginSource` provide UI-safe onboarding contracts. Until a concrete backend installer/connector is available, these contracts return explicit unsupported results with secrets redacted.
+
+Mesh tool catalogs shown here come from negotiated/cached Tooling announcements. The UI must not fan out to peers during prompt or page render; it displays epoch/hash/stale/unshared/removed state from the local Tooling cache. Newly announced child tools require review unless the operator explicitly enabled future-tool trust.
+
+Surface behavior is resolved through `getAuroraSurfaceProfile`: desktop-local may show local sidecar affordances, desktop/web thin show Gateway-backed controls only, and Android/iOS/mobile must not claim a Python sidecar. Demo/mock data must be labeled as fixture/demo.

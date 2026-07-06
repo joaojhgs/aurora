@@ -501,7 +501,7 @@ make clean                       # Remove temp files
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **aurora** (3585 symbols, 11757 relationships, 293 execution flows).
+This project is indexed by GitNexus as **aurora** (8464 symbols, 26632 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 
@@ -560,3 +560,10 @@ RETURN caller.name, caller.filePath
 ```
 
 <!-- gitnexus:end -->
+
+## Aurora UI Platform and Voice Contract Memory
+
+- All Aurora UI fixes must preserve the multi-surface contract unless the change is explicitly platform-specific: desktop Tauri local, desktop Tauri thin, web thin, Android, and iOS must route through centralized surface detection rather than ad hoc transport checks.
+- Use `packages/aurora-ui/src/platform-surface.ts` (`getAuroraSurfaceProfile`) as the single source for desktop-local vs desktop-thin vs web vs Android/iOS/mobile behavior. Add new platform capability flags there first, then consume them from pages/components.
+- Voice ownership is split intentionally: desktop-local daemon wakeword/background capture remains owned by `STTCoordinator`; focused push-to-talk and visual waveform capture use WebView/browser microphone capture when available. Thin web wakeword may use focused WebView/Gateway streaming only while the page is focused. Mobile push-to-talk may use focused WebView capture, while durable wake/background behavior requires platform-native adapters.
+- Any new bus method or event must follow the typed contract process: add constants and IO models under `app/shared/contracts/models/`, implement with `@method_contract` and correct `exposure`/`method_type`/permissions, route only via bus/SDK/Gateway boundaries, update SDK descriptors/types, and add tests proving redaction plus route/event behavior. Never introduce literal bus topics.

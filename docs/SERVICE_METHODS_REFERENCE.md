@@ -330,7 +330,8 @@ Job scheduling using cron expressions.
 
 | Method ID | Summary | Input | Output | Exposure |
 |-----------|---------|-------|--------|----------|
-| `Scheduler.Schedule` | Schedule a new job | `SchedulerScheduleJobRequest` | `EmptyOutput` | **both, manage** |
+| `Scheduler.Schedule` | Legacy compatibility adapter for typed scheduling | `SchedulerScheduleJobRequest` | `EmptyOutput` | **both, manage** |
+| `Scheduler.ScheduleAction` | Schedule a validated typed bus action | `SchedulerScheduleActionRequest` | `SchedulerScheduleActionResponse` | **both, manage** |
 | `Scheduler.Cancel` | Cancel a job | `SchedulerCancelJobRequest` | `EmptyOutput` | **both, manage** |
 | `Scheduler.Pause` | Pause a job | `SchedulerPauseJobRequest` | `SchedulerActionResponse` | **both, manage, degraded** |
 | `Scheduler.Resume` | Resume a paused job | `SchedulerResumeJobRequest` | `SchedulerActionResponse` | **both, manage, degraded** |
@@ -360,6 +361,60 @@ SchedulerScheduleJobRequest(
     caller_principal_id: str | None = None   # Injected for mesh callers
 )
 ```
+
+
+#### `Scheduler.ScheduleAction` (Both)
+```python
+# Input
+SchedulerScheduleActionRequest(
+    name: str,
+    schedule: str,
+    action_spec: SchedulerActionSpec,  # tooling.execute | tts.speak | orchestrator.user_input
+    enabled: bool = True,
+    timezone: str | None = None,
+    source: str | None = None,
+    privacy_class: str | None = None,
+    namespace: str | None = None,
+    owner_peer_id: str | None = None,
+    owner_principal_id: str | None = None,
+    target_selector: MeshAddressSelector | None = None,
+    delegated_permissions: list[str] = [],
+    delegated_approval_token: str | None = None,
+    correlation_id: str | None = None,
+    caller_peer_id: str | None = None,
+    caller_principal_id: str | None = None,
+)
+
+# Output
+SchedulerScheduleActionResponse(
+    ok: bool,
+    job_id: str | None,
+    status: "scheduled" | "denied" | "invalid" | "failed",
+    reason: str | None,
+    prepared_tool: SchedulerToolBinding | None,
+    policy_decision_id: str | None,
+    correlation_id: str | None,
+)
+```
+
+`Scheduler.ScheduleAction` is the production scheduling surface. New jobs persist
+a typed `action_spec` and the reserved callback sentinel
+`__typed_action__.execute_action_spec` for migration compatibility; they do not
+persist executable Python import paths. `tooling.execute` actions are prepared
+before persistence by calling `Tooling.PrepareExecution`, which validates the
+selected tool, schema-derived arguments, mesh selector, policy decision, durable
+`schedule_execution` approval grant, resource selector, and expected argument
+schema hash. Fire time calls `Tooling.ExecuteTool` through the bus with the
+stored binding and schema hash, so local and mesh-peer tools use the same
+contract path.
+
+`SchedulerToolBinding` records the normalized `local_tool_name`,
+`global_tool_id`, provider peer/service IDs, `args_schema_hash`, and catalog
+generation metadata returned by Tooling. Job list and fired/completed events
+include action kind, provider IDs, policy/grant IDs, correlation ID, and error
+summary when available. `Scheduler.Schedule` remains only a compatibility
+adapter that translates known legacy strings into `Scheduler.ScheduleAction`; it
+must not write a second DB row.
 
 #### `Scheduler.ListJobs` (Both)
 ```python
@@ -729,6 +784,7 @@ These methods are exposed via HTTP POST at `/api/{service}/{method}`:
 | WakeWord | Detect | `POST /api/wakeword/detect` |
 | Orchestrator | ExternalUserInput | `POST /api/orchestrator/externaluserinput` |
 | Scheduler | Schedule | `POST /api/scheduler/schedule` |
+| Scheduler | ScheduleAction | `POST /api/scheduler/scheduleaction` |
 | Scheduler | Cancel | `POST /api/scheduler/cancel` |
 | Scheduler | Pause | `POST /api/scheduler/pause` |
 | Scheduler | Resume | `POST /api/scheduler/resume` |

@@ -1,90 +1,67 @@
 {
   "version": 1,
-  "createdAt": "2026-07-02T21:17:36.463Z",
-  "updatedAt": "2026-07-02T22:47:43.351Z",
+  "createdAt": "2026-07-06T02:50:50.006Z",
+  "updatedAt": "2026-07-06T05:54:17.262Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
   "codexGoalMode": "aggregate",
   "goals": [
     {
-      "id": "G001-web-auth-session-onboarding-tokens-s",
-      "title": "Web auth/session: onboarding tokens/session state must actually autho...",
-      "objective": "Web auth/session: onboarding tokens/session state must actually authorize browser Gateway transport calls without persisting secrets in browser storage. Add regression coverage for the previous false-authenticated state.",
-      "status": "complete",
-      "attempt": 1,
-      "createdAt": "2026-07-02T21:17:36.463Z",
-      "updatedAt": "2026-07-02T21:27:56.330Z",
-      "startedAt": "2026-07-02T21:17:36.910Z",
-      "completedAt": "2026-07-02T21:27:56.330Z",
-      "evidence": "Web auth/session fixed: SDK AuthApi stores ephemeral bearer token in AuthSession, browser HttpGatewayTransport reads client.auth.bearerToken dynamically, browser client identity cached, client.auth.clear removes Authorization. Verified pnpm --filter @aurora/web test -- app/aurora-client.test.ts and pnpm --filter @aurora/client test -- tests/client.test.ts."
-    },
-    {
-      "id": "G002-adminaction-security-remove-hardcode",
-      "title": "AdminAction security: remove hardcoded reauthConfirmed:true from admi...",
-      "objective": "AdminAction security: remove hardcoded reauthConfirmed:true from admin/native-sensitive UI actions. Require an explicit in-session admin confirmation/unlock path or reasoned AdminAction gate and add tests proving actions cannot silently submit without confirmation.",
+      "id": "G001-backend-contract-read-model-gap-clos",
+      "title": "Backend contract/read-model gap closure",
+      "objective": "Backend contract/read-model gap closure\nInspect current Tooling/Scheduler/Orchestrator contracts and implement any missing typed backend methods/read models required by the plan: policy summary, source list/detail, source/tool policy overrides, grants, pending approvals, policy audit/history, MCP/plugin onboarding/test where supported, mesh catalog status, scheduler dependencies.\nAdd/adjust config schema/defaults only when backend policy state requires it and regenerate config models/keys/defaults.\nAdd backend tests for redaction, policy precedence, grants, pending approvals, mesh catalog lifecycle/staleness, scheduler dependencies, and audit mutations.",
       "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-07-02T21:17:36.463Z",
-      "updatedAt": "2026-07-02T21:27:56.616Z",
-      "completedAt": "2026-07-02T21:27:56.616Z",
-      "evidence": "AdminAction fixed: rg reauthConfirmed:true over packages/aurora-ui/src has no matches; sensitive actions require explicit in-session unlock and pass actual state. Verified pnpm --filter @aurora/ui typecheck and focused AdminAction tests."
+      "createdAt": "2026-07-06T02:50:50.006Z",
+      "updatedAt": "2026-07-06T05:51:45.058Z",
+      "completedAt": "2026-07-06T05:51:45.058Z",
+      "evidence": "Completed and verified Tooling Page UI execution scope for G001-backend-contract-read-model-gap-clos; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
     },
     {
-      "id": "G003-assistant-ux-make-chat-composer-the",
-      "title": "Assistant UX: make chat/composer the primary first-viewport task whil...",
-      "objective": "Assistant UX: make chat/composer the primary first-viewport task while preserving route/privacy/tool/voice evidence. Add screenshot/route assertions so the composer remains visible.",
+      "id": "G002-sdk-tooling-management-api",
+      "title": "SDK Tooling management API",
+      "objective": "SDK Tooling management API\nAdd typed SDK models and client methods for the backend read/write surfaces above.\nUpdate descriptors, fixtures, mock client, normalizers, package exports, and SDK tests.\nEnsure request paths are Gateway-compatible and redaction metadata is preserved.",
       "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-07-02T21:17:36.463Z",
-      "updatedAt": "2026-07-02T21:27:56.909Z",
-      "completedAt": "2026-07-02T21:27:56.909Z",
-      "evidence": "Assistant UX fixed by moving composer into first chat workspace with data-first-viewport-task marker and CSS density changes. Verified accessibility responsive visual focused tests per subagent and package typecheck."
+      "createdAt": "2026-07-06T02:50:50.006Z",
+      "updatedAt": "2026-07-06T05:51:45.518Z",
+      "completedAt": "2026-07-06T05:51:45.518Z",
+      "evidence": "Completed and verified Tooling Page UI execution scope for G002-sdk-tooling-management-api; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
     },
     {
-      "id": "G004-platform-admin-truthfulness-fix-admi",
-      "title": "Platform/admin truthfulness: fix admin overview desktop-thin/tauri-lo...",
-      "objective": "Platform/admin truthfulness: fix admin overview desktop-thin/tauri-local mode labels and availability semantics with tests.",
+      "id": "G003-tools-ui-architecture-and-source-fir",
+      "title": "`/tools` UI architecture and source-first page",
+      "objective": "`/tools` UI architecture and source-first page\nReplace/split `packages/aurora-ui/src/tool-approval-panel.tsx` into a production source-first tooling console under `packages/aurora-ui/src/tooling/` as described in the plan.\nBuild responsive dark UI using existing Aurora/shadcn primitives and platform-surface truth.\nInclude source rail, summary/status, detail panel, on-demand tool expansion, empty/offline/error/loading states, and mock/demo labels.",
       "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-07-02T21:17:36.463Z",
-      "updatedAt": "2026-07-02T21:27:57.195Z",
-      "completedAt": "2026-07-02T21:27:57.195Z",
-      "evidence": "Admin overview platform truth fixed: desktop-thin returns available-remote/remote Gateway thin client and tauri-local boundary copy handled. Verified admin contracts/services/routes evidence tests and typechecks."
+      "createdAt": "2026-07-06T02:50:50.006Z",
+      "updatedAt": "2026-07-06T05:51:45.978Z",
+      "completedAt": "2026-07-06T05:51:45.978Z",
+      "evidence": "Completed and verified Tooling Page UI execution scope for G003-tools-ui-architecture-and-source-fir; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
     },
     {
-      "id": "G005-contracts-route-distinctness-make-ad",
-      "title": "Contracts route distinctness: make /admin/contracts a dedicated contr...",
-      "objective": "Contracts route distinctness: make /admin/contracts a dedicated contracts registry route, not merely the services page, with route-specific tests/oracles.",
+      "id": "G004-policy-grants-approvals-onboarding-m",
+      "title": "Policy, grants, approvals, onboarding, mesh, scheduler, and audit UX",
+      "objective": "Policy, grants, approvals, onboarding, mesh, scheduler, and audit UX\nImplement global policy controls, source/package/tool trust controls, per-tool overrides, future-tool inheritance warnings, grant lifecycle, pending runtime approval queue, MCP/plugin onboarding wizard stubs/flows backed by real SDK methods, mesh catalog/staleness/re-announcement views, scheduled tool action grant dependencies, and policy audit/history timeline.\nPreserve assistant inline approval separation: `/tools` manages catalog policy/grants; assistant inline approval handles one exact runtime tool call with approve once/session/until-expiry/always and deny once/always.",
       "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-07-02T21:17:36.463Z",
-      "updatedAt": "2026-07-02T21:27:57.471Z",
-      "completedAt": "2026-07-02T21:27:57.471Z",
-      "evidence": "Contracts route distinct: AdminContractsResource/View added, Tauri contracts maps to AdminContractsResource, web /admin/contracts maps to AdminContractsClientPage, production-surface contract split. Verified web route-registry and admin contracts/services/evidence tests."
+      "createdAt": "2026-07-06T02:50:50.006Z",
+      "updatedAt": "2026-07-06T05:51:46.424Z",
+      "completedAt": "2026-07-06T05:51:46.424Z",
+      "evidence": "Completed and verified Tooling Page UI execution scope for G004-policy-grants-approvals-onboarding-m; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
     },
     {
-      "id": "G006-layout-mobile-e2e-coverage-reduce-sh",
-      "title": "Layout/mobile/E2E coverage: reduce shell crowding for dense pages, ad...",
-      "objective": "Layout/mobile/E2E coverage: reduce shell crowding for dense pages, add/adjust web/mobile route evidence and route-specific control assertions where practical.",
+      "id": "G005-docs-verification-and-final-quality",
+      "title": "Docs, verification, and final quality gate",
+      "objective": "Docs, verification, and final quality gate\nUpdate docs/operator guidance for the real Tooling page behavior and platform limits.\nRun targeted backend, SDK, UI, and route tests. Add/adjust tests so previous placeholder/flat Tooling UI and missing policy surfaces would fail.\nRun final cleanup/no-op cleanup if appropriate, independent code review, architect invariant audit, and checkpoint final evidence.",
       "status": "complete",
       "attempt": 0,
-      "createdAt": "2026-07-02T21:17:36.463Z",
-      "updatedAt": "2026-07-02T21:27:57.744Z",
-      "completedAt": "2026-07-02T21:27:57.744Z",
-      "evidence": "Layout/mobile/E2E coverage improved: assistant/shell density changes, Playwright route crawl asserts routeSpecificControls and desktop+mobile route screenshots. Verified route-registry/unit tests and typechecks; full route crawl pending final gate."
-    },
-    {
-      "id": "G007-minor-integration-gaps-align-setting",
-      "title": "Minor integration gaps: align /settings/native oracle/copy, stabilize...",
-      "objective": "Minor integration gaps: align /settings/native oracle/copy, stabilize browser client identity, clarify partial/disabled voice/model/token/plugin capabilities as truthful production states.",
-      "status": "complete",
-      "attempt": 0,
-      "createdAt": "2026-07-02T21:17:36.463Z",
-      "updatedAt": "2026-07-02T22:47:43.351Z",
-      "evidence": "G007 and final Aurora UI quality gate complete: settings/native truthfulness, browser client identity, voice/model/token/plugin capability copy, AdminAction security, authenticated SSE/session clearing, /admin/contracts distinct route, all 22 route E2E/screenshot gates, tauri dev smoke, android/iOS policy evidence, final ai-slop no-op, code-review APPROVE, architect CLEAR.",
-      "completedAt": "2026-07-02T22:47:43.351Z"
+      "createdAt": "2026-07-06T02:50:50.006Z",
+      "updatedAt": "2026-07-06T05:54:17.262Z",
+      "evidence": "Docs, verification, aiSlopCleaner/code-simplifier evidence, code-reviewer APPROVE, architect CLEAR, quality gate JSON, and completed Codex goal snapshot recorded.",
+      "completedAt": "2026-07-06T05:54:17.262Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail."
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json for the Tooling Page UI Production Execution brief, including backend contracts, SDK Tooling API, production /tools UI, policy/grants/approvals/onboarding/mesh/scheduler/audit UX, docs, verification, and final quality gates; use .omx/ultragoal/ledger.jsonl as the audit trail."
 }
