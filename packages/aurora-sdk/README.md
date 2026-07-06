@@ -357,6 +357,19 @@ for await (const event of subscription) {
 }
 ```
 
+High-level assistant helpers subscribe to both `Orchestrator.Response` and `TTS.AudioChunk` when the backend supports correlated streaming. Token deltas, tool states, terminal results, and audio chunks are normalized into `AssistantStreamUpdate`:
+
+```ts
+for await (const update of client.assistant.streamMessage('Plan my morning')) {
+  if (update.kind === 'delta') appendAssistantText(update.textDelta)
+  if (update.kind === 'tool') renderToolCard(update.tool)
+  if (update.kind === 'tts_audio_chunk' && !update.ttsAudio?.final) playChunk(update.ttsAudio)
+  if (update.kind === 'completed') markTurnDone(update.text)
+}
+```
+
+`AssistantToolStreamEvent.payloadPreview` and `resultPreview` are already redacted by backend policy. `AssistantTtsAudioChunkEvent.audioData` is base64 encoded audio intended for client playback in web/thin/mobile surfaces; local daemon voice requests can set `TTS.StreamStart.play_on_server` so the Python TTS service also speaks through local audio output.
+
 HTTP transports support SSE by default and WebSocket when requested. The live backend path is intentionally configurable until the unified backend event contract lands:
 
 ```ts
@@ -511,6 +524,34 @@ const transport = new MockAuroraTransport()
 ```
 
 The mock fixtures are test/development data only. Production UI code should call `AuroraClient` namespaces and treat Gateway/native responses as the truth source.
+
+
+## Scheduler typed actions
+
+Use `client.scheduler.scheduleAction(...)` for new schedules. It mirrors the
+backend `Scheduler.ScheduleAction` contract and accepts a discriminated
+`action_spec` union: `tts.speak`, `orchestrator.user_input`, or
+`tooling.execute`. Tooling schedules should carry the Tooling catalog binding
+(`tool_name`, optional `global_tool_id`, provider peer/service IDs, and
+`args_schema_hash`) plus arguments and an optional mesh selector. The backend
+prepares and validates Tooling actions before persistence, then fires through
+`Tooling.ExecuteTool`; SDK callers should treat legacy `schedule(...)` as a
+compatibility adapter only.
+
+```ts
+await client.scheduler.scheduleAction({
+  name: 'Turn off oven reminder',
+  schedule: '2026-07-05 13:31:00',
+  action_spec: {
+    kind: 'tooling.execute',
+    binding: {
+      tool_name: 'scheduler_water_reminder_tool',
+      args_schema_hash: 'catalog-schema-hash'
+    },
+    arguments: { message: 'Drink water' }
+  }
+})
+```
 
 ## Transport Conformance
 
@@ -761,3 +802,7 @@ Use `client.result(() => operation())` when UI code wants a typed success/failur
 - [API and contracts](../../docs/API_AND_CONTRACTS.md)
 - [Frontend and UI architecture](../../docs/FRONTEND_AND_UI_ARCHITECTURE.md)
 - [SDK/backend conformance CI](../../docs/SDK_BACKEND_CONFORMANCE_CI.md)
+
+### Tooling management API
+
+The SDK exposes `client.tools` methods for the production `/tools` page: `getPolicySummary()`, `listSources()`, `getSourceDetail(sourceId)`, `listGrants()`, `createGrant()`, `revokeGrant()`, `upsertSourcePolicy()`, `upsertToolOverride()`, `listPendingApprovals()`, `listPolicyAuditEvents()`, `testMcpSource()`, `createMcpSource()`, `testPluginSource()`, and `createPluginSource()`. These methods route through typed Gateway/Tooling contracts and preserve redaction metadata; frontend code should not derive durable trust state from local-only preferences or direct service calls.

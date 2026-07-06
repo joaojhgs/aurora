@@ -70,15 +70,27 @@ export class EventStreamClient {
     payload?: TPayload,
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, TPayload>(
+    const subscription = subscribeWithReconnect<TEventPayload, TPayload>(
       this.transport,
       normalizeStreamRequest('assistant', {
-        topics: ['Orchestrator.Response'],
-        kinds: ['assistant.delta', 'assistant.completed', 'assistant.failed', 'tool.requested', 'tool.completed'],
+        topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+        kinds: [
+          'assistant.delta',
+          'assistant.completed',
+          'assistant.failed',
+          'tool.requested',
+          'tool.running',
+          'tool.completed',
+          'tool.failed',
+          'tts.audio_chunk',
+          'tts.audio.chunk',
+          'tts.chunk'
+        ],
         ...options,
         payload: payload ?? options.payload
       })
-    ))
+    )
+    return this.withStreamErrorHandling(sanitizeAssistantSubscription(subscription))
   }
 
   watchHealth<TEventPayload = unknown>(
@@ -120,6 +132,47 @@ export class EventStreamClient {
     }
     return createEventSubscription(source(), (reason) => subscription.close(reason))
   }
+}
+
+function sanitizeAssistantSubscription<TEventPayload>(
+  subscription: AuroraEventSubscription<TEventPayload>
+): AuroraEventSubscription<TEventPayload> {
+  const source = async function* (): AsyncIterable<AuroraEvent<TEventPayload>> {
+    for await (const event of subscription) yield sanitizeAssistantEvent(event)
+  }
+  return createEventSubscription(source(), (reason) => subscription.close(reason))
+}
+
+function sanitizeAssistantEvent<TEventPayload>(event: AuroraEvent<TEventPayload>): AuroraEvent<TEventPayload> {
+  if (!event.kind.startsWith('tool.')) return event
+  const payload = sanitizeToolValue(event.payload) as TEventPayload
+  if (payload === event.payload) return event
+  return { ...event, payload }
+}
+
+function sanitizeToolValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    let changed = false
+    const cleaned = value.map((item) => {
+      const next = sanitizeToolValue(item)
+      changed ||= next !== item
+      return next
+    })
+    return changed ? cleaned : value
+  }
+  if (!isObject(value)) return value
+  let changed = false
+  const cleaned: JsonObject = {}
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (key === 'args' || key === 'arguments') {
+      changed = true
+      continue
+    }
+    const nested = sanitizeToolValue(nestedValue)
+    cleaned[key] = nested as JsonObject[string]
+    changed ||= nested !== nestedValue
+  }
+  return changed ? cleaned : value
 }
 
 export function normalizeStreamRequest<TPayload = unknown>(
@@ -311,7 +364,15 @@ async function* reconnectingStream<TEventPayload, TPayload>(
   let lastEventId = request.lastEventId ?? null
   while (!signal.aborted) {
     const currentRequest = { ...request, lastEventId }
-    const subscription = await transport.subscribe<TEventPayload, TPayload>(currentRequest)
+    let subscription: AuroraEventSubscription<TEventPayload>
+    try {
+      subscription = await transport.subscribe<TEventPayload, TPayload>(currentRequest)
+    } catch (error) {
+      attempt += 1
+      if (attempt > reconnect.maxAttempts || signal.aborted) throw normalizeError(error)
+      await delay(backoff(attempt, reconnect), signal)
+      continue
+    }
     const iterator = subscription[Symbol.asyncIterator]()
     try {
       while (!signal.aborted) {

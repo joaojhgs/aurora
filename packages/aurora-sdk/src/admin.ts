@@ -1,7 +1,7 @@
 import { AuroraError, type AuroraErrorCode } from './errors.js'
 import { GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import type { AuroraResponse, AuroraTransport } from './transport.js'
-import type { AuditReceipt, JsonObject, JsonValue } from './types.js'
+import type { AuditReceipt, JsonObject, JsonValue, ToolingApprovalGrantScope } from './types.js'
 
 export interface AdminActionHeaderNames {
   action_id: string
@@ -113,6 +113,9 @@ export interface ToolApprovalConfirmRequest {
   approval_request_id: string
   approver_principal_id: string
   approve?: boolean
+  grant_scope?: ToolingApprovalGrantScope
+  expires_at?: number | null
+  include_future_tools?: boolean
   reason?: string | null
   correlation_id?: string | null
 }

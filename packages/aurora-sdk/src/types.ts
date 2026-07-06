@@ -83,6 +83,7 @@ export interface OrchestratorProcessRequest {
   request_id?: string | null
   correlation_id?: string | null
   stream?: boolean
+  client_tts_playback?: boolean | null
 }
 
 export interface OrchestratorResponse {
@@ -116,6 +117,15 @@ export interface AssistantStreamMessageRequest extends AssistantSendMessageReque
   lastEventId?: string | null
   replayFrom?: string | null
   requestId?: string | null
+  clientTtsPlayback?: boolean | null
+}
+
+
+export interface TTSPlaybackRequest {
+  text: string
+  voice?: string | null
+  speed?: number
+  interrupt?: boolean
 }
 
 export interface AssistantMessage {
@@ -134,11 +144,51 @@ export interface AssistantSendMessageResult {
   metadata: JsonObject
 }
 
-export type AssistantStreamUpdateKind = 'delta' | 'completed' | 'failed' | 'tool' | 'transport_lost' | 'fallback'
+export type AssistantStreamUpdateKind =
+  | 'delta'
+  | 'completed'
+  | 'failed'
+  | 'tool'
+  | 'tts_audio_chunk'
+  | 'transport_lost'
+  | 'fallback'
+
+export type AssistantToolStreamStatus = 'requested' | 'running' | 'completed' | 'failed' | 'requires_action' | string
+
+export interface AssistantToolStreamEvent {
+  id: string
+  name: string
+  status: AssistantToolStreamStatus
+  riskClass: string | null
+  target: string | null
+  dataLeavesDevice: boolean | null
+  summary: string | null
+  payloadPreview: JsonObject | null
+  resultPreview: JsonObject | string | null
+  error?: string | null
+  errorDetails?: JsonObject | string | null
+  pendingId?: string | null
+  approvalRequestId?: string | null
+  approvalExpiresAt?: number | null
+  policyDecisionId?: string | null
+}
+
+export interface AssistantTtsAudioChunkEvent {
+  chunkId: string | null
+  sequence: number | null
+  audioData: string | null
+  encoding: string | null
+  mimeType: string | null
+  sampleRate: number | null
+  channels: number | null
+  durationMs: number | null
+  final: boolean
+}
 
 export interface AssistantStreamUpdate {
   kind: AssistantStreamUpdateKind
   eventId: string | null
+  messageId: string | null
   sessionId: string | null
   text: string
   textDelta: string
@@ -147,6 +197,8 @@ export interface AssistantStreamUpdate {
   error: AuroraError | null
   audit: AuditReceipt
   metadata: JsonObject
+  tool: AssistantToolStreamEvent | null
+  ttsAudio: AssistantTtsAudioChunkEvent | null
 }
 
 export type OrchestratorInterruptScope = 'generation' | 'tool_call' | 'tts_playback' | 'session'
@@ -184,6 +236,355 @@ export interface AssistantCancelRequest {
   requestId?: string | null
   scopes?: OrchestratorInterruptScope[]
   reason?: string
+}
+
+export type OrchestratorToolApprovalStatus =
+  | 'pending'
+  | 'approved'
+  | 'denied'
+  | 'executed'
+  | 'failed'
+  | 'expired'
+
+export type ToolingApprovalGrantScope =
+  | 'once'
+  | 'session'
+  | 'until_expiry'
+  | 'always'
+  | 'scheduled_execution'
+  | 'deny_once'
+  | 'deny_always'
+  | string
+
+export interface OrchestratorPendingToolApproval {
+  pending_id: string
+  approval_request_id?: string | null
+  status: OrchestratorToolApprovalStatus
+  run_id: string
+  thread_id: string
+  session_id?: string | null
+  owner_principal_id?: string | null
+  owner_peer_id?: string | null
+  message_id: string
+  tool_call_id: string
+  tool_name: string
+  display_name?: string | null
+  arguments_preview?: JsonObject
+  policy_decision_id?: string | null
+  correlation_id?: string | null
+  created_at: number
+  expires_at?: number | null
+  metadata?: JsonObject
+}
+
+export interface OrchestratorListPendingToolApprovalsRequest {
+  session_id?: string | null
+  run_id?: string | null
+  status?: OrchestratorToolApprovalStatus | null
+}
+
+export interface OrchestratorListPendingToolApprovalsResponse {
+  approvals: OrchestratorPendingToolApproval[]
+  count: number
+}
+
+export interface OrchestratorResumeToolApprovalRequest {
+  pending_id?: string | null
+  approval_request_id?: string | null
+  session_id?: string | null
+  approve?: boolean
+  grant_scope?: ToolingApprovalGrantScope
+  approver_principal_id?: string | null
+  expires_at?: number | null
+  include_future_tools?: boolean
+  reason?: string | null
+  correlation_id?: string | null
+}
+
+export interface OrchestratorResumeToolApprovalResponse {
+  ok: boolean
+  status: OrchestratorToolApprovalStatus
+  pending?: OrchestratorPendingToolApproval | null
+  tool_result?: JsonObject | null
+  assistant_text?: string | null
+  error?: string | null
+  correlation_id?: string | null
+}
+
+
+export type ToolingApprovalMode =
+  | 'deny_all'
+  | 'ask_each_time'
+  | 'allow_once'
+  | 'allow_until_expiry'
+  | 'approve_all_for_session'
+  | 'approve_all_for_peer'
+  | 'approve_all_local_safe'
+  | 'dry_run_only'
+  | string
+
+export type ToolingPolicyMode = 'enforce' | 'dry_run_only' | 'deny_all' | 'unrestricted_except_blocked' | string
+export type ToolingTrustTier = 'trusted' | 'untrusted' | 'blocked' | string
+export type ToolingCapabilityClass = 'read' | 'write' | 'execute' | 'network' | 'secrets' | 'device' | 'admin' | string
+export type ToolingSourceClass = 'core' | 'plugin' | 'mcp' | 'toolkit' | 'mesh_peer' | 'unknown' | string
+
+export interface ToolingSharingPolicyRule {
+  rule_id: string
+  share?: boolean
+  approval_mode?: ToolingApprovalMode
+  tool_name?: string | null
+  global_tool_id?: string | null
+  execution_location?: 'local' | 'remote' | string | null
+  source_type?: ToolingSourceClass | null
+  toolkit_name?: string | null
+  safety_class?: string | null
+  operation_class?: string | null
+  resource_namespace?: string | null
+  hardware_target?: string | null
+  data_scope?: string | null
+  caller_peer_id?: string | null
+  caller_principal_id?: string | null
+  caller_device_id?: string | null
+  caller_permissions?: string[] | null
+  provider_peer_id?: string | null
+  provider_service_instance_id?: string | null
+  route_privacy_class?: string | null
+  token_ttl_seconds?: number
+  [key: string]: JsonValue | undefined
+}
+
+export interface ToolingSharingPolicy {
+  default_share: boolean
+  default_approval_mode: ToolingApprovalMode
+  policy_mode: ToolingPolicyMode
+  default_token_ttl_seconds: number
+  rules: ToolingSharingPolicyRule[]
+}
+
+export interface ToolingGetSharingPolicyResponse {
+  policy: ToolingSharingPolicy
+}
+
+export interface ToolingSetSharingPolicyRequest {
+  policy: ToolingSharingPolicy
+  actor_principal_id?: string | null
+  confirmation_text?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingSetSharingPolicyResponse {
+  ok: boolean
+  policy: ToolingSharingPolicy
+  error?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingPolicyDecisionResponse {
+  allowed: boolean
+  share: boolean
+  approval_required: boolean
+  approval_mode: ToolingApprovalMode
+  decision_id: string
+  policy_rule_id?: string | null
+  reason?: string | null
+  auto_approved_reason?: string | null
+  effective_default?: ToolingApprovalMode | null
+  grant_id?: string | null
+  grant_scope?: ToolingApprovalGrantScope | null
+  token_ttl_seconds?: number
+}
+
+export interface ToolingPrepareExecutionRequest {
+  tool_name: string
+  arguments: JsonObject
+  expected_args_schema_hash?: string | null
+  mesh_selector?: JsonObject | null
+  resource_selector?: JsonObject | null
+  confirmed?: boolean
+  approval_token?: string | null
+  dry_run?: boolean
+  correlation_id?: string | null
+  caller_peer_id?: string | null
+  caller_principal_id?: string | null
+  caller_device_id?: string | null
+  caller_permissions?: string[] | null
+  schedule_id?: string | null
+  scheduled_action_hash?: string | null
+}
+
+export interface ToolingPrepareExecutionResponse {
+  ok: boolean
+  policy_decision: ToolingPolicyDecisionResponse
+  args_hash: string
+  resource_selector_hash: string
+  route_decision_id: string
+  correlation_id: string
+  provider_peer_id: string
+  provider_service_instance_id: string
+  global_tool_id: string
+  local_tool_name: string
+  args_schema_hash?: string | null
+  source?: ToolingSourceClass
+  source_id?: string | null
+  trust_tier?: ToolingTrustTier
+  capability_class?: ToolingCapabilityClass
+  resource_scope?: string[]
+  display_args_preview?: JsonObject
+  argument_visibility?: Record<string, string>
+  secrets_redacted?: boolean
+}
+
+export interface ToolingApprovalGrant {
+  grant_id: string
+  grant_scope: ToolingApprovalGrantScope
+  grant_type: 'approval' | 'trust' | 'capability' | 'scheduled_execution' | string
+  active: boolean
+  principal_id?: string | null
+  caller_device_id?: string | null
+  caller_peer_id?: string | null
+  provider_peer_id?: string | null
+  provider_service_instance_id?: string | null
+  global_tool_id?: string | null
+  local_tool_name?: string | null
+  args_hash?: string | null
+  resource_selector_hash?: string | null
+  route_decision_id?: string | null
+  schedule_id?: string | null
+  trust_tier?: ToolingTrustTier | null
+  capability_class?: ToolingCapabilityClass | null
+  resource_scope: string[]
+  include_future_tools: boolean
+  created_by?: string | null
+  created_at: number
+  expires_at?: number | null
+  revoked_at?: number | null
+  reason?: string | null
+  metadata?: JsonObject
+}
+
+export interface ToolingListApprovalGrantsRequest {
+  principal_id?: string | null
+  provider_peer_id?: string | null
+  global_tool_id?: string | null
+  include_revoked?: boolean
+}
+
+export interface ToolingListApprovalGrantsResponse {
+  grants: ToolingApprovalGrant[]
+  count: number
+}
+
+export interface ToolingCreateApprovalGrantRequest extends Omit<ToolingApprovalGrant, 'grant_id' | 'active' | 'created_at' | 'revoked_at'> {
+  active?: boolean
+  correlation_id?: string | null
+}
+
+export interface ToolingCreateApprovalGrantResponse {
+  ok: boolean
+  grant?: ToolingApprovalGrant | null
+  error?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingRevokeApprovalGrantRequest {
+  grant_id: string
+  revoked_by?: string | null
+  reason?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingRevokeApprovalGrantResponse {
+  ok: boolean
+  grant_id: string
+  error?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingEvaluateApprovalGrantRequest extends ToolingPrepareExecutionRequest {
+  schedule_id?: string | null
+  scheduled_action_hash?: string | null
+  grant_scope?: ToolingApprovalGrantScope | null
+}
+
+export interface ToolingEvaluateApprovalGrantResponse {
+  ok: boolean
+  grant?: ToolingApprovalGrant | null
+  policy_decision?: ToolingPolicyDecisionResponse | null
+  reason?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingMcpServerStatus {
+  name?: string
+  id?: string
+  command?: string
+  url?: string
+  status?: string
+  active?: boolean
+  tool_count?: number
+  error?: string | null
+  last_error?: string | null
+  secrets_redacted?: boolean
+  [key: string]: JsonValue | undefined
+}
+
+export interface ToolingGetMcpStatusResponse {
+  servers: ToolingMcpServerStatus[]
+  total_servers: number
+  active_servers: number
+}
+
+export interface ToolingStatsResponse {
+  total_tools: number
+  mcp_tools_loaded: number
+  core_tools?: number | null
+  plugin_tools?: number | null
+}
+
+export interface AssistantVoiceListenRequest {
+  sessionId?: string | null
+  reason?: string | null
+  timeoutMs?: number
+}
+
+export interface AssistantVoiceListenResult {
+  sessionId: string
+  status: 'listening' | 'stopped' | 'unavailable'
+  source: 'wakeword' | 'push_to_talk' | 'sdk'
+}
+
+export interface STTListenRequest {
+  session_id?: string | null
+}
+
+export interface STTListenResponse {
+  success?: boolean
+  status?: string | null
+  session_id?: string | null
+  current_state?: string | null
+  source?: 'wakeword' | 'push_to_talk' | 'sdk' | string | null
+  message?: string | null
+}
+
+export interface STTStopListeningRequest {
+  reason?: string | null
+}
+
+export interface TranscribeAudioRequest {
+  audio_data: string
+  format?: 'wav' | 'raw' | 'mp3' | string
+  sample_rate?: number
+  channels?: number
+  language?: string | null
+  model?: 'realtime' | 'accurate' | string
+}
+
+export interface TranscribeAudioResponse {
+  text: string
+  confidence?: number | null
+  language?: string | null
+  duration_ms: number
+  model_used: string
 }
 
 export type AttachmentContextKind = 'text' | 'url' | 'file' | 'image'

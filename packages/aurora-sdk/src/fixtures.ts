@@ -21,6 +21,10 @@ import type {
   PrincipalResponse,
   RouteExplainResponse,
   TokenListResponse,
+  ToolingGetMcpStatusResponse,
+  ToolingListApprovalGrantsResponse,
+  ToolingSharingPolicy,
+  OrchestratorListPendingToolApprovalsResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
 import type { BackupListResponse } from './backup.js'
@@ -443,6 +447,18 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'both',
           input_model: 'SchedulerScheduleJobRequest',
           output_model: 'SchedulerActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'ScheduleAction',
+          summary: 'Schedule a typed local or delegated automation action',
+          bus_topic: 'Scheduler.ScheduleAction',
+          exposure: 'both',
+          input_model: 'SchedulerScheduleActionRequest',
+          output_model: 'SchedulerScheduleActionResponse',
           required_perms: ['Scheduler.manage'],
           method_type: 'manage',
           input_schema: null,
@@ -1158,6 +1174,17 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       summary: 'Create scheduler jobs through AdminAction.'
     }),
     action({
+      action_id: 'scheduler-schedule-action-local',
+      module: 'Scheduler',
+      method: 'ScheduleAction',
+      topic: 'Scheduler.ScheduleAction',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Create typed scheduler actions through AdminAction.'
+    }),
+    action({
       action_id: 'scheduler-cancel-local',
       module: 'Scheduler',
       method: 'Cancel',
@@ -1446,6 +1473,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Backup.List': ['backup-list-local'],
     'Scheduler.ListJobs': ['scheduler-list-local'],
     'Scheduler.Schedule': ['scheduler-schedule-local'],
+    'Scheduler.ScheduleAction': ['scheduler-schedule-action-local'],
     'Scheduler.Cancel': ['scheduler-cancel-local'],
     'Scheduler.Pause': ['scheduler-pause-local'],
     'Scheduler.Resume': ['scheduler-resume-remote']
@@ -2663,6 +2691,29 @@ export const backendInventoryFixture: BackendInventory = {
       },
       output_schema: {
         title: 'SchedulerActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
+      name: 'ScheduleAction',
+      summary: 'Schedule a typed local or delegated automation action through AdminAction',
+      bus_topic: 'Scheduler.ScheduleAction',
+      routePath: '/api/Scheduler/ScheduleAction',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScheduleActionRequest',
+      output_model: 'SchedulerScheduleActionResponse',
+      input_schema: {
+        title: 'SchedulerScheduleActionRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerScheduleActionResponse',
         type: 'object'
       },
       source: 'live_registry',
@@ -4864,6 +4915,163 @@ export const memoryImportFixture: DBRAGImportNamespaceResponse = {
   correlation_id: 'corr-memory-import'
 }
 
+
+
+export const toolingSharingPolicyFixture: ToolingSharingPolicy = {
+  default_share: true,
+  default_approval_mode: 'approve_all_local_safe',
+  policy_mode: 'enforce',
+  default_token_ttl_seconds: 300,
+  rules: [
+    {
+      rule_id: 'fixture-block-external-mcp',
+      share: false,
+      approval_mode: 'deny_all',
+      source_type: 'mcp',
+      provider_service_instance_id: 'mcp-mail',
+      token_ttl_seconds: 300
+    },
+    {
+      rule_id: 'fixture-trust-local-diagnostics',
+      share: true,
+      approval_mode: 'approve_all_for_session',
+      global_tool_id: 'tool:local:diagnostics.serviceHealth',
+      provider_peer_id: 'local-peer',
+      provider_service_instance_id: 'tool-1a9e',
+      token_ttl_seconds: 900
+    }
+  ]
+}
+
+export const toolingApprovalGrantsFixture: ToolingListApprovalGrantsResponse = {
+  count: 3,
+  grants: [
+    {
+      grant_id: 'grant-local-diagnostics-session',
+      grant_scope: 'session',
+      grant_type: 'approval',
+      active: true,
+      principal_id: 'principal-owner',
+      caller_device_id: null,
+      caller_peer_id: null,
+      provider_peer_id: 'local-peer',
+      provider_service_instance_id: 'tooling-local',
+      global_tool_id: 'tool:local:diagnostics.collect',
+      local_tool_name: 'diagnostics.collect',
+      args_hash: 'sha256:diagnostics-collect',
+      resource_selector_hash: null,
+      route_decision_id: 'route-local-diagnostics',
+      schedule_id: null,
+      trust_tier: 'trusted',
+      capability_class: 'read',
+      resource_scope: ['diagnostics'],
+      include_future_tools: false,
+      created_by: 'principal-owner',
+      created_at: 1781840400,
+      expires_at: 1781844000,
+      revoked_at: null,
+      reason: 'fixture local approval',
+      metadata: { fixture: true, secrets_redacted: true }
+    },
+    {
+      grant_id: 'grant-mesh-garage-scheduled',
+      grant_scope: 'scheduled_execution',
+      grant_type: 'scheduled_execution',
+      active: true,
+      principal_id: 'principal-owner',
+      caller_device_id: null,
+      caller_peer_id: null,
+      provider_peer_id: 'peer-garage',
+      provider_service_instance_id: 'tooling-garage',
+      global_tool_id: 'tool:remote:garageDoor.open',
+      local_tool_name: 'garageDoor.open',
+      args_hash: 'sha256:garage-open',
+      resource_selector_hash: 'sha256:garage-door',
+      route_decision_id: 'route-mesh-garage',
+      schedule_id: 'job-nightly-sync',
+      trust_tier: 'trusted',
+      capability_class: 'device',
+      resource_scope: ['garage-main-door'],
+      include_future_tools: false,
+      created_by: 'principal-owner',
+      created_at: 1781840500,
+      expires_at: null,
+      revoked_at: null,
+      reason: 'fixture scheduled hardware action',
+      metadata: { fixture: true, secrets_redacted: true }
+    },
+    {
+      grant_id: 'grant-old-plugin-revoked',
+      grant_scope: 'always',
+      grant_type: 'trust',
+      active: false,
+      principal_id: 'principal-owner',
+      caller_device_id: null,
+      caller_peer_id: null,
+      provider_peer_id: null,
+      provider_service_instance_id: 'plugin-weather',
+      global_tool_id: null,
+      local_tool_name: null,
+      args_hash: null,
+      resource_selector_hash: null,
+      route_decision_id: null,
+      schedule_id: null,
+      trust_tier: 'blocked',
+      capability_class: 'network',
+      resource_scope: ['weather'],
+      include_future_tools: false,
+      created_by: 'principal-owner',
+      created_at: 1781840000,
+      expires_at: null,
+      revoked_at: 1781842000,
+      reason: 'fixture revoked stale plugin trust',
+      metadata: { fixture: true, secrets_redacted: true }
+    }
+  ]
+}
+
+export const toolingMcpStatusFixture: ToolingGetMcpStatusResponse = {
+  total_servers: 1,
+  active_servers: 1,
+  servers: [
+    {
+      id: 'mcp-mail',
+      name: 'mail-mcp',
+      command: '[redacted]',
+      status: 'active',
+      active: true,
+      tool_count: 1,
+      secrets_redacted: true
+    }
+  ]
+}
+
+export const pendingToolApprovalsFixture: OrchestratorListPendingToolApprovalsResponse = {
+  count: 1,
+  approvals: [
+    {
+      pending_id: 'pending-tool-email-send',
+      approval_request_id: 'approval-email-send',
+      status: 'pending',
+      run_id: 'run-tools-fixture',
+      thread_id: 'thread-tools-fixture',
+      session_id: 'session-tools-fixture',
+      owner_principal_id: 'principal-owner',
+      owner_peer_id: null,
+      message_id: 'message-tools-fixture',
+      tool_call_id: 'tool-call-email-send',
+      tool_name: 'tool:cloud:email.send',
+      display_name: 'Send email draft',
+      arguments_preview: { to: 'ops@example.com', body: '[redacted]' },
+      policy_decision_id: 'policy-email-send',
+      correlation_id: 'corr-dry-run',
+      created_at: 1781840600,
+      expires_at: 1781840900,
+      metadata: { inline_assistant_only: true, secrets_redacted: true }
+    }
+  ]
+}
+
 export const configGetFixture: ConfigGetResponse = {
   config: {
     services: {
@@ -4872,7 +5080,37 @@ export const configGetFixture: ConfigGetResponse = {
           host: '127.0.0.1',
           port: 8000,
           token_secret: '[REDACTED]'
+        },
+        mesh_network: {
+          enabled: true,
+          node_name: 'Studio workstation',
+          version_policy: 'compatible',
+          peer_selection: 'latency',
+          ping_interval_s: 10,
+          registry_announce_interval_s: 30,
+          stale_peer_timeout_s: 90,
+          remote_timeout_s: 15
+        },
+        webrtc: {
+          enabled: true,
+          strategy: 'mqtt',
+          app_id: 'aurora-dev',
+          room: 'aurora-studio-room',
+          password: '[REDACTED]',
+          encrypt_signaling: true,
+          enable_app_layer_e2ee: true,
+          stun_servers: ['stun:stun.l.google.com:19302'],
+          turn_servers: []
+        },
+        signaling_mqtt: {
+          brokers: ['wss://test.mosquitto.org:8081/mqtt'],
+          topic_root: 'aurora/mesh'
         }
+      },
+      auth: {
+        default_pairing_permissions: ['Gateway.use'],
+        webrtc_auth_timeout_seconds: 30,
+        webrtc_pairing_timeout_seconds: 300
       }
     }
   }
@@ -4927,6 +5165,336 @@ export const configSchemaMetadataFixture: ConfigSchemaMetadataResponse = {
       restart_required: true,
       affected_services: ['gateway', 'auth'],
       constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.enabled',
+      title: 'Mesh enabled',
+      description: 'Enable local mesh peer routing.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.node_name',
+      title: 'Node name',
+      description: 'Human-readable name advertised to mesh peers.',
+      type: 'string',
+      default: 'Aurora node',
+      current_value: 'Studio workstation',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.version_policy',
+      title: 'Version policy',
+      description: 'Compatibility policy used when evaluating peer manifests.',
+      type: 'string',
+      default: 'compatible',
+      current_value: 'compatible',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: ['compatible', 'strict']
+    },
+    {
+      key_path: 'services.gateway.mesh_network.peer_selection',
+      title: 'Peer selection',
+      description: 'Preferred peer routing strategy.',
+      type: 'string',
+      default: 'latency',
+      current_value: 'latency',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: ['latency', 'round_robin', 'manual']
+    },
+    {
+      key_path: 'services.gateway.mesh_network.ping_interval_s',
+      title: 'Ping interval',
+      description: 'Seconds between peer latency pings.',
+      type: 'integer',
+      default: 10,
+      current_value: 10,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.registry_announce_interval_s',
+      title: 'Announce interval',
+      description: 'Seconds between mesh manifest announcements.',
+      type: 'integer',
+      default: 30,
+      current_value: 30,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.stale_peer_timeout_s',
+      title: 'Stale peer timeout',
+      description: 'Seconds before a peer is treated as stale.',
+      type: 'integer',
+      default: 90,
+      current_value: 90,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.remote_timeout_s',
+      title: 'Remote timeout',
+      description: 'Seconds to wait for remote mesh RPCs.',
+      type: 'integer',
+      default: 15,
+      current_value: 15,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.enabled',
+      title: 'WebRTC enabled',
+      description: 'Enable WebRTC peer transport.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.strategy',
+      title: 'Signaling provider',
+      description: 'Signaling backend used for WebRTC peer discovery.',
+      type: 'string',
+      default: 'mqtt',
+      current_value: 'mqtt',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: ['mqtt']
+    },
+    {
+      key_path: 'services.gateway.webrtc.app_id',
+      title: 'App id',
+      description: 'Application namespace for signaling.',
+      type: 'string',
+      default: 'aurora',
+      current_value: 'aurora-dev',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.room',
+      title: 'Room',
+      description: 'Signaling room shared by peers.',
+      type: 'string',
+      default: 'default',
+      current_value: 'aurora-studio-room',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.password',
+      title: 'Room password',
+      description: 'Optional room password for signaling.',
+      type: 'string',
+      default: null,
+      current_value: '[REDACTED]',
+      source_layer: 'env',
+      secret: true,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.encrypt_signaling',
+      title: 'Encrypt signaling',
+      description: 'Encrypt signaling metadata where supported.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.enable_app_layer_e2ee',
+      title: 'App-layer E2EE',
+      description: 'Enable Aurora application-layer peer encryption.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.stun_servers',
+      title: 'STUN servers',
+      description: 'ICE STUN server URLs.',
+      type: 'array',
+      default: ['stun:stun.l.google.com:19302'],
+      current_value: ['stun:stun.l.google.com:19302'],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.turn_servers',
+      title: 'TURN servers',
+      description: 'ICE TURN server URLs.',
+      type: 'array',
+      default: [],
+      current_value: [],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.signaling_mqtt.brokers',
+      title: 'MQTT brokers',
+      description: 'MQTT broker URLs used for signaling.',
+      type: 'array',
+      default: ['wss://test.mosquitto.org:8081/mqtt'],
+      current_value: ['wss://test.mosquitto.org:8081/mqtt'],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.signaling_mqtt.topic_root',
+      title: 'MQTT topic root',
+      description: 'Topic prefix used for WebRTC signaling.',
+      type: 'string',
+      default: 'aurora/mesh',
+      current_value: 'aurora/mesh',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.auth.default_pairing_permissions',
+      title: 'Default pairing permissions',
+      description: 'Default permissions suggested for new peer pairing approvals.',
+      type: 'array',
+      default: ['Gateway.use'],
+      current_value: ['Gateway.use'],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['auth'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.auth.webrtc_auth_timeout_seconds',
+      title: 'WebRTC auth timeout',
+      description: 'Seconds allowed for WebRTC peers to authenticate.',
+      type: 'integer',
+      default: 30,
+      current_value: 30,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['auth'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.auth.webrtc_pairing_timeout_seconds',
+      title: 'WebRTC pairing timeout',
+      description: 'Seconds allowed for admin pairing approval.',
+      type: 'integer',
+      default: 300,
+      current_value: 300,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['auth'],
+      constraints: { minimum: 1 },
       choices: null
     }
   ],
@@ -5372,6 +5940,10 @@ export interface MockAuroraFixtureSet {
   schedulerJobs: SchedulerListJobsResponse
   modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
+  toolingSharingPolicy: ToolingSharingPolicy
+  toolingApprovalGrants: ToolingListApprovalGrantsResponse
+  toolingMcpStatus: ToolingGetMcpStatusResponse
+  pendingToolApprovals: OrchestratorListPendingToolApprovalsResponse
   configGet: ConfigGetResponse
   configValidate: ConfigValidateResponse
   configSchemaMetadata: ConfigSchemaMetadataResponse
@@ -5408,6 +5980,10 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   schedulerJobs: schedulerJobsFixture,
   modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
+  toolingSharingPolicy: toolingSharingPolicyFixture,
+  toolingApprovalGrants: toolingApprovalGrantsFixture,
+  toolingMcpStatus: toolingMcpStatusFixture,
+  pendingToolApprovals: pendingToolApprovalsFixture,
   configGet: configGetFixture,
   configValidate: configValidateFixture,
   configSchemaMetadata: configSchemaMetadataFixture,

@@ -273,6 +273,7 @@ describe('SDK transport conformance', () => {
       'Auth.AuditLog',
       'Scheduler.ListJobs',
       'Scheduler.Schedule',
+      'Scheduler.ScheduleAction',
       'Scheduler.Cancel',
       'Scheduler.Pause',
       'Scheduler.Resume',
@@ -284,7 +285,7 @@ describe('SDK transport conformance', () => {
       'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 33, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 34, issues: [] })
   })
 })
 

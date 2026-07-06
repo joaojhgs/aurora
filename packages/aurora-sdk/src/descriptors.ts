@@ -60,9 +60,32 @@ export const AUTH_METHODS = {
 
 export const TOOLING_METHODS = {
   listCatalog: 'Tooling.GetToolCatalog',
+  getStats: 'Tooling.GetStats',
+  getMcpStatus: 'Tooling.GetMCPStatus',
+  reloadMcpTools: 'Tooling.ReloadMCPTools',
+  getSharingPolicy: 'Tooling.GetSharingPolicy',
+  setSharingPolicy: 'Tooling.SetSharingPolicy',
+  testSharingPolicy: 'Tooling.TestSharingPolicy',
   prepareExecution: 'Tooling.PrepareExecution',
   requestApproval: 'Tooling.RequestApproval',
   confirmExecution: 'Tooling.ConfirmExecution',
+  listApprovalGrants: 'Tooling.ListApprovalGrants',
+  createApprovalGrant: 'Tooling.CreateApprovalGrant',
+  revokeApprovalGrant: 'Tooling.RevokeApprovalGrant',
+  evaluateApprovalGrant: 'Tooling.EvaluateApprovalGrant',
+  getPolicySummary: 'Tooling.GetPolicySummary',
+  listToolSources: 'Tooling.ListToolSources',
+  getToolSourceDetail: 'Tooling.GetToolSourceDetail',
+  setPolicyMode: 'Tooling.SetPolicyMode',
+  upsertSourcePolicy: 'Tooling.UpsertSourcePolicy',
+  upsertToolPolicyOverride: 'Tooling.UpsertToolPolicyOverride',
+  listPendingApprovals: 'Tooling.ListPendingApprovals',
+  listPolicyAuditEvents: 'Tooling.ListPolicyAuditEvents',
+  getOnboardingStatus: 'Tooling.GetOnboardingStatus',
+  testMcpSource: 'Tooling.TestMCPSource',
+  createMcpSource: 'Tooling.CreateMCPSource',
+  testPluginSource: 'Tooling.TestPluginSource',
+  createPluginSource: 'Tooling.CreatePluginSource',
   executeTool: 'Tooling.ExecuteTool'
 } as const
 
@@ -70,9 +93,58 @@ export const ORCHESTRATOR_METHODS = {
   userInput: 'Orchestrator.UserInput',
   externalUserInput: 'Orchestrator.ExternalUserInput',
   ingestContext: 'Orchestrator.IngestContext',
+  listPendingToolApprovals: 'Orchestrator.ListPendingToolApprovals',
+  resumeToolApproval: 'Orchestrator.ResumeToolApproval',
   interrupt: 'Orchestrator.Interrupt',
   toolResult: 'Orchestrator.ToolResult',
   response: 'Orchestrator.Response'
+} as const
+
+
+export const TTS_METHODS = {
+  request: 'TTS.Request',
+  synthesize: 'TTS.Synthesize',
+  streamStart: 'TTS.StreamStart',
+  streamChunk: 'TTS.StreamChunk',
+  streamEnd: 'TTS.StreamEnd',
+  audioChunk: 'TTS.AudioChunk',
+  stop: 'TTS.Stop',
+  pause: 'TTS.Pause',
+  resume: 'TTS.Resume'
+} as const
+
+export const STT_METHODS = {
+  listen: 'STTCoordinator.Listen',
+  stopListening: 'STTCoordinator.StopListening',
+  sessionStarted: 'STTCoordinator.SessionStarted',
+  sessionEnded: 'STTCoordinator.SessionEnded',
+  userSpeechCaptured: 'STTCoordinator.UserSpeechCaptured',
+  partial: 'STTCoordinator.Partial',
+  final: 'STTCoordinator.Final',
+  audioLevel: 'STTCoordinator.AudioLevel'
+} as const
+
+export const WAKEWORD_METHODS = {
+  processAudio: 'WakeWord.ProcessAudio',
+  detect: 'WakeWord.Detect',
+  control: 'WakeWord.Control'
+} as const
+
+export const AUDIO_SESSION_METHODS = {
+  prepare: 'AudioSession.Prepare',
+  requestConsent: 'AudioSession.RequestConsent',
+  start: 'AudioSession.Start',
+  stop: 'AudioSession.Stop',
+  status: 'AudioSession.Status',
+  events: 'AudioSession.Events',
+  listEvents: 'AudioSession.ListEvents'
+} as const
+
+export const TRANSCRIPTION_METHODS = {
+  transcribe: 'Transcription.Transcribe',
+  processAudio: 'Transcription.ProcessAudio',
+  result: 'Transcription.Result',
+  control: 'Transcription.Control'
 } as const
 
 export const CONFIG_METHODS = {

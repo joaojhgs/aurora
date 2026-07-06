@@ -39,7 +39,15 @@ export {
 } from './scheduler.js'
 export {
   loadToolApprovalCards,
+  buildToolingPageView,
+  getToolSourceDetailFromView,
+  normalizePolicyAuditEvents,
+  normalizePendingApprovals,
+  normalizePolicyOverrides,
   normalizeToolCatalog,
+  normalizeToolGrants,
+  validateMcpSourceDraft,
+  validatePluginSourceDraft,
   submitToolDenialDecision,
   submitToolApprovalDecision
 } from './tools.js'
@@ -60,9 +68,12 @@ export {
 } from './events.js'
 export {
   AUTH_METHODS,
+  AUDIO_SESSION_METHODS,
   GATEWAY_METHODS,
   ORCHESTRATOR_METHODS,
   ORCHESTRATOR_MODEL_METHODS,
+  STT_METHODS,
+  TRANSCRIPTION_METHODS,
   TOOLING_METHODS,
   buildBackendMethodTypes,
   describeBackendInventory,
@@ -124,7 +135,11 @@ export {
   routeExplainFixture,
   schedulerJobsFixture,
   supportBundleFixture,
+  pendingToolApprovalsFixture,
   toolCatalogFixture,
+  toolingApprovalGrantsFixture,
+  toolingMcpStatusFixture,
+  toolingSharingPolicyFixture,
   uiMockReferenceFixtureSummary
 } from './fixtures.js'
 export {

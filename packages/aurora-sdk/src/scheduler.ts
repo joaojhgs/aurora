@@ -4,6 +4,7 @@ import { routePath } from './descriptors.js'
 export const SCHEDULER_METHODS = {
   listJobs: 'Scheduler.ListJobs',
   schedule: 'Scheduler.Schedule',
+  scheduleAction: 'Scheduler.ScheduleAction',
   cancel: 'Scheduler.Cancel',
   pause: 'Scheduler.Pause',
   resume: 'Scheduler.Resume'
@@ -27,6 +28,76 @@ export interface SchedulerScheduleJobRequest {
   correlation_id?: string | null
   caller_peer_id?: string | null
   caller_principal_id?: string | null
+}
+
+export interface SchedulerToolBinding {
+  tool_name: string
+  local_tool_name?: string | null
+  global_tool_id?: string | null
+  provider_peer_id?: string | null
+  provider_service_instance_id?: string | null
+  args_schema_hash?: string | null
+  catalog_generated_at?: string | null
+}
+
+export interface SchedulerToolExecuteAction {
+  kind: 'tooling.execute'
+  binding: SchedulerToolBinding
+  arguments?: Record<string, unknown>
+  mesh_selector?: Record<string, unknown> | null
+  resource_selector?: Record<string, unknown> | null
+  confirmed?: boolean
+  approval_token?: string | null
+  policy_decision_id?: string | null
+  caller_peer_id?: string | null
+  caller_principal_id?: string | null
+  correlation_id?: string | null
+}
+
+export interface SchedulerTtsSpeakAction {
+  kind: 'tts.speak'
+  text: string
+  interrupt?: boolean
+}
+
+export interface SchedulerOrchestratorUserInputAction {
+  kind: 'orchestrator.user_input'
+  text: string
+  source?: string
+}
+
+export type SchedulerActionSpec =
+  | SchedulerToolExecuteAction
+  | SchedulerTtsSpeakAction
+  | SchedulerOrchestratorUserInputAction
+
+export interface SchedulerScheduleActionRequest {
+  name: string
+  schedule: string
+  action_spec: SchedulerActionSpec
+  enabled?: boolean
+  timezone?: string | null
+  source?: string | null
+  privacy_class?: string | null
+  namespace?: string | null
+  owner_peer_id?: string | null
+  owner_principal_id?: string | null
+  target_selector?: Record<string, unknown> | null
+  delegated_permissions?: string[]
+  delegated_approval_token?: string | null
+  correlation_id?: string | null
+  caller_peer_id?: string | null
+  caller_principal_id?: string | null
+}
+
+export interface SchedulerScheduleActionResponse {
+  ok: boolean
+  job_id?: string | null
+  status: 'scheduled' | 'denied' | 'invalid' | 'failed'
+  reason?: string | null
+  prepared_tool?: SchedulerToolBinding | null
+  policy_decision_id?: string | null
+  correlation_id?: string | null
 }
 
 export interface SchedulerScopedJobRequest {
@@ -71,6 +142,8 @@ export interface SchedulerJobInfo {
   schedule: string
   action: string
   enabled: boolean
+  action_kind?: string | null
+  prepared_binding?: SchedulerToolBinding | null
   next_run: string | null
   last_run: string | null
   status: string | null
@@ -154,6 +227,16 @@ export class SchedulerClient {
       SCHEDULER_METHODS.schedule,
       payload,
       { path: routePath('Scheduler', 'Schedule') }
+    )
+  }
+
+  scheduleAction(
+    payload: SchedulerScheduleActionRequest
+  ): Promise<SchedulerScheduleActionResponse> {
+    return this.client.request<SchedulerScheduleActionResponse, SchedulerScheduleActionRequest>(
+      SCHEDULER_METHODS.scheduleAction,
+      payload,
+      { path: routePath('Scheduler', 'ScheduleAction') }
     )
   }
 

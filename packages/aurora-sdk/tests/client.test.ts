@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CONFIG_METHODS } from '../src/descriptors.js'
+import { CONFIG_METHODS, TOOLING_METHODS } from '../src/descriptors.js'
 
 import {
   AuroraClient,
@@ -19,6 +19,7 @@ import {
   buildCapabilityGraph,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
+  createEventSubscription,
   cloneFixture,
   compareRegistryFixtureToBackendInventory,
   createAuditReceipt,
@@ -39,13 +40,18 @@ import {
   iosNativeCapabilityManifestFixture,
   ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
+  buildToolingPageView,
   normalizeToolCatalog,
   normalizeVoiceRuntimeEvent,
   routeExplainFixture,
   resolveEffectivePermissions,
   supportBundleFixture,
   toolCatalogFixture,
+  toolingApprovalGrantsFixture,
+  toolingMcpStatusFixture,
+  toolingSharingPolicyFixture,
   uiMockReferenceFixtureSummary,
+  type ToolOnboardingValidationResult,
   wildcardIntersection
 } from '../src/index.js'
 
@@ -234,7 +240,7 @@ describe('AuroraClient', () => {
     await client.mesh.removePeer({ peer_id: 'peer-den', revoke_token: true })
 
     expect(calls).toEqual([
-      { method: 'Gateway.GetMeshStatus', path: '/api/Gateway/GetMeshStatus', payload: undefined },
+      { method: 'Gateway.GetMeshStatus', path: '/api/Gateway/GetMeshStatus', payload: {} },
       { method: 'Auth.MeshListPeers', path: '/api/Auth/MeshListPeers', payload: { include_disconnected: true } },
       { method: 'Auth.MeshGetPeer', path: '/api/Auth/MeshGetPeer', payload: { peer_id: 'peer-kitchen' } },
       {
@@ -1216,8 +1222,8 @@ describe('AuroraClient', () => {
     expect(manifest.totals).toEqual(
       expect.objectContaining({
         services: 4,
-        methods: 33,
-        externalMethods: 32,
+        methods: 34,
+        externalMethods: 33,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -1439,6 +1445,100 @@ describe('AuroraClient', () => {
         })
       })
     )
+  })
+
+  it('lists and resolves inline assistant tool approvals through orchestrator contracts', async () => {
+    const calls: Array<{ method: string; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Orchestrator.ListPendingToolApprovals', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return {
+          approvals: [
+            {
+              pending_id: 'thread-1:tool-1',
+              approval_request_id: 'approval-1',
+              status: 'pending',
+              run_id: 'run-1',
+              thread_id: 'thread-1',
+              message_id: 'message-1',
+              tool_call_id: 'tool-1',
+              tool_name: 'delete_file',
+              arguments_preview: { path: '/tmp/example' },
+              created_at: 1
+            }
+          ],
+          count: 1
+        }
+      })
+      .register('Orchestrator.ResumeToolApproval', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return {
+          ok: true,
+          status: 'executed',
+          pending: {
+            pending_id: 'thread-1:tool-1',
+            approval_request_id: 'approval-1',
+            status: 'executed',
+            run_id: 'run-1',
+            thread_id: 'thread-1',
+            message_id: 'message-1',
+            tool_call_id: 'tool-1',
+            tool_name: 'delete_file',
+            created_at: 1
+          },
+          tool_result: { ok: true, status: 'success' },
+          correlation_id: 'corr-1'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const pending = await client.assistant.listPendingToolApprovals({ run_id: 'run-1', status: 'pending' })
+    expect(pending).toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          count: 1,
+          approvals: [
+            expect.objectContaining({
+              pending_id: 'thread-1:tool-1',
+              approval_request_id: 'approval-1',
+              tool_call_id: 'tool-1'
+            })
+          ]
+        })
+      })
+    )
+
+    const approved = await client.assistant.approveToolCall({
+      approval_request_id: 'approval-1',
+      grant_scope: 'until_expiry',
+      correlation_id: 'corr-1'
+    })
+    expect(approved).toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          ok: true,
+          status: 'executed',
+          tool_result: expect.objectContaining({ status: 'success' })
+        })
+      })
+    )
+    expect(calls).toEqual([
+      {
+        method: 'Orchestrator.ListPendingToolApprovals',
+        payload: { run_id: 'run-1', status: 'pending' }
+      },
+      {
+        method: 'Orchestrator.ResumeToolApproval',
+        payload: {
+          approval_request_id: 'approval-1',
+          grant_scope: 'until_expiry',
+          correlation_id: 'corr-1',
+          approve: true
+        }
+      }
+    ])
   })
 
   it('evaluates route policy denials without downgrading privacy blockers to unavailable', () => {
@@ -2850,6 +2950,7 @@ describe('AuroraClient', () => {
       approval_request_id: 'approval-local-danger',
       approver_principal_id: 'admin-1',
       approve: false,
+      grant_scope: 'deny_once',
       reason: 'Operator denied config mutation',
       correlation_id: 'corr-local-danger'
     })
@@ -2862,6 +2963,55 @@ describe('AuroraClient', () => {
       approved: false,
       audit: null
     })
+  })
+
+  it('passes selected approval scope through Tooling confirmation', async () => {
+    let confirmationPayload: unknown = null
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.RequestApproval', {
+        ok: true,
+        approval_request_id: 'approval-local-danger',
+        policy_decision: {
+          decision_id: 'policy-local-danger',
+          allowed: true,
+          approval_required: true,
+          approval_mode: 'ask_each_time',
+          token_ttl_seconds: 300
+        },
+        expires_at: 1781953500,
+        correlation_id: 'corr-local-danger',
+        error: null
+      })
+      .register('Tooling.ConfirmExecution', (request) => {
+        confirmationPayload = request.payload
+        return {
+          ok: true,
+          approval_token: 'tool-token-session',
+          expires_at: 1781953500,
+          policy_decision_id: 'policy-local-danger',
+          correlation_id: 'corr-local-danger',
+          error: null
+        }
+      })
+    const client = new AuroraClient({ transport })
+    const tool = normalizeToolCatalog(toolCatalogFixture).find((candidate) => candidate.id === 'tool:local:filesystem.writeConfig')
+    if (!tool) throw new Error('missing local dangerous tool fixture')
+
+    await client.tools.submitApprovalDecision({
+      tool,
+      scope: 'session',
+      approverPrincipalId: 'admin-1',
+      reason: 'Operator approved this session'
+    })
+
+    expect(confirmationPayload).toEqual(expect.objectContaining({
+      approval_request_id: 'approval-local-danger',
+      approver_principal_id: 'admin-1',
+      grant_scope: 'session',
+      include_future_tools: false,
+      reason: 'Operator approved this session',
+      correlation_id: 'corr-local-danger'
+    }))
   })
 
   it('classifies approval denial, expiry, replay, changed args, changed provider, and downgraded risk as typed errors', async () => {
@@ -4381,6 +4531,147 @@ describe('AuroraClient', () => {
       reason: 'policy_denied',
       targetPeerId: 'peer-den'
     }))
+
+    const wakeword = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.wakeword.detected', {
+      id: 'evt-voice-3',
+      topic: 'WakeWord.Detected',
+      wake_word: 'jarvis',
+      stream_id: 'mic-stream-1',
+      privacy_class: 'raw-audio'
+    }, {
+      busTopic: 'WakeWord.Detected',
+      transport: 'mock'
+    }))
+
+    expect(wakeword).toEqual(expect.objectContaining({
+      kind: 'wakeword_detected',
+      state: 'listening',
+      text: 'jarvis'
+    }))
+
+    const audioLevel = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.audio.level', {
+      id: 'evt-voice-level',
+      topic: 'STTCoordinator.AudioLevel',
+      session_id: 'voice-session-3',
+      level: 42.5,
+      peak: 76.25,
+      bars: [12, 34, 56],
+      privacy_class: 'raw-audio',
+      redacted: true
+    }, {
+      busTopic: 'STTCoordinator.AudioLevel',
+      transport: 'mock'
+    }))
+
+    expect(audioLevel).toEqual(expect.objectContaining({
+      kind: 'audio_level',
+      state: 'listening',
+      sessionId: 'voice-session-3',
+      level: 42.5,
+      peak: 76.25,
+      bars: [12, 34, 56],
+      redacted: true
+    }))
+
+    const speech = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.transcription.final', {
+      id: 'evt-voice-4',
+      topic: 'STTCoordinator.UserSpeechCaptured',
+      session_id: 'voice-session-4',
+      text: 'what can you do',
+      is_final: true,
+      privacy_class: 'raw-audio'
+    }, {
+      busTopic: 'STTCoordinator.UserSpeechCaptured',
+      transport: 'mock'
+    }))
+
+    expect(speech).toEqual(expect.objectContaining({
+      kind: 'transcription_final',
+      state: 'processing',
+      sessionId: 'voice-session-4',
+      text: 'what can you do'
+    }))
+
+    const gatewaySpeech = normalizeVoiceRuntimeEvent(createAuroraEvent('voice', {
+      event_id: 'evt-gateway-voice-1',
+      kind: 'voice.transcription.final',
+      topic: 'STTCoordinator.UserSpeechCaptured',
+      category: 'audio',
+      status: 'success',
+      timestamp: '2026-07-04T00:00:00.000Z',
+      correlation_id: 'corr-gateway-voice',
+      redacted_payload: {
+        session_id: 'voice-session-gateway',
+        text: 'what time is it',
+        privacy_class: 'raw-audio'
+      },
+      payload_sha256: 'sha'
+    }, {
+      transport: 'tauri-local'
+    }))
+
+    expect(gatewaySpeech).toEqual(expect.objectContaining({
+      id: 'evt-gateway-voice-1',
+      kind: 'transcription_final',
+      topic: 'STTCoordinator.UserSpeechCaptured',
+      sessionId: 'voice-session-gateway',
+      correlationId: 'corr-gateway-voice',
+      text: 'what time is it',
+      state: 'processing'
+    }))
+  })
+
+  it('starts and stops backend voice listening through typed SDK methods', async () => {
+    const transport = MockAuroraTransport.empty()
+    const calls: string[] = []
+    transport
+      .register('STTCoordinator.Listen', (request) => {
+        calls.push(`${request.method}:${(request.payload as { session_id?: string }).session_id}`)
+        return {}
+      })
+      .register('STTCoordinator.StopListening', (request) => {
+        calls.push(`${request.method}:${(request.payload as { reason?: string }).reason}`)
+        return {}
+      })
+    const client = new AuroraClient({ transport })
+
+    const started = await client.assistant.startVoiceListen({ sessionId: 'voice-manual-1' })
+    const stopped = await client.assistant.stopVoiceListen({ sessionId: 'voice-manual-1', reason: 'user_request' })
+
+    expect(started.ok && started.data).toEqual(expect.objectContaining({
+      sessionId: 'voice-manual-1',
+      status: 'listening',
+      source: 'push_to_talk'
+    }))
+    expect(stopped.ok && stopped.data).toEqual(expect.objectContaining({
+      sessionId: 'voice-manual-1',
+      status: 'stopped'
+    }))
+    expect(calls).toEqual([
+      'STTCoordinator.Listen:voice-manual-1',
+      'STTCoordinator.StopListening:user_request'
+    ])
+  })
+
+  it('adopts backend active voice session when listen joins an existing wakeword session', async () => {
+    const transport = MockAuroraTransport.empty()
+    transport.register('STTCoordinator.Listen', () => ({
+      success: true,
+      status: 'listening',
+      session_id: 'stt-wakeword-active',
+      current_state: 'listening',
+      source: 'sdk',
+      message: 'already_listening'
+    }))
+    const client = new AuroraClient({ transport })
+
+    const started = await client.assistant.startVoiceListen({ sessionId: 'voice-requested' })
+
+    expect(started.ok && started.data).toEqual(expect.objectContaining({
+      sessionId: 'stt-wakeword-active',
+      status: 'listening',
+      source: 'sdk'
+    }))
   })
 
   it('streams normalized voice events through the assistant SDK surface', async () => {
@@ -4429,6 +4720,45 @@ describe('AuroraClient', () => {
     }))
   })
 
+  it('sanitizes nested raw tool arguments from voice assistant response streams', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'voice-tool-raw',
+        kind: 'tool.running',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          text: 'Running voice tool',
+          metadata: {
+            source: 'stt',
+            tool_name: 'voice.secret',
+            args: { token: 'voice-token-must-not-render' },
+            nested: {
+              arguments: { password: 'voice-password-must-not-render' }
+            }
+          },
+          result: {
+            args: { secret: 'voice-result-secret-must-not-render' }
+          },
+          tool_calls: [
+            { arguments: { api_key: 'voice-array-secret-must-not-render' } }
+          ]
+        },
+        tool_id: 'tool:voice.secret',
+        secrets_redacted: true
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const updates = await collectEvents(client.assistant.streamVoiceAssistantResponses(), 1)
+
+    const serialized = JSON.stringify(updates)
+    expect(serialized).not.toContain('voice-token-must-not-render')
+    expect(serialized).not.toContain('voice-password-must-not-render')
+    expect(serialized).not.toContain('voice-result-secret-must-not-render')
+    expect(serialized).not.toContain('voice-array-secret-must-not-render')
+    expect(updates[0]?.tool?.name).toBe('voice.secret')
+  })
+
   it('subscribes to mock event streams with filtered event envelopes', async () => {
     const transport = new MockAuroraTransport().stream('assistant', [
       { id: '1', kind: 'assistant.delta', payload: { text: 'hel' }, correlation_id: 'corr-assistant-1' },
@@ -4454,6 +4784,132 @@ describe('AuroraClient', () => {
     expect(events[1]?.audit.toolId).toBe('tool:notes')
   })
 
+  it('maps structured assistant delta and tool stream payloads without exposing secrets', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'evt-delta-1',
+        kind: 'assistant.delta',
+        topic: 'Orchestrator.Response',
+        payload: {
+          text_delta: 'Hel',
+          session_id: 'session-structured',
+          request_id: 'request-structured',
+          metadata: { model: 'mock-stream', token: { redacted: true, sha256: 'secret-hash' } }
+        },
+        correlation_id: 'corr-structured',
+        secrets_redacted: true
+      },
+      {
+        id: 'evt-tool-running',
+        kind: 'tool.running',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          text: 'Running notes.write',
+          metadata: {
+            status: 'running',
+            tool_name: 'notes.write',
+            payload_preview: { title: 'safe title' }
+          }
+        },
+        correlation_id: 'corr-structured',
+        tool_id: 'tool:notes.write',
+        secrets_redacted: true
+      },
+      {
+        id: 'evt-tool-failed',
+        kind: 'tool.failed',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          text: 'notes.write failed',
+          metadata: {
+            status: 'failed',
+            tool_name: 'notes.write',
+            payload_preview: { title: 'safe title' }
+          }
+        },
+        correlation_id: 'corr-structured',
+        tool_id: 'tool:notes.write',
+        status: 'failed',
+        secrets_redacted: true
+      },
+      {
+        id: 'evt-tool-raw-args',
+        kind: 'tool.running',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          name: 'notes.delete',
+          args: { token: 'sk-raw-secret-must-not-render', path: '/tmp/private' },
+          arguments: { password: 'raw-password-must-not-render' },
+          tool_calls: [
+            {
+              name: 'nested.delete',
+              arguments: { password: 'nested-password-must-not-render' },
+              meta: { args: { token: 'nested-token-must-not-render' } }
+            }
+          ]
+        },
+        correlation_id: 'corr-structured',
+        tool_id: 'tool:notes.delete',
+        secrets_redacted: true
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(
+      client.events.streamAssistant(undefined, { kinds: ['assistant.delta', 'tool.running', 'tool.failed'] }),
+      4
+    )
+
+    expect(events.map((event) => event.id)).toEqual(['evt-delta-1', 'evt-tool-running', 'evt-tool-failed', 'evt-tool-raw-args'])
+    expect(events.map((event) => event.kind)).toEqual(['assistant.delta', 'tool.running', 'tool.failed', 'tool.running'])
+    expect(events[0]).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        text_delta: 'Hel',
+        session_id: 'session-structured',
+        request_id: 'request-structured'
+      }),
+      audit: expect.objectContaining({
+        correlationId: 'corr-structured',
+        eventKind: 'assistant.delta',
+        busTopic: 'Orchestrator.Response'
+      })
+    }))
+    expect(events[1]).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        text: 'Running notes.write',
+        metadata: expect.objectContaining({
+          status: 'running',
+          tool_name: 'notes.write',
+          payload_preview: { title: 'safe title' }
+        })
+      }),
+      audit: expect.objectContaining({
+        correlationId: 'corr-structured',
+        eventKind: 'tool.running',
+        toolId: 'tool:notes.write'
+      })
+    }))
+    expect(events[2]).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        text: 'notes.write failed',
+        metadata: expect.objectContaining({ status: 'failed' })
+      }),
+      audit: expect.objectContaining({
+        correlationId: 'corr-structured',
+        eventKind: 'tool.failed',
+        status: 'failed',
+        toolId: 'tool:notes.write'
+      })
+    }))
+    expect(JSON.stringify(events)).not.toContain('must-not-leak')
+    expect(JSON.stringify(events)).not.toContain('sk-raw-secret-must-not-render')
+    expect(JSON.stringify(events)).not.toContain('raw-password-must-not-render')
+    expect(JSON.stringify(events)).not.toContain('nested-password-must-not-render')
+    expect(JSON.stringify(events)).not.toContain('nested-token-must-not-render')
+    expect(((events[3]?.payload as { tool?: { payloadPreview?: unknown } }).tool)?.payloadPreview).toBeUndefined()
+    expect(events.every((event) => event.audit.redaction.secretsRedacted)).toBe(true)
+  })
+
   it('reconnects streams with last event backfill hints after transport loss', async () => {
     let attempts = 0
     const seenLastEventIds: Array<string | null | undefined> = []
@@ -4472,6 +4928,34 @@ describe('AuroraClient', () => {
 
     expect(events.map((event) => event.id)).toEqual(['1', '2'])
     expect(seenLastEventIds).toEqual([null, '1'])
+  })
+
+  it('retries initial event subscription failures before giving up', async () => {
+    let attempts = 0
+    const seenLastEventIds: Array<string | null | undefined> = []
+    const transport = {
+      kind: 'mock' as const,
+      async request() {
+        throw new AuroraError({ code: 'unsupported_feature', message: 'request not used' })
+      },
+      subscribe(request: Parameters<MockAuroraTransport['subscribe']>[0]) {
+        attempts += 1
+        seenLastEventIds.push(request.lastEventId)
+        if (attempts === 1) {
+          throw new TypeError('Gateway not ready')
+        }
+        return createEventSubscription(async function* () {
+          yield createAuroraEvent('health.updated', { status: 'healthy' }, { transport: 'mock' })
+        }())
+      }
+    }
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.watchHealth({ reconnect: { maxAttempts: 1, initialDelayMs: 0 } }), 1)
+
+    expect(attempts).toBe(2)
+    expect(seenLastEventIds).toEqual([null, null])
+    expect(events[0]?.payload).toEqual({ status: 'healthy' })
   })
 
   it('settles a pending event iterator when an idle wrapped stream is closed', async () => {
@@ -4874,7 +5358,7 @@ describe('AuroraClient assistant namespace', () => {
         method: ORCHESTRATOR_METHODS.externalUserInput,
         payload: {
           text: 'hello',
-          source: 'external',
+          source: 'ui',
           request_id: 'corr-stream',
           correlation_id: 'corr-stream',
           stream: true
@@ -4930,7 +5414,7 @@ describe('AuroraClient assistant namespace', () => {
       },
       eventSourceFactory: (url) => {
         expect(url).toBe(
-          'http://aurora.local/api/events/stream?stream=assistant&topic=Orchestrator.Response&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&kind=tool.requested&kind=tool.completed&correlation_id=corr-http-sdk&backfill=true'
+          'http://aurora.local/api/events/stream?stream=assistant&topic=Orchestrator.Response&topic=TTS.AudioChunk&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&kind=tool.requested&kind=tool.running&kind=tool.completed&kind=tool.failed&kind=tts.audio_chunk&kind=tts.audio.chunk&kind=tts.chunk&correlation_id=corr-http-sdk&backfill=true'
         )
         sourceReady()
         return {
@@ -4981,7 +5465,7 @@ describe('AuroraClient assistant namespace', () => {
         url: 'http://aurora.local/api/Orchestrator/ExternalUserInput',
         body: {
           text: 'hello',
-          source: 'external',
+          source: 'ui',
           request_id: 'corr-http-sdk',
           correlation_id: 'corr-http-sdk',
           stream: true
@@ -5006,6 +5490,317 @@ describe('AuroraClient assistant namespace', () => {
     )
     expect(events[0]?.audit.redaction?.secretsRedacted).toBe(true)
     expect(sourceClosed).toBe(true)
+  })
+
+  it('yields correlated assistant SSE deltas before the POST response resolves', async () => {
+    let resolvePost: (response: Response) => void = () => undefined
+    const postResponse = new Promise<Response>((resolve) => {
+      resolvePost = resolve
+    })
+    const eventListeners: Record<string, (event: MessageEvent<string>) => void> = {}
+    let sourceReady: () => void = () => undefined
+    const sourceReadyPromise = new Promise<void>((resolve) => {
+      sourceReady = resolve
+    })
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        expect(String(input)).toBe('http://aurora.local/api/Orchestrator/ExternalUserInput')
+        expect(JSON.parse(String(init?.body ?? '{}'))).toEqual(expect.objectContaining({
+          text: 'hello',
+          correlation_id: 'corr-http-live',
+          stream: true
+        }))
+        return postResponse
+      },
+      eventSourceFactory: () => {
+        sourceReady()
+        return {
+          onmessage: null,
+          onerror: null,
+          addEventListener(type, listener) {
+            eventListeners[type] = listener
+          },
+          close() {}
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const eventsPromise = collectEvents(
+      client.assistant.streamMessage({ text: 'hello', requestId: 'corr-http-live' }),
+      1
+    )
+    await sourceReadyPromise
+    eventListeners['assistant.delta']?.(
+      new MessageEvent('assistant.delta', {
+        data: JSON.stringify({
+          event_id: 'evt-http-live-1',
+          topic: 'Orchestrator.Response',
+          kind: 'assistant.delta',
+          category: 'assistant',
+          correlation_id: 'corr-http-live',
+          payload: { delta: 'Hel', text: 'Hel', request_id: 'corr-http-live', metadata: { model: 'live-model' } }
+        }),
+        lastEventId: 'evt-http-live-1'
+      })
+    )
+
+    const events = await raceWithTimeout(eventsPromise, 500)
+
+    resolvePost(new Response(JSON.stringify({
+      text: 'Hello',
+      request_id: 'corr-http-live',
+      correlation_id: 'corr-http-live',
+      metadata: { model: 'live-model' }
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    expect(events).not.toBe('timeout')
+    expect(events !== 'timeout' && events[0]).toEqual(expect.objectContaining({
+      kind: 'delta',
+      textDelta: 'Hel',
+      text: 'Hel',
+      modelLabel: 'live-model'
+    }))
+  })
+
+  it('sends client TTS playback ownership on streaming assistant requests', async () => {
+    let requestBody: unknown = null
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body ?? '{}'))
+        return new Response(JSON.stringify({
+          text: 'done',
+          session_id: 'session-client-tts',
+          request_id: 'corr-client-tts',
+          correlation_id: 'corr-client-tts',
+          metadata: { tts_status: 'skipped' }
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      },
+      eventSourceFactory: () => ({
+        onmessage: null,
+        onerror: null,
+        addEventListener() {},
+        close() {}
+      })
+    })
+    const client = new AuroraClient({ transport })
+
+    await collectEvents(client.assistant.streamMessage({
+      text: 'hello',
+      requestId: 'corr-client-tts',
+      clientTtsPlayback: false
+    }), 1)
+
+    expect(requestBody).toEqual(expect.objectContaining({ client_tts_playback: false }))
+  })
+
+  it('returns the successful assistant POST response when the correlated SSE event is missed', async () => {
+    let sourceClosed = false
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            text: 'OpenAI final response reached the Gateway.',
+            session_id: 'session-http-fallback',
+            request_id: 'corr-http-missed',
+            correlation_id: 'corr-http-missed',
+            metadata: { provider: 'openai', provider_label: 'OpenAI', model: 'gpt-4o', tts_status: 'unavailable' }
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-correlation-id': 'corr-http-missed'
+            }
+          }
+        ),
+      eventSourceFactory: () => ({
+        onmessage: null,
+        onerror: null,
+        addEventListener() {
+          // Deliberately never emit an event; this reproduces the UI race where
+          // Orchestrator.Response was published before the browser subscribed.
+        },
+        close() {
+          sourceClosed = true
+        }
+      })
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(
+      client.assistant.streamMessage({ text: 'hello', requestId: 'corr-http-missed' }),
+      1
+    )
+
+    expect(events[0]).toEqual(expect.objectContaining({
+      kind: 'fallback',
+      sessionId: 'session-http-fallback',
+      text: 'OpenAI final response reached the Gateway.',
+      modelLabel: 'gpt-4o',
+      metadata: expect.objectContaining({
+        provider: 'openai',
+        provider_label: 'OpenAI',
+        tts_status: 'unavailable'
+      })
+    }))
+    expect(sourceClosed).toBe(true)
+  })
+
+  it('normalizes structured assistant tool events and TTS audio chunks without text deltas', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'tool-1',
+        kind: 'tool.requested',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          tool_call: {
+            tool_call_id: 'call-weather-1',
+            name: 'Weather.GetForecast',
+            status: 'requested',
+            risk_class: 'local-read',
+            target: 'local tool registry',
+            data_leaves_device: false,
+            summary: 'Read local forecast cache.',
+            payload_preview: { location: 'kitchen' }
+          }
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'tool-2',
+        kind: 'tool.completed',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          tool: {
+            tool_call_id: 'call-weather-1',
+            name: 'Weather.GetForecast',
+            status: 'completed',
+            result_preview: 'Rain later'
+          }
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'audio-1',
+        kind: 'tts.audio_chunk',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          chunk_id: 'chunk-1',
+          sequence: 7,
+          audio_data: 'UklGRg==',
+          encoding: 'base64',
+          mime_type: 'audio/wav',
+          sample_rate: 24000,
+          channels: 1,
+          duration_ms: 120,
+          final: false
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'done-1',
+        kind: 'assistant.completed',
+        payload: { text: 'Forecast says rain later.', session_id: 'session-structured', request_id: 'corr-structured' },
+        correlation_id: 'corr-structured'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => ({
+      text: 'Forecast says rain later.',
+      session_id: 'session-structured',
+      request_id: (request.payload as { request_id?: string }).request_id,
+      correlation_id: 'corr-structured'
+    }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'weather', requestId: 'corr-structured' }), 4)
+
+    expect(events.map((event) => event.kind)).toEqual(['tool', 'tool', 'tts_audio_chunk', 'completed'])
+    expect(events[0]?.tool).toEqual(expect.objectContaining({
+      id: 'call-weather-1',
+      name: 'Weather.GetForecast',
+      status: 'requested',
+      riskClass: 'local-read',
+      target: 'local tool registry',
+      dataLeavesDevice: false,
+      payloadPreview: { location: 'kitchen' }
+    }))
+    expect(events[1]?.tool).toEqual(expect.objectContaining({
+      id: 'call-weather-1',
+      status: 'completed',
+      resultPreview: 'Rain later'
+    }))
+    expect(events[2]).toEqual(expect.objectContaining({
+      textDelta: '',
+      ttsAudio: expect.objectContaining({
+        chunkId: 'chunk-1',
+        sequence: 7,
+        audioData: 'UklGRg==',
+        mimeType: 'audio/wav',
+        sampleRate: 24000,
+        channels: 1,
+        durationMs: 120,
+        final: false
+      })
+    }))
+  })
+
+  it('keeps assistant message streams open until final correlated TTS audio arrives', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'done-before-audio',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Spoken response',
+          session_id: 'session-tts-drain',
+          request_id: 'corr-tts-drain',
+          metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-tts-drain' }
+        },
+        correlation_id: 'corr-tts-drain'
+      },
+      {
+        id: 'audio-final',
+        kind: 'tts.audio_chunk',
+        payload: {
+          session_id: 'session-tts-drain',
+          request_id: 'corr-tts-drain',
+          chunk_id: 'tts-corr-tts-drain',
+          sequence: 2,
+          audio_data: '',
+          encoding: 'base64',
+          mime_type: 'audio/wav',
+          sample_rate: 24000,
+          channels: 1,
+          duration_ms: 0,
+          final: true
+        },
+        correlation_id: 'corr-tts-drain'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => ({
+      text: 'Spoken response',
+      session_id: 'session-tts-drain',
+      request_id: (request.payload as { request_id?: string }).request_id,
+      correlation_id: 'corr-tts-drain',
+      metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-tts-drain' }
+    }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(
+      client.assistant.streamMessage({ text: 'speak', requestId: 'corr-tts-drain' }),
+      2
+    )
+
+    expect(events.map((event) => event.kind)).toEqual(['completed', 'tts_audio_chunk'])
+    expect(events[1]?.ttsAudio).toEqual(expect.objectContaining({
+      chunkId: 'tts-corr-tts-drain',
+      final: true
+    }))
   })
 
   it('falls back to non-streaming assistant response when stream transport is unavailable before data', async () => {
@@ -5142,7 +5937,7 @@ describe('AuroraClient assistant namespace', () => {
 
     expect(capturedPayload).toEqual({
       text: 'hello Aurora',
-      source: 'external',
+      source: 'ui',
       session_id: 'session-123'
     })
     expect(result.ok).toBe(true)
@@ -5479,7 +6274,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 33,
+      checked: 34,
       issues: []
     })
 
@@ -5605,3 +6400,135 @@ function backupImpactPlanFixture() {
     warnings: ['Destructive restore remains disabled by backend policy.']
   }
 }
+
+
+describe('Aurora SDK tooling management API', () => {
+  it('exposes backend Tooling management descriptor strings', () => {
+    expect(TOOLING_METHODS).toEqual(expect.objectContaining({
+      getSharingPolicy: 'Tooling.GetSharingPolicy',
+      setSharingPolicy: 'Tooling.SetSharingPolicy',
+      testSharingPolicy: 'Tooling.TestSharingPolicy',
+      listApprovalGrants: 'Tooling.ListApprovalGrants',
+      createApprovalGrant: 'Tooling.CreateApprovalGrant',
+      revokeApprovalGrant: 'Tooling.RevokeApprovalGrant',
+      evaluateApprovalGrant: 'Tooling.EvaluateApprovalGrant',
+      getMcpStatus: 'Tooling.GetMCPStatus',
+      reloadMcpTools: 'Tooling.ReloadMCPTools'
+    }))
+  })
+
+  it('routes Tooling management requests through Gateway-compatible paths', async () => {
+    const calls: Array<{ method: string; path: string | null; payload: unknown }> = []
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.GetSharingPolicy', (request) => {
+        calls.push({ method: request.method, path: request.path ?? null, payload: request.payload })
+        return { policy: cloneFixture(toolingSharingPolicyFixture) }
+      })
+      .register('Tooling.ListApprovalGrants', (request) => {
+        calls.push({ method: request.method, path: request.path ?? null, payload: request.payload })
+        return cloneFixture(toolingApprovalGrantsFixture)
+      })
+      .register('Tooling.GetMCPStatus', (request) => {
+        calls.push({ method: request.method, path: request.path ?? null, payload: request.payload })
+        return cloneFixture(toolingMcpStatusFixture)
+      })
+      .register('Orchestrator.ListPendingToolApprovals', () => ({ approvals: [], count: 0 }))
+      .register('Auth.AuditLog', () => ({ events: [], total: 0 }))
+      .register('Tooling.GetToolCatalog', () => cloneFixture(toolCatalogFixture))
+
+    const client = new AuroraClient({ transport })
+    await client.tools.getSharingPolicy()
+    await client.tools.listGrants({ include_revoked: true })
+    await client.tools.getMcpStatus()
+    await client.tools.getPageView()
+
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ method: 'Tooling.GetSharingPolicy', path: '/api/Tooling/GetSharingPolicy', payload: {} }),
+      expect.objectContaining({ method: 'Tooling.ListApprovalGrants', path: '/api/Tooling/ListApprovalGrants', payload: { include_revoked: true } }),
+      expect.objectContaining({ method: 'Tooling.GetMCPStatus', path: '/api/Tooling/GetMCPStatus', payload: {} })
+    ]))
+  })
+
+  it('normalizes source-first Tooling page data without losing redaction metadata', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const view = await client.tools.getPageView()
+
+    expect(view.fixtureMode).toBe(true)
+    expect(view.secretsRedacted).toBe(true)
+    expect(view.policy.mode).toBe('enforce')
+    expect(view.policy.activeGrantCount).toBeGreaterThan(0)
+    expect(view.policy.pendingApprovalCount).toBe(1)
+    expect(view.policy.mcpServerCount).toBe(1)
+    expect(view.sources.map((source) => source.kind)).toEqual(expect.arrayContaining(['core', 'mcp', 'mesh_peer']))
+    expect(view.sources.some((source) => source.blockedToolCount > 0 || source.status === 'blocked')).toBe(true)
+    expect(view.grants.every((grant) => grant.secretsRedacted)).toBe(true)
+    expect(view.pendingApprovals[0]).toEqual(expect.objectContaining({ inlineAssistantOnly: true, secretsRedacted: true }))
+  })
+
+  it('preserves blocked, stale, review, and redacted audit state in normalizers', () => {
+    const view = buildToolingPageView({
+      catalog: toolCatalogFixture,
+      policy: toolingSharingPolicyFixture,
+      grants: toolingApprovalGrantsFixture.grants,
+      pendingApprovals: [],
+      auditEvents: [
+        {
+          id: 'audit-secret-test',
+          event: 'tooling.policy.set',
+          action: 'Tooling.SetSharingPolicy',
+          principal_id: 'principal-owner',
+          correlation_id: 'corr-secret-test',
+          details: '{"api_key":"should-not-leak","token":"also-secret","secrets_redacted":true}',
+          created_at: '2026-06-19T02:00:00Z'
+        }
+      ],
+      mcpStatus: toolingMcpStatusFixture,
+      transportKind: 'mock',
+      fixtureMode: true
+    })
+
+    expect(JSON.stringify(view.auditEvents[0]?.details)).not.toContain('should-not-leak')
+    expect(view.auditEvents[0]?.details).toEqual(expect.objectContaining({ api_key: '[REDACTED]', token: '[REDACTED]' }))
+    expect(view.sources.some((source) => source.status === 'blocked' || source.staleGrantCount > 0)).toBe(true)
+    expect(view.policy.blockedToolCount).toBeGreaterThanOrEqual(0)
+  })
+
+  it('labels unsupported MCP/plugin onboarding drafts and redacts secret previews', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const mcp: ToolOnboardingValidationResult = await client.tools.testMcpSource({
+      name: 'private-mail',
+      command: 'node',
+      env: { API_KEY: 'super-secret', NORMAL: 'visible' }
+    })
+    const plugin: ToolOnboardingValidationResult = await client.tools.testPluginSource({
+      packageName: '@aurora/private-plugin',
+      metadata: { token: 'secret-token' }
+    })
+
+    expect(mcp).toEqual(expect.objectContaining({ kind: 'mcp', supported: false, secretsRedacted: true }))
+    expect(mcp.redactedPreview.source_id).toBe('local:mcp:default')
+    expect(mcp.redactedPreview.env as Record<string, unknown>).toEqual(expect.objectContaining({ API_KEY: '[REDACTED]', NORMAL: 'visible' }))
+    expect(plugin.redactedPreview.source_id).toBe('local:plugin:default')
+    expect(plugin.redactedPreview.metadata as Record<string, unknown>).toEqual(expect.objectContaining({ token: '[REDACTED]' }))
+  })
+
+  it('keeps local unsupported onboarding fallbacks non-ok and canonical when backend routes are unavailable', async () => {
+    const client = new AuroraClient({ transport: MockAuroraTransport.empty() })
+
+    const mcp = await client.tools.testMcpSource({
+      name: 'private-mail',
+      command: 'node',
+      env: { API_KEY: 'super-secret' }
+    })
+    const plugin = await client.tools.testPluginSource({
+      packageName: '@aurora/private-plugin',
+      metadata: { token: 'secret-token' }
+    })
+
+    expect(mcp).toEqual(expect.objectContaining({ kind: 'mcp', ok: false, supported: false, status: 'unsupported' }))
+    expect(mcp.redactedPreview.source_id).toBe('local:mcp:private-mail')
+    expect(plugin).toEqual(expect.objectContaining({ kind: 'plugin', ok: false, supported: false, status: 'unsupported' }))
+    expect(plugin.redactedPreview.source_id).toBe('local:plugin:aurora_private-plugin')
+  })
+})

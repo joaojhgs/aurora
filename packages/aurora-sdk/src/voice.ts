@@ -1,8 +1,10 @@
 import type { AuroraEvent, AuditReceipt, JsonObject, PrivacyClass } from './types.js'
 
 export type VoiceRuntimeEventKind =
+  | 'wakeword_detected'
   | 'session_started'
   | 'session_ended'
+  | 'audio_level'
   | 'transcription_partial'
   | 'transcription_final'
   | 'stt_timeout'
@@ -45,6 +47,9 @@ export interface VoiceRuntimeEvent {
   privacyClass: PrivacyClass | 'raw-audio' | 'microphone' | string
   state: VoiceRuntimeState
   text: string | null
+  level: number | null
+  peak: number | null
+  bars: number[] | null
   reason: string | null
   redacted: boolean
   occurredAt: string
@@ -53,8 +58,11 @@ export interface VoiceRuntimeEvent {
 }
 
 export const VOICE_EVENT_TOPICS = [
+  'WakeWord.Detected',
   'STTCoordinator.SessionStarted',
   'STTCoordinator.SessionEnded',
+  'STTCoordinator.AudioLevel',
+  'STTCoordinator.UserSpeechCaptured',
   'STTCoordinator.Partial',
   'STTCoordinator.Final',
   'STTCoordinator.Error',
@@ -72,9 +80,12 @@ export const VOICE_EVENT_TOPICS = [
 export const VOICE_EVENT_KINDS = [
   'voice.session.started',
   'voice.session.ended',
+  'voice.audio.level',
+  'voice.wakeword.detected',
   'voice.transcription.partial',
   'voice.transcription.final',
   'voice.timeout',
+  'voice.error',
   'voice.cancelled',
   'voice.denied',
   'voice.disconnected',
@@ -92,13 +103,14 @@ export const VOICE_EVENT_KINDS = [
 ] as const
 
 export function normalizeVoiceRuntimeEvent(event: AuroraEvent<unknown>): VoiceRuntimeEvent | null {
-  const raw = objectPayload(event.payload)
-  const topic = event.topic ?? event.busTopic ?? event.method
-  const source = event.kind || topic || readString(raw, 'event_type', 'type', 'kind') || ''
+  const envelope = objectPayload(event.payload)
+  const raw = voiceEventPayload(envelope)
+  const topic = event.topic ?? event.busTopic ?? event.method ?? readString(envelope, 'topic', 'bus_topic', 'busTopic')
+  const source = event.kind || readString(envelope, 'kind', 'category') || topic || readString(raw, 'event_type', 'type', 'kind') || ''
   const audioEventType = readString(raw, 'event_type', 'type', 'status')
   const kind = runtimeKindFor(source, topic, audioEventType)
   if (!kind) return null
-  const text = readString(raw, 'text', 'transcript', 'partial', 'final', 'current_text')
+  const text = readString(raw, 'text', 'transcript', 'transcription', 'partial', 'final', 'current_text', 'wake_word', 'wakeWord')
   const reason = readString(raw, 'reason', 'error', 'message', 'status')
   const privacyClass = readString(raw, 'privacy_class', 'privacyClass') ?? inferPrivacyClass(kind)
   const correlationId = readString(raw, 'correlation_id', 'correlationId') ?? event.audit.correlationId
@@ -106,7 +118,7 @@ export function normalizeVoiceRuntimeEvent(event: AuroraEvent<unknown>): VoiceRu
     id: event.id,
     kind,
     topic,
-    sessionId: readString(raw, 'session_id', 'sessionId') ?? null,
+    sessionId: readString(raw, 'session_id', 'sessionId', 'stream_id', 'streamId') ?? null,
     correlationId,
     sourcePeerId: readString(raw, 'source_peer_id', 'sourcePeerId', 'caller_peer_id', 'callerPeerId') ?? event.audit.peerId,
     targetPeerId: readString(raw, 'target_peer_id', 'targetPeerId') ?? event.audit.targetPeerId,
@@ -116,6 +128,9 @@ export function normalizeVoiceRuntimeEvent(event: AuroraEvent<unknown>): VoiceRu
     privacyClass,
     state: runtimeStateFor(kind, readString(raw, 'status', 'state')),
     text: text ?? null,
+    level: readNumber(raw, 'level', 'rms', 'audio_level', 'audioLevel'),
+    peak: readNumber(raw, 'peak', 'peak_level', 'peakLevel'),
+    bars: readNumberArray(raw, 'bars', 'waveform', 'waveformBars'),
     reason: reason ?? null,
     redacted: readBoolean(raw, 'redacted', 'secrets_redacted', 'secretsRedacted') ?? event.redaction.secretsRedacted,
     occurredAt: readString(raw, 'occurred_at', 'timestamp', 'created_at') ?? event.receivedAt,
@@ -126,9 +141,12 @@ export function normalizeVoiceRuntimeEvent(event: AuroraEvent<unknown>): VoiceRu
 
 function runtimeKindFor(source: string, topic: string | null, audioEventType: string | null): VoiceRuntimeEventKind | null {
   const key = `${source} ${topic ?? ''} ${audioEventType ?? ''}`.toLowerCase()
+  if (key.includes('wakeword.detected') || key.includes('wakeword detected')) return 'wakeword_detected'
   if (key.includes('sessionstarted') || key.includes('session.started')) return 'session_started'
   if (key.includes('sessionended') || key.includes('session.ended')) return 'session_ended'
+  if (key.includes('audiolevel') || key.includes('audio.level')) return 'audio_level'
   if (key.includes('partial')) return 'transcription_partial'
+  if (key.includes('userspeechcaptured') || key.includes('user.speech.captured')) return 'transcription_final'
   if (key.includes('final') || key.includes('transcription.result')) return 'transcription_final'
   if (key.includes('timeout')) return 'stt_timeout'
   if (key.includes('tts.started')) return 'tts_started'
@@ -142,7 +160,7 @@ function runtimeKindFor(source: string, topic: string | null, audioEventType: st
   if (key.includes('cancelled') || key.includes('canceled')) return 'audio_cancelled'
   if (key.includes('audio') && key.includes('started')) return 'audio_started'
   if (key.includes('audio') && (key.includes('stopped') || key.includes('ended'))) return 'audio_stopped'
-  if (key.includes('sttcoordinator.error') || key.includes('transcription.error')) return 'stt_error'
+  if (key.includes('voice.error') || key.includes('sttcoordinator.error') || key.includes('transcription.error')) return 'stt_error'
   return null
 }
 
@@ -151,7 +169,7 @@ function runtimeStateFor(kind: VoiceRuntimeEventKind, status: string | null): Vo
   if (normalized === 'denied') return 'denied'
   if (normalized === 'cancelled' || normalized === 'canceled') return 'cancelled'
   if (normalized === 'disconnected') return 'disconnected'
-  if (kind === 'session_started' || kind === 'audio_started') return 'listening'
+  if (kind === 'wakeword_detected' || kind === 'session_started' || kind === 'audio_started' || kind === 'audio_level') return 'listening'
   if (kind === 'transcription_partial' || kind === 'transcription_final') return 'processing'
   if (kind === 'tts_started') return 'speaking'
   if (kind === 'tts_paused') return 'paused'
@@ -166,6 +184,12 @@ function runtimeStateFor(kind: VoiceRuntimeEventKind, status: string | null): Vo
 function inferPrivacyClass(kind: VoiceRuntimeEventKind): string {
   if (kind.startsWith('tts_')) return 'personal'
   return 'raw-audio'
+}
+
+function voiceEventPayload(envelope: JsonObject): JsonObject {
+  const redactedPayload = objectPayload(envelope.redacted_payload ?? envelope.redactedPayload)
+  if (Object.keys(redactedPayload).length === 0) return envelope
+  return { ...envelope, ...redactedPayload }
 }
 
 function objectPayload(value: unknown): JsonObject {
@@ -186,6 +210,30 @@ function readBoolean(source: JsonObject, ...keys: string[]): boolean | null {
   for (const key of keys) {
     const value = source[key]
     if (typeof value === 'boolean') return value
+  }
+  return null
+}
+
+function readNumber(source: JsonObject, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+  return null
+}
+
+function readNumberArray(source: JsonObject, ...keys: string[]): number[] | null {
+  for (const key of keys) {
+    const value = source[key]
+    if (!Array.isArray(value)) continue
+    const numbers = value
+      .map((item) => typeof item === 'number' ? item : typeof item === 'string' ? Number(item) : Number.NaN)
+      .filter((item) => Number.isFinite(item))
+    if (numbers.length > 0) return numbers
   }
   return null
 }

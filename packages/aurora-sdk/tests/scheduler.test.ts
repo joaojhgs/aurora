@@ -6,7 +6,8 @@ import {
   SCHEDULER_METHODS,
   normalizeSchedulerActionSupport,
   normalizeSchedulerJob,
-  type SchedulerJobInfo
+  type SchedulerJobInfo,
+  type SchedulerScheduleActionRequest
 } from '../src/index.js'
 import type { AuroraTransportRequest } from '../src/transport.js'
 
@@ -208,6 +209,91 @@ describe('SchedulerClient', () => {
         method: SCHEDULER_METHODS.resume,
         path: '/api/Scheduler/Resume',
         payload: expect.objectContaining({ job_id: 'job-1', namespace: 'home' })
+      })
+    ])
+  })
+
+  it('schedules typed local and mesh bus actions through Scheduler.ScheduleAction', async () => {
+    const requests: AuroraTransportRequest[] = []
+    const transport = MockAuroraTransport.empty().register('Scheduler.ScheduleAction', (request) => {
+      const payload = request.payload as SchedulerScheduleActionRequest
+      requests.push(request)
+      return {
+        ok: true,
+        job_id: 'job-typed',
+        status: 'scheduled',
+        prepared_tool: payload.action_spec.kind === 'tooling.execute'
+          ? {
+              tool_name: payload.action_spec.binding.tool_name,
+              local_tool_name: payload.action_spec.binding.tool_name,
+              global_tool_id: 'local:Tooling:tool:reminder'
+            }
+          : null,
+        policy_decision_id: 'policy-typed',
+        correlation_id: payload.correlation_id
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    await expect(
+      client.scheduler.scheduleAction({
+        name: 'Speak reminder',
+        schedule: 'in 5 minutes',
+        correlation_id: 'corr-tts',
+        action_spec: {
+          kind: 'tts.speak',
+          text: 'Turn off the oven',
+          interrupt: true
+        }
+      })
+    ).resolves.toEqual(expect.objectContaining({ ok: true, status: 'scheduled' }))
+
+    await expect(
+      client.scheduler.scheduleAction({
+        name: 'Mesh reminder',
+        schedule: '0 9 * * *',
+        target_selector: {
+          peer_id: 'peer-remote',
+          service_instance_id: 'remote:Tooling'
+        },
+        action_spec: {
+          kind: 'tooling.execute',
+          binding: {
+            tool_name: 'remote_reminder',
+            global_tool_id: 'peer_remote:remote_Tooling:tool:reminder'
+          },
+          arguments: { message: 'Check mesh task' },
+          mesh_selector: {
+            peer_id: 'peer-remote',
+            service_instance_id: 'remote:Tooling',
+            tool_id: 'peer_remote:remote_Tooling:tool:reminder'
+          }
+        }
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        prepared_tool: expect.objectContaining({ tool_name: 'remote_reminder' })
+      })
+    )
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: SCHEDULER_METHODS.scheduleAction,
+        busTopic: SCHEDULER_METHODS.scheduleAction,
+        path: '/api/Scheduler/ScheduleAction',
+        payload: expect.objectContaining({
+          action_spec: expect.objectContaining({ kind: 'tts.speak' })
+        })
+      }),
+      expect.objectContaining({
+        method: SCHEDULER_METHODS.scheduleAction,
+        path: '/api/Scheduler/ScheduleAction',
+        payload: expect.objectContaining({
+          action_spec: expect.objectContaining({
+            kind: 'tooling.execute',
+            mesh_selector: expect.objectContaining({ peer_id: 'peer-remote' })
+          })
+        })
       })
     ])
   })
