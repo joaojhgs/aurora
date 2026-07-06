@@ -1450,4 +1450,3 @@ def test_source_scoped_grant_does_not_authorize_other_local_sources(make_tooling
     grant.metadata["source_id"] = "local:core"
     grant.metadata["source_type"] = "core"
     assert service._grant_matches_prepared(grant, request, prepared_core) is True
-

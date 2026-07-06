@@ -1,9 +1,9 @@
 # Aurora Tauri UI Visual Refinement Handoff
 
-**Date:** 2026-07-03  
-**Branch / commit baseline:** `feat/ui-multi-platform-integration` at `72aade3`  
-**Primary UX source of truth:** `modules/ui-mock-reference`  
-**Current production app:** `apps/aurora-tauri` using `packages/aurora-ui`  
+**Date:** 2026-07-03
+**Branch / commit baseline:** `feat/ui-multi-platform-integration` at `72aade3`
+**Primary UX source of truth:** `modules/ui-mock-reference`
+**Current production app:** `apps/aurora-tauri` using `packages/aurora-ui`
 **Visual artifacts:** `.omx/artifacts/visual-ralph/all-pages-final/`
 
 This handoff is for the next agent refining the Aurora Tauri/web/mobile UI. The goal is not to invent a new design. The goal is to keep pushing every production page toward the dark, dense, technical cockpit shown in `modules/ui-mock-reference`, while preserving truthful Aurora SDK/Gateway/platform behavior.

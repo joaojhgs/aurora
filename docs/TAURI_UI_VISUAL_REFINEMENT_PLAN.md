@@ -137,7 +137,7 @@ Priority tiers (updated after full-res + live verification of all routes): **Tie
 
 Each entry: current problems → target → wiring/UX fixes → truthfulness. **All 22 routes are now ✅ full-res verified**; entries inspected in the 2026-07-03 live pass additionally carry a **Live interactivity** line reporting what is actually wired vs honestly capability-gated (see Section 2, F1-F3).
 
-### 6.1 Assistant `/` (Tier 3, shell-only) 
+### 6.1 Assistant `/` (Tier 3, shell-only)
 **Keep.** Strongest page. Do not restyle its chat, composer, route/privacy sheet, or tool cards. Only touch it if a shared shell/primitive change requires it. Its tool-call card and route-sheet are the visual bar the other pages should reach.
 
 ### 6.2 Memory & Knowledge `/memory` ✅ (Tier 2)
