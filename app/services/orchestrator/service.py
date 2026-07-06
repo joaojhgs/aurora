@@ -31,6 +31,7 @@ from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.db import DBMethods, DBRAGStoreRequest
 from app.shared.contracts.models.orchestrator import (
+    AssistantStreamEvent,
     AttachmentContextIngestRequest,
     AttachmentContextIngestResponse,
     AttachmentContextItem,
@@ -55,15 +56,26 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorInterruptResponse,
     OrchestratorInterruptScope,
     OrchestratorInterruptScopeResult,
+    OrchestratorListPendingToolApprovalsRequest,
+    OrchestratorListPendingToolApprovalsResponse,
     OrchestratorMethods,
     OrchestratorModule,
     OrchestratorProcessRequest,
     OrchestratorResponse,
+    OrchestratorResumeToolApprovalRequest,
+    OrchestratorResumeToolApprovalResponse,
     OrchestratorToolResultRequest,
 )
 from app.shared.contracts.models.stt import STTMethods
-from app.shared.contracts.models.tts import TTSMethods, TTSRequest
-from app.shared.contracts.registry import method_contract
+from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
+from app.shared.contracts.models.tts import (
+    TTSMethods,
+    TTSRequest,
+    TTSStreamChunkRequest,
+    TTSStreamEndRequest,
+    TTSStreamStartRequest,
+)
+from app.shared.contracts.registry import get_contract, method_contract
 from app.shared.messaging.models.stt_coordinator_models import STTUserSpeechCaptured
 from app.shared.services.base_service import BaseService
 
@@ -100,13 +112,16 @@ class OrchestratorService(BaseService):
         self._model_runtime_operations: dict[str, ModelRuntimeOperationResponse] = {}
         self._generation_tasks: dict[asyncio.Task, str | None] = {}
         self._generation_lock = asyncio.Lock()
+        self._ui_automatic_tts_readback = False
 
     async def on_start(self) -> None:
         """Start the orchestrator service and subscribe to inputs."""
         log_info("Starting Orchestrator service...")
+        await self._load_ui_assistant_config()
 
         # Initialize graph orchestrator with bus dependency injection
         self.orchestrator = GraphOrchestrator(bus=self.bus)
+        await self.orchestrator.initialize_durable_pending_approvals()
         set_orchestrator(self.orchestrator)
         log_info("Graph orchestrator initialized with bus dependency")
 
@@ -130,6 +145,8 @@ class OrchestratorService(BaseService):
             config_section: The configuration section that changed (None = full reload)
         """
         log_info(f"Reloading OrchestratorService configuration: section={config_section}")
+        if config_section is None or str(config_section).startswith("ui"):
+            await self._load_ui_assistant_config()
         # Reload orchestrator if LLM config changed
         if config_section is None or str(config_section).startswith("services.orchestrator"):
             log_info("Reloading orchestrator due to LLM config change...")
@@ -138,12 +155,26 @@ class OrchestratorService(BaseService):
             await self.start()
         log_info("OrchestratorService configuration reloaded")
 
+    async def _load_ui_assistant_config(self) -> None:
+        """Load UI-origin assistant behavior without reading config files directly."""
+        try:
+            value = await ConfigAPI().aget(
+                "ui.assistant.automatic_tts_readback",
+                default=False,
+                config_timeout=15.0,
+            )
+            self._ui_automatic_tts_readback = bool(value)
+        except Exception as e:
+            self._ui_automatic_tts_readback = False
+            log_error(f"Failed to load UI assistant config: {e}", exc_info=True)
+
     async def reload_config(self, event) -> None:
         """Reload only for Orchestrator-owned config changes."""
         key_path = getattr(event, "key_path", "") or ""
         affected_sections = getattr(event, "affected_sections", []) or []
-        if key_path.startswith("services.orchestrator") or any(
-            str(section).startswith("services.orchestrator") for section in affected_sections
+        if key_path.startswith(("services.orchestrator", "ui")) or any(
+            str(section).startswith(("services.orchestrator", "ui"))
+            for section in affected_sections
         ):
             await self.reload(key_path)
             return
@@ -170,7 +201,15 @@ class OrchestratorService(BaseService):
                 return
 
             log_info(f"Processing transcription: {event.text}")
-            await self._process_input(event.text, source="stt", session_id=event.session_id)
+            voice_request_id = event.session_id or f"voice-{uuid4().hex}"
+            await self._process_input(
+                event.text,
+                source="stt",
+                session_id=event.session_id,
+                request_id=voice_request_id,
+                correlation_id=voice_request_id,
+                stream=True,
+            )
 
         except Exception as e:
             log_error(f"Error processing transcription: {e}", exc_info=True)
@@ -187,7 +226,14 @@ class OrchestratorService(BaseService):
         """Handle UI user input command."""
         try:
             log_info(f"Processing UI input: {cmd.text}")
-            await self._process_input(cmd.text, source="ui", session_id=cmd.session_id)
+            await self._process_input(
+                cmd.text,
+                source="ui",
+                session_id=cmd.session_id,
+                request_id=cmd.request_id,
+                correlation_id=cmd.correlation_id,
+                stream=cmd.stream,
+            )
             # Wait, OrchestratorProcessRequest has session_id?
             # Let's check the model definition I created.
             # It has 'message', 'context', 'stream', 'max_tokens'.
@@ -217,24 +263,41 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
     )
-    async def process_external_input(self, cmd: OrchestratorProcessRequest) -> OrchestratorResponse:
+    async def process_external_input(
+        self,
+        cmd: OrchestratorProcessRequest,
+        envelope: Envelope | None = None,
+    ) -> OrchestratorResponse:
         """Handle external user input command and return the response."""
         try:
+            source = cmd.source or "external"
             log_info(f"Processing external input: {cmd.text}")
+            metadata: dict[str, Any] = {"source": source, "stream": cmd.stream}
+            if cmd.client_tts_playback is not None:
+                metadata["client_tts_playback"] = cmd.client_tts_playback
+            caller_context: dict[str, str | None] = {}
+            if envelope is not None:
+                caller_context = {
+                    "caller_principal_id": getattr(envelope, "principal_id", None),
+                    "caller_peer_id": getattr(envelope, "caller_peer_id", None),
+                }
             response_text = await self._process_input(
                 cmd.text,
-                source="external",
+                source=source,
                 session_id=cmd.session_id,
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
                 return_response=True,  # Return the response for external API
+                response_metadata=metadata,
+                stream=cmd.stream,
+                **caller_context,
             )
             return OrchestratorResponse(
                 text=response_text or "",
                 session_id=cmd.session_id,
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
-                metadata={"source": "external", "stream": cmd.stream},
+                metadata=metadata,
             )
 
         except Exception as e:
@@ -244,7 +307,7 @@ class OrchestratorService(BaseService):
                 session_id=cmd.session_id,
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
-                metadata={"source": "external", "stream": cmd.stream, "error": True},
+                metadata={"source": cmd.source or "external", "stream": cmd.stream, "error": True},
             )
 
     @method_contract(
@@ -432,6 +495,206 @@ class OrchestratorService(BaseService):
         except Exception as e:
             log_error(f"Error processing tool result: {e}", exc_info=True)
             return EmptyOutput()
+
+    @method_contract(
+        method_id=OrchestratorMethods.LIST_PENDING_TOOL_APPROVALS,
+        summary="List pending assistant tool approval pauses",
+        input_model=OrchestratorListPendingToolApprovalsRequest,
+        output_model=OrchestratorListPendingToolApprovalsResponse,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def list_pending_tool_approvals(
+        self,
+        data: OrchestratorListPendingToolApprovalsRequest,
+        envelope: Envelope | None = None,
+    ) -> OrchestratorListPendingToolApprovalsResponse:
+        """Return backend pending approval state for active assistant tool calls."""
+
+        if self.orchestrator is None:
+            return OrchestratorListPendingToolApprovalsResponse()
+        approvals = list(self.orchestrator.pending_tool_approvals.values())
+        if self._external_approval_request(envelope):
+            if not data.session_id:
+                return OrchestratorListPendingToolApprovalsResponse()
+            principal_id = getattr(envelope, "principal_id", None)
+            caller_peer_id = getattr(envelope, "caller_peer_id", None)
+            if not self._can_manage_tool_approvals(envelope):
+                approvals = [
+                    approval
+                    for approval in approvals
+                    if approval.owner_principal_id == principal_id
+                    or (
+                        approval.owner_principal_id is None
+                        and approval.owner_peer_id is not None
+                        and approval.owner_peer_id == caller_peer_id
+                    )
+                ]
+        if data.run_id:
+            approvals = [approval for approval in approvals if approval.run_id == data.run_id]
+        if data.session_id:
+            approvals = [
+                approval
+                for approval in approvals
+                if approval.session_id == data.session_id or approval.thread_id == data.session_id
+            ]
+        if data.status:
+            approvals = [approval for approval in approvals if approval.status == data.status]
+        return OrchestratorListPendingToolApprovalsResponse(
+            approvals=approvals,
+            count=len(approvals),
+        )
+
+    @method_contract(
+        method_id=OrchestratorMethods.RESUME_TOOL_APPROVAL,
+        summary="Resolve an exact assistant tool approval and execute the pending call",
+        input_model=OrchestratorResumeToolApprovalRequest,
+        output_model=OrchestratorResumeToolApprovalResponse,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def resume_tool_approval(
+        self,
+        data: OrchestratorResumeToolApprovalRequest,
+        envelope: Envelope | None = None,
+    ) -> OrchestratorResumeToolApprovalResponse:
+        """Approve/deny a pending assistant tool call using backend Tooling contracts."""
+
+        if self.orchestrator is None:
+            return OrchestratorResumeToolApprovalResponse(
+                ok=False,
+                status="failed",
+                error="orchestrator_not_started",
+                correlation_id=data.correlation_id,
+            )
+        pending_for_auth = self.orchestrator.get_pending_tool_approval(
+            pending_id=data.pending_id,
+            approval_request_id=data.approval_request_id,
+        )
+        auth_error = self._approval_resume_authorization_error(
+            data,
+            pending=pending_for_auth,
+            envelope=envelope,
+        )
+        if auth_error is not None:
+            return OrchestratorResumeToolApprovalResponse(
+                ok=False,
+                status=pending_for_auth.status if pending_for_auth is not None else "failed",
+                pending=pending_for_auth,
+                error=auth_error,
+                correlation_id=data.correlation_id
+                or (pending_for_auth.correlation_id if pending_for_auth else None),
+            )
+        approver_principal_id = (
+            getattr(envelope, "principal_id", None)
+            if self._external_approval_request(envelope)
+            else data.approver_principal_id
+        )
+        (
+            pending,
+            tool_result_data,
+            assistant_text,
+            error,
+        ) = await self.orchestrator.resolve_pending_tool_approval(
+            pending_id=data.pending_id,
+            approval_request_id=data.approval_request_id,
+            approve=data.approve,
+            grant_scope=data.grant_scope,
+            approver_principal_id=approver_principal_id,
+            expires_at=data.expires_at,
+            include_future_tools=data.include_future_tools,
+            reason=data.reason,
+            correlation_id=data.correlation_id,
+        )
+        tool_result = None
+        if isinstance(tool_result_data, ToolingExecuteToolResponse):
+            tool_result = tool_result_data
+        elif isinstance(tool_result_data, dict):
+            try:
+                tool_result = ToolingExecuteToolResponse.model_validate(tool_result_data)
+            except Exception:
+                tool_result = None
+        return OrchestratorResumeToolApprovalResponse(
+            ok=error is None,
+            status=pending.status if pending is not None else "failed",
+            pending=pending,
+            tool_result=tool_result,
+            assistant_text=assistant_text,
+            error=error,
+            correlation_id=data.correlation_id or (pending.correlation_id if pending else None),
+        )
+
+    @staticmethod
+    def _external_approval_request(envelope: Envelope | None) -> bool:
+        """Return whether approval/listing came from an authenticated external boundary."""
+
+        if envelope is None:
+            return False
+        identity_source = getattr(envelope, "identity_source", None)
+        origin = getattr(envelope, "origin", "internal")
+        return origin == "external" or identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+
+    @staticmethod
+    def _can_manage_tool_approvals(envelope: Envelope | None) -> bool:
+        """Return whether the caller may manage durable assistant tool approvals."""
+
+        if envelope is None:
+            return True
+        if not OrchestratorService._external_approval_request(envelope):
+            return True
+        from app.shared.auth.permissions import has_permission
+
+        effective = set(getattr(envelope, "effective_perms", None) or [])
+        return any(
+            has_permission(required, effective, method_type="manage")
+            for required in {"Tooling.manage", "Orchestrator.manage"}
+        )
+
+    def _approval_resume_authorization_error(
+        self,
+        data: OrchestratorResumeToolApprovalRequest,
+        *,
+        pending: Any | None,
+        envelope: Envelope | None,
+    ) -> str | None:
+        """Validate external approval ownership and durable-grant authority."""
+
+        if not self._external_approval_request(envelope):
+            return None
+        if pending is None:
+            return "pending_approval_not_found"
+        if not data.session_id:
+            return "session_id_required"
+        if pending.session_id != data.session_id and pending.thread_id != data.session_id:
+            return "pending_approval_session_mismatch"
+
+        principal_id = getattr(envelope, "principal_id", None)
+        caller_peer_id = getattr(envelope, "caller_peer_id", None)
+        can_manage = self._can_manage_tool_approvals(envelope)
+        if not can_manage:
+            if not principal_id and not caller_peer_id:
+                return "approval_caller_identity_required"
+            if pending.owner_principal_id and pending.owner_principal_id != principal_id:
+                return "pending_approval_owner_mismatch"
+            if (
+                pending.owner_principal_id is None
+                and pending.owner_peer_id
+                and pending.owner_peer_id != caller_peer_id
+            ):
+                return "pending_approval_owner_mismatch"
+
+        durable_scopes = {"session", "until_expiry", "always", "scheduled_execution", "deny_always"}
+        if data.grant_scope in durable_scopes and not can_manage:
+            return "tool_approval_manage_permission_required"
+        return None
 
     @method_contract(
         method_id=OrchestratorMethods.INTERRUPT,
@@ -695,6 +958,10 @@ class OrchestratorService(BaseService):
         request_id: str | None = None,
         correlation_id: str | None = None,
         return_response: bool = False,
+        response_metadata: dict[str, Any] | None = None,
+        stream: bool = False,
+        caller_principal_id: str | None = None,
+        caller_peer_id: str | None = None,
     ) -> str | None:
         """Process user input through LangGraph agent.
 
@@ -710,6 +977,9 @@ class OrchestratorService(BaseService):
         current_task = asyncio.current_task()
         if current_task is not None:
             await self._track_generation_task(current_task, session_id)
+        metadata = response_metadata if response_metadata is not None else {}
+        metadata.setdefault("source", source)
+        metadata.setdefault("stream", stream)
         try:
             log_debug(f"Processing input from {source}: {text}")
 
@@ -718,12 +988,46 @@ class OrchestratorService(BaseService):
             if self.orchestrator is None:
                 raise RuntimeError("Orchestrator not initialized")
 
-            response_text = await self.orchestrator.stream_graph_updates(text, tts_result=False)
+            metadata.update(await self._assistant_response_metadata())
+
+            if stream:
+                response_text = await self._process_streaming_input(
+                    text=text,
+                    source=source,
+                    session_id=session_id,
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    metadata=metadata,
+                    caller_principal_id=caller_principal_id,
+                    caller_peer_id=caller_peer_id,
+                )
+            else:
+                response_text = await self.orchestrator.stream_graph_updates(
+                    text,
+                    tts_result=False,
+                    thread_id=session_id or request_id or correlation_id,
+                    session_id=session_id,
+                    owner_principal_id=caller_principal_id,
+                    owner_peer_id=caller_peer_id,
+                )
 
             log_info(f"🤖 LLM response: {response_text[:100]}...")
 
-            # If we got a response, emit it
-            if response_text and response_text != "END":
+            # If we got a response, emit it. LangGraph's END sentinel is a
+            # successful terminal state, not a user-visible assistant answer.
+            # Still publish a completion event so voice/chat clients do not
+            # remain stuck in "processing" when the graph decides no natural
+            # language response is needed.
+            publish_text = response_text
+            skip_tts = False
+            if response_text == "END":
+                publish_text = "Done."
+                skip_tts = True
+                metadata["terminal_reason"] = "graph_end"
+                metadata["tts_status"] = "skipped"
+                metadata["tts_reason"] = "Graph ended without a speakable assistant answer."
+
+            if publish_text and not stream:
                 # Emit response event
                 # We need to use the new OrchestratorResponse model if we want to be consistent,
                 # but LLMResponseReady is what listeners expect currently.
@@ -733,12 +1037,13 @@ class OrchestratorService(BaseService):
                 await self.bus.publish(
                     OrchestratorMethods.RESPONSE,
                     LLMResponseReady(
-                        text=response_text,
+                        text=publish_text,
                         session_id=session_id,
                         metadata={
                             "source": source,
                             "request_id": request_id,
                             "correlation_id": correlation_id,
+                            **metadata,
                         },
                     ),
                     event=True,  # Broadcast to all subscribers (UI, TTS, etc.)
@@ -748,14 +1053,42 @@ class OrchestratorService(BaseService):
                     correlation_id=correlation_id,
                 )
 
-                # Send TTS request to speak the response
-                await self.bus.publish(
-                    TTSMethods.REQUEST,
-                    TTSRequest(text=response_text, interrupt=True),
-                    event=False,  # Command, not event
-                    priority=get_interactive_priority(),
-                    origin="internal",
+                # Voice-origin requests keep voice-to-voice playback. Typed UI and
+                # external requests stay silent by default so the chat can finish as soon
+                # as text arrives; UI-origin auto-readback is an explicit UI config opt-in.
+                should_request_tts = source == "stt" or (
+                    source in {"ui", "external"} and self._ui_automatic_tts_readback
                 )
+                if skip_tts:
+                    pass
+                elif not should_request_tts:
+                    metadata["tts_status"] = "skipped"
+                    metadata["tts_reason"] = (
+                        "Typed assistant requests do not auto-play TTS unless "
+                        "ui.assistant.automatic_tts_readback is enabled."
+                    )
+                elif get_contract(TTSMethods.REQUEST) is None:
+                    metadata["tts_status"] = "unavailable"
+                    metadata["tts_reason"] = (
+                        f"Optional TTS contract {TTSMethods.REQUEST} is not registered."
+                    )
+                    log_info(
+                        "Assistant response returned; optional TTS request skipped because TTS is disabled"
+                    )
+                else:
+                    try:
+                        await self.bus.publish(
+                            TTSMethods.REQUEST,
+                            TTSRequest(text=publish_text, interrupt=True),
+                            event=False,  # Command, not event
+                            priority=get_interactive_priority(),
+                            origin="internal",
+                        )
+                        metadata["tts_status"] = "requested"
+                    except Exception as e:
+                        metadata["tts_status"] = "unavailable"
+                        metadata["tts_reason"] = str(e).splitlines()[0]
+                        log_error(f"Assistant response returned; optional TTS request skipped: {e}")
 
             # Return response if requested (for external API calls)
             if return_response:
@@ -767,6 +1100,53 @@ class OrchestratorService(BaseService):
                 return "Interrupted"
         except Exception as e:
             log_error(f"Error processing input: {e}", exc_info=True)
+            try:
+                if stream:
+                    await self._publish_assistant_stream_event(
+                        AssistantStreamEvent(
+                            kind="assistant.failed",
+                            text="Aurora could not complete that voice request. Check diagnostics for details.",
+                            session_id=session_id,
+                            request_id=request_id,
+                            correlation_id=correlation_id,
+                            is_final=True,
+                            metadata={
+                                "source": source,
+                                "request_id": request_id,
+                                "correlation_id": correlation_id,
+                                "error": True,
+                                "error_type": type(e).__name__,
+                            },
+                        ),
+                        sequence=1,
+                    )
+                else:
+                    from app.shared.messaging.models.orchestrator_models import LLMResponseReady
+
+                    await self.bus.publish(
+                        OrchestratorMethods.RESPONSE,
+                        LLMResponseReady(
+                            text="Aurora could not complete that voice request. Check diagnostics for details.",
+                            session_id=session_id,
+                            metadata={
+                                "source": source,
+                                "request_id": request_id,
+                                "correlation_id": correlation_id,
+                                "error": True,
+                                "error_type": type(e).__name__,
+                            },
+                        ),
+                        event=True,
+                        mesh=True,
+                        priority=get_interactive_priority(),
+                        origin="internal",
+                        correlation_id=correlation_id,
+                    )
+            except Exception as publish_error:
+                log_error(
+                    f"Failed to publish assistant failure event: {publish_error}",
+                    exc_info=True,
+                )
             if return_response:
                 return f"Error: {e!s}"
         finally:
@@ -774,6 +1154,297 @@ class OrchestratorService(BaseService):
                 await self._untrack_generation_task(current_task)
 
         return None
+
+    async def _process_streaming_input(
+        self,
+        *,
+        text: str,
+        source: str,
+        session_id: str | None,
+        request_id: str | None,
+        correlation_id: str | None,
+        metadata: dict[str, Any],
+        caller_principal_id: str | None = None,
+        caller_peer_id: str | None = None,
+    ) -> str:
+        """Publish correlated assistant stream events while graph generation runs."""
+
+        if self.orchestrator is None:
+            raise RuntimeError("Orchestrator not initialized")
+
+        sequence = 0
+        response_text = ""
+        tts_stream_id: str | None = None
+        tts_text_sequence = 0
+        tts_buffer = ""
+        should_stream_tts = source == "stt" or (
+            source in {"ui", "external"} and self._ui_automatic_tts_readback
+        )
+        if should_stream_tts and get_contract(TTSMethods.STREAM_START) is not None:
+            tts_stream_id = f"tts-{request_id or correlation_id or uuid4().hex}"
+            await self.bus.publish(
+                TTSMethods.STREAM_START,
+                TTSStreamStartRequest(
+                    stream_id=tts_stream_id,
+                    interrupt=True,
+                    play_on_server=self._should_play_tts_on_server(source, metadata),
+                    correlation_id=correlation_id,
+                ),
+                event=False,
+                priority=get_interactive_priority(),
+                origin="internal",
+                correlation_id=correlation_id,
+            )
+            metadata["tts_status"] = "streaming"
+            metadata["tts_stream_id"] = tts_stream_id
+
+        async for event in self.orchestrator.stream_graph_events(
+            text,
+            thread_id=session_id or request_id or correlation_id,
+            session_id=session_id,
+            owner_principal_id=caller_principal_id,
+            owner_peer_id=caller_peer_id,
+        ):
+            sequence += 1
+            if event.kind == "assistant.delta":
+                response_text = event.text or f"{response_text}{event.delta}"
+                if tts_stream_id and event.delta:
+                    tts_buffer, tts_text_sequence = await self._flush_tts_stream_chunks(
+                        stream_id=tts_stream_id,
+                        buffer=f"{tts_buffer}{event.delta}",
+                        next_sequence=tts_text_sequence,
+                        correlation_id=correlation_id,
+                        final=False,
+                    )
+            await self._publish_assistant_stream_event(
+                event,
+                sequence=sequence,
+                session_id=session_id,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                metadata=metadata,
+            )
+
+        publish_text = response_text
+        terminal_metadata = dict(metadata)
+        if publish_text == "END":
+            publish_text = "Done."
+            terminal_metadata["terminal_reason"] = "graph_end"
+            terminal_metadata["tts_status"] = "skipped"
+            terminal_metadata["tts_reason"] = "Graph ended without a speakable assistant answer."
+
+        if tts_stream_id:
+            tts_buffer, tts_text_sequence = await self._flush_tts_stream_chunks(
+                stream_id=tts_stream_id,
+                buffer=tts_buffer,
+                next_sequence=tts_text_sequence,
+                correlation_id=correlation_id,
+                final=True,
+            )
+            await self.bus.publish(
+                TTSMethods.STREAM_END,
+                TTSStreamEndRequest(
+                    stream_id=tts_stream_id,
+                    final_sequence=tts_text_sequence - 1 if tts_text_sequence > 0 else None,
+                    reason="completed",
+                    correlation_id=correlation_id,
+                ),
+                event=False,
+                priority=get_interactive_priority(),
+                origin="internal",
+                correlation_id=correlation_id,
+            )
+        elif publish_text and publish_text != "Done.":
+            await self._request_response_tts(
+                text=publish_text,
+                source=source,
+                metadata=terminal_metadata,
+                skip_tts=False,
+            )
+
+        sequence += 1
+        await self._publish_assistant_stream_event(
+            AssistantStreamEvent(
+                kind="assistant.completed",
+                text=publish_text,
+                is_final=True,
+            ),
+            sequence=sequence,
+            session_id=session_id,
+            request_id=request_id,
+            correlation_id=correlation_id,
+            metadata=terminal_metadata,
+        )
+        return publish_text
+
+    async def _flush_tts_stream_chunks(
+        self,
+        *,
+        stream_id: str,
+        buffer: str,
+        next_sequence: int,
+        correlation_id: str | None,
+        final: bool,
+    ) -> tuple[str, int]:
+        """Flush sentence-sized TTS stream text chunks over the typed bus."""
+
+        def split_ready(text_buffer: str) -> tuple[list[str], str]:
+            chunks: list[str] = []
+            start = 0
+            for match in re.finditer(r"(?<=[.!?;:])\s+", text_buffer):
+                end = match.end()
+                chunk = text_buffer[start:end].strip()
+                if chunk:
+                    chunks.append(chunk)
+                start = end
+            remainder = text_buffer[start:]
+            # Flush earlier than sentence boundaries so voice-to-voice playback
+            # can start while tokens are still arriving. Prefer whitespace cuts
+            # to avoid feeding half-words to the TTS engine.
+            if not final and 48 <= len(remainder) < 140:
+                split_at = max(remainder.rfind(" ", 0, 96), remainder.rfind(",", 0, 96))
+                if split_at >= 32:
+                    chunks.append(remainder[: split_at + 1].strip())
+                    remainder = remainder[split_at + 1 :]
+            if not final and len(remainder) < 140:
+                return chunks, remainder
+            if final and remainder.strip() or len(remainder) >= 180:
+                chunks.append(remainder.strip())
+                remainder = ""
+            return chunks, remainder
+
+        chunks, remainder = split_ready(buffer)
+        for chunk in chunks:
+            await self.bus.publish(
+                TTSMethods.STREAM_CHUNK,
+                TTSStreamChunkRequest(
+                    stream_id=stream_id,
+                    sequence=next_sequence,
+                    text=chunk,
+                    is_final=final and chunk == chunks[-1] and not remainder,
+                    correlation_id=correlation_id,
+                ),
+                event=False,
+                priority=get_interactive_priority(),
+                origin="internal",
+                correlation_id=correlation_id,
+            )
+            next_sequence += 1
+        return remainder, next_sequence
+
+    async def _publish_assistant_stream_event(
+        self,
+        event: AssistantStreamEvent,
+        *,
+        sequence: int,
+        session_id: str | None = None,
+        request_id: str | None = None,
+        correlation_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Publish one typed assistant stream event with propagated identifiers."""
+
+        merged_metadata = {
+            **(metadata or {}),
+            **(event.metadata or {}),
+        }
+        payload = event.model_copy(
+            update={
+                "session_id": event.session_id or session_id,
+                "request_id": event.request_id or request_id,
+                "correlation_id": event.correlation_id or correlation_id,
+                "message_id": event.message_id
+                or event.request_id
+                or request_id
+                or event.correlation_id
+                or correlation_id,
+                "sequence": sequence,
+                "metadata": merged_metadata,
+            }
+        )
+        await self.bus.publish(
+            OrchestratorMethods.RESPONSE,
+            payload,
+            event=True,
+            mesh=True,
+            priority=get_interactive_priority(),
+            origin="internal",
+            correlation_id=payload.correlation_id,
+        )
+
+    def _should_play_tts_on_server(self, source: str, metadata: dict[str, Any]) -> bool:
+        """Return whether streamed TTS should use the server audio device."""
+        if source == "stt":
+            return True
+        if source in {"ui", "external"} and self._ui_automatic_tts_readback:
+            return metadata.get("client_tts_playback") is False
+        return False
+
+    async def _request_response_tts(
+        self,
+        *,
+        text: str,
+        source: str,
+        metadata: dict[str, Any],
+        skip_tts: bool,
+    ) -> None:
+        """Request server-side TTS for a completed assistant response when enabled."""
+
+        should_request_tts = source == "stt" or (
+            source in {"ui", "external"}
+            and self._ui_automatic_tts_readback
+            and metadata.get("client_tts_playback") is False
+        )
+        if skip_tts:
+            return
+        if not should_request_tts:
+            metadata["tts_status"] = "skipped"
+            metadata["tts_reason"] = (
+                "Typed assistant requests do not auto-play TTS unless "
+                "ui.assistant.automatic_tts_readback is enabled."
+            )
+            return
+        if get_contract(TTSMethods.REQUEST) is None:
+            metadata["tts_status"] = "unavailable"
+            metadata["tts_reason"] = (
+                f"Optional TTS contract {TTSMethods.REQUEST} is not registered."
+            )
+            log_info(
+                "Assistant response returned; optional TTS request skipped because TTS is disabled"
+            )
+            return
+        try:
+            await self.bus.publish(
+                TTSMethods.REQUEST,
+                TTSRequest(text=text, interrupt=True),
+                event=False,
+                priority=get_interactive_priority(),
+                origin="internal",
+            )
+            metadata["tts_status"] = "requested"
+        except Exception as e:
+            metadata["tts_status"] = "unavailable"
+            metadata["tts_reason"] = str(e).splitlines()[0]
+            log_error(f"Assistant response returned; optional TTS request skipped: {e}")
+
+    async def _assistant_response_metadata(self) -> dict[str, Any]:
+        """Return redacted selected-model metadata for assistant UI state."""
+        try:
+            services_config = await ConfigAPI().aget_config("services", timeout=15.0)
+            orchestrator_config = services_config.get("orchestrator", {})
+            llm_config = orchestrator_config.get("llm", {})
+            provider = str(llm_config.get("provider") or "openai")
+            model = _selected_llm_model(llm_config, provider)
+            metadata: dict[str, Any] = {
+                "provider": provider,
+                "provider_label": _provider_display_name(provider),
+            }
+            if model:
+                metadata["model"] = model
+            return metadata
+        except Exception as e:
+            log_error(f"Failed to build assistant response metadata: {e}", exc_info=True)
+            return {}
 
     async def _track_generation_task(
         self,
@@ -1258,6 +1929,33 @@ def _configured_model_providers(
             operations=operations,
         ),
     ]
+
+
+def _selected_llm_model(llm_config: dict[str, Any], provider: str) -> str | None:
+    """Read the configured model identifier for a selected LLM provider."""
+    third_party = llm_config.get("third_party") or {}
+    local = llm_config.get("local") or {}
+    if provider == "openai":
+        return ((third_party.get("openai") or {}).get("options") or {}).get("model")
+    if provider == "huggingface_endpoint":
+        return ((third_party.get("huggingface_endpoint") or {}).get("options") or {}).get("model")
+    if provider == "huggingface_pipeline":
+        return ((local.get("huggingface_pipeline") or {}).get("options") or {}).get("model")
+    if provider == "llama_cpp":
+        return _display_model_id(
+            ((local.get("llama_cpp") or {}).get("options") or {}).get("model_path")
+        )
+    return None
+
+
+def _provider_display_name(provider: str) -> str:
+    """Return a production-facing display name for a configured provider id."""
+    return {
+        "openai": "OpenAI",
+        "huggingface_endpoint": "HuggingFace Endpoint",
+        "huggingface_pipeline": "HuggingFace Pipeline",
+        "llama_cpp": "llama.cpp",
+    }.get(provider, provider)
 
 
 def _provider_info(

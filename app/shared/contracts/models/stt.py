@@ -42,6 +42,7 @@ class STTMethods:
     USER_SPEECH_CAPTURED = f"{STTModule.NAME}.UserSpeechCaptured"
     LISTEN = f"{STTModule.NAME}.Listen"
     STOP_LISTENING = f"{STTModule.NAME}.StopListening"
+    AUDIO_LEVEL = f"{STTModule.NAME}.AudioLevel"
     AUDIO = f"{STTModule.NAME}.Audio"
     CONTROL = f"{STTModule.NAME}.Control"
     # Additional methods/events
@@ -132,6 +133,39 @@ class STTListenRequest(IOModel):
     """Request to start listening."""
 
     session_id: str | None = None
+
+
+class STTListenResponse(IOModel):
+    """Response for listen requests.
+
+    Listen is idempotent: if a wakeword or another client already has the
+    coordinator in a non-idle session, the active session is returned instead
+    of attempting to start a duplicate session.
+    """
+
+    success: bool = True
+    status: str = "listening"
+    session_id: str | None = None
+    current_state: str = "idle"
+    source: str = "push_to_talk"
+    message: str | None = None
+
+
+class STTAudioLevel(IOModel):
+    """Redacted microphone level telemetry for UI visualizers.
+
+    This intentionally contains only derived amplitude values, never raw audio
+    samples or encoded audio bytes.
+    """
+
+    session_id: str | None = None
+    stream_id: str | None = None
+    sequence: int
+    level: float = Field(ge=0.0, le=100.0)
+    peak: float = Field(ge=0.0, le=100.0)
+    bars: list[float] = Field(default_factory=list)
+    privacy_class: str = "raw-audio"
+    redacted: bool = True
 
 
 class STTStopListeningRequest(IOModel):

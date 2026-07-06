@@ -127,6 +127,11 @@ def service(mock_bus, mock_config, mock_whisper_model, mock_vad):
         yield TranscriptionService()
 
 
+def test_active_speech_segments_are_not_rolling_window_limited(service):
+    """Long utterances must retain the beginning until final accurate STT runs."""
+    assert service._speech_segments.maxlen is None
+
+
 @pytest.fixture
 def audio_chunk():
     """Create a sample AudioChunk."""
@@ -702,3 +707,42 @@ class TestErrorHandling:
             error_message="test error",
             error_type="test_type",
         )
+
+
+@pytest.mark.asyncio
+async def test_realtime_partial_emits_before_silence_when_format_was_missed(service):
+    """Paused startup can miss chunk-zero format; realtime partials must still stream."""
+    service._loop = asyncio.get_running_loop()
+    service._paused = False
+    service._realtime_model = MagicMock()
+    service._accurate_model = None
+    service._vad = MagicMock()
+    service._vad.is_speech.return_value = True
+    segment = MagicMock()
+    segment.text = "live partial text"
+    info = MagicMock()
+    info.language = "en"
+    service._realtime_model.transcribe.return_value = ([segment], info)
+    service._realtime_model.model.model_type = "tiny"
+
+    # 1 second of raw PCM without an AudioFormat reproduces the coordinator
+    # resume path after transcription was paused during startup.
+    await service._process_audio_data(
+        b"\x00\x01" * 16_000,
+        audio_format=None,
+        stream_id="wake-session",
+        source="microphone",
+    )
+    service._process_audio_buffer()
+    await asyncio.sleep(0.05)
+
+    assert service._audio_format is not None
+    assert service._audio_format.sample_rate == 16000
+    publish_calls = [
+        call for call in service.bus.publish.call_args_list
+        if call.args and call.args[0] == TranscriptionMethods.RESULT
+    ]
+    assert publish_calls, "realtime partial should be published before VAD silence"
+    payload = publish_calls[-1].args[1]
+    assert payload.text == "live partial text"
+    assert payload.transcription_type == TranscriptionType.REALTIME

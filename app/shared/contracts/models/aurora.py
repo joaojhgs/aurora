@@ -43,7 +43,14 @@ AuroraEventCategory = Literal[
 
 
 class AuroraEventStreamEvent(IOModel):
-    """Redacted normalized event visible to SDK/UI event subscribers."""
+    """Normalized event visible to SDK/UI event subscribers.
+
+    ``redacted_payload`` is the only payload persisted in Gateway history and
+    support bundles. ``payload`` is optional and is only populated for live,
+    interactive streams that need display text (for example assistant chat and
+    STT transcript projection); it must never carry raw audio, credentials, or
+    tool arguments.
+    """
 
     event_id: str
     topic: str
@@ -62,5 +69,6 @@ class AuroraEventStreamEvent(IOModel):
     route: str | None = None
     policy_decision_id: str | None = None
     principal_id: str | None = None
+    payload: dict[str, Any] | None = None
     redacted_payload: dict[str, Any] = Field(default_factory=dict)
     payload_sha256: str = ""

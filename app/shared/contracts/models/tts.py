@@ -1,5 +1,7 @@
 """TTS (Text-to-Speech) service contract models."""
 
+from pydantic import Field
+
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
@@ -17,6 +19,10 @@ class TTSMethods:
 
     REQUEST = f"{TTSModule.NAME}.Request"
     SYNTHESIZE = f"{TTSModule.NAME}.Synthesize"  # External: returns audio data
+    STREAM_START = f"{TTSModule.NAME}.StreamStart"
+    STREAM_CHUNK = f"{TTSModule.NAME}.StreamChunk"
+    STREAM_END = f"{TTSModule.NAME}.StreamEnd"
+    AUDIO_CHUNK = f"{TTSModule.NAME}.AudioChunk"
     STOP = f"{TTSModule.NAME}.Stop"
     PAUSE = f"{TTSModule.NAME}.Pause"
     RESUME = f"{TTSModule.NAME}.Resume"
@@ -58,6 +64,62 @@ class TTSSynthesizeResponse(IOModel):
     channels: int
     duration_ms: float
     text: str
+
+
+class TTSStreamStartRequest(IOModel):
+    """Start an ordered text-to-speech streaming session.
+
+    Stream sessions accept text fragments through ``TTSStreamChunkRequest`` and
+    publish synthesized audio fragments as ``TTSAudioChunkEvent`` events.
+    """
+
+    stream_id: str
+    voice: str | None = None
+    speed: float = 1.0
+    format: str = "wav"  # "wav" | "raw"
+    sample_rate: int | None = None  # None = use model default
+    interrupt: bool = True  # Stop current server playback/streams before starting
+    play_on_server: bool = True  # Also play chunks through local server audio output
+    mesh_selector: MeshAddressSelector | None = None
+    correlation_id: str | None = None
+
+
+class TTSStreamChunkRequest(IOModel):
+    """Ordered text chunk for an active TTS streaming session."""
+
+    stream_id: str
+    sequence: int = Field(ge=0)
+    text: str
+    is_final: bool = False
+    mesh_selector: MeshAddressSelector | None = None
+    correlation_id: str | None = None
+
+
+class TTSStreamEndRequest(IOModel):
+    """End an ordered TTS streaming session."""
+
+    stream_id: str
+    final_sequence: int | None = Field(default=None, ge=0)
+    reason: str = "completed"
+    mesh_selector: MeshAddressSelector | None = None
+    correlation_id: str | None = None
+
+
+class TTSAudioChunkEvent(IOModel):
+    """Synthesized audio chunk emitted for a TTS streaming session."""
+
+    stream_id: str
+    sequence: int = Field(ge=0)
+    audio_data: str  # Base64-encoded audio
+    format: str
+    sample_rate: int
+    channels: int = 1
+    duration_ms: float = Field(ge=0)
+    text: str | None = None
+    source_sequence: int | None = Field(default=None, ge=0)
+    is_final: bool = False
+    reason: str | None = None
+    correlation_id: str | None = None
 
 
 class TTSControl(IOModel):

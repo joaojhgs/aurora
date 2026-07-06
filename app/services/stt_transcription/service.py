@@ -116,16 +116,26 @@ class TranscriptionService(BaseService):
         # VAD for speech detection
         self._vad: webrtcvad.Vad | None = None
         self._vad_mode = VADMode.MEDIUM
-        self._speech_segments: deque[bytes] = deque(maxlen=100)
+        # Active utterance audio must not be capped to a short rolling window.
+        # The coordinator bounds listening with session_timeout_s, so this
+        # remains memory-safe while preserving long-form requests for the
+        # accurate final transcription.
+        self._speech_segments: deque[bytes] = deque()
         self._in_speech = False
         self._silence_chunks = 0
         self._min_silence_chunks = 10  # ~200ms of silence to end segment
+        self._last_realtime_partial_at = 0.0
+        self._last_realtime_partial_text = ""
+        self._partial_interval_seconds = 1.0
+        self._partial_min_audio_length_ms = 700
 
         # Configuration (will be loaded in on_start)
         self._language = ""
         self._realtime_enabled = True
         self._accurate_enabled = True
         self._min_audio_length_ms = 500  # Minimum audio length to transcribe
+        self._default_sample_rate = 16000
+        self._default_channels = 1
 
         # Processing thread
         self._process_thread: threading.Thread | None = None
@@ -374,6 +384,10 @@ class TranscriptionService(BaseService):
                 stream_id = self._current_stream_id
                 source = self._current_source
 
+        self._process_audio_item(audio_data, stream_id, source)
+
+    def _process_audio_item(self, audio_data: bytes, stream_id: str, source: str) -> None:
+        """Process one audio item for VAD segmentation."""
         # Check for stream switch
         if stream_id != self._current_stream_id:
             # If we have pending speech, transcribe it now (flush)
@@ -397,6 +411,7 @@ class TranscriptionService(BaseService):
             self._speech_segments.append(audio_data)
             self._in_speech = True
             self._silence_chunks = 0
+            self._emit_realtime_partial_if_due()
         else:
             if self._in_speech:
                 # We're in speech but this chunk is silence
@@ -408,6 +423,51 @@ class TranscriptionService(BaseService):
                     # End of speech segment
                     self._transcribe_segment()
                     self._reset_speech_state()
+
+    def _flush_pending_audio(self) -> None:
+        """Drain queued audio and force transcription of the current speech segment."""
+        with self._buffer_lock:
+            pending_items = list(self._audio_buffer)
+            self._audio_buffer.clear()
+
+        fallback_audio: list[bytes] = []
+        fallback_peak = 0.0
+        for item in pending_items:
+            if isinstance(item, tuple):
+                audio_data, stream_id, source = item
+            else:
+                audio_data = item
+                stream_id = self._current_stream_id
+                source = self._current_source
+            fallback_audio.append(audio_data)
+            fallback_peak = max(fallback_peak, self._audio_peak_percent(audio_data))
+            self._process_audio_item(audio_data, stream_id, source)
+
+        if self._speech_segments:
+            log_info("Flushing pending speech segment for manual stop")
+            self._transcribe_segment()
+            self._reset_speech_state()
+        elif fallback_audio and fallback_peak >= 1.0:
+            segment_data = b"".join(fallback_audio)
+            duration_ms = len(segment_data) / 32
+            if duration_ms >= self._min_audio_length_ms:
+                log_info(
+                    "Flushing buffered audio for manual stop "
+                    f"({duration_ms:.0f}ms, peak={fallback_peak:.1f}%)"
+                )
+                self._speech_segments.append(segment_data)
+                self._transcribe_segment()
+                self._reset_speech_state()
+
+    def _audio_peak_percent(self, audio_data: bytes) -> float:
+        sample_count = len(audio_data) // 2
+        if sample_count <= 0:
+            return 0.0
+        samples = memoryview(audio_data[: sample_count * 2]).cast("h")
+        if len(samples) == 0:
+            return 0.0
+        peak = max(abs(int(sample)) for sample in samples)
+        return min(100.0, (peak / 32768.0) * 100.0)
 
     def _detect_speech(self, audio_data: bytes) -> bool:
         """Detect if audio chunk contains speech using VAD.
@@ -439,6 +499,27 @@ class TranscriptionService(BaseService):
         except Exception as e:
             log_debug(f"VAD error: {e}")
             return True  # Assume speech on error
+
+    def _emit_realtime_partial_if_due(self) -> None:
+        """Emit fast interim transcription while speech is still in progress.
+
+        The accurate model still owns the final message after VAD/silence. This
+        gives the UI live textbox updates without waiting for end-of-speech.
+        """
+        if not self._realtime_enabled or not self._realtime_model or not self._speech_segments:
+            return
+        now = time.time()
+        if now - self._last_realtime_partial_at < self._partial_interval_seconds:
+            return
+        segment_data = b"".join(self._speech_segments)
+        duration_ms = len(segment_data) / 32
+        if duration_ms < self._partial_min_audio_length_ms:
+            return
+        self._last_realtime_partial_at = now
+        audio_np = self._bytes_to_numpy(segment_data)
+        self._transcribe_with_model(
+            audio_np, self._realtime_model, TranscriptionType.REALTIME, duration_ms
+        )
 
     def _transcribe_segment(self) -> None:
         """Transcribe accumulated speech segment."""
@@ -648,11 +729,20 @@ class TranscriptionService(BaseService):
         self._current_stream_id = stream_id
         self._current_source = source
 
-        # Store audio format if provided and not yet set
-        if audio_format and self._audio_format is None:
-            self._audio_format = audio_format
+        # Store audio format if provided and not yet set. The coordinator only
+        # used to send format on process-start chunk zero, which meant a paused
+        # transcription service could miss it and then treat all later chunks as
+        # speech forever. Infer the standard coordinator format when missing so
+        # VAD can end the utterance and final transcription can run.
+        if self._audio_format is None:
+            self._audio_format = audio_format or AudioFormat(
+                sample_rate=self._default_sample_rate,
+                channels=self._default_channels,
+                encoding=AudioEncoding.PCM_S16LE,
+                bits_per_sample=16,
+            )
             log_info(
-                f"Audio format set: {audio_format.sample_rate}Hz, {audio_format.channels}ch, {audio_format.bits_per_sample}bits"
+                f"Audio format set: {self._audio_format.sample_rate}Hz, {self._audio_format.channels}ch, {self._audio_format.bits_per_sample}bits"
             )
 
         # Add to buffer with metadata
@@ -830,6 +920,8 @@ class TranscriptionService(BaseService):
 
         if action == "pause":
             self._paused = True
+        elif action == "flush":
+            await asyncio.to_thread(self._flush_pending_audio)
         elif action == "resume":
             self._paused = False
             # Clear audio buffers when resuming to avoid processing stale audio
@@ -838,6 +930,8 @@ class TranscriptionService(BaseService):
                 self._speech_segments.clear()
             self._in_speech = False
             self._silence_chunks = 0
+            self._last_realtime_partial_at = 0.0
+            self._last_realtime_partial_text = ""
             log_info("Cleared audio buffers on resume")
         elif action == "set_language":
             if data.language:

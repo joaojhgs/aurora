@@ -11,3 +11,4 @@ class State(TypedDict):
     messages: Annotated[list, add_messages]
     tool_bindings: NotRequired[dict]
     approval_candidates: NotRequired[dict]
+    approval_pending: NotRequired[bool]

@@ -53,8 +53,8 @@ def test_build_tool_bindings_keeps_local_and_safe_remote_tools():
     assert remote_binding["mesh_selector"]["tool_id"] == remote_binding["global_tool_id"]
 
 
-def test_build_tool_bindings_hides_remote_confirmation_required_tools():
-    """High-risk remote tools are not advertised for automatic model selection."""
+def test_build_tool_bindings_exposes_remote_confirmation_required_tools_for_approval():
+    """High-risk remote tools stay model-visible so runtime approval can interrupt."""
 
     tools, bindings = build_tool_bindings(
         [
@@ -74,12 +74,16 @@ def test_build_tool_bindings_hides_remote_confirmation_required_tools():
         ]
     )
 
-    assert tools == []
-    assert bindings == {}
+    assert [tool.name for tool in tools] == ["raspi-lab_unlock_door"]
+    binding = bindings["raspi-lab_unlock_door"]
+    assert binding["tool_name"] == "raspi-lab:remote_raspi-lab_Tooling:tool:unlock_door"
+    assert binding["mesh_selector"]["peer_id"] == "raspi-lab"
+    assert binding["safety_class"] == "dangerous"
+    assert binding["confirmation_required"] is True
 
 
-def test_build_tool_bindings_hides_local_confirmation_required_tools():
-    """High-risk local tools also require approval instead of model binding."""
+def test_build_tool_bindings_exposes_local_confirmation_required_tools_for_approval():
+    """High-risk local tools stay model-visible so Tooling policy can gate execution."""
 
     tools, bindings = build_tool_bindings(
         [
@@ -99,9 +103,59 @@ def test_build_tool_bindings_hides_local_confirmation_required_tools():
         ]
     )
 
+    assert [tool.name for tool in tools] == ["delete_file"]
+    binding = bindings["delete_file"]
+    assert binding["tool_name"] == "delete_file"
+    assert binding["global_tool_id"] == "local:Tooling:tool:delete_file"
+    assert binding["safety_class"] == "dangerous"
+    assert binding["confirmation_required"] is True
+
+
+def test_build_tool_bindings_hides_explicitly_blocked_tools():
+    """Explicitly blocked tools are the only policy category hidden from the model."""
+
+    tools, bindings = build_tool_bindings(
+        [
+            {
+                "name": "blocked_shell",
+                "local_name": "shell",
+                "description": "Run shell commands.",
+                "args_schema": {"type": "object", "properties": {}},
+                "trust_tier": "blocked",
+            },
+            {
+                "name": "hidden_admin",
+                "local_name": "hidden_admin",
+                "description": "Hidden by policy.",
+                "args_schema": {"type": "object", "properties": {}},
+                "blocked": True,
+            },
+        ]
+    )
+
     assert tools == []
     assert bindings == {}
 
+
+
+def test_build_tool_bindings_keeps_malformed_non_blocked_tools_visible():
+    """Malformed schema metadata must not hide a non-blocked tool from the LLM."""
+
+    tools, bindings = build_tool_bindings(
+        [
+            {
+                "name": "legacy_tool",
+                "description": "Legacy plugin with malformed JSON schema metadata.",
+                "args_schema": {"type": "object", "properties": {None: {"type": "string"}}},
+                "trust_tier": "untrusted",
+            }
+        ]
+    )
+
+    assert [tool.name for tool in tools] == ["legacy_tool"]
+    assert bindings["legacy_tool"]["tool_name"] == "legacy_tool"
+    assert bindings["legacy_tool"]["args_schema"] == {"type": "object", "properties": {}}
+    assert bindings["legacy_tool"]["schema_warning"]
 
 def test_build_tool_bindings_resolves_duplicate_names_deterministically():
     """Unexpected duplicate bind names are suffixed while preserving provider IDs."""

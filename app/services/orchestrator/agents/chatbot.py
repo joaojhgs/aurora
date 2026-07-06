@@ -1,3 +1,4 @@
+import inspect
 import os
 from datetime import datetime
 
@@ -380,14 +381,8 @@ async def chatbot(state: State, bus: MessageBus):
     )
     if not result.ok:
         log_warning(
-            "Tool catalog retrieval failed; falling back to legacy Tooling.GetTools: "
+            "Tool catalog retrieval failed; failing closed with no model-visible tools: "
             f"{result.error}"
-        )
-        result = await bus.request(
-            ToolingMethods.GET_TOOLS,
-            ToolingGetToolsRequest(query=state["messages"][-1].content, top_k=10),
-            timeout=5.0,
-            priority=get_interactive_priority(),
         )
 
     tool_bindings = {}
@@ -417,30 +412,40 @@ async def chatbot(state: State, bus: MessageBus):
 
     llm_with_tools = llm.bind_tools(tools, tool_choice="auto") if tools else llm
     log_debug(f"Processing {len(state['messages'])} messages in chatbot node")
+    prompt_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful voice assistant called Jarvis.\n"
+                "Be as concise as possible and provide the user with the most relevant information.\n"
+                "You are a voice assistant, so make all responses voice friendly, remove markdown and links.\n"
+                "Make sure to provide the user with the most relevant information and be concise."
+                "Alway respond in the language of the user"
+                "You can call tools to get information or execute actions.\n"
+                "Make sure to respond the user after finishing calling all necessary tools to gather data and/or execute actions"
+                "A tool can be called only once per message, so if you need to call a tool, make sure to call it only once.\n"
+                "The user should always get an answer at the end, summarize and adapt tool answers and respond to the user.\n"
+                f"{memories}"
+                f"\nCurrent time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            ),
+        },
+        *state["messages"][-4:],
+    ]
+    response_message = None
+    try:
+        async for chunk in llm_with_tools.astream(prompt_messages):
+            response_message = chunk if response_message is None else response_message + chunk
+    except (AttributeError, NotImplementedError, TypeError):
+        response_message = None
+        if hasattr(llm_with_tools, "ainvoke"):
+            maybe_response = llm_with_tools.ainvoke(prompt_messages)
+            if inspect.isawaitable(maybe_response):
+                response_message = await maybe_response
+        if response_message is None:
+            response_message = llm_with_tools.invoke(prompt_messages)
+
     return {
-        "messages": [
-            llm_with_tools.invoke(
-                [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a helpful voice assistant called Jarvis.\n"
-                            "Be as concise as possible and provide the user with the most relevant information.\n"
-                            "You are a voice assistant, so make all responses voice friendly, remove markdown and links.\n"
-                            "Make sure to provide the user with the most relevant information and be concise."
-                            "Alway respond in the language of the user"
-                            "You can call tools to get information or execute actions.\n"
-                            "Make sure to respond the user after finishing calling all necessary tools to gather data and/or execute actions"
-                            "A tool can be called only once per message, so if you need to call a tool, make sure to call it only once.\n"
-                            "The user should always get an answer at the end, summarize and adapt tool answers and respond to the user.\n"
-                            f"{memories}"
-                            f"\nCurrent time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                        ),
-                    },
-                    *state["messages"][-4:],
-                ]
-            )
-        ],
+        "messages": [response_message],
         "tool_bindings": tool_bindings,
         "approval_candidates": approval_candidates,
     }

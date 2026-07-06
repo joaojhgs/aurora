@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import re
 import threading
 import uuid
 from datetime import datetime
@@ -42,21 +43,25 @@ from app.messaging import (
     MessageBus,
     TranscriptionControl,
     TranscriptionResult,
+    TranscriptionType,
 )
 from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.models import AmbientTranscription, AudioInput, Coordinator
-from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.stt import (
     STTAudioChunk,
+    STTAudioLevel,
     STTCoordinatorControl,
     STTListenRequest,
+    STTListenResponse,
     STTMethods,
     STTModule,
     STTStopListeningRequest,
     TranscriptionMethods,
     WakeWordMethods,
 )
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.stt_coordinator_models import (
     STTSessionEnded,
@@ -67,6 +72,107 @@ from app.shared.messaging.models.stt_coordinator_models import (
 from app.shared.services.base_service import BaseService
 
 config_api = ConfigAPI()
+
+_TRANSCRIPT_WORD_RE = re.compile(r"\S+")
+_TRANSCRIPT_KEY_RE = re.compile(r"[^\w]+", re.UNICODE)
+
+
+def _transcript_word_key(word: str) -> str:
+    """Return a comparison key for one transcript word."""
+    return _TRANSCRIPT_KEY_RE.sub("", word).casefold()
+
+
+def _transcript_words(text: str) -> list[str]:
+    """Split transcript text into display-preserving word tokens."""
+    return _TRANSCRIPT_WORD_RE.findall(" ".join(text.split()))
+
+
+def merge_transcript_text(previous: str, incoming: str, *, append_on_miss: bool) -> str:
+    """Merge rolling STT updates without losing earlier utterance text.
+
+    Faster realtime/accurate STT calls can return a sliding tail of the active
+    utterance. If we simply replace the text, long voice prompts lose their
+    beginning before they reach the UI and LLM. This keeps the prefix from the
+    best overlapping previous text while letting the newer incoming tail correct
+    its own wording.
+    """
+    previous = " ".join(previous.split())
+    incoming = " ".join(incoming.split())
+    if not previous:
+        return incoming
+    if not incoming:
+        return previous
+
+    previous_words = _transcript_words(previous)
+    incoming_words = _transcript_words(incoming)
+    previous_keys = [_transcript_word_key(word) for word in previous_words]
+    incoming_keys = [_transcript_word_key(word) for word in incoming_words]
+    if not previous_keys:
+        return incoming
+    if not incoming_keys:
+        return previous
+
+    if incoming_keys[: len(previous_keys)] == previous_keys:
+        return incoming
+    if previous_keys == incoming_keys:
+        return incoming
+
+    # Prefer a match at the start of the incoming text. That is the common shape
+    # of Whisper rolling-window updates: the incoming text is a tail beginning
+    # somewhere inside the previous preview.
+    best_previous_index = -1
+    best_length = 0
+    for previous_index in range(len(previous_keys)):
+        length = 0
+        while (
+            previous_index + length < len(previous_keys)
+            and length < len(incoming_keys)
+            and previous_keys[previous_index + length] == incoming_keys[length]
+        ):
+            length += 1
+        if length > best_length:
+            best_previous_index = previous_index
+            best_length = length
+
+    # Two-word overlaps are useful for short prompts; three words avoids most
+    # accidental joins in longer dictation.
+    min_overlap = 2 if min(len(previous_keys), len(incoming_keys)) <= 5 else 3
+    if best_previous_index >= 0 and best_length >= min_overlap:
+        merged_words = previous_words[:best_previous_index] + incoming_words
+        return " ".join(merged_words)
+
+    if append_on_miss:
+        return f"{previous} {incoming}"
+    return incoming
+
+
+@contextlib.contextmanager
+def _native_audio_probe_stderr(enabled: bool):
+    """Temporarily silence PortAudio/ALSA/JACK probe spam when using Pulse/PipeWire.
+
+    PyAudio reports real initialization failures through Python exceptions, which
+    are logged by the caller. The native probe can still print dozens of ALSA
+    and JACK fallback errors to stderr even when Pulse/PipeWire capture succeeds.
+    """
+    if not enabled:
+        yield
+        return
+    saved_stderr_fd: int | None = None
+    devnull_fd: int | None = None
+    try:
+        saved_stderr_fd = os.dup(2)
+        devnull_fd = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull_fd, 2)
+        yield
+    finally:
+        if saved_stderr_fd is not None:
+            with contextlib.suppress(OSError):
+                os.dup2(saved_stderr_fd, 2)
+            with contextlib.suppress(OSError):
+                os.close(saved_stderr_fd)
+        if devnull_fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(devnull_fd)
 
 
 class STTCoordinatorService(BaseService):
@@ -95,6 +201,7 @@ class STTCoordinatorService(BaseService):
         self._current_session_id: str | None = None
         self._session_start_time: datetime | None = None
         self._accumulated_transcription: str = ""
+        self._partial_transcription_preview: str = ""
 
         # PyAudio resources (Any: optional dependency; types are pyaudio.PyAudio / Stream when installed)
         self._pyaudio: Any = None
@@ -114,6 +221,7 @@ class STTCoordinatorService(BaseService):
         self._format = pyaudio.paInt16 if pyaudio is not None else 8
         self._device_index: int | None = None
         self._audio_input_available: bool = False
+        self._audio_source: str = ""
 
         # Stream tracking
         self._stream_id: str | None = None
@@ -125,10 +233,12 @@ class STTCoordinatorService(BaseService):
         self._loop: asyncio.AbstractEventLoop | None = None
 
         # Coordinator configuration
-        self._listen_timeout_seconds = 10.0
+        self._listen_timeout_seconds = 30.0
         self._multi_turn_enabled = False
         self._pause_tts_on_listening = True
         self._ambient_transcription_enabled = False
+        self._tts_playing = False
+        self._tts_interrupted_for_session = False
 
         # Timeout task
         self._timeout_task: asyncio.Task | None = None
@@ -174,6 +284,22 @@ class STTCoordinatorService(BaseService):
 
         # Subscribe to transcription result events
         self.bus.subscribe(TranscriptionMethods.RESULT, self._on_transcription_result)
+        self.bus.subscribe(TTSMethods.STARTED, self._on_tts_lifecycle_event)
+        self.bus.subscribe(TTSMethods.STOPPED, self._on_tts_lifecycle_event)
+        self.bus.subscribe(TTSMethods.PAUSED, self._on_tts_lifecycle_event)
+        self.bus.subscribe(TTSMethods.RESUMED, self._on_tts_lifecycle_event)
+        self.bus.subscribe(TTSMethods.ERROR, self._on_tts_lifecycle_event)
+
+        if not self._ambient_transcription_enabled:
+            try:
+                await self.bus.publish(
+                    TranscriptionMethods.CONTROL,
+                    TranscriptionControl(action="pause"),
+                    event=False,
+                )
+                log_debug("Transcription paused at coordinator startup (ambient mode disabled)")
+            except Exception as e:
+                log_warning(f"Failed to pause transcription at startup: {e}")
 
         log_info("STT coordinator started with audio capture")
         log_info(f"   Audio: {self._sample_rate}Hz, {self._channels}ch, {self._chunk_size} frames")
@@ -197,6 +323,11 @@ class STTCoordinatorService(BaseService):
 
         self.bus.unsubscribe(WakeWordMethods.DETECTED, self._on_wake_word_detected)
         self.bus.unsubscribe(TranscriptionMethods.RESULT, self._on_transcription_result)
+        self.bus.unsubscribe(TTSMethods.STARTED, self._on_tts_lifecycle_event)
+        self.bus.unsubscribe(TTSMethods.STOPPED, self._on_tts_lifecycle_event)
+        self.bus.unsubscribe(TTSMethods.PAUSED, self._on_tts_lifecycle_event)
+        self.bus.unsubscribe(TTSMethods.RESUMED, self._on_tts_lifecycle_event)
+        self.bus.unsubscribe(TTSMethods.ERROR, self._on_tts_lifecycle_event)
 
         # Stop audio capture if active
         if self._capturing:
@@ -263,10 +394,11 @@ class STTCoordinatorService(BaseService):
         self._channels = audio_input.channels if audio_input.channels is not None else 1
         self._chunk_size = audio_input.chunk_size if audio_input.chunk_size is not None else 1024
         self._device_index = audio_input.device_index
+        self._audio_source = os.environ.get("AURORA_STT_AUDIO_SOURCE", "").strip().lower()
 
         # Coordinator configuration
         self._listen_timeout_seconds = (
-            coord_config.session_timeout_s if coord_config.session_timeout_s is not None else 10.0
+            coord_config.session_timeout_s if coord_config.session_timeout_s is not None else 30.0
         )
         self._multi_turn_enabled = (
             coord_config.multi_turn_enabled
@@ -307,27 +439,33 @@ class STTCoordinatorService(BaseService):
             self._device_index = None
             return
         try:
-            self._pyaudio = pyaudio.PyAudio()
+            input_devices: list[dict[str, Any]] = []
+            suppress_probe_stderr = self._audio_source in {"pulse", "pipewire"}
+            with _native_audio_probe_stderr(suppress_probe_stderr):
+                self._pyaudio = pyaudio.PyAudio()
 
-            # Log available devices
-            log_debug("Available audio input devices:")
-            for i in range(self._pyaudio.get_device_count()):
-                try:
-                    info = self._pyaudio.get_device_info_by_index(i)
-                    if info.get("maxInputChannels", 0) > 0:
-                        log_debug(
-                            f"  [{i}] {info.get('name')} "
-                            f"(channels: {info.get('maxInputChannels')}, "
-                            f"rate: {info.get('defaultSampleRate')})"
-                        )
-                except Exception as e:
-                    log_debug(f"Could not get info for device {i}: {e}")
+                # Log available devices
+                log_debug("Available audio input devices:")
+                for i in range(self._pyaudio.get_device_count()):
+                    try:
+                        info = self._pyaudio.get_device_info_by_index(i)
+                        if info.get("maxInputChannels", 0) > 0:
+                            input_devices.append(dict(info))
+                            log_debug(
+                                f"  [{i}] {info.get('name')} "
+                                f"(channels: {info.get('maxInputChannels')}, "
+                                f"rate: {info.get('defaultSampleRate')})"
+                            )
+                    except Exception as e:
+                        log_debug(f"Could not get info for device {i}: {e}")
 
-            # If no device index specified, use default
-            if self._device_index is None:
-                default_device = self._pyaudio.get_default_input_device_info()
-                self._device_index = default_device["index"]
-                log_debug(f"Using default input device: {default_device['name']}")
+                # If no device index specified, use default or the requested audio source.
+                if self._device_index is None:
+                    preferred_device = self._preferred_input_device(input_devices)
+                    if preferred_device is None:
+                        preferred_device = self._pyaudio.get_default_input_device_info()
+                    self._device_index = int(preferred_device["index"])
+                    log_debug(f"Using input device: {preferred_device['name']}")
 
             self._audio_input_available = True
 
@@ -347,6 +485,19 @@ class STTCoordinatorService(BaseService):
                 "STT coordinator running without local microphone capture "
                 "(set AURORA_STT_REQUIRE_MICROPHONE=1 to fail fast in production)"
             )
+
+
+    def _preferred_input_device(self, devices: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Return the preferred PyAudio input device for the configured source."""
+        if not devices or self._audio_source not in {"pulse", "pipewire"}:
+            return None
+        preferred_names = ("pulse", "pipewire", "default")
+        for preferred_name in preferred_names:
+            for device in devices:
+                name = str(device.get("name", "")).lower()
+                if name == preferred_name or preferred_name in name:
+                    return device
+        return None
 
     async def _start_audio_capture(self) -> None:
         """Start audio capture from microphone."""
@@ -499,24 +650,23 @@ class STTCoordinatorService(BaseService):
                     # Read audio data from stream
                     audio_data = self._stream.read(self._chunk_size, exception_on_overflow=False)
 
-                    # Create audio chunk
+                    audio_format = AudioFormat(
+                        sample_rate=self._sample_rate,
+                        channels=self._channels,
+                        encoding=AudioEncoding.PCM_S16LE,
+                        bits_per_sample=16,
+                        chunk_duration_ms=(self._chunk_size / self._sample_rate) * 1000,
+                    )
+
+                    # Create audio chunk. Include format while a session is
+                    # active so Transcription can recover after being paused at
+                    # startup and still run VAD/end-of-speech correctly.
                     chunk = AudioChunk(
                         data=audio_data,
                         source="microphone",
                         stream_id=self._stream_id,
                         sequence=self._sequence,
-                        # Only send format with first chunk
-                        format=(
-                            None
-                            if self._sequence > 0
-                            else AudioFormat(
-                                sample_rate=self._sample_rate,
-                                channels=self._channels,
-                                encoding=AudioEncoding.PCM_S16LE,
-                                bits_per_sample=16,
-                                chunk_duration_ms=(self._chunk_size / self._sample_rate) * 1000,
-                            )
-                        ),
+                        format=audio_format if self._sequence == 0 or self._current_session_id else None,
                     )
 
                     # Publish chunk to message bus
@@ -530,6 +680,20 @@ class STTCoordinatorService(BaseService):
                             ),
                             self._loop,
                         )
+                        if self._current_session_id and self._sequence % 3 == 0:
+                            audio_level = self._audio_level_event(audio_data)
+                            if audio_level is not None:
+                                asyncio.run_coroutine_threadsafe(
+                                    self.bus.publish(
+                                        STTMethods.AUDIO_LEVEL,
+                                        audio_level,
+                                        event=True,
+                                        mesh=True,
+                                        origin="internal",
+                                        priority=get_interactive_priority(),
+                                    ),
+                                    self._loop,
+                                )
 
                     self._sequence += 1
                     self._total_chunks += 1
@@ -545,6 +709,59 @@ class STTCoordinatorService(BaseService):
         finally:
             log_info("Audio capture loop ended")
 
+    def _audio_level_event(self, audio_data: bytes) -> STTAudioLevel | None:
+        """Build redacted audio level telemetry for UI waveform displays."""
+        sample_count = len(audio_data) // 2
+        if sample_count <= 0:
+            return None
+        samples = memoryview(audio_data[: sample_count * 2]).cast("h")
+        if not samples:
+            return None
+        sum_squares = 0
+        peak_sample = 0
+        for sample in samples:
+            absolute = abs(int(sample))
+            peak_sample = max(peak_sample, absolute)
+            sum_squares += absolute * absolute
+        rms = (sum_squares / len(samples)) ** 0.5
+        level = min(100.0, (rms / 32768.0) * 100.0)
+        peak = min(100.0, (peak_sample / 32768.0) * 100.0)
+        return STTAudioLevel(
+            session_id=self._current_session_id,
+            stream_id=self._stream_id,
+            sequence=self._sequence,
+            level=round(level, 2),
+            peak=round(peak, 2),
+            bars=self._audio_level_bars(samples),
+        )
+
+    def _audio_level_bars(self, samples: memoryview[int], bar_count: int = 24) -> list[float]:
+        """Summarize a live PCM chunk into waveform bars without exposing samples."""
+        if len(samples) == 0 or bar_count <= 0:
+            return []
+        segment_size = max(1, len(samples) // bar_count)
+        bars: list[float] = []
+        for bar_index in range(bar_count):
+            start = bar_index * segment_size
+            end = len(samples) if bar_index == bar_count - 1 else min(
+                len(samples), start + segment_size
+            )
+            if start >= end:
+                bars.append(0.0)
+                continue
+            sum_squares = 0
+            peak = 0
+            for sample in samples[start:end]:
+                absolute = abs(int(sample))
+                peak = max(peak, absolute)
+                sum_squares += absolute * absolute
+            rms = (sum_squares / (end - start)) ** 0.5
+            # Blend RMS and local peak so quiet speech still moves while sharp
+            # consonants show as taller bars. Values are derived amplitude only.
+            percent = min(100.0, ((rms / 32768.0) * 72.0) + ((peak / 32768.0) * 28.0))
+            bars.append(round(percent, 2))
+        return bars
+
     async def _transition_to(self, new_state: STTState) -> None:
         """Transition to a new state.
 
@@ -557,6 +774,14 @@ class STTCoordinatorService(BaseService):
 
             if old_state != new_state:
                 log_info(f"State transition: {old_state.value} → {new_state.value}")
+
+    async def _on_tts_lifecycle_event(self, envelope: Envelope) -> None:
+        """Track TTS playback so wakeword does not self-trigger from Aurora speech."""
+        if envelope.type == TTSMethods.STARTED or envelope.type == TTSMethods.RESUMED:
+            self._tts_playing = True
+            return
+        if envelope.type in {TTSMethods.STOPPED, TTSMethods.PAUSED, TTSMethods.ERROR}:
+            self._tts_playing = False
 
     async def _on_wake_word_detected(self, envelope: Envelope) -> None:
         """Handle wake word detection event.
@@ -578,17 +803,18 @@ class STTCoordinatorService(BaseService):
         # Start new listening session
         await self._start_session(wake_word)
 
-    async def _start_session(self, wake_word: str) -> None:
+    async def _start_session(self, wake_word: str, session_id: str | None = None) -> None:
         """Start a new STT listening session.
 
         Args:
             wake_word: Wake word that triggered the session
         """
         # Generate session ID
-        session_id = f"stt-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+        session_id = session_id or f"stt-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
         self._current_session_id = session_id
         self._session_start_time = datetime.now()
         self._accumulated_transcription = ""
+        self._partial_transcription_preview = ""
         self._sessions_started += 1
 
         log_info(f"Starting STT session: {session_id}")
@@ -596,18 +822,39 @@ class STTCoordinatorService(BaseService):
         # Transition to LISTENING state
         await self._transition_to(STTState.LISTENING)
 
-        # Pause TTS if configured
+        # Interrupt any active TTS playback before listening so the user can
+        # barge in with the wakeword and the microphone does not transcribe
+        # Aurora's own output. Non-playing/paused TTS keeps the older pause/
+        # resume behavior for compatibility.
         if self._pause_tts_on_listening:
-            log_debug("Pausing TTS playback")
-            try:
-                from app.shared.contracts.models.tts import TTSMethods
-                from app.shared.messaging.models.tts_models import TTSPause
+            if self._tts_playing:
+                log_info("Interrupting TTS playback for wakeword/listen session")
+                self._tts_interrupted_for_session = True
+                try:
+                    stop_result = await self.bus.request(
+                        TTSMethods.STOP,
+                        EmptyInput(),
+                        timeout=2.0,
+                        priority=get_interactive_priority(),
+                    )
+                    if not stop_result.ok:
+                        log_warning(f"TTS stop request failed before listening: {stop_result.error}")
+                except Exception as e:
+                    log_warning(f"Failed to stop TTS before listening: {e}")
+            else:
+                self._tts_interrupted_for_session = False
+                log_debug("Pausing TTS playback")
+                try:
+                    from app.shared.messaging.models.tts_models import TTSPause
 
-                await self.bus.publish(
-                    TTSMethods.PAUSE, TTSPause(), event=False, priority=get_interactive_priority()
-                )
-            except Exception as e:
-                log_warning(f"Failed to pause TTS: {e}")
+                    await self.bus.publish(
+                        TTSMethods.PAUSE,
+                        TTSPause(),
+                        event=False,
+                        priority=get_interactive_priority(),
+                    )
+                except Exception as e:
+                    log_warning(f"Failed to pause TTS: {e}")
 
         # Enable transcription (unpause if paused)
         try:
@@ -617,8 +864,9 @@ class STTCoordinatorService(BaseService):
         except Exception as e:
             log_warning(f"Failed to enable transcription: {e}")
 
-        # Start timeout timer
-        self._timeout_task = asyncio.create_task(self._timeout_handler())
+        # Start timeout timer. It is refreshed by realtime/partial speech so
+        # long utterances are not cut off by a fixed wall-clock timeout.
+        self._restart_timeout_timer()
 
         # Emit session started event
         await self.bus.publish(
@@ -644,13 +892,52 @@ class STTCoordinatorService(BaseService):
                     should_timeout = True
                     self._sessions_timeout += 1
 
-            # Handle timeout outside the lock to avoid deadlock
+            # Handle timeout outside the lock to avoid deadlock. Flush first so
+            # a long utterance still gets a final transcript/assistant response
+            # instead of silently ending the UI in a stuck listening state.
             if should_timeout:
-                await self._transition_to(STTState.TIMEOUT)
-                await self._end_session("timeout")
+                await self._transition_to(STTState.PROCESSING)
+                flush_result = await self.bus.request(
+                    TranscriptionMethods.CONTROL,
+                    TranscriptionControl(action="flush"),
+                    timeout=12.0,
+                    priority=get_interactive_priority(),
+                )
+                if not flush_result.ok:
+                    log_warning(f"Failed to flush transcription on timeout: {flush_result.error}")
+                    await self._transition_to(STTState.TIMEOUT)
+                    await self._end_session("timeout")
+                else:
+                    self._timeout_task = asyncio.create_task(self._flush_timeout_handler())
 
         except asyncio.CancelledError:
             # Timeout was cancelled (normal - speech was captured)
+            pass
+
+    def _restart_timeout_timer(self) -> None:
+        """Restart the listening timeout from the latest observed speech activity."""
+        if self._timeout_task and not self._timeout_task.done():
+            self._timeout_task.cancel()
+        self._timeout_task = asyncio.create_task(self._timeout_handler())
+
+    async def _flush_timeout_handler(self) -> None:
+        """End a manual recording session if no transcription arrives after stop."""
+        try:
+            # Accurate Whisper transcription for longer utterances can exceed the
+            # old six-second guard, which made the UI look stuck or randomly cut
+            # off speech even though the backend was still processing. Keep the
+            # stop flush bounded, but align it with the configured listen window.
+            await asyncio.sleep(max(12.0, min(self._listen_timeout_seconds, 30.0)))
+            should_end = False
+            async with self._state_lock:
+                should_end = (
+                    self._state == STTState.PROCESSING
+                    and self._current_session_id is not None
+                )
+            if should_end:
+                log_warning("No transcription received after manual stop; ending voice session")
+                await self._end_session("no_speech")
+        except asyncio.CancelledError:
             pass
 
     async def _on_transcription_result(self, envelope: Envelope) -> None:
@@ -666,22 +953,51 @@ class STTCoordinatorService(BaseService):
             log_debug("Empty transcription, ignoring")
             return
 
+        if result.transcription_type in {TranscriptionType.REALTIME, TranscriptionType.PARTIAL}:
+            async with self._state_lock:
+                should_refresh_timeout = self._state == STTState.LISTENING
+            if should_refresh_timeout:
+                self._restart_timeout_timer()
+            self._partial_transcription_preview = merge_transcript_text(
+                self._partial_transcription_preview,
+                text,
+                append_on_miss=False,
+            )
+            await self.bus.publish(
+                STTMethods.PARTIAL,
+                STTUserSpeechCaptured(
+                    session_id=self._current_session_id or result.stream_id or "unknown",
+                    text=self._partial_transcription_preview,
+                    confidence=result.confidence,
+                    is_final=False,
+                ),
+                event=True,
+                mesh=True,
+                origin="internal",
+                priority=get_interactive_priority(),
+            )
+            return
+
         async with self._state_lock:
-            if self._state != STTState.LISTENING:
+            if self._state not in {STTState.LISTENING, STTState.PROCESSING}:
                 log_debug(f"Ignoring transcription (state: {self._state.value})")
                 return
 
-        log_info(f"Transcription captured: '{text}'")
+        base_transcription = self._accumulated_transcription or self._partial_transcription_preview
+        final_text = merge_transcript_text(
+            base_transcription,
+            text,
+            append_on_miss=bool(self._accumulated_transcription),
+        )
+
+        log_info(f"Transcription captured: '{final_text}'")
 
         # Cancel timeout
         if self._timeout_task and not self._timeout_task.done():
             self._timeout_task.cancel()
 
-        # Accumulate transcription
-        if self._accumulated_transcription:
-            self._accumulated_transcription += " " + text
-        else:
-            self._accumulated_transcription = text
+        self._accumulated_transcription = final_text
+        self._partial_transcription_preview = final_text
 
         # Transition to PROCESSING state
         await self._transition_to(STTState.PROCESSING)
@@ -689,7 +1005,7 @@ class STTCoordinatorService(BaseService):
         # Emit user speech captured event
         speech_event = STTUserSpeechCaptured(
             session_id=self._current_session_id or "unknown",
-            text=text,
+            text=final_text,
             confidence=result.confidence,
             is_final=True,
         )
@@ -707,7 +1023,7 @@ class STTCoordinatorService(BaseService):
         if self._multi_turn_enabled:
             log_debug("Multi-turn enabled, continuing to listen...")
             await self._transition_to(STTState.LISTENING)
-            self._timeout_task = asyncio.create_task(self._timeout_handler())
+            self._restart_timeout_timer()
         else:
             # Single turn - end session
             await self._end_session("complete")
@@ -725,6 +1041,10 @@ class STTCoordinatorService(BaseService):
         transcription = self._accumulated_transcription
 
         log_info(f"Ending session {session_id} (reason: {reason})")
+
+        if self._timeout_task and not self._timeout_task.done():
+            self._timeout_task.cancel()
+        self._timeout_task = None
 
         if reason == "complete":
             self._sessions_completed += 1
@@ -755,20 +1075,23 @@ class STTCoordinatorService(BaseService):
             log_debug("Transcription kept running (ambient mode enabled)")
 
         # Resume TTS if it was paused
-        if self._pause_tts_on_listening:
+        if self._pause_tts_on_listening and not self._tts_interrupted_for_session:
             log_debug("Resuming TTS playback")
             try:
-                from app.shared.contracts.models.tts import TTSMethods
                 from app.shared.messaging.models.tts_models import TTSResume
 
                 await self.bus.publish(TTSMethods.RESUME, TTSResume(), event=False)
             except Exception as e:
                 log_warning(f"Failed to resume TTS: {e}")
+        elif self._tts_interrupted_for_session:
+            log_debug("Not resuming TTS because playback was interrupted for this session")
 
         # Reset session state
         self._current_session_id = None
         self._session_start_time = None
         self._accumulated_transcription = ""
+        self._partial_transcription_preview = ""
+        self._tts_interrupted_for_session = False
 
         # Return to IDLE state
         await self._transition_to(STTState.IDLE)
@@ -777,39 +1100,76 @@ class STTCoordinatorService(BaseService):
         method_id=STTMethods.LISTEN,
         summary="Start listening for speech (server microphone)",
         input_model=STTListenRequest,
-        output_model=EmptyOutput,
-        exposure="internal",
+        output_model=STTListenResponse,
+        exposure="both",
         method_type="use",
+        required_perms=["STTCoordinator.use"],
     )
-    async def _on_listen(self, request: STTListenRequest) -> EmptyOutput:
-        """Handle listen command."""
+    async def _on_listen(self, request: STTListenRequest) -> STTListenResponse:
+        """Handle listen command idempotently for UI push-to-talk and wakeword races."""
         log_info(f"Received listen request (session_id={request.session_id})")
 
-        # Start listening logic...
-        # For now, just acknowledge
-        await self.bus.publish(
-            STTMethods.SESSION_STARTED,
-            STTSessionStarted(session_id=request.session_id or "manual", wake_word="manual"),
-            event=True,
-            mesh=True,
-            origin="internal",
-        )
+        async with self._state_lock:
+            state = self._state
+            current_session_id = self._current_session_id
+        if state == STTState.IDLE:
+            session_id = request.session_id
+            await self._start_session("manual", session_id=session_id)
+            return STTListenResponse(
+                success=True,
+                status="listening",
+                session_id=session_id or self._current_session_id,
+                current_state=STTState.LISTENING.value,
+                source="push_to_talk",
+                message="listening_started",
+            )
 
-        return EmptyOutput()
+        log_info(
+            "Listen request joined active STT session "
+            f"(state={state.value}, session_id={current_session_id})"
+        )
+        return STTListenResponse(
+            success=True,
+            status="listening" if state == STTState.LISTENING else state.value,
+            session_id=current_session_id or request.session_id,
+            current_state=state.value,
+            source="sdk",
+            message="already_listening",
+        )
 
     @method_contract(
         method_id=STTMethods.STOP_LISTENING,
         summary="Stop listening for speech (server microphone)",
         input_model=STTStopListeningRequest,
         output_model=EmptyOutput,
-        exposure="internal",
+        exposure="both",
         method_type="use",
+        required_perms=["STTCoordinator.use"],
     )
     async def _on_stop_listening(self, request: STTStopListeningRequest) -> EmptyOutput:
         """Handle stop listening command."""
         log_info("Received stop listening request")
 
-        # Stop listening logic...
+        if self._current_session_id:
+            if self._timeout_task and not self._timeout_task.done():
+                self._timeout_task.cancel()
+            await self._transition_to(STTState.PROCESSING)
+            flush_result = await self.bus.request(
+                TranscriptionMethods.CONTROL,
+                TranscriptionControl(action="flush"),
+                timeout=8.0,
+                priority=get_interactive_priority(),
+            )
+            if not flush_result.ok:
+                log_warning(f"Failed to flush transcription before stop: {flush_result.error}")
+                await self._end_session(request.reason or "manual")
+            else:
+                self._timeout_task = asyncio.create_task(self._flush_timeout_handler())
+        else:
+            async with self._state_lock:
+                needs_idle = self._state != STTState.IDLE
+            if needs_idle:
+                await self._transition_to(STTState.IDLE)
 
         return EmptyOutput()
 

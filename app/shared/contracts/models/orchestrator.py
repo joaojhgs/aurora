@@ -4,6 +4,10 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from app.shared.contracts.models.tooling import (
+    ToolingApprovalGrantScope,
+    ToolingExecuteToolResponse,
+)
 from app.shared.contracts.registry import IOModel
 
 
@@ -22,6 +26,8 @@ class OrchestratorMethods:
     EXTERNAL_USER_INPUT = f"{OrchestratorModule.NAME}.ExternalUserInput"
     INGEST_CONTEXT = f"{OrchestratorModule.NAME}.IngestContext"
     TOOL_RESULT = f"{OrchestratorModule.NAME}.ToolResult"
+    LIST_PENDING_TOOL_APPROVALS = f"{OrchestratorModule.NAME}.ListPendingToolApprovals"
+    RESUME_TOOL_APPROVAL = f"{OrchestratorModule.NAME}.ResumeToolApproval"
     INTERRUPT = f"{OrchestratorModule.NAME}.Interrupt"
     RESPONSE = f"{OrchestratorModule.NAME}.Response"
     GET_MODEL_RUNTIME = f"{OrchestratorModule.NAME}.GetModelRuntime"
@@ -57,6 +63,7 @@ class OrchestratorProcessRequest(IOModel):
     request_id: str | None = None
     correlation_id: str | None = None
     stream: bool = False
+    client_tts_playback: bool | None = None
 
 
 class OrchestratorResponse(IOModel):
@@ -67,6 +74,138 @@ class OrchestratorResponse(IOModel):
     request_id: str | None = None
     correlation_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+AssistantStreamEventKind = Literal[
+    "assistant.delta",
+    "assistant.completed",
+    "assistant.failed",
+    "tool.requested",
+    "tool.running",
+    "tool.completed",
+    "tool.failed",
+    "tool.requires_action",
+]
+
+AssistantToolStreamStatus = Literal[
+    "requested",
+    "running",
+    "completed",
+    "failed",
+    "requires_action",
+]
+
+OrchestratorToolApprovalStatus = Literal[
+    "pending",
+    "approved",
+    "denied",
+    "executed",
+    "failed",
+    "expired",
+]
+
+
+class AssistantToolStreamState(IOModel):
+    """Safe, redacted tool-call state for assistant stream consumers."""
+
+    tool_call_id: str
+    tool_name: str
+    display_name: str | None = None
+    status: AssistantToolStreamStatus
+    summary: str = ""
+    risk_class: str | None = None
+    target: str | None = None
+    provider_id: str | None = None
+    data_leaves_device: bool = False
+    redacted_args_preview: dict[str, Any] = Field(default_factory=dict)
+    result_preview: dict[str, Any] | str | None = None
+    error: str | None = None
+    error_details: dict[str, Any] | str | None = None
+    policy_decision_id: str | None = None
+    pending_id: str | None = None
+    approval_request_id: str | None = None
+    approval_expires_at: float | None = None
+
+
+class AssistantStreamEvent(IOModel):
+    """Incremental assistant stream event published on Orchestrator.Response."""
+
+    kind: AssistantStreamEventKind
+    text: str = ""
+    delta: str = ""
+    session_id: str | None = None
+    request_id: str | None = None
+    correlation_id: str | None = None
+    message_id: str | None = None
+    sequence: int = 0
+    is_final: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    tool: AssistantToolStreamState | None = None
+
+
+class OrchestratorPendingToolApproval(IOModel):
+    """Backend state for an exact assistant tool call waiting on approval."""
+
+    pending_id: str
+    approval_request_id: str | None = None
+    status: OrchestratorToolApprovalStatus = "pending"
+    run_id: str
+    thread_id: str
+    session_id: str | None = None
+    owner_principal_id: str | None = None
+    owner_peer_id: str | None = None
+    message_id: str
+    tool_call_id: str
+    tool_name: str
+    display_name: str | None = None
+    arguments_preview: dict[str, Any] = Field(default_factory=dict)
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
+    created_at: float
+    expires_at: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestratorListPendingToolApprovalsRequest(IOModel):
+    """List active assistant approval pauses."""
+
+    session_id: str | None = None
+    run_id: str | None = None
+    status: OrchestratorToolApprovalStatus | None = None
+
+
+class OrchestratorListPendingToolApprovalsResponse(IOModel):
+    """Pending assistant approval pauses."""
+
+    approvals: list[OrchestratorPendingToolApproval] = Field(default_factory=list)
+    count: int = 0
+
+
+class OrchestratorResumeToolApprovalRequest(IOModel):
+    """Approve/deny and execute an exact pending assistant tool call."""
+
+    pending_id: str | None = None
+    approval_request_id: str | None = None
+    session_id: str | None = None
+    approve: bool = True
+    grant_scope: ToolingApprovalGrantScope = "once"
+    approver_principal_id: str | None = None
+    expires_at: float | None = None
+    include_future_tools: bool = False
+    reason: str | None = None
+    correlation_id: str | None = None
+
+
+class OrchestratorResumeToolApprovalResponse(IOModel):
+    """Result of resolving a pending assistant approval."""
+
+    ok: bool
+    status: OrchestratorToolApprovalStatus
+    pending: OrchestratorPendingToolApproval | None = None
+    tool_result: ToolingExecuteToolResponse | None = None
+    assistant_text: str | None = None
+    error: str | None = None
+    correlation_id: str | None = None
 
 
 AttachmentContextKind = Literal["text", "url", "file", "image"]

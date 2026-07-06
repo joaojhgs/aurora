@@ -7,6 +7,8 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 from pydantic import Field, create_model
 
+from app.helpers.aurora_logger import log_warning
+
 ToolBinding = dict[str, Any]
 ApprovalCandidate = dict[str, Any]
 
@@ -16,27 +18,37 @@ def build_tool_bindings(
 ) -> tuple[list[StructuredTool], dict[str, ToolBinding]]:
     """Build LLM-bindable tools and hidden execution bindings.
 
-    Tooling discovery already decides what a provider advertises. The
-    orchestrator adds one more safety layer: remote tools that require
-    confirmation or are marked sensitive/dangerous are not bound for automatic
-    model selection. Safe remote tools keep a model-visible namespaced name,
-    while execution uses the hidden global provider/tool identity.
+    Tooling discovery is the authority for what may be shown to the model.
+    The orchestrator must not hide approval-required tools from the LLM:
+    execution is controlled later by Tooling policy, approval tokens, grants,
+    and blocked-tool decisions. This keeps runtime approval possible because
+    the model can still select every non-blocked tool.
     """
 
     tools: list[StructuredTool] = []
     bindings: dict[str, ToolBinding] = {}
 
     for schema in tool_schemas:
-        if not _is_safe_to_bind(schema):
+        if _is_blocked_tool(schema):
             continue
 
+        bindable_name = _unique_tool_name(str(schema.get("name") or "unknown_tool"), bindings)
         try:
-            bindable_name = _unique_tool_name(str(schema.get("name") or "unknown_tool"), bindings)
             tool = _structured_tool_from_schema(schema, bindable_name)
-            tools.append(tool)
-            bindings[bindable_name] = _execution_binding(schema, bindable_name)
-        except Exception:
-            continue
+        except Exception as error:
+            log_warning(
+                "Failed to build exact LLM tool schema for "
+                f"{bindable_name}; binding it with empty arguments instead: {error}"
+            )
+            fallback_schema = {**schema, "args_schema": {"type": "object", "properties": {}}}
+            tool = _structured_tool_from_schema(fallback_schema, bindable_name)
+            binding = _execution_binding(fallback_schema, bindable_name)
+            binding["schema_warning"] = type(error).__name__
+        else:
+            binding = _execution_binding(schema, bindable_name)
+
+        tools.append(tool)
+        bindings[bindable_name] = binding
 
     return tools, bindings
 
@@ -72,12 +84,10 @@ def build_tool_approval_candidates(
     return candidates
 
 
-def _is_safe_to_bind(schema: dict[str, Any]) -> bool:
-    """Return whether a discovered tool may be advertised to the LLM."""
+def _is_blocked_tool(schema: dict[str, Any]) -> bool:
+    """Return whether a discovered tool must not be advertised to the LLM."""
 
-    safety_class = schema.get("safety_class") or "standard"
-    confirmation_required = bool(schema.get("confirmation_required"))
-    return safety_class == "standard" and not confirmation_required
+    return schema.get("trust_tier") == "blocked" or bool(schema.get("blocked"))
 
 
 def _requires_approval_interrupt(schema: dict[str, Any], blocked_metadata: dict[str, Any]) -> bool:
@@ -204,6 +214,13 @@ def _execution_binding(schema: dict[str, Any], bindable_name: str) -> ToolBindin
         "source_type": schema.get("source_type") or "local",
         "safety_class": schema.get("safety_class") or "standard",
         "confirmation_required": bool(schema.get("confirmation_required")),
+        "display_name": schema.get("display_name") or bindable_name,
+        "description": schema.get("description") or "",
+        "args_schema": schema.get("args_schema") or schema.get("schema") or {},
+        "required_permissions": list(schema.get("required_permissions") or []),
+        "trust_tier": schema.get("trust_tier") or "untrusted",
+        "capability_class": schema.get("capability_class"),
+        "resource_scope": schema.get("resource_scope") or [],
     }
 
     if is_remote:

@@ -271,7 +271,14 @@ class WakeWordService(BaseService):
                     },
                 )
 
-                await self.bus.publish(WakeWordMethods.DETECTED, event)
+                await self.bus.publish(
+                    WakeWordMethods.DETECTED,
+                    event,
+                    event=True,
+                    mesh=True,
+                    priority=get_interactive_priority(),
+                    origin="internal",
+                )
 
         except Exception as e:
             log_error(f"Error in wake word detection: {e}", exc_info=True)

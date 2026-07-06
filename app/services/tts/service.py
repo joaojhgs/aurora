@@ -13,33 +13,34 @@ import asyncio
 import base64
 import io
 import os
+import shutil
 import subprocess
 import tempfile
 import wave
+from dataclasses import dataclass, field
 
 from RealtimeTTS import PiperVoice, TextToAudioStream
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
-from app.messaging import Envelope, MessageBus
 from app.services.tts.piper_engine import PiperEngine
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Tts
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.tts import (
-    TTSControl,
-    TTSError,
+    TTSAudioChunkEvent,
     TTSMethods,
     TTSModule,
     TTSRequest,
-    TTSStatus,
+    TTSStreamChunkRequest,
+    TTSStreamEndRequest,
+    TTSStreamStartRequest,
     TTSSynthesizeRequest,
     TTSSynthesizeResponse,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.tts_models import (
     TTSError as TTSErrorEvent,
-    TTSEvent,
     TTSPaused,
     TTSResumed,
     TTSStarted,
@@ -49,6 +50,26 @@ from app.shared.path_utils import resolve_path
 from app.shared.services.base_service import BaseService
 
 config_api = ConfigAPI()
+
+
+@dataclass
+class _TTSStreamState:
+    """Internal ordered state for a text-to-audio stream."""
+
+    stream_id: str
+    audio_format: str
+    requested_sample_rate: int | None
+    voice: str | None
+    speed: float
+    play_on_server: bool
+    correlation_id: str | None = None
+    pending: dict[int, str] = field(default_factory=dict)
+    next_text_sequence: int = 0
+    next_audio_sequence: int = 0
+    final_text_sequence: int | None = None
+    end_reason: str = "completed"
+    emitted_sample_rate: int = 0
+    draining: bool = False
 
 
 # TODO: Implement volume control functions
@@ -85,6 +106,8 @@ class TTSService(BaseService):
         self._current_text: str | None = None
         self._current_request_id: str | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._stream_states: dict[str, _TTSStreamState] = {}
+        self._stream_state_lock = asyncio.Lock()
         self.stream = None  # Will be initialized in on_start()
 
     async def _get_model_paths(self):
@@ -118,17 +141,27 @@ class TTSService(BaseService):
             # Get voice model paths from env vars or config
             model_file, config_file = await self._get_model_paths()
 
-            # Get sample rate for caching
+            # Get sample rate and executable path for caching. Tauri dev starts
+            # Python from Rust, where PATH may not include .venv/bin even though
+            # piper-tts is installed in the project environment. Prefer explicit
+            # env/config, then PATH, then the repo venv executable.
             tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
             sample_rate = (
                 tts_cfg.model_sample_rate if tts_cfg.model_sample_rate is not None else 22050
             )
+            configured_piper_path = (
+                os.getenv("AURORA_TTS_PIPER_PATH") or tts_cfg.piper_path or shutil.which("piper")
+            )
+            venv_piper_path = resolve_path(".venv/bin/piper")
+            if not configured_piper_path and venv_piper_path.exists():
+                configured_piper_path = str(venv_piper_path)
+            piper_path = configured_piper_path or "piper"
 
             # Create Piper voice
             voice = PiperVoice(model_file=model_file, config_file=config_file)
 
             # Create Piper engine with cached sample rate
-            self.engine = PiperEngine(piper_path="piper", voice=voice, sample_rate=sample_rate)
+            self.engine = PiperEngine(piper_path=piper_path, voice=voice, sample_rate=sample_rate)
 
             # Create audio stream with callbacks
             self.stream = TextToAudioStream(
@@ -186,6 +219,7 @@ class TTSService(BaseService):
         """Stop the TTS service."""
         log_info("Stopping TTS service...")
         self._playing = False
+        await self._clear_tts_streams("service_stopped")
 
         # Stop any ongoing playback
         if hasattr(self, "stream"):
@@ -225,8 +259,9 @@ class TTSService(BaseService):
         summary="Process text-to-speech request (plays on server)",
         input_model=TTSRequest,
         output_model=EmptyOutput,
-        exposure="internal",
+        exposure="both",
         method_type="use",
+        required_perms=[TTSMethods.REQUEST],
     )
     async def _on_tts_request(self, request: TTSRequest) -> EmptyOutput:
         """Handle TTS request command.
@@ -262,11 +297,112 @@ class TTSService(BaseService):
             request_id = str(uuid.uuid4())
             await self.bus.publish(
                 TTSMethods.ERROR,
-                TTSError(request_id=request_id, error=str(e)),
+                TTSErrorEvent(request_id=request_id, error=str(e)),
                 event=True,
                 mesh=True,
                 origin="internal",
             )
+            return EmptyOutput()
+
+    @method_contract(
+        method_id=TTSMethods.STREAM_START,
+        summary="Start an ordered text-to-speech audio stream",
+        input_model=TTSStreamStartRequest,
+        output_model=EmptyOutput,
+        exposure="both",
+        method_type="use",
+        required_perms=[TTSMethods.STREAM_START],
+    )
+    async def _on_stream_start(self, request: TTSStreamStartRequest) -> EmptyOutput:
+        """Start a streaming TTS session that emits audio chunk events."""
+        try:
+            log_info(
+                f"TTS stream start: stream_id={request.stream_id} interrupt={request.interrupt}"
+            )
+            if request.interrupt:
+                await self._stop_playback("interrupted")
+                await self._clear_tts_streams("interrupted")
+
+            async with self._stream_state_lock:
+                self._stream_states[request.stream_id] = _TTSStreamState(
+                    stream_id=request.stream_id,
+                    audio_format=request.format,
+                    requested_sample_rate=request.sample_rate,
+                    voice=request.voice,
+                    speed=request.speed,
+                    play_on_server=request.play_on_server,
+                    correlation_id=request.correlation_id,
+                )
+            return EmptyOutput()
+        except Exception as e:
+            log_error(f"Error starting TTS stream: {e}", exc_info=True)
+            await self._publish_stream_error(request.stream_id, str(e), request.correlation_id)
+            return EmptyOutput()
+
+    @method_contract(
+        method_id=TTSMethods.STREAM_CHUNK,
+        summary="Process an ordered text chunk for a TTS audio stream",
+        input_model=TTSStreamChunkRequest,
+        output_model=EmptyOutput,
+        exposure="both",
+        method_type="use",
+        required_perms=[TTSMethods.STREAM_CHUNK],
+    )
+    async def _on_stream_chunk(self, request: TTSStreamChunkRequest) -> EmptyOutput:
+        """Buffer and synthesize a text chunk once prior chunks have arrived."""
+        try:
+            async with self._stream_state_lock:
+                state = self._stream_states.get(request.stream_id)
+                if state is None:
+                    raise ValueError(f"Unknown TTS stream_id: {request.stream_id}")
+                if request.sequence < state.next_text_sequence:
+                    log_debug(
+                        f"Ignoring duplicate TTS stream chunk: stream_id={request.stream_id} "
+                        f"sequence={request.sequence}"
+                    )
+                    return EmptyOutput()
+                state.pending[request.sequence] = request.text
+                if request.is_final:
+                    state.final_text_sequence = request.sequence
+                    state.end_reason = "completed"
+
+            await self._drain_stream(request.stream_id)
+            return EmptyOutput()
+        except Exception as e:
+            log_error(f"Error processing TTS stream chunk: {e}", exc_info=True)
+            await self._publish_stream_error(request.stream_id, str(e), request.correlation_id)
+            return EmptyOutput()
+
+    @method_contract(
+        method_id=TTSMethods.STREAM_END,
+        summary="End an ordered text-to-speech audio stream",
+        input_model=TTSStreamEndRequest,
+        output_model=EmptyOutput,
+        exposure="both",
+        method_type="use",
+        required_perms=[TTSMethods.STREAM_END],
+    )
+    async def _on_stream_end(self, request: TTSStreamEndRequest) -> EmptyOutput:
+        """Mark a streaming TTS session complete after all expected chunks drain."""
+        try:
+            async with self._stream_state_lock:
+                state = self._stream_states.get(request.stream_id)
+                if state is None:
+                    return EmptyOutput()
+                state.final_text_sequence = (
+                    request.final_sequence
+                    if request.final_sequence is not None
+                    else max(state.pending.keys(), default=state.next_text_sequence - 1)
+                )
+                state.end_reason = request.reason
+                if request.correlation_id is not None:
+                    state.correlation_id = request.correlation_id
+
+            await self._drain_stream(request.stream_id)
+            return EmptyOutput()
+        except Exception as e:
+            log_error(f"Error ending TTS stream: {e}", exc_info=True)
+            await self._publish_stream_error(request.stream_id, str(e), request.correlation_id)
             return EmptyOutput()
 
     @method_contract(
@@ -286,6 +422,7 @@ class TTSService(BaseService):
         try:
             log_info("TTS stop requested")
             await self._stop_playback("stopped")
+            await self._clear_tts_streams("stopped")
             return EmptyOutput()
         except Exception as e:
             log_error(f"Error stopping TTS: {e}", exc_info=True)
@@ -463,8 +600,10 @@ class TTSService(BaseService):
 
             log_debug(f"Synthesizing with piper: {cmd_list}")
 
-            # Run piper
-            subprocess.run(
+            # Run piper off the event loop so streaming synthesis does not block
+            # bus delivery or other service work while the engine generates audio.
+            await asyncio.to_thread(
+                subprocess.run,
                 cmd_list,
                 input=text.encode("utf-8"),
                 capture_output=True,
@@ -491,6 +630,7 @@ class TTSService(BaseService):
         output_model=TTSSynthesizeResponse,
         exposure="both",
         method_type="use",
+        required_perms=[TTSMethods.SYNTHESIZE],
     )
     async def synthesize(self, request: TTSSynthesizeRequest) -> TTSSynthesizeResponse:
         """Synthesize text to audio and return as base64-encoded data.
@@ -549,3 +689,171 @@ class TTSService(BaseService):
         except Exception as e:
             log_error(f"Error in TTS synthesis: {e}", exc_info=True)
             raise
+
+    async def _drain_stream(self, stream_id: str) -> None:
+        """Synthesize all currently contiguous text chunks for a stream in order."""
+        async with self._stream_state_lock:
+            state = self._stream_states.get(stream_id)
+            if state is None or state.draining:
+                return
+            state.draining = True
+
+        try:
+            while True:
+                async with self._stream_state_lock:
+                    state = self._stream_states.get(stream_id)
+                    if state is None:
+                        return
+
+                    if state.next_text_sequence not in state.pending:
+                        if self._stream_is_complete(state):
+                            final_event = self._build_final_audio_chunk_event(state)
+                            del self._stream_states[stream_id]
+                        else:
+                            state.draining = False
+                            final_event = None
+                        text_sequence = None
+                        text = None
+                        audio_sequence = None
+                        audio_format = "wav"
+                        play_on_server = False
+                        correlation_id = None
+                    else:
+                        text_sequence = state.next_text_sequence
+                        text = state.pending.pop(text_sequence)
+                        audio_sequence = state.next_audio_sequence
+                        audio_format = state.audio_format
+                        play_on_server = state.play_on_server
+                        correlation_id = state.correlation_id
+                        state.next_text_sequence += 1
+                        state.next_audio_sequence += 1
+                        final_event = None
+
+                if final_event is not None:
+                    await self._publish_audio_chunk(final_event)
+                    return
+
+                if text_sequence is None or text is None or audio_sequence is None:
+                    return
+
+                audio_bytes, sample_rate = await self._synthesize_to_bytes(text)
+                output_bytes, duration_ms = self._format_audio_bytes(
+                    audio_bytes, sample_rate, audio_format
+                )
+                async with self._stream_state_lock:
+                    state = self._stream_states.get(stream_id)
+                    if state is not None:
+                        state.emitted_sample_rate = sample_rate
+                await self._publish_audio_chunk(
+                    TTSAudioChunkEvent(
+                        stream_id=stream_id,
+                        sequence=audio_sequence,
+                        audio_data=base64.b64encode(output_bytes).decode("utf-8"),
+                        format=audio_format,
+                        sample_rate=sample_rate,
+                        channels=1,
+                        duration_ms=duration_ms,
+                        text=text,
+                        source_sequence=text_sequence,
+                        is_final=False,
+                        correlation_id=correlation_id,
+                    )
+                )
+                if play_on_server:
+                    await self._play_stream_text(text, stream_id)
+        finally:
+            async with self._stream_state_lock:
+                state = self._stream_states.get(stream_id)
+                if state is not None:
+                    state.draining = False
+
+    async def _play_stream_text(self, text: str, stream_id: str) -> None:
+        """Feed streamed text to the local server audio output without restarting playback."""
+        if not text.strip():
+            return
+        if not self._playing:
+            self._playing = True
+            self._current_text = text
+            self._current_request_id = stream_id
+            await self.bus.publish(
+                TTSMethods.STARTED,
+                TTSStarted(request_id=stream_id, text=text),
+                event=True,
+                mesh=True,
+                origin="internal",
+            )
+            self.stream.feed(text)
+            self.stream.play_async()
+            return
+
+        self._current_text = f"{self._current_text or ''}{text}"
+        self.stream.feed(text)
+
+    def _stream_is_complete(self, state: _TTSStreamState) -> bool:
+        """Return True when the stream has consumed all expected text chunks."""
+        return (
+            state.final_text_sequence is not None
+            and state.next_text_sequence > state.final_text_sequence
+        )
+
+    def _build_final_audio_chunk_event(self, state: _TTSStreamState) -> TTSAudioChunkEvent:
+        """Build the terminal empty audio chunk for a completed stream."""
+        return TTSAudioChunkEvent(
+            stream_id=state.stream_id,
+            sequence=state.next_audio_sequence,
+            audio_data="",
+            format=state.audio_format,
+            sample_rate=state.emitted_sample_rate or state.requested_sample_rate or 0,
+            channels=1,
+            duration_ms=0,
+            is_final=True,
+            reason=state.end_reason,
+            correlation_id=state.correlation_id,
+        )
+
+    def _format_audio_bytes(
+        self, audio_bytes: bytes, sample_rate: int, audio_format: str
+    ) -> tuple[bytes, float]:
+        """Format raw PCM audio bytes for stream events."""
+        duration_ms = (len(audio_bytes) / (sample_rate * 2)) * 1000
+        if audio_format == "wav":
+            wav_buffer = io.BytesIO()
+            with wave.open(wav_buffer, "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(audio_bytes)
+            return wav_buffer.getvalue(), duration_ms
+        return audio_bytes, duration_ms
+
+    async def _publish_audio_chunk(self, event: TTSAudioChunkEvent) -> None:
+        """Publish a TTS audio chunk event."""
+        await self.bus.publish(
+            TTSMethods.AUDIO_CHUNK,
+            event,
+            event=True,
+            mesh=True,
+            origin="internal",
+        )
+
+    async def _clear_tts_streams(self, reason: str) -> None:
+        """Clear active TTS stream state and emit terminal chunk events."""
+        async with self._stream_state_lock:
+            states = list(self._stream_states.values())
+            self._stream_states.clear()
+
+        for state in states:
+            state.end_reason = reason
+            await self._publish_audio_chunk(self._build_final_audio_chunk_event(state))
+
+    async def _publish_stream_error(
+        self, stream_id: str, error: str, correlation_id: str | None = None
+    ) -> None:
+        """Publish a TTS stream error event using existing TTS error topic."""
+        await self.bus.publish(
+            TTSMethods.ERROR,
+            TTSErrorEvent(request_id=stream_id, error=error),
+            event=True,
+            mesh=True,
+            origin="internal",
+        )

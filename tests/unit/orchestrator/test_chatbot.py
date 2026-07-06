@@ -212,15 +212,14 @@ class TestChatbotToolRetrieval:
             assert result["approval_candidates"]["delete_file"]["approval_required"] is True
 
     @pytest.mark.asyncio
-    async def test_chatbot_falls_back_to_legacy_get_tools(self, mock_bus, mock_state):
-        """Chatbot falls back when aggregate catalog is unavailable."""
+    async def test_chatbot_fails_closed_when_catalog_unavailable(self, mock_bus, mock_state):
+        """Chatbot binds no tools when the policy-aware catalog is unavailable."""
         from app.messaging import QueryResult
         from app.shared.contracts.models.tooling import ToolingMethods
 
         mock_bus.request.side_effect = [
             QueryResult(ok=True, data={"items": []}),
             QueryResult(ok=False, error="unknown method"),
-            QueryResult(ok=True, data={"tools": []}),
         ]
 
         with _patch_llm_for_chatbot():
@@ -228,7 +227,7 @@ class TestChatbotToolRetrieval:
 
         assert "messages" in result
         assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
-        assert mock_bus.request.call_args_list[2][0][0] == ToolingMethods.GET_TOOLS
+        assert len(mock_bus.request.call_args_list) == 2
 
     @pytest.mark.asyncio
     async def test_chatbot_get_tools_failure(self, mock_bus, mock_state):
@@ -239,7 +238,6 @@ class TestChatbotToolRetrieval:
         mock_bus.request.side_effect = [
             QueryResult(ok=True, data={"items": []}),  # Memory search
             QueryResult(ok=False, error="Tool catalog failed"),  # Catalog retrieval
-            QueryResult(ok=False, error="Tool retrieval failed"),  # Legacy tool retrieval
         ]
 
         with (
