@@ -20,6 +20,8 @@ import {
   type TokenResponse
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
 
 export type AdminDevicesLoadState =
   | 'loading'
@@ -350,45 +352,42 @@ export function AdminDevicesView({
   const visibleDevices = snapshot.devices.filter((device) => device.id !== optimisticDeviceId)
 
   return (
-    <section className="aui-admin-devices" aria-labelledby="admin-devices-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-devices-title">Devices and sessions</h1>
-          <p>
-            Registered devices, token-backed active sessions, trust state, and platform capabilities are loaded through Aurora.
-          </p>
-        </div>
-        <div className="aui-admin-badges" aria-label="Device service status">
-          {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          <PrivacyBadge privacy="credential" />
-        </div>
-      </header>
+    <div className="aui-admin-devices">
+      <PageHeader
+        id="admin-devices-title"
+        eyebrow="Admin"
+        title="Devices and sessions"
+        description="Registered devices, token-backed active sessions, trust state, and platform capabilities are loaded through Aurora."
+        badges={
+          <>
+            {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <PrivacyBadge privacy="credential" />
+          </>
+        }
+        actions={
+          <Button variant="ghost" icon={<RefreshCw size={16} aria-hidden />} disabled={snapshot.loadState === 'loading'} onClick={onRefresh}>
+            Refresh
+          </Button>
+        }
+      />
 
       <DeviceStatusPanel snapshot={snapshot} mutationError={mutationError} optimisticDeviceId={optimisticDeviceId} />
 
-      <div className="aui-admin-metrics" aria-label="Device/session summary">
-        <Metric label="Devices" value={String(snapshot.devices.length)} detail={`${totals.trusted} trusted`} />
-        <Metric label="Pending" value={String(totals.pending + snapshot.pendingPairings.length)} detail={`${snapshot.pendingPairings.length} pairing requests`} />
-        <Metric label="Sessions" value={String(totals.activeSessions)} detail="token-backed status" />
-        <Metric label="Tokens" value={String(totals.tokens)} detail={`${totals.expiredTokens} expired`} />
-      </div>
+      <StatStrip
+        ariaLabel="Device/session summary"
+        items={[
+          { label: 'Devices', value: String(snapshot.devices.length), caption: `${totals.trusted} trusted` },
+          { label: 'Pending', value: String(totals.pending + snapshot.pendingPairings.length), caption: `${snapshot.pendingPairings.length} pairing requests` },
+          { label: 'Sessions', value: String(totals.activeSessions), caption: 'token-backed status' },
+          { label: 'Tokens', value: String(totals.tokens), caption: `${totals.expiredTokens} expired` }
+        ]}
+      />
 
       <DevicePlatformSecurityPanel snapshot={snapshot} reauthConfirmed={reauthConfirmed} onRunAdminAction={onRunAdminAction} />
 
-      <section className="aui-admin-panel" aria-labelledby="device-controls-title">
-        <div className="aui-panel-heading">
-          <div>
-            <p className="aui-kicker">Controls</p>
-            <h2 id="device-controls-title">AdminAction boundary</h2>
-          </div>
-          <button className="aui-button" type="button" disabled={snapshot.loadState === 'loading'} onClick={onRefresh}>
-            <RefreshCw size={16} aria-hidden />
-            Refresh
-          </button>
-        </div>
+      <Card title="AdminAction boundary" description="Device, pairing, and mesh trust mutations require AdminAction draft, confirm, and audit.">
         <div className="aui-device-controls">
           <label>
             <span>AdminAction reason</span>
@@ -399,7 +398,7 @@ export function AdminDevicesView({
               onChange={(event) => onAdminReasonChange?.(event.currentTarget.value)}
             />
           </label>
-          <label className="aui-confirmation-check">
+          <label className="aui-inline-field">
             <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange?.(event.currentTarget.checked)} disabled={snapshot.deleteState === 'pending' || snapshot.deleteState === 'unsupported' || snapshot.deleteState === 'denied'} />
             <span>I confirm recent AdminAction reauthentication for device, pairing, and mesh trust mutations.</span>
           </label>
@@ -412,114 +411,162 @@ export function AdminDevicesView({
             <CapabilityFact label="Trust actions" state={snapshot.meshPeerActionState ?? 'unsupported'} reason={snapshot.meshPeerActionReason ?? 'Auth.MeshApprovePeer/Auth.MeshRemovePeer AdminAction capabilities are not advertised by the capability catalog.'} />
           </div>
         </div>
-      </section>
+      </Card>
 
-      <section className="aui-admin-panel" aria-labelledby="device-list-title">
-        <div className="aui-panel-heading">
+      <Card title="Registered devices" flush>
+        <DevicesDataTable
+          devices={visibleDevices}
+          loadState={snapshot.loadState}
+          pendingDeviceId={pendingDeviceId}
+          reauthConfirmed={reauthConfirmed}
+          onDeleteDevice={onDeleteDevice}
+          onRunAdminAction={onRunAdminAction}
+        />
+      </Card>
+    </div>
+  )
+}
+
+function DevicesDataTable({
+  devices,
+  loadState,
+  pendingDeviceId,
+  reauthConfirmed,
+  onDeleteDevice,
+  onRunAdminAction
+}: {
+  devices: AdminDeviceRow[]
+  loadState: AdminDevicesLoadState
+  pendingDeviceId: string | null
+  reauthConfirmed: boolean
+  onDeleteDevice?: ((device: AdminDeviceRow) => void) | undefined
+  onRunAdminAction?: ((action: AdminDeviceAction, optimisticId: string) => void) | undefined
+}) {
+  const columns: DataColumn<AdminDeviceRow>[] = [
+    {
+      key: 'device',
+      header: 'Device',
+      render: (device) => (
+        <div className="aui-device-identity">
+          <span className="aui-device-icon"><Laptop size={18} aria-hidden /></span>
           <div>
-            <p className="aui-kicker">Inventory</p>
-            <h2 id="device-list-title">Registered devices</h2>
+            <strong>{device.name}</strong>
+            <span>{device.id}</span>
           </div>
         </div>
-        {visibleDevices.length === 0 && snapshot.loadState !== 'loading' ? (
-          <p className="aui-muted">No registered devices were returned by Auth.ListDevices.</p>
-        ) : (
-          <div className="aui-table-scroll">
-            <table className="aui-table">
-              <thead>
-                <tr>
-                  <th>Device</th>
-                  <th>Trust</th>
-                  <th>Sessions</th>
-                  <th>Platform</th>
-                  <th>Mesh peer</th>
-                  <th>State</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDevices.map((device) => (
-                  <tr key={device.id}>
-                    <td>
-                      <div className="aui-device-identity">
-                        <span className="aui-device-icon"><Laptop size={18} aria-hidden /></span>
-                        <div>
-                          <strong>{device.name}</strong>
-                          <span>{device.id}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <StatusBadge state={device.trustState} />
-                      <p className="aui-muted">{device.trustLabel}</p>
-                    </td>
-                    <td>
-                      <strong>{device.activeSessionCount}</strong>
-                      <p className="aui-muted">{device.tokenCount} token records</p>
-                      <details className="aui-service-details">
-                        <summary>Token state</summary>
-                        {device.activeTokens.length === 0 ? (
-                          <p>No active token state was returned for this device.</p>
-                        ) : (
-                          <ul className="aui-device-token-list">
-                            {device.activeTokens.map((token) => (
-                              <li key={token.id}>
-                                <StatusBadge state={token.state} />
-                                <span>{token.prefix || token.id}</span>
-                                <small>{token.scopes.join(', ') || 'no scopes'}</small>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </details>
-                    </td>
-                    <td>
-                      <strong>{device.platformLabel}</strong>
-                      <p className="aui-muted">{device.platformEvidence}</p>
-                    </td>
-                    <td>
-                      <Link2 size={16} aria-hidden />
-                      <StatusBadge state={device.meshPeerState} />
-                      <p className="aui-muted">{device.linkedMeshPeerLabel}</p>
-                      <small>{device.meshPeerEvidence}</small>
-                    </td>
-                    <td>
-                      <dl className="aui-device-facts">
-                        <div><dt>Principal</dt><dd>{device.principalId ?? 'not reported'}</dd></div>
-                        <div><dt>Created</dt><dd>{formatDate(device.createdAt)}</dd></div>
-                        <div><dt>Last seen</dt><dd>{formatDate(device.lastSeen)}</dd></div>
-                      </dl>
-                    </td>
-                    <td>
-                      <button
-                        className="aui-button aui-danger-button"
-                        type="button"
-                        disabled={!reauthConfirmed || !device.deleteAction || Boolean(pendingDeviceId)}
-                        onClick={() => onDeleteDevice?.(device)}
-                      >
-                        <Trash2 size={16} aria-hidden />
-                        {pendingDeviceId === device.id ? 'Submitting AdminAction' : 'Revoke'}
-                      </button>
-                      {device.trustAction ? (
-                        <button
-                          className="aui-button"
-                          type="button"
-                          disabled={!reauthConfirmed || Boolean(pendingDeviceId)}
-                          onClick={() => device.trustAction ? onRunAdminAction?.(device.trustAction, device.id) : undefined}
-                        >
-                          <CheckCircle2 size={16} aria-hidden />
-                          Trust via AdminAction
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
+      )
+    },
+    {
+      key: 'trust',
+      header: 'Trust',
+      render: (device) => (
+        <div>
+          <StatusBadge state={device.trustState} />
+          <p className="aui-muted">{device.trustLabel}</p>
+        </div>
+      )
+    },
+    {
+      key: 'sessions',
+      header: 'Sessions',
+      render: (device) => (
+        <div>
+          <strong>{device.activeSessionCount}</strong>
+          <p className="aui-muted">{device.tokenCount} token records</p>
+          <details className="aui-service-details">
+            <summary>Token state</summary>
+            {device.activeTokens.length === 0 ? (
+              <p>No active token state was returned for this device.</p>
+            ) : (
+              <ul className="aui-device-token-list">
+                {device.activeTokens.map((token) => (
+                  <li key={token.id}>
+                    <StatusBadge state={token.state} />
+                    <span>{token.prefix || token.id}</span>
+                    <small>{token.scopes.join(', ') || 'no scopes'}</small>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </section>
+              </ul>
+            )}
+          </details>
+        </div>
+      )
+    },
+    {
+      key: 'platform',
+      header: 'Platform',
+      hideAt: 'lg',
+      render: (device) => (
+        <div>
+          <strong>{device.platformLabel}</strong>
+          <p className="aui-muted">{device.platformEvidence}</p>
+        </div>
+      )
+    },
+    {
+      key: 'mesh',
+      header: 'Mesh peer',
+      hideAt: 'md',
+      render: (device) => (
+        <div>
+          <Link2 size={16} aria-hidden />
+          <StatusBadge state={device.meshPeerState} />
+          <p className="aui-muted">{device.linkedMeshPeerLabel}</p>
+          <small>{device.meshPeerEvidence}</small>
+        </div>
+      )
+    },
+    {
+      key: 'state',
+      header: 'State',
+      hideAt: 'xl',
+      render: (device) => (
+        <dl className="aui-device-facts">
+          <div><dt>Principal</dt><dd>{device.principalId ?? 'not reported'}</dd></div>
+          <div><dt>Created</dt><dd>{formatDate(device.createdAt)}</dd></div>
+          <div><dt>Last seen</dt><dd>{formatDate(device.lastSeen)}</dd></div>
+        </dl>
+      )
+    },
+    {
+      key: 'action',
+      header: 'Action',
+      align: 'end',
+      render: (device) => (
+        <div className="aui-action-row-tight">
+          <button
+            className="aui-button aui-danger-button"
+            type="button"
+            disabled={!reauthConfirmed || !device.deleteAction || Boolean(pendingDeviceId)}
+            onClick={() => onDeleteDevice?.(device)}
+          >
+            <Trash2 size={16} aria-hidden />
+            {pendingDeviceId === device.id ? 'Submitting AdminAction' : 'Revoke'}
+          </button>
+          {device.trustAction ? (
+            <button
+              className="aui-button"
+              type="button"
+              disabled={!reauthConfirmed || Boolean(pendingDeviceId)}
+              onClick={() => device.trustAction ? onRunAdminAction?.(device.trustAction, device.id) : undefined}
+            >
+              <CheckCircle2 size={16} aria-hidden />
+              Trust via AdminAction
+            </button>
+          ) : null}
+          <span className="aui-sr-only">{device.deleteReason}</span>
+        </div>
+      )
+    }
+  ]
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={devices}
+      getRowKey={(device) => device.id}
+      empty={loadState === 'loading' ? null : <p className="aui-muted">No registered devices were returned by Auth.ListDevices.</p>}
+    />
   )
 }
 

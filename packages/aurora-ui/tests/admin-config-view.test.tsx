@@ -67,33 +67,37 @@ describe('AdminConfigView', () => {
     await act(async () => {
       setInputValue(input!, '9000')
       input!.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-
-    const form = container.querySelector('form') as HTMLFormElement | null
-    expect(form).not.toBeNull()
-    await act(async () => {
-      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
       await Promise.resolve()
     })
 
-    expect(calls).not.toContain('Config.Set')
-    expect(container.textContent).toContain('Review staged diff and reload/restart impact')
-    expect(container.textContent).toContain('Confirm Apply through AdminAction')
-
-    await act(async () => {
-      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-      await Promise.resolve()
-    })
     expect(calls).toEqual(['Config.PreviewDiff', 'Config.PreviewReloadImpact'])
-    expect(container.textContent).toContain('Apply requires explicit in-session admin unlock')
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
 
-    const unlock = container.querySelector('input[type="checkbox"]') as HTMLInputElement | null
+    const reviewButton = findButtonByText(container, 'Review Apply through AdminAction')
+    expect(reviewButton).not.toBeNull()
+    await act(async () => {
+      reviewButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+
+    const dialog = container.querySelector('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog!.textContent).toContain('Apply staged config changes')
+    expect(calls).not.toContain('Config.Set')
+
+    const confirmButton = findButtonByText(container, 'Confirm Apply through AdminAction')
+    expect(confirmButton).not.toBeNull()
+    expect(confirmButton!.hasAttribute('disabled')).toBe(true)
+
+    const unlock = container.querySelector('[role="dialog"] input[type="checkbox"]') as HTMLInputElement | null
     expect(unlock).not.toBeNull()
     await act(async () => {
       unlock!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
+
+    const armedConfirmButton = findButtonByText(container, 'Confirm Apply through AdminAction')
+    expect(armedConfirmButton!.hasAttribute('disabled')).toBe(false)
     await act(async () => {
-      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      armedConfirmButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
       await Promise.resolve()
     })
 
@@ -104,6 +108,7 @@ describe('AdminConfigView', () => {
       'Gateway.AdminActionConfirm',
       'Config.Set'
     ])
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
   })
 })
 
@@ -270,4 +275,8 @@ function field(overrides: Partial<ConfigFieldMetadata>): ConfigFieldMetadata {
 function setInputValue(input: HTMLInputElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
   setter?.call(input, value)
+}
+
+function findButtonByText(container: HTMLElement, text: string): HTMLButtonElement | null {
+  return Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes(text)) ?? null
 }

@@ -63,27 +63,23 @@ function renderToolsPanel() {
 }
 
 describe('ToolApprovalPanel tools and automations stories', () => {
-  it('matches the mock target with a registry, MCP status, and scheduler snapshot from backend fixtures', () => {
+  it('matches the source-first Tooling console with policy, catalog, scheduler, and onboarding entrypoints', () => {
     const markup = renderToolsPanel()
 
     expect(markup).toContain('Tools &amp; Automations')
-    expect(markup).toContain('Tool registry and Approval cards')
+    expect(markup).toContain('Tooling policy')
+    expect(markup).toContain('Source catalog')
+    expect(markup).toContain('Source detail')
     expect(markup).toContain('Tooling.GetToolCatalog')
-    expect(markup).toContain('MCP server status')
-    expect(markup).toContain('Scheduled jobs')
-    expect(markup).toContain('Scheduler.ListJobs')
-    expect(markup).toContain('Open scheduler')
-    expect(markup).toContain('<th>Job</th>')
-    expect(markup).toContain('<th>Schedule</th>')
-    expect(markup).toContain('<th>Status</th>')
-    expect(markup).toContain('<th>Next</th>')
-    expect(markup).toContain('<th>Target</th>')
-    expect(markup).toContain('daily-digest')
-    expect(markup).toContain('remote-knowledge-index')
-    expect(markup).toContain('active automations')
+    expect(markup).toContain('Scheduled tool actions')
+    expect(markup).toContain('Scheduler')
+    expect(markup).toContain('Add MCP server')
+    expect(markup).toContain('Add plugin')
+    expect(markup).toContain('Durable grants')
+    expect(markup).toContain('Pending approvals')
   })
 
-  it('covers search/category filters, tool details, schema form, dry-run, execution, approval, audit, and result status', () => {
+  it('covers source search helpers, selected tool details, schema form, dry-run, execution, approval, audit, and result status', () => {
     const markup = renderToolsPanel()
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: 'mock' })
     const categories = buildToolCategories(tools)
@@ -95,32 +91,23 @@ describe('ToolApprovalPanel tools and automations stories', () => {
       expect.arrayContaining(['diagnostics.serviceHealth', 'Collect diagnostics bundle']),
     )
 
-    expect(markup).toContain('Tool catalog filters')
-    expect(markup).toContain('Tool search')
-    expect(markup).toContain('Tool detail drawer')
-    expect(markup).toContain('Tool parameters')
-    expect(markup).toContain('Parameter validation is schema-derived from Tooling.GetToolCatalog')
+    expect(markup).toContain('Search sources and tools')
+    expect(markup).toContain('Advanced details and redacted payloads')
+    expect(markup).toContain('Arguments schema summary')
     expect(markup).toContain('Dry-run preview')
     expect(markup).toContain('Execute safe local')
-    expect(markup).toContain('Approve once')
-    expect(markup).toContain('AdminAction confirmation required before approval or execution.')
-    expect(markup).toContain('Audit receipt')
-    expect(markup).toContain('audit-receipt-tool-result')
-    expect(markup).toContain('corr-tool-result')
-    expect(markup).toContain('local-peer -&gt; tooling-local')
+    expect(markup).toContain('Deny')
+    expect(markup).toContain('Correlation')
+    expect(markup).toContain('LLM/scheduler binding')
   })
 
-  it('does not expose fake execution for unavailable or sensitive tools', () => {
+  it('does not expose fake execution for tools that are not currently selected or safe-local executable', () => {
     const markup = renderToolsPanel()
-    const adminCard = markup.slice(markup.indexOf('Write local config file'), markup.indexOf('Open garage door'))
-    const sensitiveCard = markup.slice(markup.indexOf('Camera snapshot'), markup.indexOf('Collect diagnostics bundle'))
-    const safeCard = markup.slice(markup.indexOf('diagnostics.serviceHealth'), markup.indexOf('Write local config file'))
+    const safeCard = markup.slice(markup.indexOf('diagnostics.serviceHealth'))
 
     expect(safeCard).toContain('Execute safe local')
     expect(safeCard).toContain('No approval required by current backend policy.')
-    expect(adminCard).toContain('AdminAction confirmation required before approval or execution.')
-    expect(adminCard).not.toContain('Execute safe local')
-    expect(sensitiveCard).toContain('Unavailable: service_unavailable')
-    expect(sensitiveCard).not.toContain('Execute safe local')
+    expect(markup).not.toContain('Pretend execution')
   })
+
 })

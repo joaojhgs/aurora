@@ -11,6 +11,7 @@ import {
   cloneFixture,
   gatewayRegistryFixture,
   schedulerJobsFixture,
+  toolCatalogFixture,
   type GetRegistryResponse,
   type SchedulerActionResponse
 } from '@aurora/client'
@@ -95,9 +96,69 @@ describe('AdminSchedulerView', () => {
       'Gateway.AdminActionConfirm',
       SCHEDULER_METHODS.cancel,
       SCHEDULER_METHODS.listJobs,
-      'Gateway.GetRegistry'
+      'Gateway.GetRegistry',
+      'Tooling.GetToolCatalog'
     ])
     expect(container.textContent).toContain('scheduler.cancel.audit')
+  })
+
+
+  it('creates typed Tooling scheduled actions through AdminAction and Scheduler.ScheduleAction', async () => {
+    const calls: string[] = []
+    const client = new Aurora({ transport: schedulerTransport(calls) })
+    const snapshot = await buildAdminSchedulerSnapshot(client, schedulerRoute())
+    calls.splice(0)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AdminSchedulerView client={client} route={schedulerRoute()} initialSnapshot={snapshot} />)
+    })
+
+    const unlock = container.querySelector('input[type="checkbox"]') as HTMLInputElement | null
+    const action = container.querySelector('#scheduler-action') as HTMLSelectElement | null
+    const form = container.querySelector('form') as HTMLFormElement | null
+    expect(unlock).not.toBeNull()
+    expect(action).not.toBeNull()
+    expect(form).not.toBeNull()
+
+    await act(async () => {
+      unlock!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      action!.value = 'tooling.execute'
+      action!.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const toolSelect = container.querySelector('#scheduler-tool') as HTMLSelectElement | null
+    const args = container.querySelector('#scheduler-tool-args') as HTMLTextAreaElement | null
+    expect(toolSelect).not.toBeNull()
+    expect(args).not.toBeNull()
+
+    await act(async () => {
+      toolSelect!.value = toolSelect!.options[0]?.value ?? ''
+      toolSelect!.dispatchEvent(new Event('change', { bubbles: true }))
+      setNativeValue(args!, '{"target":"daily-report"}')
+      args!.dispatchEvent(new Event('input', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(calls).toEqual([
+      'Gateway.AdminActionDraft',
+      'Gateway.AdminActionConfirm',
+      SCHEDULER_METHODS.scheduleAction,
+      SCHEDULER_METHODS.listJobs,
+      'Gateway.GetRegistry',
+      'Tooling.GetToolCatalog'
+    ])
+    expect(container.textContent).toContain('job-typed-tooling')
+    expect(container.textContent).toContain('daily-report')
   })
 
   it('disables create and mutation controls when Scheduler.manage is missing from advertised contracts', async () => {
@@ -139,6 +200,12 @@ function schedulerRoute(): RouteAvailability {
   }
 }
 
+function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
+  const prototype = Object.getPrototypeOf(element) as HTMLElement
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value')
+  descriptor?.set?.call(element, value)
+}
+
 function schedulerTransport(calls: string[] = [], registry: GetRegistryResponse = gatewayRegistryFixture): MockAuroraTransport {
   return MockAuroraTransport.empty()
     .register(SCHEDULER_METHODS.listJobs, () => {
@@ -152,6 +219,10 @@ function schedulerTransport(calls: string[] = [], registry: GetRegistryResponse 
     .register('Gateway.GetCapabilityCatalog', () => {
       calls.push('Gateway.GetCapabilityCatalog')
       return capabilityCatalogFixture
+    })
+    .register('Tooling.GetToolCatalog', () => {
+      calls.push('Tooling.GetToolCatalog')
+      return toolCatalogFixture
     })
     .register('Gateway.AdminActionDraft', () => {
       calls.push('Gateway.AdminActionDraft')
@@ -199,6 +270,17 @@ function schedulerTransport(calls: string[] = [], registry: GetRegistryResponse 
         reason: 'scheduler.cancel.audit',
         audit_event: 'scheduler.cancel.audit'
       } satisfies SchedulerActionResponse
+    })
+    .register(SCHEDULER_METHODS.scheduleAction, (request) => {
+      calls.push(SCHEDULER_METHODS.scheduleAction)
+      return {
+        ok: true,
+        job_id: 'job-typed-tooling',
+        status: 'scheduled',
+        reason: `scheduled typed tooling action job-typed-tooling ${JSON.stringify(request.payload)}`,
+        policy_decision_id: 'policy-schedule-action-ui',
+        correlation_id: 'corr-schedule-action-ui'
+      }
     })
 }
 

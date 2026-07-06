@@ -1,24 +1,44 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Check, Clock, FileDiff, FlaskConical, Play, Plug, ShieldAlert, Wrench, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type {
   AuroraClient,
   AuroraResponse,
-  AvailabilityState,
   NormalizedSchedulerJob,
   ToolApprovalCardModel,
   ToolApprovalDecisionResult,
-  ToolApprovalScope
+  ToolApprovalGrantModel,
+  ToolApprovalScope,
+  ToolPolicyAuditEventModel,
+  ToolPendingApprovalModel,
+  ToolOnboardingValidationResult,
+  ToolSourceDetailModel,
+  McpSourceWizardDraft,
+  PluginSourceWizardDraft,
+  ToolSourceSummaryModel,
+  ToolingPageViewModel
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { ToolingConsole } from './tooling'
+
+export interface ToolApprovalPanelManagementState {
+  policySummary?: ToolingPageViewModel['policy'] | null
+  sourceSummaries?: ToolSourceSummaryModel[]
+  sourceDetails?: Record<string, ToolSourceDetailModel | null>
+  grants?: ToolApprovalGrantModel[]
+  pendingApprovals?: ToolPendingApprovalModel[]
+  auditEvents?: ToolPolicyAuditEventModel[]
+  managementLoading?: boolean
+  managementError?: string | null
+}
 
 export interface ToolApprovalPanelProps {
   client: AuroraClient
   route: RouteAvailability
   initialTools?: ToolApprovalCardModel[] | undefined
   initialSchedulerJobs?: NormalizedSchedulerJob[] | undefined
+  nativePlatform?: string | undefined
+  initialManagementState?: ToolApprovalPanelManagementState | undefined
 }
 
 export interface ToolApprovalPanelState {
@@ -30,6 +50,14 @@ export interface ToolApprovalPanelState {
   schedulerError: string | null
   selectedProviders: Record<string, string>
   decisionMessages: Record<string, string>
+  policySummary: ToolingPageViewModel['policy'] | null
+  sourceSummaries: ToolSourceSummaryModel[]
+  sourceDetails: Record<string, ToolSourceDetailModel | null>
+  grants: ToolApprovalGrantModel[]
+  pendingApprovals: ToolPendingApprovalModel[]
+  auditEvents: ToolPolicyAuditEventModel[]
+  managementLoading: boolean
+  managementError: string | null
 }
 
 export interface ToolDenialActionInput {
@@ -39,7 +67,7 @@ export interface ToolDenialActionInput {
   reason?: string
 }
 
-export function ToolApprovalPanel({ client, route, initialTools, initialSchedulerJobs }: ToolApprovalPanelProps) {
+export function ToolApprovalPanel({ client, route, initialTools, initialSchedulerJobs, nativePlatform, initialManagementState }: ToolApprovalPanelProps) {
   const [state, setState] = useState<ToolApprovalPanelState>(() => ({
     tools: initialTools ?? [],
     loading: !initialTools,
@@ -48,7 +76,15 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     schedulerLoading: !initialSchedulerJobs,
     schedulerError: null,
     selectedProviders: {},
-    decisionMessages: {}
+    decisionMessages: {},
+    policySummary: initialManagementState?.policySummary ?? null,
+    sourceSummaries: initialManagementState?.sourceSummaries ?? [],
+    sourceDetails: initialManagementState?.sourceDetails ?? {},
+    grants: initialManagementState?.grants ?? [],
+    pendingApprovals: initialManagementState?.pendingApprovals ?? [],
+    auditEvents: initialManagementState?.auditEvents ?? [],
+    managementLoading: initialManagementState?.managementLoading ?? !initialManagementState,
+    managementError: initialManagementState?.managementError ?? null
   }))
 
   useEffect(() => {
@@ -75,47 +111,65 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     setState((current) => ({ ...current, schedulerLoading: true, schedulerError: null }))
     client.scheduler.listNormalizedJobs({ limit: 5 }).then((jobs) => {
       if (cancelled) return
-      setState((current) => ({
-        ...current,
-        schedulerLoading: false,
-        schedulerJobs: jobs,
-        schedulerError: null
-      }))
+      setState((current) => ({ ...current, schedulerLoading: false, schedulerJobs: jobs, schedulerError: null }))
     }).catch((error) => {
       if (cancelled) return
-      setState((current) => ({
-        ...current,
-        schedulerLoading: false,
-        schedulerJobs: [],
-        schedulerError: errorMessage(error)
-      }))
+      setState((current) => ({ ...current, schedulerLoading: false, schedulerJobs: [], schedulerError: errorMessage(error) }))
     })
     return () => {
       cancelled = true
     }
   }, [client, initialSchedulerJobs])
 
-  const [query, setQuery] = useState('')
-  const [category, setCategory] = useState('all')
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(initialTools?.[0]?.id ?? null)
-  const counts = useMemo(() => toolCounts(state.tools), [state.tools])
-  const jobCounts = useMemo(() => schedulerCounts(state.schedulerJobs), [state.schedulerJobs])
-  const categories = useMemo(() => buildToolCategories(state.tools), [state.tools])
-  const filteredTools = useMemo(() => filterTools(state.tools, category, query), [state.tools, category, query])
-  const selectedTool = useMemo(
-    () => filteredTools.find((tool) => tool.id === selectedToolId) ?? filteredTools[0] ?? state.tools[0] ?? null,
-    [filteredTools, selectedToolId, state.tools]
-  )
+  useEffect(() => {
+    if (initialManagementState) return
+    let cancelled = false
+    setState((current) => ({ ...current, managementLoading: true, managementError: null }))
+    async function loadManagementState() {
+      try {
+        const [policySummary, sourceSummaries, grants, pendingApprovals, auditEvents] = await Promise.all([
+          client.tools.getPolicySummary(),
+          client.tools.listSources(),
+          client.tools.listNormalizedGrants({ include_revoked: true }),
+          client.tools.listPendingApprovals({ status: 'pending' }),
+          client.tools.listPolicyAuditEvents({ limit: 100 })
+        ])
+        const detailResults = await Promise.all(sourceSummaries.map(async (source) => {
+          try {
+            return { sourceId: source.id, detail: await client.tools.getSourceDetail(source.id), error: null as string | null }
+          } catch (error) {
+            return { sourceId: source.id, detail: null, error: errorMessage(error) }
+          }
+        }))
+        const detailErrors = detailResults.filter((result) => result.error)
+        if (cancelled) return
+        setState((current) => ({
+          ...current,
+          managementLoading: false,
+          managementError: detailErrors.length > 0
+            ? `Tooling.GetToolSourceDetail failed for ${detailErrors.map((result) => `${result.sourceId}: ${result.error}`).join('; ')}`
+            : null,
+          policySummary,
+          sourceSummaries,
+          sourceDetails: Object.fromEntries(detailResults.map((result) => [result.sourceId, result.detail])),
+          grants,
+          pendingApprovals,
+          auditEvents
+        }))
+      } catch (error) {
+        if (cancelled) return
+        setState((current) => ({ ...current, managementLoading: false, managementError: errorMessage(error) }))
+      }
+    }
+    void loadManagementState()
+    return () => {
+      cancelled = true
+    }
+  }, [client, initialManagementState])
 
   async function approve(tool: ToolApprovalCardModel, scope: ToolApprovalScope, dryRun = false) {
     const selectedProviderId = state.selectedProviders[tool.id]
-    setState((current) => ({
-      ...current,
-      decisionMessages: {
-        ...current.decisionMessages,
-        [tool.id]: dryRun ? 'Submitting dry-run approval...' : `Submitting ${scope} approval...`
-      }
-    }))
+    setDecisionMessage(tool.id, dryRun ? 'Submitting dry-run approval...' : `Submitting ${scope} approval...`)
     try {
       const request = {
         tool,
@@ -124,33 +178,16 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         reason: dryRun ? `Requested dry run for ${tool.name} from Aurora UI` : `Approved ${tool.name} from Aurora UI`,
         dryRun
       }
-      const result = await client.tools.submitApprovalDecision(
-        selectedProviderId ? { ...request, selectedProviderId } : request
-      )
-      setState((current) => ({
-        ...current,
-        decisionMessages: {
-          ...current.decisionMessages,
-          [tool.id]: `Approved with correlation ${result.correlationId ?? 'pending'}`
-        }
-      }))
+      const result = await client.tools.submitApprovalDecision(selectedProviderId ? { ...request, selectedProviderId } : request)
+      setDecisionMessage(tool.id, `Approved with correlation ${result.correlationId ?? 'pending'}`)
     } catch (error) {
-      setState((current) => ({
-        ...current,
-        decisionMessages: { ...current.decisionMessages, [tool.id]: errorMessage(error) }
-      }))
+      setDecisionMessage(tool.id, errorMessage(error))
     }
   }
 
   async function deny(tool: ToolApprovalCardModel) {
     const selectedProviderId = state.selectedProviders[tool.id]
-    setState((current) => ({
-      ...current,
-      decisionMessages: {
-        ...current.decisionMessages,
-        [tool.id]: 'Submitting backend denial...'
-      }
-    }))
+    setDecisionMessage(tool.id, 'Submitting backend denial...')
     try {
       const result = await submitToolDenialAction({
         client,
@@ -158,49 +195,34 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         selectedProviderId,
         reason: `Denied ${tool.name} from Aurora UI`
       })
-      setState((current) => ({
-        ...current,
-        decisionMessages: {
-          ...current.decisionMessages,
-          [tool.id]: denialResultMessage(result)
-        }
-      }))
+      setDecisionMessage(tool.id, denialResultMessage(result))
     } catch (error) {
-      setState((current) => ({
-        ...current,
-        decisionMessages: { ...current.decisionMessages, [tool.id]: errorMessage(error) }
-      }))
+      setDecisionMessage(tool.id, errorMessage(error))
     }
   }
 
   async function executeSafe(tool: ToolApprovalCardModel) {
-    setState((current) => ({
-      ...current,
-      decisionMessages: {
-        ...current.decisionMessages,
-        [tool.id]: 'Executing safe local tool through Tooling.ExecuteTool...'
-      }
-    }))
+    setDecisionMessage(tool.id, 'Executing safe local tool through Tooling.ExecuteTool...')
     try {
       await client.tools.execute({
-        global_tool_id: tool.id,
-        provider_peer_id: tool.providerPeerId,
-        provider_service_instance_id: tool.serviceInstanceId,
-        args: tool.argsPreview ?? {}
+        tool_name: tool.id,
+        arguments: {},
+        mesh_selector: tool.meshSelector ?? null,
+        resource_selector: tool.resourceSelector ?? null,
+        confirmed: true,
+        correlation_id: tool.correlationId ?? null
       })
-      setState((current) => ({
-        ...current,
-        decisionMessages: {
-          ...current.decisionMessages,
-          [tool.id]: 'Executed safe local tool through Tooling.ExecuteTool.'
-        }
-      }))
+      setDecisionMessage(tool.id, 'Executed safe local tool through Tooling.ExecuteTool.')
     } catch (error) {
-      setState((current) => ({
-        ...current,
-        decisionMessages: { ...current.decisionMessages, [tool.id]: errorMessage(error) }
-      }))
+      setDecisionMessage(tool.id, errorMessage(error))
     }
+  }
+
+  function setDecisionMessage(toolId: string, message: string) {
+    setState((current) => ({
+      ...current,
+      decisionMessages: { ...current.decisionMessages, [toolId]: message }
+    }))
   }
 
   function selectProvider(tool: ToolApprovalCardModel, providerId: string) {
@@ -210,169 +232,140 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     }))
   }
 
+  async function setPolicyMode(policyMode: string) {
+    const requiredConfirmation = policyConfirmationText(policyMode)
+    let confirmationText: string | null = null
+    if (requiredConfirmation && typeof window !== 'undefined') {
+      confirmationText = window.prompt(`Type ${requiredConfirmation} to set Tooling policy mode to ${policyMode}`)
+    }
+    if (requiredConfirmation && confirmationText !== requiredConfirmation) {
+      setState((current) => ({ ...current, decisionMessages: { ...current.decisionMessages, __policy__: `Policy mode ${policyMode} was not changed: confirmation text did not match.` } }))
+      return
+    }
+    try {
+      await client.tools.setPolicyMode({ policyMode, confirmationText, reason: `Set ${policyMode} from /tools` })
+      const policySummary = await client.tools.getPolicySummary()
+      setState((current) => ({ ...current, policySummary, decisionMessages: { ...current.decisionMessages, __policy__: `Policy set to ${policyMode}` } }))
+    } catch (error) {
+      setState((current) => ({ ...current, decisionMessages: { ...current.decisionMessages, __policy__: errorMessage(error) } }))
+    }
+  }
+
+  async function upsertSourcePolicy(source: { id: string; peerId: string | null; serviceInstanceId: string | null }, trustTier: string, includeFutureTools = false) {
+    setDecisionMessage('__policy__', `Updating source policy for ${source.id}...`)
+    try {
+      await client.tools.upsertSourcePolicy({
+        sourceId: source.id,
+        providerPeerId: source.peerId,
+        providerServiceInstanceId: source.serviceInstanceId,
+        trustTier,
+        includeFutureTools,
+        reason: `Set source ${source.id} to ${trustTier} from /tools`
+      })
+      const [policySummary, sourceSummaries] = await Promise.all([client.tools.getPolicySummary(), client.tools.listSources()])
+      setState((current) => ({ ...current, policySummary, sourceSummaries, decisionMessages: { ...current.decisionMessages, __policy__: `Source ${source.id} set to ${trustTier}` } }))
+    } catch (error) {
+      setDecisionMessage('__policy__', errorMessage(error))
+    }
+  }
+
+  async function upsertToolOverride(tool: ToolApprovalCardModel, approvalMode: string) {
+    setDecisionMessage(tool.id, `Updating policy override for ${tool.name}...`)
+    try {
+      await client.tools.upsertToolOverride({
+        toolId: tool.id,
+        approvalMode,
+        providerPeerId: tool.providerPeerId,
+        providerServiceInstanceId: tool.serviceInstanceId,
+        reason: `Set ${tool.name} override to ${approvalMode} from /tools`
+      })
+      setDecisionMessage(tool.id, `Policy override updated to ${approvalMode}.`)
+    } catch (error) {
+      setDecisionMessage(tool.id, errorMessage(error))
+    }
+  }
+
+  async function revokeGrant(grant: { id: string }) {
+    setDecisionMessage('__policy__', `Revoking grant ${grant.id}...`)
+    try {
+      await client.tools.revokeGrant({ grant_id: grant.id, revoked_by: client.auth.snapshot().principalId ?? 'current-principal', reason: `Revoked ${grant.id} from /tools` })
+      const grants = await client.tools.listNormalizedGrants({ include_revoked: true })
+      setState((current) => ({ ...current, grants, decisionMessages: { ...current.decisionMessages, __policy__: `Grant ${grant.id} revoked` } }))
+    } catch (error) {
+      setDecisionMessage('__policy__', errorMessage(error))
+    }
+  }
+
+  async function testSource(kind: 'mcp' | 'plugin', draft: McpSourceWizardDraft | PluginSourceWizardDraft): Promise<ToolOnboardingValidationResult> {
+    setDecisionMessage('__policy__', `Testing ${kind.toUpperCase()} source through ${sourceActionContractName(kind, 'test')}...`)
+    try {
+      const result = kind === 'mcp'
+        ? await client.tools.testMcpSource(draft as McpSourceWizardDraft)
+        : await client.tools.testPluginSource(draft as PluginSourceWizardDraft)
+      setDecisionMessage('__policy__', `${kind.toUpperCase()} test ${result.status}: ${result.errors.join(', ') || 'secrets redacted'}`)
+      return result
+    } catch (error) {
+      const message = errorMessage(error)
+      setDecisionMessage('__policy__', `${kind.toUpperCase()} test failed: ${message}`)
+      throw error
+    }
+  }
+
+  async function createSource(kind: 'mcp' | 'plugin', draft: McpSourceWizardDraft | PluginSourceWizardDraft): Promise<ToolOnboardingValidationResult> {
+    setDecisionMessage('__policy__', `Creating ${kind.toUpperCase()} source through ${sourceActionContractName(kind, 'create')}...`)
+    try {
+      const result = kind === 'mcp'
+        ? await client.tools.createMcpSource(draft as McpSourceWizardDraft)
+        : await client.tools.createPluginSource(draft as PluginSourceWizardDraft)
+      setDecisionMessage('__policy__', `${kind.toUpperCase()} create ${result.status}: ${result.errors.join(', ') || 'secrets redacted'}`)
+      return result
+    } catch (error) {
+      const message = errorMessage(error)
+      setDecisionMessage('__policy__', `${kind.toUpperCase()} create failed: ${message}`)
+      throw error
+    }
+  }
+
   return (
-    <section className="aui-tool-panel" aria-labelledby="tool-approval-title">
-      <header className="aui-tool-header">
-        <div>
-          <p className="aui-kicker">Tools</p>
-          <h1 id="tool-approval-title">Tools & Automations</h1>
-          <p>
-            Tool registry, approval cards, MCP/provider status, scheduler jobs, and execution logs stay bound to Aurora state.
-          </p>
-        </div>
-        <div className="aui-assistant-badges" aria-label="Tooling service status">
-          <StatusBadge state={route.state} />
-          <PrivacyBadge privacy={route.item.privacyClass} />
-          <EvidenceBadge label={route.providerLabel} />
-          <EvidenceBadge label={client.transport.kind} />
-          <EvidenceBadge label={`${counts.total} tools`} />
-          <EvidenceBadge label={`${counts.blocked} blocked`} />
-          <EvidenceBadge label={`${jobCounts.total} scheduled jobs`} />
-          <EvidenceBadge label={`${jobCounts.active} active automations`} />
-        </div>
-      </header>
-
-      {route.disabled ? (
-        <div className="aui-tool-alert" role="alert">
-          Tooling is capability-gated: {presentableSignal(route.blockers.join(', ') || 'no executable Tooling catalog entry')}.
-        </div>
-      ) : null}
-      {state.error ? <div className="aui-tool-alert" role="alert">{state.error}</div> : null}
-
-      <div className="aui-tool-layout">
-        <section className="aui-tool-list" aria-busy={state.loading}>
-          <div className="aui-tool-section-heading">
-            <div>
-              <p className="aui-kicker">Registry</p>
-              <h2><Wrench size={18} aria-hidden />Tool registry and Approval cards</h2>
-            </div>
-            <span className="aui-action-chip"><Plug size={15} aria-hidden />Tooling.GetToolCatalog</span>
-          </div>
-          <div className="aui-tool-filters" aria-label="Tool catalog filters">
-            <label>
-              <span>Tool search</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-                placeholder="Search tools, providers, permissions, or risk"
-              />
-            </label>
-            <div className="aui-tool-category-tabs" role="tablist" aria-label="Tool categories">
-              {categories.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={category === option.id}
-                  onClick={() => setCategory(option.id)}
-                >
-                  {option.label}
-                  <span>{option.count}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          {state.loading ? <p className="aui-tool-empty">Loading Tooling catalog through Aurora...</p> : null}
-          {!state.loading && state.tools.length === 0 ? (
-            <p className="aui-tool-empty">No tools were returned by the SDK Tooling catalog.</p>
-          ) : null}
-          {!state.loading && state.tools.length > 0 && filteredTools.length === 0 ? (
-            <p className="aui-tool-empty">No tools match the current category or search filter.</p>
-          ) : null}
-          {filteredTools.map((tool) => (
-            <ToolApprovalCard
-              key={tool.id}
-              tool={tool}
-              selectedProviderId={state.selectedProviders[tool.id]}
-              decisionMessage={state.decisionMessages[tool.id] ?? null}
-              routeDisabled={route.disabled}
-              selected={selectedTool?.id === tool.id}
-              onSelect={() => setSelectedToolId(tool.id)}
-              onSelectProvider={(providerId) => selectProvider(tool, providerId)}
-              onApprove={(scope, dryRun) => approve(tool, scope, dryRun)}
-              onDeny={() => deny(tool)}
-              onExecuteSafe={() => executeSafe(tool)}
-            />
-          ))}
-        </section>
-
-        <aside className="aui-tool-summary" aria-label="Tool approval summary">
-          <ToolDetailDrawer tool={selectedTool ?? null} />
-          <section className="aui-tool-mcp" aria-label="MCP server status">
-            <h2>MCP server status</h2>
-            <dl>
-              <div><dt>Providers</dt><dd>{providerStatusSummary(state.tools)}</dd></div>
-              <div><dt>Reload support</dt><dd>Safe reload requires a backend Tooling reload/AdminAction contract.</dd></div>
-            </dl>
-            <button type="button" className="aui-secondary-action" disabled>Reload catalog</button>
-          </section>
-          <h2>Execution boundary</h2>
-          <dl>
-            <div><dt>Backend truth</dt><dd>Tooling.GetToolCatalog via Aurora</dd></div>
-            <div><dt>Approval controller</dt><dd>client.approvals request/confirm</dd></div>
-            <div><dt>Admin mutation</dt><dd>AdminAction when method_type manage/admin-critical</dd></div>
-            <div><dt>Safe local path</dt><dd>Read-only local tools without approval/AdminAction use Tooling.ExecuteTool; otherwise show backend repair state.</dd></div>
-            <div><dt>Result record</dt><dd>provider, route path, audit receipt, correlation ID</dd></div>
-            <div><dt>Route state</dt><dd>{route.state}</dd></div>
-          </dl>
-        </aside>
-      </div>
-
-      <section className="aui-tool-scheduler" aria-labelledby="tool-scheduler-title">
-        <div className="aui-tool-section-heading">
-          <div>
-            <p className="aui-kicker">Automations</p>
-            <h2 id="tool-scheduler-title"><CalendarClock size={18} aria-hidden />Scheduled jobs</h2>
-          </div>
-          <a className="aui-action-chip" href="/admin/scheduler">Open scheduler</a>
-          <span className="aui-action-chip">Scheduler.ListJobs</span>
-        </div>
-        {state.schedulerError ? <div className="aui-tool-alert" role="alert">{state.schedulerError}</div> : null}
-        {state.schedulerLoading ? <p className="aui-tool-empty">Loading scheduler jobs through Aurora...</p> : null}
-        {!state.schedulerLoading && state.schedulerJobs.length === 0 && !state.schedulerError ? (
-          <p className="aui-tool-empty">No scheduler jobs were returned by Scheduler.ListJobs.</p>
-        ) : null}
-        {state.schedulerJobs.length > 0 ? (
-          <div className="aui-table-scroll">
-            <table className="aui-table aui-tool-jobs-table">
-              <thead>
-                <tr>
-                  <th>Job</th>
-                  <th>Schedule</th>
-                  <th>Status</th>
-                  <th>Next</th>
-                  <th>Target</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.schedulerJobs.map((job) => (
-                  <tr key={job.job_id}>
-                    <td>
-                      <strong>{job.name}</strong>
-                      <small>{job.action}</small>
-                    </td>
-                    <td><code>{job.schedule}</code></td>
-                    <td>
-                      <div className="aui-state-line">
-                        <StatusBadge state={schedulerAvailability(job)} />
-                        <span>{schedulerStatusLabel(job)}</span>
-                      </div>
-                    </td>
-                    <td>{job.next_run ?? 'Not scheduled'}</td>
-                    <td>
-                      <strong>{job.target_peer_id ?? job.owner_peer_id}</strong>
-                      <small>{job.target_resource_namespace ?? job.namespace}</small>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </section>
-    </section>
+    <ToolingConsole
+      client={client}
+      route={route}
+      tools={state.tools}
+      loading={state.loading}
+      error={state.error}
+      schedulerJobs={state.schedulerJobs}
+      schedulerLoading={state.schedulerLoading}
+      schedulerError={state.schedulerError}
+      selectedProviders={state.selectedProviders}
+      decisionMessages={state.decisionMessages}
+      nativePlatform={nativePlatform}
+      policySummary={state.policySummary}
+      sourceSummaries={state.sourceSummaries}
+      sourceDetails={state.sourceDetails}
+      grants={state.grants}
+      pendingApprovals={state.pendingApprovals}
+      auditEvents={state.auditEvents}
+      managementLoading={state.managementLoading}
+      managementError={state.managementError}
+      onSetPolicyMode={setPolicyMode}
+      onUpsertSourcePolicy={upsertSourcePolicy}
+      onUpsertToolOverride={upsertToolOverride}
+      onRevokeGrant={revokeGrant}
+      onTestSource={testSource}
+      onCreateSource={createSource}
+      onSelectProvider={selectProvider}
+      onApprove={approve}
+      onDeny={deny}
+      onExecuteSafe={executeSafe}
+    />
   )
+}
+
+function policyConfirmationText(policyMode: string): string | null {
+  if (policyMode === 'unrestricted_except_blocked') return 'ALLOW NON-BLOCKED TOOLS'
+  if (policyMode === 'deny_all') return 'DENY ALL TOOLS'
+  if (policyMode === 'dry_run_only') return 'DRY RUN ONLY'
+  return null
 }
 
 export function submitToolDenialAction({
@@ -386,220 +379,17 @@ export function submitToolDenialAction({
     approverPrincipalId: client.auth.snapshot().principalId ?? 'current-principal',
     reason
   }
-  return client.tools.submitDenialDecision(
-    selectedProviderId ? { ...request, selectedProviderId } : request
-  )
-}
-
-
-function ToolDetailDrawer({ tool }: { tool: ToolApprovalCardModel | null }) {
-  const fields = tool ? toolSchemaFields(tool) : []
-  const selectedProvider = tool ? tool.providers.find((provider) => provider.selectable) ?? tool.providers[0] : null
-  return (
-    <section className="aui-tool-detail-drawer" aria-labelledby="tool-detail-drawer-title">
-      <p className="aui-kicker">Selected tool</p>
-      <h2 id="tool-detail-drawer-title">Tool detail drawer</h2>
-      <p>{tool ? tool.name : 'Select a tool to review schema, provider, approval, and execution boundaries.'}</p>
-      <dl>
-        <div><dt>Schema</dt><dd>{tool ? tool.argsSchema ? 'args_schema from Tooling.GetToolCatalog' : 'No schema reported by backend' : 'Waiting for Tooling.GetToolCatalog'}</dd></div>
-        <div><dt>Permissions</dt><dd>{tool ? tool.requiredPermissions.join(', ') || 'No explicit permissions reported' : 'Select a tool to inspect required permissions'}</dd></div>
-        <div><dt>Provider</dt><dd>{tool ? `${selectedProvider?.label ?? tool.providerLabel} (${selectedProvider?.providerKind ?? tool.providerKind})` : 'No provider selected'}</dd></div>
-        <div><dt>Risk</dt><dd>{tool ? `${tool.riskClass}${tool.requiresAdminAction ? '; AdminAction required' : ''}` : 'Pending catalog selection'}</dd></div>
-        <div><dt>Examples</dt><dd>{tool ? exampleSummary(tool) : 'No tool selected'}</dd></div>
-      </dl>
-      <form className="aui-tool-param-form" aria-label="Tool parameters">
-        <strong>Tool parameters</strong>
-        <p>
-          Parameter validation is schema-derived from Tooling.GetToolCatalog; backend validation remains authoritative before Tooling.ExecuteTool.
-        </p>
-        {fields.length > 0 ? fields.map((field) => (
-          <label key={field.name}>
-            <span>{field.name}{field.required ? ' *' : ''}</span>
-            <input readOnly value={field.example} aria-label={`${field.name} ${field.type} parameter`} />
-            <small>{field.type}</small>
-          </label>
-        )) : <p>No writable parameters were reported for this tool.</p>}
-      </form>
-    </section>
-  )
-}
-
-function ToolApprovalCard({
-  tool,
-  selectedProviderId,
-  decisionMessage,
-  routeDisabled,
-  selected,
-  onSelect,
-  onSelectProvider,
-  onApprove,
-  onDeny,
-  onExecuteSafe
-}: {
-  tool: ToolApprovalCardModel
-  selectedProviderId?: string | undefined
-  decisionMessage: string | null
-  routeDisabled: boolean
-  selected: boolean
-  onSelect: () => void
-  onSelectProvider: (providerId: string) => void
-  onApprove: (scope: ToolApprovalScope, dryRun?: boolean) => void
-  onDeny: () => void
-  onExecuteSafe: () => void
-}) {
-  const selectedProvider = tool.providers.find((provider) => provider.id === selectedProviderId)
-    ?? tool.providers.find((provider) => provider.selectable)
-    ?? tool.providers[0]
-  const selectorMissing = tool.providerSelectorRequired && !selectedProviderId && tool.providers.length > 1
-  const adminActionPending = tool.requiresAdminAction && tool.state !== 'approved' && tool.state !== 'executed'
-  const blocked = routeDisabled || tool.state === 'unavailable' || tool.state === 'denied' || tool.state === 'expired' || tool.state === 'replay-rejected'
-  const approveDisabled = blocked || selectorMissing || adminActionPending || tool.state === 'dry-run-only'
-  const dryRunDisabled = blocked || selectorMissing || !tool.dryRunSupported
-  const denyDisabled = blocked || selectorMissing
-  const executeSafeEnabled = safeLocalExecutable(tool) && !routeDisabled
-  const adminLabel = tool.requiresAdminAction ? 'AdminAction required' : 'tool approval'
-
-  return (
-    <article className={`aui-tool-card aui-tool-state-${tool.state}${selected ? ' selected' : ''}`}>
-      <header className="aui-tool-card-header">
-        <div>
-          <h2>{tool.name}</h2>
-          <p>{tool.description}</p>
-        </div>
-        <div className="aui-tool-card-actions">
-          <span className={`aui-risk-pill aui-risk-${riskClassName(tool.riskClass)}`}>{tool.riskClass}</span>
-          <button type="button" className="aui-secondary-action" aria-pressed={selected} onClick={onSelect}>View details</button>
-        </div>
-      </header>
-
-      <div className="aui-tool-meta" aria-label={`${tool.name} approval metadata`}>
-        <KeyValue label="Provider" value={selectedProvider?.label ?? tool.providerLabel} />
-        <KeyValue label="Peer" value={selectedProvider?.providerPeerId ?? tool.providerPeerId ?? 'local'} />
-        <KeyValue label="Trust tier" value={selectedProvider?.trustTier ?? tool.trustTier ?? 'not reported'} />
-        <KeyValue label="Transport" value={selectedProvider?.transport ?? tool.transport ?? 'not reported'} />
-        <KeyValue label="Data egress" value={tool.dataEgress ? 'yes' : 'no'} />
-        <KeyValue label="Mutation" value={tool.mutating ? adminLabel : 'read-only'} />
-        <KeyValue label="Args hash" value={tool.argsHash ?? 'not reported'} />
-        <KeyValue label="TTL" value={tool.tokenTtlSeconds ? `${tool.tokenTtlSeconds}s` : 'backend default'} />
-        <KeyValue label="Audit" value={tool.auditDestination ?? 'audit pending'} />
-        <KeyValue label="Correlation" value={tool.correlationId ?? 'pending'} />
-      </div>
-
-      {tool.providers.length > 1 || tool.providerSelectorRequired ? (
-        <label className="aui-tool-select">
-          <span>Provider selector</span>
-          <select
-            value={selectedProviderId ?? ''}
-            onChange={(event) => onSelectProvider(event.currentTarget.value)}
-            aria-describedby={`${idFromTool(tool.id)}-selector-help`}
-          >
-            <option value="">Select provider</option>
-            {tool.providers.map((provider) => (
-              <option key={provider.id} value={provider.id} disabled={!provider.selectable}>
-                {provider.label}
-              </option>
-            ))}
-          </select>
-          <small id={`${idFromTool(tool.id)}-selector-help`}>
-            {selectorMissing ? 'Backend requires an explicit provider selector before approval.' : selectedProvider?.reason ?? 'Provider selected from catalog.'}
-          </small>
-        </label>
-      ) : null}
-
-      <details className="aui-tool-details">
-        <summary><FileDiff size={15} aria-hidden />Arguments and result</summary>
-        <RedactedPreview label="Redacted arguments" value={tool.argsPreview} fallback="No argument preview reported." />
-        <RedactedPreview label="Dry-run preview" value={tool.dryRunPreview} fallback="No dry-run preview reported." />
-        {tool.result ? <ToolResultCard result={tool.result} /> : null}
-      </details>
-
-      <div className="aui-tool-status-row" role={blocked ? 'alert' : 'status'}>
-        {statusIcon(tool.state)}
-        <span>{stateCopy(tool)}</span>
-      </div>
-
-      <div className="aui-tool-actions">
-        <button type="button" className="aui-secondary-action" disabled={dryRunDisabled} onClick={() => onApprove('once', true)}>
-          <FlaskConical size={15} aria-hidden />
-          Dry run
-        </button>
-        <button type="button" className="aui-secondary-action" disabled={denyDisabled} onClick={onDeny}>
-          <X size={15} aria-hidden />
-          Deny
-        </button>
-        {executeSafeEnabled ? (
-          <button type="button" className="aui-primary-action" aria-label="Execute safe local through Tooling.ExecuteTool" onClick={onExecuteSafe}>
-            <Play size={15} aria-hidden />
-            Execute safe local
-          </button>
-        ) : null}
-        {tool.approvalRequired ? tool.approvalScopes.map((scope) => (
-          <button
-            key={scope}
-            type="button"
-            className="aui-primary-action"
-            disabled={approveDisabled}
-            onClick={() => onApprove(scope)}
-          >
-            <Check size={15} aria-hidden />
-            {scopeLabel(scope)}
-          </button>
-        )) : null}
-      </div>
-
-      {decisionMessage ? <p className="aui-tool-message" role="status">{decisionMessage}</p> : null}
-    </article>
-  )
-}
-
-function ToolResultCard({ result }: { result: NonNullable<ToolApprovalCardModel['result']> }) {
-  return (
-    <section className="aui-tool-result" aria-label="Tool result">
-      <h3>Result</h3>
-      <div className="aui-tool-meta">
-        <KeyValue label="Status" value={result.status} />
-        <KeyValue label="Provider" value={result.providerPeerId ?? 'local'} />
-        <KeyValue label="Correlation" value={result.correlationId ?? 'pending'} />
-        <KeyValue label="Audit receipt" value={result.auditReceipt ?? 'pending'} />
-        <KeyValue label="Route path" value={result.routePath.join(' -> ') || 'not reported'} />
-        <KeyValue label="Duration" value={result.durationMs === null ? 'not reported' : `${result.durationMs}ms`} />
-        <KeyValue label="Redaction" value={result.redactionStatus ?? 'not reported'} />
-        <KeyValue label="Retry/fallback" value={`${result.retryEligible ? 'retry' : 'no retry'} / ${result.fallbackEligible ? 'fallback' : 'no fallback'}`} />
-      </div>
-      <RedactedPreview label="Redacted output" value={result.outputPreview} fallback={result.error ?? 'No output preview reported.'} />
-    </section>
-  )
-}
-
-function KeyValue({ label, value }: { label: string; value: string }) {
-  return <div><dt>{label}</dt><dd>{value}</dd></div>
-}
-
-function RedactedPreview({ label, value, fallback }: { label: string; value: object | null; fallback: string }) {
-  return (
-    <div className="aui-redacted-preview">
-      <h3>{label}</h3>
-      <code>{value ? JSON.stringify(value, null, 2) : fallback}</code>
-    </div>
-  )
-}
-
-function toolCounts(tools: ToolApprovalCardModel[]) {
-  return {
-    total: tools.length,
-    blocked: tools.filter((tool) => ['denied', 'expired', 'replay-rejected', 'unavailable', 'provider-selector-required', 'dry-run-only'].includes(tool.state)).length
-  }
+  return client.tools.submitDenialDecision(selectedProviderId ? { ...request, selectedProviderId } : request)
 }
 
 export function buildToolCategories(tools: ToolApprovalCardModel[]) {
-  const base = [
+  return [
     { id: 'all', label: 'All', count: tools.length },
     { id: 'read', label: 'Read-only', count: tools.filter((tool) => toolCategory(tool) === 'read').length },
     { id: 'mutating', label: 'Mutating', count: tools.filter((tool) => toolCategory(tool) === 'mutating').length },
     { id: 'external', label: 'External', count: tools.filter((tool) => toolCategory(tool) === 'external').length },
     { id: 'admin', label: 'Admin', count: tools.filter((tool) => toolCategory(tool) === 'admin').length }
   ]
-  return base
 }
 
 export function filterTools(tools: ToolApprovalCardModel[], category: string, query: string) {
@@ -634,152 +424,6 @@ function toolSearchHaystack(tool: ToolApprovalCardModel) {
   ].join(' ').toLowerCase()
 }
 
-function safeLocalExecutable(tool: ToolApprovalCardModel) {
-  const localProvider = tool.providerKind === 'local'
-    || tool.providerPeerId === null
-    || tool.providerPeerId === 'local-peer'
-    || tool.transport === 'local-bus'
-  return localProvider
-    && tool.state === 'ready'
-    && !tool.approvalRequired
-    && !tool.requiresAdminAction
-    && !tool.mutating
-    && !tool.dataEgress
-    && !tool.providerSelectorRequired
-}
-
-function providerStatusSummary(tools: ToolApprovalCardModel[]) {
-  const providers = new Set<string>()
-  let mcpLike = 0
-  for (const tool of tools) {
-    const labels = tool.providers.length > 0
-      ? tool.providers.map((provider) => ({ id: provider.id, providerKind: provider.providerKind }))
-      : [{ id: tool.providerLabel, providerKind: tool.providerKind }]
-    for (const provider of labels) {
-      providers.add(provider.id)
-      if (`${provider.providerKind} ${provider.id}`.toLowerCase().includes('mcp')) mcpLike += 1
-    }
-  }
-  if (providers.size === 0) return 'No providers reported by catalog.'
-  return `${providers.size} provider endpoints from catalog; ${mcpLike} MCP-like endpoint${mcpLike === 1 ? '' : 's'} reported.`
-}
-
-function toolSchemaFields(tool: ToolApprovalCardModel) {
-  const required = schemaRequiredFields(tool.argsSchema)
-  const properties = schemaProperties(tool.argsSchema)
-  if (properties) {
-    return Object.entries(properties).map(([name, schema]) => ({
-      name,
-      type: schemaFieldType(schema),
-      required: required.includes(name),
-      example: exampleValue(name, tool)
-    }))
-  }
-  if (tool.argsPreview) {
-    return Object.keys(tool.argsPreview).map((name) => ({
-      name,
-      type: typeof tool.argsPreview?.[name],
-      required: false,
-      example: exampleValue(name, tool)
-    }))
-  }
-  return []
-}
-
-function schemaProperties(schema: object | null) {
-  const properties = recordValue(schema, 'properties')
-  return properties && !Array.isArray(properties) ? properties : null
-}
-
-function schemaRequiredFields(schema: object | null) {
-  const required = schema && 'required' in schema ? (schema as Record<string, unknown>).required : null
-  return Array.isArray(required) ? required.filter((field): field is string => typeof field === 'string') : []
-}
-
-function schemaFieldType(schema: unknown) {
-  const type = recordValue(schema, 'type')
-  if (typeof type === 'string') return type
-  if (Array.isArray(type)) return type.filter((value) => typeof value === 'string').join(' | ') || 'unknown'
-  return 'unknown'
-}
-
-function exampleValue(name: string, tool: ToolApprovalCardModel) {
-  const value = recordValue(tool.argsPreview, name)
-    ?? recordValue(tool.dryRunPreview, name)
-    ?? ''
-  if (value === '') return ''
-  return typeof value === 'string' ? value : JSON.stringify(value)
-}
-
-function exampleSummary(tool: ToolApprovalCardModel) {
-  if (tool.dryRunPreview) return `Dry-run preview: ${JSON.stringify(tool.dryRunPreview)}`
-  if (tool.argsPreview) return `Arguments preview: ${JSON.stringify(tool.argsPreview)}`
-  return 'No example payload reported by backend.'
-}
-
-function recordValue(value: unknown, key: string): Record<string, unknown> | unknown | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  return (value as Record<string, unknown>)[key] ?? null
-}
-
-function schedulerCounts(jobs: NormalizedSchedulerJob[]) {
-  return {
-    total: jobs.length,
-    active: jobs.filter((job) => job.enabled && !job.blocked_reason).length
-  }
-}
-
-function schedulerAvailability(job: NormalizedSchedulerJob): AvailabilityState {
-  if (job.blocked_reason || job.last_error) return 'denied'
-  if (!job.enabled || job.status === 'paused') return 'degraded'
-  if (job.status === 'delegated' || job.status === 'remote-running') return 'available-remote'
-  return 'available-local'
-}
-
-function schedulerStatusLabel(job: NormalizedSchedulerJob): string {
-  if (job.blocked_reason) return `blocked: ${job.blocked_reason}`
-  if (job.last_error) return `error: ${job.last_error}`
-  if (!job.enabled) return 'paused'
-  return job.status ?? 'active'
-}
-
-function stateCopy(tool: ToolApprovalCardModel): string {
-  if (tool.state === 'provider-selector-required') return 'Provider selector required before approval.'
-  if (tool.state === 'dry-run-only') return 'Dry-run only until backend policy permits execution.'
-  if (tool.state === 'denied') return `Denied: ${tool.denialReason ?? 'backend policy denied approval'}.`
-  if (tool.state === 'expired') return 'Approval expired; request a fresh backend approval.'
-  if (tool.state === 'replay-rejected') return `Replay rejected: ${tool.denialReason ?? 'backend replay protection blocked it'}.`
-  if (tool.state === 'unavailable') return `Unavailable: ${tool.disabledReason ?? 'service unavailable'}. Disabled until provider/service repair completes.`
-  if (tool.state === 'executed') return 'Tool result includes audit and correlation status.'
-  if (tool.requiresAdminAction) return 'AdminAction confirmation required before approval or execution.'
-  if (tool.approvalRequired) return 'Approval required before execution.'
-  return 'No approval required by current backend policy.'
-}
-
-function statusIcon(state: ToolApprovalCardModel['state']) {
-  if (state === 'ready' || state === 'approved' || state === 'executed') return <Check size={16} aria-hidden />
-  if (state === 'expired') return <Clock size={16} aria-hidden />
-  if (state === 'dry-run-only') return <FlaskConical size={16} aria-hidden />
-  if (state === 'denied' || state === 'replay-rejected' || state === 'unavailable' || state === 'failed') return <ShieldAlert size={16} aria-hidden />
-  return <Play size={16} aria-hidden />
-}
-
-function scopeLabel(scope: ToolApprovalScope): string {
-  if (scope === 'once') return 'Approve once'
-  if (scope === 'session') return 'Approve session'
-  if (scope === 'peer') return 'Approve peer'
-  if (scope === 'local-safe-tools') return 'Approve local safe'
-  return `Approve ${scope}`
-}
-
-function riskClassName(risk: string): string {
-  return risk.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
-}
-
-function idFromTool(id: string): string {
-  return id.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
-}
-
 function toolErrorMessage(result: AuroraResponse<unknown>): string {
   if (result.ok) return ''
   return result.error.message || 'Tooling catalog request failed.'
@@ -793,4 +437,11 @@ function denialResultMessage(result: ToolApprovalDecisionResult): string {
   const correlation = result.correlationId ?? 'pending'
   const policy = result.policyDecisionId ? `, policy ${result.policyDecisionId}` : ''
   return `Denied with correlation ${correlation}${policy}`
+}
+
+function sourceActionContractName(kind: 'mcp' | 'plugin', action: 'test' | 'create'): string {
+  if (kind === 'mcp') {
+    return action === 'test' ? 'Tooling.TestMCPSource' : 'Tooling.CreateMCPSource'
+  }
+  return action === 'test' ? 'Tooling.TestPluginSource' : 'Tooling.CreatePluginSource'
 }

@@ -6,9 +6,10 @@ import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './s
 export interface PageHeaderProps {
   title: string
   description: string
-  eyebrow?: string
+  eyebrow?: string | null
   id?: string
   badges?: ReactNode
+  actions?: ReactNode
   className?: string
   badgesLabel?: string
 }
@@ -65,6 +66,7 @@ export function PageHeader({
   eyebrow = 'Route surface',
   id,
   badges,
+  actions,
   className = 'aui-page-header',
   badgesLabel
 }: PageHeaderProps) {
@@ -72,7 +74,7 @@ export function PageHeader({
   return (
     <header className={className} aria-labelledby={titleId}>
       <div>
-        <p className="aui-kicker">{eyebrow}</p>
+        {eyebrow ? <p className="aui-kicker">{eyebrow}</p> : null}
         <h1 id={titleId}>{title}</h1>
         <p>{description}</p>
       </div>
@@ -81,6 +83,7 @@ export function PageHeader({
           {badges}
         </div>
       ) : null}
+      {actions ? <div className="aui-page-header-actions">{actions}</div> : null}
     </header>
   )
 }

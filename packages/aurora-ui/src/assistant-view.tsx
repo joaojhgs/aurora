@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link, MessageSquarePlus, Mic, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, Share2, StopCircle, Trash2, Volume2, WifiOff, Wrench, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { CheckCircle2, ChevronDown, Copy, FileText, Image as ImageIcon, LoaderCircle, MessageSquarePlus, Mic, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -15,11 +15,39 @@ import type {
   AuroraClient,
   AuroraError,
   AuroraResponse,
-  VoiceRuntimeEvent
+  VoiceRuntimeEvent,
+  ModelRuntimeProviderInfo
 } from '@aurora/client'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
 import { RouteSheet } from './route-sheet'
+import { AudioRecorderVisualizer } from './audio-recorder-visualizer'
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle
+} from '#components/ui/attachment'
+import { Bubble, BubbleContent } from '#components/ui/bubble'
+import { Button } from '#components/ui/button'
+import { CollapsibleTrigger } from '#components/ui/collapsible'
+import { Marker, MarkerContent } from '#components/ui/marker'
+import { Message, MessageContent, MessageFooter, MessageHeader } from '#components/ui/message'
+import {
+  MessageScroller,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport
+} from '#components/ui/message-scroller'
+import { ToolFallbackArgs, ToolFallbackContent, ToolFallbackResult, ToolFallbackRoot } from '#components/assistant-ui/tool-fallback'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { getAuroraSurfaceProfile } from './platform-surface'
+import type { AuroraSurfaceProfile } from './platform-surface'
+
 
 export interface AssistantViewProps {
   client: AuroraClient
@@ -48,13 +76,21 @@ export type AssistantUiMessageStatus = 'sent' | 'sending' | 'streaming' | 'faile
 export interface AssistantToolCallCard {
   id: string
   name: string
-  status: 'requested' | 'running' | 'completed' | 'failed'
+  status: 'requested' | 'running' | 'completed' | 'failed' | 'requires_action'
   riskClass: string
   target: string
   dataLeavesDevice: boolean
   summary: string
   auditId: string | null
   payloadPreview: Record<string, unknown> | null
+  resultPreview?: Record<string, unknown> | string | null | undefined
+  error?: string | null | undefined
+  errorDetails?: Record<string, unknown> | string | null | undefined
+  pendingId?: string | null | undefined
+  approvalRequestId?: string | null | undefined
+  approvalExpiresAt?: number | null | undefined
+  policyDecisionId?: string | null | undefined
+  resolving?: boolean | undefined
 }
 
 export interface AssistantUiMessage {
@@ -66,7 +102,12 @@ export interface AssistantUiMessage {
   error?: string | undefined
   toolCalls?: AssistantToolCallCard[] | undefined
   sources?: string[] | undefined
+  modelLabel?: string | null | undefined
+  providerLabel?: string | null | undefined
+  routeLabel?: string | null | undefined
 }
+
+type AssistantApprovalGrantScope = 'once' | 'session' | 'until_expiry' | 'always' | 'deny_once' | 'deny_always'
 
 export interface AssistantSessionSnapshot {
   sessionId: string | null
@@ -107,6 +148,7 @@ export interface AssistantAttachmentDraft {
   filename?: string | null
   mimeType?: string | null
   sizeBytes?: number | null
+  previewUrl?: string | null
   sourceChannel: AttachmentContextSourceChannel
   sourceDisplayName: string
   privacyClass: AttachmentContextPrivacyClass
@@ -117,7 +159,7 @@ export interface AssistantAttachmentDraft {
   redacted: boolean
 }
 
-export type VoiceCaptureStatus = 'idle' | 'listening' | 'permission-denied' | 'no-device' | 'error'
+export type VoiceCaptureStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'no-device' | 'error'
 
 export interface VoiceCapabilityChip {
   id: string
@@ -153,6 +195,8 @@ export interface AssistantVoiceModel {
   retentionPolicy: string
   sessionTtl: string
   transport: string
+  platformTruth: string
+  visualizerSourceLabel: string
   targetLabel: string
   chips: VoiceCapabilityChip[]
   controls: VoiceControlModel[]
@@ -173,6 +217,15 @@ const defaultContextLimits = {
   max_text_chars: 120_000
 }
 
+const assistantAttachmentPickerAccept = 'image/*,application/pdf,application/json,text/plain,text/markdown,.txt,.md,.markdown,.json'
+
+type BrowserFileSystemFileHandle = { getFile: () => Promise<File> }
+type BrowserOpenFilePicker = (options?: {
+  multiple?: boolean
+  excludeAcceptAllOption?: boolean
+  types?: Array<{ description: string; accept: Record<string, string[]> }>
+}) => Promise<BrowserFileSystemFileHandle[]>
+
 export function AssistantView({
   client,
   route,
@@ -189,28 +242,69 @@ export function AssistantView({
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? defaultAssistantSessionForTransport(client.transport.kind))
   const [text, setText] = useState('')
-  const [urlDraft, setUrlDraft] = useState('')
-  const [sharedTextDraft, setSharedTextDraft] = useState('')
-  const [privacyClass, setPrivacyClass] = useState<AttachmentContextPrivacyClass>('personal')
-  const [sourceChannel, setSourceChannel] = useState<AttachmentContextSourceChannel>('chat')
+  const [privacyClass] = useState<AttachmentContextPrivacyClass>('personal')
   const [attachments, setAttachments] = useState<AssistantAttachmentDraft[]>([])
+  const attachmentsRef = useRef<AssistantAttachmentDraft[]>([])
   const [lastResult, setLastResult] = useState<SdkAssistantMessage | null>(null)
   const [modelLabel, setModelLabel] = useState<string | null>(null)
+  const [runtimeProviderLabel, setRuntimeProviderLabel] = useState<string | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastPrompt, setLastPrompt] = useState<string | null>(null)
   const [streamState, setStreamState] = useState<AssistantStreamState>(() => idleAssistantStreamState())
   const [voiceConsentGranted, setVoiceConsentGranted] = useState(false)
-  const [voiceCaptureStatus, setVoiceCaptureStatus] = useState<VoiceCaptureStatus>('idle')
+  const [voiceCaptureStatus, setVoiceCaptureStatusState] = useState<VoiceCaptureStatus>('idle')
+  const [activeAssistantPendingId, setActiveAssistantPendingId] = useState<string | null>(null)
+  const [voiceResponsePendingId, setVoiceResponsePendingId] = useState<string | null>(null)
   const [voiceEvents, setVoiceEvents] = useState<VoiceRuntimeEvent[]>(recentVoiceEvents)
+  const [voiceWaveformBars, setVoiceWaveformBars] = useState<number[]>(() => idleWaveformBars())
+  const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0)
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const voiceStreamRef = useRef<MediaStream | null>(null)
+  const voiceAudioContextRef = useRef<AudioContext | null>(null)
+  const voiceAnalyserRef = useRef<AnalyserNode | null>(null)
+  const voiceMediaSourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
+  const voiceScriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
+  const voicePcmChunksRef = useRef<Float32Array[]>([])
+  const voicePcmSampleRateRef = useRef(16_000)
+  const voicePartialTranscribeTimerRef = useRef<number | null>(null)
+  const voicePartialTranscribeInFlightRef = useRef(false)
+  const voiceRecordingGenerationRef = useRef(0)
+  const voiceFinalizeOnStopRef = useRef(false)
+  const voiceAnalyserFrameRef = useRef<number | null>(null)
+  const activeVoiceSessionRef = useRef<string | null>(null)
+  const ownedVoiceSessionIdsRef = useRef<Set<string>>(new Set())
+  const coordinatorVoiceSessionIdsRef = useRef<Set<string>>(new Set())
+  const voiceSessionStartedAtRef = useRef<number | null>(null)
+  const appliedVoiceEventIdsRef = useRef<Set<string>>(new Set())
+  const voiceCaptureStatusRef = useRef<VoiceCaptureStatus>('idle')
+  const voicePendingAssistantIdRef = useRef<string | null>(null)
+  const voiceTranscriptPreviewRef = useRef('')
+  function setVoiceCaptureStatus(next: VoiceCaptureStatus) {
+    voiceCaptureStatusRef.current = next
+    setVoiceCaptureStatusState(next)
+  }
+  const voiceToggleInFlightRef = useRef(false)
+  const voiceResponseTimeoutRef = useRef<number | null>(null)
+  const readAloudFallbackTimerRef = useRef<number | null>(null)
+  const readAloudFallbackTokenRef = useRef(0)
+  const [speakingMessageIdState, setSpeakingMessageIdState] = useState<string | null>(null)
+  const speakingMessageIdRef = useRef<string | null>(null)
+  const lastAssistantMessageIdRef = useRef<string | null>(null)
+  const streamedTtsQueueRef = useRef<string[]>([])
+  const streamedTtsAudioRef = useRef<HTMLAudioElement | null>(null)
+  function setSpeakingMessageId(next: string | null) {
+    speakingMessageIdRef.current = next
+    setSpeakingMessageIdState(next)
+  }
   const activePendingIdRef = useRef<string | null>(null)
   const cancelledPendingIdsRef = useRef<Set<string>>(new Set())
   const routePolicy = useMemo(() => routePolicyFromRoute(route), [route])
-  const isSending = session.messages.some((message) => message.status === 'sending')
-  const isStreaming = session.messages.some((message) => message.status === 'streaming')
+  const sessionMessages = session.messages
+  const isSending = sessionMessages.some((message) => message.status === 'sending')
+  const isStreaming = sessionMessages.some((message) => message.status === 'streaming')
   const hasContextUpload = attachments.some((attachment) => attachment.status === 'uploading')
   const controls = assistantControlsForRoute(route, cancellationRoute, isSending || isStreaming || hasContextUpload)
   const canSend = controls.canSend
@@ -218,11 +312,37 @@ export function AssistantView({
   const attachmentsAwaitingValidation = attachments.filter((attachment) =>
     attachment.status === 'staged' || attachment.status === 'error'
   )
+  const assistantBusy = Boolean(activeAssistantPendingId) || isSending || sessionMessages.some(isAssistantPendingWork)
+  const voiceBusy = voiceCaptureStatus === 'processing' || Boolean(voiceResponsePendingId)
+  const retryableFailure = Boolean(lastPrompt) && (
+    streamState.status === 'lost' ||
+    streamState.status === 'fallback' ||
+    voiceCaptureStatus === 'error' ||
+    sessionMessages.some((message) => message.status === 'failed')
+  )
+  const primaryComposerAction: 'send' | 'stop' | 'retry' = retryableFailure ? 'retry' : assistantBusy || voiceBusy ? 'stop' : 'send'
+  const primaryComposerDisabled = primaryComposerAction === 'send'
+    ? !canSend || hasContextUpload || text.trim().length === 0
+    : primaryComposerAction === 'retry'
+      ? !lastPrompt || !canSend
+      : false
+  const primaryComposerLabel = primaryComposerAction === 'retry' ? 'Retry' : primaryComposerAction === 'stop' ? 'Stop' : 'Send'
+  const primaryComposerAriaLabel = primaryComposerAction === 'retry'
+    ? 'Retry last assistant prompt'
+    : primaryComposerAction === 'stop'
+      ? 'Stop assistant generation'
+      : 'Send assistant prompt'
   const contextSummary = summarizeAttachments(attachments)
   const runtimeStrip = useMemo(
     () => buildAssistantRuntimeStrip(runtimeHealth, modelLabel, route, client.transport.kind),
     [runtimeHealth, modelLabel, route, client.transport.kind]
   )
+  const surfaceProfile = useMemo(() => getAuroraSurfaceProfile({
+    runtimeMode: client.transport.kind === 'tauri-local' ? 'desktop-local' : client.transport.kind === 'native-mobile' ? 'mobile' : undefined,
+    transportKind: client.transport.kind,
+    nativePlatform,
+    userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent
+  }), [client.transport.kind, nativePlatform])
   const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
     () => buildAssistantVoiceModel({
@@ -235,7 +355,8 @@ export function AssistantView({
       nativeCapabilities,
       captureStatus: voiceCaptureStatus,
       consentGranted: voiceConsentGranted,
-      voiceEvents
+      voiceEvents,
+      waveformBars: voiceWaveformBars
     }),
     [
       client,
@@ -247,40 +368,154 @@ export function AssistantView({
       nativeCapabilities,
       voiceCaptureStatus,
       voiceConsentGranted,
-      voiceEvents
+      voiceEvents,
+      voiceWaveformBars
     ]
   )
 
+  function enqueueStreamedTtsAudio(update: AssistantStreamUpdate) {
+    const chunk = update.ttsAudio
+    if (!chunk) return
+    if (surfaceProfile.usesLocalSidecar) return
+    if (chunk.final) {
+      if (!streamedTtsAudioRef.current && streamedTtsQueueRef.current.length === 0) {
+        setSpeakingMessageId(null)
+      }
+      return
+    }
+    if (!chunk.audioData || typeof window === 'undefined') return
+    const bytes = base64ToUint8Array(chunk.audioData)
+    if (bytes.byteLength === 0) return
+    const encoding = (chunk.encoding ?? 'wav').toLowerCase()
+    const mimeType = chunk.mimeType ?? (encoding === 'raw' ? 'audio/wav' : `audio/${encoding}`)
+    const url = window.URL.createObjectURL(new Blob([bytes], { type: mimeType }))
+    streamedTtsQueueRef.current.push(url)
+    void drainStreamedTtsAudioQueue()
+  }
+
+  async function drainStreamedTtsAudioQueue() {
+    if (streamedTtsAudioRef.current) return
+    const nextUrl = streamedTtsQueueRef.current.shift()
+    if (!nextUrl || typeof Audio === 'undefined') {
+      if (!nextUrl) setSpeakingMessageId(null)
+      return
+    }
+    const audio = new Audio(nextUrl)
+    streamedTtsAudioRef.current = audio
+    const cleanup = () => {
+      if (streamedTtsAudioRef.current === audio) streamedTtsAudioRef.current = null
+      window.URL.revokeObjectURL(nextUrl)
+      void drainStreamedTtsAudioQueue()
+    }
+    audio.onended = cleanup
+    audio.onerror = cleanup
+    try {
+      await audio.play()
+    } catch {
+      cleanup()
+    }
+  }
+
+  function stopStreamedTtsPlayback() {
+    const activeAudio = streamedTtsAudioRef.current
+    streamedTtsAudioRef.current = null
+    activeAudio?.pause()
+    for (const url of streamedTtsQueueRef.current) {
+      window.URL.revokeObjectURL(url)
+    }
+    streamedTtsQueueRef.current = []
+    setSpeakingMessageId(null)
+  }
+
   useEffect(() => {
     const stored = loadAssistantSession(storageKey)
-    setSession(initialSession ?? (stored.sessionId || stored.messages.length > 0 ? stored : defaultAssistantSessionForTransport(client.transport.kind)))
+    const nextSession = initialSession ?? (stored.sessionId || stored.messages.length > 0 ? stored : defaultAssistantSessionForTransport(client.transport.kind))
+    setSession(nextSession)
   }, [client.transport.kind, initialSession, storageKey])
 
   useEffect(() => {
-    persistAssistantSession(storageKey, session)
-  }, [session, storageKey])
+    persistAssistantSession(storageKey, { ...session, messages: sessionMessages })
+  }, [session, sessionMessages, storageKey])
+
+  useEffect(() => {
+    attachmentsRef.current = attachments
+  }, [attachments])
+
+  useEffect(() => () => {
+    for (const attachment of attachmentsRef.current) revokeAttachmentPreview(attachment)
+  }, [])
 
   useEffect(() => () => {
     abortRef.current?.abort()
+    clearVoiceResponseTimeout()
+    clearReadAloudFallbackTimer()
+    stopStreamedTtsPlayback()
     stopLocalCapture()
   }, [])
 
   useEffect(() => {
-    setVoiceEvents(recentVoiceEvents)
+    let active = true
+    void client.models.getRuntime({ include_unavailable: true })
+      .then((runtime) => {
+        if (!active) return
+        const provider = selectedRuntimeProvider(runtime.provider, runtime.providers)
+        if (provider?.model_id) setModelLabel(provider.model_id)
+        if (provider?.display_name) setRuntimeProviderLabel(provider.display_name)
+      })
+      .catch(() => {
+        if (active) setRuntimeProviderLabel((current) => current)
+      })
+    return () => {
+      active = false
+    }
+  }, [client])
+
+  useEffect(() => {
+    if (recentVoiceEvents.length === 0) return
+    setVoiceEvents((current) => mergeVoiceRuntimeEvents(recentVoiceEvents, current).slice(0, 12))
   }, [recentVoiceEvents])
 
   useEffect(() => {
-    if (recentVoiceEvents.length > 0) return
+    voiceCaptureStatusRef.current = voiceCaptureStatus
+  }, [voiceCaptureStatus])
+
+  useEffect(() => {
+    const active = voiceCaptureStatus === 'listening' || voiceCaptureStatus === 'processing' || voiceCaptureStatus === 'speaking'
+    if (!active) {
+      voiceSessionStartedAtRef.current = null
+      setVoiceElapsedSeconds(0)
+      return
+    }
+    if (voiceSessionStartedAtRef.current === null) voiceSessionStartedAtRef.current = Date.now()
+    const tick = () => {
+      const startedAt = voiceSessionStartedAtRef.current ?? Date.now()
+      setVoiceElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
+    }
+    tick()
+    const interval = window.setInterval(tick, 1000)
+    return () => window.clearInterval(interval)
+  }, [voiceCaptureStatus])
+
+  useEffect(() => {
     const controller = new AbortController()
     let active = true
     void (async () => {
       try {
         for await (const event of client.assistant.streamVoiceEvents({ signal: controller.signal })) {
           if (!active) return
-          setVoiceEvents((current) => [event, ...current].slice(0, 12))
+          applyVoiceRuntimeEvent(event)
+          if (event.kind !== 'audio_level') {
+            setVoiceEvents((current) => [event, ...current].slice(0, 12))
+          }
         }
-      } catch {
+      } catch (error) {
         if (active) {
+          const message = assistantErrorMessage(error instanceof Error ? error : new Error(String(error)))
+          const currentVoiceState = voiceCaptureStatusRef.current
+          if (currentVoiceState === 'listening' || currentVoiceState === 'processing' || currentVoiceState === 'speaking') {
+            setLastError(`Voice event stream unavailable: ${message}`)
+            setStreamState((current) => ({ ...current, status: 'lost', message: `Voice event stream unavailable: ${message}` }))
+          }
           setVoiceEvents((current) => current)
         }
       }
@@ -289,32 +524,95 @@ export function AssistantView({
       active = false
       controller.abort()
     }
-  }, [client, recentVoiceEvents.length])
+  }, [client])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let active = true
+    void (async () => {
+      try {
+        for await (const update of client.assistant.streamVoiceAssistantResponses({ signal: controller.signal })) {
+          if (!active) return
+          applyVoiceAssistantResponse(update)
+        }
+      } catch {
+        if (active) {
+          const pendingId = voicePendingAssistantIdRef.current
+          if (pendingId) {
+            markVoiceAssistantFailed(pendingId, 'Voice response stream disconnected before Aurora returned a final response.')
+          } else {
+            setStreamState((current) => current)
+          }
+        }
+      }
+    })()
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [client])
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    await submitCurrentPrompt()
+  }
+
+  async function submitCurrentPrompt() {
     const prompt = text.trim()
-    if (!prompt || !canSend) return
-    const contextResult = await ingestPendingAttachments()
-    if (contextResult === 'blocked') return
+    if (!prompt || !canSend || hasContextUpload) return
+    // Attachment ingestion is intentionally not wired yet. Keep previews in the UI,
+    // but never block or mutate message sending until the backend contract supports it.
     await startAssistantTurn(prompt)
+  }
+
+  function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter') return
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      event.preventDefault()
+      insertComposerNewline()
+      return
+    }
+    event.preventDefault()
+    if (primaryComposerAction === 'send' && !primaryComposerDisabled) {
+      void submitCurrentPrompt()
+    }
+  }
+
+  function insertComposerNewline() {
+    const element = textAreaRef.current
+    if (!element) {
+      setText((current) => `${current}\n`)
+      return
+    }
+    const start = element.selectionStart
+    const end = element.selectionEnd
+    const next = `${text.slice(0, start)}\n${text.slice(end)}`
+    setText(next)
+    window.setTimeout(() => {
+      element.selectionStart = start + 1
+      element.selectionEnd = start + 1
+    }, 0)
   }
 
   async function startAssistantTurn(prompt: string, replayFrom: string | null = null) {
     const now = new Date().toISOString()
+    const requestId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     const userMessage: AssistantUiMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${requestId}`,
       role: 'user',
       text: prompt,
       createdAt: now,
       status: 'sent'
     }
     const pendingMessage: AssistantUiMessage = {
-      id: `assistant-pending-${Date.now()}`,
+      id: requestId,
       role: 'assistant',
       text: replayFrom ? 'Replaying stream from last backend event...' : 'Waiting for Aurora stream...',
       createdAt: now,
-      status: 'streaming'
+      status: 'streaming',
+      modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
+      providerLabel: runtimeProviderLabel ?? route.providerLabel,
+      routeLabel: route.providerLabel
     }
 
     setText('')
@@ -329,21 +627,63 @@ export function AssistantView({
     const abort = new AbortController()
     abortRef.current = abort
     activePendingIdRef.current = pendingMessage.id
+    setActiveAssistantPendingId(pendingMessage.id)
     cancelledPendingIdsRef.current.delete(pendingMessage.id)
-    for await (const update of client.assistant.streamMessage({
-      text: prompt,
-      sessionId: session.sessionId,
-      routePolicy,
-      signal: abort.signal,
-      replayFrom
-    })) {
-      applyAssistantStreamUpdate(update, pendingMessage.id)
-      if (update.kind === 'completed' || update.kind === 'failed' || update.kind === 'fallback' || update.kind === 'transport_lost') {
-        break
+    let terminalSeen = false
+    try {
+      for await (const update of client.assistant.streamMessage({
+        text: prompt,
+        sessionId: session.sessionId,
+        requestId,
+        routePolicy,
+        signal: abort.signal,
+        replayFrom,
+        clientTtsPlayback: !surfaceProfile.usesLocalSidecar
+      })) {
+        applyAssistantStreamUpdate(update, pendingMessage.id)
+        if (update.kind === 'completed') {
+          terminalSeen = true
+          continue
+        }
+        if (isAssistantStreamHardTerminal(update)) {
+          terminalSeen = true
+          break
+        }
       }
+      if (!terminalSeen && !abort.signal.aborted && !cancelledPendingIdsRef.current.has(pendingMessage.id)) {
+        markAssistantTurnFailed(pendingMessage.id, 'Assistant stream ended before Aurora returned a final response. Retry will resend the last prompt.')
+      }
+    } catch (error) {
+      if (!abort.signal.aborted && !cancelledPendingIdsRef.current.has(pendingMessage.id)) {
+        markAssistantTurnFailed(pendingMessage.id, assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+      }
+    } finally {
+      if (abortRef.current === abort) abortRef.current = null
+      if (activePendingIdRef.current === pendingMessage.id) activePendingIdRef.current = null
+      setActiveAssistantPendingId((current) => current === pendingMessage.id ? null : current)
     }
-    if (abortRef.current === abort) abortRef.current = null
-    if (activePendingIdRef.current === pendingMessage.id) activePendingIdRef.current = null
+  }
+
+  function markAssistantTurnFailed(pendingId: string, error: string) {
+    setLastError(error)
+    setStreamState((current) => ({
+      status: 'lost',
+      lastEventId: current.lastEventId,
+      message: error
+    }))
+    setSession((current) => ({
+      ...current,
+      messages: current.messages.map((message) =>
+        message.id === pendingId
+          ? {
+              ...message,
+              text: message.text.trim() && message.text !== 'Waiting for Aurora stream...' ? message.text : error,
+              status: 'failed',
+              error
+            }
+          : message
+      )
+    }))
   }
 
   async function ingestPendingAttachments(): Promise<'ready' | 'blocked'> {
@@ -421,6 +761,8 @@ export function AssistantView({
     if (result.ok) {
       setLastResult(result.data.response)
       setModelLabel(result.data.modelLabel)
+      const providerLabel = metadataStringValue(result.data.metadata, 'provider_label') ?? metadataStringValue(result.data.metadata, 'provider') ?? runtimeProviderLabel ?? route.providerLabel
+      setRuntimeProviderLabel(providerLabel)
       setSession((current) => ({
         sessionId: result.data.sessionId,
         messages: current.messages.map((message) =>
@@ -430,7 +772,10 @@ export function AssistantView({
                 role: 'assistant',
                 text: result.data.response.text,
                 createdAt: result.data.response.createdAt,
-                status: 'sent'
+                status: 'sent',
+                modelLabel: result.data.modelLabel,
+                providerLabel,
+                routeLabel: route.providerLabel
               }
             : message
         )
@@ -461,6 +806,8 @@ export function AssistantView({
       setStreamState((current) => ({ ...current, lastEventId: update.eventId }))
     }
     if (update.modelLabel) setModelLabel(update.modelLabel)
+    const updateProviderLabel = metadataStringValue(update.metadata ?? {}, 'provider_label') ?? metadataStringValue(update.metadata ?? {}, 'provider')
+    if (updateProviderLabel) setRuntimeProviderLabel(updateProviderLabel)
     if (update.kind === 'transport_lost') {
       const error = assistantErrorMessage(update.error ?? new Error('Assistant stream disconnected.'))
       setLastError(error)
@@ -485,20 +832,31 @@ export function AssistantView({
       return
     }
     if (update.kind === 'tool') {
-      const toolCall = assistantToolCallFromUpdate(update)
       setSession((current) => ({
         ...current,
         messages: current.messages.map((message) =>
-          message.id === pendingId
-            ? {
-                ...message,
-                text: message.text.trim() && message.text !== 'Waiting for Aurora stream...' ? message.text : 'Aurora requested a tool call. Review the approval card before execution.',
-                toolCalls: upsertAssistantToolCall(message.toolCalls, toolCall)
-              }
-            : message
+          message.id === pendingId ? applyAssistantToolUpdate(message, update) : message
         )
       }))
       setStreamState((current) => ({ ...current, status: 'streaming', message: 'Tool call approval card received from assistant stream.' }))
+      return
+    }
+    if (update.kind === 'tts_audio_chunk') {
+      clearReadAloudFallbackTimer()
+      enqueueStreamedTtsAudio(update)
+      if (lastAssistantMessageIdRef.current === null) lastAssistantMessageIdRef.current = pendingId
+      if (!speakingMessageIdRef.current) setSpeakingMessageId(lastAssistantMessageIdRef.current)
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId ? applyAssistantAudioChunkUpdate(message, update) : message
+        )
+      }))
+      setStreamState((current) => ({
+        ...current,
+        status: current.status === 'streaming' ? 'streaming' : current.status,
+        message: 'TTS audio chunk received; playback state is separate from the composer.'
+      }))
       return
     }
     if (update.kind === 'failed') {
@@ -534,12 +892,35 @@ export function AssistantView({
         text: update.text,
         createdAt: new Date().toISOString()
       })
-      setSession((current) => ({
-        sessionId: update.sessionId ?? current.sessionId ?? session.sessionId,
-        messages: current.messages.map((message) =>
-          message.id === pendingId ? applyAssistantTerminalUpdate(message, update) : message
-        )
-      }))
+        const finalAssistantId = update.messageId ?? pendingId
+        lastAssistantMessageIdRef.current = finalAssistantId
+        setSession((current) => {
+        const existing = current.messages.find((message) => message.id === finalAssistantId)
+        const baseMessage: AssistantUiMessage = existing ?? {
+          id: finalAssistantId,
+          role: 'assistant',
+          text: '',
+          createdAt: new Date().toISOString(),
+          status: 'streaming',
+          modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
+          providerLabel: runtimeProviderLabel ?? route.providerLabel,
+          routeLabel: route.providerLabel
+        }
+        const terminalMessage = applyAssistantTerminalUpdate({
+          ...baseMessage,
+          modelLabel: update.modelLabel ?? baseMessage.modelLabel,
+          providerLabel: metadataStringValue(update.metadata, 'provider_label') ?? metadataStringValue(update.metadata, 'provider') ?? baseMessage.providerLabel,
+          routeLabel: baseMessage.routeLabel ?? route.providerLabel
+        }, update)
+        lastAssistantMessageIdRef.current = terminalMessage.id
+        const replaced = current.messages.some((message) => message.id === terminalMessage.id)
+        return {
+          sessionId: update.sessionId ?? current.sessionId ?? session.sessionId,
+          messages: replaced
+            ? current.messages.map((message) => message.id === terminalMessage.id ? terminalMessage : message)
+            : [...current.messages, terminalMessage]
+        }
+      })
       if (update.kind === 'completed') {
         setStreamState((current) => ({ ...current, status: 'idle', message: 'Final assistant event received.' }))
       }
@@ -553,6 +934,531 @@ export function AssistantView({
         )
       }))
     }
+  }
+
+  function applyVoiceRuntimeEvent(event: VoiceRuntimeEvent) {
+    const eventKey = voiceRuntimeEventKey(event)
+    if (event.kind !== 'audio_level') {
+      if (appliedVoiceEventIdsRef.current.has(eventKey)) return
+      appliedVoiceEventIdsRef.current.add(eventKey)
+    }
+    if (event.kind === 'audio_level') {
+      if (!shouldApplyVoiceRuntimeEvent(event, activeVoiceSessionRef.current, voiceCaptureStatusRef.current)) return
+      setVoiceWaveformBars(event.bars?.length ? event.bars : waveformBarsFromLevel(event.level ?? 0, event.peak ?? event.level ?? 0))
+      if (event.sessionId) {
+        ownedVoiceSessionIdsRef.current.add(event.sessionId)
+        activeVoiceSessionRef.current = event.sessionId
+      }
+      return
+    }
+    if (event.kind === 'wakeword_detected') {
+      setStreamState((current) => ({
+        ...current,
+        status: 'streaming',
+        message: event.text ? `Wake word heard: ${event.text}` : 'Wake word heard.'
+      }))
+      return
+    }
+    if (event.kind === 'session_started') {
+      if (event.sessionId) {
+        const activeSessionId = activeVoiceSessionRef.current
+        if (shouldIgnoreForeignVoiceSessionEvent(event, activeSessionId, voiceCaptureStatusRef.current)) return
+        if (!ownedVoiceSessionIdsRef.current.has(event.sessionId) && !isLocalVoiceEventSource(event)) return
+        ownedVoiceSessionIdsRef.current.add(event.sessionId)
+        activeVoiceSessionRef.current = event.sessionId
+      }
+      voiceTranscriptPreviewRef.current = ''
+      setText('')
+      setVoiceCaptureStatus('listening')
+      setStreamState((current) => ({ ...current, status: 'streaming', message: event.text ? `Wake word heard: ${event.text}` : 'Aurora is listening.' }))
+      if (surfaceProfile.voiceCapture.canUseWebViewVisualizer) {
+        void startLocalAudioCapture({ recordForTranscription: false, optionalVisualizer: true }).catch((error: unknown) => {
+          setLastError(audioCaptureErrorMessage(error))
+        })
+      }
+      return
+    }
+    if (event.kind === 'transcription_partial') {
+      if (!isAuthoritativeVoiceTranscriptEvent(event)) return
+      if (!shouldApplyVoiceRuntimeEvent(event, activeVoiceSessionRef.current, voiceCaptureStatusRef.current)) return
+      if (event.sessionId) {
+        ownedVoiceSessionIdsRef.current.add(event.sessionId)
+        activeVoiceSessionRef.current = event.sessionId
+      }
+      if (event.text) {
+        const preview = mergeTranscriptText(voiceTranscriptPreviewRef.current, event.text, { appendOnMiss: false })
+        voiceTranscriptPreviewRef.current = preview
+        setText(preview)
+      }
+      setVoiceCaptureStatus('listening')
+      return
+    }
+    if (event.kind === 'transcription_final') {
+      if (!isAuthoritativeVoiceTranscriptEvent(event)) return
+      if (!shouldApplyVoiceRuntimeEvent(event, activeVoiceSessionRef.current, voiceCaptureStatusRef.current)) return
+      if (event.sessionId) {
+        ownedVoiceSessionIdsRef.current.add(event.sessionId)
+        activeVoiceSessionRef.current = event.sessionId
+      }
+      const transcript = mergeTranscriptText(voiceTranscriptPreviewRef.current, event.text ?? '', { appendOnMiss: false }).trim()
+      stopLocalCapture({ finalizeTranscription: false })
+      setVoiceCaptureStatus('idle')
+      setStreamState((current) => ({ ...current, status: 'streaming', message: 'Voice captured. Aurora is processing the request.' }))
+      if (!transcript) {
+        setVoiceCaptureStatus('idle')
+        return
+      }
+      const userId = `voice-user-${event.sessionId ?? eventKey}`
+      const pendingId = event.sessionId ?? `voice-assistant-${eventKey}`
+      voicePendingAssistantIdRef.current = pendingId
+      setVoiceResponsePendingId(pendingId)
+      armVoiceResponseTimeout(pendingId)
+      voiceTranscriptPreviewRef.current = ''
+      setText('')
+      setLastPrompt(transcript)
+      setSession((current) => {
+        const hasUser = current.messages.some((message) => message.id === userId)
+        const hasPending = current.messages.some((message) => message.id === pendingId)
+        return {
+          sessionId: event.sessionId ?? current.sessionId,
+          messages: [
+            ...current.messages,
+            ...(hasUser ? [] : [{
+              id: userId,
+              role: 'user' as const,
+              text: transcript,
+              createdAt: event.occurredAt,
+              status: 'sent' as const
+            }]),
+            ...(hasPending ? [] : [{
+              id: pendingId,
+              role: 'assistant' as const,
+              text: 'Aurora is processing your voice request…',
+              createdAt: new Date().toISOString(),
+              status: 'streaming' as const,
+              modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
+              providerLabel: runtimeProviderLabel ?? route.providerLabel,
+              routeLabel: route.providerLabel
+            }])
+          ]
+        }
+      })
+      return
+    }
+    if (event.kind === 'session_ended') {
+      if (!shouldApplyVoiceSessionEndEvent(event, activeVoiceSessionRef.current, voiceCaptureStatusRef.current)) return
+      stopLocalCapture({ finalizeTranscription: false })
+      setSpeakingMessageId(null)
+      setVoiceCaptureStatus('idle')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      coordinatorVoiceSessionIdsRef.current.clear()
+      return
+    }
+    if (event.kind === 'tts_started') {
+      clearReadAloudFallbackTimer()
+      settleVoicePendingFromObservedText(event.text, 'tts_started')
+      settleSubstantiveStreamingAssistantMessages('tts_started')
+      // TTS playback must not keep the composer or push-to-talk controls in a stop state.
+      if (voiceCaptureStatusRef.current !== 'listening') {
+        stopLocalCapture({ finalizeTranscription: false })
+        setVoiceCaptureStatus('idle')
+      }
+      if (!speakingMessageIdRef.current && lastAssistantMessageIdRef.current) {
+        setSpeakingMessageId(lastAssistantMessageIdRef.current)
+      }
+      return
+    }
+    if (event.kind === 'tts_stopped' || event.kind === 'tts_paused' || event.kind === 'tts_resumed') {
+      if (event.kind === 'tts_stopped') setSpeakingMessageId(null)
+      if (voiceCaptureStatusRef.current !== 'listening') setVoiceCaptureStatus('idle')
+      return
+    }
+    if (event.kind === 'tts_error') {
+      clearReadAloudFallbackTimer()
+      setSpeakingMessageId(null)
+      if (event.reason) setLastError(event.reason)
+      setVoiceCaptureStatus('idle')
+      return
+    }
+    if (event.state === 'denied' || event.state === 'error' || event.state === 'timeout' || event.state === 'disconnected') {
+      setVoiceCaptureStatus(event.state === 'denied' ? 'permission-denied' : 'error')
+      if (event.reason) setLastError(event.reason)
+    }
+  }
+
+  function applyVoiceAssistantResponse(update: AssistantStreamUpdate) {
+    const pendingId = voicePendingAssistantIdRef.current
+    if (update.modelLabel) setModelLabel(update.modelLabel)
+    const providerLabel = metadataStringValue(update.metadata, 'provider_label') ?? metadataStringValue(update.metadata, 'provider') ?? runtimeProviderLabel ?? route.providerLabel
+    if (providerLabel) setRuntimeProviderLabel(providerLabel)
+    if (update.kind === 'failed' || update.kind === 'transport_lost') {
+      const error = assistantErrorMessage(update.error ?? new Error(update.text || 'Voice assistant response failed.'))
+      setLastError(error)
+      setVoiceCaptureStatus('error')
+      voicePendingAssistantIdRef.current = null
+      setVoiceResponsePendingId(null)
+      clearVoiceResponseTimeout()
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      coordinatorVoiceSessionIdsRef.current.clear()
+      if (!pendingId) return
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId ? { ...message, text: error, status: 'failed', error } : message
+        )
+      }))
+      return
+    }
+    const textDelta = update.textDelta || update.text
+    if (update.kind === 'delta' && pendingId) {
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId ? applyAssistantStreamDelta(message, { ...update, textDelta }) : message
+        )
+      }))
+      return
+    }
+    if (update.kind === 'tool' && pendingId) {
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === pendingId ? applyAssistantToolUpdate(message, update, 'Aurora is processing your voice request…') : message
+        )
+      }))
+      return
+    }
+    if (update.kind === 'tts_audio_chunk') {
+      clearReadAloudFallbackTimer()
+      enqueueStreamedTtsAudio(update)
+      if (pendingId && !speakingMessageIdRef.current) setSpeakingMessageId(pendingId)
+      if (pendingId) {
+        setSession((current) => ({
+          ...current,
+          messages: current.messages.map((message) =>
+            message.id === pendingId ? applyAssistantAudioChunkUpdate(message, update) : message
+          )
+        }))
+      }
+      setVoiceCaptureStatus('idle')
+      setVoiceResponsePendingId(null)
+      clearVoiceResponseTimeout()
+      setStreamState((current) => ({ ...current, status: 'idle', message: 'Voice response audio chunk received; composer is ready.' }))
+      return
+    }
+    if (update.kind !== 'completed' && update.kind !== 'fallback') return
+    setVoiceCaptureStatus('idle')
+    voicePendingAssistantIdRef.current = null
+    setVoiceResponsePendingId(null)
+    clearVoiceResponseTimeout()
+    activeVoiceSessionRef.current = null
+    ownedVoiceSessionIdsRef.current.clear()
+    coordinatorVoiceSessionIdsRef.current.clear()
+    setStreamState((current) => ({ ...current, status: 'idle', message: 'Voice response received from Aurora.' }))
+    setSession((current) => {
+      const finalAssistantId = update.messageId ?? pendingId ?? `assistant-voice-${Date.now()}`
+      const existing = current.messages.find((message) => message.id === finalAssistantId)
+      const assistantMessage = applyAssistantTerminalUpdate({
+        id: finalAssistantId,
+        role: 'assistant',
+        text: '',
+        createdAt: new Date().toISOString(),
+        status: 'streaming',
+        modelLabel: update.modelLabel ?? modelLabel,
+        providerLabel,
+        routeLabel: route.providerLabel,
+        ...(existing || {})
+      }, update)
+      setLastResult({
+        id: assistantMessage.id,
+        role: 'assistant',
+        text: assistantMessage.text,
+        createdAt: assistantMessage.createdAt
+      })
+      lastAssistantMessageIdRef.current = assistantMessage.id
+      const replaced = current.messages.some((message) => message.id === assistantMessage.id)
+      return {
+        sessionId: update.sessionId ?? current.sessionId,
+        messages: replaced
+          ? current.messages.map((message) => message.id === assistantMessage.id ? assistantMessage : message)
+          : [...current.messages, assistantMessage]
+      }
+    })
+  }
+
+
+  function armVoiceResponseTimeout(pendingId: string) {
+    clearVoiceResponseTimeout()
+    if (typeof window === 'undefined') return
+    voiceResponseTimeoutRef.current = window.setTimeout(() => {
+      if (voicePendingAssistantIdRef.current !== pendingId) return
+      markVoiceAssistantFailed(pendingId, 'Aurora did not return a voice response before the response timeout. Retry will resend the final transcript.')
+    }, 120_000)
+  }
+
+  function clearVoiceResponseTimeout() {
+    if (voiceResponseTimeoutRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(voiceResponseTimeoutRef.current)
+    }
+    voiceResponseTimeoutRef.current = null
+  }
+
+  function markVoiceAssistantFailed(pendingId: string, error: string) {
+    setLastError(error)
+    setVoiceCaptureStatus('error')
+    setStreamState((current) => ({
+      status: 'lost',
+      lastEventId: current.lastEventId,
+      message: error
+    }))
+    voicePendingAssistantIdRef.current = null
+    setVoiceResponsePendingId(null)
+    clearVoiceResponseTimeout()
+    activeVoiceSessionRef.current = null
+    ownedVoiceSessionIdsRef.current.clear()
+    coordinatorVoiceSessionIdsRef.current.clear()
+    setSession((current) => ({
+      ...current,
+      messages: current.messages.map((message) =>
+        message.id === pendingId
+          ? { ...message, text: error, status: 'failed', error }
+          : message
+      )
+    }))
+  }
+
+  function settleSubstantiveStreamingAssistantMessages(reason: 'tts_started' | 'response_text_observed') {
+    let settledVoicePending = false
+    let settledActivePending = false
+    setSession((current) => {
+      let changed = false
+      const messages = current.messages.map((message) => {
+        if ((message.status === 'streaming' || message.status === 'sending') && hasSubstantiveAssistantText(message)) {
+          changed = true
+          if (message.id === voicePendingAssistantIdRef.current) settledVoicePending = true
+          if (message.id === activePendingIdRef.current) settledActivePending = true
+          return { ...message, status: 'sent' as const }
+        }
+        return message
+      })
+      return changed ? { ...current, messages } : current
+    })
+    if (settledVoicePending) {
+      voicePendingAssistantIdRef.current = null
+      setVoiceResponsePendingId(null)
+      clearVoiceResponseTimeout()
+    }
+    if (settledActivePending) {
+      activePendingIdRef.current = null
+      setActiveAssistantPendingId(null)
+    }
+    setStreamState((current) => current.status === 'streaming'
+      ? { ...current, status: 'idle', message: reason === 'tts_started' ? 'Assistant response received; TTS playback is separate.' : current.message }
+      : current)
+  }
+
+  function settleVoicePendingFromObservedText(observedText: string | null, reason: 'tts_started' | 'assistant_response') {
+    const pendingId = voicePendingAssistantIdRef.current
+    const textFromPlayback = observedText?.trim()
+    if (!pendingId || !textFromPlayback) return
+    let settled = false
+    setSession((current) => {
+      let changed = false
+      const messages = current.messages.map((message) => {
+        if (message.id !== pendingId) return message
+        changed = true
+        settled = true
+        return {
+          ...message,
+          text: isAssistantPlaceholderText(message.text) ? textFromPlayback : message.text,
+          status: 'sent' as const
+        }
+      })
+      return changed ? { ...current, messages } : current
+    })
+    if (!settled) return
+    lastAssistantMessageIdRef.current = pendingId
+    voicePendingAssistantIdRef.current = null
+    setVoiceResponsePendingId(null)
+    clearVoiceResponseTimeout()
+    activeVoiceSessionRef.current = null
+    ownedVoiceSessionIdsRef.current.clear()
+    coordinatorVoiceSessionIdsRef.current.clear()
+    setVoiceCaptureStatus('idle')
+    setStreamState((current) => current.status === 'streaming'
+      ? {
+          ...current,
+          status: 'idle',
+          message: reason === 'tts_started'
+            ? 'Assistant text observed from TTS playback; generation is complete.'
+            : 'Voice response received from Aurora.'
+        }
+      : current)
+  }
+
+  async function readAssistantMessageAloud(message: AssistantUiMessage) {
+    const speakableText = message.text.trim()
+    if (!speakableText) return
+    if (speakingMessageIdRef.current === message.id) {
+      await stopReadAloud('user_interrupt')
+      return
+    }
+    setLastError(null)
+    setSpeakingMessageId(message.id)
+    lastAssistantMessageIdRef.current = message.id
+    try {
+      const result = await client.assistant.requestReadAloud({ text: speakableText, interrupt: true })
+      if (result.ok) {
+        setStreamState((current) => ({ ...current, message: 'Reading assistant response through Aurora TTS.' }))
+        scheduleBrowserReadAloudFallback(speakableText, message.id)
+        return
+      }
+      throw result.error
+    } catch (error) {
+      if (browserReadAloud(speakableText, message.id)) {
+        setStreamState((current) => ({ ...current, message: 'Aurora TTS unavailable; using browser speech synthesis.' }))
+        return
+      }
+      setSpeakingMessageId(null)
+      setLastError(assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+    }
+  }
+
+  async function resolveAssistantToolApproval(
+    tool: AssistantToolCallCard,
+    approve: boolean,
+    grantScope: AssistantApprovalGrantScope
+  ) {
+    if (!tool.pendingId && !tool.approvalRequestId) {
+      setLastError('This tool approval card is missing backend approval identifiers.')
+      return
+    }
+    setLastError(null)
+    setSession((current) => ({
+      ...current,
+      messages: current.messages.map((message) => ({
+        ...message,
+        toolCalls: message.toolCalls?.map((candidate) =>
+          candidate.id === tool.id ? { ...candidate, resolving: true } : candidate
+        )
+      }))
+    }))
+    try {
+      const request: Parameters<typeof client.assistant.resumeToolApproval>[0] = {
+        approve,
+        grant_scope: grantScope,
+        session_id: session.sessionId,
+        approver_principal_id: 'aurora-ui',
+        reason: approve ? `Approved ${tool.name} from assistant inline card.` : `Denied ${tool.name} from assistant inline card.`
+      }
+      if (tool.pendingId !== undefined) request.pending_id = tool.pendingId
+      if (tool.approvalRequestId !== undefined) request.approval_request_id = tool.approvalRequestId
+      const result = await client.assistant.resumeToolApproval(request)
+      if (!result.ok) throw result.error
+      const response = result.data
+      if (!response.ok) throw new Error(response.error ?? 'Tool approval resume failed.')
+      const assistantText = typeof response.assistant_text === 'string' ? response.assistant_text : ''
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((message) => {
+          if (!message.toolCalls?.some((candidate) => candidate.id === tool.id)) return message
+          return {
+            ...message,
+            text: assistantText.trim()
+              ? assistantText
+              : approve
+                ? message.text
+                : 'Aurora will continue without this tool because it was denied.',
+            status: approve ? 'sent' : 'failed',
+            toolCalls: message.toolCalls.map((candidate) =>
+              candidate.id === tool.id
+                ? {
+                    ...candidate,
+                    resolving: false,
+                    status: approve ? 'completed' : 'failed',
+                    summary: approve
+                      ? 'Approved inline and executed by Aurora.'
+                      : 'Denied inline by the operator.',
+                    error: approve ? null : 'approval_denied',
+                    resultPreview: approve ? response.tool_result ?? candidate.resultPreview ?? null : candidate.resultPreview ?? null
+                  }
+                : candidate
+            )
+          }
+        })
+      }))
+    } catch (error) {
+      const message = assistantErrorMessage(error instanceof Error ? error : new Error(String(error)))
+      setLastError(message)
+      setSession((current) => ({
+        ...current,
+        messages: current.messages.map((chatMessage) => ({
+          ...chatMessage,
+          toolCalls: chatMessage.toolCalls?.map((candidate) =>
+            candidate.id === tool.id
+              ? { ...candidate, resolving: false, status: 'failed', error: message }
+              : candidate
+          )
+        }))
+      }))
+    }
+  }
+
+  async function stopReadAloud(reason: string) {
+    clearReadAloudFallbackTimer()
+    readAloudFallbackTokenRef.current += 1
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+    setSpeakingMessageId(null)
+    const result = await client.assistant.cancel({
+      sessionId: session.sessionId,
+      scopes: ['tts_playback'],
+      reason
+    })
+    if (!result.ok) setLastError(assistantErrorMessage(result.error))
+  }
+
+  function clearReadAloudFallbackTimer() {
+    if (readAloudFallbackTimerRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(readAloudFallbackTimerRef.current)
+    }
+    readAloudFallbackTimerRef.current = null
+  }
+
+  function browserReadAloud(textToSpeak: string, messageId: string | null = null): boolean {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return false
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(textToSpeak)
+    const token = readAloudFallbackTokenRef.current
+    if (messageId) setSpeakingMessageId(messageId)
+    utterance.onend = () => {
+      if (readAloudFallbackTokenRef.current === token && (!messageId || speakingMessageIdRef.current === messageId)) {
+        setSpeakingMessageId(null)
+      }
+    }
+    utterance.onerror = () => {
+      if (readAloudFallbackTokenRef.current === token && (!messageId || speakingMessageIdRef.current === messageId)) {
+        setSpeakingMessageId(null)
+      }
+    }
+    window.speechSynthesis.speak(utterance)
+    return true
+  }
+
+  function scheduleBrowserReadAloudFallback(textToSpeak: string, messageId: string) {
+    if (typeof window === 'undefined') return
+    clearReadAloudFallbackTimer()
+    const token = readAloudFallbackTokenRef.current + 1
+    readAloudFallbackTokenRef.current = token
+    readAloudFallbackTimerRef.current = window.setTimeout(() => {
+      if (readAloudFallbackTokenRef.current !== token) return
+      if (browserReadAloud(textToSpeak, messageId)) {
+        setStreamState((current) => ({ ...current, message: 'Aurora TTS did not report playback; using browser speech synthesis.' }))
+      }
+    }, 2500)
   }
 
   async function onCancel() {
@@ -584,80 +1490,422 @@ export function AssistantView({
     await startAssistantTurn(replay ? lastPrompt : lastPrompt, replay ? streamState.lastEventId : null)
   }
 
-  function addUrlAttachment() {
-    const value = urlDraft.trim()
-    if (!value || !canAttach) return
-    setAttachments((current) => [...current, createAttachmentDraft({
-      kind: 'url',
-      label: urlLabel(value),
-      detail: value,
-      url: value,
-      sourceChannel,
-      privacyClass
-    })])
-    setUrlDraft('')
+  async function onPrimaryComposerAction() {
+    if (primaryComposerAction === 'retry') {
+      await retryLastPrompt(false)
+      return
+    }
+    if (primaryComposerAction !== 'stop') return
+    if (voiceCaptureStatus === 'listening') {
+      await toggleLocalCapture()
+      return
+    }
+    await onCancel()
   }
 
-  function addSharedTextAttachment() {
-    const value = sharedTextDraft.trim()
-    if (!value || !canAttach) return
-    setAttachments((current) => [...current, createAttachmentDraft({
-      kind: 'text',
-      label: 'Shared text',
-      detail: `${value.length} characters`,
-      contentText: value,
-      sourceChannel,
-      privacyClass
-    })])
-    setSharedTextDraft('')
+  async function openAttachmentPicker() {
+    if (!canAttach) return
+    const picker = typeof window === 'undefined'
+      ? undefined
+      : (window as unknown as { showOpenFilePicker?: BrowserOpenFilePicker }).showOpenFilePicker
+    if (!picker) {
+      attachmentInputRef.current?.click()
+      return
+    }
+    try {
+      const handles = await picker({
+        multiple: true,
+        excludeAcceptAllOption: true,
+        types: [{
+          description: 'Aurora context files',
+          accept: {
+            'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'],
+            'application/pdf': ['.pdf'],
+            'application/json': ['.json'],
+            'text/plain': ['.txt'],
+            'text/markdown': ['.md', '.markdown']
+          }
+        }]
+      })
+      const files = await Promise.all(handles.map((handle) => handle.getFile()))
+      await stageAttachmentFiles(files)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      attachmentInputRef.current?.click()
+    }
   }
 
   async function onFileInput(files: FileList | null) {
     if (!files || !canAttach) return
-    const next = await Promise.all([...files].map((file) => fileToAttachmentDraft(file, sourceChannel, privacyClass)))
-    setAttachments((current) => [...current, ...next])
+    await stageAttachmentFiles([...files])
+  }
+
+  async function stageAttachmentFiles(files: File[]) {
+    const drafts = await Promise.all(files.map((file) => fileToAttachmentDraft(file, 'chat', privacyClass)))
+    const supported = drafts.filter((draft) => draft.status !== 'rejected' && draft.status !== 'unsupported')
+    // The picker should filter these, but some WebViews still expose an "All files" path.
+    // Silently drop unsupported files so the composer never shows rejected attachment cards.
+    if (supported.length === 0) return
+    setAttachments((current) => [...current, ...supported])
   }
 
   function removeAttachment(id: string) {
-    setAttachments((current) => current.filter((attachment) => attachment.id !== id))
+    setAttachments((current) => {
+      const removed = current.find((attachment) => attachment.id === id)
+      if (removed) revokeAttachmentPreview(removed)
+      return current.filter((attachment) => attachment.id !== id)
+    })
+  }
+
+  function requestVoiceToggle() {
+    if (voiceToggleInFlightRef.current) return
+    voiceToggleInFlightRef.current = true
+    const unlock = typeof window === 'undefined'
+      ? null
+      : window.setTimeout(() => {
+          voiceToggleInFlightRef.current = false
+        }, 12_000)
+    void toggleLocalCapture().finally(() => {
+      if (unlock !== null) window.clearTimeout(unlock)
+      voiceToggleInFlightRef.current = false
+    })
+  }
+
+  async function startCoordinatorPushToTalk(sessionId: string, options: { fallback?: boolean } = {}): Promise<boolean> {
+    activeVoiceSessionRef.current = sessionId
+    ownedVoiceSessionIdsRef.current.add(sessionId)
+    setVoiceConsentGranted(true)
+    setVoiceCaptureStatus('listening')
+    setStreamState((current) => ({
+      ...current,
+      status: 'streaming',
+      message: options.fallback
+        ? 'Focused WebView microphone was unavailable; using Aurora local STT service for this push-to-talk session.'
+        : 'Starting Aurora server microphone through the local STT service…'
+    }))
+    try {
+      const started = await client.assistant.startVoiceListen({ sessionId, timeoutMs: 8_000 })
+      if (!started.ok) {
+        activeVoiceSessionRef.current = null
+        ownedVoiceSessionIdsRef.current.delete(sessionId)
+        setLastError(assistantErrorMessage(started.error))
+        setVoiceCaptureStatus('error')
+        setStreamState((current) => ({ ...current, status: 'lost', message: assistantErrorMessage(started.error) }))
+        return false
+      }
+      activeVoiceSessionRef.current = started.data.sessionId
+      ownedVoiceSessionIdsRef.current.add(started.data.sessionId)
+      coordinatorVoiceSessionIdsRef.current.add(started.data.sessionId)
+      setStreamState((current) => ({
+        ...current,
+        status: 'streaming',
+        message: options.fallback
+          ? 'Aurora is listening through the local STT service fallback.'
+          : 'Aurora is listening through the local STT service.'
+      }))
+      void startLocalAudioCapture({ recordForTranscription: false, optionalVisualizer: true }).catch(() => {
+        setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora is listening through the local STT service; WebView microphone levels are unavailable.' }))
+      })
+      return true
+    } catch (error) {
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.delete(sessionId)
+      const message = assistantErrorMessage(error instanceof Error ? error : new Error(String(error)))
+      setLastError(message)
+      setVoiceCaptureStatus('error')
+      setStreamState((current) => ({ ...current, status: 'lost', message }))
+      return false
+    }
+  }
+
+  async function interruptTtsForVoiceCapture() {
+    if (speakingMessageIdRef.current) setSpeakingMessageId(null)
+    clearReadAloudFallbackTimer()
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+    const result = await client.assistant.cancel({
+      sessionId: session.sessionId,
+      scopes: ['tts_playback'],
+      reason: 'voice_capture_started'
+    })
+    if (!result.ok) setLastError(assistantErrorMessage(result.error))
   }
 
   async function toggleLocalCapture() {
-    if (voiceCaptureStatus === 'listening') {
-      stopLocalCapture()
+    const currentCaptureStatus = voiceCaptureStatusRef.current
+    if (currentCaptureStatus === 'listening') {
+      const sessionId = activeVoiceSessionRef.current
+      if (sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)) {
+        const stopped = await client.assistant.stopVoiceListen({ sessionId, reason: 'user_request' })
+        if (!stopped.ok) setLastError(assistantErrorMessage(stopped.error))
+      }
+      stopLocalCapture({ finalizeTranscription: currentCaptureStatus === 'listening' })
       setVoiceCaptureStatus('idle')
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      coordinatorVoiceSessionIdsRef.current.clear()
+      voicePendingAssistantIdRef.current = null
+      setVoiceResponsePendingId(null)
       return
     }
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      setVoiceCaptureStatus('no-device')
+    const sessionId = `voice-${Date.now()}`
+    voiceTranscriptPreviewRef.current = ''
+    setLastError(null)
+    void interruptTtsForVoiceCapture()
+    if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) {
+      await startCoordinatorPushToTalk(sessionId)
       return
     }
+
+    activeVoiceSessionRef.current = sessionId
+    ownedVoiceSessionIdsRef.current.add(sessionId)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      voiceStreamRef.current = stream
+      setVoiceConsentGranted(true)
       setVoiceCaptureStatus('listening')
+      setStreamState((current) => ({
+        ...current,
+        status: 'streaming',
+        message: 'Requesting focused microphone access for push-to-talk…'
+      }))
+      await startLocalAudioCapture({ recordForTranscription: true })
+      setStreamState((current) => ({
+        ...current,
+        status: 'streaming',
+        message: surfaceProfile.kind === 'desktop-local'
+          ? 'Focused push-to-talk is using the WebView microphone; daemon wakeword remains owned by STTCoordinator.'
+          : 'Focused browser microphone capture is active.'
+      }))
+      return
     } catch (error) {
+      stopLocalCapture({ finalizeTranscription: false })
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      coordinatorVoiceSessionIdsRef.current.clear()
+      if (surfaceProfile.kind === 'desktop-local' && surfaceProfile.usesLocalSidecar) {
+        setLastError(null)
+        const fallbackStarted = await startCoordinatorPushToTalk(sessionId, { fallback: true })
+        if (fallbackStarted) return
+      }
       const name = error instanceof DOMException ? error.name : ''
-      setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'error')
+      setLastError(audioCaptureErrorMessage(error))
+      setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'no-device')
     }
   }
 
-  function stopLocalCapture() {
+  async function startLocalAudioCapture({ recordForTranscription, optionalVisualizer = false }: { recordForTranscription: boolean; optionalVisualizer?: boolean }) {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error('This platform did not expose a browser microphone API to the Aurora UI.')
+    }
+    const stream = await withTimeout(
+      navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      }),
+      8_000,
+      new Error('Timed out waiting for microphone permission or device samples.')
+    )
+    voiceStreamRef.current = stream
+    const audioStarted = startVoiceWaveform(stream, { recordForTranscription })
+    if (recordForTranscription && !audioStarted) {
+      stopLocalCapture({ finalizeTranscription: false })
+      throw new Error('This platform can show microphone permission but did not expose Web Audio samples for transcription.')
+    }
+    if (recordForTranscription) {
+      const generation = voiceRecordingGenerationRef.current + 1
+      voiceRecordingGenerationRef.current = generation
+      voiceFinalizeOnStopRef.current = true
+      voiceTranscriptPreviewRef.current = ''
+      voicePcmChunksRef.current = []
+      scheduleRealtimeTranscriptionPreview(generation)
+    } else if (!audioStarted && !optionalVisualizer) {
+      throw new Error('This platform did not expose Web Audio microphone levels to the Aurora UI.')
+    }
+  }
+
+  function stopLocalCapture({ finalizeTranscription = false }: { finalizeTranscription?: boolean } = {}) {
+    const generation = voiceRecordingGenerationRef.current
+    const shouldFinalize = finalizeTranscription && voicePcmChunksRef.current.length > 0
+    voiceFinalizeOnStopRef.current = finalizeTranscription
+    clearPartialTranscriptionTimer()
     voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
     voiceStreamRef.current = null
+    stopVoiceWaveform()
+    setVoiceWaveformBars(idleWaveformBars())
+    if (shouldFinalize) {
+      void transcribeRecordedBrowserAudio({ final: true, generation })
+    } else if (!finalizeTranscription) {
+      voicePcmChunksRef.current = []
+    }
+  }
+
+  function clearPartialTranscriptionTimer() {
+    if (voicePartialTranscribeTimerRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(voicePartialTranscribeTimerRef.current)
+    }
+    voicePartialTranscribeTimerRef.current = null
+  }
+
+  function scheduleRealtimeTranscriptionPreview(generation: number) {
+    if (typeof window === 'undefined') return
+    if (voicePartialTranscribeTimerRef.current !== null) return
+    voicePartialTranscribeTimerRef.current = window.setTimeout(() => {
+      voicePartialTranscribeTimerRef.current = null
+      if (voicePartialTranscribeInFlightRef.current) return
+      if (voiceRecordingGenerationRef.current !== generation) return
+      if (voicePcmChunksRef.current.length === 0) {
+        scheduleRealtimeTranscriptionPreview(generation)
+        return
+      }
+      voicePartialTranscribeInFlightRef.current = true
+      void transcribeRecordedBrowserAudio({ final: false, generation })
+        .finally(() => {
+          voicePartialTranscribeInFlightRef.current = false
+          if (voiceCaptureStatusRef.current === 'listening' && voiceRecordingGenerationRef.current === generation) {
+            scheduleRealtimeTranscriptionPreview(generation)
+          }
+        })
+    }, 900)
+  }
+
+  function startVoiceWaveform(stream: MediaStream, options: { recordForTranscription?: boolean } = {}): boolean {
+    stopVoiceWaveform()
+    if (typeof window === 'undefined') return false
+    const AudioContextCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextCtor) return false
+    const context = new AudioContextCtor()
+    if (context.state === 'suspended') void context.resume().catch(() => undefined)
+    const source = context.createMediaStreamSource(stream)
+    const analyser = context.createAnalyser()
+    analyser.fftSize = 1024
+    analyser.smoothingTimeConstant = 0.35
+    source.connect(analyser)
+    voiceAudioContextRef.current = context
+    voiceMediaSourceRef.current = source
+    voiceAnalyserRef.current = analyser
+    voicePcmSampleRateRef.current = context.sampleRate
+    if (options.recordForTranscription) {
+      const processor = context.createScriptProcessor(4096, 1, 1)
+      processor.onaudioprocess = (event) => {
+        const channel = event.inputBuffer.getChannelData(0)
+        voicePcmChunksRef.current.push(new Float32Array(channel))
+      }
+      source.connect(processor)
+      processor.connect(context.destination)
+      voiceScriptProcessorRef.current = processor
+    }
+    const samples = new Uint8Array(analyser.fftSize)
+    const tick = () => {
+      analyser.getByteTimeDomainData(samples)
+      setVoiceWaveformBars(waveformBarsFromTimeDomain(samples, 24))
+      voiceAnalyserFrameRef.current = window.requestAnimationFrame(tick)
+    }
+    tick()
+    return true
+  }
+
+  function stopVoiceWaveform() {
+    if (voiceAnalyserFrameRef.current !== null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(voiceAnalyserFrameRef.current)
+    }
+    voiceAnalyserFrameRef.current = null
+    const processor = voiceScriptProcessorRef.current
+    voiceScriptProcessorRef.current = null
+    if (processor) {
+      processor.onaudioprocess = null
+      withIgnoredAudioDisconnect(() => processor.disconnect())
+    }
+    const source = voiceMediaSourceRef.current
+    voiceMediaSourceRef.current = null
+    if (source) withIgnoredAudioDisconnect(() => source.disconnect())
+    voiceAnalyserRef.current = null
+    const context = voiceAudioContextRef.current
+    voiceAudioContextRef.current = null
+    if (context && context.state !== 'closed') void context.close()
+  }
+
+  function recordedPcmBase64(recentSeconds?: number): string | null {
+    const chunks = voicePcmChunksRef.current
+    if (chunks.length === 0) return null
+    const sourceRate = voicePcmSampleRateRef.current || 16_000
+    const samples = flattenPcmChunks(chunks, recentSeconds ? Math.ceil(sourceRate * recentSeconds) : undefined)
+    if (samples.length < sourceRate * 0.35) return null
+    return floatPcmToBase64(samples, sourceRate, 16_000)
+  }
+
+  async function transcribeRecordedBrowserAudio({ final, generation }: { final: boolean; generation: number }) {
+    if (final) setVoiceCaptureStatus('processing')
+    try {
+      const audioData = recordedPcmBase64(final ? undefined : 12)
+      if (!audioData) {
+        if (final) {
+          setLastError('No microphone samples were captured. Check browser/WebView microphone permission and try push-to-talk again.')
+          setVoiceCaptureStatus('idle')
+        }
+        return
+      }
+      const result = await client.assistant.transcribeVoiceAudio({
+        audio_data: audioData,
+        format: 'raw',
+        sample_rate: 16000,
+        channels: 1,
+        model: final ? 'accurate' : 'realtime'
+      })
+      if (voiceRecordingGenerationRef.current !== generation && !final) return
+      if (!result.ok) {
+        if (final) {
+          setLastError(assistantErrorMessage(result.error))
+          setVoiceCaptureStatus('error')
+        }
+        return
+      }
+      const transcript = result.data.text.trim()
+      if (!transcript) {
+        if (final) {
+          setLastError('No speech was transcribed from the recorded audio.')
+          setVoiceCaptureStatus('idle')
+          voicePcmChunksRef.current = []
+        }
+        return
+      }
+      if (!final) {
+        if (voiceCaptureStatusRef.current !== 'listening') return
+        const preview = mergeTranscriptText(voiceTranscriptPreviewRef.current, transcript, { appendOnMiss: false })
+        voiceTranscriptPreviewRef.current = preview
+        setText(preview)
+        return
+      }
+      voicePcmChunksRef.current = []
+      const finalTranscript = mergeTranscriptText(voiceTranscriptPreviewRef.current, transcript, { appendOnMiss: false }).trim()
+      voiceTranscriptPreviewRef.current = ''
+      await startAssistantTurn(finalTranscript || transcript)
+      setVoiceCaptureStatus('idle')
+    } catch (error) {
+      if (final) {
+        setLastError(error instanceof Error ? error.message : 'Browser audio transcription failed.')
+        setVoiceCaptureStatus('error')
+      }
+    }
   }
 
   function startNewConversation() {
     abortRef.current?.abort()
     stopLocalCapture()
+    ownedVoiceSessionIdsRef.current.clear()
+    coordinatorVoiceSessionIdsRef.current.clear()
     cancelledPendingIdsRef.current.clear()
     activePendingIdRef.current = null
+    for (const attachment of attachmentsRef.current) revokeAttachmentPreview(attachment)
+    setAttachments([])
     setSession(emptyAssistantSession())
     setLastResult(null)
     setModelLabel(null)
+    setRuntimeProviderLabel(null)
     setLastError(null)
     setLastPrompt(null)
     setStreamState(idleAssistantStreamState())
+    voiceTranscriptPreviewRef.current = ''
     setText('')
     textAreaRef.current?.focus()
   }
@@ -680,25 +1928,44 @@ export function AssistantView({
 
       <div className="aui-assistant-grid">
         <ConversationRail
-          session={session}
+          session={{ ...session, messages: sessionMessages }}
           route={route}
           transportKind={client.transport.kind}
           onNewConversation={startNewConversation}
         />
 
         <div className="aui-chat-workspace" data-first-viewport-work="assistant-chat-composer" aria-label="Primary chat workspace">
-          <div className="aui-chat-panel" aria-label="Assistant conversation thread" aria-live="polite">
-            {session.messages.length === 0 ? (
-              <div className="aui-chat-empty">
-                <h2>Start with a prompt</h2>
-                <p>Responses appear only after the SDK returns final Orchestrator output.</p>
-              </div>
-            ) : (
-              session.messages.map((message) => <ChatBubble key={message.id} message={message} />)
-            )}
-          </div>
+          <MessageScrollerProvider autoScroll>
+            <MessageScroller className="aui-chat-panel" aria-label="Assistant conversation thread" aria-live="polite">
+              <MessageScrollerViewport className="aui-chat-scroller-viewport">
+                <MessageScrollerContent className="aui-chat-scroller-content">
+                  {sessionMessages.length === 0 ? (
+                    <MessageScrollerItem messageId="assistant-empty">
+                      <Marker className="aui-chat-empty" variant="border">
+                        <MarkerContent>
+                          <strong>Start with a prompt</strong>
+                          <span>Responses appear only after the SDK returns final Orchestrator output.</span>
+                        </MarkerContent>
+                      </Marker>
+                    </MessageScrollerItem>
+                  ) : (
+                    sessionMessages.map((message) => (
+                      <MessageScrollerItem key={message.id} messageId={message.id} scrollAnchor={message.role === 'user'}>
+                        <ChatBubble
+                          message={message}
+                          onReadAloud={readAssistantMessageAloud}
+                          onResolveToolApproval={resolveAssistantToolApproval}
+                          speakingMessageId={speakingMessageIdState}
+                        />
+                      </MessageScrollerItem>
+                    ))
+                  )}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+            </MessageScroller>
+          </MessageScrollerProvider>
 
-          <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer">
+          <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer" data-voice-active={voiceCaptureStatus === 'listening' ? 'true' : undefined}>
             <div className="aui-composer-toolbar" aria-label="Route/model selector">
               <button
                 type="button"
@@ -709,49 +1976,92 @@ export function AssistantView({
               >
                 <RouteIcon size={14} aria-hidden />
                 <span>Routing via</span>
-                <EvidenceBadge label={route.providerLabel} />
+                <span className="aui-route-pill">{assistantRouteModeLabel(route)}</span>
               </button>
-              <span className="aui-composer-model-status"><EvidenceBadge label={modelLabel ? modelLabel : 'model pending'} /></span>
+              <span className="aui-composer-model-status aui-model-pill">{modelLabel ? modelLabel : 'model pending'}</span>
               <PrivacyBadge privacy={route.item.privacyClass} />
+              {attachments.length > 0 ? <span className="aui-composer-attachment-count">{attachments.length} attached</span> : null}
             </div>
             <label htmlFor="assistant-prompt" className="aui-sr-only">Prompt</label>
+            {voiceCaptureStatus === 'listening' ? (
+              <div className="aui-composer-recorder-row">
+                <AudioRecorderVisualizer
+                  status={voiceCaptureStatus}
+                  bars={voiceModel.waveformBars}
+                  elapsedSeconds={voiceElapsedSeconds}
+                  showControls={false}
+                  className="aui-composer-recorder-panel"
+                  title="Listening"
+                  sourceLabel={surfaceProfile.kind === 'desktop-local' ? 'WebView microphone' : 'Browser microphone'}
+                  detail="Live microphone level"
+                />
+              </div>
+            ) : null}
+            <input
+              id="assistant-context-file-input"
+              ref={attachmentInputRef}
+              className="aui-sr-only"
+              type="file"
+              aria-label="Attach context files"
+              multiple
+              accept={assistantAttachmentPickerAccept}
+              disabled={!canAttach}
+              onChange={(event) => {
+                void onFileInput(event.currentTarget.files)
+                event.currentTarget.value = ''
+              }}
+            />
+            <section className="aui-sr-only" aria-labelledby="assistant-context-title">
+              <h2 id="assistant-context-title">Attachment context status</h2>
+              <p>{contextSummary.ready} ready, {contextSummary.blocked} blocked</p>
+            </section>
+            {attachments.length > 0 ? (
+              <ComposerAttachmentPreview attachments={attachments} onRemove={removeAttachment} />
+            ) : null}
             <button
               type="button"
               className="aui-secondary-button aui-composer-icon"
               disabled={!canAttach}
               aria-label="Attach context"
-              onClick={() => document.getElementById('assistant-context-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              onClick={() => void openAttachmentPicker()}
             >
               <Paperclip size={18} aria-hidden />
             </button>
-            <textarea
-              id="assistant-prompt"
-              ref={textAreaRef}
-              value={text}
-              onChange={(event) => setText(event.currentTarget.value)}
-              disabled={!canSend}
-              placeholder={route.disabled ? 'Assistant capability is unavailable' : 'Ask Aurora...'}
-              rows={1}
-            />
+            <div className="aui-composer-input-shell" data-voice-active={voiceCaptureStatus === 'listening' ? 'true' : undefined}>
+              <textarea
+                id="assistant-prompt"
+                ref={textAreaRef}
+                value={text}
+                onChange={(event) => setText(event.currentTarget.value)}
+                onKeyDown={onComposerKeyDown}
+                disabled={!canSend && voiceCaptureStatus !== 'listening'}
+                readOnly={voiceCaptureStatus === 'listening'}
+                placeholder={route.disabled ? 'Assistant capability is unavailable' : voiceCaptureStatus === 'listening' ? 'Realtime transcription appears here…' : 'Ask Aurora...'}
+                rows={voiceCaptureStatus === 'listening' ? 2 : 1}
+              />
+            </div>
             <button
               type="button"
               className="aui-secondary-button aui-composer-icon"
-              onClick={() => void toggleLocalCapture()}
+              data-voice-state={voiceCaptureStatus === 'listening' ? 'listening' : 'idle'}
+              disabled={voiceCaptureStatus === 'processing'}
+              onClick={(event) => { event.preventDefault(); requestVoiceToggle() }}
               aria-label={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
+              title={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
             >
-              <Mic size={18} aria-hidden />
+              {voiceCaptureStatus === 'listening' ? <StopCircle size={18} aria-hidden /> : <Mic size={18} aria-hidden />}
+              <span className="aui-sr-only">{voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}</span>
             </button>
-            <button type="button" className="aui-secondary-button aui-composer-icon" onClick={onCancel} disabled={!controls.canCancel} aria-label="Stop assistant generation">
-              <StopCircle size={17} aria-hidden />
-              <span className="aui-button-label">Stop</span>
-            </button>
-            <button type="button" className="aui-secondary-button aui-composer-icon" onClick={() => void retryLastPrompt(false)} disabled={!lastPrompt || !canSend} aria-label="Retry last assistant prompt">
-              <RotateCcw size={17} aria-hidden />
-              <span className="aui-button-label">Retry</span>
-            </button>
-            <button type="submit" className="aui-composer-send" disabled={!canSend || hasContextUpload || text.trim().length === 0} aria-label="Send assistant prompt">
-              <ArrowUp size={17} aria-hidden />
-              <span className="aui-button-label">Send</span>
+            <button
+              type={primaryComposerAction === 'send' ? 'submit' : 'button'}
+              className="aui-composer-send"
+              data-composer-action={primaryComposerAction}
+              disabled={primaryComposerDisabled}
+              aria-label={primaryComposerAriaLabel}
+              onClick={primaryComposerAction === 'send' ? undefined : () => void onPrimaryComposerAction()}
+            >
+              {primaryComposerAction === 'retry' ? <RotateCcw size={17} aria-hidden /> : primaryComposerAction === 'stop' ? <StopCircle size={17} aria-hidden /> : <ArrowUp size={17} aria-hidden />}
+              <span className="aui-button-label">{primaryComposerLabel}</span>
             </button>
             <p className="aui-mobile-composer-note">
               Aurora routes locally by default. Remote and mesh routes are shown before any data leaves this device.
@@ -810,141 +2120,12 @@ export function AssistantView({
         </aside>
       </div>
 
-      <VoiceModePanel
-        client={client}
-        model={voiceModel}
-        captureStatus={voiceCaptureStatus}
-        onToggleCapture={() => void toggleLocalCapture()}
-        onToggleConsent={() => setVoiceConsentGranted((current) => !current)}
-      />
-
-      <section className="aui-attachment-panel" aria-labelledby="assistant-context-title">
-        <div className="aui-attachment-head">
-          <div>
-            <p className="aui-kicker">Context intake</p>
-            <h2 id="assistant-context-title">Attachments and shared content</h2>
-          </div>
-          <div className="aui-assistant-badges" aria-label="Context route and privacy status">
-            <PrivacyBadge privacy={privacyClass} />
-            <EvidenceBadge label={route.providerLabel} />
-            <EvidenceBadge label={sourceLabel(sourceChannel)} />
-          </div>
-        </div>
-
-        <div className="aui-attachment-controls">
-          <label>
-            Privacy label
-            <select
-              value={privacyClass}
-              onChange={(event) => setPrivacyClass(event.currentTarget.value as AttachmentContextPrivacyClass)}
-              disabled={!canAttach}
-            >
-              <option value="public">Public</option>
-              <option value="personal">Personal</option>
-              <option value="sensitive">Sensitive</option>
-              <option value="secret">Secret</option>
-              <option value="credential">Credential</option>
-              <option value="raw-audio">Raw audio</option>
-            </select>
-          </label>
-          <label>
-            Share source
-            <select
-              value={sourceChannel}
-              onChange={(event) => setSourceChannel(event.currentTarget.value as AttachmentContextSourceChannel)}
-              disabled={!canAttach}
-            >
-              <option value="chat">Chat composer</option>
-              <option value="desktop">Desktop drop</option>
-              <option value="mobile_share_sheet">Mobile share sheet</option>
-              <option value="deep_link">Deep link</option>
-              <option value="browser_extension">Browser extension</option>
-            </select>
-          </label>
-          <label>
-            URL
-            <span className="aui-inline-action">
-              <input
-                value={urlDraft}
-                onChange={(event) => setUrlDraft(event.currentTarget.value)}
-                disabled={!canAttach}
-                placeholder="https://example.com/context"
-              />
-              <button type="button" onClick={addUrlAttachment} disabled={!canAttach || !urlDraft.trim()}>
-                <Link size={16} aria-hidden />
-                Add URL
-              </button>
-            </span>
-          </label>
-          <label>
-            Shared text
-            <span className="aui-inline-action">
-              <textarea
-                value={sharedTextDraft}
-                onChange={(event) => setSharedTextDraft(event.currentTarget.value)}
-                disabled={!canAttach}
-                placeholder="Paste shared text or screenshot OCR"
-                rows={2}
-              />
-              <button type="button" onClick={addSharedTextAttachment} disabled={!canAttach || !sharedTextDraft.trim()}>
-                <Share2 size={16} aria-hidden />
-                Add text
-              </button>
-            </span>
-          </label>
-          <label className="aui-file-picker">
-            <Paperclip size={16} aria-hidden />
-            <span>Add files or images</span>
-            <input
-              type="file"
-              multiple
-              disabled={!canAttach}
-              onChange={(event) => {
-                void onFileInput(event.currentTarget.files)
-                event.currentTarget.value = ''
-              }}
-            />
-          </label>
-        </div>
-
-        <p className="aui-attachment-note">
-          Native mobile share payloads remain disabled until the Android and iOS native manifests advertise them; staged items still use the backend ingestion contract through Aurora.
-        </p>
-
-        {attachments.length === 0 ? (
-          <div className="aui-attachment-empty">No context attached.</div>
-        ) : (
-          <ul className="aui-attachment-list" aria-label="Attached context items">
-            {attachments.map((attachment) => (
-              <li key={attachment.id} className={`aui-attachment-item aui-attachment-${attachment.status}`}>
-                <div>
-                  <strong>{attachment.label}</strong>
-                  <span>{attachment.detail}</span>
-                  <small>{sourceLabel(attachment.sourceChannel)} / {attachment.privacyClass} / {attachment.message}</small>
-                  {attachment.status === 'uploading' ? <progress value={attachment.progress} max={100}>{attachment.progress}%</progress> : null}
-                </div>
-                <StatusBadge state={attachmentStateBadge(attachment.status)} />
-                <button type="button" onClick={() => removeAttachment(attachment.id)} aria-label={`Remove ${attachment.label}`}>
-                  <Trash2 size={16} aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {attachmentsAwaitingValidation.length > 0 ? <p className="aui-attachment-note">{attachmentsAwaitingValidation.length} item(s) will be validated before the prompt is sent.</p> : null}
-      </section>
     </section>
   )
 }
 
 function assistantVoicePlatformTruth(model: AssistantVoiceModel): string {
-  if (model.transport === 'tauri-local') {
-    return 'Desktop voice uses Tauri/native manifest status; browser mic claims are not shown for this transport.'
-  }
-  if (model.transport === 'native-mobile') {
-    return 'Mobile voice uses native microphone permission state from the SDK manifest plus explicit raw-audio consent.'
-  }
-  return 'Web voice uses browser mic only; no Tauri native voice claim is made in this runtime.'
+  return model.platformTruth
 }
 
 function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
@@ -1021,7 +2202,7 @@ function isAssistantToolCallCard(value: unknown): value is AssistantToolCallCard
   return (
     typeof tool.id === 'string' &&
     typeof tool.name === 'string' &&
-    (tool.status === 'requested' || tool.status === 'running' || tool.status === 'completed' || tool.status === 'failed') &&
+    (tool.status === 'requested' || tool.status === 'running' || tool.status === 'completed' || tool.status === 'failed' || tool.status === 'requires_action') &&
     typeof tool.riskClass === 'string' &&
     typeof tool.target === 'string' &&
     typeof tool.dataLeavesDevice === 'boolean' &&
@@ -1042,6 +2223,7 @@ export function buildAssistantVoiceModel(input: {
   captureStatus: VoiceCaptureStatus
   consentGranted: boolean
   voiceEvents?: VoiceRuntimeEvent[] | undefined
+  waveformBars?: number[] | undefined
 }): AssistantVoiceModel {
   const transcription = input.voiceRoutes?.transcription ?? missingVoiceRoute('voice-transcription', 'Remote transcription', 'Transcription.Transcribe', 'raw-audio')
   const wakeProcess = input.voiceRoutes?.wakeProcess ?? missingVoiceRoute('voice-wake-process', 'Wake audio processing', 'WakeWord.ProcessAudio', 'raw-audio')
@@ -1049,7 +2231,12 @@ export function buildAssistantVoiceModel(input: {
   const ttsSynthesize = input.voiceRoutes?.ttsSynthesize ?? missingVoiceRoute('voice-tts-synthesize', 'TTS synthesis', 'TTS.Synthesize', 'personal')
   const ttsStop = input.voiceRoutes?.ttsStop ?? missingVoiceRoute('voice-tts-stop', 'TTS playback stop', 'TTS.Stop', 'personal')
   const nativeCapture = nativeCaptureState(input.nativeAvailable ?? false, input.nativePlatform ?? 'not available', input.nativePermissions ?? [], input.nativeCapabilities ?? [])
-  const browserCaptureState = browserCaptureAvailability(input.client.transport.kind, input.captureStatus)
+  const surfaceProfile = getAuroraSurfaceProfile({
+    runtimeMode: input.client.transport.kind === 'tauri-local' ? 'desktop-local' : input.client.transport.kind === 'native-mobile' ? 'mobile' : undefined,
+    transportKind: input.client.transport.kind,
+    nativePlatform: input.nativePlatform
+  })
+  const browserCaptureState = browserCaptureAvailability(surfaceProfile, input.captureStatus)
   const remoteAudioRoute = remoteAudioRouteFor(transcription, ttsSynthesize, wakeProcess)
 
   return {
@@ -1059,6 +2246,8 @@ export function buildAssistantVoiceModel(input: {
     retentionPolicy: remoteAudioRoute.disabled ? 'not retained: route unavailable' : 'transient unless backend retention policy says otherwise',
     sessionTtl: input.consentGranted ? 'current UI session' : 'consent not granted',
     transport: input.client.transport.kind,
+    platformTruth: surfaceProfile.voiceCapture.detail,
+    visualizerSourceLabel: surfaceProfile.kind === 'desktop-local' ? 'WebView microphone / daemon wake events' : 'Browser microphone',
     targetLabel: remoteAudioRoute.providerLabel,
     chips: [
       {
@@ -1082,10 +2271,10 @@ export function buildAssistantVoiceModel(input: {
     controls: [
       {
         id: 'push-to-talk',
-        label: input.captureStatus === 'listening' ? 'Stop local capture' : 'Push to talk',
-        state: browserCaptureState.state,
-        enabled: browserCaptureState.state !== 'unsupported',
-        reason: browserCaptureState.detail,
+        label: input.captureStatus === 'listening' || input.captureStatus === 'processing' || input.captureStatus === 'speaking' ? 'Stop listening' : 'Push to talk',
+        state: pushToTalkControlState(surfaceProfile, browserCaptureState.state),
+        enabled: pushToTalkControlState(surfaceProfile, browserCaptureState.state) !== 'unsupported',
+        reason: surfaceProfile.voiceCapture.detail,
         route: null
       },
       {
@@ -1106,7 +2295,7 @@ export function buildAssistantVoiceModel(input: {
     events: voiceEventRows(input.captureStatus, transcription, input.voiceEvents ?? []),
     routeSheetRoute: remoteAudioRoute,
     remoteAudioRoute,
-    waveformBars: waveformBars(input.captureStatus)
+    waveformBars: input.waveformBars ?? waveformBars(input.captureStatus)
   }
 }
 
@@ -1114,12 +2303,14 @@ function VoiceModePanel({
   client,
   model,
   captureStatus,
+  elapsedSeconds,
   onToggleCapture,
   onToggleConsent
 }: {
   client: AuroraClient
   model: AssistantVoiceModel
   captureStatus: VoiceCaptureStatus
+  elapsedSeconds: number
   onToggleCapture: () => void
   onToggleConsent: () => void
 }) {
@@ -1160,13 +2351,16 @@ function VoiceModePanel({
       <div className="aui-voice-body">
         <section className="aui-voice-controls" aria-labelledby="voice-controls-title">
           <h3 id="voice-controls-title">Session controls</h3>
-          <div className="aui-waveform" role="img" aria-label={`Capture state ${captureStatus}`}>
-            {model.waveformBars.map((height, index) => (
-              <span key={`${height}-${index}`} style={{ height: `${height}%` }} />
-            ))}
-          </div>
+          <AudioRecorderVisualizer
+            status={captureStatus}
+            bars={model.waveformBars}
+            elapsedSeconds={elapsedSeconds}
+            variant="panel"
+            sourceLabel={model.visualizerSourceLabel}
+            onToggle={onToggleCapture}
+          />
           <div className="aui-voice-action-grid">
-            {model.controls.map((control) => {
+            {model.controls.filter((control) => control.id !== 'push-to-talk').map((control) => {
               const isCapture = control.id === 'push-to-talk'
               const isConsent = control.id === 'remote-consent'
               return (
@@ -1174,7 +2368,8 @@ function VoiceModePanel({
                   key={control.id}
                   type="button"
                   disabled={!control.enabled}
-                  onClick={isCapture ? onToggleCapture : isConsent ? onToggleConsent : undefined}
+                  onPointerUp={isCapture ? (event) => { if (event.button === 0) { event.preventDefault(); onToggleCapture() } } : undefined}
+                  onClick={isCapture ? (event) => { event.preventDefault() } : isConsent ? onToggleConsent : undefined}
                 >
                   {isCapture ? <Mic size={16} aria-hidden /> : control.id.includes('tts') || control.id.includes('playback') ? <Volume2 size={16} aria-hidden /> : <Radio size={16} aria-hidden />}
                   <span>{control.label}</span>
@@ -1228,18 +2423,6 @@ function VoiceModePanel({
         </aside>
       </div>
 
-      <section className="aui-voice-events" aria-labelledby="voice-events-title">
-        <h3 id="voice-events-title">Voice event stream</h3>
-        <ul>
-          {model.events.map((event) => (
-            <li key={event.id}>
-              <StatusBadge state={event.state} />
-              <strong>{event.label}</strong>
-              <span>{event.detail}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
     </section>
   )
 }
@@ -1455,27 +2638,158 @@ export function assistantControlsForRoute(
   }
 }
 
+
+export function isAssistantStreamHardTerminal(update: Pick<AssistantStreamUpdate, 'kind'>): boolean {
+  return update.kind === 'failed' || update.kind === 'fallback' || update.kind === 'transport_lost'
+}
+
 export function applyAssistantStreamDelta(message: AssistantUiMessage, update: AssistantStreamUpdate): AssistantUiMessage {
   if (message.status === 'cancelled') return message
+  if (!update.textDelta) return message
   const currentText = message.text === 'Waiting for Aurora stream...' || message.text === 'Replaying stream from last backend event...'
     ? ''
     : message.text
   return {
     ...message,
     text: `${currentText}${update.textDelta}`,
-    status: 'streaming'
+    status: 'streaming',
+    modelLabel: update.modelLabel ?? message.modelLabel,
+    providerLabel: metadataStringValue(update.metadata, 'provider_label') ?? metadataStringValue(update.metadata, 'provider') ?? message.providerLabel
   }
+}
+
+export function applyAssistantToolUpdate(
+  message: AssistantUiMessage,
+  update: AssistantStreamUpdate,
+  placeholder = 'Waiting for Aurora stream...'
+): AssistantUiMessage {
+  if (message.status === 'cancelled') return message
+  const toolCall = assistantToolCallFromUpdate(update)
+  return {
+    ...message,
+    text: message.text.trim() && message.text !== placeholder
+      ? message.text
+      : toolCall.status === 'requires_action'
+        ? 'Aurora paused for a tool approval decision.'
+        : `Aurora is ${toolCall.status === 'failed' ? 'reporting a tool error' : toolCall.status === 'completed' ? 'finished using a tool' : 'using a tool'}.`,
+    toolCalls: upsertAssistantToolCall(message.toolCalls, toolCall)
+  }
+}
+
+export function applyAssistantAudioChunkUpdate(message: AssistantUiMessage, _update: AssistantStreamUpdate): AssistantUiMessage {
+  if (message.status === 'cancelled') return message
+  if (!hasSubstantiveAssistantText(message)) return message
+  return { ...message, status: 'sent' }
+}
+
+function base64ToUint8Array(value: string): Uint8Array {
+  if (typeof atob !== 'function') return new Uint8Array()
+  const binary = atob(value)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return bytes
 }
 
 export function applyAssistantTerminalUpdate(message: AssistantUiMessage, update: AssistantStreamUpdate): AssistantUiMessage {
   if (message.status === 'cancelled') return message
   return {
-    id: update.eventId ?? message.id,
+    ...message,
+    id: update.messageId ?? message.id,
     role: 'assistant',
     text: update.text,
     createdAt: message.createdAt,
-    status: 'sent'
+    status: 'sent',
+    modelLabel: update.modelLabel ?? message.modelLabel,
+    providerLabel: metadataStringValue(update.metadata, 'provider_label') ?? metadataStringValue(update.metadata, 'provider') ?? message.providerLabel,
+    routeLabel: message.routeLabel,
+    toolCalls: message.toolCalls
   }
+}
+
+export function mergeTranscriptText(
+  previous: string,
+  incoming: string,
+  options: { appendOnMiss: boolean }
+): string {
+  const previousWords = transcriptWords(previous)
+  const incomingWords = transcriptWords(incoming)
+  if (previousWords.length === 0) return incomingWords.join(' ')
+  if (incomingWords.length === 0) return previousWords.join(' ')
+
+  const previousKeys = previousWords.map(transcriptWordKey)
+  const incomingKeys = incomingWords.map(transcriptWordKey)
+  if (incomingKeys.slice(0, previousKeys.length).every((word, index) => word === previousKeys[index])) {
+    return incomingWords.join(' ')
+  }
+  if (previousKeys.length === incomingKeys.length && previousKeys.every((word, index) => word === incomingKeys[index])) {
+    return incomingWords.join(' ')
+  }
+
+  let bestPreviousIndex = -1
+  let bestLength = 0
+  for (let previousIndex = 0; previousIndex < previousKeys.length; previousIndex += 1) {
+    let length = 0
+    while (
+      previousIndex + length < previousKeys.length &&
+      length < incomingKeys.length &&
+      previousKeys[previousIndex + length] === incomingKeys[length]
+    ) {
+      length += 1
+    }
+    if (length > bestLength) {
+      bestPreviousIndex = previousIndex
+      bestLength = length
+    }
+  }
+
+  const minOverlap = Math.min(previousKeys.length, incomingKeys.length) <= 5 ? 2 : 3
+  if (bestPreviousIndex >= 0 && bestLength >= minOverlap) {
+    return [...previousWords.slice(0, bestPreviousIndex), ...incomingWords].join(' ')
+  }
+
+  return options.appendOnMiss
+    ? [...previousWords, ...incomingWords].join(' ')
+    : incomingWords.join(' ')
+}
+
+export function isAuthoritativeVoiceTranscriptEvent(event: Pick<VoiceRuntimeEvent, 'kind' | 'topic'>): boolean {
+  if (event.kind !== 'transcription_partial' && event.kind !== 'transcription_final') return true
+  const topic = event.topic ?? ''
+  // Transcription.Result is the lower-level STT service result. The
+  // STTCoordinator republishes authoritative per-session Partial and
+  // UserSpeechCaptured/Final events after timeout refresh, merge, and state
+  // gating. Treating both as chat finals creates duplicate voice turns.
+  if (topic === 'Transcription.Result') return false
+  return true
+}
+
+function transcriptWords(text: string): string[] {
+  return text.trim().split(/\s+/).filter(Boolean)
+}
+
+function transcriptWordKey(word: string): string {
+  return word.replace(/[^\p{L}\p{N}_]+/gu, '').toLocaleLowerCase()
+}
+
+function normalizeAssistantMessageText(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function isAssistantPlaceholderText(text: string): boolean {
+  return /^(waiting for aurora stream|replaying stream from last backend event|aurora is processing your voice request)/i.test(text.trim())
+}
+
+function hasSubstantiveAssistantText(message: AssistantUiMessage): boolean {
+  return message.role === 'assistant' && Boolean(normalizeAssistantMessageText(message.text)) && !isAssistantPlaceholderText(message.text)
+}
+
+function isAssistantPendingWork(message: AssistantUiMessage): boolean {
+  if (message.role !== 'assistant') return false
+  if (message.status === 'sending') return true
+  if (message.status !== 'streaming') return false
+  return !hasSubstantiveAssistantText(message)
 }
 
 function createAttachmentDraft(input: {
@@ -1487,6 +2801,7 @@ function createAttachmentDraft(input: {
   filename?: string | null
   mimeType?: string | null
   sizeBytes?: number | null
+  previewUrl?: string | null
   sourceChannel: AttachmentContextSourceChannel
   privacyClass: AttachmentContextPrivacyClass
 }): AssistantAttachmentDraft {
@@ -1500,14 +2815,15 @@ function createAttachmentDraft(input: {
     filename: input.filename ?? null,
     mimeType: input.mimeType ?? null,
     sizeBytes: input.sizeBytes ?? null,
+    previewUrl: input.previewUrl ?? null,
     sourceChannel: input.sourceChannel,
     sourceDisplayName: sourceLabel(input.sourceChannel),
     privacyClass: input.privacyClass,
-    status: input.kind === 'image' && !input.contentText ? 'unsupported' : 'staged',
+    status: 'staged',
     progress: 0,
-    message: input.kind === 'image' && !input.contentText
-      ? 'Image binaries require OCR or native payload support before ingestion.'
-      : 'Staged for backend validation.',
+    message: input.contentText
+      ? 'Staged for backend validation.'
+      : 'Preview staged; Aurora will receive file metadata only until binary extraction is enabled.',
     reasonCode: null,
     redacted: false
   }
@@ -1518,23 +2834,68 @@ async function fileToAttachmentDraft(
   sourceChannel: AttachmentContextSourceChannel,
   privacyClass: AttachmentContextPrivacyClass
 ): Promise<AssistantAttachmentDraft> {
-  const isTextLike = file.type.startsWith('text/') || ['application/json', 'application/xml'].includes(file.type)
-  const isImage = file.type.startsWith('image/')
-  let contentText: string | null = null
-  if (isTextLike) {
-    contentText = await file.text()
+  const validation = validateAssistantAttachmentFile(file)
+  if (!validation.allowed) {
+    return {
+      ...createAttachmentDraft({
+        kind: 'file',
+        label: file.name,
+        detail: `${file.type || 'unknown type'} / ${formatBytes(file.size)}`,
+        filename: file.name,
+        mimeType: file.type || null,
+        sizeBytes: file.size,
+        sourceChannel,
+        privacyClass
+      }),
+      status: 'rejected',
+      progress: 0,
+      message: validation.reason
+    }
   }
+  const isTextLike = validation.kind === 'text' || validation.kind === 'json'
+  const isImage = validation.kind === 'image'
+  const previewUrl = isImage || validation.kind === 'pdf' ? URL.createObjectURL(file) : null
+  const contentText = isTextLike
+    ? await file.text()
+    : `${isImage ? 'Image' : 'PDF'} attachment: ${file.name} (${file.type || validation.mimeType || 'unknown type'}, ${formatBytes(file.size)}). Binary content is previewed in the UI; extracted file content is not included in this text context yet.`
   return createAttachmentDraft({
     kind: isImage ? 'image' : 'file',
     label: file.name,
-    detail: `${file.type || 'unknown type'} / ${formatBytes(file.size)}`,
+    detail: `${validation.label} · ${formatBytes(file.size)}`,
     contentText,
+    previewUrl,
     filename: file.name,
-    mimeType: file.type || null,
+    mimeType: file.type || validation.mimeType,
     sizeBytes: file.size,
     sourceChannel,
     privacyClass
   })
+}
+
+function validateAssistantAttachmentFile(file: File):
+  | { allowed: true; kind: 'image' | 'pdf' | 'text' | 'json'; label: string; mimeType: string | null }
+  | { allowed: false; reason: string } {
+  const name = file.name.toLowerCase()
+  const mime = file.type || ''
+  const imageMime = imageMimeTypeFromFile(name, mime)
+  if (imageMime) return { allowed: true, kind: 'image', label: imageMime, mimeType: imageMime }
+  if (mime === 'application/pdf' || name.endsWith('.pdf')) return { allowed: true, kind: 'pdf', label: 'PDF', mimeType: 'application/pdf' }
+  if (mime === 'application/json' || mime === 'text/json' || name.endsWith('.json')) return { allowed: true, kind: 'json', label: 'JSON', mimeType: mime || 'application/json' }
+  if (mime === 'text/plain' || mime === 'text/markdown' || name.endsWith('.txt') || name.endsWith('.md') || name.endsWith('.markdown')) {
+    return { allowed: true, kind: 'text', label: name.endsWith('.md') || name.endsWith('.markdown') ? 'Markdown' : 'Text', mimeType: mime || 'text/plain' }
+  }
+  return { allowed: false, reason: 'Unsupported attachment type. Add only images, PDF, JSON, .txt, or .md files.' }
+}
+
+function imageMimeTypeFromFile(name: string, mime: string): string | null {
+  if (mime.startsWith('image/')) return mime
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg'
+  if (name.endsWith('.png')) return 'image/png'
+  if (name.endsWith('.gif')) return 'image/gif'
+  if (name.endsWith('.webp')) return 'image/webp'
+  if (name.endsWith('.svg')) return 'image/svg+xml'
+  if (name.endsWith('.bmp')) return 'image/bmp'
+  return null
 }
 
 function summarizeAttachments(attachments: AssistantAttachmentDraft[]): { ready: number; blocked: number } {
@@ -1631,15 +2992,23 @@ function voiceNativeKey(name: string): boolean {
 }
 
 function browserCaptureAvailability(
-  transportKind: string,
+  surfaceProfile: AuroraSurfaceProfile,
   captureStatus: VoiceCaptureStatus
 ): Pick<VoiceCapabilityChip, 'state' | 'providerLabel' | 'detail' | 'blockers'> {
-  if (transportKind === 'tauri-local' || transportKind === 'native-mobile') {
+  if (surfaceProfile.kind === 'desktop-local') {
     return {
-      state: 'unsupported',
-      providerLabel: transportKind,
-      detail: 'Native capture must come from the SDK native manifest for this transport.',
-      blockers: ['native_manifest_required']
+      state: captureStatus === 'listening' || captureStatus === 'processing' || captureStatus === 'speaking' ? 'available-local' : 'pending',
+      providerLabel: 'WebView getUserMedia + STTCoordinator wake',
+      detail: surfaceProfile.voiceCapture.detail,
+      blockers: []
+    }
+  }
+  if (surfaceProfile.isMobile) {
+    return {
+      state: captureStatus === 'listening' || captureStatus === 'processing' || captureStatus === 'speaking' ? 'available-local' : 'pending',
+      providerLabel: 'mobile WebView getUserMedia',
+      detail: surfaceProfile.voiceCapture.detail,
+      blockers: []
     }
   }
   if (captureStatus === 'listening') {
@@ -1647,6 +3016,14 @@ function browserCaptureAvailability(
       state: 'available-local',
       providerLabel: 'browser getUserMedia',
       detail: 'Local browser microphone stream is active on this device.',
+      blockers: []
+    }
+  }
+  if (captureStatus === 'processing' || captureStatus === 'speaking') {
+    return {
+      state: 'available-local',
+      providerLabel: 'browser getUserMedia',
+      detail: captureStatus === 'processing' ? 'Captured audio is being processed.' : 'Assistant speech playback is active.',
       blockers: []
     }
   }
@@ -1680,6 +3057,15 @@ function browserCaptureAvailability(
     detail: 'Local capture waits for the browser permission prompt.',
     blockers: []
   }
+}
+
+function pushToTalkControlState(
+  surfaceProfile: AuroraSurfaceProfile,
+  browserState: RouteAvailability['state']
+): RouteAvailability['state'] {
+  if (surfaceProfile.kind === 'desktop-local') return 'available-local'
+  if (surfaceProfile.isMobile) return browserState === 'unsupported' ? 'pending' : browserState
+  return browserState
 }
 
 function voiceChip(
@@ -1761,7 +3147,7 @@ function voiceAction(
     label,
     state: route.state,
     enabled: false,
-    reason: 'Capability route is visible; typed audio session start/status SDK wiring is still required before dispatch.',
+    reason: 'Capability route is visible; direct audio streaming uses the SDK audio/STT contracts when this platform supports microphone routing.',
     route
   }
 }
@@ -1842,8 +3228,220 @@ function voiceEvidenceDetail(event: VoiceRuntimeEvent): string {
 
 function waveformBars(captureStatus: VoiceCaptureStatus): number[] {
   if (captureStatus === 'listening') return [24, 48, 72, 52, 84, 38, 64, 46, 76, 30, 58, 42]
+  if (captureStatus === 'processing') return [32, 32, 36, 40, 46, 54, 62, 70, 58, 46, 38, 34]
+  if (captureStatus === 'speaking') return [42, 70, 48, 82, 52, 88, 58, 76, 44, 64, 36, 56]
   if (captureStatus === 'permission-denied' || captureStatus === 'error') return [18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18]
   return [12, 20, 14, 22, 16, 18, 12, 20, 14, 22, 16, 18]
+}
+
+function idleWaveformBars(): number[] {
+  return Array.from({ length: 24 }, () => 8)
+}
+
+function voiceRuntimeEventKey(event: VoiceRuntimeEvent): string {
+  const sequence = typeof event.raw.sequence === 'number' || typeof event.raw.sequence === 'string'
+    ? String(event.raw.sequence)
+    : null
+  return event.id ?? `${event.kind}:${event.sessionId ?? 'session'}:${sequence ?? event.text ?? ''}:${event.occurredAt}`
+}
+
+function isOwnedVoiceRuntimeEvent(event: VoiceRuntimeEvent, activeSessionId: string | null): boolean {
+  if (!activeSessionId) return false
+  return event.sessionId === activeSessionId
+}
+
+function shouldApplyVoiceRuntimeEvent(
+  event: VoiceRuntimeEvent,
+  activeSessionId: string | null,
+  captureStatus: VoiceCaptureStatus
+): boolean {
+  if (isOwnedVoiceRuntimeEvent(event, activeSessionId)) return true
+  const local = isLocalVoiceEventSource(event)
+  if (event.kind === 'session_started') return local && !shouldIgnoreForeignVoiceSessionEvent(event, activeSessionId, captureStatus)
+  if (event.kind === 'transcription_partial' || event.kind === 'transcription_final') {
+    // WebView push-to-talk calls Transcription directly and owns its response in
+    // transcribeRecordedBrowserAudio. Ignore sessionless bus echoes while a UI
+    // capture session is active; daemon wakeword/STTCoordinator finals carry the
+    // owned session id and pass the check above.
+    if (activeSessionId && !event.sessionId) return false
+    if (shouldIgnoreForeignVoiceSessionEvent(event, activeSessionId, captureStatus)) return false
+    return local
+  }
+  const activeCapture = captureStatus === 'listening' || captureStatus === 'processing' || captureStatus === 'speaking'
+  if (!activeCapture) return false
+  if (shouldIgnoreForeignVoiceSessionEvent(event, activeSessionId, captureStatus)) return false
+  return local
+}
+
+function shouldIgnoreForeignVoiceSessionEvent(
+  event: VoiceRuntimeEvent,
+  activeSessionId: string | null,
+  captureStatus: VoiceCaptureStatus
+): boolean {
+  if (!activeSessionId || !event.sessionId || event.sessionId === activeSessionId) return false
+  const activeCapture = captureStatus === 'listening' || captureStatus === 'processing'
+  return activeCapture && activeSessionId.startsWith('voice-')
+}
+
+function shouldApplyVoiceSessionEndEvent(
+  event: VoiceRuntimeEvent,
+  activeSessionId: string | null,
+  captureStatus: VoiceCaptureStatus
+): boolean {
+  if (event.kind !== 'session_ended') return false
+  if (isOwnedVoiceRuntimeEvent(event, activeSessionId)) return true
+  const activeCapture = captureStatus === 'listening' || captureStatus === 'processing'
+  if (activeCapture && activeSessionId) return false
+  return isLocalVoiceEventSource(event)
+}
+
+function isLocalVoiceEventSource(event: VoiceRuntimeEvent): boolean {
+  const provenance = [event.sourcePeerId, event.targetPeerId, event.targetDeviceId].filter(Boolean)
+  if (provenance.length === 0) return true
+  return provenance.every((value) => /^(local|localhost|internal|self|system|gateway|aurora)$/i.test(value ?? ''))
+}
+
+function mergeVoiceRuntimeEvents(...groups: VoiceRuntimeEvent[][]): VoiceRuntimeEvent[] {
+  const seen = new Set<string>()
+  const merged: VoiceRuntimeEvent[] = []
+  for (const event of groups.flat()) {
+    const key = voiceRuntimeEventKey(event)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(event)
+  }
+  return merged
+}
+
+function waveformBarsFromLevel(level: number, peak: number): number[] {
+  const safeLevel = Math.max(0, Math.min(100, level))
+  const safePeak = Math.max(safeLevel, Math.min(100, peak))
+  const shape = [0.38, 0.72, 0.54, 0.9, 0.62, 1, 0.76, 0.46, 0.84, 0.58, 0.68, 0.42, 0.94, 0.64, 0.5, 0.8, 0.56, 0.72, 0.44, 0.88, 0.6, 0.78, 0.48, 0.7]
+  return shape.map((weight, index) => {
+    const peakAccent = index % 5 === 0 ? safePeak * 0.28 : 0
+    return Math.max(6, Math.min(100, Math.round(6 + safeLevel * weight + peakAccent)))
+  })
+}
+
+function withIgnoredAudioDisconnect(disconnect: () => void) {
+  try {
+    disconnect()
+  } catch {
+    // Web Audio nodes may already be disconnected during rapid stop/retry.
+  }
+}
+
+function flattenPcmChunks(chunks: Float32Array[], maxSamples?: number): Float32Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const wanted = maxSamples === undefined ? total : Math.min(total, maxSamples)
+  const output = new Float32Array(wanted)
+  let writeOffset = wanted
+  let remaining = wanted
+  for (let index = chunks.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const chunk = chunks[index]
+    if (!chunk) continue
+    const take = Math.min(chunk.length, remaining)
+    writeOffset -= take
+    output.set(chunk.subarray(chunk.length - take), writeOffset)
+    remaining -= take
+  }
+  return output
+}
+
+function floatPcmToBase64(samples: Float32Array, sourceRate: number, targetRate: number): string {
+  const resampled = resampleFloat32(samples, sourceRate, targetRate)
+  const buffer = new ArrayBuffer(resampled.length * 2)
+  const view = new DataView(buffer)
+  let offset = 0
+  for (const sample of resampled) {
+    const clamped = Math.max(-1, Math.min(1, sample))
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true)
+    offset += 2
+  }
+  return arrayBufferToBase64(buffer)
+}
+
+function waveformBarsFromTimeDomain(samples: Uint8Array, barCount: number): number[] {
+  if (samples.length === 0 || barCount <= 0) return idleWaveformBars()
+  const bars: number[] = []
+  const segmentSize = Math.max(1, Math.floor(samples.length / barCount))
+  for (let bar = 0; bar < barCount; bar += 1) {
+    const start = bar * segmentSize
+    const end = bar === barCount - 1 ? samples.length : Math.min(samples.length, start + segmentSize)
+    let sumSquares = 0
+    let count = 0
+    for (let index = start; index < end; index += 1) {
+      const centered = ((samples[index] ?? 128) - 128) / 128
+      sumSquares += centered * centered
+      count += 1
+    }
+    const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0
+    bars.push(Math.max(8, Math.min(96, Math.round(8 + rms * 220))))
+  }
+  return bars
+}
+
+function audioCaptureErrorMessage(error: unknown): string {
+  if (error instanceof DOMException) {
+    if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+      return 'Microphone permission was denied by the OS or WebView.'
+    }
+    if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+      return 'No microphone device was exposed to the Aurora UI.'
+    }
+    return `${error.name}: ${error.message}`
+  }
+  return error instanceof Error ? error.message : 'Microphone capture failed.'
+}
+
+function resampleFloat32(input: Float32Array, sourceRate: number, targetRate: number): Float32Array {
+  if (sourceRate === targetRate) return input
+  const ratio = sourceRate / targetRate
+  const output = new Float32Array(Math.max(1, Math.round(input.length / ratio)))
+  for (let index = 0; index < output.length; index += 1) {
+    const sourceIndex = index * ratio
+    const left = Math.floor(sourceIndex)
+    const right = Math.min(input.length - 1, left + 1)
+    const weight = sourceIndex - left
+    output[index] = (input[left] ?? 0) * (1 - weight) + (input[right] ?? 0) * weight
+  }
+  return output
+}
+
+function writeAscii(view: DataView, offset: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) view.setUint8(offset + index, value.charCodeAt(index))
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+  }
+  return btoa(binary)
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): Promise<T> {
+  if (typeof window === 'undefined') return promise
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(timeoutError), ms)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+}
+
+function revokeAttachmentPreview(attachment: Pick<AssistantAttachmentDraft, 'previewUrl'>): void {
+  if (!attachment.previewUrl || typeof URL === 'undefined') return
+  URL.revokeObjectURL(attachment.previewUrl)
 }
 
 function sourceLabel(source: AttachmentContextSourceChannel): string {
@@ -1888,20 +3486,20 @@ function ConversationRail({
     <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
       <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2><span className="aui-sr-only">Conversation rail</span><div className="aui-sr-only" aria-label="Assistant local remote mesh route chips"><span>Search recent conversations</span><span>Local {route.providerLabel}</span><span>Remote route pending</span><span>Mesh route pending</span></div>
       <header>
-        <button type="button" onClick={onNewConversation} aria-label="New conversation">
-          <MessageSquarePlus size={16} aria-hidden />
+        <Button type="button" variant="ghost" size="sm" onClick={onNewConversation} aria-label="New conversation" className="aui-thread-new-button">
+          <MessageSquarePlus aria-hidden />
           <span>New conversation</span>
-        </button>
+        </Button>
       </header>
       <ul aria-label="Assistant conversation list">
         {rows.length === 0 ? (
           <li className="empty">No matching conversations.</li>
         ) : rows.map((row) => (
           <li key={row.id} className={row.active ? 'active' : undefined}>
-            <button type="button" aria-current={row.active ? 'true' : undefined}>
+            <Button type="button" variant="ghost" aria-current={row.active ? 'true' : undefined} className="aui-thread-row-button">
               <strong>{row.title}</strong>
               <span><EvidenceBadge label={row.route} /> <time>{row.updated}</time></span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -1928,82 +3526,302 @@ function assistantConversationRows(session: AssistantSessionSnapshot, route: Rou
   }]
 }
 
-function ChatBubble({ message }: { message: AssistantUiMessage }) {
-  const assistant = message.role === 'assistant'
+function ComposerAttachmentPreview({ attachments, onRemove }: { attachments: AssistantAttachmentDraft[]; onRemove: (id: string) => void }) {
   return (
-    <article className={`aui-chat-bubble aui-chat-${message.role} aui-chat-${message.status}`}>
-      <header>
-        <strong>{assistant ? 'AI' : messageRoleLabel(message.role)}</strong>
-        {assistant ? <EvidenceBadge label="Local" /> : null}
-        {assistant ? <span>llama.cpp · 8B</span> : <span>{message.status}</span>}
-        {assistant ? <span className="aui-sr-only">Aurora · {message.status}</span> : null}
-      </header>
-      <p>{message.text}</p>
-      {message.sources?.length ? (
-        <div className="aui-message-sources"><span>Sources:</span>{message.sources.map((source) => <code key={source}>{source}</code>)}</div>
-      ) : null}
-      {message.toolCalls?.length ? (
-        <div className="aui-assistant-tool-cards" aria-label="Assistant tool call cards">
-          {message.toolCalls.map((tool) => <AssistantToolCallCardView key={tool.id} tool={tool} />)}
-        </div>
-      ) : null}
-      {assistant ? (
-        <div className="aui-message-actions" aria-label="Assistant message actions">
-          <button type="button">Copy</button>
-          <button type="button">Save to memory</button>
-        </div>
-      ) : null}
-    </article>
+    <AttachmentGroup className="aui-composer-attachment-preview" aria-label="Attached context previews">
+      {attachments.map((attachment) => (
+        <Attachment key={attachment.id} state={attachmentStateForUi(attachment.status)} size="sm" orientation="vertical" className={`aui-composer-attachment-card aui-attachment-${attachment.status} aui-attachment-kind-${attachment.kind}`}>
+          <AttachmentMedia variant={attachment.previewUrl && attachment.mimeType?.startsWith('image/') ? 'image' : 'icon'} className="aui-composer-attachment-media">
+            {attachment.previewUrl && attachment.mimeType?.startsWith('image/') ? (
+              <img src={attachment.previewUrl} alt={attachment.label} />
+            ) : attachment.mimeType?.startsWith('image/') ? (
+              <ImageIcon aria-hidden />
+            ) : (
+              <FileText aria-hidden />
+            )}
+          </AttachmentMedia>
+          <div className="aui-composer-attachment-bottom">
+            <AttachmentContent className="aui-composer-attachment-meta">
+              <AttachmentTitle>{attachment.label}</AttachmentTitle>
+              <AttachmentDescription>{attachment.detail}</AttachmentDescription>
+            </AttachmentContent>
+            <AttachmentActions className="aui-composer-attachment-actions">
+              <AttachmentAction type="button" aria-label={`Remove ${attachment.label}`} onClick={() => onRemove(attachment.id)}>
+                <X aria-hidden />
+              </AttachmentAction>
+            </AttachmentActions>
+          </div>
+        </Attachment>
+      ))}
+    </AttachmentGroup>
   )
 }
 
-function AssistantToolCallCardView({ tool }: { tool: AssistantToolCallCard }) {
+function attachmentStateForUi(status: AttachmentTrayStatus): 'idle' | 'uploading' | 'processing' | 'error' | 'done' {
+  if (status === 'uploading') return 'uploading'
+  if (status === 'staged') return 'idle'
+  if (status === 'accepted' || status === 'redacted' || status === 'stored') return 'done'
+  return 'error'
+}
+
+function ChatBubble({
+  message,
+  onReadAloud,
+  onResolveToolApproval,
+  speakingMessageId
+}: {
+  message: AssistantUiMessage
+  onReadAloud?: (message: AssistantUiMessage) => void
+  onResolveToolApproval?: ((tool: AssistantToolCallCard, approve: boolean, grantScope: AssistantApprovalGrantScope) => void) | undefined
+  speakingMessageId?: string | null
+}) {
+  const [copied, setCopied] = useState(false)
+  const assistant = message.role === 'assistant'
+  const runtimeLabel = assistantMessageRuntimeLabel(message)
+  const align = message.role === 'user' ? 'end' : 'start'
+  const variant = message.role === 'user' ? 'tinted' : assistant ? 'outline' : 'muted'
+  const isSpeaking = speakingMessageId === message.id
+  function copyMessageText() {
+    if (typeof navigator !== 'undefined') {
+      void navigator.clipboard?.writeText(message.text)
+    }
+    setCopied(true)
+    if (typeof window !== 'undefined') window.setTimeout(() => setCopied(false), 1100)
+  }
   return (
-    <section className={`aui-assistant-tool-card aui-tool-call-${tool.status}`} aria-label={`${tool.name} tool call card`}>
-      <header>
-        <Wrench size={15} aria-hidden />
-        <strong>{tool.name}</strong>
-        <span>{tool.riskClass}</span>
-      </header>
-      <dl>
-        <div><dt>Target</dt><dd>{tool.target}</dd></div>
-        {tool.payloadPreview ? Object.entries(tool.payloadPreview).map(([key, value]) => (
-          <div key={key}><dt>{key}</dt><dd>{String(value)}</dd></div>
-        )) : <div><dt>Status</dt><dd>{tool.status}</dd></div>}
-        <div><dt>Data leaves device</dt><dd>{tool.dataLeavesDevice ? 'Yes' : 'No'}</dd></div>
-      </dl>
+    <Message align={align} className={`aui-chat-message aui-chat-${message.role} aui-chat-${message.status}`}>
+      <MessageContent className="aui-chat-message-content">
+        <MessageHeader className="aui-chat-message-header">
+          <strong>{assistant ? 'Aurora' : messageRoleLabel(message.role)}</strong>
+          {assistant ? <span className="aui-chat-runtime">{runtimeLabel}</span> : <span>{message.status}</span>}
+          {assistant ? <span className="aui-sr-only">Aurora · {message.status}</span> : null}
+        </MessageHeader>
+        {assistant && message.toolCalls?.length ? (
+          <div className="aui-assistant-tool-cards" aria-label="Assistant tool call cards">
+            {message.toolCalls.map((tool) => (
+              <AssistantToolCallCardView
+                key={tool.id}
+                tool={tool}
+                onResolveToolApproval={onResolveToolApproval}
+              />
+            ))}
+          </div>
+        ) : null}
+        <Bubble align={align} variant={variant} className="aui-chat-bubble-wrap">
+          <BubbleContent className="aui-chat-bubble">
+            <p>{message.text}</p>
+            {message.sources?.length ? (
+              <div className="aui-message-sources"><span>Sources:</span>{message.sources.map((source) => <code key={source}>{source}</code>)}</div>
+            ) : null}
+          </BubbleContent>
+        </Bubble>
+        {assistant ? (
+          <MessageFooter className="aui-message-actions" aria-label="Assistant message actions">
+            <Button type="button" variant="ghost" size="xs" onClick={copyMessageText} className="aui-message-action-button">
+              <Copy size={12} aria-hidden data-icon="inline-start" />
+              <span>{copied ? 'Copied' : 'Copy'}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => onReadAloud?.(message)}
+              disabled={!message.text.trim() || message.status === 'streaming'}
+              className="aui-message-action-button"
+              data-speaking={isSpeaking ? 'true' : undefined}
+              aria-pressed={isSpeaking}
+            >
+              {isSpeaking ? <StopCircle size={12} aria-hidden data-icon="inline-start" /> : <Volume2 size={12} aria-hidden data-icon="inline-start" />}
+              <span>{isSpeaking ? 'Stop' : 'Read aloud'}</span>
+            </Button>
+          </MessageFooter>
+        ) : null}
+      </MessageContent>
+    </Message>
+  )
+}
+
+function assistantMessageRuntimeLabel(message: AssistantUiMessage): string {
+  const provider = message.providerLabel || message.routeLabel || null
+  const model = message.modelLabel || null
+  if (provider && model && provider !== model) return `${provider} · ${model}`
+  return model || provider || message.status
+}
+
+function assistantRouteModeLabel(route: RouteAvailability): string {
+  if (route.state === 'available-local') return 'Local'
+  if (route.state === 'available-remote') return /mesh|peer/i.test(route.providerLabel) ? 'Mesh' : 'Remote'
+  if (/mesh|peer/i.test(route.providerLabel)) return 'Mesh'
+  if (/openai|cloud|remote/i.test(route.providerLabel)) return 'Remote'
+  return route.providerLabel
+}
+
+function selectedRuntimeProvider(
+  provider: ModelRuntimeProviderInfo | null,
+  providers: ModelRuntimeProviderInfo[]
+): ModelRuntimeProviderInfo | null {
+  return provider ?? providers.find((candidate) => candidate.selected) ?? null
+}
+
+function AssistantToolCallCardView({
+  tool,
+  onResolveToolApproval
+}: {
+  tool: AssistantToolCallCard
+  onResolveToolApproval?: ((tool: AssistantToolCallCard, approve: boolean, grantScope: AssistantApprovalGrantScope) => void) | undefined
+}) {
+  const statusLabel = toolStatusLabel(tool.status)
+  const StatusIcon = toolStatusIcon(tool.status)
+  const previewText = toolInlinePreview(tool)
+  const argsText = tool.payloadPreview ? JSON.stringify(tool.payloadPreview, null, 2) : undefined
+  const detailResult = tool.errorDetails ?? tool.resultPreview ?? undefined
+  const resultText = detailResult === undefined || detailResult === null ? undefined : detailResult
+  const triggerLabel = `${statusLabel}: ${tool.name}`
+  return (
+    <ToolFallbackRoot
+      className={`aui-assistant-tool-inline aui-tool-call-${tool.status}`}
+      defaultOpen={tool.status === 'requires_action'}
+      aria-label={`${tool.name} tool call`}
+    >
+      <CollapsibleTrigger className="aui-assistant-tool-trigger" aria-label={triggerLabel}>
+        <StatusIcon aria-hidden />
+        <span className="aui-assistant-tool-title">
+          <span className="aui-assistant-tool-status">{statusLabel}</span>
+          <strong>{tool.name}</strong>
+        </span>
+        {previewText ? <span className="aui-assistant-tool-preview">{previewText}</span> : null}
+        <ChevronDown aria-hidden className="aui-assistant-tool-chevron" />
+      </CollapsibleTrigger>
       <span className="aui-sr-only">Payload preview</span>
-      <span className="aui-sr-only">Edit scope</span>
-      {tool.payloadPreview ? <code className="aui-sr-only">{JSON.stringify(tool.payloadPreview, null, 2)}</code> : null}
       <dl className="aui-sr-only">
-        <div><dt>Status</dt><dd>{tool.status}</dd></div>
+        <div><dt>Status</dt><dd>{statusLabel}</dd></div>
         <div><dt>Audit</dt><dd>{tool.auditId ?? 'pending backend receipt'}</dd></div>
       </dl>
-      <div className="aui-assistant-tool-actions" aria-label={`${tool.name} approval actions`}>
-        <a href="/tools" className="aui-action-chip aui-action-approve">Approve</a>
-        <a href="/tools" className="aui-action-chip">Deny</a>
-      </div>
-    </section>
+      {tool.errorDetails ? <code className="aui-sr-only">{JSON.stringify(tool.errorDetails, null, 2)}</code> : null}
+      {tool.payloadPreview ? <code className="aui-sr-only">{JSON.stringify(tool.payloadPreview, null, 2)}</code> : null}
+      {tool.resultPreview ? <code className="aui-sr-only">{JSON.stringify(tool.resultPreview, null, 2)}</code> : null}
+      <ToolFallbackContent className="aui-assistant-tool-details">
+        <dl className="aui-assistant-tool-metadata">
+          <div><dt>Status</dt><dd>{statusLabel}</dd></div>
+          <div><dt>Policy</dt><dd>{tool.riskClass}</dd></div>
+          <div><dt>Target</dt><dd>{tool.target}</dd></div>
+          <div><dt>Data leaves device</dt><dd>{tool.dataLeavesDevice ? 'Yes' : 'No'}</dd></div>
+          <div><dt>Audit</dt><dd>{tool.auditId ?? 'pending backend receipt'}</dd></div>
+        </dl>
+        {tool.summary ? <p className="aui-assistant-tool-summary">{tool.summary}</p> : null}
+        {tool.error ? (
+          <div className="aui-tool-fallback-error">
+            <p className="aui-tool-fallback-error-header">Error:</p>
+            <p className="aui-tool-fallback-error-reason">{tool.error}</p>
+          </div>
+        ) : null}
+        {argsText ? <ToolFallbackArgs argsText={argsText} /> : null}
+        {resultText !== undefined ? <ToolFallbackResult result={resultText} /> : null}
+      </ToolFallbackContent>
+      {tool.status === 'requires_action' ? (
+        <div className="aui-assistant-tool-actions" aria-label={`${tool.name} approval actions`}>
+          <Button
+            type="button"
+            size="xs"
+            className="aui-action-chip aui-action-approve"
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            onClick={() => onResolveToolApproval?.(tool, true, 'once')}
+          >
+            Approve once
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="aui-action-chip aui-action-approve"
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            onClick={() => onResolveToolApproval?.(tool, true, 'session')}
+          >
+            Session
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="aui-action-chip aui-action-approve"
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            onClick={() => onResolveToolApproval?.(tool, true, 'until_expiry')}
+          >
+            Until expiry
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="aui-action-chip aui-action-approve"
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            onClick={() => onResolveToolApproval?.(tool, true, 'always')}
+          >
+            Always
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="aui-action-chip"
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            onClick={() => onResolveToolApproval?.(tool, false, 'deny_once')}
+          >
+            Deny once
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="aui-action-chip"
+            disabled={tool.resolving || (!tool.pendingId && !tool.approvalRequestId)}
+            onClick={() => onResolveToolApproval?.(tool, false, 'deny_always')}
+          >
+            Block
+          </Button>
+        </div>
+      ) : null}
+    </ToolFallbackRoot>
   )
 }
 
 function assistantToolCallFromUpdate(update: AssistantStreamUpdate): AssistantToolCallCard {
   const metadata = update.metadata ?? {}
-  const name = metadataStringValue(metadata, 'tool_name') ?? metadataStringValue(metadata, 'toolName') ?? metadataStringValue(metadata, 'name') ?? 'tool.requested'
+  const tool = update.tool
+  const structuredTool = tool as (typeof tool & { errorDetails?: Record<string, unknown> | string | null }) | null
+  const name = tool?.name
+    ?? metadataStringValue(metadata, 'tool_name')
+    ?? metadataStringValue(metadata, 'toolName')
+    ?? metadataStringValue(metadata, 'name')
+    ?? 'tool.requested'
   const status = toolStatusFromUpdate(update)
   return {
-    id: update.eventId ?? `${name}-${Date.now()}`,
+    id: tool?.id ?? update.eventId ?? `${name}-${Date.now()}`,
     name,
     status,
-    riskClass: metadataStringValue(metadata, 'risk_class') ?? metadataStringValue(metadata, 'riskClass') ?? 'backend-evaluated',
-    target: metadataStringValue(metadata, 'target') ?? metadataStringValue(metadata, 'provider') ?? 'Aurora tool provider',
-    dataLeavesDevice: metadataBooleanValue(metadata, 'data_leaves_device') ?? metadataBooleanValue(metadata, 'dataLeavesDevice') ?? false,
-    summary: update.text || metadataStringValue(metadata, 'summary') || 'The assistant stream reported a backend tool event; approve or deny through the Tools approval surface.',
+    riskClass: tool?.riskClass ?? metadataStringValue(metadata, 'risk_class') ?? metadataStringValue(metadata, 'riskClass') ?? 'backend-evaluated',
+    target: tool?.target ?? metadataStringValue(metadata, 'target') ?? metadataStringValue(metadata, 'provider') ?? 'Aurora tool provider',
+    dataLeavesDevice: tool?.dataLeavesDevice ?? metadataBooleanValue(metadata, 'data_leaves_device') ?? metadataBooleanValue(metadata, 'dataLeavesDevice') ?? false,
+    summary: tool?.summary ?? (update.text || metadataStringValue(metadata, 'summary') || toolSummaryForStatus(status)),
     auditId: update.audit.correlationId ?? null,
-    payloadPreview: metadataObjectValue(metadata, 'payload_preview')
+    payloadPreview: tool?.payloadPreview
+      ?? metadataObjectValue(metadata, 'payload_preview')
       ?? metadataObjectValue(metadata, 'payloadPreview')
       ?? metadataObjectValue(metadata, 'redacted_args_preview')
-      ?? metadataObjectValue(metadata, 'argsPreview')
+      ?? metadataObjectValue(metadata, 'argsPreview'),
+    resultPreview: tool?.resultPreview ?? metadataObjectValue(metadata, 'result_preview') ?? metadataObjectValue(metadata, 'resultPreview') ?? metadataStringValue(metadata, 'result_preview') ?? metadataStringValue(metadata, 'resultPreview'),
+    error: tool?.error ?? metadataStringValue(metadata, 'error') ?? null,
+    errorDetails: structuredTool?.errorDetails
+      ?? metadataObjectValue(metadata, 'error_details')
+      ?? metadataObjectValue(metadata, 'errorDetails')
+      ?? metadataStringValue(metadata, 'error_details')
+      ?? metadataStringValue(metadata, 'errorDetails'),
+    pendingId: tool?.pendingId ?? metadataStringValue(metadata, 'pending_id') ?? metadataStringValue(metadata, 'pendingId') ?? null,
+    approvalRequestId: tool?.approvalRequestId ?? metadataStringValue(metadata, 'approval_request_id') ?? metadataStringValue(metadata, 'approvalRequestId') ?? null,
+    approvalExpiresAt: typeof tool?.approvalExpiresAt === 'number'
+      ? tool.approvalExpiresAt
+      : metadataNumberValue(metadata, 'approval_expires_at') ?? metadataNumberValue(metadata, 'approvalExpiresAt') ?? null,
+    policyDecisionId: tool?.policyDecisionId ?? metadataStringValue(metadata, 'policy_decision_id') ?? metadataStringValue(metadata, 'policyDecisionId') ?? null
   }
 }
 
@@ -2012,13 +3830,100 @@ function upsertAssistantToolCall(
   next: AssistantToolCallCard
 ): AssistantToolCallCard[] {
   const existing = current ?? []
-  const index = existing.findIndex((tool) => tool.id === next.id || tool.name === next.name)
+  const index = existing.findIndex((tool) => tool.id === next.id)
   if (index === -1) return [...existing, next]
-  return existing.map((tool, currentIndex) => currentIndex === index ? { ...tool, ...next } : tool)
+  return existing.map((tool, currentIndex) => currentIndex === index ? mergeAssistantToolCall(tool, next) : tool)
+}
+
+function mergeAssistantToolCall(current: AssistantToolCallCard, next: AssistantToolCallCard): AssistantToolCallCard {
+  return {
+    ...current,
+    ...next,
+    riskClass: next.riskClass || current.riskClass,
+    target: next.target || current.target,
+    summary: next.summary || current.summary,
+    auditId: next.auditId ?? current.auditId,
+    payloadPreview: next.payloadPreview ?? current.payloadPreview,
+    resultPreview: next.resultPreview ?? current.resultPreview ?? null,
+    error: next.error ?? current.error ?? null,
+    errorDetails: next.errorDetails ?? current.errorDetails ?? null,
+    pendingId: next.pendingId ?? current.pendingId ?? null,
+    approvalRequestId: next.approvalRequestId ?? current.approvalRequestId ?? null,
+    approvalExpiresAt: next.approvalExpiresAt ?? current.approvalExpiresAt ?? null,
+    policyDecisionId: next.policyDecisionId ?? current.policyDecisionId ?? null,
+    resolving: next.resolving ?? current.resolving
+  }
+}
+
+
+function toolSummaryForStatus(status: AssistantToolCallCard['status']): string {
+  if (status === 'requires_action') return 'Aurora paused this tool call until an operator approves or denies it.'
+  if (status === 'failed') return 'Tool execution failed; Aurora will continue with the available context.'
+  if (status === 'completed') return 'Tool execution completed and the result was returned to Aurora.'
+  if (status === 'running') return 'Tool execution is running.'
+  return 'Tool call requested by Aurora.'
+}
+
+function toolStatusLabel(status: AssistantToolCallCard['status']): string {
+  if (status === 'requires_action') return 'Needs approval'
+  if (status === 'completed') return 'Done'
+  if (status === 'failed') return 'Errored'
+  if (status === 'running') return 'Running'
+  return 'Requested'
+}
+
+function toolStatusIcon(status: AssistantToolCallCard['status']) {
+  if (status === 'completed') return CheckCircle2
+  if (status === 'failed') return XCircle
+  if (status === 'running') return LoaderCircle
+  if (status === 'requires_action') return ShieldAlert
+  return Wrench
+}
+
+function toolInlinePreview(tool: AssistantToolCallCard): string | null {
+  const resultPreview = compactToolPreviewValue(tool.resultPreview)
+  const errorDetails = compactToolPreviewValue(tool.errorDetails)
+  const payloadPreview = compactToolPreviewValue(tool.payloadPreview)
+  if (tool.status === 'failed') return tool.error || errorDetails || tool.summary || null
+  if (tool.status === 'completed') return resultPreview || tool.summary || null
+  return tool.summary || payloadPreview
+}
+
+function compactToolPreviewValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  const text = formatToolPreviewValue(value)
+  return text === '-' ? null : text
+}
+
+function formatToolPreviewValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value === null || value === undefined) return '-'
+  if (Array.isArray(value)) {
+    const compact = value.map((item) => formatToolPreviewValue(item)).join(', ')
+    return compact.length > 180 ? `${compact.slice(0, 177)}…` : compact
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const preferred = ['query', 'text', 'value', 'description', 'title', 'name']
+      .map((key) => record[key])
+      .find((candidate) => typeof candidate === 'string' && candidate.trim())
+    if (typeof preferred === 'string') return preferred
+    try {
+      const serialized = JSON.stringify(value)
+      return serialized.length > 240 ? `${serialized.slice(0, 237)}…` : serialized
+    } catch {
+      return '[object]'
+    }
+  }
+  return String(value)
 }
 
 function toolStatusFromUpdate(update: AssistantStreamUpdate): AssistantToolCallCard['status'] {
+  const structuredStatus = update.tool?.status?.toLowerCase()
+  if (structuredStatus === 'requested' || structuredStatus === 'running' || structuredStatus === 'completed' || structuredStatus === 'failed' || structuredStatus === 'requires_action') return structuredStatus
   const value = metadataStringValue(update.metadata ?? {}, 'status')?.toLowerCase()
+  if (value === 'requested' || value === 'requires_action') return value
   if (value === 'running' || value === 'completed' || value === 'failed') return value
   if (update.text.toLowerCase().includes('completed')) return 'completed'
   if (update.text.toLowerCase().includes('failed')) return 'failed'
@@ -2033,6 +3938,11 @@ function metadataStringValue(metadata: Record<string, unknown>, key: string): st
 function metadataBooleanValue(metadata: Record<string, unknown>, key: string): boolean | null {
   const value = metadata[key]
   return typeof value === 'boolean' ? value : null
+}
+
+function metadataNumberValue(metadata: Record<string, unknown>, key: string): number | null {
+  const value = metadata[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function metadataObjectValue(metadata: Record<string, unknown>, key: string): Record<string, unknown> | null {

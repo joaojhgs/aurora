@@ -5,6 +5,7 @@ import { Compass, KeyRound, Monitor, PlugZap, RadioTower, Rocket, Server, Shield
 import type { AuroraClient, AuroraError, AuthSessionSnapshot, AvailabilityState } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { EvidenceBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PageHeader } from './state-surface'
 
 export interface OnboardingViewProps {
   client: AuroraClient
@@ -209,23 +210,27 @@ export function OnboardingView({ client, snapshot, modePreferenceStore }: Onboar
 
   return (
     <section className="aui-onboarding" aria-labelledby="onboarding-title">
-      <header className="aui-onboarding-header">
-        <div>
-          <p className="aui-kicker">First run</p>
-          <h1 id="onboarding-title">Connect Aurora</h1>
-          <p>Choose server web, desktop local, desktop thin, mesh shell, Android/iOS mobile thin, or explicitly labeled offline demo mode, then authenticate or pair through SDK-backed Auth methods.</p>
-        </div>
-        <button className="aui-primary-action" type="button" onClick={() => setMessage('Guided setup resumes from the first incomplete step: mode selection, Auth.Login/Auth.PairingStart, capability readiness, privacy review, then cockpit entry.') }>
-          <Rocket size={15} aria-hidden />Start guided setup
-        </button>
-        <div className="aui-assistant-badges" aria-label="Onboarding status">
-          <StatusBadge state={model.authState} />
-          <EvidenceBadge label={client.transport.kind} />
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={credentialStorageEvidence} />
-          <EvidenceBadge label={modePreferenceEvidence} />
-        </div>
-      </header>
+      <PageHeader
+        id="onboarding-title"
+        eyebrow="First run"
+        title="Connect Aurora"
+        description="Choose a deployment mode, then authenticate or pair through SDK-backed Auth methods."
+        badges={
+          <>
+            <StatusBadge state={model.authState} />
+            <EvidenceBadge label={client.transport.kind} />
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={credentialStorageEvidence} />
+          </>
+        }
+        badgesLabel="Onboarding status"
+        actions={
+          <button className="aui-primary-action" type="button" onClick={() => setMessage('Guided setup resumes from the first incomplete step: mode selection, Auth.Login/Auth.PairingStart, capability readiness, privacy review, then cockpit entry.') }>
+            <Rocket size={15} aria-hidden />Start guided setup
+          </button>
+        }
+      />
+      <p className="aui-onboarding-mode-evidence" title={modePreferenceEvidence}>{presentableSignal(modePreferenceEvidence)}</p>
 
       <div className="aui-onboarding-grid">
         <section className="aui-onboarding-panel aui-mode-panel" aria-labelledby="mode-title">
@@ -239,12 +244,13 @@ export function OnboardingView({ client, snapshot, modePreferenceStore }: Onboar
                 role="radio"
                 aria-checked={mode.id === model.selectedModeId}
                 disabled={mode.disabled || !modePreferenceReady}
+                title={`${mode.routeLabel} · ${presentableSignal(mode.evidence)} · ${mode.repair}`}
                 onClick={() => onSelectMode(mode.id)}
               >
                 <ModeIcon id={mode.id} />
                 <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
                 <StatusBadge state={mode.state} />
-                <em><b>{mode.routeLabel}</b> · {presentableSignal(mode.evidence)}</em>
+                <em>{mode.routeLabel}</em>
               </button>
             ))}
           </div>
@@ -260,8 +266,8 @@ export function OnboardingView({ client, snapshot, modePreferenceStore }: Onboar
                 <span className="aui-step-number">{index + 1}</span>
                 <div>
                   <strong>{step.title}</strong>
-                  <p>{step.detail}</p>
-                  <small>{step.repair}</small>
+                  <p>{step.detail.length > 120 ? `${step.detail.slice(0, 117)}…` : step.detail}</p>
+                  <small title={step.repair}>{step.repair.length > 96 ? `${step.repair.slice(0, 93)}…` : step.repair}</small>
                   {step.progress !== null ? <div className="aui-setup-progress" aria-label={`${step.title} ${step.progress}% complete`}><span style={{ width: `${step.progress}%` }} /></div> : null}
                 </div>
                 <StatusBadge state={step.state} />

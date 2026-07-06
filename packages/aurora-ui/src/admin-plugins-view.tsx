@@ -11,6 +11,8 @@ import type {
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
 
 export type AdminPluginsLoadState =
   | 'loading'
@@ -197,43 +199,57 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
   }
 
   return (
-    <section className="aui-admin-services" aria-labelledby="admin-plugins-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-plugins-title"><Plug size={24} aria-hidden /> Plugins, MCP, and tools</h1>
-          <p>
-            Plugin, MCP, and aggregate tool inventory is rendered from Aurora. Reload, install, and sharing
-            mutations stay AdminAction-gated and disabled when the backend contract is not advertised.
-          </p>
-        </div>
-        <div className="aui-admin-badges" aria-label="Plugin admin service status">
-          {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-          <StatusBadge state={route.state} />
-          <PrivacyBadge privacy={route.item.privacyClass} />
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-        </div>
-      </header>
+    <div className="aui-admin-services">
+      <PageHeader
+        id="admin-plugins-title"
+        eyebrow="Admin"
+        title="Plugins, MCP, and tools"
+        description="Plugin, MCP, and aggregate tool inventory is rendered from Aurora. Reload, install, and sharing mutations stay AdminAction-gated and disabled when the backend contract is not advertised."
+        badges={
+          <>
+            {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
+            <StatusBadge state={route.state} />
+            <PrivacyBadge privacy={route.item.privacyClass} />
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+          </>
+        }
+        actions={
+          <Button
+            variant="outline"
+            disabled
+            disabledReason="Reload catalog is enabled only when Tooling.ReloadPlugins is advertised with Gateway AdminAction draft/confirm routes."
+            icon={<RefreshCw size={14} aria-hidden />}
+          >
+            Reload catalog
+          </Button>
+        }
+      />
 
       <PluginsStatusPanel snapshot={snapshot} route={route} message={message} />
 
-      <div className="aui-admin-metrics" aria-label="Plugin and tool summary">
-        <Metric label="Tools" value={String(snapshot.tools.length)} detail={`${totals.local} local / ${totals.remote} remote`} />
-        <Metric label="Plugin/MCP" value={String(totals.pluginLike)} detail="provider classified" />
-        <Metric label="Policy gated" value={String(totals.policyGated)} detail="approval or AdminAction" />
-        <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, or service unavailable" />
-      </div>
+      <StatStrip
+        ariaLabel="Plugin and tool summary"
+        items={[
+          { label: 'Tools', value: String(snapshot.tools.length), caption: `${totals.local} local / ${totals.remote} remote` },
+          { label: 'Plugin/MCP', value: String(totals.pluginLike), caption: 'provider classified' },
+          { label: 'Policy gated', value: String(totals.policyGated), caption: 'approval or AdminAction' },
+          { label: 'Unavailable', value: String(totals.unavailable), caption: 'denied, stale, or service unavailable' }
+        ]}
+      />
+
+      {snapshot.tools.length === 0 && snapshot.loadState !== 'loading' ? (
+        <Card title="Tool inventory">
+          <p className="aui-muted">No plugin, MCP, or tool catalog entries were returned by the SDK.</p>
+        </Card>
+      ) : (
+        <Card title="Tool risk and sharing policy" icon={<FlaskConical size={18} aria-hidden />} flush>
+          <PluginsInventoryTable tools={snapshot.tools} />
+        </Card>
+      )}
 
       <div className="aui-admin-grid">
-        <section className="aui-admin-panel" aria-labelledby="provider-groups-title">
-          <div className="aui-panel-heading">
-            <div>
-              <p className="aui-kicker">Providers</p>
-              <h2 id="provider-groups-title">Provider grouping</h2>
-            </div>
-            <Boxes size={18} aria-hidden />
-          </div>
+        <Card title="Provider grouping" icon={<Boxes size={18} aria-hidden />}>
           <div className="aui-config-history">
             {snapshot.providerGroups.map((group) => (
               <article key={group.group}>
@@ -245,25 +261,9 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
               </article>
             ))}
           </div>
-        </section>
+        </Card>
 
-        <section className="aui-admin-panel" aria-labelledby="plugin-actions-title">
-          <div className="aui-panel-heading">
-            <div>
-              <p className="aui-kicker">AdminAction</p>
-              <h2 id="plugin-actions-title">Reload and install controls</h2>
-            </div>
-            <button
-              type="button"
-              className="aui-action-chip"
-              disabled
-              title="Reload catalog is enabled only when Tooling.ReloadPlugins is advertised with Gateway AdminAction draft/confirm routes."
-            >
-              <RefreshCw size={14} aria-hidden />
-              Reload catalog
-            </button>
-            <ShieldCheck size={18} aria-hidden />
-          </div>
+        <Card title="Reload and install controls" icon={<ShieldCheck size={18} aria-hidden />}>
           <div className="aui-config-history">
             {snapshot.actions.map((action) => (
               <article key={action.id}>
@@ -280,37 +280,9 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
               </article>
             ))}
           </div>
-        </section>
+        </Card>
       </div>
-
-      <section className="aui-admin-panel" aria-labelledby="tool-inventory-title">
-        <div className="aui-panel-heading">
-          <div>
-            <p className="aui-kicker">Inventory</p>
-            <h2 id="tool-inventory-title">Tool risk and sharing policy</h2>
-          </div>
-          <FlaskConical size={18} aria-hidden />
-        </div>
-        {snapshot.tools.length === 0 ? <p className="aui-muted">No plugin, MCP, or tool catalog entries were returned by the SDK.</p> : null}
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <thead>
-              <tr>
-                <th>Tool</th>
-                <th>Provider</th>
-                <th>Health</th>
-                <th>Risk</th>
-                <th>Policy</th>
-                <th>Audit and logs</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snapshot.tools.map((tool) => <ToolInventoryRow key={tool.id} tool={tool} />)}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </section>
+    </div>
   )
 }
 
@@ -341,46 +313,64 @@ function PluginsStatusPanel({
   return null
 }
 
-function ToolInventoryRow({ tool }: { tool: AdminToolInventoryRow }) {
-  return (
-    <tr>
-      <td>
-        <details className="aui-service-details">
-          <summary>
-            <strong>{tool.name}</strong>
-            <small>{tool.description}</small>
-          </summary>
-          <div className="aui-service-drawer">
-            <dl>
-              <div><dt>Tool ID</dt><dd>{tool.id}</dd></div>
-              <div><dt>Install state</dt><dd>{tool.installedState}</dd></div>
-              <div><dt>Data classes</dt><dd>{tool.dataClasses.join(', ') || 'none reported'}</dd></div>
-              <div><dt>Flags</dt><dd>{tool.admin ? 'admin ' : ''}{tool.mutating ? 'mutating ' : ''}{tool.external ? 'external' : 'local-only'}</dd></div>
-              <div><dt>Default TTL</dt><dd>{tool.defaultTtl}</dd></div>
-            </dl>
+function PluginsInventoryTable({ tools }: { tools: AdminToolInventoryRow[] }) {
+  const columns: DataColumn<AdminToolInventoryRow>[] = [
+    {
+      key: 'tool',
+      header: 'Tool',
+      render: (tool) => (
+        <div>
+          <strong>{tool.name}</strong>
+          <small>{tool.description}</small>
+          <span className="aui-sr-only">
+            {tool.id} {tool.installedState} {tool.dataClasses.join(', ')}
+          </span>
+        </div>
+      )
+    },
+    {
+      key: 'provider',
+      header: 'Provider',
+      render: (tool) => (
+        <div>
+          <div className="aui-state-line">
+            <StatusBadge state={tool.routeState} />
+            <span>{providerGroupLabel(tool.providerGroup)}</span>
           </div>
-        </details>
-      </td>
-      <td>
-        <div className="aui-state-line">
-          <StatusBadge state={tool.routeState} />
-          <span>{providerGroupLabel(tool.providerGroup)}</span>
+          <small>{tool.providerLabel}; peer {tool.providerPeerId}; service {tool.serviceInstanceId}</small>
         </div>
-        <small>{tool.providerLabel}; peer {tool.providerPeerId}; service {tool.serviceInstanceId}</small>
-      </td>
-      <td>
-        <div className="aui-state-line">
-          <StatusBadge state={tool.healthState} />
-          <span>{tool.enabledState}</span>
+      )
+    },
+    {
+      key: 'health',
+      header: 'Health',
+      hideAt: 'md',
+      render: (tool) => (
+        <div>
+          <div className="aui-state-line">
+            <StatusBadge state={tool.healthState} />
+            <span>{tool.enabledState}</span>
+          </div>
+          <small>{tool.providerStatus}</small>
+          {tool.providerErrors.length > 0 ? <small>Errors: {tool.providerErrors.join('; ')}</small> : null}
         </div>
-        <small>{tool.providerStatus}</small>
-        {tool.providerErrors.length > 0 ? <small>Errors: {tool.providerErrors.join('; ')}</small> : null}
-      </td>
-      <td>
-        <span className={`aui-risk-pill aui-risk-${riskClassName(tool.riskClass)}`}>{tool.riskClass}</span>
-        <small>{tool.approvalMode}</small>
-      </td>
-      <td>
+      )
+    },
+    {
+      key: 'risk',
+      header: 'Risk',
+      render: (tool) => (
+        <div>
+          <span className={`aui-risk-pill aui-risk-${riskClassName(tool.riskClass)}`}>{tool.riskClass}</span>
+          <small>{tool.approvalMode}</small>
+        </div>
+      )
+    },
+    {
+      key: 'policy',
+      header: 'Policy',
+      hideAt: 'lg',
+      render: (tool) => (
         <div className="aui-method-list">
           {tool.policyControls.map((control) => (
             <span key={control.mode} className={`aui-method-chip ${control.available ? '' : 'aui-method-chip-disabled'}`} title={control.reason}>
@@ -388,18 +378,28 @@ function ToolInventoryRow({ tool }: { tool: AdminToolInventoryRow }) {
             </span>
           ))}
         </div>
-      </td>
-      <td>
-        <code>{tool.lastAuditOutcome}</code>
-        <small>{tool.routeReason}</small>
-        <details className="aui-service-details">
-          <summary><Stethoscope size={14} aria-hidden /> Provider logs</summary>
-          <ul>
-            {tool.providerLogs.map((log) => <li key={log}>{log}</li>)}
-          </ul>
-        </details>
-      </td>
-    </tr>
+      )
+    },
+    {
+      key: 'audit',
+      header: 'Audit and logs',
+      hideAt: 'xl',
+      render: (tool) => (
+        <div>
+          <code>{tool.lastAuditOutcome}</code>
+          <small>{tool.routeReason}</small>
+          <span className="aui-sr-only">Provider logs {tool.providerLogs.join('; ')}</span>
+        </div>
+      )
+    }
+  ]
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={tools}
+      getRowKey={(tool) => tool.id}
+    />
   )
 }
 

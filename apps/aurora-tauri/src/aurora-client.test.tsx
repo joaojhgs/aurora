@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AuroraClient as Aurora, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, nativeCapabilityManifestFixture, type AuroraTransportRequest } from '@aurora/client'
+import { AuroraClient as Aurora, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, STT_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, nativeCapabilityManifestFixture, routeExplainFixture, type AuroraTransportRequest } from '@aurora/client'
 import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
@@ -51,6 +51,7 @@ const adminRouteIds = new Set([
 
 const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<string, readonly string[]> = {
   native: ['Native platform settings', 'Native permissions and capabilities'],
+  tools: ['Tools & Automations', 'Tooling policy', 'Source catalog', 'Core tools'],
 }
 
 function expectedRenderedLandmarks(routeId: string, oracle: ReturnType<typeof getProductionRouteOracle>): readonly string[] {
@@ -75,6 +76,18 @@ class RecordingMockAuroraTransport extends MockAuroraTransport {
     this.requests.push(request)
     return super.request<TData, TPayload>(request)
   }
+}
+
+
+
+function tauriLocalTransportProxy(transport: RecordingMockAuroraTransport) {
+  return new Proxy(transport, {
+    get(target, property, receiver) {
+      if (property === 'kind') return 'tauri-local'
+      const value = Reflect.get(target, property, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    }
+  }) as typeof transport
 }
 
 function testRuntime(client: Aurora, modePreferenceStore?: AuroraTauriRuntime['modePreferenceStore']): AuroraTauriRuntime {
@@ -843,7 +856,7 @@ describe('Tauri CI/E2E route gates', () => {
 
     expect(nativeText).toContain('Native platform settings')
     expect(nativeText).toContain('Native permissions and capabilities')
-    expect(nativeText).toContain('request buttons are enabled only when that platform advertises a native request command')
+    expect(nativeText).toContain('Request buttons are enabled only when the platform advertises a native request command')
     expect(nativeText).not.toContain('Theme, accessibility, and local storage')
     expect(nativeText).not.toBe(settingsText)
   })
@@ -869,7 +882,7 @@ describe('Tauri CI/E2E route gates', () => {
         expect(memory.container.textContent).toContain('Delete record')
       })
       const queryInput = memory.container.querySelector<HTMLInputElement>('#memory-query')
-      const searchForm = memory.container.querySelector<HTMLFormElement>('form.aui-memory-search')
+      const searchForm = memory.container.querySelector<HTMLFormElement>('form.aui-memory-toolbar')
       expect(queryInput).not.toBeNull()
       expect(searchForm).not.toBeNull()
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -937,7 +950,7 @@ describe('Tauri CI/E2E route gates', () => {
       })
       const queryInput = staleMemory.container.querySelector<HTMLInputElement>('#memory-query')
       const namespaceSelect = staleMemory.container.querySelector<HTMLSelectElement>('#memory-namespace')
-      const searchForm = staleMemory.container.querySelector<HTMLFormElement>('form.aui-memory-search')
+      const searchForm = staleMemory.container.querySelector<HTMLFormElement>('form.aui-memory-toolbar')
       expect(queryInput).not.toBeNull()
       expect(namespaceSelect).not.toBeNull()
       expect(searchForm).not.toBeNull()
@@ -1002,7 +1015,7 @@ describe('Tauri CI/E2E route gates', () => {
     try {
       await waitUntil(() => {
         expect(tools.container.textContent).toContain('Tools & Automations')
-        expect(tools.container.textContent).toContain('Tool registry and Approval cards')
+        expect(tools.container.textContent).toContain('Source-first Tooling control center')
         expect(tools.container.textContent).toContain(TOOLING_METHODS.listCatalog)
         expect(requestMethods(transport)).toContain(TOOLING_METHODS.listCatalog)
       })
@@ -1014,16 +1027,12 @@ describe('Tauri CI/E2E route gates', () => {
         expect(tools.container.textContent).toContain('Send email draft')
         expect(tools.container.textContent).not.toContain('Open garage door')
       })
-      await clickButtonByLabel(tools.container, 'View details')
       await waitUntil(() => {
-        expect(tools.container.textContent).toContain('Tool detail drawer')
-        expect(tools.container.textContent).toContain('Tool parameters')
-        expect(tools.container.textContent).toContain('Parameter validation is schema-derived from Tooling.GetToolCatalog')
+        expect(tools.container.textContent).toContain('Advanced details and redacted payloads')
+        expect(tools.container.textContent).toContain('Arguments schema summary')
         expect(tools.container.textContent).toContain('Dry-run preview')
-        expect(tools.container.textContent).toContain('Schema')
         expect(tools.container.textContent).toContain('Permissions')
-        expect(tools.container.textContent).toContain('Risk')
-        expect(tools.container.textContent).toContain('Examples')
+        expect(tools.container.textContent).toContain('Capability')
         expect(tools.container.textContent).toContain('Dry-run only until backend policy permits execution.')
       })
       const dryRunButton = Array.from(tools.container.querySelectorAll<HTMLButtonElement>('button'))
@@ -1059,32 +1068,24 @@ describe('Tauri CI/E2E route gates', () => {
     try {
       await waitUntil(() => {
         expect(mesh.container.textContent).toContain('Mesh peers')
-        expect(mesh.container.textContent).toContain('Topology')
-        expect(mesh.container.textContent).toContain('Trust queue')
-        expect(mesh.container.textContent).toContain('Route preview')
-        expect(mesh.container.textContent).toContain('Peer table')
-        expect(mesh.container.textContent).toContain('Persisted Auth trust, Gateway route quality, and WebRTC diagnostics are cross-referenced')
-        expect(mesh.container.textContent).toContain('Open pairing queue')
-        expect(mesh.container.textContent).toContain('Refresh diagnostics')
-        expect(mesh.container.textContent).toContain('Explain route through peer')
-        expect(mesh.container.textContent).toContain('Gateway.GetMeshStatus route decision / capability graph')
+        expect(mesh.container.textContent).toContain('Overview')
+        expect(mesh.container.textContent).toContain('Peers')
+        expect(mesh.container.textContent).toContain('Pending requests')
+        expect(mesh.container.textContent).toContain('Route policy')
+        expect(mesh.container.textContent).toContain('Runtime state')
+        expect(mesh.container.textContent).toContain('Shared module summary')
+        expect(mesh.container.textContent).toContain('Review request')
+        expect(mesh.container.textContent).toContain('Gateway.ExplainRoute')
         expect(requestMethods(meshTransport)).toContain(GATEWAY_METHODS.getMeshStatus)
         expect(requestMethods(meshTransport)).toContain(AUTH_METHODS.meshListPeers)
         expect(requestMethods(meshTransport)).toContain(AUTH_METHODS.listPendingPairings)
         expect(requestMethods(meshTransport)).toContain(AUTH_METHODS.listDevices)
         expect(requestMethods(meshTransport)).toContain(GATEWAY_METHODS.getWebRTCDiagnostics)
       })
-      const pairingLink = Array.from(mesh.container.querySelectorAll<HTMLAnchorElement>('a[href="/admin/pairing"]'))
-        .find((link) => link.textContent?.includes('Open pairing queue'))
-      expect(pairingLink?.textContent).toContain('Open pairing queue')
-      const actionButtons = Array.from(mesh.container.querySelectorAll<HTMLButtonElement>('button'))
-      const approveButtons = actionButtons.filter((button) => button.textContent?.includes('AdminAction approve') || button.textContent?.includes('Approve peer'))
-      const denyButtons = actionButtons.filter((button) => button.textContent?.includes('AdminAction deny') || button.textContent?.includes('Deny peer'))
-      expect(approveButtons.length, 'mesh approve action controls').toBeGreaterThan(0)
-      expect(denyButtons.length, 'mesh deny action controls').toBeGreaterThan(0)
-      expect(mesh.container.textContent).toContain('In-session admin unlock confirmed for mesh peer AdminAction')
-      expect(approveButtons.every((button) => button.disabled), 'approve controls stay disabled until AdminAction reauth is explicitly confirmed').toBe(true)
-      expect(denyButtons.every((button) => button.disabled), 'deny controls stay disabled until AdminAction reauth is explicitly confirmed').toBe(true)
+      const reviewButtons = Array.from(mesh.container.querySelectorAll<HTMLButtonElement>('button'))
+        .filter((button) => button.textContent?.includes('Review request'))
+      expect(reviewButtons.length, 'mesh review request controls').toBeGreaterThan(0)
+      expect(mesh.container.textContent).toContain('Peer trust decisions waiting for approval or refusal.')
       writeOutcomeArtifact('mesh-route-status-pair-actions-route-preview', mesh.container.innerHTML)
     } finally {
       await act(async () => mesh.root.unmount())
@@ -1148,7 +1149,7 @@ describe('Tauri CI/E2E route gates', () => {
       expect(assistantRequests).toHaveLength(1)
       expect(assistantRequests[0]?.payload).toEqual(expect.objectContaining({
         text: 'hello local gateway',
-        source: 'external',
+        source: 'ui',
         stream: true
       }))
       expect(requestMethods(successTransport)).toContain(GATEWAY_METHODS.getCapabilityCatalog)
@@ -1171,7 +1172,7 @@ describe('Tauri CI/E2E route gates', () => {
       expect(assistantRequests).toHaveLength(1)
       expect(assistantRequests[0]?.payload).toEqual(expect.objectContaining({
         text: 'hello with expired token',
-        source: 'external',
+        source: 'ui',
         stream: true
       }))
       writeOutcomeArtifact('assistant-send-auth-error', failure.container.innerHTML)
@@ -1181,8 +1182,93 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
+  it('e2e:assistant projects realtime voice partials into the composer textbox with recorder above it', async () => {
+    const transport = assistantGatewayTransport()
+    transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () => cloneFixture(modelRuntimeCatalogFixture))
+    transport.stream('voice', [
+      {
+        id: 'voice-start-live-textbox',
+        kind: 'voice.session.started',
+        topic: 'STTCoordinator.SessionStarted',
+        payload: { session_id: 'voice-live-textbox', source: 'wakeword', wake_word: 'jarvis' }
+      },
+      {
+        id: 'voice-partial-live-textbox',
+        kind: 'voice.transcription.partial',
+        topic: 'STTCoordinator.Partial',
+        payload: { session_id: 'voice-live-textbox', text: 'what is the weather', source: 'stt' }
+      }
+    ])
+    const runtime = testRuntime(new Aurora({ transport }))
+    window.localStorage.clear()
+    window.history.replaceState({}, '', '/')
+    const mounted = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        const textarea = mounted.container.querySelector<HTMLTextAreaElement>('#assistant-prompt')
+        const recorder = mounted.container.querySelector<HTMLElement>('.aui-composer-recorder-row')
+        expect(textarea?.value).toBe('what is the weather')
+        expect(textarea?.readOnly).toBe(true)
+        expect(recorder).not.toBeNull()
+        expect(recorder!.compareDocumentPosition(textarea!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+      })
+      writeOutcomeArtifact('assistant-voice-partial-textbox-recorder-above', mounted.container.innerHTML)
+    } finally {
+      await act(async () => mounted.root.unmount())
+      mounted.container.remove()
+    }
+  })
+
+  it('e2e:assistant push-to-talk tries focused WebView capture and falls back to local STT in Tauri local mode', async () => {
+    const transport = new RecordingMockAuroraTransport()
+    transport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
+    transport.register(GATEWAY_METHODS.getCapabilityCatalog, () => assistantCapabilityCatalog())
+    transport.register(GATEWAY_METHODS.explainRoute, () => cloneFixture(routeExplainFixture))
+    transport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () => cloneFixture(modelRuntimeCatalogFixture))
+    transport.register(STT_METHODS.listen, (request) => ({
+      success: true,
+      session_id: (request.payload as { session_id?: string } | undefined)?.session_id ?? 'voice-test-session'
+    }))
+    const runtime = {
+      ...testRuntime(new Aurora({ transport: tauriLocalTransportProxy(transport) })),
+      mode: 'desktop-local' as const,
+      sidecarStatus: async () => ({
+        running: true,
+        mode: 'threads',
+        pid: 6060,
+        gatewayUrl: 'http://127.0.0.1:8000',
+        lastError: null,
+        details: { healthPath: '/api/health' }
+      })
+    }
+    window.history.replaceState({}, '', '/')
+    const mounted = await mountOutcomeApp(runtime)
+    try {
+      await waitUntil(() => {
+        const button = mounted.container.querySelector<HTMLButtonElement>('[aria-label="Push to talk"]')
+        expect(button).not.toBeNull()
+        expect(button?.disabled).toBe(false)
+      })
+      await clickButtonByLabel(mounted.container, 'Push to talk')
+      await waitUntil(() => {
+        expect(requestMethods(transport)).toContain(STT_METHODS.listen)
+        expect(mounted.container.textContent).toContain('Stop listening')
+      })
+    } finally {
+      await act(async () => mounted.root.unmount())
+      mounted.container.remove()
+    }
+  })
+
   it('e2e:assistant covers live stream, fallback banner, stop/retry, route sheet, tool approval, and no-model state', async () => {
     const fallbackTransport = assistantGatewayTransport('Fallback final response from local Orchestrator.')
+    fallbackTransport.register(ORCHESTRATOR_MODEL_METHODS.getRuntime, () => ({
+      generated_at: '2026-06-19T00:00:00Z',
+      selected_provider_id: null,
+      provider: null,
+      providers: [],
+      secrets_redacted: true
+    }))
     const fallbackRuntime = testRuntime(new Aurora({ transport: fallbackTransport }))
     window.localStorage.clear()
     window.history.replaceState({}, '', '/')
@@ -1220,9 +1306,10 @@ describe('Tauri CI/E2E route gates', () => {
         expect(live.container.textContent).toContain('Tooling.RequestApproval')
         expect(live.container.textContent).toContain('Payload preview')
         expect(live.container.textContent).toContain('[redacted]')
-        expect(live.container.textContent).toContain('Approve')
-        expect(live.container.textContent).toContain('Deny')
-        expect(live.container.textContent).toContain('Retry')
+        expect(live.container.textContent).toContain('Requested')
+        expect(live.container.textContent).toContain('Status')
+        expect(live.container.textContent).toContain('Stop')
+        expect(live.container.textContent).not.toContain('Retry')
       })
       expect(requestMethods(streamTransport).filter((method) => method === ORCHESTRATOR_METHODS.externalUserInput)).toHaveLength(1)
       await clickButtonByLabel(live.container, 'Stop assistant generation')
@@ -1230,15 +1317,11 @@ describe('Tauri CI/E2E route gates', () => {
         expect(live.container.textContent).toContain('Aurora · cancelled')
         expect(requestMethods(streamTransport)).toContain(ORCHESTRATOR_METHODS.interrupt)
       })
-      await clickButtonByLabel(live.container, 'Retry last assistant prompt')
-      await waitUntil(() => {
-        expect(requestMethods(streamTransport).filter((method) => method === ORCHESTRATOR_METHODS.externalUserInput)).toHaveLength(2)
-        expect(live.container.textContent).toContain('Tooling.RequestApproval')
-      })
+      expect(live.container.textContent).not.toContain('Retry')
       await navigateByHref(live.container, '/tools')
       await waitUntil(() => {
         expect(live.container.textContent).toContain('Tools & Automations')
-        expect(live.container.textContent).toContain('Tool registry and Approval cards')
+        expect(live.container.textContent).toContain('Source-first Tooling control center')
       })
       writeOutcomeArtifact('assistant-live-stream-tool-stop-retry-tools', live.container.innerHTML)
     } finally {
@@ -1255,9 +1338,10 @@ describe('Tauri CI/E2E route gates', () => {
     expect(mainText).toContain('Assistant')
     expect(mainText).toContain('Text chat')
     expect(mainText).toContain('Prompt')
-    expect(mainText).toContain('Voice modes')
+    expect(mainText).toContain('Push to talk')
+    expect(mainText).not.toContain('Voice modes')
     expect(mainText).toContain('Assistant send is disabled: loading.')
-    expect(mainText).toContain('Route guard')
+    expect(mainText).toContain('Route & privacy sheet')
     expect(mainText).not.toContain('Runtime snapshot')
     for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
       expect(mainText, `assistant main content must not render diagnostics/dashboard marker ${marker}`).not.toContain(marker)
@@ -1349,14 +1433,23 @@ describe('Tauri CI/E2E route gates', () => {
         expect(container.textContent).toContain('yes; writes llama_cpp through Config.Set AdminAction')
         expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
       })
-      const modelReauth = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
-        .find((input) => input.closest('label')?.textContent?.includes('model provider changes'))
-      expect(modelReauth, 'model provider AdminAction reauth checkbox').toBeDefined()
+      await clickButtonByLabel(container, 'Select llama.cpp desktop')
+      await waitUntil(() => {
+        expect(container.querySelector('.aui-modal[role="dialog"]')).not.toBeNull()
+      })
+      const dialog = container.querySelector('.aui-modal[role="dialog"]')!
+      const dialogReauth = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      expect(dialogReauth, 'model provider AdminAction reauth checkbox in dialog').not.toBeNull()
       await act(async () => {
-        modelReauth!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        dialogReauth!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
         await flushReactWork()
       })
-      await clickButtonByLabel(container, 'Select llama.cpp desktop')
+      const confirmButton = dialog.querySelector<HTMLButtonElement>('.aui-modal-foot .aui-btn-primary')
+      expect(confirmButton, 'model provider confirm button').not.toBeNull()
+      await act(async () => {
+        confirmButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        await flushReactWork()
+      })
       await waitUntil(() => {
         expect(requestMethods(transport)).toEqual(expect.arrayContaining([
           'Gateway.AdminActionDraft',
@@ -1674,7 +1767,7 @@ describe('Tauri CI/E2E route gates', () => {
       details: { healthPath: '/api/health' },
     }
     const runtime: AuroraTauriRuntime = {
-      ...testRuntime(new Aurora({ transport })),
+      ...testRuntime(new Aurora({ transport: tauriLocalTransportProxy(transport) })),
       mode: 'desktop-local',
       startSidecar: async () => {
         sidecarCalls.push('start')
@@ -1728,7 +1821,7 @@ describe('Tauri CI/E2E route gates', () => {
       details: { healthPath: '/api/health' },
     }
     const runtime: AuroraTauriRuntime = {
-      ...testRuntime(new Aurora({ transport })),
+      ...testRuntime(new Aurora({ transport: tauriLocalTransportProxy(transport) })),
       mode: 'desktop-local',
       startSidecar: async () => readySidecar,
       sidecarStatus: async () => readySidecar,
@@ -1764,7 +1857,7 @@ describe('Tauri CI/E2E route gates', () => {
       details: { healthPath: '/api/health', command: 'aurora_sidecar_status' },
     }
     const runtime: AuroraTauriRuntime = {
-      ...testRuntime(new Aurora({ transport })),
+      ...testRuntime(new Aurora({ transport: tauriLocalTransportProxy(transport) })),
       mode: 'desktop-local',
       startSidecar: async () => readySidecar,
       sidecarStatus: async () => readySidecar,

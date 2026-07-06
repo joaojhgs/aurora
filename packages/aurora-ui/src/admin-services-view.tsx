@@ -16,6 +16,18 @@ import {
   type ServiceInfo
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import {
+  AdminConfirmDialog,
+  Button,
+  Card,
+  DataTable,
+  DetailSheet,
+  MetaGrid,
+  StatStrip,
+  FilterBar,
+  type DataColumn
+} from './primitives'
 
 export type AdminServicesLoadState =
   | 'loading'
@@ -184,31 +196,135 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
 export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServicesViewProps) {
   const totals = useMemo(() => serviceTotals(snapshot.services), [snapshot.services])
   const state = snapshot.loadState
+  const [selectedModule, setSelectedModule] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<AdminServiceControlAction | null>(null)
+  const [reason, setReason] = useState('')
+  const [typedPhrase, setTypedPhrase] = useState('')
+  const selectedService = snapshot.services.find((service) => service.module === selectedModule) ?? null
+
+  const stats = useMemo(
+    () => [
+      { label: 'Services', value: String(snapshot.services.length), caption: `${totals.selectable} selectable` },
+      { label: 'Methods', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} manage/admin` },
+      { label: 'Unavailable', value: String(totals.unavailable), caption: 'denied, stale, blocked, or unsupported' },
+      { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'catalog timestamp' }
+    ],
+    [snapshot.contracts.length, snapshot.generatedAt, snapshot.services.length, totals.manageMethods, totals.selectable, totals.unavailable]
+  )
 
   return (
-    <section className="aui-admin-services" aria-labelledby="admin-services-title">
-      <AdminEvidenceHeader
+    <div className="aui-admin-services">
+      <PageHeader
+        id="admin-services-title"
+        eyebrow="Admin"
         title="Services"
-        titleId="admin-services-title"
         description="Service registry health, route status, and AdminAction service controls are rendered from Aurora SDK responses. Method contract browsing lives on /admin/contracts."
-        snapshot={snapshot}
-        state={state}
-        badgeLabel="Admin services service status"
+        badges={
+          <>
+            {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+          </>
+        }
       />
 
       <StatusPanel snapshot={snapshot} />
+      <StatStrip items={stats} ariaLabel="Service coverage summary" />
 
-      <div className="aui-admin-metrics" aria-label="Service coverage summary">
-        <Metric label="Services" value={String(snapshot.services.length)} detail={`${totals.selectable} selectable`} />
-        <Metric label="Methods" value={String(snapshot.contracts.length)} detail={`${totals.manageMethods} manage/admin`} />
-        <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, blocked, or unsupported" />
-        <Metric label="Updated" value={snapshot.generatedAt ?? 'pending'} detail="catalog timestamp" />
-      </div>
+      <Card
+        title="Services"
+        description="Details: routes, methods, and backend exposure"
+        flush
+      >
+        <ServicesDataTable
+          services={snapshot.services}
+          onSelect={(service) => setSelectedModule(service.module)}
+          onPreviewControl={(action) => {
+            setReason('')
+            setTypedPhrase('')
+            setPendingAction(action)
+          }}
+        />
+      </Card>
 
-      <div className="aui-admin-grid">
-        <ServicesTable services={snapshot.services} onPreviewAdminAction={onPreviewAdminAction} />
-      </div>
-    </section>
+      <DetailSheet
+        open={selectedService !== null}
+        onClose={() => setSelectedModule(null)}
+        title={selectedService?.module ?? 'Service detail'}
+        description={selectedService?.summary || `${selectedService?.module ?? 'Service'} service`}
+        badge={selectedService ? <StatusBadge state={selectedService.healthState} /> : null}
+        actions={
+          selectedService ? (
+            <div className="aui-action-row-tight">
+              {selectedService.controls.map((control) => (
+                <Button
+                  key={control.verb}
+                  variant={control.verb === 'stop' ? 'danger' : 'primary'}
+                  disabled={!control.available || !control.action}
+                  disabledReason={control.reason}
+                  onClick={() => {
+                    if (control.action) {
+                      setReason('')
+                      setTypedPhrase('')
+                      setPendingAction(control.action)
+                    }
+                  }}
+                >
+                  {serviceControlLabel(control.verb)} {selectedService.module}
+                </Button>
+              ))}
+            </div>
+          ) : null
+        }
+      >
+        {selectedService ? (
+          <>
+            <MetaGrid
+              items={[
+                { label: 'Version', value: selectedService.version },
+                { label: 'Last seen', value: selectedService.lastSeen },
+                { label: 'Provider', value: selectedService.providerLabel },
+                { label: 'Route state', value: selectedService.routeReason },
+                { label: 'Capabilities', value: String(selectedService.capabilities.length) },
+                { label: 'Control posture', value: controlPosture(selectedService.controls) },
+                { label: 'Errors/logs', value: serviceLogsAndErrorsLabel(selectedService) }
+              ]}
+            />
+            <MethodList methods={selectedService.methods} />
+          </>
+        ) : null}
+      </DetailSheet>
+
+      {pendingAction ? (
+        <AdminConfirmDialog
+          open
+          title={pendingAction.title}
+          description={pendingAction.description}
+          methodId={pendingAction.methodId}
+          severity={pendingAction.severity === 'critical' ? 'destructive' : 'standard'}
+          affected={[pendingAction.serviceModule]}
+          requireReason={pendingAction.requiresReason}
+          reasonValue={reason}
+          onReasonChange={setReason}
+          confirmLabel={pendingAction.title}
+          onConfirm={() => {
+            onPreviewAdminAction?.(pendingAction)
+            setPendingAction(null)
+          }}
+          onCancel={() => setPendingAction(null)}
+          requireTypedPhrase={pendingAction.requiresTypedPhrase ?? undefined}
+          typedValue={typedPhrase}
+          onTypedChange={setTypedPhrase}
+          extraValid={!pendingAction.requiresTypedPhrase || typedPhrase === pendingAction.requiresTypedPhrase}
+          extraInvalidReason={
+            pendingAction.requiresTypedPhrase
+              ? `Type ${pendingAction.requiresTypedPhrase} to confirm this service control.`
+              : undefined
+          }
+        />
+      ) : null}
+    </div>
   )
 }
 
@@ -234,27 +350,36 @@ export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapsh
   const state = snapshot.loadState
 
   return (
-    <section className="aui-admin-services" aria-labelledby="admin-contracts-title">
-      <AdminEvidenceHeader
+    <div className="aui-admin-services">
+      <PageHeader
+        id="admin-contracts-title"
+        eyebrow="Admin"
         title="Contracts registry"
-        titleId="admin-contracts-title"
         description="Method exposure, Gateway routes, schemas, permissions, and conformance status are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services."
-        snapshot={snapshot}
-        state={state}
-        badgeLabel="Admin contracts service status"
+        badges={
+          <>
+            {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+          </>
+        }
       />
 
       <StatusPanel snapshot={snapshot} />
 
-      <div className="aui-admin-metrics" aria-label="Contract registry coverage summary">
-        <Metric label="Contracts" value={String(snapshot.contracts.length)} detail={`${totals.manageMethods} manage/admin`} />
-        <Metric label="Services" value={String(snapshot.services.length)} detail="registry modules with descriptors" />
-        <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, blocked, or unsupported" />
-        <Metric label="Updated" value={snapshot.generatedAt ?? 'pending'} detail="catalog timestamp" />
-      </div>
+      <StatStrip
+        ariaLabel="Contract registry coverage summary"
+        items={[
+          { label: 'Contracts', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} manage/admin` },
+          { label: 'Services', value: String(snapshot.services.length), caption: 'registry modules with descriptors' },
+          { label: 'Unavailable', value: String(totals.unavailable), caption: 'denied, stale, blocked, or unsupported' },
+          { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'catalog timestamp' }
+        ]}
+      />
 
       <ContractsPanel contracts={snapshot.contracts} />
-    </section>
+    </div>
   )
 }
 
@@ -316,112 +441,91 @@ function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
   )
 }
 
-function ServicesTable({
+function ServicesDataTable({
   services,
-  onPreviewAdminAction
+  onSelect,
+  onPreviewControl
 }: {
   services: AdminServiceRow[]
-  onPreviewAdminAction?: ((action: AdminServiceControlAction) => void) | undefined
+  onSelect: (service: AdminServiceRow) => void
+  onPreviewControl: (action: AdminServiceControlAction) => void
 }) {
-  return (
-    <section className="aui-admin-panel" aria-label="Services table with health">
-      <div className="aui-panel-heading">
+  const columns: DataColumn<AdminServiceRow>[] = [
+    {
+      key: 'module',
+      header: 'Module',
+      render: (service) => (
         <div>
-          <p className="aui-kicker">Registry</p>
-          <h2 id="services-table-title">Services</h2>
+          <strong>{service.module}</strong>
+          <small>{service.summary || `${service.module} service`}</small>
+          <span className="aui-sr-only">
+            Errors/logs: {serviceLogsAndErrorsLabel(service)}
+            {' '}
+            {service.routeReason}
+            {' '}
+            {service.methods.map((method) => `${method.busTopic} ${methodExposureLabel(method.exposure)}`).join(' ')}
+            {' '}
+            {service.controls.map((control) => `${control.methodId} ${control.reason}`).join(' ')}
+          </span>
         </div>
-      </div>
-      {services.length === 0 ? (
-        <p className="aui-muted">No services were returned by Gateway.GetServices.</p>
-      ) : (
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <caption className="aui-sr-only">
-              Services table with health, route state, capabilities, heartbeat, instance, and AdminAction controls
-            </caption>
-            <thead>
-              <tr>
-                <th>Module</th>
-                <th>Health</th>
-                <th>Route</th>
-                <th>Capabilities</th>
-                <th>Heartbeat</th>
-                <th>Methods</th>
-                <th>Instance</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.map((service) => (
-                <ServiceTableRow
-                  key={service.module}
-                  service={service}
-                  onPreviewAdminAction={onPreviewAdminAction}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function ServiceTableRow({
-  service,
-  onPreviewAdminAction
-}: {
-  service: AdminServiceRow
-  onPreviewAdminAction?: ((action: AdminServiceControlAction) => void) | undefined
-}) {
-  return (
-    <tr>
-      <td>
-        <details className="aui-service-details">
-          <summary>
-            <strong>{service.module}</strong>
-            <small>{service.summary || `${service.module} service`}</small>
-            <span className="aui-detail-affordance">Details: routes, methods, and backend exposure</span>
-          </summary>
-          <div className="aui-service-drawer">
-            <dl>
-              <div><dt>Version</dt><dd>{service.version}</dd></div>
-              <div><dt>Last seen</dt><dd>{service.lastSeen}</dd></div>
-              <div><dt>Provider</dt><dd>{service.providerLabel}</dd></div>
-              <div><dt>Route state</dt><dd>{service.routeReason}</dd></div>
-              <div><dt>Capabilities</dt><dd>{service.capabilities.length}</dd></div>
-              <div><dt>Control posture</dt><dd>{controlPosture(service.controls)}</dd></div>
-              <div><dt>Errors/logs</dt><dd>{serviceLogsAndErrorsLabel(service)}</dd></div>
-            </dl>
-            <MethodList methods={service.methods} />
-          </div>
-        </details>
-      </td>
-      <td><StatusBadge state={service.healthState} /></td>
-      <td>
+      )
+    },
+    {
+      key: 'health',
+      header: 'Health',
+      render: (service) => <StatusBadge state={service.healthState} />
+    },
+    {
+      key: 'route',
+      header: 'Route',
+      render: (service) => (
         <div className="aui-state-line">
           <StatusBadge state={service.routeState} />
           <span>{service.providerLabel}</span>
         </div>
-      </td>
-      <td>
+      )
+    },
+    {
+      key: 'capabilities',
+      header: 'Capabilities',
+      hideAt: 'lg',
+      render: (service) => (
         <div className="aui-chip-list">
           {service.capabilities.slice(0, 4).map((capability) => (
             <span className="aui-chip" key={capability}>{capability}</span>
           ))}
           {service.capabilities.length === 0 ? <span className="aui-muted">none reported</span> : null}
         </div>
-      </td>
-      <td>
-        <time dateTime={service.lastSeen}>{service.lastSeen}</time>
-      </td>
-      <td>
-        <strong>{service.methodCount}</strong>
-        <small>{service.controls.filter((control) => control.available).length} AdminAction-ready controls</small>
-      </td>
-      <td><code>{service.instanceId ?? 'not reported'}</code></td>
-      <td>
-        <div className="aui-icon-actions">
+      )
+    },
+    {
+      key: 'heartbeat',
+      header: 'Heartbeat',
+      hideAt: 'xl',
+      render: (service) => <time className="aui-cell-text" dateTime={service.lastSeen}>{service.lastSeen}</time>
+    },
+    {
+      key: 'methods',
+      header: 'Methods',
+      render: (service) => (
+        <div>
+          <strong>{service.methodCount}</strong>
+          <small>{service.controls.filter((control) => control.available).length} AdminAction-ready controls</small>
+        </div>
+      )
+    },
+    {
+      key: 'instance',
+      header: 'Instance',
+      hideAt: 'md',
+      render: (service) => <code>{service.instanceId ?? 'not reported'}</code>
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'end',
+      render: (service) => (
+        <div className="aui-icon-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
           {service.controls.map((control) => (
             <button
               key={control.verb}
@@ -430,7 +534,7 @@ function ServiceTableRow({
               title={control.reason}
               disabled={!control.available || !control.action}
               onClick={() => {
-                if (control.action) onPreviewAdminAction?.(control.action)
+                if (control.action) onPreviewControl(control.action)
               }}
             >
               {control.verb === 'restart'
@@ -443,8 +547,19 @@ function ServiceTableRow({
             </button>
           ))}
         </div>
-      </td>
-    </tr>
+      )
+    }
+  ]
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={services}
+      getRowKey={(service) => service.module}
+      onRowClick={onSelect}
+      caption="Services table with health, route state, capabilities, heartbeat, instance, and AdminAction controls"
+      empty={<p className="aui-muted">No services were returned by Gateway.GetServices.</p>}
+    />
   )
 }
 
@@ -511,71 +626,65 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
   const groupedContracts = groupContractsByModule(filteredContracts)
 
   return (
-    <section className="aui-admin-panel" aria-labelledby="contracts-table-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Explorer</p>
-          <h2 id="contracts-table-title">Contracts</h2>
-        </div>
-      </div>
+    <Card title="Contracts" flush>
       {contracts.length === 0 ? (
         <p className="aui-muted">No method descriptors were returned by Gateway.GetRegistry.</p>
       ) : (
         <div className="aui-contract-browser">
-          <div className="aui-admin-toolbar" aria-label="Contract search and filters">
-            <label>
-              <span>Search contracts</span>
-              <span className="aui-input-with-icon">
-                <Search size={14} aria-hidden />
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.currentTarget.value)}
-                  placeholder="Method, route, schema, permission"
-                  aria-label="Search contracts"
-                />
-              </span>
-            </label>
-            <label>
-              <span>Service/module</span>
-              <select value={moduleFilter} onChange={(event) => setModuleFilter(event.currentTarget.value)}>
-                <option value="all">All modules</option>
-                {modules.map((module) => <option key={module} value={module}>{module}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Exposure</span>
-              <select
-                value={exposureFilter}
-                onChange={(event) => setExposureFilter(event.currentTarget.value as ContractExposure | 'all')}
-              >
-                <option value="all">All exposures</option>
-                <option value="external">external</option>
-                <option value="internal">internal</option>
-                <option value="both">both</option>
-                <option value="gateway_builtin">gateway_builtin</option>
-              </select>
-            </label>
-            <label>
-              <span>Method detail</span>
-              <select
-                value={selectedContract?.busTopic ?? ''}
-                onChange={(event) => setSelectedTopic(event.currentTarget.value)}
-                aria-label="Select contract detail"
-              >
-                {filteredContracts.map((contract) => (
-                  <option key={contract.busTopic} value={contract.busTopic}>{contract.busTopic}</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <FilterBar
+            search={{
+              value: query,
+              onChange: setQuery,
+              placeholder: 'Method, route, schema, permission',
+              label: 'Search contracts'
+            }}
+            controls={
+              <>
+                <label className="aui-filter-control">
+                  <span>Service/module</span>
+                  <select value={moduleFilter} onChange={(event) => setModuleFilter(event.currentTarget.value)}>
+                    <option value="all">All modules</option>
+                    {modules.map((module) => <option key={module} value={module}>{module}</option>)}
+                  </select>
+                </label>
+                <label className="aui-filter-control">
+                  <span>Exposure</span>
+                  <select
+                    value={exposureFilter}
+                    onChange={(event) => setExposureFilter(event.currentTarget.value as ContractExposure | 'all')}
+                  >
+                    <option value="all">All exposures</option>
+                    <option value="external">external</option>
+                    <option value="internal">internal</option>
+                    <option value="both">both</option>
+                    <option value="gateway_builtin">gateway_builtin</option>
+                  </select>
+                </label>
+                <label className="aui-filter-control aui-sr-only">
+                  <span>Method detail</span>
+                  <select
+                    value={selectedContract?.busTopic ?? ''}
+                    onChange={(event) => setSelectedTopic(event.currentTarget.value)}
+                    aria-label="Select contract detail"
+                  >
+                    {filteredContracts.map((contract) => (
+                      <option key={contract.busTopic} value={contract.busTopic}>{contract.busTopic}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            }
+          />
 
-          <div className="aui-admin-metrics" aria-label="Contract explorer summary">
-            <Metric label="Filtered methods" value={String(filteredContracts.length)} detail={`${modules.length} service modules`} />
-            <Metric label="HTTP routes" value={String(filteredContracts.filter((contract) => contract.availableOverHttp).length)} detail="SDK route paths" />
-            <Metric label="Live registry" value={String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length)} detail="registry + capability catalog" />
-            <Metric label="Schemas" value={String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length)} detail="input or output JSON Schema" />
-          </div>
+          <StatStrip
+            ariaLabel="Contract explorer summary"
+            items={[
+              { label: 'Filtered methods', value: String(filteredContracts.length), caption: `${modules.length} service modules` },
+              { label: 'HTTP routes', value: String(filteredContracts.filter((contract) => contract.availableOverHttp).length), caption: 'SDK route paths' },
+              { label: 'Live registry', value: String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length), caption: 'registry + capability catalog' },
+              { label: 'Schemas', value: String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length), caption: 'input or output JSON Schema' }
+            ]}
+          />
 
           {filteredContracts.length === 0 ? (
             <p className="aui-muted">No contracts match the current search and filters.</p>
@@ -615,7 +724,7 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
           {selectedContract ? <ContractDetail contract={selectedContract} /> : null}
         </div>
       )}
-    </section>
+    </Card>
   )
 }
 

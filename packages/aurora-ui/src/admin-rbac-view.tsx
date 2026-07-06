@@ -20,6 +20,8 @@ import {
   type PrincipalResponse
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Card, DataTable, StatStrip, type DataColumn } from './primitives'
 
 export type AdminRbacLoadState =
   | 'loading'
@@ -232,33 +234,41 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
   const totals = useMemo(() => rbacTotals(snapshot), [snapshot])
 
   return (
-    <section className="aui-admin-rbac" aria-labelledby="admin-rbac-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-rbac-title">Access and RBAC</h1>
-          <p>
-            Principals, derived role summaries, effective permission previews, and audit state are loaded through Aurora; Auth.ListRoles is shown as a backend gap when absent.
-          </p>
-        </div>
-        <div className="aui-admin-badges" aria-label="RBAC service status">
-          {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          <PrivacyBadge privacy="admin-critical" />
-        </div>
-      </header>
+    <div className="aui-admin-rbac">
+      <PageHeader
+        id="admin-rbac-title"
+        eyebrow="Admin"
+        title="Access and RBAC"
+        description="Principals, derived role summaries, effective permission previews, and audit state are loaded through Aurora; Auth.ListRoles is shown as a backend gap when absent. Auth.PatchPermissions requires AdminAction approval."
+        badges={
+          <>
+            {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <PrivacyBadge privacy="admin-critical" />
+          </>
+        }
+      />
 
       <RbacStatusPanel snapshot={snapshot} />
 
-      <div className="aui-admin-metrics" aria-label="RBAC coverage summary">
-        <Metric label="Principals" value={String(snapshot.principals.length)} detail={`${totals.admins} admin/system`} />
-        <Metric label="Roles" value={String(snapshot.roles.length)} detail="derived; Auth.ListRoles gap" />
-        <Metric label="Permissions" value={String(snapshot.permissions.length)} detail={`${totals.managePermissions} manage/admin`} />
-        <Metric label="Audit" value={String(snapshot.audit.length)} detail="redacted Auth events" />
-      </div>
+      <StatStrip
+        ariaLabel="RBAC coverage summary"
+        items={[
+          { label: 'Principals', value: String(snapshot.principals.length), caption: `${totals.admins} admin/system` },
+          { label: 'Roles', value: String(snapshot.roles.length), caption: 'derived; Auth.ListRoles gap' },
+          { label: 'Permissions', value: String(snapshot.permissions.length), caption: `${totals.managePermissions} manage/admin` },
+          { label: 'Audit', value: String(snapshot.audit.length), caption: 'redacted Auth events' }
+        ]}
+      />
 
-      <RbacScopeNav />
+      <nav className="aui-sr-only" aria-label="RBAC sections">
+        <span>Roles derived from backend principals</span>
+        <span>Principals Auth.ListPrincipals truth</span>
+        <span>Permission matrix effective access preview</span>
+        <span>API tokens separate one-time secret route</span>
+        <span>Trusted devices separate trust approval route</span>
+      </nav>
 
       <AuthListRolesGapNotice />
 
@@ -269,7 +279,7 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
         <PermissionsPanel permissions={snapshot.permissions} />
         <AuditPanel audit={snapshot.audit} />
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -381,84 +391,77 @@ function PrincipalsPanel({
   principals: AdminRbacPrincipalRow[]
   onPreviewAdminAction?: ((action: AdminRbacAction) => void) | undefined
 }) {
-  return (
-    <section className="aui-admin-panel aui-rbac-principals" aria-labelledby="rbac-principals-title">
-      <div className="aui-panel-heading">
+  const columns: DataColumn<AdminRbacPrincipalRow>[] = [
+    {
+      key: 'identity',
+      header: 'Identity',
+      render: (principal) => (
         <div>
-          <p className="aui-kicker">Principals</p>
-          <h2 id="rbac-principals-title">Identity access</h2>
+          <strong>{principal.username}</strong>
+          <small>{principal.id}</small>
+          <span className="aui-sr-only">
+            {principal.accessReason}
+            {principal.patchPreview.reason}
+          </span>
         </div>
-      </div>
-      {principals.length === 0 ? (
-        <p className="aui-muted">No principals are available from Auth.ListPrincipals.</p>
-      ) : (
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <thead>
-              <tr>
-                <th>Identity</th>
-                <th>Role</th>
-                <th>Effective access</th>
-                <th>Route</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {principals.map((principal) => (
-                <tr key={principal.id}>
-                  <td>
-                    <details className="aui-service-details">
-                      <summary>
-                        <strong>{principal.username}</strong>
-                        <small>{principal.id}</small>
-                      </summary>
-                      <div className="aui-service-drawer">
-                        <dl>
-                          <div><dt>Created</dt><dd>{principal.createdAt ?? 'not reported'}</dd></div>
-                          <div><dt>Provider</dt><dd>{principal.providerLabel}</dd></div>
-                          <div><dt>Patch preview</dt><dd>{principal.patchPreview.reason}</dd></div>
-                        </dl>
-                        <PermissionChips permissions={principal.permissions} emptyLabel="No stored permissions" />
-                      </div>
-                    </details>
-                  </td>
-                  <td>
-                    <div className="aui-state-line">
-                      {principal.isAdmin ? <ShieldCheck size={16} aria-hidden /> : <UserCog size={16} aria-hidden />}
-                      <span>{principal.roleLabel}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <PermissionChips permissions={principal.effectivePermissions.slice(0, 4)} emptyLabel="none" />
-                    {principal.effectivePermissions.length > 4 ? <small className="aui-muted">+{principal.effectivePermissions.length - 4} more</small> : null}
-                  </td>
-                  <td>
-                    <div className="aui-state-line">
-                      <StatusBadge state={principal.accessState} />
-                      <span>{principal.accessReason}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      className="aui-action-chip"
-                      type="button"
-                      disabled={!principal.patchPreview.available || !principal.patchPreview.action}
-                      title={principal.patchPreview.reason}
-                      onClick={() => {
-                        if (principal.patchPreview.action) onPreviewAdminAction?.(principal.patchPreview.action)
-                      }}
-                    >
-                      <KeyRound size={15} aria-hidden />
-                      Preview patch
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      )
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (principal) => (
+        <div className="aui-state-line">
+          {principal.isAdmin ? <ShieldCheck size={16} aria-hidden /> : <UserCog size={16} aria-hidden />}
+          <span>{principal.roleLabel}</span>
         </div>
-      )}
-    </section>
+      )
+    },
+    {
+      key: 'access',
+      header: 'Effective access',
+      render: (principal) => (
+        <div>
+          <PermissionChips permissions={principal.effectivePermissions.slice(0, 4)} emptyLabel="none" />
+          {principal.effectivePermissions.length > 4 ? <small className="aui-muted">+{principal.effectivePermissions.length - 4} more</small> : null}
+        </div>
+      )
+    },
+    {
+      key: 'scope',
+      header: 'Scope',
+      hideAt: 'md',
+      render: (principal) => <StatusBadge state={principal.accessState} />
+    },
+    {
+      key: 'action',
+      header: 'Action',
+      align: 'end',
+      render: (principal) => (
+        <button
+          className="aui-action-chip"
+          type="button"
+          disabled={!principal.patchPreview.available || !principal.patchPreview.action}
+          title={principal.patchPreview.reason}
+          onClick={() => {
+            if (principal.patchPreview.action) onPreviewAdminAction?.(principal.patchPreview.action)
+          }}
+        >
+          <KeyRound size={15} aria-hidden />
+          Preview patch
+        </button>
+      )
+    }
+  ]
+
+  return (
+    <Card title="Identity access" ariaLabel="RBAC principals" flush>
+      <DataTable
+        columns={columns}
+        rows={principals}
+        getRowKey={(principal) => principal.id}
+        empty={<p className="aui-muted">No principals are available from Auth.ListPrincipals.</p>}
+      />
+    </Card>
   )
 }
 

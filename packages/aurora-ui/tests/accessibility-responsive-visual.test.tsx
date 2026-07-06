@@ -45,19 +45,19 @@ const viewports: Viewport[] = [
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   assistant: {
-    desktop: '56bb1c2db9e1',
-    tablet: '1aa0b56d5afe',
-    mobile: '1eeb49b255e5'
+    desktop: '4f8f5768f680',
+    tablet: '28013b1e6f19',
+    mobile: 'b4051ad944b6'
   },
   admin: {
-    desktop: '539cc2496c55',
-    tablet: '667badf85423',
-    mobile: 'fcdc5ca6bb68'
+    desktop: '38d35e4bddd2',
+    tablet: '51469e6d4e17',
+    mobile: '990b3efe8083'
   },
   'mobile-settings': {
-    desktop: '999b1dcaa99b',
-    tablet: 'fa4f497fb3ef',
-    mobile: '26565cf17171'
+    desktop: 'db4702f87205',
+    tablet: 'f076fa447163',
+    mobile: '174b8bb6dea6'
   }
 }
 
@@ -116,8 +116,8 @@ describe('Accessibility, responsive, and visual regression suite', () => {
         expect(surface.html, `assistant composer marker/${surface.viewport.id}`).toContain('data-first-viewport-work="assistant-chat-composer"')
         expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before route status/${surface.viewport.id}`)
           .toBeLessThan(surface.html.indexOf('aria-label="Assistant route and privacy details"'))
-        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before voice status/${surface.viewport.id}`)
-          .toBeLessThan(surface.html.indexOf('aria-labelledby="assistant-voice-title"'))
+        expect(surface.html, `assistant clean composer has no bottom voice panel/${surface.viewport.id}`)
+          .not.toContain('aria-labelledby="assistant-voice-title"')
         expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before attachment status/${surface.viewport.id}`)
           .toBeLessThan(surface.html.indexOf('aria-labelledby="assistant-context-title"'))
       }

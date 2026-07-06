@@ -16,6 +16,8 @@ import type {
 } from '@aurora/client'
 import { EvidenceBadge, StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
+import { PageHeader } from './state-surface'
+import { Button, StatStrip } from './primitives'
 
 export type MeshDiagnosticsLoadState = 'loading' | 'ready' | 'empty' | 'degraded' | 'denied' | 'unavailable' | 'error'
 
@@ -326,31 +328,39 @@ export function meshDiagnosticsSnapshotFromResults(input: {
 
 export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSupportBundle, supportBundleExportState = { status: 'idle', message: null }, reauthConfirmed = false, onReauthConfirmedChange }: MeshDiagnosticsViewProps) {
   return (
-    <section className="aui-mesh-diagnostics" aria-labelledby="mesh-diagnostics-title">
-      <header className="aui-mesh-diagnostics-header">
-        <div>
-          <p className="aui-kicker">service contract</p>
-          <h1 id="mesh-diagnostics-title">Diagnostics</h1>
-          <p>
-            WebRTC and ICE diagnostics, live probes, redaction preview, support-bundle export, traces, and route failures are rendered from Aurora diagnostics.
-          </p>
-        </div>
-        <div className="aui-mesh-badges" aria-label="Mesh diagnostics state">
-          <StatusBadge state={snapshot.loadState === 'ready' ? 'available-remote' : stateForLoad(snapshot.loadState)} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          <EvidenceBadge label={snapshot.supportBundleState === 'available-local' ? 'support bundle ready' : 'support bundle gated'} />
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          {onRefresh ? <button className="aui-action-chip" type="button" onClick={onRefresh}><RefreshCw size={14} aria-hidden />Refresh</button> : null}
-        </div>
-      </header>
+    <div className="aui-mesh-diagnostics">
+      <PageHeader
+        id="mesh-diagnostics-title"
+        eyebrow="Diagnostics"
+        title="Diagnostics"
+        description="WebRTC and ICE diagnostics, live probes, redaction preview, support-bundle export, traces, and route failures are rendered from Aurora diagnostics."
+        badges={
+          <>
+            <StatusBadge state={snapshot.loadState === 'ready' ? 'available-remote' : stateForLoad(snapshot.loadState)} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <EvidenceBadge label={snapshot.supportBundleState === 'available-local' ? 'support bundle ready' : 'support bundle gated'} />
+            <EvidenceBadge label={snapshot.evidenceSource} />
+          </>
+        }
+        actions={
+          onRefresh ? (
+            <Button variant="ghost" icon={<RefreshCw size={14} aria-hidden />} onClick={onRefresh}>
+              Refresh
+            </Button>
+          ) : null
+        }
+      />
 
-      <div className="aui-diagnostics-overview" aria-label="Diagnostics overview">
-        <MetricCard icon={<Activity size={20} aria-hidden />} label="services observed" value={String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount)} detail="Gateway.GetSupportBundle service list" />
-        <MetricCard icon={<FileArchive size={20} aria-hidden />} label="event stream" value={String(snapshot.supportBundleRecentEventCount)} detail="redacted EventStream metadata" />
-        <MetricCard icon={<Gauge size={20} aria-hidden />} label="route diagnostics" value={String(snapshot.supportBundleRouteCount || snapshot.routeRows.length)} detail="mesh and Gateway route state" />
-        <MetricCard icon={<RadioTower size={20} aria-hidden />} label="live probes" value={String(snapshot.liveProbes.length)} detail="registry, WebRTC, mesh, support bundle" />
-        <MetricCard icon={<Bug size={20} aria-hidden />} label="reported errors" value={String(snapshot.recentErrors.length + snapshot.errors.length)} detail="redacted before render" />
-      </div>
+      <StatStrip
+        ariaLabel="Diagnostics overview"
+        items={[
+          { label: 'Services observed', value: String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount), caption: 'Gateway.GetSupportBundle service list' },
+          { label: 'Event stream', value: String(snapshot.supportBundleRecentEventCount), caption: 'redacted EventStream metadata' },
+          { label: 'Route diagnostics', value: String(snapshot.supportBundleRouteCount || snapshot.routeRows.length), caption: 'mesh and Gateway route state' },
+          { label: 'Live probes', value: String(snapshot.liveProbes.length), caption: 'registry, WebRTC, mesh, support bundle' },
+          { label: 'Reported errors', value: String(snapshot.recentErrors.length + snapshot.errors.length), caption: 'redacted before render' }
+        ]}
+      />
 
       <div className="aui-diagnostics-grid">
         <section className="aui-mesh-panel" aria-label="Live probes">
@@ -576,7 +586,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           <p className="aui-mesh-diagnostics-empty" role="status">No recent transport errors were reported.</p>
         )}
       </section>
-    </section>
+    </div>
   )
 }
 

@@ -1,9 +1,33 @@
+// @vitest-environment jsdom
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { AuroraClient as Aurora, AuroraError, MockAuroraTransport, backupListFixture } from '@aurora/client'
 import { BackupRestoreView, backupErrorMessage } from '../src/backup-restore-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
+
+const roots: Root[] = []
+
+beforeAll(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+})
+
+afterEach(() => {
+  for (const root of roots.splice(0)) root.unmount()
+})
+
+function mount(node: React.ReactElement): HTMLElement {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  roots.push(root)
+  act(() => {
+    root.render(node)
+  })
+  return container
+}
 
 describe('BackupRestoreView', () => {
   it('renders manifests with encryption, manifest integrity, AdminAction operations, and dry-run rollback warnings', () => {
@@ -41,16 +65,21 @@ describe('BackupRestoreView', () => {
         reason: 'Backend has not advertised Backup.List or Backup.* AdminAction contracts.'
       }]
     })
-    const markup = renderToStaticMarkup(
+    const container = mount(
       <BackupRestoreView client={client()} route={route} initialList={backupListFixture} />
     )
+    const markup = container.innerHTML
 
     expect(markup).toContain('Create is disabled: Unavailable')
     expect(markup).toContain('Backup operations are disabled until backend Backup.List capability state')
     expect(markup).toContain('Expose Backup contracts')
     expect(markup).toContain('Backend has not advertised Backup.List or Backup.* AdminAction contracts.')
-    expect(markup).toContain('<button type="submit" disabled="">Create via AdminAction</button>')
-    expect(markup).toContain('<button type="submit" disabled="">Preview restore impact</button>')
+
+    const buttonByLabel = (label: string) =>
+      Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes(label))
+    expect(buttonByLabel('Create via AdminAction')?.disabled).toBe(true)
+    expect(buttonByLabel('Verify via AdminAction')?.disabled).toBe(true)
+    expect(buttonByLabel('Preview restore impact')?.disabled).toBe(true)
   })
 
   it('describes AdminAction as required for mutations even when route-level read access does not require AdminAction', () => {
@@ -60,6 +89,43 @@ describe('BackupRestoreView', () => {
 
     expect(markup).toContain('required for create, verify, restore dry-run and rollback dry-run')
     expect(markup).not.toContain('not required')
+  })
+
+  it('opens an AdminAction confirm dialog that stays gated until reason and reauthentication are provided', () => {
+    const container = mount(
+      <BackupRestoreView client={client()} route={backupRoute()} initialList={backupListFixture} />
+    )
+    const createTrigger = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Create via AdminAction')
+    )
+    expect(createTrigger?.disabled).toBe(false)
+    act(() => {
+      createTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const dialog = container.querySelector('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog?.textContent).toContain('Create backup')
+
+    const confirmButton = Array.from(container.querySelectorAll('[role="dialog"] button')).find((button) =>
+      button.textContent === 'Create backup'
+    ) as HTMLButtonElement | undefined
+    // reauthentication not yet acknowledged -> confirm stays disabled
+    expect(confirmButton?.disabled).toBe(true)
+  })
+
+  it('opens a manifest detail sheet when a row is activated', () => {
+    const container = mount(
+      <BackupRestoreView client={client()} route={backupRoute()} initialList={backupListFixture} />
+    )
+    const row = container.querySelector('tr.aui-row-clickable') as HTMLElement | null
+    expect(row).not.toBeNull()
+    act(() => {
+      row!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const sheet = container.querySelector('[role="dialog"]')
+    expect(sheet).not.toBeNull()
+    expect(sheet?.textContent).toContain('Components')
   })
 
   it('maps backup SDK errors to operator-safe recovery copy', () => {

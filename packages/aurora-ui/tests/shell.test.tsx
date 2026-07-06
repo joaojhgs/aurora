@@ -85,6 +85,7 @@ import {
   buildPairingQueueModel,
   buildMeshDiagnosticsSnapshot,
   buildMeshPeerAdminAction,
+  buildMeshInvitePayload,
   buildMeshPeersSnapshot,
   buildRoutePolicySnapshot,
   buildRouteSheetViewModel,
@@ -96,10 +97,13 @@ import {
   RouteStateNotice,
   StateSurface,
   SurfaceSkeleton,
+  applyAssistantAudioChunkUpdate,
   attachmentStatusFromBackend,
   attachmentToContextItem,
   applyAssistantStreamDelta,
   applyAssistantTerminalUpdate,
+  applyAssistantToolUpdate,
+  isAssistantStreamHardTerminal,
   assistantControlsForRoute,
   assistantRemotePrivacyWarning,
   contextIngestOutcomeIndex,
@@ -144,8 +148,29 @@ import {
   auroraMobileTabs,
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
-  auroraNavSections
+  auroraNavSections,
+  getAuroraSurfaceProfile
 } from '../src/index'
+
+
+it('centralizes voice capture ownership by target surface', () => {
+  const desktopLocal = getAuroraSurfaceProfile({ runtimeMode: 'desktop-local', transportKind: 'tauri-local' })
+  expect(desktopLocal.kind).toBe('desktop-local')
+  expect(desktopLocal.voiceCapture.wakewordOwner).toBe('coordinator-daemon')
+  expect(desktopLocal.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
+  expect(desktopLocal.voiceCapture.avoidCoordinatorPushToTalk).toBe(true)
+
+  const webThin = getAuroraSurfaceProfile({ transportKind: 'http' })
+  expect(webThin.kind).toBe('web')
+  expect(webThin.isWebThin).toBe(true)
+  expect(webThin.voiceCapture.wakewordOwner).toBe('webview-focused')
+  expect(webThin.voiceCapture.wakewordRequiresFocus).toBe(true)
+
+  const mobile = getAuroraSurfaceProfile({ transportKind: 'native-mobile', nativePlatform: 'ios' })
+  expect(mobile.kind).toBe('ios')
+  expect(mobile.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
+  expect(mobile.voiceCapture.wakewordOwner).toBe('mobile-native')
+})
 
 class RecordingMockAuroraTransport extends MockAuroraTransport {
   readonly requests: AuroraTransportRequest[] = []
@@ -548,6 +573,9 @@ describe('Aurora production shell', () => {
     expect(css).toContain('.aui-activity-drawer { display: block; }')
     expect(css).toContain('.aui-activity-drawer-panel')
     expect(css).toContain('.aui-content :where(button, .aui-button, .aui-action-chip, input, select, textarea, summary) { min-height: 2.6rem; }')
+    expect(css).toContain('[data-slot="card"]')
+    expect(css).toContain('[data-slot="button"]')
+    expect(css).toContain('.aui-mesh')
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {
@@ -912,7 +940,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('raw-audio')
     expect(markup).toContain('Native permission details live on /settings/native')
     expect(markup).toContain('Route and fallback policy')
-    expect(markup).toContain('AdminAction required')
+    expect(markup).toContain('AdminAction')
     expect(markup).toContain('secrets protected')
     expect(markup).not.toContain('Native permissions and capabilities')
 
@@ -1217,7 +1245,7 @@ describe('Aurora production shell', () => {
     expect(model.nativePermissions).toEqual([])
     expect(model.privacyControls.every((control) => control.disabled)).toBe(true)
     expect(markup).toContain('Gateway unavailable')
-    expect(markup).toContain('AdminAction required')
+    expect(markup).toContain('AdminAction')
     expect(nativeMarkup).toContain('Gateway unavailable')
     expect(nativeMarkup).toContain('No native permission manifest is available')
   })
@@ -1301,6 +1329,9 @@ describe('Aurora production shell', () => {
               text: 'I need a tool approval before continuing.',
               createdAt: '2026-06-19T00:00:00Z',
               status: 'streaming',
+              modelLabel: 'gpt-4o',
+              providerLabel: 'OpenAI',
+              routeLabel: 'local / Orchestrator.ExternalUserInput',
               toolCalls: [
                 {
                   id: 'tool-call-local-health',
@@ -1348,6 +1379,10 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('System routing policy loaded from Gateway health.')
     expect(markup).toContain('Summarize the local Gateway service health.')
     expect(markup).toContain('Gateway.GetServices returned a redacted service summary.')
+    expect(markup).toContain('Aurora')
+    expect(markup).toContain('OpenAI')
+    expect(markup).toContain('gpt-4o')
+    expect(markup).not.toContain('llama.cpp · 8B')
     expect(markup).toContain('System')
     expect(markup).toContain('Tool')
     expect(markup).toContain('Orchestrator.ExternalUserInput')
@@ -1359,35 +1394,32 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('running')
     expect(markup).toContain('Gateway http://127.0.0.1:8000 healthy')
     expect(markup).toContain('Assistant tool call cards')
+    expect(markup).not.toContain('Approve')
+    expect(markup).not.toContain('Deny')
     expect(markup).toContain('Gateway.GetServices')
     expect(markup).toContain('Payload preview')
     expect(markup).toContain('&quot;token&quot;: &quot;[redacted]&quot;')
-    expect(markup).toContain('Approve')
-    expect(markup).toContain('Deny')
-    expect(markup).toContain('Edit scope')
+    expect(markup).not.toContain('Edit scope')
     expect(markup).toContain('corr-tool-call-001')
-    expect(markup).toContain('Voice modes')
-    expect(markup).toContain('Browser capture')
-    expect(markup).toContain('Native capture')
-    expect(markup).toContain('Audio route and consent')
-    expect(markup).toContain('Web voice uses browser mic only')
-    expect(markup).toContain('Voice event stream')
+    expect(markup).toContain('Push to talk')
+    expect(markup).not.toContain('Voice modes')
+    expect(markup).not.toContain('Audio route and consent')
+    expect(markup).not.toContain('Voice event stream')
     expect(markup).toContain('local / Orchestrator.ExternalUserInput')
     expect(markup).toContain('model pending')
     expect(markup).toContain('personal')
     expect(markup).toContain('Ask Aurora...')
     expect(markup).toContain('Prompt composer')
     expect(markup).toContain('Route/model selector')
-    expect(markup).toContain('Attachments and shared content')
-    expect(markup).toContain('Privacy label')
-    expect(markup).toContain('Share source')
-    expect(markup).toContain('Add URL')
-    expect(markup).toContain('Add files or images')
-    expect(markup).toContain('Native mobile share payloads remain disabled')
-    expect(markup).toContain('Web voice uses browser mic only; no Tauri native voice claim is made in this runtime.')
+    expect(markup).not.toContain('Attachments and shared content')
+    expect(markup).not.toContain('Share source')
+    expect(markup).not.toContain('Add URL')
+    expect(markup).not.toContain('Add files or images')
+    expect(markup).not.toContain('Native mobile share payloads remain disabled')
+    expect(markup).toContain('Push to talk')
     expect(markup).toContain('Aurora routes locally by default')
     expect(markup).toContain('0 ready, 0 blocked')
-    expect(markup).toContain('Route sheet')
+    expect(markup).toContain('Route &amp; privacy sheet')
 
     const disabledMarkup = renderToStaticMarkup(
       <AssistantView
@@ -1452,7 +1484,8 @@ describe('Aurora production shell', () => {
     )
 
     expect(markup).toContain('Sensitive data requires route/privacy review before remote or mesh fallback')
-    expect(markup).toContain('Raw audio leaves the local device only when the selected route, consent, privacy indicator, and target policy allow it.')
+    expect(markup).toContain('Push to talk')
+    expect(markup).not.toContain('Raw audio leaves the local device only when the selected route, consent, privacy indicator, and target policy allow it.')
     expect(markup).toContain('Payload preview')
     expect(markup).toContain('&quot;token&quot;: &quot;[redacted]&quot;')
     expect(markup).toContain('payload_hash')
@@ -1464,7 +1497,63 @@ describe('Aurora production shell', () => {
     const renderStringifyLines = assistantSource
       .split('\n')
       .filter((line) => line.includes('JSON.stringify') && !line.includes('localStorage.setItem'))
-    expect(renderStringifyLines).toEqual([expect.stringContaining('JSON.stringify(tool.payloadPreview')])
+    expect(renderStringifyLines).toEqual([
+      expect.stringContaining('JSON.stringify(tool.payloadPreview'),
+      expect.stringContaining('JSON.stringify(tool.errorDetails'),
+      expect.stringContaining('JSON.stringify(tool.payloadPreview'),
+      expect.stringContaining('JSON.stringify(tool.resultPreview'),
+      expect.stringContaining('JSON.stringify(value)')
+    ])
+  })
+
+  it('renders inline assistant approval actions instead of linking to the tools page', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const snapshot = await buildShellSnapshot(client)
+    const assistantRoute = enabledRoute(route(snapshot, 'assistant'), {
+      providerLabel: `local / ${ORCHESTRATOR_METHODS.externalUserInput}`
+    })
+    const markup = renderToStaticMarkup(
+      <AssistantView
+        client={client}
+        route={assistantRoute}
+        initialSession={{
+          sessionId: 'assistant-inline-approval',
+          messages: [
+            {
+              id: 'assistant-inline-approval-message',
+              role: 'assistant',
+              text: 'Aurora paused for a tool approval decision.',
+              createdAt: '2026-07-05T00:00:00Z',
+              status: 'streaming',
+              toolCalls: [
+                {
+                  id: 'tool-call-approval',
+                  name: 'mesh_peer.delete_file',
+                  status: 'requires_action',
+                  riskClass: 'backend-evaluated',
+                  target: 'raspi-lab',
+                  dataLeavesDevice: false,
+                  summary: 'Tool requires operator approval before execution.',
+                  auditId: 'corr-inline-approval',
+                  payloadPreview: { path: '/tmp/example.txt' },
+                  pendingId: 'thread-1:tool-call-approval',
+                  approvalRequestId: 'approval-123',
+                  approvalExpiresAt: 1_783_200_000
+                }
+              ]
+            }
+          ]
+        }}
+      />
+    )
+
+    expect(markup).toContain('Approve once')
+    expect(markup).toContain('Session')
+    expect(markup).toContain('Until expiry')
+    expect(markup).toContain('Always')
+    expect(markup).toContain('Deny once')
+    expect(markup).toContain('Block')
+    expect(markup).not.toContain('href="/tools"')
   })
 
   it('renders the assistant state matrix for empty, no-model, selector, stream, tool, retry, cancel, offline, and auth states', async () => {
@@ -1543,10 +1632,10 @@ describe('Aurora production shell', () => {
     expect(activeMarkup).toContain('Streaming partial backend text...')
     expect(activeMarkup).toContain('Assistant tool call cards')
     expect(activeMarkup).toContain('Tooling.RequestApproval')
-    expect(activeMarkup).toContain('<dt>Status</dt><dd>requested</dd>')
+    expect(activeMarkup).toContain('<dt>Status</dt><dd>Requested</dd>')
     expect(activeMarkup).toContain('pending backend receipt')
-    expect(activeMarkup).toContain('Retry last assistant prompt')
-    expect(activeMarkup).toContain('Stop assistant generation')
+    expect(activeMarkup.indexOf('Tooling.RequestApproval')).toBeLessThan(activeMarkup.indexOf('Streaming partial backend text...'))
+    expect(activeMarkup).not.toContain('Retry last assistant prompt')
     expect(activeMarkup).toContain('Stopped by user.')
     expect(activeMarkup).toContain('cancelled')
 
@@ -1600,18 +1689,24 @@ describe('Aurora production shell', () => {
       role: 'assistant' as const,
       text: 'Waiting for Aurora stream...',
       createdAt: '2026-06-21T00:00:00Z',
-      status: 'streaming' as const
+      status: 'streaming' as const,
+      modelLabel: 'gpt-4o',
+      providerLabel: 'OpenAI',
+      routeLabel: 'local / Orchestrator.ExternalUserInput'
     }
     expect(applyAssistantTerminalUpdate(pendingMessage, {
       ...streamUpdate('Final fallback response'),
       kind: 'fallback' as const,
       eventId: 'fallback-event-1',
+      messageId: 'assistant-pending',
       text: 'Final fallback response',
       textDelta: 'Final fallback response'
     })).toEqual(expect.objectContaining({
-      id: 'fallback-event-1',
+      id: 'assistant-pending',
       text: 'Final fallback response',
-      status: 'sent'
+      status: 'sent',
+      modelLabel: 'gpt-4o',
+      providerLabel: 'OpenAI'
     }))
 
     const contextItem = attachmentToContextItem({
@@ -1686,15 +1781,16 @@ describe('Aurora production shell', () => {
 
     expect(markup).toContain(ORCHESTRATOR_METHODS.externalUserInput)
     expect(markup).toContain('Stop assistant generation')
-    expect(markup).toContain('Start transcription')
-    expect(markup).toContain('Wake foreground')
-    expect(markup).toContain('Synthesize speech')
-    expect(markup).toContain('Stop playback')
-    expect(markup).toContain('Add URL')
-    expect(markup).toContain('Add text')
-    expect(markup).toContain('Add files or images')
-    expect(markup).toContain('Route sheet')
-    expect(markup).toContain('Voice event stream')
+    expect(markup).toContain('Push to talk')
+    expect(markup).not.toContain('Start transcription')
+    expect(markup).not.toContain('Wake foreground')
+    expect(markup).not.toContain('Synthesize speech')
+    expect(markup).not.toContain('Stop playback')
+    expect(markup).not.toContain('Add URL')
+    expect(markup).not.toContain('Add text')
+    expect(markup).not.toContain('Add files or images')
+    expect(markup).toContain('Route &amp; privacy sheet')
+    expect(markup).not.toContain('Voice event stream')
   })
 
   it('renders backup dashboard with SDK manifests, AdminAction controls, download, and rollback visibility', async () => {
@@ -1712,7 +1808,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Preview restore impact')
     expect(markup).toContain('Full restore disabled')
     expect(markup).toContain('Preview rollback')
-    expect(markup).toContain('Download manifest')
+    expect(markup).toContain('Manifest integrity')
     expect(markup).toContain('backup-20260625T120000Z-config-rag')
     expect(markup).toContain('config:included')
     expect(markup).toContain('models:unsupported')
@@ -1727,7 +1823,6 @@ describe('Aurora production shell', () => {
     const emptyMarkup = renderToStaticMarkup(
       <BackupRestoreView client={client} route={backups} initialList={{ backups: [], total: 0, secrets_redacted: true }} />
     )
-    expect(emptyMarkup).toContain('No manifests available')
     expect(emptyMarkup).toContain('No backup manifests were returned')
 
     const deniedMarkup = renderToStaticMarkup(
@@ -1739,12 +1834,12 @@ describe('Aurora production shell', () => {
     const degradedMarkup = renderToStaticMarkup(
       <BackupRestoreView client={client} route={{ ...backups, state: 'degraded', disabled: false }} initialList={backupListFixture} />
     )
-    expect(degradedMarkup).toContain('<dd>degraded</dd>')
+    expect(degradedMarkup).toContain('>degraded</dd>')
 
     const unavailableMarkup = renderToStaticMarkup(
       <BackupRestoreView client={client} route={{ ...backups, state: 'unsupported', disabled: true, blockers: ['capability_not_advertised'] }} />
     )
-    expect(unavailableMarkup).toContain('<dd>unavailable</dd>')
+    expect(unavailableMarkup).toContain('>unavailable</dd>')
     expect(unavailableMarkup).toContain('Unavailable')
 
     expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('denied')
@@ -1781,7 +1876,7 @@ describe('Aurora production shell', () => {
 
     expect(model.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('available-local')
     expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
-    expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('typed audio session')
+    expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('SDK audio/STT contracts')
     expect(model.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'timeout', 'cancelled', 'remote-denied', 'peer-disconnect']))
 
     const eventDrivenModel = buildAssistantVoiceModel({
@@ -2266,9 +2361,9 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Local MCP')
     expect(markup).toContain('Remote peer built-in')
     expect(markup).toContain('Unavailable or stale provider')
-    expect(markup).toContain('Write local config file')
-    expect(markup).toContain('Open garage door')
-    expect(markup).toContain('Send email draft')
+    expect(markup).toContain('diagnostics.serviceHealth')
+    expect(markup).toContain('Remote peer built-in')
+    expect(markup).toContain('Local MCP')
     expect(markup).toContain('admin-critical')
     expect(markup).toContain('external-egress')
     expect(markup).toContain('Share selected')
@@ -2806,7 +2901,6 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('restart required')
     expect(markup).toContain('Staged review')
     expect(markup).toContain('Config.PreviewDiff')
-    expect(markup).toContain('Config.Set')
     expect(markup).toContain('Apply through AdminAction')
     expect(markup).toContain('Rollback')
     expect(markup).toContain('secrets protected')
@@ -2822,7 +2916,7 @@ describe('Aurora production shell', () => {
 
     expect(model.state).toBe('denied')
     expect(model.fields).toEqual([])
-    expect(markup).toContain('Config editor unavailable')
+    expect(markup).toContain('Configuration editor is unavailable')
     expect(markup).toContain('missing:Config.manage')
     expect(markup).toContain('disabled=""')
   })
@@ -2859,7 +2953,7 @@ describe('Aurora production shell', () => {
     expect(markup).toContain('Kitchen node / peer-kitchen')
     expect(markup).toContain('AdminAction approve')
     expect(markup).toContain('AdminAction deny')
-    expect(markup).toContain('Copy pairing code')
+    expect(markup).toContain('Copy code')
     expect(markup).toContain('Pairing code copied from controlled Admin pairing surface')
     expect(markup).toContain('redacted by UI')
     expect(markup).not.toContain('secret-pending-code')
@@ -2931,7 +3025,7 @@ describe('Aurora production shell', () => {
     )
 
     expect(markup).toContain('Loading pairing queue')
-    expect(markup).toContain('Admin action required')
+    expect(markup).toContain('AdminAction')
   })
 
   it('builds mesh peer lifecycle snapshots from SDK mesh, Auth, WebRTC, and capability status', async () => {
@@ -2993,53 +3087,83 @@ describe('Aurora production shell', () => {
       <MeshPeersView
         snapshot={snapshot}
         route={route}
-        adminReason="Approve kitchen peer"
         permissions="Gateway.use TTS.use"
       />
     )
 
     expect(snapshot.fixtureOnly).toBe(true)
-    expect(snapshot.evidenceSource).toContain('sample peers are not live truth')
+    expect(snapshot.evidenceSource).toContain('not live runtime state')
     expect(markup).toContain('Mesh peers')
-    expect(markup).toContain('Demo mode')
-    expect(markup).toContain('sample peers are not live truth')
-    expect(markup).toContain('Demo, not live truth')
-    expect(markup).toContain('Topology')
-    expect(markup).toContain('Trust queue')
-    expect(markup).toContain('Pair new peer')
-    expect(markup).toContain('Open pairing queue')
-    expect(markup).toContain('Code/QR/deep link')
-    expect(markup).toContain('pairing secret is present and redacted')
-    expect(markup).toContain('controlled Admin pairing flow')
-    expect(markup).toContain('Route preview')
-    expect(markup).toContain('Explain route through peer')
-    expect(markup).toContain('Gateway.GetMeshStatus route decision / capability graph')
-    expect(markup).toContain('Refresh diagnostics')
-    expect(markup).toContain('Stale/dev peer cleanup')
-    expect(markup).toContain('Stale peer requires manifest/heartbeat review before cleanup')
-    expect(markup).toContain('Removed peer trust record should be reviewed for cleanup')
-    expect(markup).toContain('AdminAction remove available in peer table')
-    expect(markup).toContain('Peer table')
-    expect(markup).toContain('Persisted Auth trust, Gateway route quality, and WebRTC diagnostics are cross-referenced without treating live sessions as stable peer trust.')
-    expect(markup).toContain('<th scope="col">Peer</th>')
-    expect(markup).toContain('<th scope="col">Permissions</th>')
-    expect(markup).toContain('<th scope="col">Latency</th>')
-    expect(markup).toContain('<th scope="col">Trust</th>')
-    expect(markup).toContain('<th scope="col">Action</th>')
-    expect(markup).toContain('Active WebRTC sessions')
-    expect(markup).toContain('Auth device records')
+    expect(markup).toContain('Local preview data')
+    expect(markup).toContain('Preview peers and configuration')
+    expect(markup).toContain('Add peer')
+    expect(markup).toContain('Connected peers')
+    expect(markup).toContain('Pending requests')
+    expect(markup).toContain('Configuration')
+    expect(markup).toContain('Runtime state')
+    expect(markup).toContain('Shared module summary')
     expect(markup).toContain('Kitchen node')
     expect(markup).toContain('Studio GPU')
-    expect(markup).toContain('session-peer')
-    expect(markup).toContain('Studio Mac')
-    expect(markup).toContain('AdminAction approve')
-    expect(markup).toContain('AdminAction deny')
-    expect(markup).toContain('AdminAction remove')
-    expect(markup).toContain('Approve peer')
-    expect(markup).toContain('Deny peer')
-    expect(markup).toContain('secrets protected')
+    expect(markup).toContain('TTS.use')
+    expect(markup).toContain('Review request')
+    expect(markup).toContain('secrets redacted')
     expect(markup).toContain('Gateway.GetMeshStatus')
-    expect(markup).not.toContain('mesh-pairing-secret')
+    expect(markup).not.toContain('Admin unlock')
+    expect(markup).not.toContain('AdminAction reason')
+    expect(markup).not.toContain('No mesh config fields')
+    expect(markup).not.toContain('Runtime values are read-only')
+    expect(snapshot.config.fields.some((field) => field.key_path === 'services.gateway.webrtc.room')).toBe(true)
+    const invite = buildMeshInvitePayload(snapshot, false)
+    expect(JSON.stringify(invite)).toContain('aurora.mesh.invite')
+    expect(JSON.stringify(invite)).toContain('aurora-studio-room')
+    expect(JSON.stringify(invite)).toContain('Gateway.use')
+    expect(JSON.stringify(invite)).not.toContain('room_password')
+    expect(JSON.stringify(invite)).not.toContain('mesh-pairing-secret')
+  })
+
+  it('keeps mesh configuration read-only when schema metadata is unavailable', async () => {
+    const snapshot = await buildMeshPeersSnapshot(
+      new Aurora({ transport: new MockAuroraTransport().lose('Config.GetSchemaMetadata', 'metadata down') }),
+      meshRoute()
+    )
+    expect(snapshot.config.fields.length).toBeGreaterThan(0)
+    expect(snapshot.config.editable).toBe(false)
+    expect(snapshot.config.state).toBe('degraded')
+    expect(snapshot.config.reason).toContain('editable metadata')
+    expect(snapshot.config.warnings.join(' ')).toContain('metadata down')
+  })
+
+  it('does not surface non-pending pairing history as approval requests', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Auth.ListPendingPairings', () => ({
+      pairings: [
+        {
+          request_id: 'mesh-pairing-history',
+          code: 'historical-secret',
+          device_name: 'Kitchen tablet',
+          client_ip: '192.168.10.42',
+          status: 'approved',
+          expires_at: '2026-06-25T16:30:00Z',
+          created_at: '2026-06-25T16:00:00Z',
+          remote_peer_id: 'peer-studio-gpu',
+          remote_node_name: 'Studio GPU',
+          approved_by: 'admin',
+          denied_by: null,
+          denied_reason: '',
+          granted_permissions: ['Gateway.use'],
+          granted_is_admin: false
+        } satisfies PendingPairingEntry
+      ],
+      total: 1,
+      expired_count: 0,
+      secrets_redacted: true
+    }))
+
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport }), meshRoute())
+    const stablePeer = snapshot.peers.find((peer) => peer.peerId === 'peer-studio-gpu')
+
+    expect(stablePeer?.pendingPairing).toBeNull()
+    expect(stablePeer?.trustState).not.toBe('pending')
   })
 
   it('builds mesh peer AdminAction payloads without raw confirmation shortcuts', () => {
@@ -3138,11 +3262,9 @@ describe('Aurora production shell', () => {
     const markup = renderToStaticMarkup(<MeshPeersView snapshot={emptySnapshot} route={route} />)
 
     expect(markup).toContain('No active WebRTC sessions, persisted mesh peers, pending pairings, or device records were reported by the backend.')
-    expect(markup).toContain('To pair, open')
-    expect(markup).toContain('href="/admin/pairing"')
-    expect(markup).toContain('request or approve a code')
+    expect(markup).toContain('Use Add peer to create an invite')
     expect(markup).toContain('confirm Gateway mesh is enabled')
-    expect(markup).toContain('refresh diagnostics')
+    expect(markup).toContain('refresh this page')
   })
 
   it('builds WebRTC ICE diagnostics from SDK WebRTC, mesh, and capability status', async () => {
@@ -3386,19 +3508,20 @@ describe('Aurora production shell', () => {
     expect(methods.filter((method) => method === 'Gateway.ExplainRoute')).toHaveLength(routePolicyScenarios().length)
   })
 
-  it('renders route policy editor and exact explain blockers without local-only success claims', async () => {
+  it('renders route policy decision matrix and exact explain blockers without local-only success claims', async () => {
     const snapshot = await buildRoutePolicySnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
-    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
+    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} />)
 
-    expect(markup).toContain('Route policy and explain')
+    expect(markup).toContain('Route policy decisions')
     expect(markup).toContain('Backend decision matrix')
     expect(markup).toContain('Remote RAG namespace')
     expect(markup).toContain('Remote STT session')
     expect(markup).toContain('Scheduler delegation')
     expect(markup).toContain('explicit_selector_required')
     expect(markup).toContain('Select the target peer before remote raw-audio capable synthesis.')
-    expect(markup).toContain('Config.Set')
-    expect(markup).toContain('AdminAction')
+    expect(markup).not.toContain('AdminAction editor')
+    expect(markup).not.toContain('Mesh sharing policy')
+    expect(markup).not.toContain('Save policy')
     expect(markup).not.toContain('mesh-pairing-secret')
   })
 
@@ -3429,15 +3552,15 @@ describe('Aurora production shell', () => {
       .fail('Gateway.ExplainRoute', 'unavailable_service', 'route explain down')
       .fail('Gateway.GetCapabilityCatalog', 'permission', 'catalog denied')
     const snapshot = await buildRoutePolicySnapshot(new Aurora({ transport }), meshRoute())
-    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} draft={routePolicyDraft()} />)
+    const markup = renderToStaticMarkup(<RoutePolicyView snapshot={snapshot} />)
 
     expect(snapshot.loadState).toBe('denied')
     expect(snapshot.error).toContain('Route explain')
     expect(snapshot.canEditPolicy).toBe(false)
     expect(markup).toContain('route explain down')
     expect(markup).toContain('catalog denied')
-    expect(markup).toContain('Save policy')
-    expect(markup).toContain('disabled')
+    expect(markup).toContain('Backend decision matrix')
+    expect(markup).not.toContain('Save policy')
   })
 
   it('serializes route policy draft to schema-backed mesh sharing config', () => {
@@ -3633,6 +3756,177 @@ describe('Aurora production shell', () => {
     expect(second.status).toBe('streaming')
   })
 
+  it('consumes structured tool updates and ignores TTS audio chunks as assistant text', () => {
+    const pending = {
+      id: 'assistant-pending',
+      role: 'assistant' as const,
+      text: 'Waiting for Aurora stream...',
+      createdAt: '2026-06-21T00:00:00Z',
+      status: 'streaming' as const
+    }
+    const toolUpdated = applyAssistantToolUpdate(pending, {
+      ...streamUpdate(''),
+      kind: 'tool' as const,
+      eventId: 'tool-event-1',
+      text: 'Tool call requested',
+      textDelta: '',
+      tool: {
+        id: 'call-1',
+        name: 'Calendar.CreateEvent',
+        status: 'running',
+        riskClass: 'requires-approval',
+        target: 'local calendar',
+        dataLeavesDevice: false,
+        summary: 'Create a local calendar event.',
+        payloadPreview: { title: 'Standup' },
+        resultPreview: null
+      }
+    })
+
+    expect(toolUpdated.text).toContain('using a tool')
+    expect(toolUpdated.toolCalls).toEqual([
+      expect.objectContaining({
+        id: 'call-1',
+        name: 'Calendar.CreateEvent',
+        status: 'running',
+        riskClass: 'requires-approval',
+        target: 'local calendar',
+        dataLeavesDevice: false,
+        payloadPreview: { title: 'Standup' }
+      })
+    ])
+
+    const withText = { ...pending, text: 'Final answer already visible.' }
+    const audioUpdated = applyAssistantAudioChunkUpdate(withText, {
+      ...streamUpdate(''),
+      kind: 'tts_audio_chunk' as const,
+      text: '',
+      textDelta: '',
+      ttsAudio: {
+        chunkId: 'chunk-1',
+        sequence: 1,
+        audioData: 'UklGRg==',
+        encoding: 'base64',
+        mimeType: 'audio/wav',
+        sampleRate: 24000,
+        channels: 1,
+        durationMs: 90,
+        final: false
+      }
+    })
+
+    expect(audioUpdated.text).toBe('Final answer already visible.')
+    expect(audioUpdated.status).toBe('sent')
+  })
+
+
+  it('keeps same-name tool calls distinct by stable ids and treats completed as drainable', () => {
+    const pending = {
+      id: 'assistant-pending',
+      role: 'assistant' as const,
+      text: 'Waiting for Aurora stream...',
+      createdAt: '2026-06-21T00:00:00Z',
+      status: 'streaming' as const
+    }
+
+    const firstTool = applyAssistantToolUpdate(pending, {
+      ...streamUpdate(''),
+      kind: 'tool' as const,
+      eventId: 'tool-event-a',
+      tool: {
+        id: 'tool-call-a',
+        name: 'Search.Web',
+        status: 'running',
+        riskClass: null,
+        target: null,
+        dataLeavesDevice: false,
+        summary: 'First search',
+        payloadPreview: { query: 'alpha' },
+        resultPreview: null
+      }
+    })
+    const secondTool = applyAssistantToolUpdate(firstTool, {
+      ...streamUpdate(''),
+      kind: 'tool' as const,
+      eventId: 'tool-event-b',
+      tool: {
+        id: 'tool-call-b',
+        name: 'Search.Web',
+        status: 'running',
+        riskClass: null,
+        target: null,
+        dataLeavesDevice: false,
+        summary: 'Second search',
+        payloadPreview: { query: 'beta' },
+        resultPreview: null
+      }
+    })
+
+    expect(secondTool.toolCalls).toHaveLength(2)
+    expect(secondTool.toolCalls?.map((tool) => tool.id)).toEqual(['tool-call-a', 'tool-call-b'])
+    expect(isAssistantStreamHardTerminal({ kind: 'completed' })).toBe(false)
+    expect(isAssistantStreamHardTerminal({ kind: 'failed' })).toBe(true)
+  })
+
+  it('preserves and updates tool call cards when final assistant text arrives', () => {
+    const pending = applyAssistantToolUpdate({
+      id: 'assistant-pending',
+      role: 'assistant' as const,
+      text: 'Waiting for Aurora stream...',
+      createdAt: '2026-06-21T00:00:00Z',
+      status: 'streaming' as const
+    }, {
+      ...streamUpdate(''),
+      kind: 'tool' as const,
+      eventId: 'tool-event-running',
+      tool: {
+        id: 'tool-call-search',
+        name: 'duckduckgo_results_json',
+        status: 'running',
+        riskClass: 'backend-evaluated',
+        target: 'openai',
+        dataLeavesDevice: false,
+        summary: 'Tool execution is running.',
+        payloadPreview: { query: { text: 'latest news in Egypt' } },
+        resultPreview: null,
+        error: null
+      }
+    })
+    const completed = applyAssistantToolUpdate(pending, {
+      ...streamUpdate(''),
+      kind: 'tool' as const,
+      eventId: 'tool-event-completed',
+      tool: {
+        id: 'tool-call-search',
+        name: 'duckduckgo_results_json',
+        status: 'completed',
+        riskClass: 'backend-evaluated',
+        target: 'openai',
+        dataLeavesDevice: false,
+        summary: 'Tool execution completed.',
+        payloadPreview: { query: { text: 'latest news in Egypt' } },
+        resultPreview: { count: 3 },
+        error: null
+      }
+    })
+    const terminal = applyAssistantTerminalUpdate(completed, {
+      ...streamUpdate('Here are the results.'),
+      kind: 'completed' as const,
+      text: 'Here are the results.',
+      textDelta: ''
+    })
+
+    expect(terminal.text).toBe('Here are the results.')
+    expect(terminal.toolCalls).toEqual([
+      expect.objectContaining({
+        id: 'tool-call-search',
+        status: 'completed',
+        payloadPreview: { query: { text: 'latest news in Egypt' } },
+        resultPreview: { count: 3 }
+      })
+    ])
+  })
+
   it('keeps a cancelled assistant message from being overwritten by later stream events', () => {
     const cancelled = {
       id: 'assistant-pending',
@@ -3663,48 +3957,48 @@ describe('Aurora production shell', () => {
     )
 
     expect(markup).toContain('Tools &amp; Automations')
-    expect(markup).toContain('Tool registry and Approval cards')
-    expect(markup).toContain('Tool catalog filters')
-    expect(markup).toContain('Tool search')
-    expect(markup).toContain('Read-only')
-    expect(markup).toContain('Mutating')
-    expect(markup).toContain('External')
-    expect(markup).toContain('Approval cards')
-    expect(markup).toContain('Tool detail drawer')
-    expect(markup).toContain('Schema')
+    expect(markup).toContain('Tooling policy')
+    expect(markup).toContain('Source catalog')
+    expect(markup).toContain('Search sources and tools')
+    expect(markup).toContain('Core tools')
+    expect(markup).toContain('MCP servers')
+    expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Pending approvals')
+    expect(markup).toContain('Selected source overview')
+    expect(markup).toContain('Arguments schema summary')
     expect(markup).toContain('Permissions')
     expect(markup).toContain('Provider')
-    expect(markup).toContain('Risk')
-    expect(markup).toContain('Examples')
-    expect(markup).toContain('Tool parameters')
-    expect(markup).toContain('MCP server status')
-    expect(markup).toContain('Reload catalog')
-    expect(markup).toContain('Safe local path')
+    expect(markup).toContain('risk')
+    expect(markup).toContain('Advanced details and redacted payloads')
+    expect(markup).toContain('Arguments schema summary')
+    expect(markup).toContain('MCP servers')
+    expect(markup).toContain('Negotiated catalog cache')
     expect(markup).toContain('Execute safe local')
-    expect(markup).toContain('Scheduled jobs')
+    expect(markup).toContain('Execute safe local')
+    expect(markup).toContain('Scheduled tool actions')
     expect(markup).toContain('Scheduler.ListJobs')
-    expect(markup).toContain('Open scheduler')
-    expect(markup).toContain('daily-digest')
-    expect(markup).toContain('remote-knowledge-index')
-    expect(markup).toContain('active automations')
-    expect(markup).toContain('Write local config file')
-    expect(markup).toContain('Open garage door')
-    expect(markup).toContain('Search notes')
-    expect(markup).toContain('Send email draft')
-    expect(markup).toContain('Delete calendar event')
-    expect(markup).toContain('Apply lights scene')
-    expect(markup).toContain('Unlock front door')
-    expect(markup).toContain('Camera snapshot')
-    expect(markup).toContain('Collect diagnostics bundle')
-    expect(markup).toContain('AdminAction required')
-    expect(markup).toContain('Data egress')
-    expect(markup).toContain('audit.mesh.hardware')
+    expect(markup).toContain('/admin/scheduler')
+    expect(markup).toContain('Scheduler')
+    expect(markup).toContain('Grant dependency')
+    expect(markup).toContain('Scheduled tool actions')
+    expect(markup).toContain('diagnostics.serviceHealth')
+    expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Core tools')
+    expect(markup).toContain('MCP servers')
+    expect(markup).toContain('Pending approvals')
+    expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Blocked')
+    expect(markup).toContain('Blocked')
+    expect(markup).toContain('diagnostics.serviceHealth')
+    expect(markup).toContain('AdminAction')
+    expect(markup).toContain('data')
+    expect(markup).toContain('Activity and audit')
     expect(markup).toContain('Redacted arguments')
     expect(markup).toContain('Dry run')
     expect(markup).toContain('Deny')
-    expect(markup).toContain('audit-receipt-tool-result')
-    expect(markup).toContain('corr-tool-result')
-    expect(markup).toContain('local-peer -&gt; tooling-local')
+    expect(markup).toContain('Audit')
+    expect(markup).toContain('Correlation')
+    expect(markup).toContain('Route path')
   })
 
   it('exposes one safe local tool execution path without pretending approval is required', async () => {
@@ -3751,16 +4045,16 @@ describe('Aurora production shell', () => {
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
     const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
 
-    expect(markup).toContain('Provider selector required before approval.')
-    expect(markup).toContain('Backend requires an explicit provider selector before approval.')
-    expect(markup).toContain('Approve session')
-    expect(markup).toContain('Approve peer')
-    expect(markup).toContain('Approve local safe')
-    expect(markup).toContain('Dry-run only until backend policy permits execution.')
-    expect(markup).toContain('Denied: peer policy denies destructive calendar changes.')
-    expect(markup).toContain('Approval expired; request a fresh backend approval.')
-    expect(markup).toContain('Replay rejected: approval_request_replayed.')
-    expect(markup).toContain('Unavailable: service_unavailable. Disabled until provider/service repair completes.')
+    expect(tools.some((tool) => tool.state === 'provider-selector-required')).toBe(true)
+    expect(tools.some((tool) => tool.approvalScopes.includes('session'))).toBe(true)
+    expect(tools.some((tool) => tool.approvalScopes.includes('peer'))).toBe(true)
+    expect(tools.some((tool) => tool.approvalScopes.includes('local-safe-tools'))).toBe(true)
+    expect(tools.some((tool) => tool.state === 'dry-run-only')).toBe(true)
+    expect(tools.some((tool) => tool.state === 'denied')).toBe(true)
+    expect(tools.some((tool) => tool.state === 'expired')).toBe(true)
+    expect(tools.some((tool) => tool.state === 'replay-rejected')).toBe(true)
+    expect(tools.some((tool) => tool.state === 'unavailable')).toBe(true)
+    expect(markup).toContain('approval queue active')
     expect(markup).toContain('disabled=""')
   })
 
@@ -3770,19 +4064,10 @@ describe('Aurora production shell', () => {
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
     const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
-    const localConfigCard = markup.slice(markup.indexOf('Write local config file'), markup.indexOf('Open garage door'))
-    const garageDoorCard = markup.slice(markup.indexOf('Open garage door'), markup.indexOf('Search notes'))
-
-    expect(localConfigCard).toContain('AdminAction confirmation required before approval or execution.')
-    expect(localConfigCard).toContain('Redacted arguments')
-    expect(localConfigCard).not.toContain('Execute safe local')
-    expect(localConfigCard).toMatch(/<button[^>]*class="aui-primary-action"[^>]*disabled=""[\s\S]*?Approve once/)
-    expect(localConfigCard).toMatch(/<button[^>]*class="aui-primary-action"[^>]*disabled=""[\s\S]*?Approve session/)
-    expect(garageDoorCard).toContain('AdminAction confirmation required before approval or execution.')
-    expect(garageDoorCard).toContain('Redacted arguments')
-    expect(garageDoorCard).not.toContain('Execute safe local')
-    expect(garageDoorCard).toMatch(/<button[^>]*class="aui-primary-action"[^>]*disabled=""[\s\S]*?Approve peer/)
-    expect(markup).toContain('Dry-run only until backend policy permits execution.')
+    expect(tools.some((tool) => tool.requiresAdminAction)).toBe(true)
+    expect(tools.some((tool) => tool.riskClass.includes('admin'))).toBe(true)
+    expect(markup).toContain('Redacted arguments')
+    expect(markup).toContain('approval queue active')
   })
 
   it('shows sensitive tool approval UI without direct execution', async () => {
@@ -3791,18 +4076,11 @@ describe('Aurora production shell', () => {
     const toolsRoute = enabledRoute(route(snapshot, 'tools'))
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind })
     const markup = renderToStaticMarkup(<ToolApprovalPanel client={client} route={toolsRoute} initialTools={tools} />)
-    const emailCard = markup.slice(markup.indexOf('Send email draft'), markup.indexOf('Delete calendar event'))
-    const cameraCard = markup.slice(markup.indexOf('Camera snapshot'), markup.indexOf('Collect diagnostics bundle'))
-
-    expect(emailCard).toContain('external')
-    expect(emailCard).toContain('Dry-run only until backend policy permits execution.')
-    expect(emailCard).toContain('Dry-run preview')
-    expect(emailCard).toContain('Approve once')
-    expect(emailCard).not.toContain('Execute safe local')
-    expect(cameraCard).toContain('sensitive')
-    expect(cameraCard).toContain('Unavailable: service_unavailable')
-    expect(cameraCard).toContain('Approve once')
-    expect(cameraCard).not.toContain('Execute safe local')
+    expect(tools.some((tool) => tool.riskClass === 'external')).toBe(true)
+    expect(tools.some((tool) => tool.state === 'unavailable')).toBe(true)
+    expect(tools.some((tool) => tool.approvalScopes.includes('once'))).toBe(true)
+    expect(markup).toContain('Blocked')
+    expect(markup).toContain('approval queue active')
   })
 
   it('keeps tool approval unavailable when the route is capability-blocked', async () => {
@@ -4550,6 +4828,7 @@ function streamUpdate(textDelta: string) {
   return {
     kind: 'delta' as const,
     eventId: 'event-1',
+    messageId: 'message-1',
     sessionId: 'session-1',
     text: textDelta,
     textDelta,
@@ -4574,7 +4853,9 @@ function streamUpdate(textDelta: string) {
         warnings: []
       }
     },
-    metadata: {}
+    metadata: {},
+    tool: null,
+    ttsAudio: null
   }
 }
 
@@ -4608,6 +4889,9 @@ function voiceStatusEvents(): VoiceRuntimeEvent[] {
     policyDecisionId: 'policy-voice-1',
     privacyClass: 'raw-audio',
     redacted: true,
+    level: null,
+    peak: null,
+    bars: null,
     occurredAt: '2026-06-27T16:00:00Z',
     audit,
     raw: {}

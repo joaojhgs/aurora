@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AUTH_METHODS,
   AuroraError,
@@ -14,9 +14,19 @@ import {
   type PendingPairingEntry,
   type TokenRevokeResponse
 } from '@aurora/client'
-import { StateSurface } from './state-surface'
+import { PageHeader } from './state-surface'
 import { StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
+import {
+  Button,
+  Card,
+  DataTable,
+  MetaGrid,
+  StatStrip,
+  Switch,
+  type DataColumn
+} from './primitives'
+import { KeyRound, Plus, RefreshCcw, RotateCcw } from 'lucide-react'
 
 export type PairingQueueLoadState = 'loading' | 'ready' | 'error'
 export type PairingOperationStatus = 'idle' | 'pending' | 'success' | 'error'
@@ -402,200 +412,261 @@ export function PairingQueueSurface({
   const canCreate = adminActionReady && reauthConfirmed && Boolean(createDeviceName.trim()) && !pendingAction && Boolean(onCreate)
   const canExchange = adminActionReady && reauthConfirmed && Boolean(exchangeCode.trim()) && !pendingAction && Boolean(onExchange)
   const canRevokeToken = adminActionReady && reauthConfirmed && Boolean(exchangeResult?.tokenId) && !pendingAction && Boolean(onRevokeExchangedToken)
+  const reauthReason = reauthConfirmed ? undefined : 'Confirm the in-session admin unlock to submit AdminAction requests.'
+
+  const queueColumns: Array<DataColumn<PendingPairingEntry>> = [
+    {
+      key: 'device',
+      header: 'Device / peer',
+      render: (entry) => (
+        <span className="aui-cell-stack">
+          <strong>{entry.device_name || 'Unnamed device'}</strong>
+          <small>{peerLabel(entry)}</small>
+        </span>
+      )
+    },
+    { key: 'status', header: 'Status', render: (entry) => <StatusBadge state={pairingState(entry)} /> },
+    { key: 'client', header: 'Client', hideAt: 'md', render: (entry) => entry.client_ip || 'not reported' },
+    { key: 'expiry', header: 'Expiry state', render: (entry) => (isExpired(entry.expires_at) ? 'expired' : 'active') },
+    { key: 'expires', header: 'Expires', hideAt: 'lg', render: (entry) => formatDate(entry.expires_at) },
+    {
+      key: 'code',
+      header: 'Pairing code',
+      hideAt: 'lg',
+      render: (entry) => <span className="aui-mono">{redactedCodeLabel(entry.code)}</span>
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'end',
+      render: (entry) => (
+        <div className="aui-action-row aui-action-row-tight">
+          <Button
+            variant="ghost"
+            disabled={actionDisabled || entry.status !== 'pending' || !entry.code || (!onCopyValue && !onCopyCode)}
+            onClick={() => (onCopyCode ? onCopyCode(entry) : onCopyValue?.(entry.code, entry.request_id))}
+          >
+            Copy code
+          </Button>
+          <Button
+            variant="primary"
+            disabled={actionDisabled || entry.status !== 'pending'}
+            disabledReason={reauthReason}
+            onClick={() => onApprove?.(entry)}
+          >
+            {pendingAction === `${entry.request_id}:approve` ? 'Submitting AdminAction' : 'AdminAction approve'}
+          </Button>
+          <Button
+            variant="danger"
+            disabled={actionDisabled || entry.status !== 'pending'}
+            disabledReason={reauthReason}
+            onClick={() => onDeny?.(entry)}
+          >
+            {pendingAction === `${entry.request_id}:deny` ? 'Submitting AdminAction' : 'AdminAction deny'}
+          </Button>
+        </div>
+      )
+    }
+  ]
+
   return (
-    <div className="aui-pairing-queue">
-      <StateSurface
+    <div className="aui-stack-lg">
+      <PageHeader
+        eyebrow="Admin"
         title="Pairing queue"
-        state={model.state}
-        description={model.description}
-        evidence={model.evidence}
-        actionLabel="Admin action required"
+        description="Review pending device and peer pairing requests, and mint or exchange pairing codes through audited AdminAction."
+        badges={<StatusBadge state={route.state} />}
+        badgesLabel="Pairing route status"
+        actions={
+          <Button
+            variant="outline"
+            icon={<RefreshCcw size={16} aria-hidden />}
+            disabled={controlsDisabled}
+            onClick={onRefresh}
+          >
+            Refresh
+          </Button>
+        }
       />
 
-      <section className="aui-pairing-controls" aria-label="Pairing queue controls">
-        <label className="aui-inline-field">
-          <input
-            type="checkbox"
+      <StatStrip
+        items={[
+          { label: 'Pending', value: String(model.total) },
+          { label: 'Expired', value: String(model.expiredCount) },
+          { label: 'Secrets', value: 'Protected', tone: 'success' },
+          { label: 'Queue', value: String(model.state) }
+        ]}
+      />
+
+      <Card title="AdminAction options" ariaLabel="Pairing AdminAction options">
+        <p className="aui-card-note">Approve, deny, create, and exchange all route through Aurora AdminAction; provide a reason and confirm the in-session unlock before submitting.</p>
+        <div className="aui-two-col">
+          <div className="aui-field">
+            <label className="aui-field-label" htmlFor="pairing-reason">AdminAction reason</label>
+            <textarea
+              id="pairing-reason"
+              className="aui-input aui-textarea"
+              value={adminReason}
+              rows={2}
+              disabled={controlsDisabled}
+              onChange={(event) => onAdminReasonChange?.(event.currentTarget.value)}
+            />
+          </div>
+          <div className="aui-field">
+            <label className="aui-field-label" htmlFor="pairing-permissions">Approve permissions</label>
+            <input
+              id="pairing-permissions"
+              className="aui-input"
+              value={permissions}
+              disabled={controlsDisabled}
+              placeholder="Auth.use, Gateway.use"
+              onChange={(event) => onPermissionsChange?.(event.currentTarget.value)}
+            />
+            <p className="aui-field-helper">Space or comma separated permissions granted on approval.</p>
+          </div>
+        </div>
+        <div className="aui-switch-row">
+          <Switch
             checked={includeNonPending}
             disabled={controlsDisabled}
-            onChange={(event) => onIncludeNonPendingChange?.(event.currentTarget.checked)}
+            onChange={(value) => onIncludeNonPendingChange?.(value)}
+            label="Include approved, denied, and expired requests"
           />
-          <span>Include approved, denied, and expired requests</span>
-        </label>
-        <label>
-          <span>AdminAction reason</span>
-          <textarea
-            value={adminReason}
-            disabled={controlsDisabled}
-            rows={2}
-            onChange={(event) => onAdminReasonChange?.(event.currentTarget.value)}
-          />
-        </label>
-        <label>
-          <span>Approve permissions</span>
-          <input
-            value={permissions}
-            disabled={controlsDisabled}
-            placeholder="Auth.use, Gateway.use"
-            onChange={(event) => onPermissionsChange?.(event.currentTarget.value)}
-          />
-        </label>
-        <label className="aui-inline-field">
-          <input
-            type="checkbox"
+          <Switch
             checked={grantAdmin}
             disabled={controlsDisabled}
-            onChange={(event) => onGrantAdminChange?.(event.currentTarget.checked)}
+            onChange={(value) => onGrantAdminChange?.(value)}
+            label="Grant admin role on approval"
           />
-          <span>Grant admin role on approval</span>
-        </label>
-        <label className="aui-inline-field">
-          <input
-            type="checkbox"
+          <Switch
             checked={reauthConfirmed}
             disabled={controlsDisabled}
-            onChange={(event) => onReauthConfirmedChange?.(event.currentTarget.checked)}
+            onChange={(value) => onReauthConfirmedChange?.(value)}
+            label="In-session admin unlock confirmed for AdminAction submit"
           />
-          <span>In-session admin unlock confirmed for AdminAction submit</span>
-        </label>
-        <button className="aui-button" type="button" disabled={controlsDisabled} onClick={onRefresh}>Refresh</button>
-      </section>
+        </div>
+      </Card>
 
-      <section className="aui-pairing-admin" aria-label="Admin pairing code creation and exchange">
-        <h2>Pairing code, QR, and deep link</h2>
-        <p>
-          Pairing creation uses <code>{AUTH_METHODS.pairingStart}</code> through AdminAction. QR image output is honest-unavailable until a QR renderer or backend QR contract exists; the deep link payload is shown for native handoff.
-        </p>
-        <form className="aui-pairing-controls" onSubmit={(event: FormEvent) => { event.preventDefault(); onCreate?.() }}>
-          <label>
-            <span>Device name</span>
-            <input value={createDeviceName} disabled={controlsDisabled} onChange={(event) => onCreateDeviceNameChange?.(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>Remote peer id</span>
-            <input value={createRemotePeerId} disabled={controlsDisabled} placeholder="optional mesh peer id" onChange={(event) => onCreateRemotePeerIdChange?.(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>Remote node name</span>
-            <input value={createRemoteNodeName} disabled={controlsDisabled} placeholder="optional node name" onChange={(event) => onCreateRemoteNodeNameChange?.(event.currentTarget.value)} />
-          </label>
-          <button className="aui-primary-action" type="submit" disabled={!canCreate}>
-            {pendingAction === 'create' ? 'Creating through AdminAction' : 'Create pairing code via AdminAction'}
-          </button>
-        </form>
-        {createdCredential ? (
-          <div className="aui-card" aria-label="Created pairing credential">
-            <dl className="aui-pairing-facts">
-              <div><dt>One-time pairing code</dt><dd><code>{createdCredential.code}</code></dd></div>
-              <div><dt>Expires</dt><dd>{createdCredential.expiresAt ? formatDate(createdCredential.expiresAt) : `${createdCredential.expiresInSeconds ?? 'unknown'} seconds`}</dd></div>
-              <div><dt>Deep link</dt><dd><code>{createdCredential.deepLink}</code></dd></div>
-              <div><dt>QR</dt><dd>{createdCredential.qrUnavailableReason}</dd></div>
-              <div><dt>Audit</dt><dd>{createdCredential.auditReceipt ?? 'audit receipt pending'}</dd></div>
-            </dl>
-            <div className="aui-pairing-actions">
-              <button type="button" className="aui-button" onClick={() => onCopyValue?.(createdCredential.code, 'created-code')}>Copy one-time code</button>
-              <button type="button" className="aui-button" onClick={() => onCopyValue?.(createdCredential.deepLink, 'created-link')}>Copy deep link</button>
-            </div>
-            <p className="aui-message">QR payload: {createdCredential.qrPayload}</p>
+      <div className="aui-two-col">
+        <Card title="Create pairing code" icon={<KeyRound size={18} aria-hidden />} ariaLabel="Create pairing code">
+          <p className="aui-card-note">
+            Uses <code className="aui-mono">{AUTH_METHODS.pairingStart}</code>. QR image is unavailable until a renderer or backend QR contract exists; the deep-link payload is provided for native handoff.
+          </p>
+          <div className="aui-field">
+            <label className="aui-field-label" htmlFor="pairing-device">Device name</label>
+            <input id="pairing-device" className="aui-input" value={createDeviceName} disabled={controlsDisabled} onChange={(event) => onCreateDeviceNameChange?.(event.currentTarget.value)} />
           </div>
-        ) : null}
-      </section>
-
-      <section className="aui-pairing-admin" aria-label="Pairing exchange and revoke">
-        <h2>Exchange and revoke</h2>
-        <p>
-          Exchange uses <code>{AUTH_METHODS.pairingExchange}</code> through AdminAction. Pending-code revoke is unavailable because <code>Auth.PairingRevoke</code> is not exposed; exchanged tokens can be revoked through <code>{AUTH_METHODS.revokeToken}</code> when the backend returns a token id.
-        </p>
-        <form className="aui-pairing-controls" onSubmit={(event: FormEvent) => { event.preventDefault(); onExchange?.() }}>
-          <label>
-            <span>Pairing code to exchange</span>
-            <input value={exchangeCode} disabled={controlsDisabled} placeholder="paste code from device" onChange={(event) => onExchangeCodeChange?.(event.currentTarget.value)} />
-          </label>
-          <button className="aui-primary-action" type="submit" disabled={!canExchange}>
-            {pendingAction === 'exchange' ? 'Exchanging through AdminAction' : 'Exchange via AdminAction'}
-          </button>
-          <button className="aui-button" type="button" disabled={!canRevokeToken} onClick={onRevokeExchangedToken}>
-            {pendingAction === 'revoke-token' ? 'Revoking through AdminAction' : 'Revoke exchanged token via AdminAction'}
-          </button>
-        </form>
-        <p className="aui-message">Pending pairing revoke unavailable: missing backend contract Auth.PairingRevoke.</p>
-        {exchangeResult ? (
-          <div className="aui-card" aria-label="Pairing exchange result">
-            <dl className="aui-pairing-facts">
-              <div><dt>Session state</dt><dd>{exchangeResult.state}</dd></div>
-              <div><dt>Token id</dt><dd>{exchangeResult.tokenId ?? 'not returned'}</dd></div>
-              <div><dt>Token secret</dt><dd>redacted after exchange</dd></div>
-              <div><dt>Audit</dt><dd>{exchangeResult.auditReceipt ?? 'audit receipt pending'}</dd></div>
-            </dl>
+          <div className="aui-field">
+            <label className="aui-field-label" htmlFor="pairing-peer">Remote peer id</label>
+            <input id="pairing-peer" className="aui-input" value={createRemotePeerId} disabled={controlsDisabled} placeholder="optional mesh peer id" onChange={(event) => onCreateRemotePeerIdChange?.(event.currentTarget.value)} />
           </div>
-        ) : null}
-      </section>
-
-      {operation.message ? <p className={`aui-message${operation.status === 'error' ? ' aui-message-danger' : ''}`} role={operation.status === 'error' ? 'alert' : 'status'}>{operation.message}</p> : null}
-      {operation.auditReceipt ? <p className="aui-message">AdminAction audit receipt: {operation.auditReceipt}</p> : null}
-      {mutationError ? <p className="aui-message aui-message-danger" role="alert">{mutationError}</p> : null}
-      {copyError ? <p className="aui-message aui-message-danger" role="alert">{copyError}</p> : null}
-      {copiedRequestId ? <p className="aui-message" role="status">Pairing code copied from controlled Admin pairing surface; secrets stay scoped to clipboard and are not logged.</p> : null}
-      {model.disabledReason ? <p className="aui-message">{model.disabledReason}</p> : null}
-      {model.error ? <p className="aui-message aui-message-danger" role="alert">{model.error}</p> : null}
-      {model.state === 'loading' ? <p className="aui-message" aria-live="polite">Loading pairing queue from Aurora.</p> : null}
-      {model.state !== 'loading' && !model.disabledReason && !model.error && model.entries.length === 0 ? (
-        <p className="aui-message">No pending device or peer pairing requests were reported by Auth.</p>
-      ) : null}
-
-      <section className="aui-pairing-list" aria-label="Pending device and peer pairing requests">
-        {model.entries.map((entry) => (
-          <article className="aui-pairing-card" key={entry.request_id}>
-            <header className="aui-pairing-card-header">
-              <div>
-                <p className="aui-kicker">{entry.device_name || 'Unnamed device'}</p>
-                <h2>{peerLabel(entry)}</h2>
+          <div className="aui-field">
+            <label className="aui-field-label" htmlFor="pairing-node">Remote node name</label>
+            <input id="pairing-node" className="aui-input" value={createRemoteNodeName} disabled={controlsDisabled} placeholder="optional node name" onChange={(event) => onCreateRemoteNodeNameChange?.(event.currentTarget.value)} />
+          </div>
+          <div className="aui-action-row">
+            <Button
+              variant="primary"
+              icon={<Plus size={16} aria-hidden />}
+              disabled={!canCreate}
+              disabledReason={!reauthConfirmed ? reauthReason : 'Enter a device name to create a pairing code.'}
+              busy={pendingAction === 'create'}
+              onClick={onCreate}
+            >
+              {pendingAction === 'create' ? 'Creating through AdminAction' : 'Create pairing code via AdminAction'}
+            </Button>
+          </div>
+          {createdCredential ? (
+            <section className="aui-op-result aui-op-result-success" aria-label="Created pairing credential">
+              <MetaGrid
+                columns={1}
+                items={[
+                  { label: 'One-time pairing code', value: <code className="aui-mono">{createdCredential.code}</code> },
+                  { label: 'Expires', value: createdCredential.expiresAt ? formatDate(createdCredential.expiresAt) : `${createdCredential.expiresInSeconds ?? 'unknown'} seconds` },
+                  { label: 'Deep link', value: <code className="aui-mono">{createdCredential.deepLink}</code> },
+                  { label: 'QR', value: createdCredential.qrUnavailableReason },
+                  { label: 'Audit', value: createdCredential.auditReceipt ?? 'audit receipt pending' }
+                ]}
+              />
+              <div className="aui-action-row">
+                <Button variant="outline" onClick={() => onCopyValue?.(createdCredential.code, 'created-code')}>Copy one-time code</Button>
+                <Button variant="outline" onClick={() => onCopyValue?.(createdCredential.deepLink, 'created-link')}>Copy deep link</Button>
               </div>
-              <StatusBadge state={pairingState(entry)} />
-            </header>
-            <dl className="aui-pairing-facts">
-              <div><dt>Request</dt><dd>{entry.request_id}</dd></div>
-              <div><dt>Status</dt><dd>{entry.status}</dd></div>
-              <div><dt>Client</dt><dd>{entry.client_ip || 'not reported'}</dd></div>
-              <div><dt>Pairing code</dt><dd>{redactedCodeLabel(entry.code)}</dd></div>
-              <div><dt>Expiry state</dt><dd>{isExpired(entry.expires_at) ? 'expired' : 'active'}</dd></div>
-              <div><dt>Expires</dt><dd>{formatDate(entry.expires_at)}</dd></div>
-              <div><dt>Created</dt><dd>{formatDate(entry.created_at)}</dd></div>
-              <div><dt>Approved by</dt><dd>{entry.approved_by || 'not approved'}</dd></div>
-              <div><dt>Denied by</dt><dd>{entry.denied_by || 'not denied'}</dd></div>
-              <div><dt>Deny reason</dt><dd>{entry.denied_reason || 'none'}</dd></div>
-              <div><dt>Permissions</dt><dd>{entry.granted_permissions?.join(', ') || 'none granted'}</dd></div>
-              <div><dt>Admin grant</dt><dd>{entry.granted_is_admin ? 'yes' : 'no'}</dd></div>
-            </dl>
-            <div className="aui-pairing-actions">
-              <button
-                className="aui-button"
-                type="button"
-                disabled={actionDisabled || entry.status !== 'pending' || !entry.code || (!onCopyValue && !onCopyCode)}
-                onClick={() => onCopyCode ? onCopyCode(entry) : onCopyValue?.(entry.code, entry.request_id)}
-              >
-                Copy pairing code
-              </button>
-              <button
-                className="aui-primary-action"
-                type="button"
-                disabled={actionDisabled || entry.status !== 'pending'}
-                onClick={() => onApprove?.(entry)}
-              >
-                {pendingAction === `${entry.request_id}:approve` ? 'Submitting AdminAction' : 'AdminAction approve'}
-              </button>
-              <button
-                className="aui-button"
-                type="button"
-                disabled={actionDisabled || entry.status !== 'pending'}
-                onClick={() => onDeny?.(entry)}
-              >
-                {pendingAction === `${entry.request_id}:deny` ? 'Submitting AdminAction' : 'AdminAction deny'}
-              </button>
+            </section>
+          ) : null}
+        </Card>
+
+        <Card title="Exchange and revoke" icon={<RotateCcw size={18} aria-hidden />} ariaLabel="Pairing exchange and revoke">
+          <p className="aui-card-note">
+            Exchange uses <code className="aui-mono">{AUTH_METHODS.pairingExchange}</code>. Exchanged tokens revoke through <code className="aui-mono">{AUTH_METHODS.revokeToken}</code> when the backend returns a token id.
+          </p>
+          <div className="aui-field">
+            <label className="aui-field-label" htmlFor="pairing-exchange-code">Pairing code to exchange</label>
+            <input id="pairing-exchange-code" className="aui-input" value={exchangeCode} disabled={controlsDisabled} placeholder="paste code from device" onChange={(event) => onExchangeCodeChange?.(event.currentTarget.value)} />
+          </div>
+          <div className="aui-action-row">
+            <Button
+              variant="primary"
+              disabled={!canExchange}
+              disabledReason={!reauthConfirmed ? reauthReason : 'Enter a pairing code to exchange.'}
+              busy={pendingAction === 'exchange'}
+              onClick={onExchange}
+            >
+              {pendingAction === 'exchange' ? 'Exchanging through AdminAction' : 'Exchange via AdminAction'}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!canRevokeToken}
+              disabledReason="Revoke needs a token id returned from a completed exchange."
+              busy={pendingAction === 'revoke-token'}
+              onClick={onRevokeExchangedToken}
+            >
+              {pendingAction === 'revoke-token' ? 'Revoking through AdminAction' : 'Revoke exchanged token via AdminAction'}
+            </Button>
+          </div>
+          <p className="aui-card-note" role="note">Pending pairing revoke unavailable: missing backend contract Auth.PairingRevoke.</p>
+          {exchangeResult ? (
+            <section className="aui-op-result aui-op-result-success" aria-label="Pairing exchange result">
+              <MetaGrid
+                columns={1}
+                items={[
+                  { label: 'Session state', value: exchangeResult.state },
+                  { label: 'Token id', value: exchangeResult.tokenId ?? 'not returned' },
+                  { label: 'Token secret', value: 'redacted after exchange' },
+                  { label: 'Audit', value: exchangeResult.auditReceipt ?? 'audit receipt pending' }
+                ]}
+              />
+            </section>
+          ) : null}
+        </Card>
+      </div>
+
+      {operation.message ? <p className={`aui-inline-alert${operation.status === 'error' ? ' aui-inline-alert-danger' : ''}`} role={operation.status === 'error' ? 'alert' : 'status'}>{operation.message}</p> : null}
+      {operation.auditReceipt ? <p className="aui-card-note">AdminAction audit receipt: {operation.auditReceipt}</p> : null}
+      {mutationError ? <p className="aui-inline-alert aui-inline-alert-danger" role="alert">{mutationError}</p> : null}
+      {copyError ? <p className="aui-inline-alert aui-inline-alert-danger" role="alert">{copyError}</p> : null}
+      {copiedRequestId ? <p className="aui-card-note" role="status">Pairing code copied from controlled Admin pairing surface; secrets stay scoped to clipboard and are not logged.</p> : null}
+      {model.disabledReason ? <p className="aui-inline-alert" role="note">{model.disabledReason}</p> : null}
+      {model.error ? <p className="aui-inline-alert aui-inline-alert-danger" role="alert">{model.error}</p> : null}
+
+      <Card title="Pending requests" ariaLabel="Pending device and peer pairing requests" flush>
+        <DataTable
+          columns={queueColumns}
+          rows={model.entries}
+          getRowKey={(entry) => entry.request_id}
+          empty={
+            <div className="aui-empty-inline">
+              {model.state === 'loading'
+                ? <p aria-live="polite">Loading pairing queue from Aurora.</p>
+                : model.disabledReason
+                  ? <p>{model.disabledReason}</p>
+                  : model.error
+                    ? <p>{model.error}</p>
+                    : <p>No pending device or peer pairing requests were reported by Auth.</p>}
             </div>
-          </article>
-        ))}
-      </section>
+          }
+        />
+      </Card>
     </div>
   )
 }

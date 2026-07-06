@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { History, RotateCcw, Save, Settings, ShieldCheck } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { History, RotateCcw, Save, ShieldCheck } from 'lucide-react'
 import type {
   AuroraClient,
   AuroraError,
@@ -14,6 +14,8 @@ import type {
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { EmptyState, PageHeader } from './state-surface'
+import { AdminConfirmDialog, Button, Card, Checkbox, DataTable, StatStrip, type DataColumn } from './primitives'
 
 export interface ConfigEditorViewProps {
   client: AuroraClient
@@ -67,14 +69,18 @@ export async function buildConfigEditorModel(client: AuroraClient, route?: Route
   }
 }
 
+type ConfigDialogKind = 'apply' | 'rollback'
+
 export function ConfigEditorView({ client, route, initialModel }: ConfigEditorViewProps) {
   const [model, setModel] = useState<ConfigEditorModel>(initialModel ?? loadingModel(route))
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [diff, setDiff] = useState<ConfigDiffEntry[]>([])
   const [impact, setImpact] = useState<ConfigReloadImpactEntry[]>([])
   const [reason, setReason] = useState('Admin config update from Aurora UI')
-  const [reviewArmed, setReviewArmed] = useState(false)
+  const [rollbackReason, setRollbackReason] = useState('')
+  const [rollbackTarget, setRollbackTarget] = useState<ConfigVersionEntry | null>(null)
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
+  const [dialogKind, setDialogKind] = useState<ConfigDialogKind | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -103,13 +109,12 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   const reviewBlocked = changes.length === 0 || localValidationErrors.length > 0 || reason.trim().length === 0
 
   useEffect(() => {
-    let cancelled = false
-    setReviewArmed(false)
     if (changes.length === 0) {
       setDiff([])
       setImpact([])
       return
     }
+    let cancelled = false
     Promise.all([
       client.config.previewDiff({ changes }),
       client.config.previewReloadImpact({ changes })
@@ -127,37 +132,34 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
     }
   }, [client, changes])
 
-  useEffect(() => {
-    setReviewArmed(false)
-  }, [reason])
-
   async function refresh() {
     setModel(await buildConfigEditorModel(client, route))
   }
 
-  async function applyChanges(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  function closeDialog() {
+    setDialogKind(null)
+    setReauthConfirmed(false)
+  }
+
+  function openRollbackDialog(version: ConfigVersionEntry) {
+    setRollbackTarget(version)
+    setRollbackReason(`Rollback ${version.key_path} from Aurora UI`)
+    setDialogKind('rollback')
+  }
+
+  async function confirmApply() {
     if (reviewBlocked) return
-    if (!reviewArmed) {
-      setReviewArmed(true)
-      setMessage('Review staged diff and reload/restart impact, then confirm AdminAction apply.')
-      return
-    }
-    if (!reauthConfirmed) {
-      setMessage('Apply requires explicit in-session admin unlock before AdminAction submit.')
-      return
-    }
     setBusy(true)
     setMessage(null)
     try {
       const receipts: string[] = []
       for (const change of changes) {
-        const result = await client.config.applyChange({ change, reason, reauthConfirmed })
+        const result = await client.config.applyChange({ change, reason, reauthConfirmed: true })
         receipts.push(result.confirmation.audit_receipt)
         if (!result.data.success) throw new Error(result.data.error ?? `Config.Set failed for ${change.key_path}`)
       }
       setEdits({})
-      setReviewArmed(false)
+      closeDialog()
       setMessage(`Applied ${changes.length} change(s). Audit receipt: ${receipts.join(', ')}`)
       await refresh()
     } catch (error) {
@@ -167,21 +169,19 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
     }
   }
 
-  async function rollback(version: ConfigVersionEntry) {
-    if (!reauthConfirmed) {
-      setMessage('Rollback requires explicit in-session admin unlock before AdminAction submit.')
-      return
-    }
+  async function confirmRollback() {
+    if (!rollbackTarget) return
     setBusy(true)
     setMessage(null)
     try {
       const result = await client.config.rollback({
-        versionId: version.version_id,
-        reason: `Rollback ${version.key_path} from Aurora UI`,
-        reauthConfirmed
+        versionId: rollbackTarget.version_id,
+        reason: rollbackReason,
+        reauthConfirmed: true
       })
       if (!result.data.success) throw new Error(result.data.error ?? 'Config rollback failed')
-      setMessage(`Rolled back ${version.key_path}. Audit receipt: ${result.confirmation.audit_receipt}`)
+      setMessage(`Rolled back ${rollbackTarget.key_path}. Audit receipt: ${result.confirmation.audit_receipt}`)
+      closeDialog()
       await refresh()
     } catch (error) {
       setMessage(`Rollback failed: ${errorMessage(error)}`)
@@ -192,53 +192,86 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
 
   const canMutate = !route.disabled && model.state !== 'denied' && model.state !== 'unavailable'
 
+  const rollbackColumns: Array<DataColumn<ConfigVersionEntry>> = [
+    {
+      key: 'field',
+      header: 'Field',
+      render: (version) => (
+        <span className="aui-cell-stack">
+          <strong>{version.key_path}</strong>
+          <small className="aui-mono">{version.version_id}</small>
+        </span>
+      )
+    },
+    {
+      key: 'when',
+      header: 'When and visibility',
+      render: (version) => (
+        <span className="aui-cell-text">{version.timestamp}; {version.secret ? 'secret redacted' : 'value visible'}</span>
+      )
+    },
+    {
+      key: 'action',
+      header: 'Action',
+      align: 'end',
+      render: (version) => (
+        <Button variant="outline" disabled={!canMutate || busy} onClick={() => openRollbackDialog(version)}>
+          Rollback
+        </Button>
+      )
+    }
+  ]
+
   return (
     <section className="aui-config" aria-labelledby="config-editor-title">
-      <header className="aui-config-header">
-        <div>
-          <p className="aui-kicker">Admin configuration</p>
-          <h1 id="config-editor-title"><Settings size={24} aria-hidden /> Configuration</h1>
-          <p>Schema-backed values, redacted secrets, validation, diff preview, reload impact, rollback, and audit receipts.</p>
-        </div>
-        <div className="aui-assistant-badges" aria-label="Config route status">
-          <StatusBadge state={route.state} />
-          <PrivacyBadge privacy={route.item.privacyClass} />
-          <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          <EvidenceBadge label={model.evidence} />
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Admin configuration"
+        id="config-editor-title"
+        title="Configuration"
+        description="Schema-backed values, redacted secrets, validation, diff preview, reload impact, rollback, and audit receipts."
+        badges={
+          <>
+            <StatusBadge state={route.state} />
+            <PrivacyBadge privacy={route.item.privacyClass} />
+            <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <EvidenceBadge label={model.evidence} />
+          </>
+        }
+      />
 
-      {model.state === 'loading' ? <ConfigNotice title="Loading config" text="Waiting for Aurora config responses." /> : null}
-      {model.state === 'empty' ? <ConfigNotice title="No config fields" text="Config schema metadata returned no editable fields." /> : null}
+      <StatStrip
+        ariaLabel="Configuration editor summary"
+        items={[
+          { label: 'Schema fields', value: model.fields.length, caption: `${sections.length} accordion sections` },
+          { label: 'Secrets', value: secretCount, caption: 'redacted and disabled' },
+          { label: 'Restart', value: restartCount, caption: 'fields require service restart' },
+          { label: 'Staged', value: changes.length, caption: 'changes awaiting review', tone: changes.length > 0 ? 'warning' : 'default' }
+        ]}
+      />
+
+      {model.state === 'loading' ? <p className="aui-message">Loading config from Aurora.</p> : null}
+      {model.state === 'empty' ? <EmptyState title="No config fields" message="Config schema metadata returned no editable fields." /> : null}
       {model.state === 'denied' || model.state === 'unavailable' || model.state === 'error'
-        ? <ConfigNotice title="Config editor unavailable" text={presentableSignal(model.error ?? route.explanation)} />
+        ? <EmptyState title="Configuration editor is unavailable" message={presentableSignal(model.error ?? route.explanation)} />
         : null}
       {model.validationErrors.length > 0 ? (
-        <div className="aui-config-alert" role="alert">
+        <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
           <strong>Validation errors</strong>
           <ul>{model.validationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
         </div>
       ) : null}
-      {message ? <div className="aui-config-alert" role="status">{message}</div> : null}
+      {message ? <div className="aui-inline-alert" role="status"><span>{message}</span></div> : null}
 
-      <div className="aui-config-summary" aria-label="Configuration editor summary">
-        <ConfigMetric label="Schema fields" value={String(model.fields.length)} detail={`${sections.length} accordion sections`} />
-        <ConfigMetric label="Secrets" value={String(secretCount)} detail="redacted and disabled" />
-        <ConfigMetric label="Restart" value={String(restartCount)} detail="fields require service restart" />
-        <ConfigMetric label="Staged" value={String(changes.length)} detail="changes awaiting review" />
-      </div>
-
-      <form className="aui-config-grid" onSubmit={applyChanges}>
-        <div className="aui-config-panel">
-          <div className="aui-config-panel-header">
-            <h2>Schema-backed config accordion</h2>
-            <button type="button" className="aui-action-chip" onClick={() => {
-              setEdits({})
-              setReviewArmed(false)
-            }} disabled={changes.length === 0 || busy}>
-              <RotateCcw size={14} aria-hidden /> Discard
-            </button>
-          </div>
+      <div className="aui-config-grid">
+        <Card
+          className="aui-config-panel"
+          title="Schema-backed config accordion"
+          actions={
+            <Button variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={() => setEdits({})} disabled={changes.length === 0 || busy}>
+              Discard
+            </Button>
+          }
+        >
           <div className="aui-config-accordion">
             {sections.length === 0 ? <p className="aui-muted">No schema sections are available.</p> : null}
             {sections.map(([section, fields]) => (
@@ -286,64 +319,70 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
               </details>
             ))}
           </div>
-        </div>
+        </Card>
 
-        <aside className="aui-config-panel">
-          <div className="aui-config-panel-header">
-            <h2>Staged review</h2>
-            <ShieldCheck size={18} aria-hidden />
-          </div>
-          <p className="aui-config-review-note">
-            Preview Config.PreviewDiff and Config.PreviewReloadImpact before Config.Set is submitted through AdminAction. Secret values stay redacted.
-          </p>
+        <Card
+          className="aui-config-panel"
+          title="Staged review"
+          icon={<ShieldCheck size={18} aria-hidden />}
+          description="Preview Config.PreviewDiff and Config.PreviewReloadImpact before Config.Set is submitted through AdminAction. Secret values stay redacted."
+        >
           <DiffList diff={diff} />
           <ImpactList impact={impact} />
           {localValidationErrors.length > 0 ? (
-            <div className="aui-config-alert" role="alert">
+            <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
               <strong>Staged validation</strong>
               <ul>{localValidationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
             </div>
           ) : null}
-          <label className="aui-config-reason">
-            <span>Admin reason</span>
-            <textarea value={reason} onChange={(event) => setReason(event.target.value)} disabled={!canMutate || busy} />
-          </label>
-          <label className="aui-inline-field">
-            <input
-              type="checkbox"
-              checked={reauthConfirmed}
-              disabled={!canMutate || busy}
-              onChange={(event) => setReauthConfirmed(event.currentTarget.checked)}
-            />
-            <span>In-session admin unlock confirmed for config AdminAction</span>
-          </label>
-          <button className="aui-primary-action" type="submit" disabled={!canMutate || reviewBlocked || !reauthConfirmed || busy}>
-            <Save size={16} aria-hidden /> {reviewArmed ? 'Confirm Apply through AdminAction' : 'Review Apply through AdminAction'}
-          </button>
-        </aside>
-      </form>
+          <Button
+            variant="primary"
+            icon={<Save size={16} aria-hidden />}
+            disabled={!canMutate || reviewBlocked || busy}
+            onClick={() => setDialogKind('apply')}
+          >
+            Review Apply through AdminAction
+          </Button>
+        </Card>
+      </div>
 
-      <section className="aui-config-panel">
-        <div className="aui-config-panel-header">
-          <h2>Rollback history</h2>
-          <History size={18} aria-hidden />
-        </div>
-        <div className="aui-config-history">
-          {model.versions.length === 0 ? <p>No version history reported.</p> : null}
-          {model.versions.map((version) => (
-            <article key={version.version_id}>
-              <div>
-                <strong>{version.key_path}</strong>
-                <code>{version.version_id}</code>
-                <span>{version.timestamp}; {version.secret ? 'secret redacted' : 'value visible'}</span>
-              </div>
-              <button type="button" className="aui-action-chip" disabled={!canMutate || !reauthConfirmed || busy} onClick={() => rollback(version)}>
-                Rollback
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
+      <Card className="aui-config-panel" title="Rollback history" icon={<History size={18} aria-hidden />}>
+        <DataTable
+          columns={rollbackColumns}
+          rows={model.versions}
+          getRowKey={(version) => version.version_id}
+          empty={<div className="aui-empty-inline"><p>No version history reported.</p></div>}
+        />
+      </Card>
+
+      {dialogKind ? (
+        <AdminConfirmDialog
+          open
+          title={dialogKind === 'apply' ? 'Apply staged config changes' : 'Roll back configuration value'}
+          description={
+            dialogKind === 'apply'
+              ? `Apply ${changes.length} staged change(s) through Config.Set. Reload/restart impact is shown in the staged review card; secret values stay redacted.`
+              : `Roll back ${rollbackTarget?.key_path ?? 'this field'} to a prior version through Config.Set.`
+          }
+          methodId="Config.Set"
+          affected={dialogKind === 'apply' ? changes.map((change) => change.key_path) : rollbackTarget ? [rollbackTarget.key_path] : []}
+          requireReason
+          reasonValue={dialogKind === 'apply' ? reason : rollbackReason}
+          onReasonChange={dialogKind === 'apply' ? setReason : setRollbackReason}
+          confirmLabel={dialogKind === 'apply' ? 'Confirm Apply through AdminAction' : 'Confirm Rollback through AdminAction'}
+          onConfirm={dialogKind === 'apply' ? confirmApply : confirmRollback}
+          onCancel={closeDialog}
+          busy={busy}
+          extraValid={reauthConfirmed}
+          extraInvalidReason="Confirm in-session admin unlock before config AdminAction."
+        >
+          <Checkbox
+            checked={reauthConfirmed}
+            onChange={setReauthConfirmed}
+            label="In-session admin unlock confirmed for config AdminAction"
+          />
+        </AdminConfirmDialog>
+      ) : null}
     </section>
   )
 }
@@ -400,16 +439,6 @@ function ConfigFieldControl({
   )
 }
 
-function ConfigMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <article>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
-  )
-}
-
 function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
   return (
     <div className="aui-config-review-block" aria-label="Preview diff">
@@ -438,10 +467,6 @@ function ImpactList({ impact }: { impact: ConfigReloadImpactEntry[] }) {
       ))}
     </div>
   )
-}
-
-function ConfigNotice({ title, text }: { title: string; text: string }) {
-  return <div className="aui-config-alert" role="status"><strong>{title}</strong><span>{text}</span></div>
 }
 
 function loadingModel(route: RouteAvailability): ConfigEditorModel {

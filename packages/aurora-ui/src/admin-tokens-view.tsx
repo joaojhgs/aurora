@@ -23,6 +23,8 @@ import {
   type TokenResponse,
 } from "@aurora/client";
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from "./status-badges";
+import { PageHeader } from "./state-surface";
+import { Button, Card, DataTable, StatStrip, type DataColumn } from "./primitives";
 
 export type AdminTokensLoadState =
   | "loading"
@@ -235,69 +237,63 @@ export function AdminTokensView({
   const totals = useMemo(() => tokenTotals(snapshot.tokens), [snapshot.tokens]);
 
   return (
-    <section className="aui-admin-tokens" aria-labelledby="admin-tokens-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-tokens-title">Tokens</h1>
-          <p>
-            Scoped API tokens are RBAC credentials shown as redacted prefixes
-            only. The create-token wizard treats new secrets as one-time reveal
-            material; revoke and rotate controls are previewed through the
-            AdminAction boundary.
-          </p>
-        </div>
-        <div className="aui-admin-badges" aria-label="Token service status">
-          {isAvailabilityState(snapshot.loadState) ? (
-            <StatusBadge state={snapshot.loadState} />
-          ) : (
-            <span className={`aui-badge aui-badge-${snapshot.loadState}`}>
-              {snapshot.loadState}
-            </span>
-          )}
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge
-            label={
-              snapshot.secretsRedacted
-                ? "secrets protected"
-                : "redaction pending"
-            }
-          />
-          <PrivacyBadge privacy="credential" />
-        </div>
-      </header>
+    <div className="aui-admin-tokens">
+      <PageHeader
+        id="admin-tokens-title"
+        eyebrow="Admin"
+        title="Tokens"
+        description="Scoped API tokens are RBAC credentials shown as redacted prefixes only. One-time reveal only: after dismissal or navigation, token secrets are not retained in the UI."
+        badges={
+          <>
+            {isAvailabilityState(snapshot.loadState) ? (
+              <StatusBadge state={snapshot.loadState} />
+            ) : (
+              <span className={`aui-badge aui-badge-${snapshot.loadState}`}>
+                {snapshot.loadState}
+              </span>
+            )}
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge
+              label={
+                snapshot.secretsRedacted
+                  ? "secrets protected"
+                  : "redaction pending"
+              }
+            />
+            <PrivacyBadge privacy="credential" />
+          </>
+        }
+        actions={
+          <Button
+            variant="primary"
+            disabled
+            disabledReason={snapshot.createReason}
+            icon={<Plus size={15} aria-hidden />}
+            ariaLabel="Create token unavailable"
+          >
+            Create token unavailable
+          </Button>
+        }
+      />
 
       <TokensStatusPanel snapshot={snapshot} />
 
-      <div className="aui-admin-metrics" aria-label="Token stats">
-        <Metric
-          label="Tokens"
-          value={String(snapshot.tokens.length)}
-          detail={`${totals.active} active`}
-        />
-        <Metric
-          label="Expiring"
-          value={String(totals.expiring)}
-          detail="expires within 30 days"
-        />
-        <Metric
-          label="Expired"
-          value={String(totals.expired)}
-          detail="not presented as usable"
-        />
-        <Metric
-          label="Scopes"
-          value={String(totals.scopes)}
-          detail="unique redacted grants"
-        />
-      </div>
+      <StatStrip
+        ariaLabel="Token stats"
+        items={[
+          { label: "Tokens", value: String(snapshot.tokens.length), caption: `${totals.active} active` },
+          { label: "Expiring", value: String(totals.expiring), caption: "expires within 30 days" },
+          { label: "Expired", value: String(totals.expired), caption: "not presented as usable" },
+          { label: "Scopes", value: String(totals.scopes), caption: "unique redacted grants" }
+        ]}
+      />
 
-      <CreateTokenWizard snapshot={snapshot} />
       <TokensTable
         tokens={snapshot.tokens}
         onPreviewAdminAction={onPreviewAdminAction}
       />
-    </section>
+      <CreateTokenWizard snapshot={snapshot} />
+    </div>
   );
 }
 
@@ -460,111 +456,118 @@ function TokensTable({
   tokens: AdminTokenRow[];
   onPreviewAdminAction?: ((action: AdminTokenAction) => void) | undefined;
 }) {
-  return (
-    <section className="aui-admin-panel" aria-labelledby="tokens-table-title">
-      <div className="aui-panel-heading">
+  const columns: DataColumn<AdminTokenRow>[] = [
+    {
+      key: "prefix",
+      header: "Prefix",
+      mono: true,
+      render: (token) => (
         <div>
-          <p className="aui-kicker">Credentials</p>
-          <h2 id="tokens-table-title">Scoped token inventory</h2>
+          <code>{token.prefix}••••</code>
+          <small>prefix only; secret redacted</small>
         </div>
-      </div>
-      {tokens.length === 0 ? (
-        <p className="aui-muted">No tokens were returned by Auth.ListTokens.</p>
-      ) : (
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <caption className="aui-sr-only">
-              Scoped token table with redacted prefixes, scopes, expiry, and
-              revoke AdminAction previews
-            </caption>
-            <thead>
-              <tr>
-                <th>Prefix</th>
-                <th>Owner</th>
-                <th>Device</th>
-                <th>Scopes</th>
-                <th>Status</th>
-                <th>Expires</th>
-                <th>Last used</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.map((token) => (
-                <tr key={token.id}>
-                  <td>
-                    <code>{token.prefix}••••</code>
-                    <small>prefix only; secret redacted</small>
-                  </td>
-                  <td>
-                    <code>{token.owner}</code>
-                  </td>
-                  <td>
-                    <code>{token.deviceId ?? "not bound"}</code>
-                  </td>
-                  <td>
-                    <PermissionChips scopes={token.scopes} />
-                  </td>
-                  <td>
-                    <span
-                      className={`aui-token-status aui-token-${token.status}`}
-                    >
-                      {token.status}
-                    </span>
-                  </td>
-                  <td>{token.expiresAt ?? "no expiry reported"}</td>
-                  <td>{token.lastUsedAt ?? "never reported"}</td>
-                  <td>
-                    <div className="aui-icon-actions">
-                      <button
-                        type="button"
-                        aria-label={`Copy redacted prefix for ${token.prefix}`}
-                        title="Copies only the redacted token prefix, never the secret."
-                        disabled
-                      >
-                        <Copy size={16} aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Rotate token ${token.prefix}`}
-                        title={token.rotateAction?.reason ?? token.revokeReason}
-                        disabled={!token.rotateAction}
-                        onClick={() => {
-                          if (token.rotateAction)
-                            onPreviewAdminAction?.(token.rotateAction);
-                        }}
-                      >
-                        {token.rotateAction ? (
-                          <RefreshCw size={16} aria-hidden />
-                        ) : (
-                          <Lock size={16} aria-hidden />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Revoke token ${token.prefix}`}
-                        title={token.revokeReason}
-                        disabled={!token.revokeAction}
-                        onClick={() => {
-                          if (token.revokeAction)
-                            onPreviewAdminAction?.(token.revokeAction);
-                        }}
-                      >
-                        {token.revokeAction ? (
-                          <Trash2 size={16} aria-hidden />
-                        ) : (
-                          <Lock size={16} aria-hidden />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      ),
+    },
+    {
+      key: "owner",
+      header: "Owner",
+      render: (token) => <code>{token.owner}</code>,
+    },
+    {
+      key: "device",
+      header: "Device",
+      hideAt: "lg",
+      render: (token) => <code>{token.deviceId ?? "not bound"}</code>,
+    },
+    {
+      key: "scopes",
+      header: "Scopes",
+      hideAt: "lg",
+      render: (token) => <PermissionChips scopes={token.scopes} />,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (token) => (
+        <span className={`aui-token-status aui-token-${token.status}`}>
+          {token.status}
+        </span>
+      ),
+    },
+    {
+      key: "expires",
+      header: "Expires",
+      hideAt: "md",
+      render: (token) => token.expiresAt ?? "no expiry reported",
+    },
+    {
+      key: "lastUsed",
+      header: "Last used",
+      hideAt: "xl",
+      render: (token) => token.lastUsedAt ?? "never reported",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "end",
+      render: (token) => (
+        <div className="aui-icon-actions">
+          <button
+            type="button"
+            aria-label={`Copy redacted prefix for ${token.prefix}`}
+            title="Copies only the redacted token prefix, never the secret."
+            disabled
+          >
+            <Copy size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-label={`Rotate token ${token.prefix}`}
+            title={token.rotateAction?.reason ?? token.revokeReason}
+            disabled={!token.rotateAction}
+            onClick={() => {
+              if (token.rotateAction)
+                onPreviewAdminAction?.(token.rotateAction);
+            }}
+          >
+            {token.rotateAction ? (
+              <RefreshCw size={16} aria-hidden />
+            ) : (
+              <Lock size={16} aria-hidden />
+            )}
+          </button>
+          <button
+            type="button"
+            aria-label={`Revoke token ${token.prefix}`}
+            title={token.revokeReason}
+            disabled={!token.revokeAction}
+            onClick={() => {
+              if (token.revokeAction)
+                onPreviewAdminAction?.(token.revokeAction);
+            }}
+          >
+            {token.revokeAction ? (
+              <Trash2 size={16} aria-hidden />
+            ) : (
+              <Lock size={16} aria-hidden />
+            )}
+          </button>
+          <span className="aui-sr-only">{token.revokeReason}</span>
         </div>
-      )}
-    </section>
+      ),
+    },
+  ];
+
+  return (
+    <Card title="Scoped token inventory" flush>
+      <DataTable
+        columns={columns}
+        rows={tokens}
+        getRowKey={(token) => token.id}
+        caption="Scoped token table with redacted prefixes, scopes, expiry, and revoke AdminAction previews"
+        empty={<p className="aui-muted">No tokens were returned by Auth.ListTokens.</p>}
+      />
+    </Card>
   );
 }
 

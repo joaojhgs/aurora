@@ -48,7 +48,7 @@ describe('admin route checkpoint status', () => {
 
     expect(model.state).toBe('denied')
     expect(model.fields).toEqual([])
-    expect(markup).toContain('Config editor unavailable')
+    expect(markup).toContain('Configuration editor is unavailable')
     expect(markup).toContain('missing:Config.manage')
     expect(markup).toContain('disabled=""')
   })

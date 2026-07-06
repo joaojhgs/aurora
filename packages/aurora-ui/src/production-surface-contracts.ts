@@ -380,7 +380,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
       routeOracle('pairing', ['Pairing queue'], ['Pairing queue controls'])
     ],
     mockReferenceFiles: ['components/aurora/mesh/mesh-view.tsx'],
-    mockUxAnchors: ['Mesh peers', 'Topology', 'Trust queue', 'Pairing queue'],
+    mockUxAnchors: ['Mesh peers', 'Connected peers', 'Pending requests', 'Add peer'],
     componentFiles: ['mesh-peers-view.tsx', 'pairing-queue-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -419,7 +419,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Route policy',
     navItemIds: ['mesh', 'settings'],
     mockReferenceFiles: ['components/aurora/assistant/route-sheet.tsx', 'components/aurora/settings/settings-permissions-view.tsx'],
-    mockUxAnchors: ['Route policy and explain', 'Route explain scenarios', 'Tool call', 'Scheduler delegation'],
+    mockUxAnchors: ['Route policy decisions', 'Route explain scenarios', 'Tool call', 'Scheduler delegation'],
     componentFiles: ['route-policy-view.tsx', 'route-sheet.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [

@@ -3,7 +3,6 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::env;
-use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -2635,7 +2634,6 @@ fn spawn_sidecar(app: &AppHandle, gateway: &Url, token: &str) -> Result<Child, A
     command.env("AURORA_TAURI_DISABLE_GATEWAY_AUTH", "1");
     command.env("AURORA_GATEWAY_URL", gateway.to_string());
     command.env("AURORA_TAURI_SIDECAR_TOKEN", token);
-    command.env("AURORA_CONFIG_FILE", sidecar_config_file(app, gateway)?);
     command.env(
         "AURORA_GATEWAY_HOST",
         gateway.host_str().unwrap_or("127.0.0.1"),
@@ -2982,103 +2980,6 @@ fn bundled_sidecar_path(app: &AppHandle) -> Option<PathBuf> {
             .join(&filename),
     );
     candidates.into_iter().find(|path| path.is_file())
-}
-
-fn sidecar_config_defaults_path(app: &AppHandle) -> Result<PathBuf, AuroraCommandError> {
-    let dev_path = sidecar_working_dir()
-        .join("app")
-        .join("services")
-        .join("config")
-        .join("config_defaults.json");
-    if dev_path.is_file() {
-        return Ok(dev_path);
-    }
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let resource_path = resource_dir
-            .join("app")
-            .join("services")
-            .join("config")
-            .join("config_defaults.json");
-        if resource_path.is_file() {
-            return Ok(resource_path);
-        }
-    }
-    Err(AuroraCommandError::SidecarProcess(
-        "failed to locate config_defaults.json for managed sidecar; run prepare:sidecar before bundling".to_string(),
-    ))
-}
-
-fn sidecar_config_file(app: &AppHandle, gateway: &Url) -> Result<PathBuf, AuroraCommandError> {
-    if let Ok(path) = env::var("AURORA_TAURI_SIDECAR_CONFIG_FILE") {
-        return Ok(PathBuf::from(path));
-    }
-
-    let defaults_path = sidecar_config_defaults_path(app)?;
-    sidecar_config_file_from_defaults(&defaults_path, gateway)
-}
-
-fn sidecar_config_file_from_defaults(
-    defaults_path: &Path,
-    gateway: &Url,
-) -> Result<PathBuf, AuroraCommandError> {
-    let defaults = fs::read_to_string(defaults_path).map_err(|error| {
-        AuroraCommandError::SidecarProcess(format!(
-            "failed to read config defaults at {}: {error}",
-            defaults_path.display()
-        ))
-    })?;
-    let mut config: Value = serde_json::from_str(&defaults).map_err(|error| {
-        AuroraCommandError::SidecarProcess(format!(
-            "failed to parse config defaults at {}: {error}",
-            defaults_path.display()
-        ))
-    })?;
-
-    if let Some(auth_config) = config
-        .pointer_mut("/services/auth")
-        .and_then(Value::as_object_mut)
-    {
-        auth_config.insert("enabled".to_string(), json!(true));
-    }
-    let gateway_config = config
-        .pointer_mut("/services/gateway")
-        .and_then(Value::as_object_mut)
-        .ok_or_else(|| {
-            AuroraCommandError::SidecarProcess(
-                "config defaults are missing services.gateway".to_string(),
-            )
-        })?;
-    gateway_config.insert("enabled".to_string(), json!(true));
-    let api_config = gateway_config
-        .get_mut("api")
-        .and_then(Value::as_object_mut)
-        .ok_or_else(|| {
-            AuroraCommandError::SidecarProcess(
-                "config defaults are missing services.gateway.api".to_string(),
-            )
-        })?;
-    api_config.insert(
-        "host".to_string(),
-        json!(gateway.host_str().unwrap_or("127.0.0.1")),
-    );
-    if let Some(port) = gateway.port_or_known_default() {
-        api_config.insert("port".to_string(), json!(port));
-    }
-
-    let path = env::temp_dir().join(format!(
-        "aurora-tauri-sidecar-{}-config.json",
-        std::process::id()
-    ));
-    let serialized = serde_json::to_string_pretty(&config).map_err(|error| {
-        AuroraCommandError::SidecarProcess(format!("failed to serialize sidecar config: {error}"))
-    })?;
-    fs::write(&path, serialized).map_err(|error| {
-        AuroraCommandError::SidecarProcess(format!(
-            "failed to write sidecar config at {}: {error}",
-            path.display()
-        ))
-    })?;
-    Ok(path)
 }
 
 fn generate_sidecar_token() -> String {
@@ -3663,41 +3564,6 @@ mod tests {
     fn default_sidecar_working_dir_points_to_repo_root() {
         let cwd = sidecar_working_dir();
         assert!(cwd.join("main.py").is_file());
-        assert!(cwd
-            .join("app")
-            .join("services")
-            .join("config")
-            .join("config_defaults.json")
-            .is_file());
-    }
-
-    #[test]
-    fn generated_sidecar_config_enables_loopback_gateway() {
-        let defaults_path = sidecar_working_dir()
-            .join("app")
-            .join("services")
-            .join("config")
-            .join("config_defaults.json");
-        let path = sidecar_config_file_from_defaults(
-            &defaults_path,
-            &Url::parse("http://127.0.0.1:8765").unwrap(),
-        )
-        .unwrap();
-        let config = fs::read_to_string(path).unwrap();
-        let value: Value = serde_json::from_str(&config).unwrap();
-        assert_eq!(
-            value.pointer("/services/gateway/enabled"),
-            Some(&json!(true))
-        );
-        assert_eq!(value.pointer("/services/auth/enabled"), Some(&json!(true)));
-        assert_eq!(
-            value.pointer("/services/gateway/api/host"),
-            Some(&json!("127.0.0.1"))
-        );
-        assert_eq!(
-            value.pointer("/services/gateway/api/port"),
-            Some(&json!(8765))
-        );
     }
 
     #[test]

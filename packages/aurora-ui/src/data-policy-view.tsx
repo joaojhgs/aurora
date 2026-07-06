@@ -13,6 +13,8 @@ import type {
 import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
 
 export type DataPolicyLoadState = 'loading' | 'ready' | 'degraded' | 'denied' | 'empty' | 'error'
 
@@ -151,30 +153,70 @@ export async function buildDataPolicySnapshot(client: AuroraClient, route: Route
 export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
   const totals = useMemo(() => dataPolicyTotals(snapshot.namespaces, snapshot.conversations, snapshot.checks), [snapshot.namespaces, snapshot.conversations, snapshot.checks])
 
+  const retentionColumns: Array<DataColumn<DBRAGNamespaceInfo>> = [
+    {
+      key: 'namespace',
+      header: 'Namespace',
+      render: (namespace) => (
+        <span className="aui-cell-stack">
+          <strong>{namespace.namespace}</strong>
+          <small>{namespace.record_count === null ? 'records unknown' : `${namespace.record_count} records`}</small>
+        </span>
+      )
+    },
+    { key: 'privacy', header: 'Privacy', render: (namespace) => <PrivacyBadge privacy={normalizeRagPrivacyClass(namespace.policy.privacy_class)} /> },
+    {
+      key: 'retention',
+      header: 'Retention and sharing',
+      render: (namespace) => (
+        <span className="aui-cell-stack">
+          <span>{namespace.policy.sharing_mode}</span>
+          <small>{namespace.freshness ?? 'freshness not reported'}</small>
+        </span>
+      )
+    },
+    { key: 'visibility', header: 'Visibility', hideAt: 'lg', render: (namespace) => <span className="aui-cell-text">{namespaceVisibility(namespace)}</span> },
+    { key: 'flows', header: 'Data flows', hideAt: 'md', render: (namespace) => <span className="aui-cell-text">{dataFlowText(namespace)}</span> },
+    {
+      key: 'audit',
+      header: 'Audit and AdminAction',
+      hideAt: 'lg',
+      render: (namespace) => (
+        <span className="aui-cell-text">
+          {namespace.policy.requires_admin_approval ? 'AdminAction required for export/import/delete' : namespace.policy.denial_reason ?? 'read/search policy only'}
+        </span>
+      )
+    }
+  ]
+
   return (
     <section className="aui-route-policy-view" aria-labelledby="data-policy-title">
-      <header className="aui-route-policy-header">
-        <div>
-          <p className="aui-kicker">Memory data policy</p>
-          <h1 id="data-policy-title">Data policy and retention</h1>
-          <p>Review settings-style privacy controls for retention defaults, namespace visibility, raw audio/transcript storage, remote fallback rules, data flows, and audit state before data leaves Aurora.</p>
-        </div>
-        <div className="aui-mesh-badges" aria-label="Data policy status">
-          <StatusBadge state={dataPolicyStatusState(snapshot.loadState)} />
-          <PrivacyBadge privacy={totals.highestPrivacy} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          <EvidenceBadge label={snapshot.generatedAt ?? 'Gateway catalog timestamp pending'} />
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Memory"
+        id="data-policy-title"
+        title="Data policy and retention"
+        description="Review settings-style privacy controls for retention defaults, namespace visibility, raw audio/transcript storage, remote fallback rules, data flows, and audit state before data leaves Aurora."
+        badges={
+          <>
+            <StatusBadge state={dataPolicyStatusState(snapshot.loadState)} />
+            <PrivacyBadge privacy={totals.highestPrivacy} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <EvidenceBadge label={snapshot.generatedAt ?? 'Gateway catalog timestamp pending'} />
+          </>
+        }
+      />
 
-      <dl className="aui-route-policy-summary" aria-label="Data policy summary cards">
-        <PolicyFact label="Retention defaults" value={`${totals.retentionModes} across ${snapshot.namespaces.length} namespace(s)`} />
-        <PolicyFact label="Namespace visibility" value={`${totals.localNamespaces} local, ${totals.remoteNamespaces} remote, ${totals.deniedNamespaces} denied/stale`} />
-        <PolicyFact label="Raw audio/transcripts" value={totals.audioPolicy} />
-        <PolicyFact label="Audit trail" value={`${totals.auditTargets} audit target(s); ${totals.policyDecisions} policy decision(s)`} />
-      </dl>
+      <StatStrip
+        ariaLabel="Data policy summary"
+        items={[
+          { label: 'Retention defaults', value: totals.retentionModes, caption: `${snapshot.namespaces.length} namespace(s)` },
+          { label: 'Namespace visibility', value: `${totals.localNamespaces} local / ${totals.remoteNamespaces} remote`, caption: `${totals.deniedNamespaces} denied or stale` },
+          { label: 'Raw audio/transcripts', value: `${snapshot.conversations.length} transcript record(s)`, caption: 'raw audio off by default' },
+          { label: 'Audit trail', value: `${totals.auditTargets} target(s)`, caption: `${totals.policyDecisions} policy decision(s)` }
+        ]}
+      />
 
-      {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{snapshot.error}</p> : null}
+      {snapshot.error ? <div className="aui-inline-alert aui-inline-alert-danger" role="alert"><span>{snapshot.error}</span></div> : null}
       {snapshot.loadState === 'loading' ? <p className="aui-message">Loading data policy from Aurora.</p> : null}
       {snapshot.loadState === 'empty' ? <p className="aui-message">No namespaces or transcript records were returned by the backend.</p> : null}
       {snapshot.warnings.length > 0 ? (
@@ -183,70 +225,54 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         </ul>
       ) : null}
 
-      <div className="aui-route-policy-layout">
-        <section className="aui-route-policy-panel" aria-labelledby="retention-defaults-title">
-          <div className="aui-panel-heading">
-            <PanelTitle icon={<Database size={18} aria-hidden />} title="Retention defaults and namespace visibility" description="DB.RAGListNamespaces is the source of truth for sharing mode, privacy class, operations, freshness, and AdminAction requirements." id="retention-defaults-title" />
-            <button className="aui-button" type="button" onClick={onRefresh} disabled={snapshot.loadState === 'loading'}><RefreshCw size={16} aria-hidden /> Refresh</button>
-          </div>
-          <div className="aui-table-wrap">
-            <table className="aui-admin-table">
-              <thead>
-                <tr>
-                  <th>Namespace</th>
-                  <th>Privacy</th>
-                  <th>Retention/sharing</th>
-                  <th>Visibility</th>
-                  <th>Data flows</th>
-                  <th>Audit/AdminAction</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshot.namespaces.map((namespace) => (
-                  <tr key={namespace.namespace}>
-                    <td><strong>{namespace.namespace}</strong><small>{namespace.record_count === null ? 'records unknown' : `${namespace.record_count} records`}</small></td>
-                    <td><PrivacyBadge privacy={normalizeRagPrivacyClass(namespace.policy.privacy_class)} /></td>
-                    <td>{namespace.policy.sharing_mode}<small>{namespace.freshness ?? 'freshness not reported'}</small></td>
-                    <td>{namespaceVisibility(namespace)}</td>
-                    <td>{dataFlowText(namespace)}</td>
-                    <td>{namespace.policy.requires_admin_approval ? 'AdminAction required for export/import/delete' : namespace.policy.denial_reason ?? 'read/search policy only'}</td>
-                  </tr>
-                ))}
-                {snapshot.namespaces.length === 0 ? <tr><td colSpan={6}>No namespace policy rows returned.</td></tr> : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      <Card
+        title="Retention defaults and namespace visibility"
+        description="DB.RAGListNamespaces is the source of truth for sharing mode, privacy class, operations, freshness, and AdminAction requirements."
+        icon={<Database size={18} aria-hidden />}
+        actions={<Button variant="ghost" icon={<RefreshCw size={15} aria-hidden />} onClick={onRefresh} disabled={snapshot.loadState === 'loading'}>Refresh</Button>}
+      >
+        <DataTable
+          columns={retentionColumns}
+          rows={snapshot.namespaces}
+          getRowKey={(namespace) => namespace.namespace}
+          empty={<div className="aui-empty-inline"><p>No namespace policy rows returned.</p></div>}
+        />
+      </Card>
 
-        <section className="aui-route-policy-panel" aria-labelledby="storage-fallback-title">
-          <div className="aui-panel-heading">
-            <PanelTitle icon={<Mic size={18} aria-hidden />} title="Raw audio, transcripts, and fallback rules" description="Storage toggles are represented as policy state until backend AdminAction mutation endpoints exist." id="storage-fallback-title" />
-          </div>
-          <div className="aui-route-policy-form">
+      <div className="aui-two-col">
+        <Card
+          title="Raw audio, transcripts, and fallback rules"
+          description="Storage toggles are represented as policy state until backend AdminAction mutation endpoints exist."
+          icon={<Mic size={18} aria-hidden />}
+        >
+          <div className="aui-policy-toggles">
             <DataPolicyToggle label="Raw audio storage" value="Off by default" detail="Raw audio is transient unless the selected route, consent, privacy indicator, and backend policy allow retention." />
             <DataPolicyToggle label="Transcript storage" value={`${snapshot.conversations.length} recent transcript record(s)`} detail="Conversation text is loaded via DB.GetMessages and inherits each record privacy class; retention changes require AdminAction audit." />
             <DataPolicyToggle label="Remote/mesh fallback" value={totals.remoteFallback} detail="Remote RAG and audio routes require explicit selector, consent/privacy indicators where applicable, and cannot silently fall back to cloud." />
             <DataPolicyToggle label="Namespace visibility" value={totals.visibilityPolicy} detail="Denied, stale, and secret namespaces stay visible as policy status but are not actionable data sources." />
           </div>
-        </section>
+        </Card>
+
+        <Card
+          title="Export, delete, and import data flows"
+          description="Each flow is enabled only when namespace policy and AdminAction permit it; no raw payloads or tokens are rendered."
+          icon={<ShieldCheck size={18} aria-hidden />}
+        >
+          <div className="aui-route-scenarios" aria-label="Data policy flow cards">
+            <FlowCard icon={<FileDown size={18} aria-hidden />} label="Export snapshot" value={`${totals.exportableNamespaces} namespace(s)`} detail="Exports require namespace policy support plus AdminAction approval before records leave this node." />
+            <FlowCard icon={<Trash2 size={18} aria-hidden />} label="Delete record" value={`${totals.deleteableNamespaces} namespace(s)`} detail="Deletes remain admin-critical and must carry reason, policy decision, and audit correlation." />
+            <FlowCard icon={<Upload size={18} aria-hidden />} label="Import preview" value={`${totals.importableNamespaces} namespace(s)`} detail="Imports are previewed before write; owner overwrite and remote source metadata remain policy-gated." />
+            <FlowCard icon={<Network size={18} aria-hidden />} label="Remote query" value={`${totals.remoteQueryableNamespaces} namespace(s)`} detail="Remote query is allowed only for selected namespaces and never exposes raw SQL or unrestricted replication." />
+          </div>
+        </Card>
       </div>
 
-      <section className="aui-route-policy-panel" aria-labelledby="data-flows-title">
-        <div className="aui-panel-heading">
-          <PanelTitle icon={<ShieldCheck size={18} aria-hidden />} title="Export, delete, and import data flows" description="Each flow is enabled only when namespace policy and AdminAction permit it; no raw payloads or tokens are rendered." id="data-flows-title" />
-        </div>
-        <div className="aui-route-scenarios" aria-label="Data policy flow cards">
-          <FlowCard icon={<FileDown size={18} aria-hidden />} label="Export snapshot" value={`${totals.exportableNamespaces} namespace(s)`} detail="Exports require namespace policy support plus AdminAction approval before records leave this node." />
-          <FlowCard icon={<Trash2 size={18} aria-hidden />} label="Delete record" value={`${totals.deleteableNamespaces} namespace(s)`} detail="Deletes remain admin-critical and must carry reason, policy decision, and audit correlation." />
-          <FlowCard icon={<Upload size={18} aria-hidden />} label="Import preview" value={`${totals.importableNamespaces} namespace(s)`} detail="Imports are previewed before write; owner overwrite and remote source metadata remain policy-gated." />
-          <FlowCard icon={<Network size={18} aria-hidden />} label="Remote query" value={`${totals.remoteQueryableNamespaces} namespace(s)`} detail="Remote query is allowed only for selected namespaces and never exposes raw SQL or unrestricted replication." />
-        </div>
-      </section>
-
-      <section className="aui-route-policy-panel" aria-labelledby="audit-policy-title">
-        <div className="aui-panel-heading">
-          <PanelTitle icon={<History size={18} aria-hidden />} title="Audit trail for policy changes" description="Route policy dry-runs show the audit target, policy decision, fallback behavior, and blockers that would accompany data-policy changes." id="audit-policy-title" />
-        </div>
+      <Card
+        title="Audit trail for policy changes"
+        description="Route policy dry-runs show the audit target, policy decision, fallback behavior, and blockers that would accompany data-policy changes."
+        icon={<History size={18} aria-hidden />}
+        actions={<a className="aui-btn aui-btn-ghost aui-btn-sm" href="/admin/audit">Open audit log</a>}
+      >
         <div className="aui-route-scenarios" role="list" aria-label="Data policy audit trail">
           {snapshot.checks.map((check) => (
             <article key={check.id} className="aui-route-candidate" role="listitem" data-selected={check.evaluation?.allowed ?? false}>
@@ -265,9 +291,8 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
             </article>
           ))}
         </div>
-        <a className="aui-action-chip" href="/admin/audit">Open audit log</a>
         <p className="aui-message" role="alert">Policy edits require AdminAction draft/confirm/audit through Config.Set; this route does not mutate retention, raw audio, transcript, fallback, export, delete, or import policy directly.</p>
-      </section>
+      </Card>
     </section>
   )
 }
@@ -372,10 +397,6 @@ function dataFlowText(namespace: DBRAGNamespaceInfo) {
 
 function PolicyFact({ label, value }: { label: string; value: string }) {
   return <div><dt>{label}</dt><dd>{value}</dd></div>
-}
-
-function PanelTitle({ icon, id, title, description }: { icon: React.ReactNode; id: string; title: string; description: string }) {
-  return <div>{icon}<div><h2 id={id}>{title}</h2><p>{description}</p></div></div>
 }
 
 function DataPolicyToggle({ label, value, detail }: { label: string; value: string; detail: string }) {

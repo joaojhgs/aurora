@@ -13,6 +13,16 @@ import type {
   PrivacyClass
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PageHeader } from './state-surface'
+import {
+  AdminConfirmDialog,
+  Card,
+  Checkbox,
+  DataTable,
+  MetaGrid,
+  StatStrip,
+  type DataColumn
+} from './primitives'
 
 export interface ModelsViewProps {
   client: AuroraClient
@@ -118,6 +128,8 @@ export function ModelsView({
   const [error, setError] = useState<string | null>(initialError)
   const [selectingProviderId, setSelectingProviderId] = useState<string | null>(null)
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null)
+  const [pendingProvider, setPendingProvider] = useState<ModelProviderViewModel | null>(null)
+  const [reason, setReason] = useState('')
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
 
   useEffect(() => {
@@ -153,12 +165,9 @@ export function ModelsView({
     [catalog, graph, nativeManifest, loadState, error]
   )
 
-  async function selectProvider(provider: ModelProviderViewModel) {
-    if (!provider.canSelect || !provider.selectConfigValue || selectingProviderId) return
-    if (!reauthConfirmed) {
-      setSelectionMessage('Confirm AdminAction reauthentication before selecting a model provider.')
-      return
-    }
+  async function confirmProviderSelection() {
+    const provider = pendingProvider
+    if (!provider?.canSelect || !provider.selectConfigValue || selectingProviderId) return
     setSelectingProviderId(provider.id)
     setSelectionMessage(null)
     try {
@@ -167,7 +176,7 @@ export function ModelsView({
           key_path: 'services.orchestrator.llm.provider',
           value: provider.selectConfigValue
         },
-        reason: `Select model provider ${provider.name} from Aurora Models runtime`,
+        reason: reason.trim() || `Select model provider ${provider.name} from Aurora Models runtime`,
         reauthConfirmed
       })
       if (!result.data.success) throw new Error(result.data.error ?? 'Config.Set did not accept the provider selection')
@@ -175,6 +184,9 @@ export function ModelsView({
       setCatalog(nextCatalog)
       setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
       setSelectionMessage(`Provider selection applied through Config.Set AdminAction. Audit receipt: ${result.confirmation.audit_receipt}`)
+      setPendingProvider(null)
+      setReason('')
+      setReauthConfirmed(false)
     } catch (nextError) {
       setSelectionMessage(`Provider selection failed: ${modelErrorMessage(nextError)}`)
     } finally {
@@ -182,23 +194,37 @@ export function ModelsView({
     }
   }
 
+  function requestProviderSelection(provider: ModelProviderViewModel) {
+    if (!provider.canSelect || provider.selected || selectingProviderId) return
+    setReason(`Select model provider ${provider.name} from Aurora Models runtime`)
+    setReauthConfirmed(false)
+    setPendingProvider(provider)
+  }
+
   return (
-    <section className="aui-models" aria-labelledby="aui-models-title" data-state={model.loadState}>
-      <header className="aui-models-header">
-        <div>
-          <p className="aui-kicker">Models</p>
-          <h1 id="aui-models-title">Models and runtime</h1>
-          <p>
-            Provider health, route, privacy, hardware, and benchmark states are loaded through Aurora.
-          </p>
-        </div>
-        <div className="aui-model-badges" aria-label="Model catalog summary">
-          <EvidenceBadge label={`${model.providerCount} providers`} />
-          <EvidenceBadge label={`${model.availableCount} routeable`} />
-          <EvidenceBadge label={`${model.remoteCount} remote`} />
-          <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-        </div>
-      </header>
+    <div className="aui-models" data-state={model.loadState}>
+      <PageHeader
+        id="aui-models-title"
+        eyebrow="Models"
+        title="Models and runtime"
+        description="Provider health, route, privacy, hardware, and benchmark states are loaded through Aurora."
+        badges={
+          <>
+            <EvidenceBadge label={`${model.providerCount} providers`} />
+            <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+          </>
+        }
+      />
+
+      <StatStrip
+        ariaLabel="Model catalog summary"
+        items={[
+          { label: 'Providers', value: String(model.providerCount) },
+          { label: 'Routeable', value: `${model.availableCount} routeable` },
+          { label: 'Remote', value: `${model.remoteCount} remote` },
+          { label: 'Updated', value: model.generatedAt ?? 'pending' }
+        ]}
+      />
 
       {model.loadState === 'loading' ? (
         <ModelNotice icon="loading" message="Loading model runtime catalog from Aurora." />
@@ -218,41 +244,76 @@ export function ModelsView({
 
       {model.providers.length > 0 ? (
         <>
-          <label className="aui-confirmation-check">
-            <input type="checkbox" checked={reauthConfirmed} onChange={(event) => setReauthConfirmed(event.currentTarget.checked)} />
-            <span>I confirm recent AdminAction reauthentication for model provider changes.</span>
-          </label>
           <ModelRoutePolicyBanner providers={model.providers} selectedProviderId={model.selectedProviderId} />
-          <ModelRuntimeCategories rows={model.categoryRows} />
+          <Card title="Model runtime categories" icon={<HardDrive size={18} aria-hidden="true" />}>
+            <ModelRuntimeCategories rows={model.categoryRows} />
+          </Card>
           <div className="aui-model-grid">
             {model.providers.map((provider) => (
               <ModelProviderCard
                 key={provider.id}
                 provider={provider}
                 selecting={selectingProviderId === provider.id}
-                onSelect={selectProvider}
+                onSelect={requestProviderSelection}
               />
             ))}
           </div>
-          <ModelRoutePolicyPanel providers={model.providers} />
+          <Card title="Provider route policy" icon={<Route size={18} aria-hidden="true" />}>
+            <ModelRoutePolicyPanel providers={model.providers} />
+          </Card>
           <div className="aui-model-layout">
-            <ModelProviderTable providers={model.providers} />
+            <Card title="Runtime providers" flush>
+              <ModelProviderTable providers={model.providers} />
+            </Card>
             <aside className="aui-model-summary" aria-label="Runtime summary">
-              <h2>Runtime state</h2>
-              <dl>
-                <div><dt>Updated</dt><dd>{model.generatedAt ?? 'pending'}</dd></div>
-                <div><dt>Selected provider</dt><dd>{model.selectedProviderId ?? 'not selected'}</dd></div>
-                <div><dt>Mobile local-light</dt><dd><StatusBadge state={model.mobileLocalLightState} /></dd></div>
-                <div><dt>Native state</dt><dd>{model.mobileLocalLightReason}</dd></div>
-              </dl>
-              <ModelBenchmarkSnapshot rows={model.benchmarkRows} />
-              <ModelSetupActions providers={model.providers} />
-              <ModelWarnings warnings={model.warnings} />
+              <Card title="Runtime state">
+                <MetaGrid
+                  items={[
+                    { label: 'Updated', value: model.generatedAt ?? 'pending' },
+                    { label: 'Selected provider', value: model.selectedProviderId ?? 'not selected' },
+                    { label: 'Mobile local-light', value: <StatusBadge state={model.mobileLocalLightState} /> },
+                    { label: 'Native state', value: model.mobileLocalLightReason }
+                  ]}
+                />
+                <ModelBenchmarkSnapshot rows={model.benchmarkRows} />
+                <ModelSetupActions providers={model.providers} />
+                <ModelWarnings warnings={model.warnings} />
+              </Card>
             </aside>
           </div>
         </>
       ) : null}
-    </section>
+
+      {pendingProvider ? (
+        <AdminConfirmDialog
+          open
+          title={`Select ${pendingProvider.name}`}
+          description={`Apply ${pendingProvider.selectConfigValue ?? 'provider'} through Config.Set AdminAction.`}
+          methodId="Config.Set"
+          severity="standard"
+          affected={[pendingProvider.id]}
+          requireReason
+          reasonValue={reason}
+          onReasonChange={setReason}
+          confirmLabel={`Select ${pendingProvider.name}`}
+          onConfirm={() => { void confirmProviderSelection() }}
+          onCancel={() => {
+            setPendingProvider(null)
+            setReason('')
+            setReauthConfirmed(false)
+          }}
+          busy={selectingProviderId === pendingProvider.id}
+          extraValid={reauthConfirmed}
+          extraInvalidReason="Confirm AdminAction reauthentication before selecting a model provider."
+        >
+          <Checkbox
+            checked={reauthConfirmed}
+            onChange={setReauthConfirmed}
+            label="I confirm recent AdminAction reauthentication for model provider changes."
+          />
+        </AdminConfirmDialog>
+      ) : null}
+    </div>
   )
 }
 
@@ -386,60 +447,44 @@ function ModelRoutePolicyBanner({
 
 function ModelRuntimeCategories({ rows }: { rows: ModelRuntimeCategoryRow[] }) {
   return (
-    <section className="aui-model-categories" aria-labelledby="model-categories-title">
-      <div className="aui-model-panel-title">
-        <span><HardDrive size={18} aria-hidden="true" /></span>
-        <div>
-          <h2 id="model-categories-title">Model runtime categories</h2>
-          <p>Provider inventory separates selection, configured backends, local files, operations, benchmarks, mesh routes, and mobile-native proof.</p>
+    <dl className="aui-model-categories-list" aria-label="Model runtime categories">
+      {rows.map((row) => (
+        <div key={row.id}>
+          <dt>{row.label}</dt>
+          <dd>
+            <StatusBadge state={row.state} />
+            <strong>{row.value}</strong>
+            <small>{row.detail}</small>
+          </dd>
         </div>
-      </div>
-      <dl>
-        {rows.map((row) => (
-          <div key={row.id}>
-            <dt>{row.label}</dt>
-            <dd>
-              <StatusBadge state={row.state} />
-              <strong>{row.value}</strong>
-              <small>{row.detail}</small>
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </section>
+      ))}
+    </dl>
   )
 }
 
 function ModelRoutePolicyPanel({ providers }: { providers: ModelProviderViewModel[] }) {
   return (
-    <section className="aui-model-route-policy" aria-labelledby="model-route-policy-title">
-      <div className="aui-model-panel-title">
-        <span><Route size={18} aria-hidden="true" /></span>
-        <div>
-          <h2 id="model-route-policy-title">Provider route policy</h2>
-          <p>Route, privacy, and blocker state is read from the capability graph and runtime catalog; selector-only policy is not treated as a hard blocker.</p>
-        </div>
-      </div>
-      <div className="aui-model-route-grid">
-        {providers.map((provider) => (
-          <article className="aui-model-route-card" key={provider.id}>
-            <header>
-              <div>
-                <p className="aui-kicker">{provider.providerType} provider</p>
-                <h3>{provider.name}</h3>
-              </div>
-              <StatusBadge state={provider.availability} />
-            </header>
-            <dl className="aui-model-meta">
-              <div><dt>Route</dt><dd>{provider.routeLabel}</dd></div>
-              <div><dt>Privacy</dt><dd><PrivacyBadge privacy={provider.privacyClass} /></dd></div>
-              <div><dt>Selectable</dt><dd>{provider.canSelect ? `yes; writes ${provider.selectConfigValue ?? 'unknown'} through Config.Set AdminAction` : provider.selectReason}</dd></div>
-              <div><dt>Blockers</dt><dd>{presentableSignal(provider.blockers.length > 0 ? provider.blockers.join(', ') : 'none reported')}</dd></div>
-            </dl>
-          </article>
-        ))}
-      </div>
-    </section>
+    <div className="aui-model-route-grid">
+      {providers.map((provider) => (
+        <article className="aui-model-route-card" key={provider.id}>
+          <header>
+            <div>
+              <p className="aui-kicker">{provider.providerType} provider</p>
+              <h3>{provider.name}</h3>
+            </div>
+            <StatusBadge state={provider.availability} />
+          </header>
+          <MetaGrid
+            items={[
+              { label: 'Route', value: provider.routeLabel },
+              { label: 'Privacy', value: <PrivacyBadge privacy={provider.privacyClass} /> },
+              { label: 'Selectable', value: provider.canSelect ? `yes; writes ${provider.selectConfigValue ?? 'unknown'} through Config.Set AdminAction` : provider.selectReason },
+              { label: 'Blockers', value: presentableSignal(provider.blockers.length > 0 ? provider.blockers.join(', ') : 'none reported') }
+            ]}
+          />
+        </article>
+      ))}
+    </div>
   )
 }
 
@@ -522,35 +567,63 @@ function ModelWarnings({ warnings }: { warnings: string[] }) {
 }
 
 function ModelProviderTable({ providers }: { providers: ModelProviderViewModel[] }) {
+  const columns: DataColumn<ModelProviderViewModel>[] = [
+    {
+      key: 'provider',
+      header: 'Provider',
+      render: (provider) => (
+        <div>
+          <span>{provider.name}</span>
+          <code>{provider.id}</code>
+        </div>
+      )
+    },
+    {
+      key: 'state',
+      header: 'State',
+      render: (provider) => <StatusBadge state={provider.availability} />
+    },
+    {
+      key: 'route',
+      header: 'Route/privacy',
+      render: (provider) => (
+        <div>
+          {provider.routeLabel}
+          <PrivacyBadge privacy={provider.privacyClass} />
+        </div>
+      )
+    },
+    {
+      key: 'hardware',
+      header: 'Hardware',
+      hideAt: 'lg',
+      render: (provider) => provider.hardware
+    },
+    {
+      key: 'benchmark',
+      header: 'Benchmark',
+      hideAt: 'lg',
+      render: (provider) => provider.benchmark
+    },
+    {
+      key: 'latency',
+      header: 'Latency/context',
+      hideAt: 'md',
+      render: (provider) => provider.latencyContext
+    },
+    {
+      key: 'operation',
+      header: 'Operation',
+      render: (provider) => provider.operationStatus
+    }
+  ]
+
   return (
-    <div className="aui-model-table-wrap">
-      <table className="aui-model-table">
-        <thead>
-          <tr>
-            <th scope="col">Provider</th>
-            <th scope="col">State</th>
-            <th scope="col">Route/privacy</th>
-            <th scope="col">Hardware</th>
-            <th scope="col">Benchmark</th>
-            <th scope="col">Latency/context</th>
-            <th scope="col">Operation</th>
-          </tr>
-        </thead>
-        <tbody>
-          {providers.map((provider) => (
-            <tr key={provider.id}>
-              <th scope="row"><span>{provider.name}</span><code>{provider.id}</code></th>
-              <td><StatusBadge state={provider.availability} /></td>
-              <td>{provider.routeLabel}<br /><PrivacyBadge privacy={provider.privacyClass} /></td>
-              <td>{provider.hardware}</td>
-              <td>{provider.benchmark}</td>
-              <td>{provider.latencyContext}</td>
-              <td>{provider.operationStatus}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={providers}
+      getRowKey={(provider) => provider.id}
+    />
   )
 }
 

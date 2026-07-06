@@ -11,6 +11,8 @@ import type {
   MethodDescriptor
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
 
 export interface AdminOverviewViewProps {
   client: AuroraClient
@@ -66,20 +68,26 @@ export async function buildAdminOverviewSnapshot(client: AuroraClient): Promise<
 export function AdminOverviewContent({ manifest, transportKind, error }: AdminOverviewContentProps) {
   if (!manifest) {
     return (
-      <section className="aui-admin-overview" aria-labelledby="admin-overview-title">
-        <AdminOverviewHeader
+      <div className="aui-admin-overview">
+        <PageHeader
+          id="admin-overview-title"
+          eyebrow="Admin"
           title="Admin overview"
           description="Aurora could not load the admin overview manifest. Controls stay disabled until service status is available."
-          transportKind={transportKind}
-          generatedAt="pending"
-          secretsRedacted
+          badges={
+            <>
+              <EvidenceBadge label={transportKind} />
+              <EvidenceBadge label="secrets protected" />
+              <EvidenceBadge label="pending" />
+            </>
+          }
         />
         <div className="aui-admin-empty" role="alert">
           <h2>Service overview unavailable</h2>
           <p>{errorMessage(error)}</p>
           <a className="aui-action-chip" href="/diagnostics">Open diagnostics</a>
         </div>
-      </section>
+      </div>
     )
   }
 
@@ -89,13 +97,26 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
   const manageMethods = manifest.methods.filter((method) => method.methodType === 'manage')
 
   return (
-    <section className="aui-admin-overview" aria-labelledby="admin-overview-title">
-      <AdminOverviewHeader
+    <div className="aui-admin-overview">
+      <PageHeader
+        id="admin-overview-title"
+        eyebrow="Admin"
         title="Admin overview"
         description="Deployment posture, service health, capability gaps, and repair paths are rendered from the SDK admin overview manifest."
-        transportKind={transportKind}
-        generatedAt={manifest.generatedAt}
-        secretsRedacted={manifest.privacy.secretsRedacted}
+        badges={
+          <>
+            <EvidenceBadge label={transportKind} />
+            <EvidenceBadge label={manifest.privacy.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <EvidenceBadge label={manifest.generatedAt} />
+          </>
+        }
+        actions={
+          <div className="aui-action-row-tight">
+            <a className="aui-btn aui-btn-ghost" href="/diagnostics">Diagnostics export</a>
+            <a className="aui-btn aui-btn-ghost" href="/admin/services">Services</a>
+            <a className="aui-btn aui-btn-ghost" href="/admin/contracts">Contracts registry</a>
+          </div>
+        }
       />
 
       <AdminOverviewMetrics manifest={manifest} gaps={gaps} posture={posture} />
@@ -137,7 +158,7 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
           <p>No manage methods were reported by the registry.</p>
         )}
       </section>
-    </section>
+    </div>
   )
 }
 
@@ -152,91 +173,41 @@ function AdminOverviewMetrics({
 }) {
   const healthyServices = manifest.services.filter((service) => service.status.toLowerCase() === 'healthy').length
   return (
-    <section className="aui-admin-metrics" aria-label="Deployment metrics">
-      <div className="aui-admin-metric">
-        <span>Services</span>
-        <strong>{manifest.totals.services}</strong>
-        <small>
-          {healthyServices}/{manifest.totals.services} healthy from Gateway.GetServices and registry summaries
-        </small>
-      </div>
-      <div className="aui-admin-metric">
-        <span>Capability gaps</span>
-        <strong>{gaps.length}</strong>
-        <small>
-          {manifest.totals.capabilityActions} catalog actions; denied/stale/privacy-blocked/unsupported stay visible
-        </small>
-      </div>
-      <div className="aui-admin-metric">
-        <span>Mesh peers</span>
-        <strong>{manifest.totals.peers}</strong>
-        <small>Peer summaries reported by SDK; peer state invented={String(manifest.privacy.peerStateInvented)}</small>
-      </div>
-      <div className="aui-admin-metric">
-        <span>Deployment posture</span>
-        <strong>
-          <StatusBadge state={posture} />
-        </strong>
-        <small>
-          {manifest.deploymentTopology
-            ? deploymentModeLabel(manifest.deploymentTopology)
-            : 'topology status unavailable'}
-        </small>
-      </div>
-    </section>
+    <StatStrip
+      ariaLabel="Deployment metrics"
+      items={[
+        { label: 'Services', value: String(manifest.totals.services), caption: `${healthyServices}/${manifest.totals.services} healthy from Gateway.GetServices and registry summaries` },
+        { label: 'Capability gaps', value: String(gaps.length), caption: `${manifest.totals.capabilityActions} catalog actions; denied/stale/privacy-blocked/unsupported stay visible` },
+        { label: 'Mesh peers', value: String(manifest.totals.peers), caption: `Peer summaries reported by SDK; peer state invented=${String(manifest.privacy.peerStateInvented)}` },
+        { label: 'Deployment posture', value: <StatusBadge state={posture} />, caption: manifest.deploymentTopology ? deploymentModeLabel(manifest.deploymentTopology) : 'topology status unavailable' }
+      ]}
+    />
   )
 }
 
-function AdminOverviewHeader({
-  title,
-  description,
-  transportKind,
-  generatedAt,
-  secretsRedacted
-}: {
-  title: string
-  description: string
-  transportKind: string
-  generatedAt: string
-  secretsRedacted: boolean
-}) {
-  return (
-    <header className="aui-admin-header">
-      <div>
-        <p className="aui-kicker">Operator surface</p>
-        <h1 id="admin-overview-title">{title}</h1>
-        <p>{description}</p>
-      </div>
-      <div className="aui-admin-badges" aria-label="Admin overview status">
-        <EvidenceBadge label={transportKind} />
-        <EvidenceBadge label={secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-        <EvidenceBadge label={generatedAt} />
-      </div>
-    </header>
-  )
-}
 
 function PosturePanel({ manifest, posture }: { manifest: AdminOverviewManifest; posture: AvailabilityState }) {
   const topology = manifest.deploymentTopology
   return (
-    <section className="aui-admin-panel" aria-labelledby="deployment-posture-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Deployment</p>
-          <h2 id="deployment-posture-title">Posture</h2>
-        </div>
-        <StatusBadge state={posture} />
-      </div>
-      <dl className="aui-admin-facts">
-        <div><dt>Service mode</dt><dd>{manifest.serviceMode}</dd></div>
-        <div><dt>Runtime</dt><dd>{topology ? deploymentModeLabel(topology) : 'service contract topology unavailable'}</dd></div>
-        <div><dt>Registry digest</dt><dd>{manifest.registryDigest || 'not reported'}</dd></div>
-        <div><dt>Services</dt><dd>{manifest.totals.services}</dd></div>
-        <div><dt>Methods</dt><dd>{manifest.totals.externalMethods} external / {manifest.totals.internalMethods} internal</dd></div>
-        <div><dt>Peers</dt><dd>{manifest.totals.peers}</dd></div>
-        <div><dt>Native</dt><dd>{manifest.native.availability} via {manifest.native.evidenceSource}</dd></div>
-      </dl>
-    </section>
+    <Card
+      description="Deployment posture from the admin overview manifest."
+      actions={<StatusBadge state={posture} />}
+      ariaLabel="Deployment posture"
+    >
+      <h2 className="aui-section-title">Posture</h2>
+      <MetaGrid
+        ariaLabel="Deployment posture facts"
+        items={[
+          { label: 'Service mode', value: manifest.serviceMode },
+          { label: 'Runtime', value: topology ? deploymentModeLabel(topology) : 'service contract topology unavailable' },
+          { label: 'Registry digest', value: manifest.registryDigest || 'not reported', mono: Boolean(manifest.registryDigest) },
+          { label: 'Services', value: String(manifest.totals.services) },
+          { label: 'Methods', value: `${manifest.totals.externalMethods} external / ${manifest.totals.internalMethods} internal` },
+          { label: 'Peers', value: String(manifest.totals.peers) },
+          { label: 'Native', value: `${manifest.native.availability} via ${manifest.native.evidenceSource}` }
+        ]}
+      />
+    </Card>
   )
 }
 
@@ -256,29 +227,36 @@ function DeploymentTopologyPanel({
     ...(topology?.bullmq_queue_health.degraded_reasons ?? [])
   ])
   const controlsSupported = supportsProcessControls(manifest)
+  const topologyColumns: Array<DataColumn<(typeof visibleServices)[number]>> = [
+    { key: 'service', header: 'Service', render: (service) => service.module },
+    { key: 'topology', header: 'Topology', render: (service) => service.topology },
+    { key: 'status', header: 'Status', render: (service) => (service.stale ? 'stale' : service.status) },
+    { key: 'hint', header: 'Hint', render: (service) => service.container_hint ?? service.process_hint ?? 'not reported', hideAt: 'md' }
+  ]
 
   return (
-    <section className="aui-admin-panel" aria-labelledby="deployment-topology-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Runtime topology</p>
-          <h2 id="deployment-topology-title">Deployment topology</h2>
-        </div>
-        <StatusBadge state={topologyState} />
-      </div>
-
+    <Card
+      description="Runtime topology from Gateway.GetDeploymentTopology."
+      actions={<StatusBadge state={topologyState} />}
+      ariaLabel="Deployment topology"
+      flush={visibleServices.length > 0}
+    >
+      <h2 className="aui-section-title">Deployment topology</h2>
       {topology ? (
         <>
-          <dl className="aui-admin-facts">
-            <div><dt>Client boundary</dt><dd>{clientBoundaryLabel(transportKind, topology)}</dd></div>
-            <div><dt>Architecture</dt><dd>{topology.architecture_mode} / {topology.runtime_mode}</dd></div>
-            <div><dt>Bus backend</dt><dd>{topology.bus_backend}</dd></div>
-            <div><dt>Redis</dt><dd>{redisHealthLabel(topology)}</dd></div>
-            <div><dt>BullMQ</dt><dd>{busHealthLabel(topology)}</dd></div>
-            <div><dt>Registry freshness</dt><dd>{staleServices.length > 0 ? `${staleServices.length} stale services` : 'fresh topology status'}</dd></div>
-            <div><dt>Container hints</dt><dd>{containerHintLabel(topology)}</dd></div>
-            <div><dt>Redaction</dt><dd>{topology.secrets_redacted ? 'secrets protected by backend' : 'redaction not confirmed'}</dd></div>
-          </dl>
+          <MetaGrid
+            ariaLabel="Deployment topology facts"
+            items={[
+              { label: 'Client boundary', value: clientBoundaryLabel(transportKind, topology) },
+              { label: 'Architecture', value: `${topology.architecture_mode} / ${topology.runtime_mode}` },
+              { label: 'Bus backend', value: topology.bus_backend },
+              { label: 'Redis', value: redisHealthLabel(topology) },
+              { label: 'BullMQ', value: busHealthLabel(topology) },
+              { label: 'Registry freshness', value: staleServices.length > 0 ? `${staleServices.length} stale services` : 'fresh topology status' },
+              { label: 'Container hints', value: containerHintLabel(topology) },
+              { label: 'Redaction', value: topology.secrets_redacted ? 'secrets protected by backend' : 'redaction not confirmed' }
+            ]}
+          />
 
           {degradedReasons.length > 0 ? (
             <ul className="aui-admin-gap-list" aria-label="Deployment degraded reasons">
@@ -300,28 +278,12 @@ function DeploymentTopologyPanel({
           )}
 
           {visibleServices.length > 0 ? (
-            <div className="aui-table-wrap">
-              <table className="aui-admin-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Service</th>
-                    <th scope="col">Topology</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Hint</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleServices.map((service) => (
-                    <tr key={`${service.module}:${service.instance_id ?? service.topology}`}>
-                      <th scope="row">{service.module}</th>
-                      <td>{service.topology}</td>
-                      <td>{service.stale ? 'stale' : service.status}</td>
-                      <td>{service.container_hint ?? service.process_hint ?? 'not reported'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={topologyColumns}
+              rows={visibleServices}
+              getRowKey={(service) => `${service.module}:${service.instance_id ?? service.topology}`}
+              caption="Service process topology"
+            />
           ) : null}
         </>
       ) : (
@@ -351,7 +313,7 @@ function DeploymentTopologyPanel({
           Process controls {controlsSupported ? 'read-only here' : 'unsupported'}
         </button>
       </div>
-    </section>
+    </Card>
   )
 }
 

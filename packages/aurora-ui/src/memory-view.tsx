@@ -13,6 +13,8 @@ import type {
 import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Button, Card, MetaGrid, StatStrip, type StatItem } from './primitives'
 
 export interface MemoryViewProps {
   client: AuroraClient
@@ -194,37 +196,38 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
     ? normalizeRagPrivacyClass(model.selectedNamespace.info.policy.privacy_class)
     : route.item.privacyClass
   const statusCopy = useMemo(() => memoryStatusCopy(model), [model])
+  const statItems = useMemo(() => memoryStatItems(model), [model])
 
   return (
     <section className="aui-memory" aria-labelledby="memory-title">
-      <header className="aui-memory-header">
-        <div>
-          <p className="aui-kicker">Memory</p>
-          <h1 id="memory-title">{'Memory & Knowledge'}</h1>
-          <p>{statusCopy}</p>
-        </div>
-        <div className="aui-assistant-badges" aria-label="Memory service status">
-          <StatusBadge state={route.state} />
-          <PrivacyBadge privacy={selectedPrivacy} />
-          <EvidenceBadge label={route.providerLabel} />
-          <EvidenceBadge label={client.transport.kind} />
-          {model.correlationId ? <EvidenceBadge label={`audit ${model.correlationId}`} /> : null}
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Memory"
+        title="Memory & Knowledge"
+        description={statusCopy}
+        id="memory-title"
+        badgesLabel="Memory service status"
+        badges={
+          <>
+            <StatusBadge state={route.state} />
+            <PrivacyBadge privacy={selectedPrivacy} />
+            <EvidenceBadge label={route.providerLabel} />
+            <EvidenceBadge label={client.transport.kind} />
+            {model.correlationId ? <EvidenceBadge label={`audit ${model.correlationId}`} /> : null}
+          </>
+        }
+      />
 
-      <MemorySummaryGrid model={model} />
+      <StatStrip ariaLabel="Memory summary cards" items={statItems} />
 
-      <section className="aui-memory-collections" aria-labelledby="memory-collections-title">
-        <div className="aui-memory-section-heading">
-          <div>
-            <p className="aui-kicker">Collections</p>
-            <h2 id="memory-collections-title">Memory & RAG collections</h2>
-          </div>
-          <a className="aui-action-chip" href="/memory/policy">
-            <HardDrive size={15} aria-hidden />
-            Retention policy
+      <Card
+        title="Memory & RAG collections"
+        actions={
+          <a className="aui-btn aui-btn-ghost aui-btn-sm" href="/memory/policy">
+            <span className="aui-btn-icon" aria-hidden><HardDrive size={15} /></span>
+            <span>Retention policy</span>
           </a>
-        </div>
+        }
+      >
         {model.namespaces.length === 0 ? (
           <div className="aui-memory-empty">
             <strong>No collections reported</strong>
@@ -247,49 +250,68 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
             ))}
           </div>
         )}
-      </section>
+      </Card>
 
-      <form className="aui-memory-search" onSubmit={onSubmit}>
-        <label htmlFor="memory-namespace">Namespace</label>
-        <select
-          id="memory-namespace"
-          value={namespace}
-          onChange={(event) => setNamespace(event.currentTarget.value)}
-          disabled={model.loadState === 'loading'}
-        >
-          {model.namespaces.length === 0 ? <option value="">No namespace reported</option> : null}
-          {model.namespaces.map((candidate) => (
-            <option key={candidate.info.namespace} value={candidate.info.namespace}>
-              {candidate.label}
-            </option>
-          ))}
-        </select>
+      <Card title="Search memory and RAG" description="Search runs DB.RAGSearch through Aurora and returns provenance-backed records only.">
+        <form className="aui-memory-toolbar" onSubmit={onSubmit}>
+          <label htmlFor="memory-namespace">
+            <span>Namespace</span>
+            <select
+              id="memory-namespace"
+              value={namespace}
+              onChange={(event) => setNamespace(event.currentTarget.value)}
+              disabled={model.loadState === 'loading'}
+            >
+              {model.namespaces.length === 0 ? <option value="">No namespace reported</option> : null}
+              {model.namespaces.map((candidate) => (
+                <option key={candidate.info.namespace} value={candidate.info.namespace}>
+                  {candidate.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label htmlFor="memory-query">Search</label>
-        <input
-          id="memory-query"
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-          disabled={!canSearch || model.loadState === 'loading'}
-          aria-label="Search memory and RAG"
-          placeholder={canSearch ? 'Search memory and RAG...' : model.actions.search.reason}
-        />
-        <button type="submit" disabled={!canSearch || query.trim().length === 0 || model.loadState === 'loading'}>
-          <Search size={16} aria-hidden />
-          <span>Search</span>
-        </button>
-        <button type="button" disabled={isRefreshing} onClick={() => void refresh({ namespace, query })}>
-          <RefreshCw size={16} aria-hidden />
-          <span>Refresh</span>
-        </button>
-      </form>
+          <label htmlFor="memory-query" className="aui-memory-toolbar-search">
+            <span>Search</span>
+            <div className="aui-input-icon">
+              <Search size={15} aria-hidden />
+              <input
+                id="memory-query"
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                disabled={!canSearch || model.loadState === 'loading'}
+                aria-label="Search memory and RAG"
+                placeholder={canSearch ? 'Search memory and RAG...' : 'Search unavailable'}
+              />
+            </div>
+          </label>
 
-      {model.error ? <p className="aui-memory-alert" role="alert">{model.error}</p> : null}
-      {model.denialReason ? <p className="aui-memory-alert" role="alert">{model.denialReason}</p> : null}
+          <div className="aui-memory-toolbar-actions">
+            <Button type="submit" disabled={!canSearch || query.trim().length === 0 || model.loadState === 'loading'} icon={<Search size={15} />}>
+              Search
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isRefreshing}
+              onClick={() => void refresh({ namespace, query })}
+              icon={<RefreshCw size={15} />}
+              ariaLabel="Refresh memory and namespaces"
+            >
+              Refresh
+            </Button>
+          </div>
+        </form>
+        {!canSearch && model.actions.search.reason ? (
+          <p className="aui-memory-search-note">{model.actions.search.reason}</p>
+        ) : null}
+      </Card>
+
+      {model.error ? <div className="aui-inline-alert aui-inline-alert-danger" role="alert"><span>{model.error}</span></div> : null}
+      {model.denialReason ? <div className="aui-inline-alert aui-inline-alert-danger" role="alert"><span>{model.denialReason}</span></div> : null}
 
       <div className="aui-memory-grid">
-        <section className="aui-memory-panel" aria-labelledby="memory-namespaces-title">
-          <h2 id="memory-namespaces-title">Namespaces</h2>
+        <Card title="Namespaces" ariaLabel="Namespaces">
           <div className="aui-namespace-list">
             {model.namespaces.map((candidate) => (
               <button
@@ -307,30 +329,30 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
               </button>
             ))}
           </div>
-        </section>
+        </Card>
 
-        <section className="aui-memory-panel" aria-labelledby="memory-results-title" aria-live="polite">
-          <h2 id="memory-results-title">Search results</h2>
-          {model.searchItems.length === 0 ? (
-            <div className="aui-memory-empty">
-              <strong>{model.searchDecision === 'not-requested' ? 'Search has not run' : 'No visible results'}</strong>
-              <span>{model.searchDecision === 'not-requested' ? 'Submit a query to ask the backend for provenance-backed records.' : model.denialReason ?? 'The backend returned no records for this namespace.'}</span>
-            </div>
-          ) : (
-            <div className="aui-memory-results">
-              {model.searchItems.map((item) => (
-                <MemoryResultCard
-                  key={`${item.namespace}:${item.key}`}
-                  item={item}
-                  namespace={model.namespaces.find((candidate) => candidate.info.namespace === item.namespace) ?? null}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+        <Card title="Search results" ariaLabel="Search results">
+          <div aria-live="polite">
+            {model.searchItems.length === 0 ? (
+              <div className="aui-memory-empty">
+                <strong>{model.searchDecision === 'not-requested' ? 'Search has not run' : 'No visible results'}</strong>
+                <span>{model.searchDecision === 'not-requested' ? 'Submit a query to ask the backend for provenance-backed records.' : model.denialReason ?? 'The backend returned no records for this namespace.'}</span>
+              </div>
+            ) : (
+              <div className="aui-memory-results">
+                {model.searchItems.map((item) => (
+                  <MemoryResultCard
+                    key={`${item.namespace}:${item.key}`}
+                    item={item}
+                    namespace={model.namespaces.find((candidate) => candidate.info.namespace === item.namespace) ?? null}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
 
-        <section className="aui-memory-panel" aria-labelledby="memory-history-title">
-          <h2 id="memory-history-title">Conversation history</h2>
+        <Card title="Conversation history" ariaLabel="Conversation history">
           {model.conversations.length === 0 ? (
             <div className="aui-memory-empty">
               <strong>No conversations reported</strong>
@@ -350,27 +372,30 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
               ))}
             </div>
           )}
-        </section>
+        </Card>
+      </div>
 
-        <aside className="aui-memory-panel" aria-labelledby="memory-actions-title">
-          <h2 id="memory-actions-title">Data controls</h2>
+      <Card title="Data controls" ariaLabel="Data controls" description="Export, delete, and import actions remain governed by namespace policy and AdminAction.">
+        <div className="aui-memory-actions-row">
           <MemoryActionButton icon="download" action={model.actions.export} />
           <MemoryActionButton icon="trash" action={model.actions.delete} />
           <MemoryActionButton icon="upload" action={model.actions.importPreview} />
-          <dl className="aui-memory-facts">
-            <div><dt>Policy</dt><dd>{model.selectedNamespace?.info.policy.sharing_mode ?? 'none'}</dd></div>
-            <div><dt>Provider</dt><dd>{model.selectedNamespace?.info.provider_peer_id ?? 'not reported'}</dd></div>
-            <div><dt>Source peer</dt><dd>{model.selectedNamespace?.info.source_peer_id ?? 'not reported'}</dd></div>
-            <div><dt>Policy decision</dt><dd>{model.policyDecisionId ?? 'pending search'}</dd></div>
-            <div><dt>Correlation</dt><dd>{model.correlationId ?? 'pending search'}</dd></div>
-          </dl>
-        </aside>
-      </div>
+        </div>
+        <MetaGrid
+          items={[
+            { label: 'Policy', value: model.selectedNamespace?.info.policy.sharing_mode ?? 'none' },
+            { label: 'Provider', value: model.selectedNamespace?.info.provider_peer_id ?? 'not reported' },
+            { label: 'Source peer', value: model.selectedNamespace?.info.source_peer_id ?? 'not reported' },
+            { label: 'Policy decision', value: model.policyDecisionId ?? 'pending search', mono: true },
+            { label: 'Correlation', value: model.correlationId ?? 'pending search', mono: true }
+          ]}
+        />
+      </Card>
     </section>
   )
 }
 
-function MemorySummaryGrid({ model }: { model: MemoryViewModel }) {
+function memoryStatItems(model: MemoryViewModel): StatItem[] {
   const knownRecords = model.namespaces.reduce((total, namespace) => total + (namespace.info.record_count ?? 0), 0)
   const unknownRecords = model.namespaces.filter((namespace) => namespace.info.record_count === null).length
   const sharingModes = [...new Set(model.namespaces.map((namespace) => namespace.info.policy.sharing_mode))]
@@ -394,30 +419,29 @@ function MemorySummaryGrid({ model }: { model: MemoryViewModel }) {
         ? embeddingModels.join(', ')
         : 'Waiting for backend namespace metadata.'
 
-  return (
-    <section className="aui-memory-summary" aria-label="Memory summary cards">
-      <article>
-        <span>Namespaces</span>
-        <strong>{model.namespaces.length}</strong>
-        <small>{model.selectedNamespace?.info.namespace ?? 'No namespace selected'}</small>
-      </article>
-      <article>
-        <span>Records</span>
-        <strong>{knownRecords.toLocaleString()}</strong>
-        <small>{unknownRecords > 0 ? `${unknownRecords} namespace(s) did not report counts` : 'All selected namespaces report counts'}</small>
-      </article>
-      <article>
-        <span>Retention</span>
-        <strong>{sharingModes.length > 0 ? sharingModes.join(', ') : 'policy pending'}</strong>
-        <small>Actions remain governed by namespace policy and AdminAction.</small>
-      </article>
-      <article>
-        <span>Embedding health</span>
-        <strong>{embeddingState}</strong>
-        <small>{embeddingCopy}</small>
-      </article>
-    </section>
-  )
+  return [
+    {
+      label: 'Namespaces',
+      value: model.namespaces.length,
+      caption: model.selectedNamespace?.info.namespace ?? 'No namespace selected'
+    },
+    {
+      label: 'Records',
+      value: knownRecords.toLocaleString(),
+      caption: unknownRecords > 0 ? `${unknownRecords} namespace(s) did not report counts` : 'All selected namespaces report counts'
+    },
+    {
+      label: 'Retention',
+      value: sharingModes.length > 0 ? sharingModes.join(', ') : 'policy pending',
+      caption: 'Actions remain governed by namespace policy and AdminAction.'
+    },
+    {
+      label: 'Embedding health',
+      value: embeddingState,
+      caption: embeddingCopy,
+      tone: missingEmbeddings.length > 0 ? 'warning' : 'default'
+    }
+  ]
 }
 
 function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; namespace: MemoryNamespaceView | null }) {
@@ -429,16 +453,23 @@ function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; name
         {item.redacted ? <span className="aui-badge aui-badge-privacy-blocked">redacted</span> : null}
       </header>
       <p>{text}</p>
-      <dl className="aui-memory-facts">
-        <div><dt>Namespace</dt><dd>{item.namespace}</dd></div>
-        <div><dt>Peer/provider</dt><dd>{item.provenance.source_peer_id}</dd></div>
-        <div><dt>Route path</dt><dd>{item.provenance.owner_peer_id === item.provenance.source_peer_id ? 'owner peer' : `${item.provenance.source_peer_id} -> ${item.provenance.owner_peer_id}`}</dd></div>
-        <div><dt>Privacy class</dt><dd>{namespace?.info.policy.privacy_class ?? 'not reported by namespace metadata'}</dd></div>
-        <div><dt>Citation</dt><dd>{item.provenance.record_id}</dd></div>
-        <div><dt>Policy</dt><dd>{item.provenance.policy_decision_id}</dd></div>
-        <div><dt>Audit</dt><dd>{item.provenance.correlation_id}</dd></div>
-        <div><dt>Tombstone</dt><dd>{item.provenance.tombstone ? item.provenance.delete_reason ?? 'deleted' : 'active'}</dd></div>
-      </dl>
+      <MetaGrid
+        items={[
+          { label: 'Namespace', value: item.namespace },
+          { label: 'Peer/provider', value: item.provenance.source_peer_id },
+          {
+            label: 'Route path',
+            value: item.provenance.owner_peer_id === item.provenance.source_peer_id
+              ? 'owner peer'
+              : `${item.provenance.source_peer_id} -> ${item.provenance.owner_peer_id}`
+          },
+          { label: 'Privacy class', value: namespace?.info.policy.privacy_class ?? 'not reported by namespace metadata' },
+          { label: 'Citation', value: item.provenance.record_id, mono: true },
+          { label: 'Policy', value: item.provenance.policy_decision_id, mono: true },
+          { label: 'Audit', value: item.provenance.correlation_id, mono: true },
+          { label: 'Tombstone', value: item.provenance.tombstone ? item.provenance.delete_reason ?? 'deleted' : 'active' }
+        ]}
+      />
       {item.redaction_reasons.length > 0 ? <small>{item.redaction_reasons.join(', ')}</small> : null}
     </article>
   )
@@ -447,10 +478,9 @@ function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; name
 function MemoryActionButton({ action, icon }: { action: MemoryActionState; icon: 'download' | 'trash' | 'upload' }) {
   const Icon = icon === 'download' ? Download : icon === 'trash' ? Trash2 : Upload
   return (
-    <button className="aui-memory-action" type="button" disabled={action.disabled} title={action.reason}>
-      <Icon size={16} aria-hidden />
-      <span>{action.label}</span>
-    </button>
+    <Button variant="outline" disabled={action.disabled} disabledReason={action.reason} icon={<Icon size={15} />}>
+      {action.label}
+    </Button>
   )
 }
 

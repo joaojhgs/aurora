@@ -1,0 +1,26 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "#components",
+    "utils": "#lib/utils",
+    "ui": "#components/ui",
+    "lib": "#lib",
+    "hooks": "#hooks"
+  },
+  "registries": {
+    "@assistant-ui": "https://r.assistant-ui.com/{name}.json",
+    "@animate-ui": "https://animate-ui.com/r/{name}.json",
+    "@agents-ui": "https://livekit.com/ui/r/{name}.json"
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, Download, Filter, Lock, Search, ShieldCheck } from 'lucide-react'
+import { Activity, Download, Lock, Search, ShieldCheck } from 'lucide-react'
 import {
   AuroraError,
   type AuditLogEntry,
@@ -12,6 +12,8 @@ import {
   type JsonValue
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Button, Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
 
 export type AdminAuditLoadState =
   | 'loading'
@@ -256,98 +258,124 @@ export function AdminAuditView({
     }
   }, [selectedRowId, visibleRows])
 
+  const eventColumns: Array<DataColumn<AdminAuditRow>> = [
+    {
+      key: 'time',
+      header: 'Time',
+      render: (row) => (
+        <span className="aui-cell-stack">
+          <strong>{row.createdAt}</strong>
+          <small>{row.lifecycleLabel}</small>
+        </span>
+      )
+    },
+    {
+      key: 'event',
+      header: 'Event / action',
+      render: (row) => (
+        <span className="aui-cell-stack">
+          <strong>{row.event}</strong>
+          <small>{row.action}</small>
+        </span>
+      )
+    },
+    { key: 'principal', header: 'Principal', render: (row) => <span className="aui-cell-text">{row.principalId}</span> },
+    {
+      key: 'resource',
+      header: 'Route / resource',
+      hideAt: 'lg',
+      render: (row) => (
+        <span className="aui-cell-stack">
+          <strong>{row.routePath}</strong>
+          <small>{row.peerId} / {row.providerId}</small>
+        </span>
+      )
+    },
+    {
+      key: 'result',
+      header: 'Result',
+      render: (row) => (
+        <div className="aui-state-line">
+          <StatusBadge state={statusAvailability(row.status)} />
+          <span>{row.status}</span>
+        </div>
+      )
+    },
+    {
+      key: 'correlation',
+      header: 'Correlation / receipt',
+      hideAt: 'md',
+      render: (row) => (
+        <span className="aui-cell-stack">
+          <code className="aui-mono">{row.correlationId}</code>
+          <small className="aui-mono">{row.receipt}</small>
+        </span>
+      )
+    }
+  ]
+
   return (
     <section className="aui-admin-audit" aria-labelledby="admin-audit-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-audit-title">Audit log</h1>
-          <p>
-            Audit search, mesh trace filters, event receipts, redacted payload previews, and export are loaded through Aurora.
-          </p>
-        </div>
-        <div className="aui-admin-badges" aria-label="Audit service status">
-          {isStatusBadgeState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          <PrivacyBadge privacy="admin-critical" />
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Admin"
+        id="admin-audit-title"
+        title="Audit log"
+        description="Audit search, mesh trace filters, event receipts, redacted payload previews, and export are loaded through Aurora."
+        badges={
+          <>
+            {isStatusBadgeState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <PrivacyBadge privacy="admin-critical" />
+          </>
+        }
+      />
 
       <AuditStatusPanel snapshot={snapshot} />
 
-      <div className="aui-admin-metrics" aria-label="Audit summary">
-        <Metric label="Events" value={String(visibleRows.length)} detail={`${snapshot.total} returned by Auth.AuditLog`} />
-        <Metric label="Denied" value={String(totals.denied)} detail="policy, auth, replay, or selector denial" />
-        <Metric label="Approvals" value={String(totals.approvals)} detail="approval lifecycle events" />
-        <Metric label="Correlations" value={String(totals.correlations)} detail="support-bundle trace IDs" />
-      </div>
+      <StatStrip
+        ariaLabel="Audit summary"
+        items={[
+          { label: 'Events', value: visibleRows.length, caption: `${snapshot.total} returned by Auth.AuditLog` },
+          { label: 'Denied', value: totals.denied, caption: 'policy, auth, replay, or selector denial', tone: totals.denied > 0 ? 'danger' : 'default' },
+          { label: 'Approvals', value: totals.approvals, caption: 'approval lifecycle events' },
+          { label: 'Correlations', value: totals.correlations, caption: 'support-bundle trace IDs' }
+        ]}
+      />
 
-      <section className="aui-admin-panel" aria-labelledby="audit-controls-title">
-        <div className="aui-panel-heading">
-          <div>
-            <p className="aui-kicker">Filters</p>
-            <h2 id="audit-controls-title">Search actor, action, resource, and time</h2>
-          </div>
-          <button
-            className="aui-action-chip"
-            type="button"
+      <Card
+        ariaLabel="Filters"
+        title="Search actor, action, resource, and time"
+        description={snapshot.exportReason}
+        actions={
+          <Button
+            variant="outline"
+            icon={<Download size={15} aria-hidden />}
             disabled={snapshot.exportState === 'unsupported' || visibleRows.length === 0}
-            title={snapshot.exportReason}
+            disabledReason={snapshot.exportReason}
             onClick={() => onExport?.(visibleRows)}
           >
-            <Download size={15} aria-hidden />
             Export redacted
-          </button>
-        </div>
+          </Button>
+        }
+      >
         <div role="group" aria-label="Filters">
           <AuditFilters
             filters={effectiveFilters}
             {...(onFiltersChange ? { onChange: onFiltersChange } : {})}
           />
         </div>
-        <div className="aui-audit-filter-note" role="status">
-          <Filter size={16} aria-hidden />
-          <span>{snapshot.exportReason}</span>
-        </div>
-      </section>
+      </Card>
 
-      <section className="aui-admin-panel" aria-labelledby="audit-events-title">
-        <div className="aui-panel-heading">
-          <div>
-            <p className="aui-kicker">Events</p>
-            <h2 id="audit-events-title">Redacted event details</h2>
-          </div>
-        </div>
-        {visibleRows.length === 0 ? (
-          <p className="aui-muted">No audit events match the current SDK-backed filters.</p>
-        ) : (
-          <div className="aui-table-scroll">
-            <table className="aui-table aui-audit-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Event</th>
-                  <th>Principal</th>
-                  <th>Route/provider</th>
-                  <th>Status</th>
-                  <th>Correlation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.map((row) => (
-                  <AuditRow
-                    key={row.id}
-                    row={row}
-                    selected={selectedRow?.id === row.id}
-                    onSelect={() => setSelectedRowId(row.id)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <Card ariaLabel="Events" title="Redacted event details">
+        <DataTable
+          columns={eventColumns}
+          rows={visibleRows}
+          getRowKey={(row) => row.id}
+          onRowClick={(row) => setSelectedRowId(row.id)}
+          empty={<div className="aui-empty-inline"><p>No audit events match the current SDK-backed filters.</p></div>}
+        />
+      </Card>
       {selectedRow ? <AuditDetailDrawer row={selectedRow} /> : null}
     </section>
   )
@@ -397,68 +425,75 @@ function AuditFilters({
   }
 
   return (
-    <div className="aui-audit-filters">
-      <label>
-        <span>Search</span>
-        <div className="aui-input-icon">
-          <Search size={15} aria-hidden />
-          <input value={filters.query} onChange={(event) => update('query', event.currentTarget.value)} placeholder="actor, event, receipt, route" />
+    <div className="aui-audit-filterbar">
+      <div className="aui-audit-filterbar-row">
+        <label className="aui-audit-search">
+          <span>Search</span>
+          <div className="aui-input-icon">
+            <Search size={15} aria-hidden />
+            <input value={filters.query} onChange={(event) => update('query', event.currentTarget.value)} placeholder="actor, event, receipt, route" />
+          </div>
+        </label>
+        <label>
+          <span>Event</span>
+          <select value={filters.event} onChange={(event) => update('event', event.currentTarget.value)}>
+            <option value="all">All events</option>
+            <option value="admin_action.requested">Requested</option>
+            <option value="admin_action.confirmed">Approved</option>
+            <option value="admin_action.denied">Denied</option>
+            <option value="tooling.approval_scope_created">Approve-all scope created</option>
+            <option value="tooling.approval_token_expired">Token expired</option>
+            <option value="tooling.approval_replay_rejected">Replay rejected</option>
+            <option value="tooling.execute.completed">Executed</option>
+            <option value="tooling.execute.dry_run">Dry-run</option>
+          </select>
+        </label>
+        <label>
+          <span>Result</span>
+          <select value={filters.status} onChange={(event) => update('status', event.currentTarget.value)}>
+            <option value="all">All results</option>
+            <option value="requested">Requested</option>
+            <option value="approved">Approved</option>
+            <option value="executed">Executed</option>
+            <option value="denied">Denied</option>
+            <option value="failed">Failed</option>
+            <option value="token-expired">Token expired</option>
+            <option value="replay-rejected">Replay rejected</option>
+            <option value="dry-run">Dry-run</option>
+            <option value="recorded">Recorded</option>
+          </select>
+        </label>
+        <FilterInput label="Created after" type="datetime-local" value={filters.createdAfter ?? ''} onChange={(value) => update('createdAfter', value)} />
+        <FilterInput label="Created before" type="datetime-local" value={filters.createdBefore ?? ''} onChange={(value) => update('createdBefore', value)} />
+      </div>
+      <details className="aui-audit-more-filters">
+        <summary>More filters</summary>
+        <div className="aui-audit-filterbar-row aui-audit-filterbar-grid">
+          <FilterInput label="Actor" value={filters.actor ?? ''} onChange={(value) => update('actor', value)} />
+          <FilterInput label="Action" value={filters.action ?? ''} onChange={(value) => update('action', value)} />
+          <FilterInput label="Resource" value={filters.resource ?? ''} onChange={(value) => update('resource', value)} />
+          <FilterInput label="Principal" value={filters.principalId} onChange={(value) => update('principalId', value)} />
+          <FilterInput label="Peer/provider" value={filters.peerOrProvider} onChange={(value) => update('peerOrProvider', value)} />
+          <FilterInput label="Route path" value={filters.routePath} onChange={(value) => update('routePath', value)} />
+          <label>
+            <span>Approval mode</span>
+            <select value={filters.approvalMode} onChange={(event) => update('approvalMode', event.currentTarget.value)}>
+              <option value="all">All modes</option>
+              <option value="none">None</option>
+              <option value="single">Single approval</option>
+              <option value="approve_all">Approve all</option>
+              <option value="admin_action">AdminAction</option>
+              <option value="dry_run">Dry-run</option>
+            </select>
+          </label>
+          <FilterInput label="Tool ID" value={filters.toolId} onChange={(value) => update('toolId', value)} />
+          <FilterInput label="Data namespace" value={filters.dataNamespace} onChange={(value) => update('dataNamespace', value)} />
+          <FilterInput label="Audio session" value={filters.audioSessionId} onChange={(value) => update('audioSessionId', value)} />
+          <FilterInput label="Scheduler job" value={filters.schedulerJobId} onChange={(value) => update('schedulerJobId', value)} />
+          <FilterInput label="Correlation ID" value={filters.correlationId} onChange={(value) => update('correlationId', value)} />
+          <FilterInput label="Denial reason" value={filters.denialReason} onChange={(value) => update('denialReason', value)} />
         </div>
-      </label>
-      <FilterInput label="Actor" value={filters.actor ?? ''} onChange={(value) => update('actor', value)} />
-      <FilterInput label="Action" value={filters.action ?? ''} onChange={(value) => update('action', value)} />
-      <FilterInput label="Resource" value={filters.resource ?? ''} onChange={(value) => update('resource', value)} />
-      <FilterInput label="Created after" type="datetime-local" value={filters.createdAfter ?? ''} onChange={(value) => update('createdAfter', value)} />
-      <FilterInput label="Created before" type="datetime-local" value={filters.createdBefore ?? ''} onChange={(value) => update('createdBefore', value)} />
-      <label>
-        <span>Event</span>
-        <select value={filters.event} onChange={(event) => update('event', event.currentTarget.value)}>
-          <option value="all">All events</option>
-          <option value="admin_action.requested">Requested</option>
-          <option value="admin_action.confirmed">Approved</option>
-          <option value="admin_action.denied">Denied</option>
-          <option value="tooling.approval_scope_created">Approve-all scope created</option>
-          <option value="tooling.approval_token_expired">Token expired</option>
-          <option value="tooling.approval_replay_rejected">Replay rejected</option>
-          <option value="tooling.execute.completed">Executed</option>
-          <option value="tooling.execute.dry_run">Dry-run</option>
-        </select>
-      </label>
-      <FilterInput label="Principal" value={filters.principalId} onChange={(value) => update('principalId', value)} />
-      <FilterInput label="Peer/provider" value={filters.peerOrProvider} onChange={(value) => update('peerOrProvider', value)} />
-      <FilterInput label="Route path" value={filters.routePath} onChange={(value) => update('routePath', value)} />
-      <label>
-        <span>Approval mode</span>
-        <select value={filters.approvalMode} onChange={(event) => update('approvalMode', event.currentTarget.value)}>
-          <option value="all">All modes</option>
-          <option value="none">None</option>
-          <option value="single">Single approval</option>
-          <option value="approve_all">Approve all</option>
-          <option value="admin_action">AdminAction</option>
-          <option value="dry_run">Dry-run</option>
-        </select>
-      </label>
-      <label>
-        <span>Result</span>
-        <select value={filters.status} onChange={(event) => update('status', event.currentTarget.value)}>
-          <option value="all">All results</option>
-          <option value="requested">Requested</option>
-          <option value="approved">Approved</option>
-          <option value="executed">Executed</option>
-          <option value="denied">Denied</option>
-          <option value="failed">Failed</option>
-          <option value="token-expired">Token expired</option>
-          <option value="replay-rejected">Replay rejected</option>
-          <option value="dry-run">Dry-run</option>
-          <option value="recorded">Recorded</option>
-        </select>
-      </label>
-      <FilterInput label="Tool ID" value={filters.toolId} onChange={(value) => update('toolId', value)} />
-      <FilterInput label="Data namespace" value={filters.dataNamespace} onChange={(value) => update('dataNamespace', value)} />
-      <FilterInput label="Audio session" value={filters.audioSessionId} onChange={(value) => update('audioSessionId', value)} />
-      <FilterInput label="Scheduler job" value={filters.schedulerJobId} onChange={(value) => update('schedulerJobId', value)} />
-      <FilterInput label="Correlation ID" value={filters.correlationId} onChange={(value) => update('correlationId', value)} />
-      <FilterInput label="Denial reason" value={filters.denialReason} onChange={(value) => update('denialReason', value)} />
+      </details>
     </div>
   )
 }
@@ -472,93 +507,45 @@ function FilterInput({ label, type = 'text', value, onChange }: { label: string;
   )
 }
 
-function AuditRow({ row, selected, onSelect }: { row: AdminAuditRow; selected: boolean; onSelect: () => void }) {
-  return (
-    <tr aria-selected={selected}>
-      <td>
-        <strong>{row.createdAt}</strong>
-        <small>{row.lifecycleLabel}</small>
-      </td>
-      <td>
-        <details className="aui-service-details">
-          <summary>
-            <strong>{row.event}</strong>
-            <small>{row.action}</small>
-          </summary>
-          <div className="aui-service-drawer">
-            <dl>
-              <div><dt>Audit receipt</dt><dd>{row.receipt}</dd></div>
-              <div><dt>Payload hash</dt><dd>{row.payloadHash}</dd></div>
-              <div><dt>Approval mode</dt><dd>{row.approvalMode}</dd></div>
-              <div><dt>Denial reason</dt><dd>{row.denialReason}</dd></div>
-              <div><dt>Tool ID</dt><dd>{row.toolId}</dd></div>
-              <div><dt>Data namespace</dt><dd>{row.dataNamespace}</dd></div>
-              <div><dt>Audio session</dt><dd>{row.audioSessionId}</dd></div>
-              <div><dt>Scheduler job</dt><dd>{row.schedulerJobId}</dd></div>
-            </dl>
-            <div className="aui-redacted-preview">
-              <h3>Redacted payload preview</h3>
-              <code>{row.redactedPreview}</code>
-            </div>
-          </div>
-        </details>
-      </td>
-      <td>
-        <strong>{row.principalId}</strong>
-        <small>{row.receipt}</small>
-      </td>
-      <td>
-        <strong>{row.routePath}</strong>
-        <small>{row.peerId} / {row.providerId}</small>
-      </td>
-      <td>
-        <div className="aui-state-line">
-          <StatusBadge state={statusAvailability(row.status)} />
-          <span>{row.status}</span>
-        </div>
-      </td>
-      <td>
-        <button className="aui-action-chip" type="button" onClick={onSelect} aria-pressed={selected}>
-          {selected ? 'Selected detail' : 'View detail'}
-        </button>
-        <code>{row.correlationId}</code>
-        <small>{row.supportBundleCorrelationIds.join(', ')}</small>
-      </td>
-    </tr>
-  )
-}
-
 function AuditDetailDrawer({ row }: { row: AdminAuditRow }) {
   return (
-    <aside className="aui-admin-panel aui-service-drawer" aria-labelledby="audit-selected-detail-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Selected detail</p>
-          <h2 id="audit-selected-detail-title">{row.event}</h2>
-        </div>
-        <EvidenceBadge label={`correlation ${row.correlationId}`} />
-      </div>
-      <dl>
-        <div><dt>Actor</dt><dd>{row.principalId}</dd></div>
-        <div><dt>Action</dt><dd>{row.action}</dd></div>
-        <div><dt>Resource</dt><dd>{resourceSummary(row)}</dd></div>
-        <div><dt>Created at</dt><dd>{row.createdAt}</dd></div>
-        <div><dt>Correlation ID</dt><dd><code>{row.correlationId}</code></dd></div>
-        <div><dt>Audit receipt</dt><dd>{row.receipt}</dd></div>
-        <div><dt>Payload hash</dt><dd>{row.payloadHash}</dd></div>
-      </dl>
+    <Card
+      ariaLabel="Selected detail"
+      icon={<ShieldCheck size={18} aria-hidden />}
+      title={<span id="audit-selected-detail-title">Selected detail: {row.event}</span>}
+      description="Redacted payload preview, receipts, and correlation ids for the selected event."
+      actions={<EvidenceBadge label={`correlation ${row.correlationId}`} />}
+    >
+      <MetaGrid
+        items={[
+          { label: 'Actor', value: row.principalId },
+          { label: 'Action', value: row.action },
+          { label: 'Resource', value: resourceSummary(row) },
+          { label: 'Created at', value: row.createdAt },
+          { label: 'Correlation ID', value: row.correlationId, mono: true },
+          { label: 'Audit receipt', value: row.receipt, mono: true },
+          { label: 'Payload hash', value: row.payloadHash, mono: true },
+          { label: 'Approval mode', value: row.approvalMode },
+          { label: 'Denial reason', value: row.denialReason },
+          { label: 'Tool ID', value: row.toolId },
+          { label: 'Data namespace', value: row.dataNamespace },
+          { label: 'Audio session', value: row.audioSessionId },
+          { label: 'Scheduler job', value: row.schedulerJobId },
+          { label: 'Support-bundle correlations', value: row.supportBundleCorrelationIds.join(', ') || 'none' }
+        ]}
+      />
       <div className="aui-redacted-preview">
-        <h3>Redacted detail payload</h3>
+        <h3>Redacted payload preview</h3>
         <code>{row.redactedPreview}</code>
       </div>
-    </aside>
+    </Card>
   )
 }
 
 function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   if (snapshot.loadState === 'loading') {
     return (
-      <div className="aui-admin-notice" aria-live="polite">
+      <div className="aui-inline-alert" aria-live="polite">
         <Activity size={18} aria-hidden />
         <span>Loading audit events and redaction metadata through Aurora.</span>
       </div>
@@ -567,27 +554,17 @@ function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   if (snapshot.loadState === 'ready') return null
   if (snapshot.loadState === 'empty') {
     return (
-      <div className="aui-admin-notice" role="status">
+      <div className="aui-inline-alert" role="status">
         <ShieldCheck size={18} aria-hidden />
         <span>No audit rows match the active search and trace filters.</span>
       </div>
     )
   }
   return (
-    <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
+    <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
       <Lock size={18} aria-hidden />
       <span>{snapshot.error ?? 'Audit status is degraded or unavailable. Export remains disabled until redacted SDK data is present.'}</span>
     </div>
-  )
-}
-
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <article className="aui-admin-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
   )
 }
 

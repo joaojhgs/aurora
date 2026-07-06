@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Route, Save, ShieldCheck } from 'lucide-react'
+import { RefreshCw, Route } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
@@ -85,27 +85,8 @@ export interface RoutePolicyResourceProps {
 
 export interface RoutePolicyViewProps {
   snapshot: RoutePolicySnapshot
-  draft: RoutePolicyDraft
-  pendingSave?: boolean
-  saveError?: string | null
-  onDraftChange?: (draft: RoutePolicyDraft) => void
   onSelectScenario?: (id: RoutePolicyScenarioId) => void
   onRefresh?: () => void
-  onSavePolicy?: () => void
-}
-
-const defaultDraft: RoutePolicyDraft = {
-  module: 'TTS',
-  requireExplicitSelector: true,
-  allowedPeers: '',
-  deniedPeers: '',
-  requiredCapabilities: 'synthesize',
-  minimumVersion: '',
-  trustTier: 'paired',
-  fallbackPolicy: 'local',
-  safetySensitiveClasses: 'admin-critical, raw-audio, credential',
-  reason: 'Update mesh route fallback and explicit selector policy',
-  reauthConfirmed: false
 }
 
 const loadingSnapshot: RoutePolicySnapshot = {
@@ -117,7 +98,7 @@ const loadingSnapshot: RoutePolicySnapshot = {
   policyCapabilityState: 'pending',
   policyCapabilityReason: 'Loading Gateway.ExplainRoute and capability catalog.',
   configCapabilityState: 'pending',
-  configCapabilityReason: 'Loading Config.Set AdminAction capability.',
+  configCapabilityReason: 'Loading Config.Set approval capability.',
   canEditPolicy: false,
   scenarios: routePolicyScenarios().map((scenario) => ({
     scenario,
@@ -134,61 +115,33 @@ const loadingSnapshot: RoutePolicySnapshot = {
 
 export function RoutePolicyResource({ client, route }: RoutePolicyResourceProps) {
   const [snapshot, setSnapshot] = useState<RoutePolicySnapshot>(loadingSnapshot)
-  const [draft, setDraft] = useState<RoutePolicyDraft>(defaultDraft)
   const [selectedScenarioId, setSelectedScenarioId] = useState<RoutePolicyScenarioId>('assistant_prompt')
-  const [pendingSave, setPendingSave] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [persistedReceipt, setPersistedReceipt] = useState<string | null>(null)
 
   const routeKey = routePolicyRouteKey(route)
   const stableRoute = useMemo(() => route, [routeKey])
 
   const loadPolicy = useCallback(async () => {
-    setSnapshot({ ...loadingSnapshot, selectedScenarioId, persistedReceipt })
-    const next = await buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId, persistedReceipt)
+    setSnapshot({ ...loadingSnapshot, selectedScenarioId })
+    const next = await buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId)
     setSnapshot(next)
-  }, [client, stableRoute, selectedScenarioId, persistedReceipt])
+  }, [client, stableRoute, selectedScenarioId])
 
   useEffect(() => {
     let cancelled = false
-    setSnapshot({ ...loadingSnapshot, selectedScenarioId, persistedReceipt })
-    void buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId, persistedReceipt).then((next) => {
+    setSnapshot({ ...loadingSnapshot, selectedScenarioId })
+    void buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId).then((next) => {
       if (!cancelled) setSnapshot(next)
     })
     return () => {
       cancelled = true
     }
-  }, [client, stableRoute, selectedScenarioId, persistedReceipt])
-
-  const savePolicy = useCallback(async () => {
-    if (!snapshot.canEditPolicy) return
-    setPendingSave(true)
-    setSaveError(null)
-    try {
-      const result = await client.config.applyChange({
-        change: routePolicyDraftChange(draft),
-        reason: draft.reason,
-        reauthConfirmed: draft.reauthConfirmed
-      })
-      setPersistedReceipt(result.confirmation.audit_receipt)
-      await loadPolicy()
-    } catch (error) {
-      setSaveError(routePolicyErrorMessage(error))
-    } finally {
-      setPendingSave(false)
-    }
-  }, [client.config, draft, loadPolicy, snapshot.canEditPolicy])
+  }, [client, stableRoute, selectedScenarioId])
 
   return (
     <RoutePolicyView
       snapshot={snapshot}
-      draft={draft}
-      pendingSave={pendingSave}
-      saveError={saveError}
-      onDraftChange={setDraft}
       onSelectScenario={setSelectedScenarioId}
       onRefresh={loadPolicy}
-      onSavePolicy={savePolicy}
     />
   )
 }
@@ -258,12 +211,12 @@ export async function buildRoutePolicySnapshot(
     configCapabilityState: configCapability ? capabilityAvailability(configCapability) : 'unsupported',
     configCapabilityReason: configCapability
       ? capabilityReason(configCapability)
-      : 'Config.Set AdminAction capability is required before route policy edits can be saved.',
+      : 'Config.Set approval capability is required before route policy edits can be saved.',
     canEditPolicy,
     scenarios,
     selectedScenarioId,
     persistedReceipt,
-    error: allFailed ? 'Route explain dry-runs are unavailable through Aurora.' : null,
+    error: allFailed ? 'Route explain is unavailable through Aurora.' : null,
     warnings: failures,
     evidenceSource: catalog ? 'Aurora capability catalog and Gateway.ExplainRoute' : 'Aurora route explain results'
   }
@@ -318,27 +271,20 @@ function routePolicyRouteKey(route: RouteAvailability): string {
 
 export function RoutePolicyView({
   snapshot,
-  draft,
-  pendingSave = false,
-  saveError = null,
-  onDraftChange,
   onSelectScenario,
-  onRefresh,
-  onSavePolicy
+  onRefresh
 }: RoutePolicyViewProps) {
   const selected = useMemo(
     () => snapshot.scenarios.find((scenario) => scenario.scenario.id === snapshot.selectedScenarioId) ?? snapshot.scenarios[0],
     [snapshot.scenarios, snapshot.selectedScenarioId]
   )
-  const saveDisabled = pendingSave || !snapshot.canEditPolicy || !draft.reason.trim() || !draft.reauthConfirmed
-
   return (
     <section className="aui-route-policy-view" aria-labelledby="route-policy-title">
       <header className="aui-route-policy-header">
         <div>
           <p className="aui-kicker">Mesh route policy</p>
-          <h1 id="route-policy-title">Route policy and explain</h1>
-          <p>Dry-run backend route decisions before changing peer fallback, explicit selector, trust, and latency-sensitive policy.</p>
+          <h1 id="route-policy-title">Route policy decisions</h1>
+          <p>Review how Aurora routes peer, privacy, selector, and fallback scenarios before configuration changes are applied.</p>
         </div>
         <div className="aui-mesh-badges" aria-label="Route policy status">
           <StatusBadge state={snapshot.loadState === 'loading' ? 'pending' : snapshot.routeState} />
@@ -349,13 +295,10 @@ export function RoutePolicyView({
 
       <dl className="aui-route-policy-summary">
         <PolicyFact label="Route policy" value={`${snapshot.policyCapabilityState}: ${snapshot.policyCapabilityReason}`} />
-        <PolicyFact label="Config mutation" value={`${snapshot.configCapabilityState}: ${snapshot.configCapabilityReason}`} />
-        <PolicyFact label="Selected dry-run" value={selected ? `${selected.scenario.label}: ${selected.state}` : 'not loaded'} />
-        <PolicyFact label="Audit receipt" value={snapshot.persistedReceipt ?? 'not persisted in this session'} />
+        <PolicyFact label="Selected scenario" value={selected ? `${selected.scenario.label}: ${selected.state}` : 'not loaded'} />
       </dl>
 
       {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{snapshot.error}</p> : null}
-      {saveError ? <p className="aui-message aui-message-danger" role="alert">{saveError}</p> : null}
       {snapshot.warnings.length > 0 ? (
         <ul className="aui-mesh-warnings" aria-label="Route policy warnings">
           {snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}
@@ -366,7 +309,6 @@ export function RoutePolicyView({
         <section className="aui-route-policy-panel" aria-labelledby="route-dry-run-title">
           <div className="aui-panel-heading">
             <div>
-              <p className="aui-kicker">Dry-run route explain</p>
               <h2 id="route-dry-run-title">Backend decision matrix</h2>
             </div>
             <button className="aui-button" type="button" onClick={onRefresh} disabled={snapshot.loadState === 'loading'}>
@@ -390,32 +332,6 @@ export function RoutePolicyView({
             ))}
           </div>
           {selected ? <RouteScenarioDetails result={selected} /> : null}
-        </section>
-
-        <section className="aui-route-policy-panel" aria-labelledby="route-editor-title">
-          <div className="aui-panel-heading">
-            <div>
-              <p className="aui-kicker">AdminAction editor</p>
-              <h2 id="route-editor-title">Mesh sharing policy</h2>
-            </div>
-            <StatusBadge state={snapshot.canEditPolicy ? 'available-local' : snapshot.configCapabilityState} />
-          </div>
-          <RoutePolicyEditor
-            draft={draft}
-            disabled={!snapshot.canEditPolicy || pendingSave}
-            {...(onDraftChange ? { onDraftChange } : {})}
-          />
-          <footer className="aui-route-policy-actions">
-            <button type="button" className="aui-button" disabled={saveDisabled} onClick={onSavePolicy}>
-              <Save size={16} aria-hidden="true" />
-              {pendingSave ? 'Submitting AdminAction' : 'Save policy'}
-            </button>
-            <p role={!snapshot.canEditPolicy || saveDisabled ? 'alert' : undefined}>
-              {snapshot.canEditPolicy
-                ? 'Reason and re-auth confirmation are required before Config.Set is submitted.'
-                : snapshot.configCapabilityReason}
-            </p>
-          </footer>
         </section>
       </div>
     </section>
@@ -476,88 +392,6 @@ function RouteScenarioDetails({ result }: { result: RoutePolicyScenarioResult })
   )
 }
 
-function RoutePolicyEditor({
-  draft,
-  disabled,
-  onDraftChange
-}: {
-  draft: RoutePolicyDraft
-  disabled: boolean
-  onDraftChange?: (draft: RoutePolicyDraft) => void
-}) {
-  function update<K extends keyof RoutePolicyDraft>(key: K, value: RoutePolicyDraft[K]) {
-    onDraftChange?.({ ...draft, [key]: value })
-  }
-
-  return (
-    <div className="aui-route-policy-form">
-      <label>
-        <span>Service module</span>
-        <select value={draft.module} disabled={disabled} onChange={(event) => update('module', event.currentTarget.value)}>
-          {['TTS', 'STT', 'Tooling', 'DB', 'Orchestrator', 'Scheduler', 'ModelRuntime', 'Admin'].map((module) => (
-            <option key={module} value={module}>{module}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>Fallback policy</span>
-        <select value={draft.fallbackPolicy} disabled={disabled} onChange={(event) => update('fallbackPolicy', event.currentTarget.value as RoutePolicyDraft['fallbackPolicy'])}>
-          <option value="local">local</option>
-          <option value="network">network</option>
-          <option value="error">error</option>
-          <option value="none">none</option>
-        </select>
-      </label>
-      <label>
-        <span>Minimum version</span>
-        <input value={draft.minimumVersion} disabled={disabled} placeholder="0.1.0" onChange={(event) => update('minimumVersion', event.currentTarget.value)} />
-      </label>
-      <label>
-        <span>Trust tier</span>
-        <input value={draft.trustTier} disabled={disabled} placeholder="paired" onChange={(event) => update('trustTier', event.currentTarget.value)} />
-      </label>
-      <label>
-        <span>Allowed peers</span>
-        <input value={draft.allowedPeers} disabled={disabled} placeholder="peer-a, peer-b" onChange={(event) => update('allowedPeers', event.currentTarget.value)} />
-      </label>
-      <label>
-        <span>Denied peers (route explain)</span>
-        <input value={draft.deniedPeers} disabled={disabled} placeholder="peer-x" onChange={(event) => update('deniedPeers', event.currentTarget.value)} />
-      </label>
-      <label>
-        <span>Required capability tags</span>
-        <input value={draft.requiredCapabilities} disabled={disabled} placeholder="synthesize, low-latency" onChange={(event) => update('requiredCapabilities', event.currentTarget.value)} />
-      </label>
-      <label>
-        <span>Safety-sensitive classes</span>
-        <input value={draft.safetySensitiveClasses} disabled={disabled} placeholder="admin-critical, raw-audio" onChange={(event) => update('safetySensitiveClasses', event.currentTarget.value)} />
-      </label>
-      <label className="aui-inline-field">
-        <input
-          type="checkbox"
-          checked={draft.requireExplicitSelector}
-          disabled={disabled}
-          onChange={(event) => update('requireExplicitSelector', event.currentTarget.checked)}
-        />
-        <span>Require explicit peer/provider/resource selector</span>
-      </label>
-      <label className="aui-inline-field">
-        <input
-          type="checkbox"
-          checked={draft.reauthConfirmed}
-          disabled={disabled}
-          onChange={(event) => update('reauthConfirmed', event.currentTarget.checked)}
-        />
-        <span>Re-authentication confirmed for AdminAction</span>
-      </label>
-      <label className="aui-route-policy-reason">
-        <span>AdminAction reason</span>
-        <textarea value={draft.reason} disabled={disabled} rows={3} onChange={(event) => update('reason', event.currentTarget.value)} />
-      </label>
-    </div>
-  )
-}
-
 export function routePolicyScenarios(): RoutePolicyScenario[] {
   return [
     scenario('assistant_prompt', 'Assistant prompt', 'Prompt routing must keep personal text off fallback paths unless policy allows it.', 'Orchestrator.UserInput', 'Orchestrator', 'UserInput', { text: 'summarize my calendar' }, null, 'personal', ['personal']),
@@ -566,7 +400,7 @@ export function routePolicyScenarios(): RoutePolicyScenario[] {
     scenario('audio_session', 'Remote STT session', 'Audio sessions require consent and privacy indicator status before raw audio leaves the node.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
     scenario('model_runtime', 'Model runtime', 'Model selection can choose local, peer, or cloud fallback only when privacy class permits it.', 'Orchestrator.GetModelRuntime', 'Orchestrator', 'GetModelRuntime', { requested_runtime: 'balanced' }, { resource_id: 'model:balanced' }, 'personal', ['personal']),
     scenario('scheduler_job', 'Scheduler delegation', 'Delegated jobs need namespace, owner, target selector, and correlation policy.', 'Scheduler.ScheduleJob', 'Scheduler', 'ScheduleJob', { namespace: 'household', owner_peer_id: 'local', target_selector: { peer_id: 'studio-peer' } }, { peer_id: 'studio-peer', resource_id: 'scheduler:household' }, 'admin-critical', ['admin-critical']),
-    scenario('admin_action', 'Admin action', 'Admin-critical mutations must preserve AdminAction and audit receipt requirements.', 'Config.Set', 'Config', 'Set', { key_path: 'services.tts.mesh_sharing', value: { require_explicit_selector: true } }, null, 'admin-critical', ['admin-critical'])
+    scenario('admin_action', 'Sensitive config change', 'Admin-critical mutations must preserve confirmation and audit receipt requirements.', 'Config.Set', 'Config', 'Set', { key_path: 'services.tts.mesh_sharing', value: { require_explicit_selector: true } }, null, 'admin-critical', ['admin-critical'])
   ]
 }
 
@@ -636,7 +470,7 @@ function capabilityAvailability(action: CapabilityCatalogResponse['actions'][num
 function capabilityReason(action: CapabilityCatalogResponse['actions'][number]): string {
   const blockers = [...action.route_blockers, ...action.policy.denial_reasons]
   if (blockers.length > 0) return presentableSignal(blockers.join(', '))
-  if (action.policy.approval_required) return `${action.topic} requires AdminAction/approval before mutation.`
+  if (action.policy.approval_required) return `${action.topic} requires approval before mutation.`
   return `${action.topic} is ${action.bindability} via ${action.provider_kind}.`
 }
 

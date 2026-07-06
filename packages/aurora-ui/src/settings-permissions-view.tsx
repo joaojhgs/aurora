@@ -13,6 +13,8 @@ import type {
 } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Button, Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
 
 export type SettingsMutationState = 'idle' | 'optimistic' | 'rollback-error' | 'disabled'
 
@@ -124,33 +126,30 @@ function RouteSettingsSurface({
   model: SettingsPermissionsModel
 }) {
   return (
-    <section className="aui-settings" aria-labelledby="settings-permissions-title">
-      <header className="aui-settings-header">
-        <div>
-          <p className="aui-kicker">Settings</p>
-          <h1 id="settings-permissions-title">Settings and permissions</h1>
-          <p>
-            Route privacy defaults, voice defaults, assistant behavior, theme/accessibility/local storage posture, and
-            fallback behavior are rendered from Aurora capability state. Native permission details live on
-            /settings/native.
-          </p>
-        </div>
-        <div className="aui-settings-badges" aria-label="Settings status">
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-        </div>
-      </header>
+    <div className="aui-settings">
+      <PageHeader
+        id="settings-permissions-title"
+        eyebrow="Settings"
+        title="Settings and permissions"
+        description="Route privacy defaults, voice defaults, assistant behavior, theme/accessibility/local storage posture, and fallback behavior are rendered from Aurora capability state. Native permission details live on /settings/native."
+        badges={
+          <>
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+          </>
+        }
+      />
 
       {model.error ? (
-        <div className="aui-settings-alert" role="alert">
+        <div className="aui-settings-alert aui-inline-alert-danger" role="alert">
           <AlertTriangle size={17} aria-hidden />
           <span>{model.error}</span>
         </div>
       ) : null}
 
       <div className="aui-settings-grid">
-        <section className="aui-settings-panel" aria-labelledby="privacy-defaults-title">
+        <Card>
           <PanelTitle
             icon={<ShieldCheck size={18} aria-hidden />}
             title="Privacy defaults"
@@ -162,9 +161,9 @@ function RouteSettingsSurface({
               <PrivacyControlRow key={control.id} control={control} />
             ))}
           </div>
-        </section>
+        </Card>
 
-        <section className="aui-settings-panel" aria-labelledby="voice-behavior-title">
+        <Card>
           <PanelTitle
             icon={<Volume2 size={18} aria-hidden />}
             title="Voice behavior"
@@ -176,9 +175,9 @@ function RouteSettingsSurface({
               <VoiceBehaviorRow key={item.id} item={item} />
             ))}
           </div>
-        </section>
+        </Card>
 
-        <section className="aui-settings-panel" aria-labelledby="assistant-behavior-title">
+        <Card>
           <PanelTitle
             icon={<Mic size={18} aria-hidden />}
             title="Assistant behavior"
@@ -197,10 +196,10 @@ function RouteSettingsSurface({
               </article>
             ))}
           </div>
-        </section>
+        </Card>
       </div>
 
-      <section className="aui-settings-panel" aria-labelledby="theme-accessibility-storage-title">
+      <Card>
         <PanelTitle
           icon={<ToggleLeft size={18} aria-hidden />}
           title="Theme, accessibility, and local storage"
@@ -219,9 +218,9 @@ function RouteSettingsSurface({
             </article>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="aui-settings-panel" aria-labelledby="route-policy-title">
+      <Card>
         <PanelTitle
           icon={<RefreshCw size={18} aria-hidden />}
           title="Route and fallback policy"
@@ -240,13 +239,16 @@ function RouteSettingsSurface({
             </article>
           ))}
         </div>
-        <dl className="aui-settings-facts">
-          <div><dt>Admin confirmation</dt><dd>{model.adminActionLabel}</dd></div>
-          <div><dt>Fallback behavior</dt><dd>{model.fallbackLabel}</dd></div>
-          <div><dt>Backend truth</dt><dd>{snapshot.evidenceSource}</dd></div>
-        </dl>
-      </section>
-    </section>
+        <MetaGrid
+          items={[
+            { label: 'Admin confirmation', value: model.adminActionLabel },
+            { label: 'Fallback behavior', value: model.fallbackLabel },
+            { label: 'Backend truth', value: snapshot.evidenceSource }
+          ]}
+          columns={1}
+        />
+      </Card>
+    </div>
   )
 }
 
@@ -257,59 +259,119 @@ function NativeSettingsSurface({
   snapshot: AuroraShellSnapshot
   model: SettingsPermissionsModel
 }) {
+  const grantedCount = model.nativePermissions.filter((permission) => permission.granted).length
+  const manifestNote = snapshot.nativePlatform.includes('android')
+    ? 'Android native status is shown only from RoleManager, permission, foreground service, Keystore, biometric, share, or deep-link manifest status.'
+    : snapshot.nativePlatform.includes('ios')
+      ? 'iOS native status is shown only from the app-owned manifest; system assistant ownership and always-on background listening are unavailable.'
+      : 'Tauri desktop native status is shown only from the manifest for permissions, tray, notifications, dialogs, audio, local file access, secure storage, or updater capability.'
+
+  const permissionColumns: Array<DataColumn<SettingsNativePermissionCard>> = [
+    {
+      key: 'capability',
+      header: 'Capability',
+      render: (permission) => (
+        <span className="aui-cell-stack">
+          <strong>{permission.label}</strong>
+          {permission.detail && permission.detail !== manifestNote ? <small>{permission.detail}</small> : null}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (permission) => (
+        <span className="aui-cell-stack">
+          <StatusBadge state={permission.state} />
+          <small>{permission.capabilityEnabled ? 'capability enabled' : 'capability disabled'}; {presentableSignal(permission.blockers.length > 0 ? permission.blockers.join(', ') : 'no blocker reported')}</small>
+        </span>
+      )
+    },
+    {
+      key: 'permission',
+      header: 'Native permission id',
+      hideAt: 'md',
+      render: (permission) => (
+        <span className="aui-cell-stack">
+          <span className="aui-mono">{permission.id}</span>
+          {permission.evidence.length > 0 ? <small>{permission.evidence.join(', ')}</small> : null}
+        </span>
+      )
+    },
+    {
+      key: 'action',
+      header: 'Action',
+      align: 'end',
+      render: (permission) => (
+        <Button
+          variant={permission.requestEnabled ? 'primary' : 'ghost'}
+          disabled={!permission.requestEnabled}
+          disabledReason={permission.granted ? 'Native manifest reports this permission as granted.' : 'No native request command is advertised for this capability.'}
+        >
+          {permission.requestEnabled ? 'Request permission' : permission.granted ? 'Granted' : 'Request unavailable'}
+        </Button>
+      )
+    }
+  ]
+
   return (
     <section className="aui-settings" aria-labelledby="settings-native-title">
-      <header className="aui-settings-header">
-        <div>
-          <p className="aui-kicker">Settings / Native</p>
-          <h1 id="settings-native-title">Native platform settings</h1>
-          <p>
-            Native desktop, Android, and iOS capability claims are rendered only from the SDK/native manifest. Browser
-            deployments show unsupported status instead of pretending native permission state exists.
-          </p>
-        </div>
-        <div className="aui-settings-badges" aria-label="Native settings status">
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
-          <EvidenceBadge label={model.nativeRoute?.providerLabel ?? 'Native.GetCapabilityManifest'} />
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="Settings"
+        id="settings-native-title"
+        title="Native platform settings"
+        description="Native desktop, Android, and iOS capability claims are rendered only from the SDK/native manifest. Browser deployments show unsupported status instead of pretending native permission state exists."
+        badges={
+          <>
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
+            <EvidenceBadge label={model.nativeRoute?.providerLabel ?? 'Native.GetCapabilityManifest'} />
+          </>
+        }
+      />
 
       {model.error ? (
-        <div className="aui-settings-alert" role="alert">
+        <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
           <AlertTriangle size={17} aria-hidden />
           <span>{model.error}</span>
         </div>
       ) : null}
 
-      <section className="aui-settings-panel" aria-labelledby="native-permissions-title">
-        <PanelTitle
-          icon={<Smartphone size={18} aria-hidden />}
-          title="Native permissions and capabilities"
-          description="Tauri desktop, Android, and iOS rows come from the manifest; request buttons are enabled only when that platform advertises a native request command."
-          id="native-permissions-title"
-        />
+      <StatStrip
+        items={[
+          { label: 'Platform', value: snapshot.nativePlatform },
+          { label: 'Native manifest', value: snapshot.nativeAvailable ? 'present' : 'unsupported' },
+          { label: 'Capabilities granted', value: `${grantedCount}/${model.nativePermissions.length}` },
+          { label: 'Mode', value: snapshot.transportKind }
+        ]}
+      />
+
+      <Card
+        title="Native permissions and capabilities"
+        description="Request buttons are enabled only when the platform advertises a native request command."
+        icon={<Smartphone size={18} aria-hidden />}
+      >
+        <p className="aui-card-note">{manifestNote}</p>
         {model.nativePermissions.length > 0 ? (
-          <div className="aui-native-list">
-            {model.nativePermissions.map((permission) => (
-              <NativePermissionRow key={permission.id} permission={permission} />
-            ))}
-          </div>
+          <DataTable
+            columns={permissionColumns}
+            rows={model.nativePermissions}
+            getRowKey={(permission) => permission.id}
+            empty={<div className="aui-empty-inline"><p>No native permission manifest is available for this deployment mode.</p></div>}
+          />
         ) : (
-          <div className="aui-settings-empty">
+          <div className="aui-empty-inline">
             <EvidenceBadge label="empty" />
             <p>No native permission manifest is available for this deployment mode.</p>
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="aui-settings-panel" aria-labelledby="native-integrations-title">
-        <PanelTitle
-          icon={<Smartphone size={18} aria-hidden />}
-          title="Native integrations"
-          description="Android assistant role, foreground voice, notifications, share/deep-link entrypoints, and iOS app-owned App Intents/Shortcuts/widgets/share/deep-link surfaces remain separated from browser settings."
-          id="native-integrations-title"
-        />
+      <Card
+        title="Native integrations"
+        description="Android assistant role, foreground voice, notifications, share/deep-link entrypoints, and iOS app-owned App Intents/Shortcuts/widgets/share/deep-link surfaces remain separated from browser settings."
+        icon={<Smartphone size={18} aria-hidden />}
+      >
         {model.nativeIntegrations.length > 0 ? (
           <div className="aui-native-list" aria-label="Native integrations">
             {model.nativeIntegrations.map((integration) => (
@@ -317,20 +379,18 @@ function NativeSettingsSurface({
             ))}
           </div>
         ) : (
-          <div className="aui-settings-empty">
+          <div className="aui-empty-inline">
             <EvidenceBadge label="native-integrations" />
             <p>No mobile integration manifest is available for this platform.</p>
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="aui-settings-panel" aria-labelledby="ios-integration-title">
-        <PanelTitle
-          icon={<Smartphone size={18} aria-hidden />}
-          title="iOS App Intents, Shortcuts, widgets, share, and deep links"
-          description="iOS uses app-owned invocation surfaces and foreground constraints. It is not advertised as the system Siri assistant."
-          id="ios-integration-title"
-        />
+      <Card
+        title="iOS App Intents, Shortcuts, widgets, share, and deep links"
+        description="iOS uses app-owned invocation surfaces and foreground constraints. It is not advertised as the system Siri assistant."
+        icon={<Smartphone size={18} aria-hidden />}
+      >
         {model.nativePlatformIntegrations.length > 0 || model.nativeReleaseGates.length > 0 ? (
           <div className="aui-route-defaults">
             {model.nativePlatformIntegrations.map((integration) => (
@@ -355,7 +415,7 @@ function NativeSettingsSurface({
             ))}
           </div>
         ) : (
-          <div className="aui-settings-empty">
+          <div className="aui-empty-inline">
             <EvidenceBadge label="native-manifest" />
             <p>No iOS integration or preflight manifest is available for this deployment mode.</p>
           </div>
@@ -375,15 +435,13 @@ function NativeSettingsSurface({
             ))}
           </dl>
         ) : null}
-      </section>
+      </Card>
 
-      <section className="aui-settings-panel" aria-labelledby="native-limitations-title">
-        <PanelTitle
-          icon={<AlertTriangle size={18} aria-hidden />}
-          title="Native limitations and foreground constraints"
-          description="Unsupported native surfaces are explicit blockers, not browser fallbacks."
-          id="native-limitations-title"
-        />
+      <Card
+        title="Native limitations and foreground constraints"
+        description="Unsupported native surfaces are explicit blockers, not browser fallbacks."
+        icon={<AlertTriangle size={18} aria-hidden />}
+      >
         {model.nativeLimitations.length > 0 ? (
           <dl className="aui-settings-facts">
             {model.nativeLimitations.map((limitation) => (
@@ -394,12 +452,12 @@ function NativeSettingsSurface({
             ))}
           </dl>
         ) : (
-          <div className="aui-settings-empty">
+          <div className="aui-empty-inline">
             <EvidenceBadge label="native-limitations" />
             <p>No native platform limitation manifest is available for this deployment mode.</p>
           </div>
         )}
-      </section>
+      </Card>
     </section>
   )
 }
@@ -648,29 +706,6 @@ function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
       </div>
       <button type="button" disabled={control.disabled || control.requiresAdminAction}>
         {control.requiresAdminAction ? 'AdminAction required' : control.enabled ? 'Enabled' : 'Unavailable'}
-      </button>
-    </article>
-  )
-}
-
-function NativePermissionRow({ permission }: { permission: SettingsNativePermissionCard }) {
-  return (
-    <article className="aui-native-card">
-      <div className="aui-settings-control-icon">
-        {permission.granted ? <CheckCircle2 size={18} aria-hidden /> : <AlertTriangle size={18} aria-hidden />}
-      </div>
-      <div>
-        <h3>{permission.label}</h3>
-        <p>{permission.detail}</p>
-        <div className="aui-settings-inline">
-          <StatusBadge state={permission.state} />
-          <EvidenceBadge label={permission.capabilityEnabled ? 'capability enabled' : 'capability disabled'} />
-          <EvidenceBadge label={permission.evidence.join(', ') || 'no status'} />
-        </div>
-        <small>{presentableSignal(permission.blockers.length > 0 ? permission.blockers.join(', ') : 'No blocker reported.')}</small>
-      </div>
-      <button type="button" disabled={!permission.requestEnabled}>
-        {permission.requestEnabled ? 'Request permission' : permission.granted ? 'Granted' : 'Request unavailable'}
       </button>
     </article>
   )

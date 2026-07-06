@@ -10,11 +10,22 @@ import type {
   NormalizedSchedulerJob,
   PrivacyClass,
   SchedulerActionResponse,
-  SchedulerScheduleJobRequest
+  SchedulerScheduleActionRequest,
+  ToolApprovalCardModel
 } from '@aurora/client'
 import { SCHEDULER_METHODS, routePath } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PageHeader } from './state-surface'
+import {
+  Button,
+  Card,
+  DataTable,
+  DetailSheet,
+  MetaGrid,
+  StatStrip,
+  type DataColumn
+} from './primitives'
 
 export type SchedulerLoadState =
   | 'loading'
@@ -71,6 +82,17 @@ export interface SchedulerCreateControl {
   targetOptions: Array<{ id: string; label: string; disabled: boolean; reason: string }>
 }
 
+export interface SchedulerToolCreateOption {
+  id: string
+  label: string
+  localName: string
+  globalToolId: string
+  providerPeerId: string | null
+  serviceInstanceId: string | null
+  disabled: boolean
+  reason: string
+}
+
 export interface AdminSchedulerSnapshot {
   loadState: SchedulerLoadState
   jobs: SchedulerJobRow[]
@@ -85,6 +107,7 @@ export interface AdminSchedulerSnapshot {
   error: string | null
   evidenceSource: string
   secretsRedacted: boolean
+  toolOptions: SchedulerToolCreateOption[]
 }
 
 export interface AdminSchedulerViewProps {
@@ -99,6 +122,8 @@ interface SchedulerOperationState {
   auditReceipt: string | null
 }
 
+type SchedulerActionKind = 'orchestrator.user_input' | 'tooling.execute'
+
 export async function buildAdminSchedulerSnapshot(
   client: AuroraClient,
   route?: RouteAvailability
@@ -109,22 +134,26 @@ export async function buildAdminSchedulerSnapshot(
       loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
       error: presentableSignal(route.blockers.join(', ') || route.explanation),
       warnings: route.blockers.map(presentableSignal),
-      evidenceSource: route.providerLabel
+      evidenceSource: route.providerLabel,
+      toolOptions: []
     }
   }
 
-  const [jobsResult, methodsResult, catalogResult] = await Promise.allSettled([
+  const [jobsResult, methodsResult, catalogResult, toolsResult] = await Promise.allSettled([
     client.scheduler.listNormalizedJobs({ limit: 100 }),
     client.registry.listMethods(),
-    client.capabilities.listCatalog({ include_unavailable: true })
+    client.capabilities.listCatalog({ include_unavailable: true }),
+    client.tools.listApprovalCards({ include_unavailable: true, top_k: 1000 })
   ])
   const jobs = valueOrNull(jobsResult) ?? []
   const methods = valueOrNull(methodsResult) ?? []
   const catalog = valueOrNull(catalogResult)
+  const toolCards = valueOrNull(toolsResult) ?? []
   const warnings = [
     failureMessage('scheduler jobs', jobsResult),
     failureMessage('registry methods', methodsResult),
-    failureMessage('capability catalog', catalogResult)
+    failureMessage('capability catalog', catalogResult),
+    failureMessage('tool catalog', toolsResult)
   ].filter((message): message is string => Boolean(message))
   const denied = [jobsResult, methodsResult, catalogResult].some(isPermissionFailure)
 
@@ -134,7 +163,8 @@ export async function buildAdminSchedulerSnapshot(
       loadState: denied ? 'denied' : 'service-unavailable',
       error: warnings.join(' ') || 'Scheduler jobs and registry methods are unavailable.',
       warnings,
-      evidenceSource: 'Aurora request error'
+      evidenceSource: 'Aurora request error',
+      toolOptions: []
     }
   }
 
@@ -156,7 +186,8 @@ export async function buildAdminSchedulerSnapshot(
     warnings: [...warnings, ...permissionWarnings],
     error: warnings[0] ?? permissionWarnings[0] ?? null,
     evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response',
-    secretsRedacted: catalog?.secrets_redacted ?? true
+    secretsRedacted: catalog?.secrets_redacted ?? true,
+    toolOptions: schedulerToolOptions(toolCards)
   }
 }
 
@@ -168,7 +199,11 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
   const [jobName, setJobName] = useState('new-automation')
   const [cron, setCron] = useState('0 * * * *')
   const [targetPeer, setTargetPeer] = useState('local-peer')
-  const [action, setAction] = useState('Orchestrator.ExternalUserInput')
+  const [actionKind, setActionKind] = useState<SchedulerActionKind>('orchestrator.user_input')
+  const [orchestratorText, setOrchestratorText] = useState('Run the scheduled assistant automation.')
+  const [selectedToolId, setSelectedToolId] = useState('')
+  const [toolArguments, setToolArguments] = useState('{}')
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -186,7 +221,17 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
     () => snapshot.createControl.targetOptions.find((option) => option.id === targetPeer) ?? snapshot.createControl.targetOptions[0] ?? null,
     [snapshot.createControl.targetOptions, targetPeer]
   )
-  const canCreate = snapshot.createControl.available && reauthConfirmed && reason.trim().length > 0 && jobName.trim().length > 0 && cron.trim().length > 0 && operation?.status !== 'pending'
+  const selectedTool = useMemo(
+    () => snapshot.toolOptions.find((option) => option.id === selectedToolId) ?? snapshot.toolOptions[0] ?? null,
+    [snapshot.toolOptions, selectedToolId]
+  )
+  const canCreate = snapshot.createControl.available
+    && reauthConfirmed
+    && reason.trim().length > 0
+    && jobName.trim().length > 0
+    && cron.trim().length > 0
+    && (actionKind !== 'tooling.execute' || Boolean(selectedTool))
+    && operation?.status !== 'pending'
 
   async function runAdminAction(label: string, methodId: string, payload: JsonObject) {
     if (!reauthConfirmed) {
@@ -218,78 +263,133 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
   function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canCreate || !selectedTarget) return
-    const payload: SchedulerScheduleJobRequest = {
+    const actionSpec = buildScheduleActionSpec({
+      actionKind,
+      orchestratorText,
+      selectedTool,
+      toolArguments,
+      targetPeer: selectedTarget.id,
+      targetLabel: selectedTarget.label
+    })
+    if (!actionSpec) {
+      setOperation({ status: 'failed', message: 'Select a Tooling catalog entry and provide valid JSON arguments before scheduling a tool action.', auditReceipt: null })
+      return
+    }
+    const payload: SchedulerScheduleActionRequest = {
       name: jobName.trim(),
       schedule: cron.trim(),
-      action: action.trim(),
+      action_spec: actionSpec,
       enabled: true,
       timezone: 'UTC',
       namespace: selectedTarget.id === 'local-peer' ? 'local:automation' : 'local:delegated',
       owner_peer_id: 'local-peer',
       target_selector: selectedTarget.id === 'local-peer' ? null : { peer_id: selectedTarget.id, provider: selectedTarget.label },
-      delegated_permissions: action.startsWith('Tooling.') ? ['Tooling.use'] : ['Orchestrator.use'],
-      policy_decision_id: selectedTarget.id === 'local-peer' ? 'policy-local-scheduler-ui' : 'policy-remote-scheduler-ui',
+      delegated_permissions: actionKind === 'tooling.execute' ? ['Tooling.use'] : ['Orchestrator.use'],
       caller_peer_id: 'local-peer',
       privacy_class: selectedTarget.id === 'local-peer' ? 'personal' : 'sensitive'
     }
-    void runAdminAction('Schedule job', SCHEDULER_METHODS.schedule, payload as unknown as JsonObject)
+    void runAdminAction('Schedule typed action', SCHEDULER_METHODS.scheduleAction, payload as unknown as JsonObject)
   }
 
+  const selectedJob = useMemo(
+    () => snapshot.jobs.find((job) => job.id === selectedJobId) ?? null,
+    [snapshot.jobs, selectedJobId]
+  )
+
   return (
-    <section className="aui-admin-scheduler" aria-labelledby="admin-scheduler-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-scheduler-title"><CalendarClock size={24} aria-hidden /> Scheduler jobs</h1>
-          <p>
-            Jobs, ownership namespaces, delegated permissions, approval policy, target peer, and audit receipts are loaded through Aurora.
-          </p>
-        </div>
-        <div className="aui-admin-badges" aria-label="Scheduler service status">
-          {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-          <StatusBadge state={route.state} />
-          <PrivacyBadge privacy="admin-critical" />
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-        </div>
-      </header>
+    <div className="aui-stack-lg">
+      <PageHeader
+        eyebrow="Admin"
+        title="Scheduler jobs"
+        description="Review ownership-scoped jobs, delegation, and approval policy, then schedule or manage automation through audited AdminAction."
+        badgesLabel="Scheduler service status"
+        badges={
+          <>
+            {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
+            <StatusBadge state={route.state} />
+            <PrivacyBadge privacy="admin-critical" />
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+          </>
+        }
+      />
 
       <SchedulerStatusPanel snapshot={snapshot} route={route} operation={operation} />
 
-      <div className="aui-admin-metrics" aria-label="Scheduler job ownership summary">
-        <Metric label="Local" value={String(snapshot.totals.local)} detail="owned and running on this node" />
-        <Metric label="Delegated" value={String(snapshot.totals.delegatedOwned)} detail="owned here, target remote" />
-        <Metric label="Remote running" value={String(snapshot.totals.remoteRunning)} detail="foreign owner visible to this node" />
-        <Metric label="Denied" value={String(snapshot.totals.foreignDenied)} detail="foreign namespace blocked" />
-      </div>
+      <StatStrip
+        ariaLabel="Scheduler job ownership summary"
+        items={[
+          { label: 'Local', value: String(snapshot.totals.local), caption: 'owned and running here' },
+          { label: 'Delegated', value: String(snapshot.totals.delegatedOwned), caption: 'owned here, target remote' },
+          { label: 'Remote running', value: String(snapshot.totals.remoteRunning), caption: 'foreign owner visible here' },
+          { label: 'Denied', value: String(snapshot.totals.foreignDenied), tone: snapshot.totals.foreignDenied > 0 ? 'warning' : 'default', caption: 'foreign namespace blocked' }
+        ]}
+      />
 
-      <div className="aui-admin-grid">
-        <section className="aui-admin-panel" aria-labelledby="scheduler-create-title">
-          <div className="aui-panel-heading">
-            <div>
-              <p className="aui-kicker">Create</p>
-              <h2 id="scheduler-create-title">Schedule automation</h2>
+      <Card title="Ownership-scoped job table" icon={<CalendarClock size={18} aria-hidden />} ariaLabel="Jobs" flush>
+        <SchedulerJobsTable
+          jobs={snapshot.jobs}
+          onRun={runAdminAction}
+          pending={operation?.status === 'pending'}
+          reauthConfirmed={reauthConfirmed}
+          onSelect={setSelectedJobId}
+        />
+      </Card>
+
+      <div className="aui-two-col">
+        <Card title="Schedule automation" icon={<ShieldCheck size={18} aria-hidden />} ariaLabel="Schedule automation">
+          <p className="aui-card-note">{snapshot.createControl.reason}</p>
+          <form className="aui-stack" onSubmit={submitCreate}>
+            <div className="aui-field">
+              <label className="aui-field-label" htmlFor="scheduler-job-name">Job name</label>
+              <input id="scheduler-job-name" className="aui-input" value={jobName} onChange={(event) => setJobName(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
             </div>
-            <ShieldCheck size={18} aria-hidden />
-          </div>
-          <form className="aui-scheduler-form" onSubmit={submitCreate}>
-            <label htmlFor="scheduler-job-name">Job name</label>
-            <input id="scheduler-job-name" value={jobName} onChange={(event) => setJobName(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
-            <label htmlFor="scheduler-cron">Schedule</label>
-            <input id="scheduler-cron" value={cron} onChange={(event) => setCron(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
-            <label htmlFor="scheduler-action">Action</label>
-            <select id="scheduler-action" value={action} onChange={(event) => setAction(event.currentTarget.value)} disabled={!snapshot.createControl.available}>
-              <option value="Orchestrator.ExternalUserInput">Orchestrator.ExternalUserInput</option>
-              <option value="Tooling.ExecuteTool">Tooling.ExecuteTool</option>
-            </select>
-            <label htmlFor="scheduler-target">Target peer/provider</label>
-            <select id="scheduler-target" value={targetPeer} onChange={(event) => setTargetPeer(event.currentTarget.value)} disabled={!snapshot.createControl.available}>
-              {snapshot.createControl.targetOptions.map((option) => (
-                <option key={option.id} value={option.id} disabled={option.disabled}>{option.label}</option>
-              ))}
-            </select>
-            <label htmlFor="scheduler-reason">AdminAction reason</label>
-            <textarea id="scheduler-reason" value={reason} rows={3} onChange={(event) => setReason(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+            <div className="aui-field">
+              <label className="aui-field-label" htmlFor="scheduler-cron">Schedule</label>
+              <input id="scheduler-cron" className="aui-input aui-mono" value={cron} onChange={(event) => setCron(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+            </div>
+            <div className="aui-two-col">
+              <div className="aui-field">
+                <label className="aui-field-label" htmlFor="scheduler-action">Action</label>
+                <select id="scheduler-action" className="aui-select" value={actionKind} onChange={(event) => setActionKind(event.currentTarget.value as 'orchestrator.user_input' | 'tooling.execute')} disabled={!snapshot.createControl.available}>
+                  <option value="orchestrator.user_input">Assistant prompt</option>
+                  <option value="tooling.execute">Tooling catalog action</option>
+                </select>
+              </div>
+              <div className="aui-field">
+                <label className="aui-field-label" htmlFor="scheduler-target">Target peer/provider</label>
+                <select id="scheduler-target" className="aui-select" value={targetPeer} onChange={(event) => setTargetPeer(event.currentTarget.value)} disabled={!snapshot.createControl.available}>
+                  {snapshot.createControl.targetOptions.map((option) => (
+                    <option key={option.id} value={option.id} disabled={option.disabled}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            {actionKind === 'orchestrator.user_input' ? (
+              <div className="aui-field">
+                <label className="aui-field-label" htmlFor="scheduler-prompt">Assistant prompt</label>
+                <textarea id="scheduler-prompt" className="aui-input aui-textarea" value={orchestratorText} rows={3} onChange={(event) => setOrchestratorText(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+              </div>
+            ) : (
+              <div className="aui-stack">
+                <div className="aui-field">
+                  <label className="aui-field-label" htmlFor="scheduler-tool">Tooling catalog entry</label>
+                  <select id="scheduler-tool" className="aui-select" value={selectedTool?.id ?? ''} onChange={(event) => setSelectedToolId(event.currentTarget.value)} disabled={!snapshot.createControl.available || snapshot.toolOptions.length === 0}>
+                    {snapshot.toolOptions.map((tool) => (
+                      <option key={tool.id} value={tool.id} disabled={tool.disabled}>{tool.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="aui-field">
+                  <label className="aui-field-label" htmlFor="scheduler-tool-args">Tool arguments JSON</label>
+                  <textarea id="scheduler-tool-args" className="aui-input aui-textarea aui-mono" value={toolArguments} rows={4} onChange={(event) => setToolArguments(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+                </div>
+              </div>
+            )}
+            </div>
+            <div className="aui-field">
+              <label className="aui-field-label" htmlFor="scheduler-reason">AdminAction reason</label>
+              <textarea id="scheduler-reason" className="aui-input aui-textarea" value={reason} rows={3} onChange={(event) => setReason(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+            </div>
             <label className="aui-inline-field">
               <input
                 type="checkbox"
@@ -299,39 +399,52 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
               />
               <span>I confirm recent AdminAction reauthentication for scheduler mutations</span>
             </label>
-            <button type="submit" disabled={!canCreate} title={snapshot.createControl.reason}><Plus size={16} aria-hidden />Create via AdminAction</button>
-          </form>
-          <p className="aui-muted">{snapshot.createControl.reason}</p>
-        </section>
-
-        <section className="aui-admin-panel" aria-labelledby="scheduler-policy-title">
-          <div className="aui-panel-heading">
-            <div>
-              <p className="aui-kicker">Policy</p>
-              <h2 id="scheduler-policy-title">Delegation context</h2>
+            <div className="aui-action-row">
+              <Button type="submit" variant="primary" icon={<Plus size={16} aria-hidden />} disabled={!canCreate} disabledReason={snapshot.createControl.reason}>
+                Create via AdminAction
+              </Button>
             </div>
-            <AlertTriangle size={18} aria-hidden />
-          </div>
-          <dl className="aui-scheduler-facts">
-            <div><dt>Route</dt><dd>{presentableSignal(route.explanation)}</dd></div>
-            <div><dt>AdminAction</dt><dd>{route.requiresAdminAction ? 'required for schedule, cancel, pause, and resume' : 'not required by route metadata'}</dd></div>
-            <div><dt>Target selector</dt><dd>{selectedTarget ? selectedTarget.reason : 'no selector status'}</dd></div>
-            <div><dt>Blockers</dt><dd>{presentableSignal(route.blockers.join(', ') || snapshot.error || 'none')}</dd></div>
-          </dl>
-        </section>
+          </form>
+        </Card>
+
+        <Card title="Delegation context" icon={<AlertTriangle size={18} aria-hidden />} ariaLabel="Delegation context">
+          <MetaGrid
+            columns={1}
+            items={[
+              { label: 'Route', value: presentableSignal(route.explanation) },
+              { label: 'AdminAction', value: route.requiresAdminAction ? 'required for schedule, cancel, pause, and resume' : 'not required by route metadata' },
+              { label: 'Target selector', value: selectedTarget ? selectedTarget.reason : 'no selector status' },
+              { label: 'Blockers', value: presentableSignal(route.blockers.join(', ') || snapshot.error || 'none') }
+            ]}
+          />
+        </Card>
       </div>
 
-      <section className="aui-admin-panel" aria-label="Jobs">
-        <div className="aui-panel-heading">
-          <div>
-            <p className="aui-kicker">Jobs</p>
-            <h2 id="scheduler-jobs-title">Ownership-scoped job table</h2>
-          </div>
-          <CalendarClock size={18} aria-hidden />
-        </div>
-        <SchedulerJobsTable jobs={snapshot.jobs} onRun={runAdminAction} pending={operation?.status === 'pending'} reauthConfirmed={reauthConfirmed} />
-      </section>
-    </section>
+      <DetailSheet
+        open={Boolean(selectedJob)}
+        onClose={() => setSelectedJobId(null)}
+        title={selectedJob?.name ?? 'Scheduler job'}
+        description={selectedJob?.action}
+        badge={selectedJob ? <StatusBadge state={stateForJob(selectedJob)} /> : undefined}
+      >
+        {selectedJob ? (
+          <MetaGrid
+            columns={1}
+            items={[
+              { label: 'Job ID', value: selectedJob.id, mono: true },
+              { label: 'Namespace', value: selectedJob.namespace },
+              { label: 'Ownership', value: `${ownershipLabel(selectedJob.ownership)} (${selectedJob.ownerLabel})` },
+              { label: 'Target and approval', value: `${selectedJob.targetLabel}; ${selectedJob.approvalLabel}` },
+              { label: 'Policy decision', value: selectedJob.policyDecisionId, mono: true },
+              { label: 'Audit', value: selectedJob.auditReceipt, mono: true },
+              { label: 'Tool integration', value: selectedJob.toolIntegration },
+              { label: 'Run history', value: selectedJob.runHistory },
+              { label: 'Blocker', value: selectedJob.blockedReason ?? 'none' }
+            ]}
+          />
+        ) : null}
+      </DetailSheet>
+    </div>
   )
 }
 
@@ -364,75 +477,93 @@ function SchedulerJobsTable({
   jobs,
   onRun,
   pending,
-  reauthConfirmed
+  reauthConfirmed,
+  onSelect
 }: {
   jobs: SchedulerJobRow[]
   onRun: (label: string, methodId: string, payload: JsonObject) => Promise<void>
   pending: boolean
   reauthConfirmed: boolean
+  onSelect: (id: string) => void
 }) {
-  if (jobs.length === 0) return <p className="aui-muted">No scheduler jobs available.</p>
-  return (
-    <div className="aui-table-scroll">
-      <table className="aui-table">
-        <thead>
-          <tr>
-            <th>Job</th>
-            <th>Ownership</th>
-            <th>Target and approval</th>
-            <th>Runs</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((job) => (
-            <tr key={job.id}>
-              <td>
-                <details className="aui-service-details">
-                  <summary><strong>{job.name}</strong><small>{job.action}</small></summary>
-                  <div className="aui-service-drawer">
-                    <dl>
-                      <div><dt>Job ID</dt><dd>{job.id}</dd></div>
-                      <div><dt>Namespace</dt><dd>{job.namespace}</dd></div>
-                      <div><dt>Policy decision</dt><dd>{job.policyDecisionId}</dd></div>
-                      <div><dt>Audit</dt><dd>{job.auditReceipt}</dd></div>
-                      <div><dt>Tool integration</dt><dd>{job.toolIntegration}</dd></div>
-                      <div><dt>Run history</dt><dd>{job.runHistory}</dd></div>
-                      <div><dt>Blocker</dt><dd>{job.blockedReason ?? 'none'}</dd></div>
-                    </dl>
-                  </div>
-                </details>
-                <div className="aui-state-line"><StatusBadge state={stateForJob(job)} /><PrivacyBadge privacy={privacyForJob(job)} /></div>
-              </td>
-              <td><strong>{ownershipLabel(job.ownership)}</strong><small>{job.ownerLabel}</small></td>
-              <td><span>{job.targetLabel}</span><small>{job.approvalLabel}</small></td>
-              <td><code>{job.schedule}</code><small>next {job.nextRun}; {job.runHistory}</small></td>
-              <td>
-                <div className="aui-tool-actions">
-                  {job.operationControls.map((control) => (
-                    <button
-                      key={control.action}
-                      type="button"
-                      className="aui-secondary-action"
-                      disabled={pending || !reauthConfirmed || !control.available}
-                      title={control.reason}
-                      onClick={() => void onRun(
-                        `${control.action} ${job.name}`,
-                        control.methodId,
-                        { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
-                      )}
-                    >
-                      {control.action === 'edit' ? <Edit3 size={15} aria-hidden /> : control.action === 'cancel' ? <Trash2 size={15} aria-hidden /> : control.action === 'pause' ? <Pause size={15} aria-hidden /> : <Play size={15} aria-hidden />}
-                      {control.action}
-                    </button>
-                  ))}
-                </div>
-              </td>
-            </tr>
+  const columns: Array<DataColumn<SchedulerJobRow>> = [
+    {
+      key: 'job',
+      header: 'Job',
+      render: (job) => (
+        <span className="aui-cell-stack">
+          <strong>{job.name}</strong>
+          <small>{job.toolIntegration}</small>
+        </span>
+      )
+    },
+    { key: 'schedule', header: 'Schedule', hideAt: 'md', render: (job) => <span className="aui-mono">{job.schedule}</span> },
+    {
+      key: 'ownership',
+      header: 'Ownership',
+      hideAt: 'lg',
+      render: (job) => (
+        <span className="aui-cell-stack">
+          <strong>{ownershipLabel(job.ownership)}</strong>
+          <small>{job.ownerLabel}</small>
+        </span>
+      )
+    },
+    {
+      key: 'approval',
+      header: 'Target and approval',
+      hideAt: 'lg',
+      render: (job) => (
+        <span className="aui-cell-stack">
+          <span>{job.targetLabel}</span>
+          <small>{job.approvalLabel}</small>
+        </span>
+      )
+    },
+    {
+      key: 'runs',
+      header: 'Status and runs',
+      render: (job) => (
+        <span className="aui-cell-stack">
+          <span className="aui-badge-cluster"><StatusBadge state={stateForJob(job)} /><PrivacyBadge privacy={privacyForJob(job)} /></span>
+          <small>next {job.nextRun}; {job.runHistory}</small>
+        </span>
+      )
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'end',
+      render: (job) => (
+        <div className="aui-action-row aui-action-row-tight">
+          {job.operationControls.map((control) => (
+            <Button
+              key={control.action}
+              variant={control.action === 'cancel' ? 'danger' : 'ghost'}
+              icon={control.action === 'edit' ? <Edit3 size={15} aria-hidden /> : control.action === 'cancel' ? <Trash2 size={15} aria-hidden /> : control.action === 'pause' ? <Pause size={15} aria-hidden /> : <Play size={15} aria-hidden />}
+              disabled={pending || !reauthConfirmed || !control.available}
+              disabledReason={control.reason}
+              onClick={() => void onRun(
+                `${control.action} ${job.name}`,
+                control.methodId,
+                { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
+              )}
+            >
+              {control.action}
+            </Button>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </div>
+      )
+    }
+  ]
+  return (
+    <DataTable
+      columns={columns}
+      rows={jobs}
+      getRowKey={(job) => job.id}
+      onRowClick={(job) => onSelect(job.id)}
+      empty={<div className="aui-empty-inline"><p>No scheduler jobs available.</p></div>}
+    />
   )
 }
 
@@ -525,7 +656,7 @@ function createControl(
   localPeerId: string,
   providers: Array<{ peer_id: string | null; node_name: string; eligible: boolean; reason: string; module: string }>
 ): SchedulerCreateControl {
-  const method = methods.find((candidate) => candidate.busTopic === SCHEDULER_METHODS.schedule)
+  const method = methods.find((candidate) => candidate.busTopic === SCHEDULER_METHODS.scheduleAction)
   const support = methodSupport(method)
   const available = support.ok
   const schedulerProviders = providers.filter((provider) => provider.module === 'Scheduler')
@@ -546,7 +677,7 @@ function createControl(
     requiresAdminAction: true,
     reason: available
       ? 'Create/edit uses AdminAction; remote execution requires target selector, delegated permissions, policy decision, and audit correlation.'
-      : support.reason ?? `${SCHEDULER_METHODS.schedule} is not advertised as an external manage/admin-critical method.`,
+      : support.reason ?? `${SCHEDULER_METHODS.scheduleAction} is not advertised as an external manage/admin-critical method.`,
     targetOptions
   }
 }
@@ -568,7 +699,7 @@ function hasSchedulerManagePermission(method: MethodDescriptor): boolean {
 }
 
 function schedulerPermissionWarnings(methods: MethodDescriptor[]): string[] {
-  return [SCHEDULER_METHODS.schedule, SCHEDULER_METHODS.cancel, SCHEDULER_METHODS.pause, SCHEDULER_METHODS.resume]
+  return [SCHEDULER_METHODS.scheduleAction, SCHEDULER_METHODS.cancel, SCHEDULER_METHODS.pause, SCHEDULER_METHODS.resume]
     .map((methodId) => methods.find((candidate) => candidate.busTopic === methodId))
     .filter((method): method is MethodDescriptor => Boolean(method))
     .filter((method) => method.availableOverHttp && (method.methodType === 'manage' || method.methodType === 'admin-critical') && !hasSchedulerManagePermission(method))
@@ -640,6 +771,66 @@ function privacyForJob(job: Pick<SchedulerJobRow, 'privacyClass'>): PrivacyClass
   return 'admin-critical'
 }
 
+
+function schedulerToolOptions(tools: ToolApprovalCardModel[]): SchedulerToolCreateOption[] {
+  return tools.map((tool) => ({
+    id: tool.id,
+    label: `${tool.name} (${tool.providerLabel})`,
+    localName: tool.name,
+    globalToolId: tool.id,
+    providerPeerId: tool.providerPeerId,
+    serviceInstanceId: tool.serviceInstanceId,
+    disabled: tool.state === 'denied' || tool.state === 'unavailable' || Boolean(tool.disabledReason),
+    reason: tool.disabledReason ?? tool.denialReason ?? 'Available from negotiated Tooling catalog.'
+  }))
+}
+
+function buildScheduleActionSpec({
+  actionKind,
+  orchestratorText,
+  selectedTool,
+  toolArguments,
+  targetPeer,
+  targetLabel
+}: {
+  actionKind: 'orchestrator.user_input' | 'tooling.execute'
+  orchestratorText: string
+  selectedTool: SchedulerToolCreateOption | null
+  toolArguments: string
+  targetPeer: string
+  targetLabel: string
+}): SchedulerScheduleActionRequest['action_spec'] | null {
+  if (actionKind === 'orchestrator.user_input') {
+    return { kind: 'orchestrator.user_input', text: orchestratorText.trim(), source: 'admin.scheduler.ui' }
+  }
+  if (!selectedTool) return null
+  let parsedArguments: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(toolArguments || '{}') as unknown
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    parsedArguments = parsed as Record<string, unknown>
+  } catch {
+    return null
+  }
+  return {
+    kind: 'tooling.execute',
+    binding: {
+      tool_name: selectedTool.localName,
+      local_tool_name: selectedTool.localName,
+      global_tool_id: selectedTool.globalToolId,
+      provider_peer_id: selectedTool.providerPeerId,
+      provider_service_instance_id: selectedTool.serviceInstanceId
+    },
+    arguments: parsedArguments,
+    mesh_selector: selectedTool.providerPeerId && selectedTool.providerPeerId !== 'local'
+      ? { peer_id: selectedTool.providerPeerId, provider: targetLabel }
+      : targetPeer !== 'local-peer'
+        ? { peer_id: targetPeer, provider: targetLabel }
+        : null,
+    caller_peer_id: 'local-peer'
+  }
+}
+
 function pathForSchedulerMethod(methodId: string): string {
   const [, method] = methodId.split('.')
   return routePath('Scheduler', method ?? 'ListJobs')
@@ -680,10 +871,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <div className="aui-admin-metric"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>
-}
-
 const loadingSchedulerSnapshot: AdminSchedulerSnapshot = {
   loadState: 'loading',
   jobs: [],
@@ -703,5 +890,6 @@ const loadingSchedulerSnapshot: AdminSchedulerSnapshot = {
   warnings: [],
   error: null,
   evidenceSource: 'pending Aurora service calls',
-  secretsRedacted: true
+  secretsRedacted: true,
+  toolOptions: []
 }
