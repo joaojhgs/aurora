@@ -182,18 +182,20 @@ class TestRegistryAggregator:
             methods=[MethodInfo(name="Method1", exposure="external")],
             timestamp="2026-07-04T00:00:00",
         )
-        second = first.model_copy(update={
-            "timestamp": "2026-07-04T00:00:30",
-            "instance_id": "stable-service-worker-2",
-            "methods": [
-                MethodInfo(
-                    name="Method1",
-                    exposure="external",
-                    input_schema={"type": "object", "properties": {"q": {"type": "string"}}},
-                    output_schema={"type": "object"},
-                )
-            ],
-        })
+        second = first.model_copy(
+            update={
+                "timestamp": "2026-07-04T00:00:30",
+                "instance_id": "stable-service-worker-2",
+                "methods": [
+                    MethodInfo(
+                        name="Method1",
+                        exposure="external",
+                        input_schema={"type": "object", "properties": {"q": {"type": "string"}}},
+                        output_schema={"type": "object"},
+                    )
+                ],
+            }
+        )
 
         await bus.publish(GatewayMethods.SERVICE_ANNOUNCE, first, event=True)
         await asyncio.sleep(0.1)

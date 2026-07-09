@@ -504,6 +504,65 @@ class BaseService(ABC):
                     contract_method_type = metadata.get("method_type")
 
                     if topic:
+                        stream_handler: Any | None = None
+
+                        async def create_stream_handler(
+                            method=attr,
+                            model=input_model,
+                            method_name=attr_name,
+                            required_perms=required_perms,
+                            contract_method_type=contract_method_type,
+                            pass_envelope=_wants_envelope(attr),  # noqa: B008
+                        ):
+                            async def direct_stream_handler(envelope: Envelope) -> Any:
+                                if not self._envelope_authorized(
+                                    envelope,
+                                    required_perms=list(required_perms),
+                                    method_type=contract_method_type,
+                                    method_name=method_name,
+                                ):
+                                    raise PermissionError("Forbidden")
+
+                                if model:
+                                    try:
+                                        if isinstance(envelope.payload, model):
+                                            data = envelope.payload
+                                        elif isinstance(envelope.payload, dict):
+                                            data = model.model_validate(envelope.payload)
+                                        else:
+                                            data = model.model_validate(
+                                                envelope.payload.model_dump()
+                                                if hasattr(envelope.payload, "model_dump")
+                                                else envelope.payload
+                                            )
+                                    except Exception as e:
+                                        raise ValueError(f"Validation error: {e}") from e
+                                    if pass_envelope:
+                                        return await method(data, envelope=envelope)
+                                    return await method(data)
+
+                                if pass_envelope:
+                                    return await method(envelope.payload, envelope=envelope)
+                                return await method(envelope.payload)
+
+                            return direct_stream_handler
+
+                        try:
+                            from app.shared.contracts.models.orchestrator import (
+                                OrchestratorMethods,
+                            )
+
+                            register_stream_handler = getattr(
+                                self.bus, "register_stream_handler", None
+                            )
+                            if topic == OrchestratorMethods.STREAM_INFER_CHAT and callable(
+                                register_stream_handler
+                            ):
+                                stream_handler = await create_stream_handler()
+                                register_stream_handler(topic, stream_handler)
+                        except Exception as e:
+                            log_error(f"Failed to register stream handler for {topic}: {e}")
+
                         # Create a wrapper to handle the envelope and types
                         async def create_wrapper(
                             method=attr,
@@ -636,6 +695,8 @@ class BaseService(ABC):
                         handler = await create_wrapper()
                         self.bus.subscribe(topic, handler)
                         self._contract_subscriptions.append((topic, handler))
+                        if stream_handler is not None:
+                            self._contract_subscriptions.append((f"stream:{topic}", stream_handler))
                         log_info(f"Auto-subscribed {attr_name} to {topic}")
 
             except Exception as e:
@@ -692,7 +753,13 @@ class BaseService(ABC):
         """Unsubscribe all auto-registered method contracts."""
         for topic, handler in list(self._contract_subscriptions):
             try:
-                self.bus.unsubscribe(topic, handler)
+                if topic.startswith("stream:"):
+                    stream_topic = topic.split(":", 1)[1]
+                    unregister_stream_handler = getattr(self.bus, "unregister_stream_handler", None)
+                    if callable(unregister_stream_handler):
+                        unregister_stream_handler(stream_topic, handler)
+                else:
+                    self.bus.unsubscribe(topic, handler)
                 log_debug(f"Unsubscribed {self.module} contract from {topic}")
             except Exception as e:
                 log_error(f"Error unsubscribing {self.module} from {topic}: {e}")

@@ -17,6 +17,12 @@ from app.shared.contracts.models.aurora import (
     AuroraEventStreamEvent,
     AuroraMethods,
 )
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.orchestrator import (
+    OrchestratorInferChatChunk,
+    OrchestratorInferChatRequest,
+    OrchestratorInferChatResponse,
+)
 from app.shared.contracts.registry import IOModel
 
 # =============================================================================
@@ -58,6 +64,10 @@ class GatewayMethods:
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
     ADMIN_ACTION_DRAFT = f"{GatewayModule.NAME}.AdminActionDraft"
     ADMIN_ACTION_CONFIRM = f"{GatewayModule.NAME}.AdminActionConfirm"
+    MESH_INFER_CHAT = f"{GatewayModule.NAME}.MeshInferChat"
+    STREAM_MESH_INFER_CHAT = f"{GatewayModule.NAME}.StreamMeshInferChat"
+    CANCEL_MESH_INFER_CHAT_STREAM = f"{GatewayModule.NAME}.CancelMeshInferChatStream"
+    MESH_INFER_CHAT_CHUNK = f"{GatewayModule.NAME}.MeshInferChatChunk"
 
 
 # =============================================================================
@@ -238,6 +248,85 @@ class DeploymentTopologyResponse(IOModel):
     mesh_peer_topology_trusted: bool | None = None
     generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     secrets_redacted: bool = True
+
+
+class GatewayMeshInferChatRequest(IOModel):
+    """Proxy a fixed Orchestrator.InferChat call through Gateway-owned mesh.
+
+    The topic is intentionally not caller-controlled: Gateway forwards only to
+    Orchestrator.InferChat using its MeshBus/PeerBridge so process-mode
+    Orchestrator containers do not need direct WebRTC access.
+    """
+
+    request: OrchestratorInferChatRequest
+    mesh_selector: MeshAddressSelector | None = None
+    principal_id: str | None = None
+    effective_perms: list[str] | None = None
+    identity_source: str | None = None
+    method_type: str | None = None
+    caller_peer_id: str | None = None
+    origin: str | None = None
+
+
+class GatewayMeshInferChatResponse(IOModel):
+    """Complete response from a Gateway-owned remote mesh inference call."""
+
+    response: OrchestratorInferChatResponse
+
+
+class GatewayStreamMeshInferChatStartRequest(IOModel):
+    """Start a Gateway-owned remote mesh inference stream.
+
+    Chunks are published as Gateway.MeshInferChatChunk events keyed by
+    stream_id/correlation_id instead of returning an async generator through a
+    process bus transport.
+    """
+
+    stream_id: str
+    request: OrchestratorInferChatRequest
+    mesh_selector: MeshAddressSelector | None = None
+    principal_id: str | None = None
+    effective_perms: list[str] | None = None
+    identity_source: str | None = None
+    method_type: str | None = None
+    caller_peer_id: str | None = None
+    origin: str | None = None
+
+
+class GatewayStreamMeshInferChatStartResponse(IOModel):
+    """Acknowledgement that Gateway accepted stream proxy ownership."""
+
+    stream_id: str
+    accepted: bool = True
+    correlation_id: str | None = None
+
+
+class GatewayCancelMeshInferChatStreamRequest(IOModel):
+    """Cancel a Gateway-owned remote mesh inference stream."""
+
+    stream_id: str
+    principal_id: str | None = None
+    identity_source: str | None = None
+    caller_peer_id: str | None = None
+    origin: str | None = None
+
+
+class GatewayCancelMeshInferChatStreamResponse(IOModel):
+    """Result of cancelling a Gateway-owned stream proxy."""
+
+    stream_id: str
+    cancelled: bool = False
+
+
+class GatewayMeshInferChatChunkEvent(IOModel):
+    """One Gateway proxy stream event for remote mesh inference."""
+
+    stream_id: str
+    chunk: OrchestratorInferChatChunk | None = None
+    is_final: bool = False
+    error: str | None = None
+    correlation_id: str | None = None
+    sequence: int = 0
 
 
 class AdminActionHeaderNames(IOModel):

@@ -410,7 +410,9 @@ def test_event_normalization_handles_raw_audio_bytes_without_exposing_audio():
     assert event.category == "audio"
     assert event.redacted_payload["data"]["redacted"] is True
     assert event.redacted_payload["data"]["kind"] == "binary"
-    assert event.redacted_payload["data"]["byte_length"] == len(b"\xff\x00\x81\xfe raw pcm is not utf8")
+    assert event.redacted_payload["data"]["byte_length"] == len(
+        b"\xff\x00\x81\xfe raw pcm is not utf8"
+    )
     assert event.payload_sha256
     assert "raw pcm" not in json.dumps(event.redacted_payload)
 

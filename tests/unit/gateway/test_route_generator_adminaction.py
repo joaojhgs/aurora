@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import APIRouter, FastAPI
@@ -41,6 +42,12 @@ from app.shared.contracts.models.config import (
     ConfigSetResponse,
 )
 from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.orchestrator import (
+    OrchestratorInferChatRequest,
+    OrchestratorMethods,
+    OrchestratorProcessRequest,
+    OrchestratorResponse,
+)
 
 
 class _SingleMethodRegistry:
@@ -412,3 +419,407 @@ async def test_generated_backup_create_requires_admin_action_headers(generated_r
     assert response.status_code == 428
     assert response.json()["detail"]["code"] == "admin_action_required"
     bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generated_handler_uses_updated_bus_for_mesh_selector_route():
+    """Existing generated handlers must dispatch through set_bus() after mesh starts."""
+    raw_bus = AsyncMock()
+    raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "raw"}))
+    mesh_bus = AsyncMock()
+    mesh_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "mesh"}))
+    method_info = MethodInfo(
+        name="ExternalUserInput",
+        summary="Process user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=[OrchestratorMethods.EXTERNAL_USER_INPUT],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=raw_bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    generator.set_bus(mesh_bus)
+    result = await handler(
+        {
+            "text": "hello",
+            "mesh_selector": {"peer_id": "assistant-peer"},
+        },
+        principal_id="principal-1",
+        effective_perms=["Orchestrator.RemoteDispatch"],
+        identity_source="test",
+    )
+
+    assert result == {"bus": "mesh"}
+    raw_bus.request.assert_not_awaited()
+    mesh_bus.request.assert_awaited_once()
+    assert mesh_bus.request.await_args.args[0] == OrchestratorMethods.EXTERNAL_USER_INPUT
+    assert mesh_bus.request.await_args.args[1]["mesh_selector"] == {"peer_id": "assistant-peer"}
+
+
+@pytest.mark.asyncio
+async def test_generated_handler_denies_runtime_dispatch_without_remote_permission():
+    raw_bus = AsyncMock()
+    raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "raw"}))
+    method_info = MethodInfo(
+        name="ExternalUserInput",
+        summary="Process user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=raw_bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {"text": "hello", "mesh_selector": {"peer_id": "assistant-peer"}},
+            principal_id="principal-1",
+            effective_perms=["Orchestrator.use"],
+            identity_source="gateway_http",
+        )
+
+    assert exc.value.status_code == 403
+    assert "RemoteDispatch" in str(exc.value.detail)
+    raw_bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generated_handler_denies_runtime_remote_inference_without_permission():
+    raw_bus = AsyncMock()
+    raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "raw"}))
+    method_info = MethodInfo(
+        name="ExternalUserInput",
+        summary="Process user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=raw_bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {
+                "text": "hello",
+                "inference_selector": {"peer_id": "model-peer"},
+            },
+            principal_id="principal-1",
+            effective_perms=["Orchestrator.use"],
+            identity_source="gateway_http",
+        )
+
+    assert exc.value.status_code == 403
+    assert "RemoteInference" in str(exc.value.detail)
+    raw_bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "override_payload",
+    [
+        {"inference_provider_id": "openai"},
+        {"inference_model_id": "gpt-test"},
+    ],
+)
+async def test_generated_handler_denies_runtime_inference_provider_model_override_without_permission(
+    override_payload,
+):
+    raw_bus = AsyncMock()
+    raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "raw"}))
+    method_info = MethodInfo(
+        name="ExternalUserInput",
+        summary="Process user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=raw_bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {"text": "hello", **override_payload},
+            principal_id="principal-1",
+            effective_perms=["Orchestrator.use"],
+            identity_source="gateway_http",
+        )
+
+    assert exc.value.status_code == 403
+    assert "RemoteInference" in str(exc.value.detail)
+    raw_bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generated_handler_allows_runtime_inference_provider_model_override_with_permission():
+    raw_bus = AsyncMock()
+    raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"bus": "raw"}))
+    method_info = MethodInfo(
+        name="ExternalUserInput",
+        summary="Process user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=raw_bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    result = await handler(
+        {"text": "hello", "inference_provider_id": "openai"},
+        principal_id="principal-1",
+        effective_perms=["Orchestrator.use", "Orchestrator.RemoteInference"],
+        identity_source="gateway_http",
+    )
+
+    assert result == {"bus": "raw"}
+    raw_bus.request.assert_awaited_once()
+    assert raw_bus.request.await_args.args[1]["inference_provider_id"] == "openai"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("override_payload", [{"provider_id": "openai"}, {"model_id": "gpt-test"}])
+async def test_generated_infer_chat_denies_plain_provider_model_override_without_permission(
+    override_payload,
+):
+    raw_bus = AsyncMock()
+    raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"text": "ok"}))
+    method_info = MethodInfo(
+        name="InferChat",
+        summary="Infer chat",
+        bus_topic=OrchestratorMethods.INFER_CHAT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorInferChatRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorInferChatRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=raw_bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {"messages": [{"role": "user", "content": "hi"}], **override_payload},
+            principal_id="principal-1",
+            effective_perms=["Orchestrator.use"],
+            identity_source="gateway_http",
+        )
+
+    assert exc.value.status_code == 403
+    assert "RemoteInference" in str(exc.value.detail)
+    raw_bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generated_infer_chat_allows_plain_provider_model_override_with_permission():
+    raw_bus = AsyncMock()
+    raw_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"text": "ok"}))
+    method_info = MethodInfo(
+        name="InferChat",
+        summary="Infer chat",
+        bus_topic=OrchestratorMethods.INFER_CHAT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorInferChatRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorInferChatRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=raw_bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    result = await handler(
+        {"messages": [{"role": "user", "content": "hi"}], "provider_id": "openai"},
+        principal_id="principal-1",
+        effective_perms=["Orchestrator.use", "Orchestrator.RemoteInference"],
+        identity_source="gateway_http",
+    )
+
+    assert result == {"text": "ok"}
+    raw_bus.request.assert_awaited_once()
+    assert raw_bus.request.await_args.args[0] == OrchestratorMethods.INFER_CHAT
+    assert raw_bus.request.await_args.args[1]["provider_id"] == "openai"
+
+
+def test_gateway_service_rewire_updates_app_state_and_route_generator_bus():
+    """Mesh startup can repoint already-mounted HTTP dynamic routes to MeshBus."""
+    from app.services.gateway.service import GatewayService
+
+    service = GatewayService()
+    route_generator = SimpleNamespace(set_bus=Mock())
+    mesh_bus = object()
+    service._gateway_app = SimpleNamespace(
+        state=SimpleNamespace(bus=object(), route_generator=route_generator)
+    )
+
+    service._rewire_gateway_app_bus(mesh_bus)
+
+    assert service._gateway_app.state.bus is mesh_bus
+    route_generator.set_bus.assert_called_once_with(mesh_bus)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_dispatch_default_applied_only_when_runtime_selector_absent(
+    generated_route_app, monkeypatch
+):
+    method = MethodInfo(
+        name="ExternalUserInput",
+        summary="External user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    app, router, generator, bus, _ = generated_route_app("Orchestrator", method)
+
+    fake_config = AsyncMock()
+    fake_config.aget_config = AsyncMock(
+        return_value={
+            "orchestrator": {
+                "routing": {
+                    "dispatch_default": {
+                        "enabled": True,
+                        "peer_id": "assistant-peer",
+                        "resource_namespace": "assistant",
+                    }
+                }
+            }
+        }
+    )
+    monkeypatch.setattr("app.services.gateway.route_generator.ConfigAPI", lambda: fake_config)
+    await _start_app(app, router, generator)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/Orchestrator/ExternalUserInput", json={"text": "hi"})
+        assert response.status_code == 200
+        response = await client.post(
+            "/api/Orchestrator/ExternalUserInput",
+            json={"text": "hi", "mesh_selector": {"peer_id": "runtime-peer"}},
+        )
+        assert response.status_code == 200
+
+    first_payload = bus.request.await_args_list[0].args[1]
+    second_payload = bus.request.await_args_list[1].args[1]
+    assert first_payload["dispatch_selector"] == {
+        "peer_id": "assistant-peer",
+        "resource_namespace": "assistant",
+    }
+    assert "dispatch_selector" not in second_payload
+    assert second_payload["mesh_selector"] == {"peer_id": "runtime-peer"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "runtime_selector_payload",
+    [
+        {"mesh_selector": {}},
+        {"mesh_selector": {"peer_id": None}},
+        {"selector": {}},
+    ],
+)
+async def test_orchestrator_dispatch_default_ignores_empty_runtime_selectors(
+    generated_route_app, monkeypatch, runtime_selector_payload
+):
+    method = MethodInfo(
+        name="ExternalUserInput",
+        summary="External user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    app, router, generator, bus, _ = generated_route_app("Orchestrator", method)
+
+    fake_config = AsyncMock()
+    fake_config.aget_config = AsyncMock(
+        return_value={
+            "orchestrator": {
+                "routing": {
+                    "dispatch_default": {
+                        "enabled": True,
+                        "peer_id": "assistant-peer",
+                        "resource_namespace": "assistant",
+                    }
+                }
+            }
+        }
+    )
+    monkeypatch.setattr("app.services.gateway.route_generator.ConfigAPI", lambda: fake_config)
+    await _start_app(app, router, generator)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/Orchestrator/ExternalUserInput",
+            json={"text": "hi", **runtime_selector_payload},
+        )
+
+    assert response.status_code == 200
+    payload = bus.request.await_args.args[1]
+    assert payload["dispatch_selector"] == {
+        "peer_id": "assistant-peer",
+        "resource_namespace": "assistant",
+    }

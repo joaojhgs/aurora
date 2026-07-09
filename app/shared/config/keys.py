@@ -191,6 +191,48 @@ class _ServicesOrchestratorLlmLocalConfigPath(ConfigPath):
         return self
 
 
+class _ServicesOrchestratorLlmMeshPeerConfigPath(ConfigPath):
+    peer_id: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorLlmMeshPeerConfigPath:
+        self = super().__new__(cls, "services.orchestrator.llm.mesh_peer")
+        self.peer_id = ConfigPath("services.orchestrator.llm.mesh_peer.peer_id")
+        self.provider_id = ConfigPath("services.orchestrator.llm.mesh_peer.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.llm.mesh_peer.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.llm.mesh_peer.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.llm.mesh_peer.timeout_s")
+        return self
+
+
+class _ServicesOrchestratorLlmRemotePeerConfigPath(ConfigPath):
+    peer_id: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorLlmRemotePeerConfigPath:
+        self = super().__new__(cls, "services.orchestrator.llm.remote_peer")
+        self.peer_id = ConfigPath("services.orchestrator.llm.remote_peer.peer_id")
+        self.provider_id = ConfigPath("services.orchestrator.llm.remote_peer.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.llm.remote_peer.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.llm.remote_peer.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.llm.remote_peer.timeout_s")
+        return self
+
+
 class _ServicesOrchestratorLlmThirdPartyConfigPath(ConfigPath):
     huggingface_endpoint: _ServicesOrchestratorLlmThirdPartyHuggingfaceEndpointConfigPath
     openai: _ServicesOrchestratorLlmThirdPartyOpenaiConfigPath
@@ -201,6 +243,54 @@ class _ServicesOrchestratorLlmThirdPartyConfigPath(ConfigPath):
             _ServicesOrchestratorLlmThirdPartyHuggingfaceEndpointConfigPath()
         )
         self.openai = _ServicesOrchestratorLlmThirdPartyOpenaiConfigPath()
+        return self
+
+
+class _ServicesOrchestratorRoutingDispatchDefaultConfigPath(ConfigPath):
+    enabled: ConfigPath
+    peer_id: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorRoutingDispatchDefaultConfigPath:
+        self = super().__new__(cls, "services.orchestrator.routing.dispatch_default")
+        self.enabled = ConfigPath("services.orchestrator.routing.dispatch_default.enabled")
+        self.peer_id = ConfigPath("services.orchestrator.routing.dispatch_default.peer_id")
+        self.provider_id = ConfigPath("services.orchestrator.routing.dispatch_default.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.routing.dispatch_default.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.routing.dispatch_default.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.routing.dispatch_default.timeout_s")
+        return self
+
+
+class _ServicesOrchestratorRoutingInferenceDefaultConfigPath(ConfigPath):
+    model_id: ConfigPath
+    peer_id: ConfigPath
+    provider: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorRoutingInferenceDefaultConfigPath:
+        self = super().__new__(cls, "services.orchestrator.routing.inference_default")
+        self.model_id = ConfigPath("services.orchestrator.routing.inference_default.model_id")
+        self.peer_id = ConfigPath("services.orchestrator.routing.inference_default.peer_id")
+        self.provider = ConfigPath("services.orchestrator.routing.inference_default.provider")
+        self.provider_id = ConfigPath("services.orchestrator.routing.inference_default.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.routing.inference_default.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.routing.inference_default.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.routing.inference_default.timeout_s")
         return self
 
 
@@ -559,13 +649,17 @@ class _ServicesGatewayWebrtcConfigPath(ConfigPath):
 
 class _ServicesOrchestratorLlmConfigPath(ConfigPath):
     local: _ServicesOrchestratorLlmLocalConfigPath
+    mesh_peer: _ServicesOrchestratorLlmMeshPeerConfigPath
     provider: ConfigPath
+    remote_peer: _ServicesOrchestratorLlmRemotePeerConfigPath
     third_party: _ServicesOrchestratorLlmThirdPartyConfigPath
 
     def __new__(cls) -> _ServicesOrchestratorLlmConfigPath:
         self = super().__new__(cls, "services.orchestrator.llm")
         self.local = _ServicesOrchestratorLlmLocalConfigPath()
+        self.mesh_peer = _ServicesOrchestratorLlmMeshPeerConfigPath()
         self.provider = ConfigPath("services.orchestrator.llm.provider")
+        self.remote_peer = _ServicesOrchestratorLlmRemotePeerConfigPath()
         self.third_party = _ServicesOrchestratorLlmThirdPartyConfigPath()
         return self
 
@@ -594,6 +688,17 @@ class _ServicesOrchestratorMeshSharingConfigPath(ConfigPath):
             "services.orchestrator.mesh_sharing.required_capabilities"
         )
         self.share = ConfigPath("services.orchestrator.mesh_sharing.share")
+        return self
+
+
+class _ServicesOrchestratorRoutingConfigPath(ConfigPath):
+    dispatch_default: _ServicesOrchestratorRoutingDispatchDefaultConfigPath
+    inference_default: _ServicesOrchestratorRoutingInferenceDefaultConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorRoutingConfigPath:
+        self = super().__new__(cls, "services.orchestrator.routing")
+        self.dispatch_default = _ServicesOrchestratorRoutingDispatchDefaultConfigPath()
+        self.inference_default = _ServicesOrchestratorRoutingInferenceDefaultConfigPath()
         return self
 
 
@@ -700,10 +805,10 @@ class _ServicesToolingApprovalPolicyConfigPath(ConfigPath):
             "services.tooling.approval_policy.default_approval_mode"
         )
         self.default_share = ConfigPath("services.tooling.approval_policy.default_share")
-        self.policy_mode = ConfigPath("services.tooling.approval_policy.policy_mode")
         self.default_token_ttl_seconds = ConfigPath(
             "services.tooling.approval_policy.default_token_ttl_seconds"
         )
+        self.policy_mode = ConfigPath("services.tooling.approval_policy.policy_mode")
         self.rules = ConfigPath("services.tooling.approval_policy.rules")
         return self
 
@@ -880,6 +985,7 @@ class _ServicesOrchestratorConfigPath(ConfigPath):
     hardware_acceleration: ConfigPath
     llm: _ServicesOrchestratorLlmConfigPath
     mesh_sharing: _ServicesOrchestratorMeshSharingConfigPath
+    routing: _ServicesOrchestratorRoutingConfigPath
 
     def __new__(cls) -> _ServicesOrchestratorConfigPath:
         self = super().__new__(cls, "services.orchestrator")
@@ -887,6 +993,7 @@ class _ServicesOrchestratorConfigPath(ConfigPath):
         self.hardware_acceleration = ConfigPath("services.orchestrator.hardware_acceleration")
         self.llm = _ServicesOrchestratorLlmConfigPath()
         self.mesh_sharing = _ServicesOrchestratorMeshSharingConfigPath()
+        self.routing = _ServicesOrchestratorRoutingConfigPath()
         return self
 
 
@@ -967,6 +1074,27 @@ class _UiAssistantConfigPath(ConfigPath):
         return self
 
 
+class _UiDesktopOverlayConfigPath(ConfigPath):
+    auto_close_delay_ms: ConfigPath
+    close_behavior: ConfigPath
+    enabled: ConfigPath
+    persist_positions: ConfigPath
+    text_hotkey: ConfigPath
+    visible_on_all_workspaces: ConfigPath
+    voice_overlay_enabled: ConfigPath
+
+    def __new__(cls) -> _UiDesktopOverlayConfigPath:
+        self = super().__new__(cls, "ui.desktop_overlay")
+        self.auto_close_delay_ms = ConfigPath("ui.desktop_overlay.auto_close_delay_ms")
+        self.close_behavior = ConfigPath("ui.desktop_overlay.close_behavior")
+        self.enabled = ConfigPath("ui.desktop_overlay.enabled")
+        self.persist_positions = ConfigPath("ui.desktop_overlay.persist_positions")
+        self.text_hotkey = ConfigPath("ui.desktop_overlay.text_hotkey")
+        self.visible_on_all_workspaces = ConfigPath("ui.desktop_overlay.visible_on_all_workspaces")
+        self.voice_overlay_enabled = ConfigPath("ui.desktop_overlay.voice_overlay_enabled")
+        return self
+
+
 class _ServicesConfigPath(ConfigPath):
     auth: _ServicesAuthConfigPath
     config: _ServicesConfigConfigPath
@@ -1006,6 +1134,7 @@ class _UiConfigPath(ConfigPath):
     assistant: _UiAssistantConfigPath
     dark_mode: ConfigPath
     debug: ConfigPath
+    desktop_overlay: _UiDesktopOverlayConfigPath
 
     def __new__(cls) -> _UiConfigPath:
         self = super().__new__(cls, "ui")
@@ -1013,6 +1142,7 @@ class _UiConfigPath(ConfigPath):
         self.assistant = _UiAssistantConfigPath()
         self.dark_mode = ConfigPath("ui.dark_mode")
         self.debug = ConfigPath("ui.debug")
+        self.desktop_overlay = _UiDesktopOverlayConfigPath()
         return self
 
 

@@ -434,8 +434,10 @@ def _parse_selector_target(
         return value, None, None
 
     parts = value.split(":")
-    if len(parts) == 3 and parts[0] in {"local", "remote"}:
-        provider_kind, peer_id, service_module = parts
+    if len(parts) >= 3 and parts[0] in {"local", "remote", "mesh"}:
+        provider_kind, peer_id, service_module = parts[:3]
+        if provider_kind == "mesh":
+            provider_kind = "remote"
     else:
         provider_kind = None
         peer_id, service_module = value.split(":", 1)

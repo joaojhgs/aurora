@@ -35,6 +35,11 @@ class TestConfigFieldMetadata:
         assert ui_dark_mode["type"] == "bool"
         assert "dark mode" in ui_dark_mode["description"].lower()
 
+        close_behavior = metadata.get("ui.desktop_overlay.close_behavior")
+        assert close_behavior is not None
+        assert close_behavior["type"] == "choice"
+        assert close_behavior["choices"] == ["hide_to_tray"]
+
     def test_llm_provider_choice_field(self, config_manager):
         """Test that LLM provider has correct choice metadata."""
         metadata = config_manager.get_field_metadata()
@@ -44,7 +49,14 @@ class TestConfigFieldMetadata:
         assert llm_provider["type"] == "choice"
         assert "choices" in llm_provider
 
-        expected_choices = ["llama_cpp", "openai", "huggingface_endpoint", "huggingface_pipeline"]
+        expected_choices = [
+            "llama_cpp",
+            "openai",
+            "huggingface_endpoint",
+            "huggingface_pipeline",
+            "remote_peer",
+            "mesh_peer",
+        ]
         assert llm_provider["choices"] == expected_choices
         assert "LLM provider" in llm_provider["description"]
 

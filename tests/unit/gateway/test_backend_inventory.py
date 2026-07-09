@@ -65,7 +65,9 @@ def test_backend_inventory_supports_admin_overview_manifest_contract():
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["exposure"] == "external"
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["method_type"] == "manage"
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["required_perms"] == ["Gateway.manage"]
-    assert methods[GatewayMethods.GET_SUPPORT_BUNDLE]["routePath"] == "/api/Gateway/GetSupportBundle"
+    assert (
+        methods[GatewayMethods.GET_SUPPORT_BUNDLE]["routePath"] == "/api/Gateway/GetSupportBundle"
+    )
 
     assert builtins["/api/health"]["method_type"] == "gateway"
     assert builtins["/api/registry"]["route_kind"] == "gateway_builtin"

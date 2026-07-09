@@ -739,7 +739,8 @@ async def test_realtime_partial_emits_before_silence_when_format_was_missed(serv
     assert service._audio_format is not None
     assert service._audio_format.sample_rate == 16000
     publish_calls = [
-        call for call in service.bus.publish.call_args_list
+        call
+        for call in service.bus.publish.call_args_list
         if call.args and call.args[0] == TranscriptionMethods.RESULT
     ]
     assert publish_calls, "realtime partial should be published before VAD silence"

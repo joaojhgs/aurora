@@ -159,6 +159,312 @@ class TestOrchestratorServiceUserInputHandling:
     """Test orchestrator service user input handling."""
 
     @pytest.mark.asyncio
+    async def test_local_graph_inference_ids_reject_unknown_provider(self, orchestrator_service):
+        """Explicit provider ids without a remote selector must match the local runtime."""
+        from app.shared.contracts.models.orchestrator import (
+            ModelRuntimeCatalogResponse,
+            ModelRuntimeProviderInfo,
+        )
+
+        catalog = ModelRuntimeCatalogResponse(
+            generated_at="2026-07-07T00:00:00Z",
+            selected_provider_id="openai",
+            providers=[
+                ModelRuntimeProviderInfo(
+                    provider_id="openai",
+                    display_name="OpenAI",
+                    backend_kind="cloud",
+                    provider_type="openai",
+                    model_id="gpt-4o-mini",
+                    default_model_id="gpt-4o-mini",
+                    selected=True,
+                )
+            ],
+        )
+
+        with (
+            patch.object(
+                orchestrator_service,
+                "_build_model_runtime_catalog",
+                new_callable=AsyncMock,
+                return_value=catalog,
+            ),
+            pytest.raises(ValueError, match="inference_provider_id"),
+        ):
+            await orchestrator_service._resolve_inference_override(
+                inference_provider_id="mesh:gpu:Orchestrator",
+                inference_model_id="gpt-4o-mini",
+            )
+
+    @pytest.mark.asyncio
+    async def test_local_graph_inference_ids_preserve_valid_model_id(self, orchestrator_service):
+        """A local explicit model id is preserved after matching the selected runtime."""
+        from app.shared.contracts.models.orchestrator import (
+            ModelRuntimeCatalogResponse,
+            ModelRuntimeModelInfo,
+            ModelRuntimeProviderInfo,
+        )
+
+        catalog = ModelRuntimeCatalogResponse(
+            generated_at="2026-07-07T00:00:00Z",
+            selected_provider_id="llama_cpp",
+            providers=[
+                ModelRuntimeProviderInfo(
+                    provider_id="llama_cpp",
+                    display_name="Llama.cpp",
+                    backend_kind="local",
+                    provider_type="llama_cpp",
+                    model_id="local-model.gguf",
+                    default_model_id="local-model.gguf",
+                    selected=True,
+                    models=[
+                        ModelRuntimeModelInfo(
+                            model_id="local-model.gguf",
+                            display_name="local-model.gguf",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        with patch.object(
+            orchestrator_service,
+            "_build_model_runtime_catalog",
+            new_callable=AsyncMock,
+            return_value=catalog,
+        ):
+            override = await orchestrator_service._resolve_inference_override(
+                inference_model_id="local-model.gguf",
+            )
+
+        assert override == {
+            "inference_selector": None,
+            "inference_provider_id": "llama_cpp",
+            "inference_model_id": "local-model.gguf",
+            "inference_provider": None,
+            "inference_timeout_s": None,
+            "inference_explicit_selection": True,
+            "inference_provider_is_cloud": False,
+            "inference_selection_is_default": True,
+            "inference_selected_provider_id": "llama_cpp",
+            "inference_selected_model_id": "local-model.gguf",
+        }
+
+    def test_remote_runtime_inference_selector_requires_explicit_permission(
+        self, orchestrator_service
+    ):
+        """External callers need explicit permission before prompts leave the device."""
+        from app.shared.contracts.models.mesh import MeshAddressSelector
+
+        with pytest.raises(PermissionError, match="RemoteInference"):
+            orchestrator_service._authorize_inference_override(
+                {
+                    "inference_selector": MeshAddressSelector(
+                        peer_id="lab", resource_namespace="inference"
+                    ),
+                    "inference_provider": "remote_peer",
+                },
+                caller_effective_perms=["Orchestrator.use"],
+                caller_identity_source="gateway_http",
+                source="external",
+            )
+
+        orchestrator_service._authorize_inference_override(
+            {
+                "inference_selector": MeshAddressSelector(
+                    peer_id="lab", resource_namespace="inference"
+                ),
+                "inference_provider": "remote_peer",
+            },
+            caller_effective_perms=["Orchestrator.RemoteInference"],
+            caller_identity_source="gateway_http",
+            source="external",
+        )
+
+    def test_external_explicit_cloud_or_non_default_inference_requires_permission(
+        self, orchestrator_service
+    ):
+        """External provider/model overrides require remote-inference permission."""
+
+        for override in (
+            {
+                "inference_provider_id": "openai",
+                "inference_model_id": "gpt-4o",
+                "inference_explicit_selection": True,
+                "inference_provider_is_cloud": True,
+                "inference_selection_is_default": False,
+            },
+            {
+                "inference_provider_id": "huggingface_pipeline",
+                "inference_model_id": "microsoft/DialoGPT-medium",
+                "inference_explicit_selection": True,
+                "inference_provider_is_cloud": False,
+                "inference_selection_is_default": False,
+            },
+        ):
+            with pytest.raises(PermissionError, match="RemoteInference"):
+                orchestrator_service._authorize_inference_override(
+                    override,
+                    caller_effective_perms=["Orchestrator.use"],
+                    caller_identity_source="gateway_http",
+                    source="external",
+                )
+
+            orchestrator_service._authorize_inference_override(
+                override,
+                caller_effective_perms=["Orchestrator.RemoteInference"],
+                caller_identity_source="gateway_http",
+                source="external",
+            )
+
+    @pytest.mark.asyncio
+    async def test_resolved_cloud_graph_override_is_permission_gated_for_external_callers(
+        self, orchestrator_service
+    ):
+        """ExternalUserInput provider/model ids are classified before authorization."""
+        from app.shared.contracts.models.orchestrator import (
+            ModelRuntimeCatalogResponse,
+            ModelRuntimeProviderInfo,
+        )
+
+        catalog = ModelRuntimeCatalogResponse(
+            generated_at="2026-07-07T00:00:00Z",
+            selected_provider_id="llama_cpp",
+            providers=[
+                ModelRuntimeProviderInfo(
+                    provider_id="llama_cpp",
+                    display_name="Llama.cpp",
+                    backend_kind="local",
+                    provider_type="local",
+                    provider_kind="local",
+                    model_id="local-model.gguf",
+                    default_model_id="local-model.gguf",
+                    selected=True,
+                ),
+                ModelRuntimeProviderInfo(
+                    provider_id="openai",
+                    display_name="OpenAI",
+                    backend_kind="openai_chat",
+                    provider_type="cloud",
+                    provider_kind="cloud",
+                    upstream_provider_type="openai",
+                    model_id="gpt-4o",
+                    default_model_id="gpt-4o",
+                ),
+            ],
+        )
+
+        with patch.object(
+            orchestrator_service,
+            "_build_model_runtime_catalog",
+            new_callable=AsyncMock,
+            return_value=catalog,
+        ):
+            override = await orchestrator_service._resolve_inference_override(
+                inference_provider_id="openai",
+                inference_model_id="gpt-4o",
+            )
+
+        assert override["inference_provider_is_cloud"] is True
+        assert override["inference_selection_is_default"] is False
+        with pytest.raises(PermissionError, match="RemoteInference"):
+            orchestrator_service._authorize_inference_override(
+                override,
+                caller_effective_perms=["Orchestrator.use"],
+                caller_identity_source="gateway_http",
+                source="external",
+            )
+
+    def test_external_explicit_default_local_inference_uses_existing_permission(
+        self, orchestrator_service
+    ):
+        """Selecting the already-configured local default does not add new permission needs."""
+
+        orchestrator_service._authorize_inference_override(
+            {
+                "inference_provider_id": "llama_cpp",
+                "inference_model_id": "local-model.gguf",
+                "inference_explicit_selection": True,
+                "inference_provider_is_cloud": False,
+                "inference_selection_is_default": True,
+            },
+            caller_effective_perms=["Orchestrator.use"],
+            caller_identity_source="gateway_http",
+            source="external",
+        )
+
+    def test_direct_inference_provider_selection_requires_explicit_permission(
+        self, orchestrator_service
+    ):
+        from app.messaging.bus import Envelope
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorChatMessage,
+            OrchestratorInferChatRequest,
+        )
+
+        request = OrchestratorInferChatRequest(
+            messages=[OrchestratorChatMessage(role="user", content="hi")],
+            provider_id="openai",
+        )
+        envelope = Envelope(
+            type="Orchestrator.InferChat",
+            payload=request,
+            origin="external",
+            principal_id="principal-1",
+            effective_perms=["Orchestrator.use"],
+            identity_source="gateway_http",
+        )
+
+        with pytest.raises(PermissionError, match="RemoteInference"):
+            orchestrator_service._authorize_direct_inference_request(
+                request,
+                envelope,
+                explicit_selection=True,
+            )
+
+        allowed = envelope.model_copy(update={"effective_perms": ["Orchestrator.RemoteInference"]})
+        orchestrator_service._authorize_direct_inference_request(
+            request,
+            allowed,
+            explicit_selection=True,
+        )
+
+    def test_cloud_catalog_expansion_requires_explicit_permission(self, orchestrator_service):
+        from app.messaging.bus import Envelope
+        from app.shared.contracts.models.orchestrator import ModelRuntimeCatalogRequest
+
+        request = ModelRuntimeCatalogRequest(include_cloud_models=True)
+        envelope = Envelope(
+            type="Orchestrator.GetModelCatalog",
+            payload=request,
+            origin="external",
+            principal_id="principal-1",
+            effective_perms=["Orchestrator.use"],
+            identity_source="gateway_http",
+        )
+
+        with pytest.raises(PermissionError, match="Cloud model catalog"):
+            orchestrator_service._authorize_cloud_catalog_request(request, envelope)
+
+        orchestrator_service._authorize_cloud_catalog_request(
+            request,
+            envelope.model_copy(update={"effective_perms": ["Orchestrator.RemoteInference"]}),
+        )
+
+    def test_inference_request_limits_reject_oversized_payload(self, orchestrator_service):
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorChatMessage,
+            OrchestratorInferChatRequest,
+        )
+
+        request = OrchestratorInferChatRequest(
+            messages=[OrchestratorChatMessage(role="user", content="x" * (70 * 1024))]
+        )
+
+        with pytest.raises(ValueError, match="message content exceeds limit"):
+            orchestrator_service._enforce_inference_request_limits(request)
+
+    @pytest.mark.asyncio
     async def test_on_user_input(self, orchestrator_service):
         """Test handling UI user input."""
         from app.shared.contracts.models.common import EmptyOutput
@@ -181,6 +487,9 @@ class TestOrchestratorServiceUserInputHandling:
                 request_id=None,
                 correlation_id=None,
                 stream=False,
+                inference_selector=None,
+                inference_provider_id=None,
+                inference_model_id=None,
             )
 
     @pytest.mark.asyncio
@@ -234,6 +543,9 @@ class TestOrchestratorServiceUserInputHandling:
                 return_response=True,
                 response_metadata={"source": "external", "stream": True},
                 stream=True,
+                inference_selector=None,
+                inference_provider_id=None,
+                inference_model_id=None,
             )
 
     @pytest.mark.asyncio

@@ -29,6 +29,8 @@ services work without any modification.
 
 from __future__ import annotations
 
+import inspect
+from collections.abc import AsyncIterator, Mapping
 from typing import Any, Protocol
 
 from pydantic import BaseModel
@@ -87,6 +89,21 @@ class _PeerBridgeLike(Protocol):
         method_type: str | None = None,
         caller_peer_id: str | None = None,
     ) -> QueryResult: ...
+
+    def stream_call(
+        self,
+        peer_id: str,
+        method: str,
+        params: BaseModel,
+        *,
+        timeout: float,
+        correlation_id: str | None = None,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+    ) -> AsyncIterator[Any]: ...
 
     def fire_event(
         self,
@@ -220,7 +237,7 @@ class MeshBus:
             return
 
         # For commands, check routing
-        selector = _extract_mesh_selector(message)
+        selector = _extract_mesh_selector(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         route = self._routing_table.resolve(topic, selector=selector)
         log_debug(
@@ -417,7 +434,7 @@ class MeshBus:
         Returns:
             QueryResult containing the response data or error
         """
-        selector = _extract_mesh_selector(message)
+        selector = _extract_mesh_selector(message, topic=topic)
         trace_id = ensure_correlation_id(message, correlation_id)
         route = self._routing_table.resolve(topic, selector=selector)
         log_debug(
@@ -556,6 +573,191 @@ class MeshBus:
             correlation_id=trace_id,
         )
 
+    async def stream_request(
+        self,
+        topic: str,
+        message: BaseModel,
+        *,
+        priority: int = 50,
+        origin: str = "internal",
+        timeout: float = 30.0,
+        ttl_ms: int | None = None,
+        max_attempts: int = 3,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        correlation_id: str | None = None,
+    ) -> AsyncIterator[Any]:
+        """Request a stream, using PeerBridge streaming when routed remote."""
+        selector = _extract_mesh_selector(message, topic=topic)
+        trace_id = ensure_correlation_id(message, correlation_id)
+        route = self._routing_table.resolve(topic, selector=selector)
+
+        if route.target == "error":
+            raise RuntimeError(route.error_message or f"No remote peer available for {topic}")
+
+        if route.target == "none":
+            raise RuntimeError(f"No route available for {topic}")
+
+        if route.target == "local":
+            async for item in self._stream_local_request(
+                topic,
+                message,
+                priority=priority,
+                origin=origin,
+                timeout=timeout,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                correlation_id=trace_id,
+            ):
+                yield item
+            return
+
+        if route.target == "remote" and route.peer_id and self._peer_bridge:
+            yielded_remote_chunk = False
+            try:
+                async for item in self._peer_bridge.stream_call(
+                    route.peer_id,
+                    topic,
+                    message,
+                    timeout=timeout,
+                    correlation_id=trace_id,
+                    principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
+                ):
+                    yielded_remote_chunk = True
+                    yield item
+                return
+            except Exception as e:
+                if yielded_remote_chunk:
+                    raise
+                log_warning(f"MeshBus: Remote stream request to {route.peer_id} failed: {e}")
+
+            fallback = self._routing_table.resolve_fallback(
+                topic,
+                failed_peer_id=route.peer_id,
+                selector=selector,
+            )
+            if fallback.target == "error":
+                raise RuntimeError(
+                    fallback.error_message or f"No fallback route available for {topic}"
+                )
+            if fallback.target == "none":
+                raise RuntimeError(f"No fallback route available for {topic}")
+            if fallback.target == "local":
+                async for item in self._stream_local_request(
+                    topic,
+                    message,
+                    priority=priority,
+                    origin=origin,
+                    timeout=timeout,
+                    ttl_ms=ttl_ms,
+                    max_attempts=max_attempts,
+                    principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
+                    correlation_id=trace_id,
+                ):
+                    yield item
+                return
+            if fallback.target == "remote" and fallback.peer_id and self._peer_bridge:
+                async for item in self._peer_bridge.stream_call(
+                    fallback.peer_id,
+                    topic,
+                    message,
+                    timeout=timeout,
+                    correlation_id=trace_id,
+                    principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source,
+                    method_type=method_type,
+                    caller_peer_id=caller_peer_id,
+                ):
+                    yield item
+                return
+
+        raise RuntimeError(f"No route available for {topic}")
+
+    async def _stream_local_request(
+        self,
+        topic: str,
+        message: BaseModel,
+        *,
+        priority: int,
+        origin: str,
+        timeout: float,
+        ttl_ms: int | None,
+        max_attempts: int,
+        principal_id: str | None,
+        effective_perms: list[str] | None,
+        identity_source: str | None,
+        method_type: str | None,
+        caller_peer_id: str | None,
+        correlation_id: str | None,
+    ) -> AsyncIterator[Any]:
+        """Stream from the wrapped local bus or adapt request data into stream items."""
+
+        inner_stream = getattr(self._inner, "stream_request", None)
+        if callable(inner_stream):
+            stream = inner_stream(
+                topic,
+                message,
+                priority=priority,
+                origin=origin,
+                timeout=timeout,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                correlation_id=correlation_id,
+            )
+            if inspect.isawaitable(stream):
+                stream = await stream
+            async for item in stream:
+                yield item
+            return
+
+        if _requires_native_local_stream(topic):
+            raise RuntimeError(
+                f"Local bus does not support native stream_request for {topic}; "
+                "refusing request fallback to avoid serializing async stream data"
+            )
+
+        result = await self.request(
+            topic,
+            message,
+            priority=priority,
+            origin=origin,
+            timeout=timeout,
+            ttl_ms=ttl_ms,
+            max_attempts=max_attempts,
+            principal_id=principal_id,
+            effective_perms=effective_perms,
+            identity_source=identity_source,
+            method_type=method_type,
+            caller_peer_id=caller_peer_id,
+            correlation_id=correlation_id,
+        )
+        if not result.ok:
+            raise RuntimeError(result.error or f"Stream request failed for {topic}")
+        async for item in _iterate_stream_data(result.data):
+            yield item
+
     # ── Subscribe ────────────────────────────────────────────────────────
 
     def subscribe(self, topic: str, handler: Handler) -> None:
@@ -574,13 +776,75 @@ class MeshBus:
         """Unsubscribe from the inner local bus."""
         self._inner.unsubscribe(topic, handler)
 
+    def register_stream_handler(self, topic: str, handler: Handler) -> None:
+        """Register a local streaming handler on the wrapped bus when supported."""
 
-def _extract_mesh_selector(message: BaseModel) -> MeshAddressSelector | None:
+        register = getattr(self._inner, "register_stream_handler", None)
+        if callable(register):
+            register(topic, handler)
+
+    def unregister_stream_handler(self, topic: str, handler: Handler) -> None:
+        """Unregister a local streaming handler on the wrapped bus when supported."""
+
+        unregister = getattr(self._inner, "unregister_stream_handler", None)
+        if callable(unregister):
+            unregister(topic, handler)
+
+
+def _requires_native_local_stream(topic: str) -> bool:
+    """Return True when request fallback would corrupt stream-only responses."""
+    from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+    return topic == OrchestratorMethods.STREAM_INFER_CHAT
+
+
+def _extract_mesh_selector(message: Any, *, topic: str | None = None) -> MeshAddressSelector | None:
     """Return a typed mesh selector from a bus payload when present."""
+    from app.shared.contracts.models.orchestrator import OrchestratorMethods
 
-    selector = getattr(message, "mesh_selector", None)
+    if isinstance(message, Mapping):
+        selector = message.get("dispatch_selector")
+        if selector is None and topic != OrchestratorMethods.GET_MODEL_CATALOG:
+            selector = message.get("mesh_selector")
+        if selector is None and topic != OrchestratorMethods.GET_MODEL_CATALOG:
+            selector = message.get("selector")
+    else:
+        selector = getattr(message, "dispatch_selector", None)
+        if selector is None and topic != OrchestratorMethods.GET_MODEL_CATALOG:
+            selector = getattr(message, "mesh_selector", None)
+        if selector is None and topic != OrchestratorMethods.GET_MODEL_CATALOG:
+            selector = getattr(message, "selector", None)
+
     if isinstance(selector, MeshAddressSelector):
         return selector
-    if isinstance(selector, dict):
-        return MeshAddressSelector.model_validate(selector)
+    if isinstance(selector, Mapping):
+        return MeshAddressSelector.model_validate(dict(selector))
     return None
+
+
+async def _iterate_stream_data(data: Any) -> AsyncIterator[Any]:
+    if data is None:
+        return
+    if hasattr(data, "__aiter__"):
+        async for item in data:
+            yield item
+        return
+    if isinstance(data, dict):
+        for key in ("chunks", "events", "stream"):
+            value = data.get(key)
+            if value is not None and not isinstance(value, bool):
+                async for item in _iterate_stream_data(value):
+                    yield item
+                return
+        yield data
+        return
+    if isinstance(data, (str, bytes)):
+        yield data.decode() if isinstance(data, bytes) else data
+        return
+    try:
+        iterator = iter(data)
+    except TypeError:
+        yield data
+        return
+    for item in iterator:
+        yield item

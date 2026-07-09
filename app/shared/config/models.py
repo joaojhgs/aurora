@@ -17,6 +17,37 @@ class Assistant(BaseConfigModel):
     """
 
 
+class DesktopOverlay(BaseConfigModel):
+    enabled: bool | None = True
+    """
+    Enable the desktop overlay window for quick access to Aurora.
+    """
+    voice_overlay_enabled: bool | None = True
+    """
+    Show voice activity and listening state in the desktop overlay when voice features are active.
+    """
+    text_hotkey: str | None = "CommandOrControl+K"
+    """
+    Global keyboard shortcut that opens the desktop overlay text input.
+    """
+    close_behavior: Literal["hide_to_tray"] | None = "hide_to_tray"
+    """
+    Behavior when the desktop overlay window is closed.
+    """
+    auto_close_delay_ms: int | None = Field(1200, ge=0)
+    """
+    Delay in milliseconds before the desktop overlay auto-closes after transient interactions; set to 0 to close immediately.
+    """
+    visible_on_all_workspaces: bool | None = True
+    """
+    Keep the desktop overlay visible across all virtual desktops or workspaces when supported by the OS.
+    """
+    persist_positions: bool | None = True
+    """
+    Remember desktop overlay window positions between app launches.
+    """
+
+
 class Ui(BaseConfigModel):
     activate: bool | None = False
     """
@@ -33,6 +64,10 @@ class Ui(BaseConfigModel):
     assistant: Assistant | None = None
     """
     Assistant UI behavior settings
+    """
+    desktop_overlay: DesktopOverlay | None = None
+    """
+    Desktop assistant overlay window behavior and persistence settings.
     """
 
 
@@ -467,9 +502,42 @@ class Local(BaseConfigModel):
     llama_cpp: LlamaCpp | None = None
 
 
+class RemotePeer(BaseConfigModel):
+    peer_id: str | None = None
+    """
+    Stable mesh peer id to route inference to
+    """
+    provider_id: str | None = None
+    """
+    Provider alias or peer id to route inference to
+    """
+    service_instance_id: str | None = None
+    """
+    Remote service instance id such as remote:<peer>:Orchestrator
+    """
+    resource_namespace: str | None = "inference"
+    timeout_s: float | None = Field(60, ge=1.0)
+
+
+class MeshPeer(BaseConfigModel):
+    peer_id: str | None = None
+    provider_id: str | None = None
+    service_instance_id: str | None = None
+    resource_namespace: str | None = "inference"
+    timeout_s: float | None = Field(60, ge=1.0)
+
+
 class Llm(BaseConfigModel):
     provider: (
-        Literal["openai", "huggingface_endpoint", "huggingface_pipeline", "llama_cpp"] | None
+        Literal[
+            "openai",
+            "huggingface_endpoint",
+            "huggingface_pipeline",
+            "llama_cpp",
+            "remote_peer",
+            "mesh_peer",
+        ]
+        | None
     ) = "openai"
     """
     LLM provider to use
@@ -481,6 +549,44 @@ class Llm(BaseConfigModel):
     local: Local | None = None
     """
     Local LLM provider options
+    """
+    remote_peer: RemotePeer | None = None
+    """
+    Remote mesh peer LLM routing options. Tools and graph execution remain local; only chat inference is delegated.
+    """
+    mesh_peer: MeshPeer | None = None
+    """
+    Alias for remote_peer LLM routing options
+    """
+
+
+class DispatchDefault(BaseConfigModel):
+    enabled: bool | None = False
+    peer_id: str | None = None
+    provider_id: str | None = None
+    service_instance_id: str | None = None
+    resource_namespace: str | None = None
+    timeout_s: float | None = Field(None, ge=1.0)
+
+
+class InferenceDefault(BaseConfigModel):
+    provider: Literal["local", "configured", "remote_peer", "mesh_peer"] | None = "configured"
+    peer_id: str | None = None
+    provider_id: str | None = None
+    service_instance_id: str | None = None
+    resource_namespace: str | None = "inference"
+    model_id: str | None = None
+    timeout_s: float | None = Field(60, ge=1.0)
+
+
+class Routing(BaseConfigModel):
+    dispatch_default: DispatchDefault | None = None
+    """
+    Default mesh dispatch route for external orchestrator requests when no runtime dispatch selector is supplied
+    """
+    inference_default: InferenceDefault | None = None
+    """
+    Default chat inference provider for local orchestration; does not affect dispatch routing
     """
 
 
@@ -889,6 +995,10 @@ class Orchestrator(BaseConfigModel):
     llm: Llm | None = None
     """
     LLM provider configuration
+    """
+    routing: Routing | None = None
+    """
+    Separate dispatch and inference routing defaults for orchestrator requests
     """
 
 

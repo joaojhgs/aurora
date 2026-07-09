@@ -52,7 +52,9 @@ import {
   toolingSharingPolicyFixture,
   uiMockReferenceFixtureSummary,
   type ToolOnboardingValidationResult,
-  wildcardIntersection
+  wildcardIntersection,
+  type ModelRuntimeCatalogRequest,
+  type ModelRuntimeCatalogResponse
 } from '../src/index.js'
 
 describe('AuroraClient', () => {
@@ -428,6 +430,94 @@ describe('AuroraClient', () => {
       [ORCHESTRATOR_MODEL_METHODS.downloadModel, '/api/Orchestrator/DownloadModel'],
       [ORCHESTRATOR_MODEL_METHODS.benchmarkModel, '/api/Orchestrator/BenchmarkModel']
     ])
+  })
+
+  it('serializes remote model catalog selectors and exposes provider model metadata to typed callers', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const provider = {
+      ...cloneFixture(modelRuntimeCatalogFixture.providers[1]!),
+      provider_kind: 'mesh_peer',
+      upstream_provider_type: 'openai-compatible',
+      provider_peer_id: 'peer-studio-gpu',
+      provider_service_instance_id: 'orchestrator-studio-gpu',
+      default_model_id: 'qwen-32b-instruct',
+      models: [
+        {
+          model_id: 'qwen-32b-instruct',
+          display_name: 'Qwen 32B Instruct',
+          provider_id: 'mesh:studio-gpu:Orchestrator',
+          provider_kind: 'mesh_peer',
+          upstream_provider_type: 'openai-compatible',
+          source: 'mesh-peer',
+          context_window: 32768,
+          generation_limit: 4096,
+          capabilities: ['chat', 'large-context'],
+          default: true,
+          available: true,
+          metadata: { quantization: 'Q4_K_M' },
+          secrets_redacted: true
+        }
+      ],
+      model_catalog: {
+        source: 'remote-runtime',
+        count: 1
+      }
+    }
+    const response: ModelRuntimeCatalogResponse = {
+      ...cloneFixture(modelRuntimeCatalogFixture),
+      selected_provider_id: provider.provider_id,
+      providers: [provider],
+      provider_index: { mesh_peer: [provider.provider_id] }
+    }
+    const transport = MockAuroraTransport.empty().register(ORCHESTRATOR_MODEL_METHODS.getCatalog, (request) => {
+      calls.push({ method: request.method, path: request.path, payload: request.payload })
+      return response
+    })
+    const client = new AuroraClient({ transport })
+    const catalogRequest: ModelRuntimeCatalogRequest = {
+      includeRemote: true,
+      includeCloudModels: true,
+      include_unavailable: true,
+      meshSelector: {
+        peerId: 'peer-studio-gpu',
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-studio-gpu',
+        dataScope: 'personal'
+      }
+    }
+
+    const catalog = await client.models.listCatalog(catalogRequest)
+
+    expect(calls[0]?.payload).toEqual({
+      include_unavailable: true,
+      include_remote: true,
+      include_cloud_models: true,
+      catalog_selector: {
+        peer_id: 'peer-studio-gpu',
+        provider_id: 'mesh:studio-gpu:Orchestrator',
+        service_instance_id: 'orchestrator-studio-gpu',
+        data_scope: 'personal'
+      }
+    })
+    expect(catalog.providers[0]).toEqual(
+      expect.objectContaining({
+        provider_kind: 'mesh_peer',
+        upstream_provider_type: 'openai-compatible',
+        provider_peer_id: 'peer-studio-gpu',
+        provider_service_instance_id: 'orchestrator-studio-gpu',
+        default_model_id: 'qwen-32b-instruct',
+        model_catalog: expect.objectContaining({ source: 'remote-runtime' })
+      })
+    )
+    expect(catalog.providers[0]?.models?.[0]).toEqual(
+      expect.objectContaining({
+        model_id: 'qwen-32b-instruct',
+        provider_kind: 'mesh_peer',
+        upstream_provider_type: 'openai-compatible',
+        default: true,
+        metadata: expect.objectContaining({ quantization: 'Q4_K_M' })
+      })
+    )
   })
 
   it('summarizes capability catalog responses without inventing state', async () => {
@@ -5643,7 +5733,10 @@ describe('AuroraClient assistant namespace', () => {
       metadata: expect.objectContaining({
         provider: 'openai',
         provider_label: 'OpenAI',
-        tts_status: 'unavailable'
+        tts_status: 'unavailable',
+        assistant_stream_contract: 'single_response_fallback',
+        assistant_stream_transport: 'http',
+        assistant_stream_fallback: true
       })
     }))
     expect(sourceClosed).toBe(true)
@@ -5813,7 +5906,12 @@ describe('AuroraClient assistant namespace', () => {
         kind: 'fallback',
         sessionId: 'mock-assistant-session',
         text: 'Mock Aurora response to "fallback please"',
-        modelLabel: 'mock-local'
+        modelLabel: 'mock-local',
+        metadata: expect.objectContaining({
+          assistant_stream_contract: 'single_response_fallback',
+          assistant_stream_transport: 'mock',
+          assistant_stream_fallback: true
+        })
       })
     )
   })
@@ -5947,6 +6045,406 @@ describe('AuroraClient assistant namespace', () => {
     expect(result.data.modelLabel).toBe('llama-local')
     expect(result.data.routePolicy?.providerId).toBe('local:orchestrator')
     expect(result.audit.correlationId).toBe('corr-assistant-123')
+  })
+
+  it('emits assistant mesh selectors only for explicit peer and service instance targets', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Remote assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-remote' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    const result = await client.assistant.sendMessage({
+      text: 'remote hello',
+      routePolicy: {
+        providerId: 'local:orchestrator',
+        peerId: 'peer-studio-gpu',
+        serviceInstanceId: 'remote:peer-studio-gpu:Orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-remote'
+      }
+    })
+
+    const expectedSelector = {
+      peer_id: 'peer-studio-gpu',
+      service_instance_id: 'remote:peer-studio-gpu:Orchestrator'
+    }
+    expect(capturedPayload).toEqual({
+      text: 'remote hello',
+      source: 'ui',
+      dispatch_selector: expectedSelector,
+      mesh_selector: expectedSelector,
+      selector: expectedSelector
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('does not emit assistant mesh selectors for local or default provider labels', async () => {
+    const capturedPayloads: unknown[] = []
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayloads.push(request.payload)
+      return {
+        data: { text: 'Local assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-local' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'local hello',
+      routePolicy: {
+        providerId: 'local:orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-local'
+      }
+    })
+    await client.assistant.sendMessage({
+      text: 'default hello',
+      routePolicy: {
+        providerId: 'default',
+        privacyClass: 'personal',
+        routeState: 'available-local'
+      }
+    })
+
+    expect(capturedPayloads).toEqual([
+      {
+        text: 'local hello',
+        source: 'ui'
+      },
+      {
+        text: 'default hello',
+        source: 'ui'
+      }
+    ])
+  })
+
+  it('emits assistant mesh selectors for remote orchestrator service provider ids', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Remote provider assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-remote-provider' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'remote provider hello',
+      routePolicy: {
+        providerId: 'remote:peer-kitchen:Orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-remote'
+      }
+    })
+
+    const expectedSelector = {
+      provider_id: 'remote:peer-kitchen:Orchestrator',
+      service_instance_id: 'remote:peer-kitchen:Orchestrator',
+      peer_id: 'peer-kitchen'
+    }
+    expect(capturedPayload).toEqual({
+      text: 'remote provider hello',
+      source: 'ui',
+      dispatch_selector: expectedSelector,
+      mesh_selector: expectedSelector,
+      selector: expectedSelector
+    })
+  })
+
+
+  it('emits assistant inference policy without dispatch compatibility selectors', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Inference assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'inference hello',
+      inferencePolicy: {
+        peerId: 'peer-studio-gpu',
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-studio-gpu',
+        modelId: 'qwen-32b-instruct'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'inference hello',
+      source: 'ui',
+      inference_selector: {
+        peer_id: 'peer-studio-gpu',
+        service_instance_id: 'orchestrator-studio-gpu'
+      },
+      inference_model_id: 'qwen-32b-instruct'
+    })
+  })
+
+  it('normalizes mesh inference provider aliases to backend route selector fields', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Mesh inference assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-mesh-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'mesh provider inference hello',
+      inferencePolicy: {
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        modelId: 'qwen-32b-instruct'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'mesh provider inference hello',
+      source: 'ui',
+      inference_selector: {
+        peer_id: 'studio-gpu',
+        service_instance_id: 'remote:studio-gpu:Orchestrator'
+      },
+      inference_model_id: 'qwen-32b-instruct'
+    })
+  })
+
+  it('keeps remote inference route provider identity separate from runtime provider id', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Inference assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-inference-runtime' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'inference runtime hello',
+      inferencePolicy: {
+        peerId: 'peer-studio-gpu',
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-studio-gpu',
+        runtimeProviderId: 'llama_cpp',
+        modelId: 'qwen-32b-instruct'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'inference runtime hello',
+      source: 'ui',
+      inference_selector: {
+        peer_id: 'peer-studio-gpu',
+        service_instance_id: 'orchestrator-studio-gpu'
+      },
+      inference_provider_id: 'llama_cpp',
+      inference_model_id: 'qwen-32b-instruct'
+    })
+  })
+
+  it('serializes local inference provider and model without a mesh selector', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Local provider inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-local-provider-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'local provider inference hello',
+      inferencePolicy: {
+        providerId: 'openai',
+        modelId: 'gpt-4o'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'local provider inference hello',
+      source: 'ui',
+      inference_provider_id: 'openai',
+      inference_model_id: 'gpt-4o'
+    })
+  })
+
+  it('serializes runtime and model selection while keeping approval policy as SDK hints', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Elevated provider inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-elevated-provider-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'elevated provider inference hello',
+      inferencePolicy: {
+        providerId: 'openai',
+        runtimeProviderId: 'openai-compatible',
+        modelId: 'gpt-4o',
+        privacyClass: 'sensitive',
+        dataLeavesDevice: true,
+        selectorRequired: true,
+        approvalRequired: true
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'elevated provider inference hello',
+      source: 'ui',
+      inference_provider_id: 'openai-compatible',
+      inference_model_id: 'gpt-4o'
+    })
+    expect(JSON.stringify(capturedPayload)).not.toContain('approvalRequired')
+    expect(JSON.stringify(capturedPayload)).not.toContain('dataLeavesDevice')
+    expect(JSON.stringify(capturedPayload)).not.toContain('privacyClass')
+    expect(JSON.stringify(capturedPayload)).not.toContain('selectorRequired')
+  })
+
+  it('serializes remote inference provider ids as mesh selectors', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Remote inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-remote-inference-provider' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'remote provider inference hello',
+      inferencePolicy: {
+        providerId: 'remote:peer-kitchen:Orchestrator',
+        modelId: 'remote-model'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'remote provider inference hello',
+      source: 'ui',
+      inference_selector: {
+        provider_id: 'remote:peer-kitchen:Orchestrator',
+        service_instance_id: 'remote:peer-kitchen:Orchestrator',
+        peer_id: 'peer-kitchen'
+      },
+      inference_model_id: 'remote-model'
+    })
+  })
+
+  it('serializes composite remote inference provider ids to service selector plus runtime provider', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Composite remote inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-composite-remote-inference-provider' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'remote composite provider inference hello',
+      inferencePolicy: {
+        providerId: 'remote:peer-kitchen:Orchestrator:openai',
+        modelId: 'gpt-4o'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'remote composite provider inference hello',
+      source: 'ui',
+      inference_selector: {
+        provider_id: 'remote:peer-kitchen:Orchestrator:openai',
+        service_instance_id: 'remote:peer-kitchen:Orchestrator',
+        peer_id: 'peer-kitchen'
+      },
+      inference_provider_id: 'openai',
+      inference_model_id: 'gpt-4o'
+    })
+  })
+
+  it('emits dispatch and inference policies independently when both are present', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Routed assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-dispatch-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'dispatch and inference hello',
+      routePolicy: {
+        peerId: 'peer-router',
+        serviceInstanceId: 'remote:peer-router:Orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-remote'
+      },
+      inferencePolicy: {
+        peerId: 'peer-gpu',
+        providerId: 'mesh:gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-gpu',
+        modelId: 'llama-70b'
+      }
+    })
+
+    const dispatchSelector = {
+      peer_id: 'peer-router',
+      service_instance_id: 'remote:peer-router:Orchestrator'
+    }
+    expect(capturedPayload).toEqual({
+      text: 'dispatch and inference hello',
+      source: 'ui',
+      dispatch_selector: dispatchSelector,
+      mesh_selector: dispatchSelector,
+      selector: dispatchSelector,
+      inference_selector: {
+        peer_id: 'peer-gpu',
+        service_instance_id: 'orchestrator-gpu'
+      },
+      inference_model_id: 'llama-70b'
+    })
   })
 
   it('maps assistant timeout, auth denied, and unavailable responses into SDK result failures', async () => {

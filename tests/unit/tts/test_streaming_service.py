@@ -58,9 +58,7 @@ def test_tts_stream_contracts_require_use_permissions():
     assert TTSService._on_stream_chunk._contract_metadata["required_perms"] == [
         TTSMethods.STREAM_CHUNK
     ]
-    assert TTSService._on_stream_end._contract_metadata["required_perms"] == [
-        TTSMethods.STREAM_END
-    ]
+    assert TTSService._on_stream_end._contract_metadata["required_perms"] == [TTSMethods.STREAM_END]
     assert TTSService.synthesize._contract_metadata["required_perms"] == [TTSMethods.SYNTHESIZE]
 
 
@@ -194,7 +192,9 @@ async def test_concurrent_stream_chunk_delivery_keeps_audio_order(
 
     monkeypatch.setattr(service, "_synthesize_to_bytes", delayed_synthesize)
 
-    await service._on_stream_start(TTSStreamStartRequest(stream_id="stream-concurrent", format="raw"))
+    await service._on_stream_start(
+        TTSStreamStartRequest(stream_id="stream-concurrent", format="raw")
+    )
     await asyncio.gather(
         service._on_stream_chunk(
             TTSStreamChunkRequest(stream_id="stream-concurrent", sequence=0, text="first")

@@ -23,6 +23,42 @@ from app.shared.messaging.models.tooling_models import (
 )
 
 
+class _DummyTool:
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        *,
+        trust_tier: str | None = None,
+        source: str | None = None,
+        module: str | None = None,
+    ) -> None:
+        if module is not None:
+            self.__module__ = module
+        self.name = name
+        self.description = description
+        self.args_schema = None
+        self.required_permissions = []
+        self.confirmation_required = False
+        if trust_tier is not None:
+            self.trust_tier = trust_tier
+        if source is not None:
+            self.source = source
+
+
+def _loaded_tools_with_duckduckgo_after_top_k(top_k: int = 10) -> list[_DummyTool]:
+    return [
+        _DummyTool(f"calendar_helper_{index}", "Calendar scheduling helper")
+        for index in range(top_k)
+    ] + [
+        _DummyTool(
+            "duckduckgo_results_json",
+            "A wrapper around Duck Duck Go Search. Useful for current events and latest news.",
+            module="langchain_community.tools.ddg_search.tool",
+        )
+    ]
+
+
 @pytest.fixture
 def mock_bus():
     """Create a mock message bus."""
@@ -129,7 +165,6 @@ async def test_prepare_execution_rejects_schema_unavailable(tooling_service):
 
     assert response.ok is False
     assert response.policy_decision.reason == "schema_unavailable"
-
 
 
 def _mock_call_text(*mocks: Mock) -> str:
@@ -439,9 +474,14 @@ class TestToolingServiceQueries:
         ):
             response = await tooling_service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
 
-        assert response.count == 0
-        assert response.blocked_count == 0
+        assert response.count == 1
+        assert response.blocked_count == 1
+        assert response.tools[0].name == "busy-peer_hidden_tool"
+        assert response.blocked_tools[0].reason_code == "approval_required"
+        assert response.blocked_tools[0].tool.name == "busy-peer_hidden_tool"
         assert response.providers[1].provider_peer_id == "busy-peer"
+        assert response.providers[1].eligible is False
+        assert response.providers[1].reason_code == "not_shared_by_policy"
 
     @pytest.mark.asyncio
     async def test_get_tool_catalog_excludes_removed_remote_snapshots(
@@ -472,7 +512,9 @@ class TestToolingServiceQueries:
             tools=[remote_tool],
             shared_by_policy=True,
         )
-        tooling_service._remote_catalog_snapshots[(snapshot.peer_id, snapshot.service_instance_id)] = (
+        tooling_service._remote_catalog_snapshots[
+            (snapshot.peer_id, snapshot.service_instance_id)
+        ] = (
             snapshot,
             0.0,
         )
@@ -743,6 +785,337 @@ class TestToolingServiceQueries:
         assert response is not None
 
     @pytest.mark.asyncio
+    async def test_get_tools_search_query_binds_duckduckgo_from_rag(
+        self, tooling_service, mock_bus
+    ):
+        """RAG-selected DuckDuckGo binds by name without web-intent fallback."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.db import DBMethods
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+        from app.shared.messaging.models.db_models import RAGSearchQuery
+
+        duckduckgo = _DummyTool(
+            "duckduckgo_results_json",
+            "A wrapper around Duck Duck Go Search. Useful for current events.",
+            module="langchain_community.tools.ddg_search.tool",
+        )
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(ok=True, data={"items": [{"key": "duckduckgo_results_json"}]})
+        )
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=duckduckgo)
+        tooling_service.tools_manager.get_tools = Mock(return_value=[])
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query="search", top_k=5)
+        )
+
+        mock_bus.request.assert_awaited_once()
+        method, payload = mock_bus.request.await_args.args[:2]
+        assert method == DBMethods.RAG_SEARCH
+        assert isinstance(payload, RAGSearchQuery)
+        assert payload.namespace == "main.tools"
+        assert payload.query == "search"
+        tooling_service.tools_manager.get_tool_by_name.assert_called_once_with(
+            "duckduckgo_results_json"
+        )
+        tooling_service.tools_manager.get_tools.assert_not_called()
+        assert [tool.local_name for tool in response.tools] == ["duckduckgo_results_json"]
+        assert response.tools[0].source == "core"
+        assert response.tools[0].trust_tier == "trusted"
+        assert response.tools[0].capability_class == "network"
+        assert response.tools[0].external is True
+
+    @pytest.mark.asyncio
+    async def test_get_tools_search_intent_zero_rag_uses_lexical_fallback(
+        self, tooling_service, mock_bus
+    ):
+        """Search-tool intent can recover loaded DDG when RAG returns no hits."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        loaded_tools = _loaded_tools_with_duckduckgo_after_top_k(top_k=10)
+        mock_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"items": []}))
+        tooling_service.tools_manager.tools = loaded_tools
+        tooling_service.tools_manager.get_tools = Mock(return_value=loaded_tools[:10])
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query="use the search tool", top_k=10)
+        )
+
+        assert [tool.local_name for tool in response.tools] == ["duckduckgo_results_json"]
+        tooling_service.tools_manager.get_tools.assert_not_called()
+
+    def test_loaded_tools_snapshot_bounds_concrete_manager_tools(self, tooling_service):
+        """Concrete loaded-tool lists are scanned only up to the explicit cap."""
+
+        loaded_tools = [
+            _DummyTool(f"tool_{index}", "Loaded tool")
+            for index in range(1200)
+        ]
+        tooling_service.tools_manager.tools = loaded_tools
+        tooling_service.tools_manager.get_tools = Mock(return_value=[])
+
+        snapshot = tooling_service._loaded_tools_snapshot(top_k=2000)
+
+        assert snapshot == loaded_tools[:1000]
+        tooling_service.tools_manager.get_tools.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_tools_search_intent_failed_rag_uses_lexical_fallback(
+        self, tooling_service, mock_bus
+    ):
+        """Search-tool intent can recover loaded DDG when RAG reports ok=False."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        duckduckgo = _DummyTool(
+            "duckduckgo_results_json",
+            "A wrapper around Duck Duck Go Search. Useful for current events.",
+            module="langchain_community.tools.ddg_search.tool",
+        )
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(ok=False, error="RAG unavailable")
+        )
+        tooling_service.tools_manager.get_tools = Mock(return_value=[duckduckgo])
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query="use the search tool", top_k=5)
+        )
+
+        assert [tool.local_name for tool in response.tools] == ["duckduckgo_results_json"]
+        tooling_service.tools_manager.get_tools.assert_called_once_with(None, 256)
+
+    @pytest.mark.asyncio
+    async def test_get_tool_catalog_search_intent_zero_rag_uses_lexical_fallback(
+        self, tooling_service, mock_bus
+    ):
+        """Catalog query mirrors local bounded lexical fallback for search-tool intent."""
+        from app.messaging import QueryResult
+
+        loaded_tools = _loaded_tools_with_duckduckgo_after_top_k(top_k=10)
+        mock_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"items": []}))
+        tooling_service.tools_manager.tools = loaded_tools
+        tooling_service.tools_manager.get_tools = Mock(return_value=loaded_tools[:10])
+
+        with patch.object(
+            tooling_service, "_load_remote_catalog_snapshots", AsyncMock(return_value=[])
+        ):
+            catalog = await tooling_service._on_get_tool_catalog(
+                ToolingGetToolCatalogRequest(
+                    query="use the search tool",
+                    top_k=10,
+                    caller_permissions=["*"],
+                )
+            )
+
+        assert "duckduckgo_results_json" in {tool.name for tool in catalog.tools}
+        tooling_service.tools_manager.get_tools.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_tool_catalog_query_scans_remote_snapshot_beyond_top_k(
+        self, tooling_service, mock_bus
+    ):
+        """Remote catalog query scans beyond first top_k and returns lexical matches only."""
+        from app.messaging import QueryResult
+
+        mock_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"items": []}))
+        remote_tools = [
+            _tool_info(
+                name=f"raspi-lab_calendar_helper_{index}",
+                local_name=f"calendar_helper_{index}",
+                provider_peer_id="raspi-lab",
+                provider_service_instance_id="remote:raspi-lab:Tooling",
+                namespace="raspi-lab",
+                source_type="mesh_peer",
+                execution_location="remote",
+            ).model_copy(update={"description": "Calendar scheduling helper"})
+            for index in range(10)
+        ]
+        remote_tools.append(
+            _tool_info(
+                name="raspi-lab_duckduckgo_results_json",
+                local_name="duckduckgo_results_json",
+                provider_peer_id="raspi-lab",
+                provider_service_instance_id="remote:raspi-lab:Tooling",
+                namespace="raspi-lab",
+                source_type="mesh_peer",
+                execution_location="remote",
+            ).model_copy(
+                update={
+                    "description": (
+                        "A wrapper around Duck Duck Go Search. Useful for current events."
+                    )
+                }
+            )
+        )
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id="raspi-lab",
+            service_instance_id="remote:raspi-lab:Tooling",
+            provider_id="raspi-lab",
+            catalog_epoch=1,
+            generated_at="2026-07-05T00:00:00Z",
+            full_schema_hash="hash",
+            tools=remote_tools,
+            shared_by_policy=True,
+        )
+
+        with patch.object(
+            tooling_service, "_load_remote_catalog_snapshots", AsyncMock(return_value=[snapshot])
+        ):
+            catalog = await tooling_service._on_get_tool_catalog(
+                ToolingGetToolCatalogRequest(
+                    query="use the search tool",
+                    top_k=10,
+                    caller_permissions=["*"],
+                )
+            )
+
+        assert "raspi-lab_duckduckgo_results_json" in {tool.name for tool in catalog.tools}
+        assert not any(tool.name.startswith("raspi-lab_calendar_helper") for tool in catalog.tools)
+
+    @pytest.mark.asyncio
+    async def test_get_tool_catalog_query_does_not_append_unrelated_remote_tools(
+        self, tooling_service, mock_bus
+    ):
+        """Remote catalog query with no lexical matches does not append all snapshot tools."""
+        from app.messaging import QueryResult
+
+        mock_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"items": []}))
+        remote_tools = [
+            _tool_info(
+                name=f"raspi-lab_calendar_helper_{index}",
+                local_name=f"calendar_helper_{index}",
+                provider_peer_id="raspi-lab",
+                provider_service_instance_id="remote:raspi-lab:Tooling",
+                namespace="raspi-lab",
+                source_type="mesh_peer",
+                execution_location="remote",
+            ).model_copy(update={"description": "Calendar scheduling helper"})
+            for index in range(10)
+        ]
+        snapshot = ToolingRemoteCatalogAnnounced(
+            peer_id="raspi-lab",
+            service_instance_id="remote:raspi-lab:Tooling",
+            provider_id="raspi-lab",
+            catalog_epoch=1,
+            generated_at="2026-07-05T00:00:00Z",
+            full_schema_hash="hash",
+            tools=remote_tools,
+            shared_by_policy=True,
+        )
+
+        with patch.object(
+            tooling_service, "_load_remote_catalog_snapshots", AsyncMock(return_value=[snapshot])
+        ):
+            catalog = await tooling_service._on_get_tool_catalog(
+                ToolingGetToolCatalogRequest(
+                    query="calculate tides",
+                    top_k=10,
+                    caller_permissions=["*"],
+                )
+            )
+
+        assert catalog.tools == []
+        assert catalog.blocked_tools == []
+        assert [provider.provider_peer_id for provider in catalog.providers] == [
+            "local",
+            "raspi-lab",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_tools_stale_rag_names_use_lexical_fallback(self, tooling_service, mock_bus):
+        """Stale RAG hits that map to no loaded callable can recover by loaded lexical match."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        duckduckgo = _DummyTool(
+            "duckduckgo_results_json",
+            "A wrapper around Duck Duck Go Search. Useful for current events.",
+            module="langchain_community.tools.ddg_search.tool",
+        )
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(ok=True, data={"items": [{"key": "stale_search_name"}]})
+        )
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=None)
+        tooling_service.tools_manager.get_tools = Mock(return_value=[duckduckgo])
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query="use the search tool", top_k=5)
+        )
+
+        assert [tool.local_name for tool in response.tools] == ["duckduckgo_results_json"]
+        tooling_service.tools_manager.get_tool_by_name.assert_called_once_with("stale_search_name")
+
+    @pytest.mark.asyncio
+    async def test_get_tools_arbitrary_no_match_remains_empty(self, tooling_service, mock_bus):
+        """No-match RAG results stay empty instead of broadening discovery."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        duckduckgo = _DummyTool(
+            "duckduckgo_results_json",
+            "A wrapper around Duck Duck Go Search. Useful for current events.",
+        )
+        mock_bus.request = AsyncMock(return_value=QueryResult(ok=True, data={"items": []}))
+        tooling_service.tools_manager.get_tools = Mock(return_value=[duckduckgo])
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query="purple elephant workflow", top_k=5)
+        )
+
+        assert response.tools == []
+        tooling_service.tools_manager.get_tools.assert_called_once_with(None, 256)
+
+    @pytest.mark.asyncio
+    async def test_get_tools_web_search_unknown_module_stays_untrusted(
+        self, tooling_service, mock_bus
+    ):
+        """RAG-matched arbitrary search-looking tools are not elevated to core."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        arbitrary_search = _DummyTool(
+            "duckduckgo_results_json",
+            "A wrapper around Duck Duck Go Search. Useful for current events.",
+        )
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(ok=True, data={"items": [{"key": "duckduckgo_results_json"}]})
+        )
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=arbitrary_search)
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query="latest news", top_k=5)
+        )
+
+        assert [tool.local_name for tool in response.tools] == ["duckduckgo_results_json"]
+        assert response.tools[0].source == "unknown"
+        assert response.tools[0].trust_tier == "untrusted"
+        assert response.tools[0].capability_class == "network"
+
+    @pytest.mark.asyncio
+    async def test_get_tools_blocked_duckduckgo_hidden(self, tooling_service, mock_bus):
+        """RAG-selected search tools still respect explicit blocked trust tier."""
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingGetToolsRequest
+
+        duckduckgo = _DummyTool(
+            "duckduckgo_results_json",
+            "A wrapper around Duck Duck Go Search. Useful for current events.",
+            trust_tier="blocked",
+            module="langchain_community.tools.ddg_search.tool",
+        )
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(ok=True, data={"items": [{"key": "duckduckgo_results_json"}]})
+        )
+        tooling_service.tools_manager.get_tool_by_name = Mock(return_value=duckduckgo)
+
+        response = await tooling_service._on_get_tools(
+            ToolingGetToolsRequest(query="latest news", top_k=5)
+        )
+
+        assert response.tools == []
+
+    @pytest.mark.asyncio
     async def test_get_tool_by_name(self, tooling_service, mock_bus):
         """Test get tool by name query."""
         from langchain_core.tools import tool
@@ -832,9 +1205,7 @@ class TestToolingServiceToolExecution:
         assert response.status == "success"
 
     @pytest.mark.asyncio
-    async def test_execute_tool_enforces_tool_specific_required_permissions(
-        self, tooling_service
-    ):
+    async def test_execute_tool_enforces_tool_specific_required_permissions(self, tooling_service):
         """Runtime execution denies tools when caller lacks declared tool permissions."""
         from app.shared.contracts.models.tooling import ToolingExecuteToolRequest
 
@@ -1585,9 +1956,7 @@ class TestToolingSharingPolicyAndApproval:
         assert "name" in bad_nested.policy_decision.reason
 
     @pytest.mark.asyncio
-    async def test_prepare_and_execute_reject_schema_hash_mismatch(
-        self, tooling_service, mock_bus
-    ):
+    async def test_prepare_and_execute_reject_schema_hash_mismatch(self, tooling_service, mock_bus):
         """Scheduler bindings fail closed when catalog schema hash drifts."""
         from app.shared.contracts.models.tooling import (
             ToolingExecuteToolRequest,
@@ -1837,8 +2206,10 @@ class TestToolingSharingPolicyAndApproval:
         assert response.status == expected_status
 
     @pytest.mark.asyncio
-    async def test_sharing_policy_hides_tools_from_discovery(self, tooling_service, mock_bus):
-        """Per-tool sharing policy can hide tools independent of service sharing."""
+    async def test_sharing_policy_does_not_hide_tools_from_discovery(
+        self, tooling_service, mock_bus
+    ):
+        """Per-tool share=False stays model-visible; execution policy gates use."""
         from langchain_core.tools import tool
 
         from app.shared.contracts.models.tooling import ToolingGetToolsRequest
@@ -1863,7 +2234,10 @@ class TestToolingSharingPolicyAndApproval:
 
         response = await tooling_service._on_get_tools(ToolingGetToolsRequest())
 
-        assert [tool_info.local_name for tool_info in response.tools] == ["visible_tool"]
+        assert [tool_info.local_name for tool_info in response.tools] == [
+            "visible_tool",
+            "hidden_tool",
+        ]
 
     @pytest.mark.asyncio
     async def test_policy_and_approval_events_are_audited(self, tooling_service, mock_bus):

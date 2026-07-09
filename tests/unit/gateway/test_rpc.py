@@ -6,7 +6,13 @@ import pytest
 from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
 from app.services.gateway.webrtc.rpc import RPCHandler
+from app.services.orchestrator.service import OrchestratorService
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from app.shared.contracts.models.orchestrator import (
+    OrchestratorInferChatRequest,
+    OrchestratorMethods,
+    OrchestratorProcessRequest,
+)
 from app.shared.contracts.models.scheduler import (
     SchedulerCancelJobRequest,
     SchedulerListJobsRequest,
@@ -15,6 +21,7 @@ from app.shared.contracts.models.scheduler import (
     SchedulerScheduleJobRequest,
 )
 from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
+from app.shared.contracts.registry import all_contracts, clear_registry
 
 
 @pytest.fixture
@@ -48,6 +55,421 @@ def mock_acl_provider():
 @pytest.fixture
 def rpc_handler(mock_bus, mock_registry, mock_send_fn, mock_acl_provider):
     return RPCHandler(mock_bus, mock_registry, mock_send_fn, mock_acl_provider)
+
+
+def _make_acl_with_perms(*perms: str):
+    identity = Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset(perms),
+        source="webrtc_peer",
+    )
+    return MagicMock(return_value=identity)
+
+
+def _orchestrator_method_info(name: str, topic: str, input_model):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = name
+    method_info.bus_topic = topic
+    method_info.exposure = "external"
+    method_info.input_model = input_model
+    method_info.required_perms = ["Orchestrator.use"]
+    method_info.method_type = "use"
+    return method_info
+
+
+def _registry_with_method(mock_registry, module: str, method_info):
+    announcement = MagicMock(spec=ServiceAnnouncement)
+    announcement.methods = [method_info]
+    mock_registry.get_service.return_value = announcement
+
+
+def test_orchestrator_rpc_contract_metadata_is_hardened():
+    clear_registry()
+    OrchestratorService()
+
+    contracts = all_contracts()
+    assert contracts[OrchestratorMethods.USER_INPUT].exposure == "internal"
+    assert contracts[OrchestratorMethods.USER_INPUT].required_perms == ["Orchestrator.use"]
+    assert contracts[OrchestratorMethods.EXTERNAL_USER_INPUT].exposure == "external"
+    assert contracts[OrchestratorMethods.EXTERNAL_USER_INPUT].required_perms == ["Orchestrator.use"]
+    assert contracts[OrchestratorMethods.TOOL_RESULT].exposure == "internal"
+    assert contracts[OrchestratorMethods.TOOL_RESULT].required_perms == ["Orchestrator.use"]
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [OrchestratorMethods.USER_INPUT, OrchestratorMethods.TOOL_RESULT],
+)
+@pytest.mark.asyncio
+async def test_internal_orchestrator_methods_denied_over_rpc_even_with_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    method_name,
+):
+    short_name = method_name.split(".", 1)[1]
+    method_info = MethodInfo(
+        name=short_name,
+        bus_topic=method_name,
+        exposure="internal",
+        input_model=None,
+        required_perms=["Orchestrator.use"],
+        method_type="use",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Orchestrator", version="1.0", methods=[method_info]
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use"),
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "orch-internal", "method": method_name, "params": {}})
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Method is not exposed for WebRTC RPC"
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_user_input_denied_without_orchestrator_use_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = "ExternalUserInput"
+    method_info.bus_topic = OrchestratorMethods.EXTERNAL_USER_INPUT
+    method_info.exposure = "external"
+    method_info.input_model = OrchestratorProcessRequest
+    method_info.required_perms = ["Orchestrator.use"]
+    method_info.method_type = "use"
+    announcement = MagicMock(spec=ServiceAnnouncement)
+    announcement.methods = [method_info]
+    mock_registry.get_service.return_value = announcement
+    handler = RPCHandler(mock_bus, mock_registry, mock_send_fn, _make_acl_with_perms("user"))
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "orch-denied",
+                "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+                "params": {"text": "hello"},
+            }
+        )
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Forbidden"
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_user_input_allowed_with_orchestrator_use_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = "ExternalUserInput"
+    method_info.bus_topic = OrchestratorMethods.EXTERNAL_USER_INPUT
+    method_info.exposure = "external"
+    method_info.input_model = OrchestratorProcessRequest
+    method_info.required_perms = ["Orchestrator.use"]
+    method_info.method_type = "use"
+    announcement = MagicMock(spec=ServiceAnnouncement)
+    announcement.methods = [method_info]
+    mock_registry.get_service.return_value = announcement
+    mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "orch-allowed",
+                "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+                "params": {"text": "hello"},
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    assert mock_bus.request.call_args.args[0] == OrchestratorMethods.EXTERNAL_USER_INPUT
+    typed_request = mock_bus.request.call_args.args[1]
+    assert isinstance(typed_request, OrchestratorProcessRequest)
+    assert typed_request.text == "hello"
+    assert mock_bus.request.call_args.kwargs["principal_id"] == "peer-user"
+    assert mock_bus.request.call_args.kwargs["effective_perms"] == ["Orchestrator.use"]
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "selector_payload",
+    [
+        {"dispatch_selector": {"peer_id": "assistant-peer"}},
+        {"mesh_selector": {"peer_id": "assistant-peer"}},
+        {"selector": {"peer_id": "assistant-peer"}},
+    ],
+)
+async def test_external_user_input_runtime_dispatch_requires_remote_dispatch_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    selector_payload,
+):
+    method_info = _orchestrator_method_info(
+        "ExternalUserInput",
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        OrchestratorProcessRequest,
+    )
+    _registry_with_method(mock_registry, "Orchestrator", method_info)
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "orch-dispatch-denied",
+                "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+                "params": {"text": "hello", **selector_payload},
+            }
+        )
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert "Orchestrator.RemoteDispatch" in response["error"]["message"]
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_user_input_runtime_dispatch_allowed_with_remote_dispatch_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = _orchestrator_method_info(
+        "ExternalUserInput",
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        OrchestratorProcessRequest,
+    )
+    _registry_with_method(mock_registry, "Orchestrator", method_info)
+    mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteDispatch"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "orch-dispatch-allowed",
+                "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+                "params": {"text": "hello", "dispatch_selector": {"peer_id": "assistant-peer"}},
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "override_payload",
+    [
+        {"inference_selector": {"peer_id": "model-peer"}},
+        {"inference_provider_id": "openai"},
+        {"inference_model_id": "gpt-test"},
+    ],
+)
+async def test_external_user_input_runtime_inference_requires_remote_inference_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    override_payload,
+):
+    method_info = _orchestrator_method_info(
+        "ExternalUserInput",
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        OrchestratorProcessRequest,
+    )
+    _registry_with_method(mock_registry, "Orchestrator", method_info)
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteDispatch"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "orch-inference-denied",
+                "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+                "params": {"text": "hello", **override_payload},
+            }
+        )
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert "Orchestrator.RemoteInference" in response["error"]["message"]
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_user_input_runtime_inference_allowed_with_remote_inference_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = _orchestrator_method_info(
+        "ExternalUserInput",
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        OrchestratorProcessRequest,
+    )
+    _registry_with_method(mock_registry, "Orchestrator", method_info)
+    mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "orch-inference-allowed",
+                "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+                "params": {"text": "hello", "inference_provider_id": "openai"},
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("override_payload", [{"provider_id": "openai"}, {"model_id": "gpt-test"}])
+async def test_stream_infer_chat_provider_model_override_requires_remote_inference_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    override_payload,
+):
+    method_info = _orchestrator_method_info(
+        "StreamInferChat",
+        OrchestratorMethods.STREAM_INFER_CHAT,
+        OrchestratorInferChatRequest,
+    )
+    _registry_with_method(mock_registry, "Orchestrator", method_info)
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "stream-inference-denied",
+                "method": OrchestratorMethods.STREAM_INFER_CHAT,
+                "params": {"messages": [{"role": "user", "content": "hi"}], **override_payload},
+            }
+        )
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert "Orchestrator.RemoteInference" in response["error"]["message"]
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stream_infer_chat_provider_model_override_allowed_with_remote_inference_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = _orchestrator_method_info(
+        "StreamInferChat",
+        OrchestratorMethods.STREAM_INFER_CHAT,
+        OrchestratorInferChatRequest,
+    )
+    _registry_with_method(mock_registry, "Orchestrator", method_info)
+    mock_bus.stream_request = None
+    mock_bus.request.return_value = QueryResult(ok=True, data={"text": "ok"})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "stream-inference-allowed",
+                "method": OrchestratorMethods.STREAM_INFER_CHAT,
+                "params": {
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "provider_id": "openai",
+                },
+            }
+        )
+    )
+
+    mock_bus.request.assert_called_once()
+    assert mock_bus.request.call_args.args[0] == OrchestratorMethods.INFER_CHAT
+    response_messages = [json.loads(call.args[0]) for call in mock_send_fn.call_args_list]
+    assert response_messages[-1] == {"type": "eof", "id": "stream-inference-allowed"}
 
 
 @pytest.mark.asyncio
@@ -85,7 +507,7 @@ async def test_handle_call_method_not_found(rpc_handler, mock_registry):
 
 @pytest.mark.asyncio
 async def test_handle_call_forbidden(rpc_handler, mock_registry, mock_acl_provider):
-    method_info = MethodInfo(name="Secret", required_perms=["admin"])
+    method_info = MethodInfo(name="Secret", required_perms=["admin"], exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
@@ -100,7 +522,7 @@ async def test_handle_call_forbidden(rpc_handler, mock_registry, mock_acl_provid
 
 @pytest.mark.asyncio
 async def test_handle_call_success(rpc_handler, mock_registry, mock_bus):
-    method_info = MethodInfo(name="Greet", bus_topic="Svc.Greet")
+    method_info = MethodInfo(name="Greet", bus_topic="Svc.Greet", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
@@ -145,6 +567,7 @@ async def test_handle_tooling_execute_injects_trusted_remote_provenance(
     method_info.input_model = ToolingExecuteToolRequest
     method_info.required_perms = []
     method_info.method_type = "use"
+    method_info.exposure = "external"
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Tooling", version="1.0", methods=[method_info]
     )
@@ -188,7 +611,7 @@ async def test_handle_call_uses_explicit_correlation_id(
     mock_registry,
     mock_bus,
 ):
-    method_info = MethodInfo(name="Greet", bus_topic="Svc.Greet")
+    method_info = MethodInfo(name="Greet", bus_topic="Svc.Greet", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
@@ -284,6 +707,7 @@ async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
     method_info.input_model = input_model
     method_info.required_perms = []
     method_info.method_type = "use"
+    method_info.exposure = "external"
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Scheduler", version="1.0", methods=[method_info]
     )
@@ -321,7 +745,7 @@ async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
 
 @pytest.mark.asyncio
 async def test_handle_call_bus_error(rpc_handler, mock_registry, mock_bus):
-    method_info = MethodInfo(name="Fail")
+    method_info = MethodInfo(name="Fail", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
@@ -338,7 +762,7 @@ async def test_handle_call_bus_error(rpc_handler, mock_registry, mock_bus):
 
 @pytest.mark.asyncio
 async def test_handle_call_timeout(rpc_handler, mock_registry, mock_bus):
-    method_info = MethodInfo(name="Slow")
+    method_info = MethodInfo(name="Slow", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
@@ -361,7 +785,7 @@ async def test_handle_call_forbidden_audits_redacted_correlation(
     mock_acl_provider,
 ):
     audit_fn = AsyncMock()
-    method_info = MethodInfo(name="Secret", required_perms=["admin"])
+    method_info = MethodInfo(name="Secret", required_perms=["admin"], exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
@@ -399,7 +823,7 @@ async def test_handle_call_forbidden_audits_redacted_correlation(
 
 @pytest.mark.asyncio
 async def test_handle_call_streaming(rpc_handler, mock_registry, mock_bus):
-    method_info = MethodInfo(name="Stream")
+    method_info = MethodInfo(name="Stream", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
@@ -483,7 +907,7 @@ async def test_mesh_gate_allows_shared_service(
         mesh_config=mesh_config,
     )
 
-    method_info = MethodInfo(name="Request")
+    method_info = MethodInfo(name="Request", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="TTS",
         version="1.0",
@@ -591,6 +1015,102 @@ async def test_mesh_gate_skips_login_method(
     )
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "result"
+
+
+@pytest.mark.asyncio
+async def test_mesh_gate_does_not_skip_non_auth_login_short_name(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    """Only fully-qualified Auth infrastructure methods bypass mesh sharing."""
+    identity = Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset({"Svc.use"}),
+        source="webrtc_peer",
+    )
+    mesh_config = _make_mesh_config(enabled=True, sharing={})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        MagicMock(return_value=identity),
+        mesh_config=mesh_config,
+    )
+
+    method_info = MethodInfo(
+        name="Login",
+        bus_topic="Svc.Login",
+        exposure="internal",
+        required_perms=["Svc.use"],
+        method_type="use",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[method_info],
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "svc-login", "method": "Svc.Login", "params": {}})
+    )
+
+    resp = json.loads(mock_send_fn.call_args[0][0])
+    assert resp["type"] == "error"
+    assert resp["error"]["code"] == 403
+    assert resp["error"]["message"] == "Service Svc is not shared"
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_internal_non_auth_login_not_exposure_bypassed_when_service_shared(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    """A shared internal Svc.Login remains denied by exposure/auth gates."""
+    identity = Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset({"Svc.use"}),
+        source="webrtc_peer",
+    )
+    mesh_config = _make_mesh_config(
+        enabled=True,
+        sharing={"Svc": _make_sharing_entry(share=True)},
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        MagicMock(return_value=identity),
+        mesh_config=mesh_config,
+    )
+    method_info = MethodInfo(
+        name="Login",
+        bus_topic="Svc.Login",
+        exposure="internal",
+        required_perms=["Svc.use"],
+        method_type="use",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[method_info],
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "svc-login-2", "method": "Svc.Login", "params": {}})
+    )
+
+    resp = json.loads(mock_send_fn.call_args[0][0])
+    assert resp["type"] == "error"
+    assert resp["error"]["code"] == 403
+    assert resp["error"]["message"] == "Method is not exposed for WebRTC RPC"
+    mock_bus.request.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -729,6 +1249,7 @@ async def test_explicit_auth_share_still_requires_method_permissions(
         name="ListPrincipals",
         required_perms=["Auth.manage"],
         method_type="manage",
+        exposure="external",
     )
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Auth",
@@ -839,3 +1360,60 @@ async def test_forwarded_tooling_catalog_event_is_bound_to_authenticated_peer(
     assert payload["service_instance_id"] == "remote:stable-remote-peer:Tooling"
     assert mock_bus.publish.await_args.kwargs["caller_peer_id"] == "stable-remote-peer"
     assert mock_bus.publish.await_args.kwargs["origin"] == "mesh_forwarded"
+
+
+@pytest.mark.asyncio
+async def test_stream_infer_chat_without_stream_request_degrades_to_single_chunk(
+    mock_registry,
+    mock_send_fn,
+):
+    class _ProcessBusWithoutStreaming:
+        def __init__(self) -> None:
+            self.request = AsyncMock(
+                return_value=QueryResult(
+                    ok=True,
+                    data={
+                        "text": "process fallback",
+                        "provider_id": "openai",
+                        "model_id": "gpt-test",
+                    },
+                )
+            )
+
+    process_bus = _ProcessBusWithoutStreaming()
+    method_info = MethodInfo(
+        name="StreamInferChat",
+        bus_topic=OrchestratorMethods.STREAM_INFER_CHAT,
+        exposure="external",
+        required_perms=["Orchestrator.use"],
+        method_type="use",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Orchestrator", version="1.0", methods=[method_info]
+    )
+    handler = RPCHandler(
+        process_bus,  # type: ignore[arg-type]
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use"),
+        peer_id="remote-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "stream-no-path",
+                "method": OrchestratorMethods.STREAM_INFER_CHAT,
+                "params": {"messages": [{"role": "user", "content": "hi"}]},
+            }
+        )
+    )
+
+    process_bus.request.assert_awaited_once()
+    assert process_bus.request.await_args.args[0] == OrchestratorMethods.INFER_CHAT
+    sent = [json.loads(call.args[0]) for call in mock_send_fn.call_args_list]
+    assert sent[0]["type"] == "chunk"
+    assert sent[0]["data"]["delta"] == "process fallback"
+    assert sent[0]["data"]["is_final"] is True
+    assert sent[1] == {"type": "eof", "id": "stream-no-path"}

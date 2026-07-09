@@ -23,6 +23,7 @@ from urllib.parse import urlsplit, urlunsplit
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging.audio_messages import AudioTopics
 from app.messaging.bus import Envelope
+from app.messaging.priority_helpers import get_interactive_priority
 from app.services.gateway.admin_action import AdminActionManager
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import (
@@ -46,10 +47,17 @@ from app.shared.contracts.models.gateway import (
     CapabilityGraph,
     ContainerTopologyHints,
     DeploymentTopologyResponse,
+    GatewayCancelMeshInferChatStreamRequest,
+    GatewayCancelMeshInferChatStreamResponse,
     GatewayEventStreamEvent,
     GatewayListEventsRequest,
     GatewayListEventsResponse,
+    GatewayMeshInferChatChunkEvent,
+    GatewayMeshInferChatRequest,
+    GatewayMeshInferChatResponse,
     GatewayMethods,
+    GatewayStreamMeshInferChatStartRequest,
+    GatewayStreamMeshInferChatStartResponse,
     GatewaySupportBundleRequest,
     GatewaySupportBundleResponse,
     GetMeshStatusResponse,
@@ -72,7 +80,11 @@ from app.shared.contracts.models.gateway import (
     SupportBundleRedactionInfo,
     WebRTCDiagnosticsResponse,
 )
-from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.orchestrator import (
+    OrchestratorInferChatChunk,
+    OrchestratorInferChatResponse,
+    OrchestratorMethods,
+)
 from app.shared.contracts.models.scheduler import SchedulerMethods
 from app.shared.contracts.models.stt import STTMethods, TranscriptionMethods, WakeWordMethods
 from app.shared.contracts.models.tooling import ToolingMethods
@@ -279,7 +291,6 @@ def _event_from_envelope(envelope: Envelope) -> GatewayEventStreamEvent:
     )
 
 
-
 def _live_display_payload(topic: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     """Return a minimal live-only payload for interactive UI projection.
 
@@ -323,7 +334,12 @@ def _live_display_payload(topic: str, payload: dict[str, Any]) -> dict[str, Any]
                 result[key] = value
         _copy_float(payload, result, "duration_ms")
         return result or None
-    if topic in {STTMethods.USER_SPEECH_CAPTURED, STTMethods.FINAL, STTMethods.PARTIAL, TranscriptionMethods.RESULT}:
+    if topic in {
+        STTMethods.USER_SPEECH_CAPTURED,
+        STTMethods.FINAL,
+        STTMethods.PARTIAL,
+        TranscriptionMethods.RESULT,
+    }:
         result = {}
         _copy_string(payload, result, "session_id")
         _copy_string(payload, result, "stream_id")
@@ -359,7 +375,11 @@ def _live_display_payload(topic: str, payload: dict[str, Any]) -> dict[str, Any]
         _copy_bool(payload, result, "redacted")
         bars = payload.get("bars")
         if isinstance(bars, list):
-            safe_bars = [float(item) for item in bars if isinstance(item, int | float) and math.isfinite(float(item))]
+            safe_bars = [
+                float(item)
+                for item in bars
+                if isinstance(item, int | float) and math.isfinite(float(item))
+            ]
             if safe_bars:
                 result["bars"] = safe_bars[:96]
         return result or None
@@ -403,7 +423,9 @@ def _safe_live_metadata(value: Any) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key in safe_keys:
         item = value.get(key)
-        if isinstance(item, str | bool) or (isinstance(item, int | float) and math.isfinite(float(item))):
+        if isinstance(item, str | bool) or (
+            isinstance(item, int | float) and math.isfinite(float(item))
+        ):
             result[key] = item
     return result
 
@@ -467,8 +489,7 @@ def _safe_live_preview_copy(value: Any, *, key: str = "", depth: int = 0) -> Any
         return preview
     if isinstance(value, list | tuple | set):
         items = [
-            _safe_live_preview_copy(item, key=key, depth=depth + 1)
-            for item in list(value)[:12]
+            _safe_live_preview_copy(item, key=key, depth=depth + 1) for item in list(value)[:12]
         ]
         if len(value) > 12:
             items.append("<truncated>")
@@ -828,6 +849,9 @@ class GatewayService(BaseService):
         self._event_stream: deque[GatewayEventStreamEvent] = deque(maxlen=_EVENT_STREAM_MAXLEN)
         self._event_stream_subscription_topic = "*"
         self._admin_action_manager = AdminActionManager()
+        self._mesh_infer_stream_tasks: set[asyncio.Task[None]] = set()
+        self._mesh_infer_stream_tasks_by_id: dict[str, asyncio.Task[None]] = {}
+        self._mesh_infer_stream_owners_by_id: dict[str, tuple[str | None, ...]] = {}
 
     async def on_start(self) -> None:
         """Service-specific startup logic."""
@@ -844,6 +868,13 @@ class GatewayService(BaseService):
                 self._event_stream_subscription_topic,
                 self._capture_gateway_event,
             )
+        for task in list(self._mesh_infer_stream_tasks):
+            task.cancel()
+        if self._mesh_infer_stream_tasks:
+            await asyncio.gather(*self._mesh_infer_stream_tasks, return_exceptions=True)
+            self._mesh_infer_stream_tasks.clear()
+            self._mesh_infer_stream_tasks_by_id.clear()
+            self._mesh_infer_stream_owners_by_id.clear()
         await self._stop_mesh()
         await self._stop_webrtc()
         await self._stop_gateway()
@@ -951,6 +982,126 @@ class GatewayService(BaseService):
         """Return known services from the Gateway registry aggregator."""
         services = await self._get_services_snapshot()
         return GetServicesResponse(services=services, mode=self._mode)
+
+    @method_contract(
+        method_id=GatewayMethods.MESH_INFER_CHAT,
+        name="MeshInferChat",
+        summary="Proxy a fixed Orchestrator.InferChat call through Gateway-owned mesh",
+        input_model=GatewayMeshInferChatRequest,
+        output_model=GatewayMeshInferChatResponse,
+        exposure="internal",
+        method_type="use",
+        required_perms=["Gateway.use"],
+    )
+    async def mesh_infer_chat(
+        self,
+        data: GatewayMeshInferChatRequest,
+        envelope: Envelope | None = None,
+    ) -> GatewayMeshInferChatResponse:
+        """Forward inference through Gateway's MeshBus/PeerBridge, not the service bus."""
+        mesh_bus = self._require_mesh_bus()
+        request = self._mesh_proxy_request(data.request, data.mesh_selector)
+        context = self._mesh_proxy_context(data, envelope=envelope)
+        result = await mesh_bus.request(
+            OrchestratorMethods.INFER_CHAT,
+            request,
+            priority=get_interactive_priority(),
+            timeout=60.0,
+            origin=context["origin"],
+            correlation_id=request.correlation_id,
+            principal_id=context["principal_id"],
+            effective_perms=context["effective_perms"],
+            identity_source=context["identity_source"],
+            method_type=context["method_type"],
+            caller_peer_id=context["caller_peer_id"],
+        )
+        if not result.ok:
+            raise RuntimeError(result.error or "Gateway mesh inference failed")
+        response = self._coerce_infer_response(result.data)
+        return GatewayMeshInferChatResponse(response=response)
+
+    @method_contract(
+        method_id=GatewayMethods.STREAM_MESH_INFER_CHAT,
+        name="StreamMeshInferChat",
+        summary="Start a Gateway-owned Orchestrator.StreamInferChat mesh proxy",
+        input_model=GatewayStreamMeshInferChatStartRequest,
+        output_model=GatewayStreamMeshInferChatStartResponse,
+        exposure="internal",
+        method_type="use",
+        required_perms=["Gateway.use"],
+    )
+    async def stream_mesh_infer_chat(
+        self,
+        data: GatewayStreamMeshInferChatStartRequest,
+        envelope: Envelope | None = None,
+    ) -> GatewayStreamMeshInferChatStartResponse:
+        """Start a background stream proxy and publish typed chunk events."""
+        self._require_mesh_bus()
+        context = self._mesh_proxy_context(data, envelope=envelope)
+        owner_key = self._mesh_stream_owner_key(context)
+        if not any(owner_key):
+            raise PermissionError("Gateway mesh stream requires caller ownership context")
+        existing = self._mesh_infer_stream_tasks_by_id.get(data.stream_id)
+        if existing is not None and not existing.done():
+            raise ValueError(f"Gateway mesh inference stream already active: {data.stream_id}")
+        self._mesh_infer_stream_tasks_by_id.pop(data.stream_id, None)
+        self._mesh_infer_stream_owners_by_id.pop(data.stream_id, None)
+        request = self._mesh_proxy_request(data.request, data.mesh_selector)
+        task = asyncio.create_task(
+            self._run_mesh_infer_stream_proxy(data.stream_id, request, context),
+            name=f"gateway-mesh-infer-stream-{data.stream_id}",
+        )
+        self._mesh_infer_stream_tasks.add(task)
+        self._mesh_infer_stream_tasks_by_id[data.stream_id] = task
+        self._mesh_infer_stream_owners_by_id[data.stream_id] = owner_key
+
+        def _forget_stream_task(done_task: asyncio.Task, stream_id: str = data.stream_id) -> None:
+            self._mesh_infer_stream_tasks.discard(done_task)
+            self._mesh_infer_stream_tasks_by_id.pop(stream_id, None)
+            self._mesh_infer_stream_owners_by_id.pop(stream_id, None)
+
+        task.add_done_callback(_forget_stream_task)
+        return GatewayStreamMeshInferChatStartResponse(
+            stream_id=data.stream_id,
+            accepted=True,
+            correlation_id=request.correlation_id,
+        )
+
+    @method_contract(
+        method_id=GatewayMethods.CANCEL_MESH_INFER_CHAT_STREAM,
+        name="CancelMeshInferChatStream",
+        summary="Cancel a Gateway-owned remote mesh inference stream proxy",
+        input_model=GatewayCancelMeshInferChatStreamRequest,
+        output_model=GatewayCancelMeshInferChatStreamResponse,
+        exposure="internal",
+        method_type="use",
+        required_perms=["Gateway.use"],
+    )
+    async def cancel_mesh_infer_chat_stream(
+        self,
+        data: GatewayCancelMeshInferChatStreamRequest,
+        envelope: Envelope | None = None,
+    ) -> GatewayCancelMeshInferChatStreamResponse:
+        """Cancel a background stream proxy if it is still active."""
+        task = self._mesh_infer_stream_tasks_by_id.get(data.stream_id)
+        if task is None or task.done():
+            self._mesh_infer_stream_tasks_by_id.pop(data.stream_id, None)
+            self._mesh_infer_stream_owners_by_id.pop(data.stream_id, None)
+            return GatewayCancelMeshInferChatStreamResponse(
+                stream_id=data.stream_id, cancelled=False
+            )
+        expected_owner = self._mesh_infer_stream_owners_by_id.get(data.stream_id)
+        context = self._mesh_proxy_context(data, envelope=envelope)
+        if expected_owner != self._mesh_stream_owner_key(context):
+            return GatewayCancelMeshInferChatStreamResponse(
+                stream_id=data.stream_id, cancelled=False
+            )
+        self._mesh_infer_stream_tasks_by_id.pop(data.stream_id, None)
+        self._mesh_infer_stream_owners_by_id.pop(data.stream_id, None)
+        self._mesh_infer_stream_tasks.discard(task)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        return GatewayCancelMeshInferChatStreamResponse(stream_id=data.stream_id, cancelled=True)
 
     @method_contract(
         method_id=GatewayMethods.GET_SERVICE_HEALTH,
@@ -1493,6 +1644,174 @@ class GatewayService(BaseService):
             events.append(event)
         return events
 
+    def _require_mesh_bus(self) -> Any:
+        """Return Gateway's MeshBus or fail before touching the plain service bus."""
+        if self._mesh_bus is None:
+            raise RuntimeError("Gateway mesh bus is not started")
+        return self._mesh_bus
+
+    @staticmethod
+    def _mesh_proxy_request(
+        request: Any,
+        mesh_selector: Any | None,
+    ) -> Any:
+        """Copy an Orchestrator inference request with an explicit mesh selector."""
+        selector = (
+            mesh_selector
+            or getattr(request, "mesh_selector", None)
+            or getattr(request, "selector", None)
+        )
+        if hasattr(request, "model_copy"):
+            return request.model_copy(
+                update={
+                    "stream": bool(getattr(request, "stream", False)),
+                    "mesh_selector": selector,
+                    "selector": selector,
+                }
+            )
+        return request
+
+    @staticmethod
+    def _mesh_proxy_context(data: Any, *, envelope: Envelope | None) -> dict[str, Any]:
+        """Resolve caller identity from the bus envelope, falling back to proxy metadata."""
+        effective_perms = (
+            list(envelope.effective_perms)
+            if envelope is not None and envelope.effective_perms is not None
+            else getattr(data, "effective_perms", None)
+        )
+        if effective_perms is not None:
+            effective_perms = list(effective_perms)
+        return {
+            "origin": (
+                envelope.origin
+                if envelope is not None and envelope.origin
+                else getattr(data, "origin", None) or "internal"
+            ),
+            "principal_id": (
+                envelope.principal_id
+                if envelope is not None and envelope.principal_id is not None
+                else getattr(data, "principal_id", None)
+            ),
+            "effective_perms": effective_perms,
+            "identity_source": (
+                envelope.identity_source
+                if envelope is not None and envelope.identity_source is not None
+                else getattr(data, "identity_source", None)
+            ),
+            "method_type": (
+                envelope.method_type
+                if envelope is not None and envelope.method_type is not None
+                else getattr(data, "method_type", None) or "use"
+            ),
+            "caller_peer_id": (
+                envelope.caller_peer_id
+                if envelope is not None and envelope.caller_peer_id is not None
+                else getattr(data, "caller_peer_id", None)
+            ),
+        }
+
+    @staticmethod
+    def _mesh_stream_owner_key(context: dict[str, Any]) -> tuple[str | None, ...]:
+        """Build the immutable ownership key used for stream cancellation."""
+        return (
+            context.get("principal_id"),
+            context.get("identity_source"),
+            context.get("caller_peer_id"),
+            context.get("origin"),
+        )
+
+    @staticmethod
+    def _coerce_infer_response(data: Any) -> OrchestratorInferChatResponse:
+        if isinstance(data, OrchestratorInferChatResponse):
+            return data
+        if isinstance(data, dict):
+            return OrchestratorInferChatResponse.model_validate(data)
+        return OrchestratorInferChatResponse(text="" if data is None else str(data))
+
+    @staticmethod
+    def _coerce_infer_chunk(data: Any, *, sequence: int) -> OrchestratorInferChatChunk:
+        if isinstance(data, OrchestratorInferChatChunk):
+            return data
+        if isinstance(data, dict):
+            return OrchestratorInferChatChunk.model_validate({"sequence": sequence, **data})
+        return OrchestratorInferChatChunk(
+            delta="" if data is None else str(data), sequence=sequence
+        )
+
+    async def _run_mesh_infer_stream_proxy(
+        self,
+        stream_id: str,
+        request: Any,
+        context: dict[str, Any],
+    ) -> None:
+        """Own the WebRTC streaming hop and publish serializable chunk events."""
+        sequence = 0
+        try:
+            async for item in self._require_mesh_bus().stream_request(
+                OrchestratorMethods.STREAM_INFER_CHAT,
+                request,
+                priority=get_interactive_priority(),
+                timeout=60.0,
+                origin=context["origin"],
+                correlation_id=getattr(request, "correlation_id", None),
+                principal_id=context["principal_id"],
+                effective_perms=context["effective_perms"],
+                identity_source=context["identity_source"],
+                method_type=context["method_type"],
+                caller_peer_id=context["caller_peer_id"],
+            ):
+                chunk = self._coerce_infer_chunk(item, sequence=sequence)
+                if not chunk.correlation_id:
+                    chunk = chunk.model_copy(
+                        update={"correlation_id": getattr(request, "correlation_id", None)}
+                    )
+                await self.bus.publish(
+                    GatewayMethods.MESH_INFER_CHAT_CHUNK,
+                    GatewayMeshInferChatChunkEvent(
+                        stream_id=stream_id,
+                        chunk=chunk,
+                        is_final=bool(chunk.is_final),
+                        correlation_id=chunk.correlation_id,
+                        sequence=sequence,
+                    ),
+                    event=True,
+                    mesh=False,
+                    origin="internal",
+                    correlation_id=chunk.correlation_id,
+                )
+                sequence += 1
+            await self.bus.publish(
+                GatewayMethods.MESH_INFER_CHAT_CHUNK,
+                GatewayMeshInferChatChunkEvent(
+                    stream_id=stream_id,
+                    is_final=True,
+                    correlation_id=getattr(request, "correlation_id", None),
+                    sequence=sequence,
+                ),
+                event=True,
+                mesh=False,
+                origin="internal",
+                correlation_id=getattr(request, "correlation_id", None),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log_warning(f"Gateway mesh inference stream {stream_id} failed: {exc}")
+            await self.bus.publish(
+                GatewayMethods.MESH_INFER_CHAT_CHUNK,
+                GatewayMeshInferChatChunkEvent(
+                    stream_id=stream_id,
+                    is_final=True,
+                    error=str(exc),
+                    correlation_id=getattr(request, "correlation_id", None),
+                    sequence=sequence,
+                ),
+                event=True,
+                mesh=False,
+                origin="internal",
+                correlation_id=getattr(request, "correlation_id", None),
+            )
+
     async def _get_recent_audit_events(
         self,
         request: GatewaySupportBundleRequest,
@@ -1797,7 +2116,9 @@ class GatewayService(BaseService):
 
             api_d = dict(gw_d.get("api") or {})
             if os.environ.get("AURORA_TAURI_MANAGED_SIDECAR") == "1":
-                api_d["host"] = os.environ.get("AURORA_GATEWAY_HOST", api_d.get("host", "127.0.0.1"))
+                api_d["host"] = os.environ.get(
+                    "AURORA_GATEWAY_HOST", api_d.get("host", "127.0.0.1")
+                )
                 if os.environ.get("AURORA_GATEWAY_PORT"):
                     api_d["port"] = int(os.environ["AURORA_GATEWAY_PORT"])
             if "token_secret" in api_d:
@@ -2159,6 +2480,15 @@ class GatewayService(BaseService):
 
     # ── Mesh P2P lifecycle ───────────────────────────────────────────────
 
+    def _rewire_gateway_app_bus(self, bus: Any) -> None:
+        """Point existing gateway HTTP route handlers at the current bus."""
+        if not self._gateway_app:
+            return
+        self._gateway_app.state.bus = bus
+        route_generator = getattr(self._gateway_app.state, "route_generator", None)
+        if route_generator and hasattr(route_generator, "set_bus"):
+            route_generator.set_bus(bus)
+
     async def _start_mesh(self) -> None:
         """Initialize and start mesh P2P components if enabled.
 
@@ -2396,6 +2726,8 @@ class GatewayService(BaseService):
                 peer_bridge=self._mesh_peer_bridge,
                 mesh_config=mesh_config,
             )
+            self._rtc_client.set_rpc_bus(self._mesh_bus)
+            self._rewire_gateway_app_bus(self._mesh_bus)
 
             # Replace the global bus singleton with MeshBus
             # Update BOTH singletons so all code paths see the MeshBus
@@ -2502,6 +2834,7 @@ class GatewayService(BaseService):
                 inner = self._mesh_bus._inner
                 set_bus(inner)
                 set_shared_bus(inner)
+                self._rewire_gateway_app_bus(inner)
                 self._mesh_bus = None
                 self._mesh_peer_id = None
 

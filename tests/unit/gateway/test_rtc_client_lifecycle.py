@@ -292,3 +292,77 @@ async def test_close_cancels_timeout_tasks(client):
     assert len(client._peer_tokens) == 0
     assert len(client._pcs) == 0
     assert len(client._peer_acl) == 0
+
+
+@pytest.mark.asyncio
+async def test_set_rpc_bus_rewires_existing_rpc_handler_to_mesh_stream_path(client):
+    """Mesh startup updates existing inbound handlers off the process bus."""
+    import json
+
+    from app.services.gateway.webrtc.rpc import RPCHandler
+    from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+    from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+    process_bus = AsyncMock()
+    process_bus.request = AsyncMock()
+    if hasattr(process_bus, "stream_request"):
+        delattr(process_bus, "stream_request")
+
+    class _MeshBus:
+        def __init__(self) -> None:
+            self.stream_calls = []
+
+        async def stream_request(self, topic, payload, **kwargs):
+            self.stream_calls.append((topic, payload, kwargs))
+            yield {"delta": "mesh"}
+
+    class _Registry:
+        async def get_service(self, service: str):
+            assert service == "Orchestrator"
+            return ServiceAnnouncement(
+                module="Orchestrator",
+                version="1.0",
+                methods=[
+                    MethodInfo(
+                        name="StreamInferChat",
+                        bus_topic=OrchestratorMethods.STREAM_INFER_CHAT,
+                        exposure="external",
+                        required_perms=["Orchestrator.use"],
+                        method_type="use",
+                    )
+                ],
+            )
+
+        async def get_external_methods(self):
+            return []
+
+    identity = Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset({"Orchestrator.use"}),
+        source="webrtc_peer",
+    )
+    send = MagicMock()
+    handler = RPCHandler(process_bus, _Registry(), send, lambda: identity, peer_id="remote-peer")
+    client._rpc_handlers = {"remote-peer": handler}
+
+    mesh_bus = _MeshBus()
+    client.set_rpc_bus(mesh_bus)  # type: ignore[arg-type]
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "stream-1",
+                "method": OrchestratorMethods.STREAM_INFER_CHAT,
+                "params": {"messages": [{"role": "user", "content": "hi"}]},
+            }
+        )
+    )
+
+    assert client._bus is mesh_bus
+    assert len(mesh_bus.stream_calls) == 1
+    process_bus.request.assert_not_called()
+    responses = [json.loads(call.args[0]) for call in send.call_args_list]
+    assert [response["type"] for response in responses] == ["chunk", "eof"]

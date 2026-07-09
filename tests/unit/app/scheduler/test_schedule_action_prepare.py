@@ -77,7 +77,8 @@ async def test_schedule_action_prepares_and_persists_normalized_binding():
     assert response.prepared_tool.global_tool_id == "local:local_Tooling:tool:switch_on"
     assert response.prepared_tool.args_schema_hash == "schema-hash-1"
     prepare_call = next(
-        call for call in service.bus.request.await_args_list
+        call
+        for call in service.bus.request.await_args_list
         if call.args[0] == ToolingMethods.PREPARE_EXECUTION
     )
     request = prepare_call.args[1]
@@ -108,7 +109,8 @@ async def test_schedule_action_delegates_permissions_to_tooling_prepare_and_job_
 
     assert response.ok is True
     prepare_call = next(
-        call for call in service.bus.request.await_args_list
+        call
+        for call in service.bus.request.await_args_list
         if call.args[0] == ToolingMethods.PREPARE_EXECUTION
     )
     prepare_request = prepare_call.args[1]
@@ -220,7 +222,8 @@ async def test_schedule_action_uses_envelope_identity_over_spoofed_payload():
 
     assert response.ok is True
     prepare_call = next(
-        call for call in service.bus.request.await_args_list
+        call
+        for call in service.bus.request.await_args_list
         if call.args[0] == ToolingMethods.PREPARE_EXECUTION
     )
     prepare_request = prepare_call.args[1]
@@ -265,7 +268,8 @@ async def test_schedule_action_uses_envelope_permissions_over_spoofed_delegation
 
     assert response.ok is True
     prepare_call = next(
-        call for call in service.bus.request.await_args_list
+        call
+        for call in service.bus.request.await_args_list
         if call.args[0] == ToolingMethods.PREPARE_EXECUTION
     )
     prepare_request = prepare_call.args[1]

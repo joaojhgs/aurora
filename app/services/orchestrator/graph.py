@@ -152,6 +152,23 @@ def _chunk_text(chunk: Any) -> str:
     return ""
 
 
+def _graph_input(
+    input_content: Any, inference_override: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    message: dict[str, Any] = {"role": "user", "content": input_content}
+    payload: dict[str, Any] = {"messages": [message]}
+    if inference_override:
+        clean_override = {
+            key: value for key, value in inference_override.items() if value is not None
+        }
+        message["additional_kwargs"] = {"aurora_inference_override": clean_override}
+        # Keep the override in graph state, not only on the newest message. Tool
+        # loops append ToolMessage entries, so last-message-only lookup loses
+        # runtime inference routing after the first tool call.
+        payload["inference_override"] = clean_override
+    return payload
+
+
 class GraphOrchestrator:
     """Graph orchestrator using message bus for tool execution and TTS."""
 
@@ -249,7 +266,6 @@ class GraphOrchestrator:
                 else {}
             )
             if candidate and not binding:
-                approval_pending = True
                 await self._emit_tool_stream_event(
                     kind="tool.requires_action",
                     tool_call_id=tool_id,
@@ -259,14 +275,16 @@ class GraphOrchestrator:
                     candidate=candidate,
                     summary="Tool requires operator approval before execution.",
                 )
-                tool_messages.append(
-                    await self._request_tool_approval(
-                        tool_name=tool_name,
-                        tool_args=tool_args,
-                        tool_call_id=tool_id,
-                        candidate=candidate,
-                    )
+                approval_message = await self._request_tool_approval(
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    tool_call_id=tool_id,
+                    candidate=candidate,
                 )
+                approval_pending = (
+                    approval_pending or self._tool_message_is_pending_approval(approval_message)
+                )
+                tool_messages.append(approval_message)
                 continue
 
             request = self._tool_execution_request(tool_name, tool_args, binding)
@@ -325,7 +343,6 @@ class GraphOrchestrator:
                 else:
                     error_msg = result.error or "Unknown error"
                     if self._execution_denial_requires_approval(result.data, error_msg):
-                        approval_pending = True
                         await self._emit_tool_stream_event(
                             kind="tool.requires_action",
                             tool_call_id=tool_id,
@@ -335,14 +352,17 @@ class GraphOrchestrator:
                             candidate=binding,
                             summary="Tool requires operator approval before execution.",
                         )
-                        tool_messages.append(
-                            await self._request_tool_approval(
-                                tool_name=tool_name,
-                                tool_args=tool_args,
-                                tool_call_id=tool_id,
-                                candidate=binding,
-                            )
+                        approval_message = await self._request_tool_approval(
+                            tool_name=tool_name,
+                            tool_args=tool_args,
+                            tool_call_id=tool_id,
+                            candidate=binding,
                         )
+                        approval_pending = (
+                            approval_pending
+                            or self._tool_message_is_pending_approval(approval_message)
+                        )
+                        tool_messages.append(approval_message)
                         continue
                     redacted_error_msg = _safe_string(error_msg) or "Unknown error"
                     log_error(f"Tool {tool_name} execution failed: {redacted_error_msg}")
@@ -393,6 +413,22 @@ class GraphOrchestrator:
                 )
 
         return {"messages": tool_messages, "approval_pending": approval_pending}
+
+
+    @staticmethod
+    def _tool_message_is_pending_approval(message: ToolMessage) -> bool:
+        """Return whether a ToolMessage contains an actionable approval card."""
+
+        try:
+            payload = json.loads(str(message.content))
+        except Exception:
+            return False
+        return (
+            isinstance(payload, dict)
+            and payload.get("type") == "tool_approval_request"
+            and payload.get("status") == "requested"
+            and bool(payload.get("approval_request_id"))
+        )
 
     async def _request_tool_approval(
         self,
@@ -466,8 +502,22 @@ class GraphOrchestrator:
                 candidate=stream_candidate,
                 summary="Tool requires operator approval before execution.",
             )
+            return ToolMessage(
+                content=json.dumps(approval_payload, sort_keys=True),
+                tool_call_id=tool_call_id,
+                name=tool_name,
+            )
+
+        if not result.ok:
+            return ToolMessage(
+                content=json.dumps(approval_payload, sort_keys=True),
+                tool_call_id=tool_call_id,
+                name=tool_name,
+            )
+
+        error = approval_payload.get("reason") or "Tool approval was not actionable."
         return ToolMessage(
-            content=json.dumps(approval_payload, sort_keys=True),
+            content=f"Error: {error}",
             tool_call_id=tool_call_id,
             name=tool_name,
         )
@@ -965,16 +1015,17 @@ class GraphOrchestrator:
             data = {}
 
         policy_decision = data.get("policy_decision") or {}
+        approval_request_id = data.get("approval_request_id")
         return {
             "type": "tool_approval_request",
-            "status": "requested" if data.get("ok") else "failed",
+            "status": "requested" if data.get("ok") and approval_request_id else "failed",
             "tool_name": tool_name,
             "display_name": candidate.get("display_name") or tool_name,
             "description": candidate.get("description") or "",
             "arguments": _redacted_preview(tool_args),
             "arguments_redacted": True,
             "args_schema": candidate.get("args_schema") or {},
-            "approval_request_id": data.get("approval_request_id"),
+            "approval_request_id": approval_request_id,
             "expires_at": data.get("expires_at"),
             "correlation_id": data.get("correlation_id"),
             "policy_decision_id": policy_decision.get("decision_id"),
@@ -1023,7 +1074,9 @@ class GraphOrchestrator:
 
         if isinstance(ai_message, ToolMessage):
             try:
-                payload = json.loads(ai_message.content) if isinstance(ai_message.content, str) else {}
+                payload = (
+                    json.loads(ai_message.content) if isinstance(ai_message.content, str) else {}
+                )
             except json.JSONDecodeError:
                 payload = {}
             if (
@@ -1075,6 +1128,7 @@ class GraphOrchestrator:
         session_id: str | None = None,
         owner_principal_id: str | None = None,
         owner_peer_id: str | None = None,
+        inference_override: dict[str, Any] | None = None,
     ) -> AsyncIterator[AssistantStreamEvent]:
         """Process user input and yield normalized assistant stream events.
 
@@ -1113,7 +1167,7 @@ class GraphOrchestrator:
             try:
                 log_debug(f"Graph: Streaming input: {str(input_content)[:30]}...")
                 async for raw_event in self.graph.astream_events(
-                    input={"messages": [{"role": "user", "content": input_content}]},
+                    input=_graph_input(input_content, inference_override),
                     config=config,
                     version="v2",
                 ):
@@ -1152,6 +1206,7 @@ class GraphOrchestrator:
                     session_id=session_id,
                     owner_principal_id=owner_principal_id,
                     owner_peer_id=owner_peer_id,
+                    inference_override=inference_override,
                 )
                 if final_text and final_text != "END":
                     await event_queue.put(
@@ -1203,6 +1258,7 @@ class GraphOrchestrator:
         session_id: str | None = None,
         owner_principal_id: str | None = None,
         owner_peer_id: str | None = None,
+        inference_override: dict[str, Any] | None = None,
     ) -> str:
         """Process user input through the graph with optional TTS output.
 
@@ -1235,7 +1291,7 @@ class GraphOrchestrator:
         )
         try:
             response = await self.graph.ainvoke(
-                input={"messages": [{"role": "user", "content": input_content}]},
+                input=_graph_input(input_content, inference_override),
                 config={"configurable": {"thread_id": thread_id}},
                 stream_mode="values",
             )

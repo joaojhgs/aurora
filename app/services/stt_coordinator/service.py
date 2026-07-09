@@ -486,7 +486,6 @@ class STTCoordinatorService(BaseService):
                 "(set AURORA_STT_REQUIRE_MICROPHONE=1 to fail fast in production)"
             )
 
-
     def _preferred_input_device(self, devices: list[dict[str, Any]]) -> dict[str, Any] | None:
         """Return the preferred PyAudio input device for the configured source."""
         if not devices or self._audio_source not in {"pulse", "pipewire"}:
@@ -666,7 +665,9 @@ class STTCoordinatorService(BaseService):
                         source="microphone",
                         stream_id=self._stream_id,
                         sequence=self._sequence,
-                        format=audio_format if self._sequence == 0 or self._current_session_id else None,
+                        format=audio_format
+                        if self._sequence == 0 or self._current_session_id
+                        else None,
                     )
 
                     # Publish chunk to message bus
@@ -743,8 +744,10 @@ class STTCoordinatorService(BaseService):
         bars: list[float] = []
         for bar_index in range(bar_count):
             start = bar_index * segment_size
-            end = len(samples) if bar_index == bar_count - 1 else min(
-                len(samples), start + segment_size
+            end = (
+                len(samples)
+                if bar_index == bar_count - 1
+                else min(len(samples), start + segment_size)
             )
             if start >= end:
                 bars.append(0.0)
@@ -838,7 +841,9 @@ class STTCoordinatorService(BaseService):
                         priority=get_interactive_priority(),
                     )
                     if not stop_result.ok:
-                        log_warning(f"TTS stop request failed before listening: {stop_result.error}")
+                        log_warning(
+                            f"TTS stop request failed before listening: {stop_result.error}"
+                        )
                 except Exception as e:
                     log_warning(f"Failed to stop TTS before listening: {e}")
             else:
@@ -931,8 +936,7 @@ class STTCoordinatorService(BaseService):
             should_end = False
             async with self._state_lock:
                 should_end = (
-                    self._state == STTState.PROCESSING
-                    and self._current_session_id is not None
+                    self._state == STTState.PROCESSING and self._current_session_id is not None
                 )
             if should_end:
                 log_warning("No transcription received after manual stop; ending voice session")

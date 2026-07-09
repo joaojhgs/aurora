@@ -63,6 +63,7 @@ async def test_anonymous_blocked_from_rpc_call(mock_bus, mock_registry, mock_sen
     method_info.required_perms = []
     method_info.bus_topic = "SomeService.DoSomething"
     method_info.method_type = "use"
+    method_info.exposure = "external"
     method_info.input_model = None
 
     announcement = MagicMock(spec=ServiceAnnouncement)
@@ -102,6 +103,7 @@ async def test_anonymous_allowed_pairing_start(mock_bus, mock_registry, mock_sen
     method_info.required_perms = []
     method_info.bus_topic = "Auth.PairingStart"
     method_info.method_type = "use"
+    method_info.exposure = "external"
     method_info.input_model = None
 
     announcement = MagicMock(spec=ServiceAnnouncement)
@@ -144,6 +146,7 @@ async def test_anonymous_allowed_pairing_exchange(mock_bus, mock_registry, mock_
     method_info.required_perms = []
     method_info.bus_topic = "Auth.PairingExchange"
     method_info.method_type = "use"
+    method_info.exposure = "external"
     method_info.input_model = None
 
     announcement = MagicMock(spec=ServiceAnnouncement)
@@ -208,6 +211,7 @@ async def test_authenticated_peer_rpc_works(mock_bus, mock_registry, mock_send_f
     method_info.name = "DoSomething"
     method_info.required_perms = ["user"]
     method_info.method_type = "use"
+    method_info.exposure = "external"
     method_info.bus_topic = "SomeService.DoSomething"
     method_info.input_model = None
 

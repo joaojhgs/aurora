@@ -101,6 +101,9 @@ class RTCClient:
         self._pending_rpc: dict[str, asyncio.Future] = {}
         # Active pairing tasks (peer_id → task) for cancellation on disconnect
         self._pairing_tasks: dict[str, asyncio.Task] = {}
+        # Inbound RPC handlers are keyed by signaling peer id so their dispatch
+        # bus can be rewired after GatewayService creates the MeshBus.
+        self._rpc_handlers: dict[str, RPCHandler] = {}
 
         # Mesh P2P attributes (set externally by GatewayService when mesh is enabled)
         self._mesh_enabled: bool = False
@@ -476,6 +479,8 @@ class RTCClient:
         self._peer_acl.pop(peer_id, None)
         self._peer_tokens.pop(session_peer_id, None)
         self._peer_tokens.pop(peer_id, None)
+        self._rpc_handlers.pop(session_peer_id, None)
+        self._rpc_handlers.pop(peer_id, None)
         self._peer_stable_ids.pop(session_peer_id, None)
         self._stable_peer_sessions.pop(stable_peer_id, None)
         log_info(f"Force disconnected peer {peer_id}")
@@ -671,6 +676,11 @@ class RTCClient:
         self._peer_bridge = peer_bridge
         log_info("RTCClient: Mesh P2P configured")
 
+    def set_rpc_bus(self, bus: MessageBus) -> None:
+        """Update the bus used by future and existing inbound RPC handlers."""
+        self._bus = bus
+        for handler in self._rpc_handlers.values():
+            handler.set_bus(bus)
 
     def _local_shares_tooling(self) -> bool:
         if not self._mesh_config:
@@ -680,7 +690,9 @@ class RTCClient:
 
     @staticmethod
     def _manifest_shares_tooling(manifest: Any) -> bool:
-        return any(service.module == "Tooling" for service in getattr(manifest, "shared_services", []))
+        return any(
+            service.module == "Tooling" for service in getattr(manifest, "shared_services", [])
+        )
 
     async def _request_tooling_catalog_sync(self, peer_id: str, *, reason: str) -> None:
         """Ask the local Tooling service to re-announce its catalog over mesh.
@@ -1321,6 +1333,7 @@ class RTCClient:
             ),
             pairing_notify_fn=lambda pid: self._peer_pairing_active.add(peer),
         )
+        self._rpc_handlers[peer] = handler
 
         def setup_channel(chan: Any, is_initiator: bool = False) -> None:
             # Store channel reference for bilateral pairing
@@ -1613,7 +1626,7 @@ class RTCClient:
                     elif msg_type == "pong":
                         if self._peer_bridge:
                             self._peer_bridge.on_pong(self._stable_peer_id_for_session(peer), obj)
-                    elif msg_type in ("result", "error"):
+                    elif msg_type in ("result", "error", "chunk", "eof"):
                         if self._peer_bridge:
                             self._peer_bridge.on_response(
                                 self._stable_peer_id_for_session(peer),
@@ -1681,6 +1694,8 @@ class RTCClient:
                 self._peer_acl.pop(stable_peer_id, None)
                 self._peer_tokens.pop(peer, None)
                 self._peer_tokens.pop(stable_peer_id, None)
+                self._rpc_handlers.pop(peer, None)
+                self._rpc_handlers.pop(stable_peer_id, None)
                 self._peer_send_fns.pop(peer, None)
                 self._peer_data_channels.pop(peer, None)
                 self._peer_names.pop(peer, None)

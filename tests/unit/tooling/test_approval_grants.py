@@ -80,7 +80,9 @@ def _remote_tool_info(name: str, schema_hash_suffix: str = "v1") -> ToolingToolI
     )
 
 
-def _local_prepared(*, source: str, global_tool_id: str, local_name: str) -> ToolingPrepareExecutionResponse:
+def _local_prepared(
+    *, source: str, global_tool_id: str, local_name: str
+) -> ToolingPrepareExecutionResponse:
     """Build a prepared local execution binding for source-scope grant tests."""
 
     return ToolingPrepareExecutionResponse(
@@ -506,8 +508,7 @@ async def test_external_grant_manage_endpoints_use_envelope_actor(
 
     assert revoke_response.ok is True
     assert any(
-        event.event == "tooling.approval.grant_revoked"
-        and event.principal_id == "real-revoker"
+        event.event == "tooling.approval.grant_revoked" and event.principal_id == "real-revoker"
         for event in sqlite_tooling_bus.audit_events
     )
 
@@ -643,7 +644,9 @@ async def test_list_approval_grants_expires_active_grants_and_audits(
     assert include_revoked.count == 1
     assert include_revoked.grants[0].active is False
     assert include_revoked.grants[0].metadata["expired"] is True
-    assert any(event.event == "tooling.approval.grant_expired" for event in sqlite_tooling_bus.audit_events)
+    assert any(
+        event.event == "tooling.approval.grant_expired" for event in sqlite_tooling_bus.audit_events
+    )
 
 
 @pytest.mark.asyncio
@@ -877,8 +880,6 @@ async def test_remote_catalog_change_after_restart_marks_dependent_grants_stale(
     assert grants.count == 1
     assert grants.grants[0].metadata["needs_review"] is True
     assert grants.grants[0].metadata["stale_reason"] == "remote_catalog_schema_changed"
-
-
 
 
 @pytest.mark.asyncio
@@ -1116,9 +1117,9 @@ async def test_negotiated_remote_catalog_cache_delta_removal_and_grant_staleness
             shared_by_policy=True,
         )
     )
-    remote_switch = service._remote_catalog_snapshots[
-        ("raspi-lab", "remote:raspi-lab:Tooling")
-    ][0].tools[0]
+    remote_switch = service._remote_catalog_snapshots[("raspi-lab", "remote:raspi-lab:Tooling")][
+        0
+    ].tools[0]
 
     created = await service._on_create_approval_grant(
         ToolingCreateApprovalGrantRequest(
@@ -1140,7 +1141,10 @@ async def test_negotiated_remote_catalog_cache_delta_removal_and_grant_staleness
     sqlite_tooling_bus.request.reset_mock()
     catalog = await service._on_get_tool_catalog(ToolingGetToolCatalogRequest())
     requested_topics = [call.args[0] for call in sqlite_tooling_bus.request.call_args_list]
-    assert all(topic in {DBMethods.EXECUTE_SQL, AuthMethods.STORE_AUDIT_EVENT} for topic in requested_topics)
+    assert all(
+        topic in {DBMethods.EXECUTE_SQL, AuthMethods.STORE_AUDIT_EVENT}
+        for topic in requested_topics
+    )
     assert [tool.name for tool in catalog.tools if tool.provider_peer_id == "raspi-lab"] == [
         remote_switch.name
     ]
@@ -1417,6 +1421,7 @@ async def test_approval_token_validation_survives_restart(make_tooling_service):
     )
 
     assert (ok, error) == (True, None)
+
 
 def test_source_scoped_grant_does_not_authorize_other_local_sources(make_tooling_service):
     """Source trust metadata must be enforced during grant matching."""

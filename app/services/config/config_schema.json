@@ -34,6 +34,52 @@
               "default": false
             }
           }
+        },
+        "desktop_overlay": {
+          "type": "object",
+          "description": "Desktop assistant overlay window behavior and persistence settings.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable the desktop overlay window for quick access to Aurora.",
+              "default": true
+            },
+            "voice_overlay_enabled": {
+              "type": "boolean",
+              "description": "Show voice activity and listening state in the desktop overlay when voice features are active.",
+              "default": true
+            },
+            "text_hotkey": {
+              "type": "string",
+              "description": "Global keyboard shortcut that opens the desktop overlay text input.",
+              "default": "CommandOrControl+K"
+            },
+            "close_behavior": {
+              "type": "string",
+              "enum": [
+                "hide_to_tray"
+              ],
+              "description": "Behavior when the desktop overlay window is closed.",
+              "default": "hide_to_tray"
+            },
+            "auto_close_delay_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Delay in milliseconds before the desktop overlay auto-closes after transient interactions; set to 0 to close immediately.",
+              "default": 1200
+            },
+            "visible_on_all_workspaces": {
+              "type": "boolean",
+              "description": "Keep the desktop overlay visible across all virtual desktops or workspaces when supported by the OS.",
+              "default": true
+            },
+            "persist_positions": {
+              "type": "boolean",
+              "description": "Remember desktop overlay window positions between app launches.",
+              "default": true
+            }
+          }
         }
       }
     },
@@ -754,14 +800,18 @@
                     "openai",
                     "huggingface_endpoint",
                     "huggingface_pipeline",
-                    "llama_cpp"
+                    "llama_cpp",
+                    "remote_peer",
+                    "mesh_peer"
                   ],
                   "description": "LLM provider to use",
                   "ui_choices": [
                     "llama_cpp",
                     "openai",
                     "huggingface_endpoint",
-                    "huggingface_pipeline"
+                    "huggingface_pipeline",
+                    "remote_peer",
+                    "mesh_peer"
                   ],
                   "default": "openai"
                 },
@@ -1034,6 +1084,97 @@
                         }
                       }
                     }
+                  }
+                },
+                "remote_peer": {
+                  "type": "object",
+                  "description": "Remote mesh peer LLM routing options. Tools and graph execution remain local; only chat inference is delegated.",
+                  "additionalProperties": false,
+                  "properties": {
+                    "peer_id": {
+                      "type": "string",
+                      "description": "Stable mesh peer id to route inference to"
+                    },
+                    "provider_id": {
+                      "type": "string",
+                      "description": "Provider alias or peer id to route inference to"
+                    },
+                    "service_instance_id": {
+                      "type": "string",
+                      "description": "Remote service instance id such as remote:<peer>:Orchestrator"
+                    },
+                    "resource_namespace": {
+                      "type": "string",
+                      "default": "inference"
+                    },
+                    "timeout_s": {
+                      "type": "number",
+                      "minimum": 1,
+                      "default": 60
+                    }
+                  }
+                },
+                "mesh_peer": {
+                  "type": "object",
+                  "description": "Alias for remote_peer LLM routing options",
+                  "additionalProperties": false,
+                  "properties": {
+                    "peer_id": {
+                      "type": "string"
+                    },
+                    "provider_id": {
+                      "type": "string"
+                    },
+                    "service_instance_id": {
+                      "type": "string"
+                    },
+                    "resource_namespace": {
+                      "type": "string",
+                      "default": "inference"
+                    },
+                    "timeout_s": {
+                      "type": "number",
+                      "minimum": 1,
+                      "default": 60
+                    }
+                  }
+                }
+              }
+            },
+            "routing": {
+              "type": "object",
+              "description": "Separate dispatch and inference routing defaults for orchestrator requests",
+              "additionalProperties": false,
+              "properties": {
+                "dispatch_default": {
+                  "type": "object",
+                  "description": "Default mesh dispatch route for external orchestrator requests when no runtime dispatch selector is supplied",
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {"type": "boolean", "default": false},
+                    "peer_id": {"type": "string"},
+                    "provider_id": {"type": "string"},
+                    "service_instance_id": {"type": "string"},
+                    "resource_namespace": {"type": "string"},
+                    "timeout_s": {"type": "number", "minimum": 1}
+                  }
+                },
+                "inference_default": {
+                  "type": "object",
+                  "description": "Default chat inference provider for local orchestration; does not affect dispatch routing",
+                  "additionalProperties": false,
+                  "properties": {
+                    "provider": {
+                      "type": "string",
+                      "enum": ["local", "configured", "remote_peer", "mesh_peer"],
+                      "default": "configured"
+                    },
+                    "peer_id": {"type": "string"},
+                    "provider_id": {"type": "string"},
+                    "service_instance_id": {"type": "string"},
+                    "resource_namespace": {"type": "string", "default": "inference"},
+                    "model_id": {"type": "string"},
+                    "timeout_s": {"type": "number", "minimum": 1, "default": 60}
                   }
                 }
               }

@@ -7,12 +7,20 @@ after validating permissions against the aggregated registry and the peer's
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
+from app.services.gateway.orchestrator_runtime_policy import remote_data_movement_denial_reason
+from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.orchestrator import (
+    OrchestratorInferChatChunk,
+    OrchestratorInferChatResponse,
+    OrchestratorMethods,
+)
 from app.shared.contracts.models.scheduler import SchedulerMethods
 from app.shared.contracts.models.stt import (
     AudioSessionMethods,
@@ -38,6 +46,14 @@ def _json_default(obj: object) -> str:
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def _is_streaming_transport_unavailable(exc: Exception) -> bool:
+    message = str(exc)
+    return (
+        "does not support native stream_request" in message
+        or "Streaming RPC transport unavailable" in message
+    )
+
+
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
     from app.services.gateway.acl.identity import Identity
@@ -50,11 +66,16 @@ if TYPE_CHECKING:
 class RPCHandler:
     # RPC methods that ANONYMOUS peers may call (pairing + login flow)
     _ANON_ALLOWED_METHODS = {
-        "PairingStart",
-        "PairingConnect",
-        "PairingExchange",
-        "Login",
+        AuthMethods.PAIRING_START,
+        AuthMethods.PAIRING_CONNECT,
+        AuthMethods.PAIRING_EXCHANGE,
+        AuthMethods.LOGIN,
     }
+    # Infrastructure bootstrap methods are intentionally reachable by their
+    # full service-qualified RPC names even though their service contracts are
+    # internal-only. All other DataChannel RPC calls must target methods marked
+    # external/both in the aggregated registry.
+    _INFRASTRUCTURE_RPC_METHODS = _ANON_ALLOWED_METHODS
 
     def __init__(
         self,
@@ -79,6 +100,26 @@ class RPCHandler:
         self._pairing_notify_fn = pairing_notify_fn
         # Track active remote calls per module for capacity limiting
         self._active_remote_calls: dict[str, int] = {}
+        self._active_stream_tasks: dict[str, asyncio.Task[Any]] = {}
+
+    def set_bus(self, bus: MessageBus) -> None:
+        """Update the bus used for inbound RPC dispatch.
+
+        Gateway starts WebRTC before mesh in process mode, so handlers may be
+        constructed while ``self._bus`` is still the raw process bus. Once the
+        Gateway-owned MeshBus exists, callers update handlers through this
+        method so streaming RPCs use MeshBus.stream_request instead of falling
+        through to process-bus serialization.
+        """
+        self._bus = bus
+
+    async def _handle_cancel(self, msg: dict[str, Any]) -> None:
+        req_id = msg.get("id")
+        if not req_id:
+            return
+        task = self._active_stream_tasks.get(str(req_id)) or self._active_stream_tasks.get(req_id)
+        if task is not None and not task.done():
+            task.cancel()
 
     async def on_message(self, text: str) -> None:
         try:
@@ -90,11 +131,12 @@ class RPCHandler:
         msg_type = msg.get("type")
         if msg_type == "call":
             await self._handle_call(msg)
+        elif msg_type == "cancel":
+            await self._handle_cancel(msg)
         elif msg_type == "event":
             await self._handle_event(msg)
         else:
             log_debug(f"RPCHandler: Ignoring message type: {msg_type}")
-
 
     def _normalize_forwarded_tooling_catalog_event(
         self, topic: str, params: dict[str, Any]
@@ -196,14 +238,10 @@ class RPCHandler:
             self._send_error(req_id, 400, "Missing method", correlation_id=correlation_id)
             return
 
-        # Extract method short name for infrastructure checks
         delimiter = "." if "." in method_name else "/" if "/" in method_name else None
-        short_name = (
-            method_name.split(delimiter, 1)[1]
-            if delimiter and delimiter in method_name
-            else method_name
-        )
-        is_infra_method = short_name in self._ANON_ALLOWED_METHODS
+        canonical_method = method_name.replace("/", ".", 1)
+        is_infra_method = canonical_method in self._ANON_ALLOWED_METHODS
+        mesh_shared_call = False
 
         # Mesh sharing gate: check if the called service is shared
         # (skip for infrastructure methods like pairing/auth that must always work)
@@ -267,6 +305,7 @@ class RPCHandler:
                         correlation_id=correlation_id,
                     )
                     return
+            mesh_shared_call = True
 
         result = await self._find_method(method_name)
         if not result:
@@ -280,7 +319,10 @@ class RPCHandler:
         identity: Identity = self._acl_provider()
 
         # Gap 2C: Block ANONYMOUS from all methods except pairing/auth
-        if identity.principal_id == "anonymous" and meta.name not in self._ANON_ALLOWED_METHODS:
+        if (
+            identity.principal_id == "anonymous"
+            and canonical_method not in self._ANON_ALLOWED_METHODS
+        ):
             log_warning(f"RPCHandler: Blocked call to {method_name} from ANONYMOUS peer")
             await self._audit_rpc_event(
                 "access.denied.rpc",
@@ -295,6 +337,35 @@ class RPCHandler:
                 req_id,
                 401,
                 "Authentication required",
+                correlation_id=correlation_id,
+            )
+            return
+
+        if (
+            getattr(meta, "exposure", "internal") not in {"external", "both"}
+            and canonical_method not in self._INFRASTRUCTURE_RPC_METHODS
+            and (not mesh_shared_call or canonical_method.endswith(".Login"))
+        ):
+            log_warning(
+                f"RPCHandler: Blocked non-external RPC call to {method_name} "
+                f"from {identity.principal_name}"
+            )
+            await self._audit_rpc_event(
+                "access.denied.rpc",
+                method_name=method_name,
+                correlation_id=correlation_id,
+                status="denied",
+                reason="method_not_exposed",
+                principal_id=identity.principal_id,
+                details={
+                    "exposure": getattr(meta, "exposure", "internal"),
+                    "params": params,
+                },
+            )
+            self._send_error(
+                req_id,
+                403,
+                "Method is not exposed for WebRTC RPC",
                 correlation_id=correlation_id,
             )
             return
@@ -324,6 +395,26 @@ class RPCHandler:
             return
 
         topic = meta.bus_topic or f"{svc_name}.{meta.name}"
+        remote_data_reason = remote_data_movement_denial_reason(
+            topic, params, identity.effective_perms
+        )
+        if remote_data_reason:
+            log_warning(
+                f"RPCHandler: Forbidden runtime data-movement override for {method_name} "
+                f"from {identity.principal_name}: {remote_data_reason}"
+            )
+            await self._audit_rpc_event(
+                "access.denied.rpc",
+                method_name=method_name,
+                correlation_id=correlation_id,
+                status="denied",
+                reason="runtime_data_movement_permission_denied",
+                principal_id=identity.principal_id,
+                details={"params": params, "required_policy": remote_data_reason},
+            )
+            self._send_error(req_id, 403, remote_data_reason, correlation_id=correlation_id)
+            return
+
         # Track active remote calls for capacity limiting
         module_for_capacity = svc_name
         max_concurrent = 0
@@ -384,6 +475,62 @@ class RPCHandler:
                         f"for {method_name}: {exc}. Falling back to raw params."
                     )
                     typed_params = params
+            is_streaming_method = topic == OrchestratorMethods.STREAM_INFER_CHAT
+            stream_request = getattr(self._bus, "stream_request", None)
+            if is_streaming_method and not callable(stream_request):
+                await self._stream_infer_via_non_streaming_fallback(
+                    req_id=req_id,
+                    typed_params=typed_params,
+                    identity=identity,
+                    meta=meta,
+                    correlation_id=correlation_id,
+                )
+                return
+
+            if is_streaming_method and callable(stream_request):
+                current_task = asyncio.current_task()
+                if current_task is not None:
+                    self._active_stream_tasks[req_id] = current_task
+                try:
+                    async for chunk in stream_request(
+                        topic,
+                        typed_params,
+                        timeout=30.0,
+                        origin="external",
+                        principal_id=identity.principal_id,
+                        effective_perms=list(identity.effective_perms),
+                        identity_source="webrtc_rpc",
+                        method_type=meta.method_type or "use",
+                        caller_peer_id=self._peer_id,
+                        correlation_id=correlation_id,
+                    ):
+                        self._send_chunk(req_id, chunk)
+                    self._send(json.dumps({"type": "eof", "id": req_id}))
+                    return
+                except asyncio.CancelledError:
+                    self._send(json.dumps({"type": "eof", "id": req_id, "cancelled": True}))
+                    return
+                except Exception as e:
+                    if _is_streaming_transport_unavailable(e):
+                        await self._stream_infer_via_non_streaming_fallback(
+                            req_id=req_id,
+                            typed_params=typed_params,
+                            identity=identity,
+                            meta=meta,
+                            correlation_id=correlation_id,
+                        )
+                        return
+                    log_error(f"RPCHandler: Error during stream of {method_name}: {e}")
+                    self._send_error(
+                        req_id,
+                        500,
+                        f"Stream error: {e}",
+                        correlation_id=correlation_id,
+                    )
+                    return
+                finally:
+                    self._active_stream_tasks.pop(req_id, None)
+
             res = await self._bus.request(
                 topic,
                 typed_params,  # type: ignore[arg-type]
@@ -399,22 +546,13 @@ class RPCHandler:
 
             if res.ok:
                 # Enhancement B: Notify RTCClient when PairingStart succeeds
-                if meta.name == "PairingStart" and self._pairing_notify_fn:
+                if canonical_method == AuthMethods.PAIRING_START and self._pairing_notify_fn:
                     self._pairing_notify_fn(self._peer_id or "")
 
                 if hasattr(res.data, "__aiter__"):
                     try:
                         async for chunk in res.data:
-                            data = chunk
-                            if isinstance(chunk, bytes):
-                                data = chunk.decode(errors="ignore")
-
-                            self._send(
-                                json.dumps(
-                                    {"type": "chunk", "id": req_id, "data": data},
-                                    default=_json_default,
-                                )
-                            )
+                            self._send_chunk(req_id, chunk)
                         self._send(json.dumps({"type": "eof", "id": req_id}))
                     except Exception as e:
                         log_error(f"RPCHandler: Error during stream of {method_name}: {e}")
@@ -492,6 +630,84 @@ class RPCHandler:
                     self._capacity_notify_fn(
                         module_for_capacity, max_concurrent - active, max_concurrent
                     )
+
+    def _send_chunk(self, req_id: Any, chunk: Any) -> None:
+        """Send one stream chunk over the DataChannel in JSON-serializable form."""
+
+        data = chunk
+        if isinstance(chunk, bytes):
+            data = chunk.decode(errors="ignore")
+        elif hasattr(chunk, "model_dump"):
+            data = chunk.model_dump(mode="json")
+
+        self._send(
+            json.dumps(
+                {"type": "chunk", "id": req_id, "data": data},
+                default=_json_default,
+            )
+        )
+
+    async def _stream_infer_via_non_streaming_fallback(
+        self,
+        *,
+        req_id: str,
+        typed_params: Any,
+        identity: Any,
+        meta: Any,
+        correlation_id: str,
+    ) -> None:
+        """Degrade process-mode stream RPC to a single non-streaming chunk.
+
+        Process-mode Gateway receives WebRTC, while Orchestrator may live behind
+        BullMQ. Until BullMQ exposes a native streaming protocol, this preserves a
+        correct RPC response instead of failing the stream transport.
+        """
+
+        payload = typed_params
+        if hasattr(payload, "model_copy"):
+            payload = payload.model_copy(update={"stream": False})
+        elif isinstance(payload, dict):
+            payload = {**payload, "stream": False}
+        result = await self._bus.request(
+            OrchestratorMethods.INFER_CHAT,
+            payload,
+            timeout=30.0,
+            origin="external",
+            principal_id=identity.principal_id,
+            effective_perms=list(identity.effective_perms),
+            identity_source="webrtc_rpc",
+            method_type=meta.method_type or "use",
+            caller_peer_id=self._peer_id,
+            correlation_id=correlation_id,
+        )
+        if not result.ok:
+            self._send_error(
+                req_id,
+                500,
+                result.error or "Streaming fallback inference failed",
+                correlation_id=correlation_id,
+            )
+            return
+        response = (
+            result.data
+            if isinstance(result.data, OrchestratorInferChatResponse)
+            else OrchestratorInferChatResponse.model_validate(result.data)
+            if isinstance(result.data, dict)
+            else OrchestratorInferChatResponse(text="" if result.data is None else str(result.data))
+        )
+        self._send_chunk(
+            req_id,
+            OrchestratorInferChatChunk(
+                delta=response.text,
+                text=response.text,
+                is_final=True,
+                finish_reason=response.finish_reason or "stop",
+                model_id=response.model_id,
+                provider_id=response.provider_id,
+                correlation_id=response.correlation_id or correlation_id,
+            ),
+        )
+        self._send(json.dumps({"type": "eof", "id": req_id}))
 
     async def _find_method(self, method_name: str) -> tuple[str, MethodInfo] | None:
         delimiter = "." if "." in method_name else "/" if "/" in method_name else None

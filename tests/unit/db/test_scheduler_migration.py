@@ -26,9 +26,7 @@ async def test_scheduler_typed_action_migration_is_idempotent_via_migration_tabl
             "policy_decision_id",
         }.issubset(columns)
 
-        cursor = await db.execute(
-            "SELECT COUNT(*) FROM migrations WHERE version = '008'"
-        )
+        cursor = await db.execute("SELECT COUNT(*) FROM migrations WHERE version = '008'")
         assert (await cursor.fetchone())[0] == 1
 
 

@@ -55,8 +55,17 @@ Assistant generation uses the typed bus first, then the Gateway live-event bridg
 - Tool updates use `tool.requested`, `tool.running`, `tool.completed`, `tool.failed`, and `tool.requires_action`; args/results exposed to clients must be safe previews, never raw secrets.
 - Low-latency TTS uses `TTS.StreamStart`, `TTS.StreamChunk`, and `TTS.StreamEnd` commands plus `TTS.AudioChunk` events. `TTSStreamStartRequest.play_on_server` controls whether the TTS service also speaks through the local audio output.
 - Gateway event subscriptions for assistant response streams may include both `Orchestrator.Response` and `TTS.AudioChunk` when correlated to an `Orchestrator.use` request.
+- The SDK `assistant.streamMessage()` surface can fall back to the final `Orchestrator.ExternalUserInput` response when a transport cannot provide a live assistant event stream, when process-mode bridging only yields the completed response, or when the correlated event is missed. Fallback updates are a single `kind: "fallback"` item and include `metadata.assistant_stream_contract = "single_response_fallback"`, `metadata.assistant_stream_transport`, and `metadata.assistant_stream_fallback = true`. Clients must not treat fallback updates as token-level streaming evidence.
 
 Desktop daemon/STT-origin voice requests start streamed TTS with server playback enabled. Web, thin, and mobile UI read-aloud paths should consume `TTS.AudioChunk` through the SDK and play client-side unless a platform-specific native bridge explicitly owns playback.
+
+### Assistant inference routing policy
+
+`AssistantInferencePolicy` in the TypeScript SDK separates provider/model selection from UI policy hints:
+
+- Serialized request selectors: `peerId`, `providerId`, `runtimeProviderId`/`inferenceProviderId`, `serviceInstanceId`, and `modelId` become `inference_selector`, `inference_provider_id`, and `inference_model_id` on `Orchestrator.ExternalUserInput`.
+- Client hints only: `privacyClass`, `dataLeavesDevice`, `selectorRequired`, and `approvalRequired` are retained for UI labels, route sheets, and capability gating. They are not serialized as server enforcement constraints and do not replace Gateway/Auth permission checks.
+- Raw inference primitives such as `Orchestrator.InferChat`/`StreamInferChat` and Gateway mesh inference proxy methods are transport/service contracts. External callers should prefer `Orchestrator.ExternalUserInput` through the SDK assistant APIs unless they have explicit permission for lower-level inference routing.
 
 ## SDK conformance
 

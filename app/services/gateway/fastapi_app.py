@@ -521,10 +521,7 @@ def _authorize_event_stream_request(
     topic_set = set(topics)
     assistant_scoped = (
         correlation_id is not None
-        and (
-            not topic_set
-            or topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK}
-        )
+        and (not topic_set or topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK})
         and (not categories or categories <= {"assistant"})
         and (not kinds or kinds <= _SAFE_ASSISTANT_KINDS)
     )

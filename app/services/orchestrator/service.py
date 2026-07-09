@@ -11,8 +11,11 @@ This service:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import re
+import time
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,7 @@ from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import (
     Envelope,
     MessageBus,
@@ -43,6 +47,7 @@ from app.shared.contracts.models.orchestrator import (
     ModelRuntimeCatalogRequest,
     ModelRuntimeCatalogResponse,
     ModelRuntimeFileInfo,
+    ModelRuntimeModelInfo,
     ModelRuntimeOperationRequest,
     ModelRuntimeOperationResponse,
     ModelRuntimeOperationStatusRequest,
@@ -50,7 +55,11 @@ from app.shared.contracts.models.orchestrator import (
     ModelRuntimeProviderInfo,
     ModelRuntimeRequest,
     ModelRuntimeResponse,
+    OrchestratorChatMessage,
     OrchestratorEvents,
+    OrchestratorInferChatChunk,
+    OrchestratorInferChatRequest,
+    OrchestratorInferChatResponse,
     OrchestratorInterruptedEvent,
     OrchestratorInterruptRequest,
     OrchestratorInterruptResponse,
@@ -88,6 +97,125 @@ _SENSITIVE_METADATA_KEY_PATTERN = re.compile(
     r"(?i)(api[_-]?key|auth|authorization|bearer|cookie|credential|password|secret|signature|token)"
 )
 _URI_IN_TEXT_PATTERN = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s'\"]+", re.IGNORECASE)
+_REMOTE_INFERENCE_PERMS = {
+    "*",
+    "Orchestrator.manage",
+    "Orchestrator.RemoteInference",
+    "Orchestrator.remote_inference",
+}
+_MAX_INFERENCE_MESSAGES = 64
+_MAX_INFERENCE_MESSAGE_BYTES = 64 * 1024
+_MAX_INFERENCE_TOTAL_BYTES = 256 * 1024
+_MAX_INFERENCE_TOOLS = 64
+_MAX_INFERENCE_TOOLS_BYTES = 256 * 1024
+_OPENAI_NON_CHAT_MODEL_MARKERS = (
+    "embedding",
+    "audio",
+    "whisper",
+    "tts",
+    "dall-e",
+    "image",
+    "moderation",
+    "babbage",
+    "davinci",
+    "instruct",
+    "realtime",
+)
+_OPENAI_CHAT_MODEL_PREFIXES = ("gpt-", "chatgpt-", "o1", "o3", "o4")
+
+
+def _coerce_mesh_selector(value: Any) -> Any | None:
+    from app.shared.contracts.models.mesh import MeshAddressSelector
+
+    if isinstance(value, MeshAddressSelector):
+        return value if value.has_routing_target() else None
+    if isinstance(value, dict):
+        selector = MeshAddressSelector(
+            peer_id=value.get("peer_id") or value.get("peerId"),
+            provider_id=value.get("provider_id") or value.get("providerId"),
+            service_instance_id=value.get("service_instance_id") or value.get("serviceInstanceId"),
+            resource_namespace=value.get("resource_namespace")
+            or value.get("resourceNamespace")
+            or "inference",
+        )
+        return selector if selector.has_routing_target() else None
+    return None
+
+
+async def configured_provider_inference_llm(provider_id: str, model_id: str | None) -> Any:
+    """Instantiate an advertised provider/model using configured options only."""
+
+    services_config = await ConfigAPI().aget_config("services", timeout=15.0)
+    llm_config = (services_config.get("orchestrator", {}) or {}).get("llm", {}) or {}
+    third_party = llm_config.get("third_party") or {}
+    local = llm_config.get("local") or {}
+
+    if provider_id == "openai":
+        from langchain_openai import ChatOpenAI
+
+        openai_options = (third_party.get("openai") or {}).get("options") or {}
+        api_key = str(openai_options.get("api_key") or "").strip()
+        if not api_key:
+            raise RuntimeError("configured OpenAI API key is not available")
+        opts = {key: value for key, value in openai_options.items() if value is not None}
+        if model_id:
+            opts["model"] = model_id
+        return ChatOpenAI(**opts)
+
+    if provider_id == "huggingface_endpoint":
+        from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+
+        endpoint_options = (
+            (third_party.get("huggingface_endpoint") or {}).get("options") or {}
+        ).copy()
+        if model_id:
+            endpoint_options["model"] = model_id
+        if "access_token" in endpoint_options:
+            endpoint_options["huggingfacehub_api_token"] = endpoint_options.pop("access_token")
+        if "max_tokens" in endpoint_options:
+            endpoint_options["max_new_tokens"] = endpoint_options.pop("max_tokens")
+        endpoint_options = {
+            key: value for key, value in endpoint_options.items() if value is not None
+        }
+        return ChatHuggingFace(llm=HuggingFaceEndpoint(**endpoint_options))
+
+    if provider_id == "huggingface_pipeline":
+        from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
+
+        pipeline_options = ((local.get("huggingface_pipeline") or {}).get("options") or {}).copy()
+        configured_model = pipeline_options.pop("model", None)
+        selected_model = model_id or configured_model
+        if not selected_model:
+            raise RuntimeError("configured HuggingFace pipeline model is not available")
+        pipeline_kwargs = pipeline_options.pop("pipeline_kwargs", {})
+        model_kwargs = pipeline_options.pop("model_kwargs", {})
+        for key, value in pipeline_options.items():
+            if key not in {"temperature", "max_tokens"} and value is not None:
+                model_kwargs[key] = value
+        device_value = 0 if get_use_hardware_acceleration("llm") == "cuda" else -1
+        pipeline = HuggingFacePipeline.from_model_id(
+            model_id=selected_model,
+            task="text-generation",
+            device=device_value,
+            pipeline_kwargs=pipeline_kwargs,
+            model_kwargs=model_kwargs,
+        )
+        return ChatHuggingFace(llm=pipeline, verbose=True, model_id=selected_model)
+
+    if provider_id == "llama_cpp":
+        import app.services.orchestrator.chat_llama_cpp_fn_handler  # noqa: F401
+        from app.services.orchestrator.chat_llama_cpp import ChatLlamaCpp
+        from app.shared.path_utils import resolve_path
+
+        llama_options = ((local.get("llama_cpp") or {}).get("options") or {}).copy()
+        model_path = llama_options.get("model_path")
+        if not model_path:
+            raise RuntimeError("configured llama.cpp model_path is not available")
+        llama_options["model_path"] = str(resolve_path(model_path))
+        llama_options["disable_streaming"] = True
+        return ChatLlamaCpp(**llama_options)
+
+    raise RuntimeError(f"provider_id {provider_id!r} is not supported by the inference factory")
 
 
 # Service implementation
@@ -110,6 +238,7 @@ class OrchestratorService(BaseService):
         )
         self.orchestrator: GraphOrchestrator | None = None
         self._model_runtime_operations: dict[str, ModelRuntimeOperationResponse] = {}
+        self._model_catalog_cache: dict[str, dict[str, Any]] = {}
         self._generation_tasks: dict[asyncio.Task, str | None] = {}
         self._generation_lock = asyncio.Lock()
         self._ui_automatic_tts_readback = False
@@ -221,6 +350,7 @@ class OrchestratorService(BaseService):
         output_model=EmptyOutput,
         exposure="internal",
         method_type="use",
+        required_perms=["Orchestrator.use"],
     )
     async def process_user_input(self, cmd: OrchestratorProcessRequest) -> EmptyOutput:
         """Handle UI user input command."""
@@ -233,22 +363,10 @@ class OrchestratorService(BaseService):
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
                 stream=cmd.stream,
+                inference_selector=cmd.inference_selector,
+                inference_provider_id=cmd.inference_provider_id,
+                inference_model_id=cmd.inference_model_id,
             )
-            # Wait, OrchestratorProcessRequest has session_id?
-            # Let's check the model definition I created.
-            # It has 'message', 'context', 'stream', 'max_tokens'.
-            # It does NOT have session_id explicitly in the one I wrote in step 800?
-            # Wait, step 800 content:
-            # class OrchestratorProcessRequest(IOModel):
-            #     message: str
-            #     context: dict[str, Any] | None = None
-            #     stream: bool = False
-            #     max_tokens: int | None = None
-
-            # The previous UserInput model had session_id.
-            # I should probably update OrchestratorProcessRequest to include session_id if needed.
-            # For now, I'll pass None or extract from context if I update the model.
-
             return EmptyOutput()
 
         except Exception as e:
@@ -262,6 +380,7 @@ class OrchestratorService(BaseService):
         output_model=OrchestratorResponse,
         exposure="external",
         method_type="use",
+        required_perms=["Orchestrator.use"],
     )
     async def process_external_input(
         self,
@@ -280,6 +399,10 @@ class OrchestratorService(BaseService):
                 caller_context = {
                     "caller_principal_id": getattr(envelope, "principal_id", None),
                     "caller_peer_id": getattr(envelope, "caller_peer_id", None),
+                    "caller_effective_perms": list(
+                        getattr(envelope, "effective_perms", None) or []
+                    ),
+                    "caller_identity_source": getattr(envelope, "identity_source", None),
                 }
             response_text = await self._process_input(
                 cmd.text,
@@ -290,6 +413,9 @@ class OrchestratorService(BaseService):
                 return_response=True,  # Return the response for external API
                 response_metadata=metadata,
                 stream=cmd.stream,
+                inference_selector=cmd.inference_selector,
+                inference_provider_id=cmd.inference_provider_id,
+                inference_model_id=cmd.inference_model_id,
                 **caller_context,
             )
             return OrchestratorResponse(
@@ -309,6 +435,61 @@ class OrchestratorService(BaseService):
                 correlation_id=cmd.correlation_id,
                 metadata={"source": cmd.source or "external", "stream": cmd.stream, "error": True},
             )
+
+    @method_contract(
+        method_id=OrchestratorMethods.INFER_CHAT,
+        summary="Run inference-only chat on this orchestrator runtime",
+        input_model=OrchestratorInferChatRequest,
+        output_model=OrchestratorInferChatResponse,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def infer_chat(
+        self,
+        data: OrchestratorInferChatRequest,
+        envelope: Envelope | None = None,
+    ) -> OrchestratorInferChatResponse:
+        """Run a local LLM inference for mesh callers without executing tools."""
+        explicit_selection = bool(data.provider_id or data.model_id)
+        self._authorize_direct_inference_request(
+            data, envelope, explicit_selection=explicit_selection
+        )
+        data = await self._validated_inference_request(
+            data,
+            include_cloud_models=self._can_expand_cloud_catalog(
+                envelope, explicit_selection=explicit_selection
+            ),
+        )
+        response_message = await self._invoke_inference_llm(data)
+        return self._infer_response_from_message(data, response_message)
+
+    @method_contract(
+        method_id=OrchestratorMethods.STREAM_INFER_CHAT,
+        summary="Stream inference-only chat from this orchestrator runtime",
+        input_model=OrchestratorInferChatRequest,
+        output_model=OrchestratorInferChatChunk,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+    )
+    async def stream_infer_chat(
+        self,
+        data: OrchestratorInferChatRequest,
+        envelope: Envelope | None = None,
+    ) -> AsyncIterator[OrchestratorInferChatChunk]:
+        """Stream local LLM chunks for mesh callers without executing tools."""
+        explicit_selection = bool(data.provider_id or data.model_id)
+        self._authorize_direct_inference_request(
+            data, envelope, explicit_selection=explicit_selection
+        )
+        data = await self._validated_inference_request(
+            data,
+            include_cloud_models=self._can_expand_cloud_catalog(
+                envelope, explicit_selection=explicit_selection
+            ),
+        )
+        return self._stream_inference_llm(data)
 
     @method_contract(
         method_id=OrchestratorMethods.INGEST_CONTEXT,
@@ -479,6 +660,7 @@ class OrchestratorService(BaseService):
         output_model=EmptyOutput,
         exposure="internal",
         method_type="use",
+        required_perms=["Orchestrator.use"],
     )
     async def process_tool_result(
         self, cmd: OrchestratorToolResultRequest
@@ -871,12 +1053,21 @@ class OrchestratorService(BaseService):
         required_perms=["Orchestrator.use"],
     )
     async def get_model_catalog(
-        self, data: ModelRuntimeCatalogRequest
+        self,
+        data: ModelRuntimeCatalogRequest,
+        envelope: Envelope | None = None,
     ) -> ModelRuntimeCatalogResponse:
         """Return a redacted provider catalog for UI/SDK availability decisions."""
+        self._authorize_cloud_catalog_request(data, envelope)
+        catalog_selector = (
+            data.catalog_selector or data.remote_catalog_selector or data.mesh_selector
+        )
         return await self._build_model_runtime_catalog(
             include_unavailable=data.include_unavailable,
             include_operations=data.include_operations,
+            include_remote=data.include_remote,
+            include_cloud_models=data.include_cloud_models,
+            mesh_selector=catalog_selector,
         )
 
     @method_contract(
@@ -962,6 +1153,11 @@ class OrchestratorService(BaseService):
         stream: bool = False,
         caller_principal_id: str | None = None,
         caller_peer_id: str | None = None,
+        inference_selector: Any | None = None,
+        inference_provider_id: str | None = None,
+        inference_model_id: str | None = None,
+        caller_effective_perms: list[str] | None = None,
+        caller_identity_source: str | None = None,
     ) -> str | None:
         """Process user input through LangGraph agent.
 
@@ -980,6 +1176,17 @@ class OrchestratorService(BaseService):
         metadata = response_metadata if response_metadata is not None else {}
         metadata.setdefault("source", source)
         metadata.setdefault("stream", stream)
+        inference_override = await self._resolve_inference_override(
+            inference_selector=inference_selector,
+            inference_provider_id=inference_provider_id,
+            inference_model_id=inference_model_id,
+        )
+        self._authorize_inference_override(
+            inference_override,
+            caller_effective_perms=caller_effective_perms,
+            caller_identity_source=caller_identity_source,
+            source=source,
+        )
         try:
             log_debug(f"Processing input from {source}: {text}")
 
@@ -1000,6 +1207,7 @@ class OrchestratorService(BaseService):
                     metadata=metadata,
                     caller_principal_id=caller_principal_id,
                     caller_peer_id=caller_peer_id,
+                    inference_override=inference_override,
                 )
             else:
                 response_text = await self.orchestrator.stream_graph_updates(
@@ -1009,6 +1217,7 @@ class OrchestratorService(BaseService):
                     session_id=session_id,
                     owner_principal_id=caller_principal_id,
                     owner_peer_id=caller_peer_id,
+                    inference_override=inference_override,
                 )
 
             log_info(f"🤖 LLM response: {response_text[:100]}...")
@@ -1166,6 +1375,7 @@ class OrchestratorService(BaseService):
         metadata: dict[str, Any],
         caller_principal_id: str | None = None,
         caller_peer_id: str | None = None,
+        inference_override: dict[str, Any] | None = None,
     ) -> str:
         """Publish correlated assistant stream events while graph generation runs."""
 
@@ -1204,6 +1414,7 @@ class OrchestratorService(BaseService):
             session_id=session_id,
             owner_principal_id=caller_principal_id,
             owner_peer_id=caller_peer_id,
+            inference_override=inference_override,
         ):
             sequence += 1
             if event.kind == "assistant.delta":
@@ -1476,23 +1687,619 @@ class OrchestratorService(BaseService):
             await asyncio.gather(*candidates, return_exceptions=True)
         return len(candidates)
 
+    async def _resolve_inference_override(
+        self,
+        *,
+        inference_selector: Any | None = None,
+        inference_provider_id: str | None = None,
+        inference_model_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Resolve per-request/default inference routing without affecting dispatch."""
+
+        selector = _coerce_mesh_selector(inference_selector)
+        provider = None
+        timeout_s: float | None = None
+        explicit_provider_model_selection = bool(inference_provider_id or inference_model_id)
+        if selector is None and not inference_provider_id and not inference_model_id:
+            try:
+                services = await ConfigAPI().aget_config("services", timeout=5.0)
+            except Exception as exc:
+                log_debug(f"Could not load orchestrator inference default: {exc}")
+                services = {}
+            orchestrator = services.get("orchestrator", {}) if isinstance(services, dict) else {}
+            routing = orchestrator.get("routing", {}) if isinstance(orchestrator, dict) else {}
+            default = routing.get("inference_default", {}) if isinstance(routing, dict) else {}
+            if isinstance(default, dict):
+                provider = default.get("provider")
+                inference_provider_id = default.get("provider_id") or default.get("providerId")
+                inference_model_id = default.get("model_id") or default.get("modelId")
+                timeout_raw = default.get("timeout_s") or default.get("timeoutSeconds")
+                try:
+                    timeout_s = float(timeout_raw) if timeout_raw is not None else None
+                except (TypeError, ValueError):
+                    timeout_s = None
+                if (
+                    provider in {"remote_peer", "mesh_peer"}
+                    or default.get("peer_id")
+                    or default.get("service_instance_id")
+                    or default.get("serviceInstanceId")
+                ):
+                    selector = _coerce_mesh_selector(default)
+        remote_selector_active = selector is not None or provider in {"remote_peer", "mesh_peer"}
+        selection_policy: dict[str, Any] = {}
+        if not remote_selector_active and (inference_provider_id or inference_model_id):
+            (
+                inference_provider_id,
+                inference_model_id,
+                selection_policy,
+            ) = await self._validate_local_graph_inference_ids(
+                provider_id=inference_provider_id,
+                model_id=inference_model_id,
+            )
+        if (
+            selector is None
+            and not inference_provider_id
+            and not inference_model_id
+            and provider in (None, "configured")
+        ):
+            return None
+        return {
+            "inference_selector": selector,
+            "inference_provider_id": inference_provider_id,
+            "inference_model_id": inference_model_id,
+            "inference_provider": provider,
+            "inference_timeout_s": timeout_s,
+            "inference_explicit_selection": explicit_provider_model_selection,
+            **selection_policy,
+        }
+
+    def _authorize_inference_override(
+        self,
+        inference_override: dict[str, Any] | None,
+        *,
+        caller_effective_perms: list[str] | None,
+        caller_identity_source: str | None,
+        source: str,
+    ) -> None:
+        """Fail closed for external runtime routing to remote inference providers.
+
+        A normal ``Orchestrator.use`` call may run the configured/default local
+        model. Choosing a mesh peer at runtime moves prompt content to another
+        device, so explicit remote-inference permission is required for
+        external callers. Internal UI/STT calls keep using configured defaults.
+        """
+
+        if not inference_override:
+            return
+        provider = inference_override.get("inference_provider")
+        selector = inference_override.get("inference_selector")
+        provider_id = str(inference_override.get("inference_provider_id") or "")
+        is_remote = (
+            provider in {"remote_peer", "mesh_peer"}
+            or selector is not None
+            or provider_id.startswith(("remote:", "mesh:"))
+        )
+        explicit_selection = bool(inference_override.get("inference_explicit_selection"))
+        cloud_or_non_default = explicit_selection and (
+            bool(inference_override.get("inference_provider_is_cloud"))
+            or not bool(inference_override.get("inference_selection_is_default"))
+        )
+        if not is_remote and not cloud_or_non_default:
+            return
+
+        externalish = source == "external" or caller_identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+        if not externalish:
+            return
+
+        effective = set(caller_effective_perms or [])
+        if effective.intersection(_REMOTE_INFERENCE_PERMS):
+            return
+        raise PermissionError(
+            "Runtime inference provider/model selection requires Orchestrator.RemoteInference permission"
+        )
+
+    async def _validate_local_graph_inference_ids(
+        self,
+        *,
+        provider_id: str | None,
+        model_id: str | None,
+    ) -> tuple[str, str | None, dict[str, Any]]:
+        """Validate explicit graph inference ids against advertised local/cloud providers."""
+
+        catalog = await self._build_model_runtime_catalog(
+            include_unavailable=True,
+            include_operations=False,
+            include_remote=False,
+            include_cloud_models=False,
+        )
+        provider, selected_model_id = self._validate_advertised_provider_from_catalog(
+            catalog=catalog,
+            provider_id=provider_id,
+            model_id=model_id,
+            provider_field="inference_provider_id",
+            model_field="inference_model_id",
+        )
+        return (
+            provider.provider_id,
+            selected_model_id,
+            self._inference_selection_policy_metadata(catalog, provider, selected_model_id),
+        )
+
+    async def _validated_inference_request(
+        self, data: OrchestratorInferChatRequest, *, include_cloud_models: bool = False
+    ) -> OrchestratorInferChatRequest:
+        """Validate provider/model labels against this peer's advertised catalog.
+
+        Callers may select provider/model ids already advertised by this
+        orchestrator runtime. The receiving runtime still owns instantiation and
+        uses only its configured provider credentials/options; caller ``params``
+        are accepted for tracing only and never applied as generation settings.
+        """
+
+        self._enforce_inference_request_limits(data)
+        provider, model_id = await self._validated_advertised_inference_provider(
+            provider_id=data.provider_id,
+            model_id=data.model_id,
+            include_cloud_models=include_cloud_models,
+            provider_field="provider_id",
+            model_field="model_id",
+        )
+        return data.model_copy(
+            update={
+                "provider_id": provider.provider_id,
+                "model_id": model_id,
+            }
+        )
+
+    @staticmethod
+    def _json_size(value: Any) -> int:
+        try:
+            return len(json.dumps(value, default=str).encode("utf-8"))
+        except Exception:
+            return len(str(value).encode("utf-8"))
+
+    def _enforce_inference_request_limits(self, data: OrchestratorInferChatRequest) -> None:
+        """Bound caller-supplied inference payloads before provider invocation."""
+
+        if len(data.messages) > _MAX_INFERENCE_MESSAGES:
+            raise ValueError(
+                f"messages exceeds limit {_MAX_INFERENCE_MESSAGES} for inference requests"
+            )
+        total_message_bytes = 0
+        for message in data.messages:
+            size = len((message.content or "").encode("utf-8"))
+            if size > _MAX_INFERENCE_MESSAGE_BYTES:
+                raise ValueError(
+                    f"message content exceeds limit {_MAX_INFERENCE_MESSAGE_BYTES} bytes"
+                )
+            total_message_bytes += self._json_size(message.model_dump(mode="json"))
+        if total_message_bytes > _MAX_INFERENCE_TOTAL_BYTES:
+            raise ValueError(f"messages payload exceeds limit {_MAX_INFERENCE_TOTAL_BYTES} bytes")
+        if len(data.tools) > _MAX_INFERENCE_TOOLS:
+            raise ValueError(f"tools exceeds limit {_MAX_INFERENCE_TOOLS} for inference requests")
+        tools_bytes = self._json_size(data.tools)
+        if tools_bytes > _MAX_INFERENCE_TOOLS_BYTES:
+            raise ValueError(f"tools payload exceeds limit {_MAX_INFERENCE_TOOLS_BYTES} bytes")
+
+    def _authorize_direct_inference_request(
+        self,
+        data: OrchestratorInferChatRequest,
+        envelope: Envelope | None,
+        *,
+        explicit_selection: bool,
+    ) -> None:
+        """Require explicit permission before external callers select provider/model.
+
+        Direct InferChat/StreamInferChat are mesh transport primitives. A default
+        request may use the receiving peer's configured model under
+        ``Orchestrator.use``. Choosing a concrete provider/model can spend cloud
+        quota or select non-default local resources, so external callers need the
+        same remote-inference capability used by conversation runtime overrides.
+        """
+
+        del data
+        if not explicit_selection or envelope is None:
+            return
+        identity_source = getattr(envelope, "identity_source", None)
+        origin = getattr(envelope, "origin", "internal")
+        externalish = origin == "external" or identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+        if not externalish:
+            return
+        effective = set(getattr(envelope, "effective_perms", None) or [])
+        if effective.intersection(_REMOTE_INFERENCE_PERMS):
+            return
+        raise PermissionError(
+            "Explicit inference provider/model selection requires Orchestrator.RemoteInference permission"
+        )
+
+    def _authorize_cloud_catalog_request(
+        self,
+        data: ModelRuntimeCatalogRequest,
+        envelope: Envelope | None,
+    ) -> None:
+        """Protect live cloud-provider catalog expansion from unprivileged callers."""
+
+        if not data.include_cloud_models:
+            return
+        if self._can_expand_cloud_catalog(envelope, explicit_selection=True):
+            return
+        raise PermissionError(
+            "Cloud model catalog expansion requires Orchestrator.RemoteInference permission"
+        )
+
+    def _can_expand_cloud_catalog(
+        self, envelope: Envelope | None, *, explicit_selection: bool
+    ) -> bool:
+        """Return whether a request may trigger live cloud model catalog fetching."""
+
+        if not explicit_selection:
+            return False
+        if envelope is None:
+            return True
+        identity_source = getattr(envelope, "identity_source", None)
+        origin = getattr(envelope, "origin", "internal")
+        externalish = origin == "external" or identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+        if not externalish:
+            return True
+        effective = set(getattr(envelope, "effective_perms", None) or [])
+        return bool(effective.intersection(_REMOTE_INFERENCE_PERMS))
+
+    async def _validated_advertised_inference_provider(
+        self,
+        *,
+        provider_id: str | None,
+        model_id: str | None,
+        include_cloud_models: bool,
+        provider_field: str,
+        model_field: str,
+    ) -> tuple[ModelRuntimeProviderInfo, str | None]:
+        catalog = await self._build_model_runtime_catalog(
+            include_unavailable=True,
+            include_operations=False,
+            include_remote=False,
+            include_cloud_models=include_cloud_models,
+        )
+        return self._validate_advertised_provider_from_catalog(
+            catalog=catalog,
+            provider_id=provider_id,
+            model_id=model_id,
+            provider_field=provider_field,
+            model_field=model_field,
+        )
+
+    def _validate_advertised_provider_from_catalog(
+        self,
+        *,
+        catalog: ModelRuntimeCatalogResponse,
+        provider_id: str | None,
+        model_id: str | None,
+        provider_field: str,
+        model_field: str,
+    ) -> tuple[ModelRuntimeProviderInfo, str | None]:
+        """Validate provider/model labels against an already-built catalog."""
+
+        requested_provider_id = provider_id or catalog.selected_provider_id
+        provider = _catalog_provider_by_id(catalog, requested_provider_id)
+        if provider is None:
+            raise ValueError(
+                f"{provider_field} {requested_provider_id!r} is not advertised by this orchestrator runtime"
+            )
+
+        selected_model_id = model_id or _default_model_id_for_provider(provider)
+        if selected_model_id is not None and not _provider_advertises_model(
+            provider, selected_model_id
+        ):
+            raise ValueError(
+                f"{model_field} {selected_model_id!r} is not advertised for provider "
+                f"{provider.provider_id!r}"
+            )
+        return provider, selected_model_id
+
+    def _inference_selection_policy_metadata(
+        self,
+        catalog: ModelRuntimeCatalogResponse,
+        provider: ModelRuntimeProviderInfo,
+        selected_model_id: str | None,
+    ) -> dict[str, Any]:
+        """Describe whether a validated selection can move data or spend quota."""
+
+        selected_provider = _catalog_provider_by_id(catalog, catalog.selected_provider_id)
+        selected_default_model_id = (
+            _default_model_id_for_provider(selected_provider) if selected_provider else None
+        )
+        provider_is_cloud = (
+            provider.provider_kind == "cloud"
+            or provider.provider_type == "cloud"
+            or provider.upstream_provider_type in {"openai", "huggingface_endpoint"}
+        )
+        selection_is_default = (
+            provider.provider_id == catalog.selected_provider_id
+            and selected_model_id == selected_default_model_id
+        )
+        return {
+            "inference_provider_is_cloud": provider_is_cloud,
+            "inference_selection_is_default": selection_is_default,
+            "inference_selected_provider_id": catalog.selected_provider_id,
+            "inference_selected_model_id": selected_default_model_id,
+        }
+
+    async def _inference_llm(self, data: OrchestratorInferChatRequest | None = None) -> Any:
+        """Return a target-owned chat LLM for an advertised inference request."""
+        chatbot_module = importlib.import_module("app.services.orchestrator.agents.chatbot")
+        selected_provider_id = None
+        configured_model_id = None
+        try:
+            services_config = await ConfigAPI().aget_config("services", timeout=15.0)
+            llm_config = (services_config.get("orchestrator", {}) or {}).get("llm", {}) or {}
+            selected_provider_id = str(llm_config.get("provider") or "openai")
+            configured_model_id = _selected_llm_model(llm_config, selected_provider_id)
+        except Exception:
+            selected_provider_id = None
+        if (
+            data is None
+            or not data.provider_id
+            or (data.provider_id == selected_provider_id and data.model_id == configured_model_id)
+        ):
+            if not getattr(chatbot_module, "_llm_initialized", False):
+                await chatbot_module._initialize_llm()
+            llm = getattr(chatbot_module, "llm", None)
+            if llm is None:
+                raise RuntimeError("local orchestrator LLM is not initialized")
+            return llm
+        return await self._configured_provider_inference_llm(data.provider_id, data.model_id)
+
+    async def _configured_provider_inference_llm(
+        self, provider_id: str, model_id: str | None
+    ) -> Any:
+        """Instantiate an advertised provider/model using configured options only."""
+        return await configured_provider_inference_llm(provider_id, model_id)
+
+    def _infer_prompt_messages(self, data: OrchestratorInferChatRequest) -> list[dict[str, Any]]:
+        """Convert contract chat messages to provider-neutral message dicts."""
+        return [
+            {
+                key: value
+                for key, value in message.model_dump(mode="json").items()
+                if value not in (None, [], {})
+            }
+            for message in data.messages
+        ]
+
+    async def _bound_inference_llm(self, data: OrchestratorInferChatRequest) -> Any:
+        """Bind caller-provided tool schemas only; never execute local tools."""
+        llm = await self._inference_llm(data)
+        if data.tools and hasattr(llm, "bind_tools"):
+            return llm.bind_tools(data.tools, tool_choice=data.tool_choice)
+        return llm
+
+    async def _invoke_inference_llm(self, data: OrchestratorInferChatRequest) -> Any:
+        """Invoke the configured chat model without applying caller params."""
+        llm = await self._bound_inference_llm(data)
+        messages = self._infer_prompt_messages(data)
+        if hasattr(llm, "ainvoke"):
+            maybe_response = llm.ainvoke(messages)
+            if hasattr(maybe_response, "__await__"):
+                return await maybe_response
+            return maybe_response
+        if hasattr(llm, "invoke"):
+            return await asyncio.to_thread(llm.invoke, messages)
+        raise RuntimeError("configured LLM does not support invoke")
+
+    async def _stream_inference_llm(
+        self, data: OrchestratorInferChatRequest
+    ) -> AsyncIterator[OrchestratorInferChatChunk]:
+        """Stream the configured chat model and normalize chunks."""
+        llm = await self._bound_inference_llm(data)
+        messages = self._infer_prompt_messages(data)
+        sequence = 0
+        cumulative = ""
+        if hasattr(llm, "astream"):
+            async for raw_chunk in llm.astream(messages):
+                delta = self._message_text(raw_chunk)
+                cumulative += delta
+                yield OrchestratorInferChatChunk(
+                    delta=delta,
+                    text=cumulative,
+                    sequence=sequence,
+                    is_final=False,
+                    model_id=data.model_id,
+                    provider_id=data.provider_id,
+                    correlation_id=data.correlation_id,
+                    session_id=data.session_id,
+                    request_id=data.request_id,
+                    tool_call_chunks=self._message_tool_call_chunks(raw_chunk),
+                    metadata={
+                        "caller_params_ignored": bool(data.params),
+                        **data.metadata,
+                    },
+                )
+                sequence += 1
+            yield OrchestratorInferChatChunk(
+                delta="",
+                text=cumulative,
+                sequence=sequence,
+                is_final=True,
+                model_id=data.model_id,
+                provider_id=data.provider_id,
+                finish_reason="stop",
+                correlation_id=data.correlation_id,
+                session_id=data.session_id,
+                request_id=data.request_id,
+                metadata={"caller_params_ignored": bool(data.params), **data.metadata},
+            )
+            return
+
+        response = await self._invoke_inference_llm(data)
+        text = self._message_text(response)
+        yield OrchestratorInferChatChunk(
+            delta=text,
+            text=text,
+            sequence=0,
+            is_final=True,
+            model_id=data.model_id,
+            provider_id=data.provider_id,
+            finish_reason="stop",
+            correlation_id=data.correlation_id,
+            session_id=data.session_id,
+            request_id=data.request_id,
+            tool_call_chunks=self._message_tool_call_chunks(response),
+            metadata={"caller_params_ignored": bool(data.params), **data.metadata},
+        )
+
+    def _infer_response_from_message(
+        self, data: OrchestratorInferChatRequest, message: Any
+    ) -> OrchestratorInferChatResponse:
+        """Build a contract response from a LangChain-style message."""
+        text = self._message_text(message)
+        return OrchestratorInferChatResponse(
+            text=text,
+            message=OrchestratorChatMessage(
+                role="assistant",
+                content=text,
+                tool_calls=self._message_tool_calls(message),
+                metadata=self._message_metadata(message),
+            ),
+            model_id=data.model_id,
+            provider_id=data.provider_id,
+            finish_reason=self._finish_reason(message),
+            correlation_id=data.correlation_id,
+            session_id=data.session_id,
+            request_id=data.request_id,
+            metadata={"caller_params_ignored": bool(data.params), **data.metadata},
+        )
+
+    @staticmethod
+    def _message_text(message: Any) -> str:
+        content = getattr(message, "content", None)
+        if isinstance(content, str):
+            return content
+        if isinstance(message, dict):
+            return str(message.get("content") or message.get("text") or message.get("delta") or "")
+        if content is None:
+            return "" if message is None else str(message)
+        return str(content)
+
+    @staticmethod
+    def _message_tool_calls(message: Any) -> list[dict[str, Any]]:
+        calls = getattr(message, "tool_calls", None)
+        if isinstance(calls, list):
+            return [
+                dict(call) if isinstance(call, dict) else {"value": str(call)} for call in calls
+            ]
+        if isinstance(message, dict) and isinstance(message.get("tool_calls"), list):
+            return list(message["tool_calls"])
+        return []
+
+    @staticmethod
+    def _message_tool_call_chunks(message: Any) -> list[dict[str, Any]]:
+        chunks = getattr(message, "tool_call_chunks", None)
+        if isinstance(chunks, list):
+            return [
+                dict(chunk) if isinstance(chunk, dict) else {"value": str(chunk)}
+                for chunk in chunks
+            ]
+        if isinstance(message, dict) and isinstance(message.get("tool_call_chunks"), list):
+            return list(message["tool_call_chunks"])
+        return []
+
+    @staticmethod
+    def _message_metadata(message: Any) -> dict[str, Any]:
+        metadata = getattr(message, "response_metadata", None)
+        return dict(metadata) if isinstance(metadata, dict) else {}
+
+    @staticmethod
+    def _finish_reason(message: Any) -> str | None:
+        metadata = getattr(message, "response_metadata", None)
+        if isinstance(metadata, dict):
+            reason = metadata.get("finish_reason")
+            return str(reason) if reason is not None else None
+        if isinstance(message, dict):
+            reason = message.get("finish_reason")
+            return str(reason) if reason is not None else None
+        return None
+
     async def _build_model_runtime_catalog(
         self,
         *,
         include_unavailable: bool = True,
         include_operations: bool = True,
+        include_remote: bool = False,
+        include_cloud_models: bool = False,
+        mesh_selector: Any = None,
     ) -> ModelRuntimeCatalogResponse:
         """Build a redacted model provider catalog from current configuration."""
         services_config = await ConfigAPI().aget_config("services", timeout=15.0)
         orchestrator_config = services_config.get("orchestrator", {})
         llm_config = orchestrator_config.get("llm", {})
         selected_provider = str(llm_config.get("provider") or "openai")
+        cloud_model_catalog: dict[str, dict[str, Any]] = {}
+        if include_cloud_models:
+            openai_options = ((llm_config.get("third_party") or {}).get("openai") or {}).get(
+                "options"
+            ) or {}
+            openai_catalog = await _fetch_openai_model_catalog(
+                api_key=openai_options.get("api_key"),
+                cache=self._model_catalog_cache,
+            )
+            cloud_model_catalog["openai"] = openai_catalog
         providers = _configured_model_providers(
             llm_config=llm_config,
             hardware_acceleration=bool(orchestrator_config.get("hardware_acceleration", False)),
             selected_provider=selected_provider,
             operations=self._model_runtime_operations if include_operations else {},
+            cloud_model_catalog=cloud_model_catalog,
         )
+        if include_remote and mesh_selector is not None and self.bus is not None:
+            remote_result = await self.bus.request(
+                OrchestratorMethods.GET_MODEL_CATALOG,
+                ModelRuntimeCatalogRequest(
+                    include_unavailable=include_unavailable,
+                    include_operations=include_operations,
+                    include_remote=False,
+                    include_cloud_models=include_cloud_models,
+                    dispatch_selector=mesh_selector,
+                ),
+                priority=get_interactive_priority(),
+                timeout=15.0,
+                origin="internal",
+            )
+            if remote_result.ok:
+                remote_catalog = (
+                    remote_result.data
+                    if isinstance(remote_result.data, ModelRuntimeCatalogResponse)
+                    else ModelRuntimeCatalogResponse.model_validate(remote_result.data)
+                )
+                providers.extend(
+                    _remote_model_providers(
+                        remote_catalog.providers,
+                        peer_id=_remote_peer_id_from_selector(mesh_selector),
+                    )
+                )
+            else:
+                log_debug(f"Remote model runtime catalog request failed: {remote_result.error}")
+        elif include_remote:
+            log_debug(
+                "Remote model runtime catalog requested without a mesh selector; "
+                "returning local catalog only"
+            )
         if not include_unavailable:
             providers = [provider for provider in providers if provider.health != "unavailable"]
 
@@ -1834,12 +2641,49 @@ def _interrupt_status(results: list[OrchestratorInterruptScopeResult]) -> str:
     return "not_supported"
 
 
+def _catalog_provider_by_id(
+    catalog: ModelRuntimeCatalogResponse, provider_id: str | None
+) -> ModelRuntimeProviderInfo | None:
+    """Return a provider from a runtime catalog by id."""
+
+    if not provider_id:
+        return None
+    return next(
+        (provider for provider in catalog.providers if provider.provider_id == provider_id),
+        None,
+    )
+
+
+def _default_model_id_for_provider(provider: ModelRuntimeProviderInfo) -> str | None:
+    """Return the configured/default model id advertised for a provider."""
+
+    if provider.model_id:
+        return provider.model_id
+    if provider.default_model_id:
+        return provider.default_model_id
+    default_model = next((model for model in provider.models if model.default), None)
+    if default_model is not None:
+        return default_model.model_id
+    if provider.models:
+        return provider.models[0].model_id
+    return None
+
+
+def _provider_advertises_model(provider: ModelRuntimeProviderInfo, model_id: str) -> bool:
+    """Return whether a model id is present in provider catalog/config fields."""
+
+    advertised = {value for value in (provider.model_id, provider.default_model_id) if value}
+    advertised.update(model.model_id for model in provider.models)
+    return model_id in advertised
+
+
 def _configured_model_providers(
     *,
     llm_config: dict[str, Any],
     hardware_acceleration: bool,
     selected_provider: str,
     operations: dict[str, ModelRuntimeOperationResponse],
+    cloud_model_catalog: dict[str, dict[str, Any]] | None = None,
 ) -> list[ModelRuntimeProviderInfo]:
     third_party = llm_config.get("third_party") or {}
     local = llm_config.get("local") or {}
@@ -1848,19 +2692,65 @@ def _configured_model_providers(
     hf_pipeline_options = (local.get("huggingface_pipeline") or {}).get("options") or {}
     llama_options = (local.get("llama_cpp") or {}).get("options") or {}
 
+    cloud_model_catalog = cloud_model_catalog or {}
+    openai_models, openai_catalog_metadata = _provider_models_with_catalog(
+        provider_id="openai",
+        provider_kind="cloud",
+        upstream_provider_type="openai",
+        default_model_id=openai_options.get("model"),
+        configured_source="provider-managed",
+        capabilities=["chat", "tool_calling"],
+        fetched_catalog=cloud_model_catalog.get("openai"),
+    )
+    hf_endpoint_models, hf_endpoint_catalog_metadata = _provider_models_with_catalog(
+        provider_id="huggingface_endpoint",
+        provider_kind="cloud",
+        upstream_provider_type="huggingface_endpoint",
+        default_model_id=hf_endpoint_options.get("model"),
+        configured_source=hf_endpoint_options.get("endpoint_url") or "provider-managed",
+        capabilities=["chat"],
+        fetched_catalog=None,
+    )
+    hf_pipeline_models, hf_pipeline_catalog_metadata = _provider_models_with_catalog(
+        provider_id="huggingface_pipeline",
+        provider_kind="local",
+        upstream_provider_type="huggingface_pipeline",
+        default_model_id=hf_pipeline_options.get("model"),
+        configured_source="huggingface_hub",
+        capabilities=["chat", "local_execution"],
+        fetched_catalog=None,
+    )
+    llama_model_id = _display_model_id(llama_options.get("model_path"))
+    llama_models, llama_catalog_metadata = _provider_models_with_catalog(
+        provider_id="llama_cpp",
+        provider_kind="local",
+        upstream_provider_type="llama_cpp",
+        default_model_id=llama_model_id,
+        configured_source="local_file",
+        capabilities=["chat", "local_execution", "gguf"],
+        context_window=llama_options.get("n_ctx"),
+        generation_limit=llama_options.get("max_tokens"),
+        fetched_catalog=None,
+    )
+
     return [
         _provider_info(
             provider_id="openai",
             display_name="OpenAI",
             backend_kind="openai_chat",
             provider_type="cloud",
+            provider_kind="cloud",
+            upstream_provider_type="openai",
             selected_provider=selected_provider,
             model_id=openai_options.get("model"),
+            default_model_id=openai_options.get("model"),
             source="provider-managed",
             license_name="provider_terms",
             context_window=None,
             generation_limit=openai_options.get("max_tokens"),
             hardware={},
+            models=openai_models,
+            model_catalog=openai_catalog_metadata,
             capabilities=["chat", "tool_calling"],
             health=_health_from_required_secret(openai_options.get("api_key")),
             health_reason=_secret_health_reason(openai_options.get("api_key"), "api_key"),
@@ -1871,13 +2761,18 @@ def _configured_model_providers(
             display_name="HuggingFace Endpoint",
             backend_kind="huggingface_endpoint",
             provider_type="cloud",
+            provider_kind="cloud",
+            upstream_provider_type="huggingface_endpoint",
             selected_provider=selected_provider,
             model_id=hf_endpoint_options.get("model"),
+            default_model_id=hf_endpoint_options.get("model"),
             source=hf_endpoint_options.get("endpoint_url") or "provider-managed",
             license_name="model_card",
             context_window=None,
             generation_limit=hf_endpoint_options.get("max_tokens"),
             hardware={},
+            models=hf_endpoint_models,
+            model_catalog=hf_endpoint_catalog_metadata,
             capabilities=["chat"],
             health="available" if hf_endpoint_options.get("endpoint_url") else "misconfigured",
             health_reason=None
@@ -1890,8 +2785,11 @@ def _configured_model_providers(
             display_name="HuggingFace Pipeline",
             backend_kind="transformers_pipeline",
             provider_type="local",
+            provider_kind="local",
+            upstream_provider_type="huggingface_pipeline",
             selected_provider=selected_provider,
             model_id=hf_pipeline_options.get("model"),
+            default_model_id=hf_pipeline_options.get("model"),
             source="huggingface_hub",
             license_name="model_card",
             context_window=None,
@@ -1901,6 +2799,8 @@ def _configured_model_providers(
                 "torch_dtype": hf_pipeline_options.get("torch_dtype") or "auto",
                 "hardware_acceleration": hardware_acceleration,
             },
+            models=hf_pipeline_models,
+            model_catalog=hf_pipeline_catalog_metadata,
             capabilities=["chat", "local_execution"],
             health="available" if hf_pipeline_options.get("model") else "misconfigured",
             health_reason=None if hf_pipeline_options.get("model") else "model is not configured",
@@ -1911,8 +2811,11 @@ def _configured_model_providers(
             display_name="llama.cpp",
             backend_kind="llama_cpp",
             provider_type="local",
+            provider_kind="local",
+            upstream_provider_type="llama_cpp",
             selected_provider=selected_provider,
-            model_id=_display_model_id(llama_options.get("model_path")),
+            model_id=llama_model_id,
+            default_model_id=llama_model_id,
             source="local_file",
             license_name="user_supplied",
             context_window=llama_options.get("n_ctx"),
@@ -1922,6 +2825,8 @@ def _configured_model_providers(
                 "n_batch": llama_options.get("n_batch"),
                 "hardware_acceleration": hardware_acceleration,
             },
+            models=llama_models,
+            model_catalog=llama_catalog_metadata,
             model_files=_model_files(llama_options.get("model_path")),
             capabilities=["chat", "local_execution", "gguf"],
             health=_file_health(llama_options.get("model_path")),
@@ -1948,6 +2853,200 @@ def _selected_llm_model(llm_config: dict[str, Any], provider: str) -> str | None
     return None
 
 
+def _provider_models_with_catalog(
+    *,
+    provider_id: str,
+    provider_kind: str,
+    upstream_provider_type: str,
+    default_model_id: Any,
+    configured_source: str | None,
+    capabilities: list[str],
+    fetched_catalog: dict[str, Any] | None,
+    context_window: Any = None,
+    generation_limit: Any = None,
+) -> tuple[list[ModelRuntimeModelInfo], dict[str, Any]]:
+    """Build model entries plus redacted catalog metadata for one provider."""
+
+    default_model = str(default_model_id) if default_model_id else None
+    catalog = fetched_catalog or {}
+    model_entries: list[ModelRuntimeModelInfo] = []
+    seen: set[str] = set()
+
+    for raw_model in catalog.get("models") or []:
+        if isinstance(raw_model, ModelRuntimeModelInfo):
+            model = raw_model
+        elif isinstance(raw_model, dict):
+            raw_model_id = raw_model.get("model_id") or raw_model.get("id")
+            if not raw_model_id:
+                continue
+            model = ModelRuntimeModelInfo(
+                model_id=str(raw_model_id),
+                display_name=raw_model.get("display_name") or str(raw_model_id),
+                provider_id=provider_id,
+                provider_kind=provider_kind,
+                upstream_provider_type=upstream_provider_type,
+                source=_redacted_source(raw_model.get("source") or configured_source),
+                context_window=raw_model.get("context_window")
+                if isinstance(raw_model.get("context_window"), int)
+                else None,
+                generation_limit=raw_model.get("generation_limit")
+                if isinstance(raw_model.get("generation_limit"), int)
+                else None,
+                capabilities=list(raw_model.get("capabilities") or capabilities),
+                default=str(raw_model_id) == default_model,
+                available=raw_model.get("available", True),
+                metadata=_redact_metadata(raw_model.get("metadata") or {}),
+                secrets_redacted=True,
+            )
+        else:
+            continue
+        if model.model_id in seen:
+            continue
+        seen.add(model.model_id)
+        model_entries.append(model)
+
+    if default_model and default_model not in seen:
+        model_entries.insert(
+            0,
+            ModelRuntimeModelInfo(
+                model_id=default_model,
+                display_name=default_model,
+                provider_id=provider_id,
+                provider_kind=provider_kind,
+                upstream_provider_type=upstream_provider_type,
+                source=_redacted_source(configured_source),
+                context_window=context_window if isinstance(context_window, int) else None,
+                generation_limit=generation_limit if isinstance(generation_limit, int) else None,
+                capabilities=capabilities,
+                default=True,
+                available=True,
+                metadata={"configured": True},
+                secrets_redacted=True,
+            ),
+        )
+
+    for model in model_entries:
+        model.default = model.model_id == default_model
+
+    metadata = {
+        "source": catalog.get("source") or "configured",
+        "status": catalog.get("status") or ("available" if model_entries else "not_configured"),
+        "fetched_at": catalog.get("fetched_at"),
+        "cache_hit": bool(catalog.get("cache_hit", False)),
+        "count": len(model_entries),
+        "secrets_redacted": True,
+    }
+    if catalog.get("reason"):
+        metadata["reason"] = catalog.get("reason")
+    if catalog.get("error"):
+        metadata["error"] = _redact_text(str(catalog.get("error")))
+    return model_entries, metadata
+
+
+async def _fetch_openai_model_catalog(
+    *,
+    api_key: Any,
+    cache: dict[str, dict[str, Any]],
+    ttl_seconds: float = 300.0,
+    client_factory: Any = None,
+) -> dict[str, Any]:
+    """Fetch OpenAI model ids with a small in-process cache.
+
+    The helper is intentionally injectable/patchable so unit tests never need a
+    real API key or network call.
+    """
+
+    if not api_key:
+        return {
+            "source": "openai_api",
+            "status": "skipped",
+            "reason": "api_key is not configured",
+            "models": [],
+            "fetched_at": None,
+            "secrets_redacted": True,
+        }
+
+    now = time.time()
+    cache_key = "openai.models"
+    cached = cache.get(cache_key)
+    if cached and float(cached.get("expires_at", 0.0)) > now:
+        payload = dict(cached.get("payload") or {})
+        payload["cache_hit"] = True
+        return payload
+
+    try:
+        if client_factory is None:
+            from openai import AsyncOpenAI  # type: ignore
+
+            client_factory = AsyncOpenAI
+        client = client_factory(api_key=str(api_key))
+        response = client.models.list()
+        if hasattr(response, "__await__"):
+            response = await response
+        raw_models = getattr(response, "data", response)
+        if isinstance(raw_models, dict) and "data" in raw_models:
+            raw_models = raw_models.get("data")
+        models: list[dict[str, Any]] = []
+        for raw_model in raw_models or []:
+            model_id = getattr(raw_model, "id", None)
+            if model_id is None and isinstance(raw_model, dict):
+                model_id = raw_model.get("id") or raw_model.get("model_id")
+            if not model_id:
+                continue
+            model_id_text = str(model_id)
+            if not _is_openai_chat_model_id(model_id_text):
+                continue
+            metadata: dict[str, Any] = {}
+            owned_by = getattr(raw_model, "owned_by", None)
+            created = getattr(raw_model, "created", None)
+            if isinstance(raw_model, dict):
+                owned_by = raw_model.get("owned_by", owned_by)
+                created = raw_model.get("created", created)
+            if owned_by:
+                metadata["owned_by"] = owned_by
+            if created:
+                metadata["created"] = created
+            models.append(
+                {
+                    "model_id": str(model_id),
+                    "display_name": model_id_text,
+                    "source": "provider-managed",
+                    "available": True,
+                    "metadata": metadata,
+                    "capabilities": ["chat"],
+                }
+            )
+        payload = {
+            "source": "openai_api",
+            "status": "available",
+            "models": sorted(models, key=lambda item: item["model_id"]),
+            "fetched_at": _utc_now(),
+            "secrets_redacted": True,
+        }
+        cache[cache_key] = {"expires_at": now + ttl_seconds, "payload": payload}
+        return payload
+    except Exception as exc:  # pragma: no cover - exact SDK failures vary
+        payload = {
+            "source": "openai_api",
+            "status": "unavailable",
+            "error": _redact_text(str(exc)),
+            "models": [],
+            "fetched_at": _utc_now(),
+            "secrets_redacted": True,
+        }
+        cache[cache_key] = {"expires_at": now + min(ttl_seconds, 30.0), "payload": payload}
+        return payload
+
+
+def _is_openai_chat_model_id(model_id: str) -> bool:
+    """Best-effort filter for OpenAI models usable through chat interfaces."""
+
+    normalized = model_id.lower()
+    if any(marker in normalized for marker in _OPENAI_NON_CHAT_MODEL_MARKERS):
+        return False
+    return normalized.startswith(_OPENAI_CHAT_MODEL_PREFIXES)
+
+
 def _provider_display_name(provider: str) -> str:
     """Return a production-facing display name for a configured provider id."""
     return {
@@ -1964,13 +3063,18 @@ def _provider_info(
     display_name: str,
     backend_kind: str,
     provider_type: str,
+    provider_kind: str | None,
+    upstream_provider_type: str | None,
     selected_provider: str,
     model_id: str | None,
+    default_model_id: str | None,
     source: str | None,
     license_name: str | None,
     context_window: int | None,
     generation_limit: int | None,
     hardware: dict[str, Any],
+    models: list[ModelRuntimeModelInfo],
+    model_catalog: dict[str, Any],
     capabilities: list[str],
     health: str,
     health_reason: str | None,
@@ -1985,16 +3089,23 @@ def _provider_info(
         display_name=display_name,
         backend_kind=backend_kind,
         provider_type=provider_type,
+        provider_kind=provider_kind,
+        upstream_provider_type=upstream_provider_type,
+        provider_peer_id="local",
+        provider_service_instance_id="local:Orchestrator",
         enabled=True,
         selected=provider_id == selected_provider,
         health=health,
         health_reason=health_reason,
         model_id=model_id,
+        default_model_id=default_model_id,
         source=_redacted_source(source),
         license=license_name,
         context_window=context_window if isinstance(context_window, int) else None,
         generation_limit=generation_limit if isinstance(generation_limit, int) else None,
         hardware=hardware,
+        models=models,
+        model_catalog=model_catalog,
         model_files=model_files or [],
         capabilities=capabilities,
         benchmark=_benchmark_progress(provider_operations),
@@ -2013,8 +3124,87 @@ def _provider_index(providers: list[ModelRuntimeProviderInfo]) -> dict[str, list
         "cloud": [
             provider.provider_id for provider in providers if provider.provider_type == "cloud"
         ],
+        "remote": [
+            provider.provider_id for provider in providers if provider.provider_type == "remote"
+        ],
         "selected": [provider.provider_id for provider in providers if provider.selected],
     }
+
+
+def _remote_peer_id_from_selector(mesh_selector: Any) -> str:
+    """Normalize a peer id from explicit remote catalog selector fields."""
+
+    for attr in ("peer_id", "provider_id", "service_instance_id"):
+        value = getattr(mesh_selector, attr, None)
+        if value:
+            parsed = _parse_remote_peer_id(str(value))
+            if parsed:
+                return parsed
+    return "remote-peer"
+
+
+def _parse_remote_peer_id(value: str) -> str | None:
+    value = value.strip()
+    if not value:
+        return None
+    parts = value.split(":")
+    if len(parts) >= 3 and parts[0] == "remote" and parts[1]:
+        return parts[1]
+    return value
+
+
+def _remote_model_providers(
+    providers: list[ModelRuntimeProviderInfo],
+    *,
+    peer_id: str,
+) -> list[ModelRuntimeProviderInfo]:
+    """Return redacted provider entries representing a selected remote peer."""
+    remote: list[ModelRuntimeProviderInfo] = []
+    service_instance_id = f"remote:{peer_id}:Orchestrator"
+    for provider in providers:
+        upstream_provider_id = provider.provider_id
+        remote_provider_id = f"{service_instance_id}:{upstream_provider_id}"
+        models = [
+            model.model_copy(
+                update={
+                    "provider_id": remote_provider_id,
+                    "provider_kind": "remote_peer",
+                    "metadata": {
+                        **model.metadata,
+                        "remote_provider_id": upstream_provider_id,
+                        "runtime_provider_id": upstream_provider_id,
+                        "remote_model_provider_id": model.provider_id,
+                        "provider_peer_id": peer_id,
+                        "provider_service_instance_id": service_instance_id,
+                    },
+                    "secrets_redacted": True,
+                }
+            )
+            for model in provider.models
+        ]
+        remote.append(
+            provider.model_copy(
+                update={
+                    "provider_id": remote_provider_id,
+                    "display_name": f"{provider.display_name} ({peer_id})",
+                    "provider_type": "remote",
+                    "provider_kind": "remote_peer",
+                    "provider_peer_id": peer_id,
+                    "provider_service_instance_id": service_instance_id,
+                    "selected": False,
+                    "models": models,
+                    "model_catalog": {
+                        **provider.model_catalog,
+                        "remote_provider_id": upstream_provider_id,
+                        "runtime_provider_id": upstream_provider_id,
+                        "provider_peer_id": peer_id,
+                        "provider_service_instance_id": service_instance_id,
+                    },
+                    "secrets_redacted": True,
+                }
+            )
+        )
+    return remote
 
 
 def _health_from_required_secret(secret_value: Any) -> str:
@@ -2037,6 +3227,30 @@ def _redacted_source(source: str | None) -> str | None:
     if "://" in source:
         return source.split("://", 1)[0] + "://redacted"
     return source
+
+
+def _redact_text(value: str) -> str:
+    redacted = value
+    for pattern, label in _SECRET_PATTERNS:
+        redacted = pattern.sub(f"[redacted:{label}]", redacted)
+    redacted = _URI_IN_TEXT_PATTERN.sub(
+        lambda match: _redacted_source(match.group(0)) or "", redacted
+    )
+    return redacted
+
+
+def _redact_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    redacted: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if _SENSITIVE_METADATA_KEY_PATTERN.search(str(key)):
+            redacted[str(key)] = "[redacted]"
+        elif isinstance(value, str):
+            redacted[str(key)] = _redact_text(value)
+        elif isinstance(value, (int, float, bool)) or value is None:
+            redacted[str(key)] = value
+        else:
+            redacted[str(key)] = str(type(value).__name__)
+    return redacted
 
 
 def _model_files(path_value: Any) -> list[ModelRuntimeFileInfo]:

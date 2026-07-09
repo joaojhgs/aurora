@@ -9,11 +9,17 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.messaging import QueryResult
-from app.services.tooling.service import ToolingService
+from app.services.tooling.service import (
+    TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS,
+    ToolingService,
+)
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.tooling import (
     ToolingExecuteToolRequest,
+    ToolingGetToolCatalogRequest,
+    ToolingGetToolsRequest,
+    ToolingMethods,
     ToolingPrepareExecutionRequest,
     ToolingSetSharingPolicyRequest,
     ToolingSharingPolicy,
@@ -63,14 +69,26 @@ def tooling_service(mock_bus):
         return service
 
 
-def _tool(*, safety_class: str = "standard", confirmation_required: bool = False) -> Mock:
+def _tool(
+    *,
+    name: str = "safe_tool",
+    safety_class: str = "standard",
+    confirmation_required: bool = False,
+    trust_tier: str | None = None,
+    operation_class: str = "read",
+    source: str = "core",
+) -> Mock:
     tool = Mock()
-    tool.name = "safe_tool"
+    tool.name = name
+    tool.description = f"{name} test tool"
     tool.args_schema = {"type": "object", "properties": {}}
     tool.safety_class = safety_class
     tool.confirmation_required = confirmation_required
-    tool.operation_class = "read"
-    tool.source = "core"
+    tool.operation_class = operation_class
+    tool.source = source
+    tool.required_permissions = []
+    if trust_tier is not None:
+        tool.trust_tier = trust_tier
     tool.ainvoke = AsyncMock(return_value={"ok": True})
     return tool
 
@@ -78,6 +96,7 @@ def _tool(*, safety_class: str = "standard", confirmation_required: bool = False
 def _install_tool(service: ToolingService, tool: Mock) -> None:
     service.tools_manager.get_all_tool_names = Mock(return_value=[tool.name])
     service.tools_manager.get_tool_by_name = Mock(return_value=tool)
+    service.tools_manager.get_tools = Mock(return_value=[tool])
 
 
 async def _set_policy(
@@ -107,15 +126,62 @@ def test_tooling_policy_defaults_are_aligned():
 
     assert ToolingSharingPolicy().default_approval_mode == "approve_all_local_safe"
     assert (
-        schema["$defs"]["tooling_approval_policy"]["properties"]["default_approval_mode"][
-            "default"
-        ]
+        schema["$defs"]["tooling_approval_policy"]["properties"]["default_approval_mode"]["default"]
         == "approve_all_local_safe"
     )
     assert (
         defaults["services"]["tooling"]["approval_policy"]["default_approval_mode"]
         == "approve_all_local_safe"
     )
+
+
+@pytest.mark.asyncio
+async def test_share_false_core_search_tool_stays_discoverable_but_execution_is_denied(
+    tooling_service,
+):
+    """Policy sharing controls execution, not LLM discovery/model binding."""
+
+    tool = _tool(name="search")
+    _install_tool(tooling_service, tool)
+    await _set_policy(
+        tooling_service,
+        rule=ToolingSharingPolicyRule(
+            rule_id="hide-no-longer",
+            tool_name="search",
+            share=False,
+            approval_mode="ask_each_time",
+        ),
+    )
+
+    discovered = await tooling_service._on_get_tools(ToolingGetToolsRequest())
+    catalog = await tooling_service._on_get_tool_catalog(
+        ToolingGetToolCatalogRequest(caller_permissions=["*"])
+    )
+    executed = await tooling_service._on_execute_tool(
+        ToolingExecuteToolRequest(tool_name="search", arguments={})
+    )
+
+    assert [item.local_name for item in discovered.tools] == ["search"]
+    assert [item.local_name for item in catalog.tools] == ["search"]
+    assert executed.ok is False
+    assert executed.error_code == "tool_not_shared"
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_explicitly_blocked_tool_is_hidden_from_discovery(tooling_service):
+    """Only explicit trust_tier=blocked removes a tool from LLM discovery."""
+
+    tool = _tool(trust_tier="blocked")
+    _install_tool(tooling_service, tool)
+
+    discovered = await tooling_service._on_get_tools(ToolingGetToolsRequest())
+    catalog = await tooling_service._on_get_tool_catalog(
+        ToolingGetToolCatalogRequest(caller_permissions=["*"])
+    )
+
+    assert discovered.tools == []
+    assert catalog.tools == []
 
 
 @pytest.mark.asyncio
@@ -139,6 +205,122 @@ async def test_safe_local_standard_tool_auto_approves_with_backend_explanation(t
     assert prepared.policy_decision.auto_approved_reason == "local_safe_tool"
     assert executed.ok is True
     tool.ainvoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_trusted_core_duckduckgo_search_auto_approves_and_fails_normally(
+    tooling_service,
+    mock_bus,
+):
+    """Trusted built-in search is not approval-gated; backend failures are tool errors."""
+
+    tool = _tool(
+        name="duckduckgo_results_json",
+        operation_class="external",
+    )
+    tool.description = "Duck Duck Go Search for latest news and current events"
+    tool.ainvoke = AsyncMock(side_effect=RuntimeError("search backend unconfigured"))
+    _install_tool(tooling_service, tool)
+
+    prepared = await tooling_service._on_prepare_execution(
+        ToolingPrepareExecutionRequest(
+            tool_name="duckduckgo_results_json",
+            arguments={"query": "latest aurora news"},
+        )
+    )
+    executed = await tooling_service._on_execute_tool(
+        ToolingExecuteToolRequest(
+            tool_name="duckduckgo_results_json",
+            arguments={"query": "latest aurora news"},
+        )
+    )
+
+    assert prepared.ok is True
+    assert prepared.capability_class == "network"
+    assert prepared.policy_decision.approval_required is False
+    assert prepared.policy_decision.auto_approved_reason == "trusted_core_web_search"
+    assert executed.ok is False
+    assert executed.status == "failed"
+    assert executed.error_code == "tool_execution_failed"
+    assert "search backend unconfigured" in (executed.error or "")
+    tool.ainvoke.assert_awaited_once()
+    assert all(call.args[0] != ToolingMethods.REQUEST_APPROVAL for call in mock_bus.request.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_tooling_audit_uses_short_bounded_store_audit_timeout(tooling_service, mock_bus):
+    """Tooling audit calls are best-effort and bounded below the old 5s timeout."""
+
+    request = ToolingExecuteToolRequest(tool_name="safe_tool", arguments={})
+
+    with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
+        await tooling_service._audit_tooling_event(
+            "tooling.test",
+            principal_id="principal",
+            details={"ok": True},
+        )
+        await tooling_service._audit_tool_execution(
+            request,
+            local_tool_name="safe_tool",
+            global_tool_id="local:Tooling:tool:safe_tool",
+            provider_peer_id="local",
+            safety_class="standard",
+            status="success",
+        )
+
+    audit_calls = [
+        call
+        for call in mock_bus.request.await_args_list
+        if call.args and call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    ]
+    assert len(audit_calls) >= 2
+    assert all(
+        call.kwargs["timeout"] == TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS
+        for call in audit_calls[-2:]
+    )
+    assert TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS <= 0.5
+
+
+@pytest.mark.asyncio
+async def test_matching_ask_each_time_rule_prompts_even_for_trusted_core_search(
+    tooling_service,
+):
+    """Explicit ask_each_time rules override built-in search auto-approval."""
+
+    tool = _tool(
+        name="duckduckgo_results_json",
+        operation_class="external",
+    )
+    tool.description = "Duck Duck Go Search for latest news and current events"
+    _install_tool(tooling_service, tool)
+    await _set_policy(
+        tooling_service,
+        rule=ToolingSharingPolicyRule(
+            rule_id="ask-search",
+            tool_name="duckduckgo_results_json",
+            approval_mode="ask_each_time",
+        ),
+    )
+
+    prepared = await tooling_service._on_prepare_execution(
+        ToolingPrepareExecutionRequest(
+            tool_name="duckduckgo_results_json",
+            arguments={"query": "latest aurora news"},
+        )
+    )
+    executed = await tooling_service._on_execute_tool(
+        ToolingExecuteToolRequest(
+            tool_name="duckduckgo_results_json",
+            arguments={"query": "latest aurora news"},
+        )
+    )
+
+    assert prepared.policy_decision.approval_required is True
+    assert prepared.policy_decision.policy_rule_id == "ask-search"
+    assert prepared.policy_decision.reason == "approval_required_by_policy"
+    assert executed.ok is False
+    assert executed.error_code == "approval_token_required"
+    tool.ainvoke.assert_not_awaited()
 
 
 @pytest.mark.asyncio

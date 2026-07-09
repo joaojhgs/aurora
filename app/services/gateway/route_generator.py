@@ -23,9 +23,16 @@ from app.services.gateway.admin_action import (
     AdminActionReceipt,
     admin_action_digest,
 )
+from app.services.gateway.orchestrator_runtime_policy import (
+    remote_data_movement_denial_reason,
+    runtime_dispatch_selector_present,
+    selector_from_mapping,
+)
+from app.shared.config.interface import ConfigAPI
 from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -78,6 +85,29 @@ _ADMIN_ACTION_EXEMPT_TOPICS = {
 }
 
 _admin_action_digest = admin_action_digest
+
+
+async def _apply_orchestrator_dispatch_default(topic: str, payload: Any) -> Any:
+    if topic != OrchestratorMethods.EXTERNAL_USER_INPUT or not isinstance(payload, dict):
+        return payload
+    if runtime_dispatch_selector_present(topic, payload):
+        return payload
+    try:
+        services = await ConfigAPI().aget_config("services", timeout=5.0)
+    except Exception as exc:
+        log_debug(f"Could not load orchestrator dispatch default: {exc}")
+        return payload
+    orchestrator = services.get("orchestrator", {}) if isinstance(services, dict) else {}
+    routing = orchestrator.get("routing", {}) if isinstance(orchestrator, dict) else {}
+    dispatch_default = routing.get("dispatch_default", {}) if isinstance(routing, dict) else {}
+    if not isinstance(dispatch_default, Mapping) or not dispatch_default.get("enabled", False):
+        return payload
+    selector = selector_from_mapping(dispatch_default)
+    if selector is None:
+        return payload
+    updated = dict(payload)
+    updated["dispatch_selector"] = selector.model_dump(exclude_none=True)
+    return updated
 
 
 def _admin_action_required(topic: str, method_type: str | None = None) -> bool:
@@ -427,6 +457,10 @@ class RouteGenerator:
         """
         self._router = router
 
+    def set_bus(self, bus: MessageBus) -> None:
+        """Replace the bus used by existing and future generated handlers."""
+        self._bus = bus
+
     async def start(self) -> None:
         """Start the route generator.
 
@@ -521,7 +555,6 @@ class RouteGenerator:
         Returns:
             Async handler function
         """
-        bus = self._bus
         registry = self._registry
         timeout = self._request_timeout
         topic = method_info.bus_topic or f"{module_name}.{method_info.name}"
@@ -564,10 +597,16 @@ class RouteGenerator:
                 # Send the request body directly to the bus as a dict
                 # The service will validate it against its own input model
                 payload = request_body if request_body else {}
+                remote_data_reason = remote_data_movement_denial_reason(
+                    topic, payload, effective_perms
+                )
+                if remote_data_reason:
+                    raise HTTPException(status_code=403, detail=remote_data_reason)
+                payload = await _apply_orchestrator_dispatch_default(topic, payload)
 
                 # Make the bus request
                 log_debug(f"Gateway forwarding to {topic} with payload: {payload}")
-                result = await bus.request(
+                result = await self._bus.request(
                     topic,
                     payload,
                     timeout=timeout,
@@ -651,7 +690,6 @@ class RouteGenerator:
         # Rebuild model to ensure it's fully defined
         request_model_cls.model_rebuild()
         method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
-        route_bus = self._bus
         admin_action_manager = self._admin_action_manager
 
         # Create handler factory to properly capture the model types
@@ -684,9 +722,7 @@ class RouteGenerator:
 
                 # Extract principal_id from the resolved Identity
                 pid = getattr(_auth, "principal_id", None) if _auth else None
-                effective_perms = (
-                    list(getattr(_auth, "effective_perms", []) or []) if _auth else []
-                )
+                effective_perms = list(getattr(_auth, "effective_perms", []) or []) if _auth else []
                 identity_source = getattr(_auth, "source", None) if _auth else None
 
                 # Use exclude_unset=True to only send fields that were explicitly
@@ -695,7 +731,7 @@ class RouteGenerator:
                 admin_action_receipt = None
                 if _admin_action_required(method_id, method_info.method_type):
                     admin_action_receipt = await _enforce_admin_action(
-                        route_bus,
+                        self._bus,
                         admin_action_manager,
                         topic=method_id,
                         principal_id=pid,

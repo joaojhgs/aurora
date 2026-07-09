@@ -142,6 +142,23 @@ _ERROR_REDACT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
     re.compile(r"\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b"),
 )
+TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS = 0.5
+
+_TOOL_LEXICAL_STOPWORDS = {
+    "use",
+    "tool",
+    "tools",
+    "please",
+    "the",
+    "about",
+    "latest",
+    "news",
+    "current",
+    "events",
+    "today",
+    "web",
+    "internet",
+}
 
 
 # Service implementation
@@ -238,9 +255,17 @@ class ToolingService(BaseService):
         if getattr(tool, "_is_mcp_tool", False) is True:
             return "mcp"
         module_name = getattr(tool, "__module__", "") or tool.__class__.__module__
-        if ".plugins." in module_name or ".plugin." in module_name or module_name.endswith("_toolkit"):
+        if (
+            ".plugins." in module_name
+            or ".plugin." in module_name
+            or module_name.endswith("_toolkit")
+        ):
             return "plugin"
         if module_name.startswith("app.services.tooling.tools"):
+            return "core"
+        if module_name.startswith(
+            "langchain_community.tools"
+        ) and ToolingService._is_known_web_search_tool(tool):
             return "core"
         explicit_source = getattr(tool, "source", None)
         if explicit_source == "core" and tool.__class__.__module__ == "unittest.mock":
@@ -448,6 +473,34 @@ class ToolingService(BaseService):
         if source == "core" and trust_tier in {"trusted", "untrusted"}:
             return trust_tier
         return "trusted" if source == "core" else "untrusted"
+
+    @staticmethod
+    def _is_known_web_search_tool(tool: Any) -> bool:
+        """Return whether a loaded tool is Aurora's known DDG/Brave search tool.
+
+        This does not honor arbitrary ``source='core'`` metadata; it recognizes
+        the loader-provided LangChain DuckDuckGo/Brave tool identities and their
+        stable names/descriptions.
+        """
+
+        name = str(getattr(tool, "name", "") or "").lower()
+        description = str(getattr(tool, "description", "") or "").lower()
+        module_name = str(getattr(tool, "__module__", "") or tool.__class__.__module__).lower()
+        class_name = tool.__class__.__name__.lower()
+        haystack = f"{name} {description} {module_name} {class_name}"
+        mentions_duckduckgo = (
+            "duckduckgo" in haystack
+            or "duck duck go" in haystack
+            or name == "duckduckgo_results_json"
+        )
+        mentions_brave = "brave" in haystack
+        search_like = (
+            "search" in haystack
+            or "current event" in haystack
+            or "latest" in haystack
+            or "news" in haystack
+        )
+        return (mentions_duckduckgo or mentions_brave) and search_like
 
     @staticmethod
     def _resource_scope(tool: Any) -> list[str]:
@@ -1349,7 +1402,7 @@ class ToolingService(BaseService):
         ):
             return (
                 "approval_required",
-                "untrusted external tools require explicit user approval before model binding",
+                "untrusted external tools require explicit user approval before execution",
             )
         if tool.safety_class in {"sensitive", "dangerous"}:
             return (
@@ -1359,7 +1412,7 @@ class ToolingService(BaseService):
         if tool.confirmation_required:
             return (
                 "confirmation_required",
-                "tool requires approval before it can be model-bound",
+                "tool requires approval before execution",
             )
         return None
 
@@ -1668,7 +1721,11 @@ class ToolingService(BaseService):
                 f"mesh:{prepared.provider_peer_id}:"
                 f"{ToolingService._safe_identifier(prepared.provider_service_instance_id)}"
             )
-        source = prepared.source if prepared.source in {"core", "plugin", "mcp", "unknown"} else "unknown"
+        source = (
+            prepared.source
+            if prepared.source in {"core", "plugin", "mcp", "unknown"}
+            else "unknown"
+        )
         return f"local:{source}"
 
     @staticmethod
@@ -1956,7 +2013,7 @@ class ToolingService(BaseService):
                     principal_id=principal_id,
                     details=json.dumps(details, sort_keys=True, default=str),
                 ),
-                timeout=5.0,
+                timeout=TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS,
                 priority=get_system_priority(),
             )
         except Exception as audit_error:
@@ -1966,6 +2023,8 @@ class ToolingService(BaseService):
         operation_class = getattr(tool, "operation_class", None)
         if operation_class in {"read", "write", "external", "admin", "hardware", "data-egress"}:
             return operation_class
+        if self._is_known_web_search_tool(tool):
+            return "external"
         if safety_class == "dangerous":
             return "hardware"
         if safety_class == "sensitive":
@@ -2173,6 +2232,16 @@ class ToolingService(BaseService):
             "admin",
         }
         requires_tool_approval = self._tool_requires_confirmation(tool, safety_class)
+        is_trusted_core_web_search = (
+            context["execution_location"] == "local"
+            and context["source_type"] == "core"
+            and trust_tier == "trusted"
+            and capability_class == "network"
+            and safety_class == "standard"
+            and not requires_tool_approval
+            and not getattr(tool, "confirmation_required", False)
+            and self._is_known_web_search_tool(tool)
+        )
         is_local_safe = (
             context["execution_location"] == "local"
             and trust_tier == "trusted"
@@ -2220,7 +2289,7 @@ class ToolingService(BaseService):
             allowed = False
             reason = "peer_required_for_approve_all"
         elif mode == "approve_all_local_safe":
-            if is_local_safe:
+            if is_local_safe or is_trusted_core_web_search:
                 approval_required = False
             elif trust_tier != "trusted" or sensitive_capability or requires_tool_approval:
                 approval_required = True
@@ -2238,6 +2307,8 @@ class ToolingService(BaseService):
         if allowed and not approval_required and not request.dry_run:
             if policy_mode == "unrestricted_except_blocked":
                 auto_approved_reason = "bypass_permissions"
+            elif mode == "approve_all_local_safe" and is_trusted_core_web_search:
+                auto_approved_reason = "trusted_core_web_search"
             elif mode == "approve_all_local_safe" and is_local_safe:
                 auto_approved_reason = "local_safe_tool"
             elif mode == "approve_all_for_session":
@@ -2249,6 +2320,13 @@ class ToolingService(BaseService):
         if allowed and approval_required and reason is None:
             if trust_tier != "trusted":
                 reason = "approval_required_by_untrusted_source"
+            elif matched_rule and mode in {
+                "ask_each_time",
+                "allow_once",
+                "allow_until_expiry",
+                "dry_run_only",
+            }:
+                reason = "approval_required_by_policy"
             elif sensitive_capability:
                 reason = "approval_required_by_capability"
             else:
@@ -2682,7 +2760,11 @@ class ToolingService(BaseService):
         ):
             return False
         source_id = grant.metadata.get("source_id")
-        if isinstance(source_id, str) and source_id and source_id != self._source_id_for_prepared(prepared):
+        if (
+            isinstance(source_id, str)
+            and source_id
+            and source_id != self._source_id_for_prepared(prepared)
+        ):
             return False
         source_type = grant.metadata.get("source_type")
         if isinstance(source_type, str) and source_type and source_type != prepared.source:
@@ -2720,10 +2802,7 @@ class ToolingService(BaseService):
             return False
         if grant.trust_tier == "blocked" and not allow_blocked:
             return False
-        if (
-            grant.grant_type == "trust"
-            and grant.trust_tier not in {"blocked", "trusted"}
-        ):
+        if grant.grant_type == "trust" and grant.trust_tier not in {"blocked", "trusted"}:
             return False
         if (
             grant.capability_class is not None
@@ -3031,7 +3110,7 @@ class ToolingService(BaseService):
                     principal_id=request.caller_principal_id,
                     details=json.dumps(details, sort_keys=True, default=str),
                 ),
-                timeout=5.0,
+                timeout=TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS,
                 priority=get_system_priority(),
             )
         except Exception as audit_error:
@@ -3356,6 +3435,7 @@ class ToolingService(BaseService):
 
                 tools = []
                 rag_search_failed = False
+                rag_returned_no_usable_hits = False
                 try:
                     result = await self.bus.request(
                         DBMethods.RAG_SEARCH,
@@ -3366,33 +3446,44 @@ class ToolingService(BaseService):
                         priority=get_interactive_priority(),
                     )
                     names: list[str] = []
-                    if result.ok and result.data and "items" in result.data:
+                    if not getattr(result, "ok", False):
+                        log_warning(
+                            "RAG tool search returned unsuccessful result; "
+                            f"using lexical tool search: {getattr(result, 'error', None)}"
+                        )
+                        rag_search_failed = True
+                    elif not isinstance(result.data, dict) or not isinstance(
+                        result.data.get("items"), list
+                    ):
+                        log_warning("RAG tool search returned invalid response; using lexical tool search")
+                        rag_search_failed = True
+                    else:
                         names = [
-                            item.get("key") for item in result.data["items"] if item.get("key")
+                            item.get("key")
+                            for item in result.data["items"]
+                            if isinstance(item, dict) and item.get("key")
                         ]
+                        rag_returned_no_usable_hits = True
 
                     # Map names to tool callables
                     for name in names:
                         tool = self.tools_manager.get_tool_by_name(name)
                         if tool:
                             tools.append(tool)
+                    if tools:
+                        rag_returned_no_usable_hits = False
 
                 except Exception as e:
                     log_warning(f"RAG tool search failed; using lexical tool search: {e}")
                     rag_search_failed = True
 
-                # RAG is authoritative for semantic search, but DB outages should
-                # not silently broaden a query to every tool. Use a local lexical
-                # fallback only when RAG failed; a no-match RAG result remains no-match.
-                if rag_search_failed and not tools:
-                    query_text = request.query.lower()
-                    lexical_matches = [
-                        tool
-                        for tool in self.tools_manager.get_tools(None, request.top_k)
-                        if query_text in getattr(tool, "name", "").lower()
-                        or query_text in getattr(tool, "description", "").lower()
-                    ]
-                    tools = lexical_matches[: request.top_k]
+                # RAG remains authoritative when it yields usable loaded tools.
+                # If RAG is unavailable, returns no hits, or returns stale names
+                # that no longer map to loaded callables, use a bounded lexical
+                # fallback over the loaded tool snapshot without broadening to
+                # every tool on unrelated queries.
+                if (rag_search_failed or rag_returned_no_usable_hits) and not tools:
+                    tools = self._lexical_tool_matches(request.query, request.top_k)
                 if not tools:
                     log_debug(f"No tools matched query: {request.query}")
             else:
@@ -3404,20 +3495,12 @@ class ToolingService(BaseService):
             for tool in tools:
                 try:
                     tool_info = self._serialize_tool(tool, request)
-                    policy_request = ToolingExecuteToolRequest(
-                        tool_name=tool_info.name,
-                        arguments={},
-                        mesh_selector=request.mesh_selector,
-                    )
-                    decision = self._evaluate_sharing_policy(
-                        policy_request,
-                        tool=tool,
-                        local_tool_name=tool_info.local_name,
-                        global_tool_id=tool_info.global_tool_id,
-                        provider_peer_id=tool_info.provider_peer_id,
-                        service_instance_id=tool_info.provider_service_instance_id,
-                    )
-                    if decision.share:
+                    # Discovery/model binding is intentionally broad: only tools
+                    # explicitly marked blocked are hidden. Sharing policy, default
+                    # deny, untrusted sources, and confirmation requirements are
+                    # enforced by prepare/execute so the LLM can still discover a
+                    # tool and trigger the approval/denial path at runtime.
+                    if tool_info.trust_tier != "blocked":
                         serialized_tools.append(tool_info)
 
                 except Exception as tool_error:
@@ -3430,6 +3513,85 @@ class ToolingService(BaseService):
         except Exception as e:
             log_error(f"Error handling get tools query: {e}", exc_info=True)
             raise
+
+    def _loaded_tools_snapshot(self, top_k: int) -> list[Any]:
+        """Return a bounded loaded-tool snapshot for local fallback matching.
+
+        Prefer the manager's in-memory loaded list so lexical fallback is not
+        constrained by ``top_k`` ordering. Test doubles often expose arbitrary
+        ``Mock`` attributes for missing fields, so only concrete list/tuple
+        snapshots are treated as loaded tool collections.
+        """
+
+        scan_limit = min(max(top_k, 256), 1000)
+        manager_tools = getattr(self.tools_manager, "tools", None)
+        if isinstance(manager_tools, (list, tuple)):
+            return list(manager_tools)[:scan_limit]
+
+        return list(self.tools_manager.get_tools(None, scan_limit) or [])
+
+    @staticmethod
+    def _tool_lexical_terms(query: str) -> set[str]:
+        """Tokenize query terms, excluding generic tool/web intent stopwords."""
+
+        return {
+            token
+            for token in re.findall(r"[a-z0-9_]+", query.lower())
+            if token and token not in _TOOL_LEXICAL_STOPWORDS
+        }
+
+    def _lexical_tool_matches(self, query: str, top_k: int) -> list[Any]:
+        """Find loaded tools whose name or description contains query terms."""
+
+        terms = self._tool_lexical_terms(query)
+        if not terms:
+            return []
+
+        matches: list[tuple[int, int, Any]] = []
+        for index, tool in enumerate(self._loaded_tools_snapshot(top_k)):
+            haystack = " ".join(
+                [
+                    getattr(tool, "name", "") or "",
+                    getattr(tool, "description", "") or "",
+                ]
+            ).lower()
+            score = sum(1 for term in terms if term in haystack)
+            if score:
+                # Negative score sorts highest score first while preserving
+                # loaded order for ties.
+                matches.append((-score, index, tool))
+
+        matches.sort(key=lambda item: (item[0], item[1]))
+        return [tool for _, _, tool in matches[:top_k]]
+
+    def _remote_catalog_tool_matches(
+        self, tools: list[ToolingToolInfo], query: str, top_k: int
+    ) -> list[ToolingToolInfo]:
+        """Find remote catalog tools whose public metadata contains query terms."""
+
+        terms = self._tool_lexical_terms(query)
+        if not terms:
+            return []
+
+        scan_limit = 1000
+        matches: list[tuple[int, int, ToolingToolInfo]] = []
+        for index, tool in enumerate(tools[:scan_limit]):
+            haystack = " ".join(
+                [
+                    tool.name or "",
+                    tool.local_name or "",
+                    tool.display_name or "",
+                    tool.description or "",
+                ]
+            ).lower()
+            score = sum(1 for term in terms if term in haystack)
+            if score:
+                # Negative score sorts highest score first while preserving
+                # snapshot order for ties.
+                matches.append((-score, index, tool))
+
+        matches.sort(key=lambda item: (item[0], item[1]))
+        return [tool for _, _, tool in matches[:top_k]]
 
     @method_contract(
         method_id=ToolingMethods.GET_TOOL_CATALOG,
@@ -3481,14 +3643,32 @@ class ToolingService(BaseService):
                         provider_service_instance_id=snapshot.service_instance_id,
                         provider_kind="mesh_peer",
                         eligible=snapshot.shared_by_policy,
-                        reason_code="cached_negotiated_catalog",
-                        reason="cached negotiated Tooling catalog",
+                        reason_code=(
+                            "cached_negotiated_catalog"
+                            if snapshot.shared_by_policy
+                            else "not_shared_by_policy"
+                        ),
+                        reason=(
+                            "cached negotiated Tooling catalog"
+                            if snapshot.shared_by_policy
+                            else (
+                                "cached negotiated Tooling catalog is not shared by "
+                                "policy; execution remains gated"
+                            )
+                        ),
                         cache_status="hit",
                     )
                 )
-                if not snapshot.shared_by_policy:
-                    continue
-                for tool in snapshot.tools[: request.top_k]:
+                remote_tools = (
+                    self._remote_catalog_tool_matches(
+                        snapshot.tools,
+                        request.query,
+                        request.top_k,
+                    )
+                    if request.query
+                    else snapshot.tools[: request.top_k]
+                )
+                for tool in remote_tools:
                     self._append_catalog_tool(
                         tool=tool,
                         caller_permissions=caller_permissions,

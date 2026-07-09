@@ -520,18 +520,21 @@ class TestGraphOrchestratorToolExecution:
             }
         )
 
-        resolved, tool_result, assistant_text, error = (
-            await graph_orchestrator.resolve_pending_tool_approval(
-                pending_id=None,
-                approval_request_id="approval-1",
-                approve=False,
-                grant_scope="deny_once",
-                approver_principal_id="admin",
-                expires_at=None,
-                include_future_tools=False,
-                reason="User denied destructive file access.",
-                correlation_id="corr-1",
-            )
+        (
+            resolved,
+            tool_result,
+            assistant_text,
+            error,
+        ) = await graph_orchestrator.resolve_pending_tool_approval(
+            pending_id=None,
+            approval_request_id="approval-1",
+            approve=False,
+            grant_scope="deny_once",
+            approver_principal_id="admin",
+            expires_at=None,
+            include_future_tools=False,
+            reason="User denied destructive file access.",
+            correlation_id="corr-1",
         )
 
         assert error is None
@@ -703,6 +706,61 @@ class TestGraphOrchestratorToolExecution:
         payload = json.loads(result["messages"][0].content)
         assert payload["status"] == "requested"
         assert payload["approval_request_id"] == "runtime-approval"
+
+    @pytest.mark.asyncio
+    async def test_non_actionable_approval_response_does_not_create_pending_json_card(
+        self, graph_orchestrator, mock_bus
+    ):
+        """Approval responses without an approval_request_id become normal tool errors."""
+        from langchain_core.messages import AIMessage
+
+        from app.messaging import QueryResult
+        from app.shared.contracts.models.tooling import ToolingMethods
+
+        mock_bus.request.side_effect = [
+            QueryResult(
+                ok=False,
+                error="approval_token_required",
+                data={
+                    "error_code": "approval_token_required",
+                    "status": "requires_action",
+                    "policy_decision": {"approval_required": True},
+                },
+            ),
+            QueryResult(
+                ok=True,
+                data={
+                    "ok": True,
+                    "approval_request_id": None,
+                    "correlation_id": "runtime-corr",
+                    "policy_decision": {
+                        "decision_id": "runtime-decision",
+                        "approval_mode": None,
+                        "approval_required": False,
+                    },
+                },
+            ),
+        ]
+
+        ai_message = AIMessage(
+            content="",
+            tool_calls=[{"name": "search", "args": {"query": "news"}, "id": "tool-search"}],
+        )
+        state = State(
+            messages=[ai_message],
+            tool_bindings={"search": {"tool_name": "search", "display_name": "Search"}},
+        )
+
+        result = await graph_orchestrator._execute_tools_via_bus(state)
+
+        assert mock_bus.request.await_args_list[0].args[0] == ToolingMethods.EXECUTE_TOOL
+        assert mock_bus.request.await_args_list[1].args[0] == ToolingMethods.REQUEST_APPROVAL
+        assert result["approval_pending"] is False
+        assert graph_orchestrator.pending_tool_approvals == {}
+        content = result["messages"][0].content
+        assert content.startswith("Error: ")
+        assert "tool_approval_request" not in content
+        assert graph_orchestrator._tools_end_condition(result) == "chatbot"
 
     @pytest.mark.asyncio
     async def test_pending_approval_state_persists_and_reloads(
@@ -883,6 +941,39 @@ class TestGraphOrchestratorProcessing:
         second = await asyncio.wait_for(iterator.__anext__(), timeout=1)
         assert second.kind == "assistant.delta"
         assert second.delta == "Done"
+
+    @pytest.mark.asyncio
+    async def test_stream_graph_events_forwards_inference_override_to_fallback(
+        self, graph_orchestrator
+    ):
+        """Fallback updates must preserve inference-only routing overrides."""
+
+        inference_override = {"provider_id": "remote:raspi-lab:Orchestrator"}
+
+        class FakeGraph:
+            async def astream_events(self, input=None, config=None, version=None):
+                raise AttributeError("streaming unsupported")
+                yield  # pragma: no cover
+
+        graph_orchestrator.graph = FakeGraph()
+        with patch.object(
+            graph_orchestrator,
+            "stream_graph_updates",
+            new=AsyncMock(return_value="fallback response"),
+        ) as fallback:
+            events = [
+                event
+                async for event in graph_orchestrator.stream_graph_events(
+                    "hello",
+                    thread_id="session-1",
+                    inference_override=inference_override,
+                )
+            ]
+
+        fallback.assert_awaited_once()
+        assert fallback.await_args.kwargs["inference_override"] == inference_override
+        assert events[0].kind == "assistant.delta"
+        assert events[0].delta == "fallback response"
 
     @pytest.mark.asyncio
     async def test_process_text_input(self, graph_orchestrator):

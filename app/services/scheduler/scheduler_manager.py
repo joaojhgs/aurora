@@ -196,7 +196,9 @@ class SchedulerManager:
             if job.action_spec:
                 continue
             module = (job.callback_module or "").strip()
-            if not module.startswith((f"{LEGACY_TOOLING_MODULE_PREFIX}.", f"{CURRENT_TOOLING_MODULE_PREFIX}.")):
+            if not module.startswith(
+                (f"{LEGACY_TOOLING_MODULE_PREFIX}.", f"{CURRENT_TOOLING_MODULE_PREFIX}.")
+            ):
                 continue
 
             action_spec = self._legacy_tooling_callback_to_action_spec(job)
@@ -282,7 +284,12 @@ class SchedulerManager:
         )
 
     async def _publish_job_completed_event(
-        self, job: CronJob, *, success: bool, result: dict[str, Any] | None = None, error: str | None = None
+        self,
+        job: CronJob,
+        *,
+        success: bool,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
     ) -> None:
         if not self.bus:
             return
@@ -345,7 +352,9 @@ class SchedulerManager:
             else:
                 error_msg = result.get("error", "Unknown error") if result else "No result returned"
                 job.update_status(JobStatus.FAILED, error_msg)
-                await self._publish_job_completed_event(job, success=False, result=result, error=error_msg)
+                await self._publish_job_completed_event(
+                    job, success=False, result=result, error=error_msg
+                )
 
                 # For failed jobs, calculate retry time
                 if job.can_retry():

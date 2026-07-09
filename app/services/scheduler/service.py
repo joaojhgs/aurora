@@ -91,7 +91,6 @@ class SchedulerService(BaseService):
         # Store instance globally for callback access
         _scheduler_service_instance = self
 
-
     def _externalish_envelope(self, envelope: Envelope | None) -> bool:
         """Return true when caller identity must come from the bus envelope only."""
 
@@ -123,8 +122,7 @@ class SchedulerService(BaseService):
             "caller_peer_id": caller_peer_id,
             "caller_principal_id": caller_principal_id,
             "delegated_permissions": [
-                str(permission)
-                for permission in (getattr(envelope, "effective_perms", None) or [])
+                str(permission) for permission in (getattr(envelope, "effective_perms", None) or [])
             ],
         }
         if getattr(request, "owner_peer_id", None) is None and caller_peer_id:
@@ -436,7 +434,9 @@ class SchedulerService(BaseService):
     def _action_hash_payload(cls, action: SchedulerActionSpec) -> dict[str, Any]:
         """Canonical action data for scheduled action tamper/binding checks."""
 
-        action_data = action.model_dump(mode="json") if hasattr(action, "model_dump") else dict(action)
+        action_data = (
+            action.model_dump(mode="json") if hasattr(action, "model_dump") else dict(action)
+        )
         action_data.pop("approval_token", None)
         action_data.pop("scheduled_action_hash", None)
         return action_data
@@ -450,7 +450,9 @@ class SchedulerService(BaseService):
         self,
         request: SchedulerScheduleActionRequest,
         scheduler_context: dict[str, Any],
-    ) -> tuple[bool, SchedulerActionSpec | None, SchedulerToolBinding | None, str | None, str | None]:
+    ) -> tuple[
+        bool, SchedulerActionSpec | None, SchedulerToolBinding | None, str | None, str | None
+    ]:
         """Validate and normalize a typed scheduled action before persistence."""
         try:
             action = TypeAdapter(SchedulerActionSpec).validate_python(
@@ -1148,7 +1150,9 @@ class SchedulerService(BaseService):
                                     error=reason,
                                     action_kind=context.get("action_kind"),
                                     provider_peer_id=context.get("provider_peer_id"),
-                                    provider_service_instance_id=context.get("provider_service_instance_id"),
+                                    provider_service_instance_id=context.get(
+                                        "provider_service_instance_id"
+                                    ),
                                     global_tool_id=context.get("global_tool_id"),
                                     result_summary=reason,
                                     namespace=context["namespace"],

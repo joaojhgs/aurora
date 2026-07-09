@@ -210,7 +210,9 @@ async def test_policy_summary_sources_and_detail_include_counts_and_grants(manag
     sources = await service._on_list_tool_sources(ToolingListToolSourcesRequest())
     source_ids = {source.source_id for source in sources.sources}
     assert {"local:core", "local:mcp:search", "local:plugin:lookup"}.issubset(source_ids)
-    mcp_source = next(source for source in sources.sources if source.source_id == "local:mcp:search")
+    mcp_source = next(
+        source for source in sources.sources if source.source_id == "local:mcp:search"
+    )
     assert mcp_source.tool_count == 1
     assert mcp_source.active_grant_count == 1
 
@@ -243,14 +245,19 @@ async def test_mcp_and_plugin_sources_keep_distinct_policy_identity(management_s
     notes_plugin.plugin_name = "notes"
     tools = [mail_mcp, calendar_mcp, weather_plugin, notes_plugin]
     service.tools_manager.get_tools.return_value = tools
-    service.tools_manager.get_tool_by_name.side_effect = (
-        lambda name: next((tool for tool in tools if tool.name == name), None)
+    service.tools_manager.get_tool_by_name.side_effect = lambda name: next(
+        (tool for tool in tools if tool.name == name), None
     )
 
     sources = await service._on_list_tool_sources(ToolingListToolSourcesRequest())
     source_ids = {source.source_id for source in sources.sources}
 
-    assert {"local:mcp:mail", "local:mcp:calendar", "local:plugin:weather", "local:plugin:notes"}.issubset(source_ids)
+    assert {
+        "local:mcp:mail",
+        "local:mcp:calendar",
+        "local:plugin:weather",
+        "local:plugin:notes",
+    }.issubset(source_ids)
     mail_detail = await service._on_get_tool_source_detail(
         ToolingGetToolSourceDetailRequest(source_id="local:mcp:mail")
     )
@@ -320,7 +327,9 @@ async def test_onboarding_status_redacts_mcp_server_secrets(management_service):
 
 
 @pytest.mark.asyncio
-async def test_policy_mutation_contracts_persist_grants_and_require_bypass_confirmation(management_service):
+async def test_policy_mutation_contracts_persist_grants_and_require_bypass_confirmation(
+    management_service,
+):
     """Management mutations use typed contracts, audit, and durable grant records."""
 
     service, bus = management_service
@@ -400,7 +409,9 @@ async def test_policy_mutation_contracts_persist_grants_and_require_bypass_confi
 
 
 @pytest.mark.asyncio
-async def test_onboarding_mutation_contracts_are_redacted_and_explicitly_unsupported(management_service):
+async def test_onboarding_mutation_contracts_are_redacted_and_explicitly_unsupported(
+    management_service,
+):
     """MCP/plugin onboarding contracts are UI-safe even before installers are implemented."""
 
     service, _bus = management_service

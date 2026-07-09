@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import MessageBus
+from app.messaging.priority_helpers import get_system_priority
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Mcp, Tooling
@@ -37,6 +38,40 @@ class ToolsManager:
         self.always_active_tools: list[Callable] = []
         self._mcp_tools_loaded = False
         self._initialized = False
+
+    def _rebuild_tool_lookup(self) -> None:
+        """Rebuild the name-to-tool lookup from the currently loaded tools."""
+
+        self.tool_lookup.clear()
+        for tool in self.tools:
+            name = getattr(tool, "name", None)
+            if name:
+                self.tool_lookup[name] = tool
+                log_debug(f"Registered tool: {name}")
+
+    def _tool_lookup_stale(self) -> bool:
+        """Return True when the lookup no longer mirrors ``self.tools`` names."""
+
+        loaded_names = {getattr(tool, "name", None) for tool in self.tools}
+        loaded_names.discard(None)
+        return set(self.tool_lookup) != loaded_names
+
+    async def _request_rag_mutation(self, method: str, payload: object, *, action: str) -> None:
+        """Send a bounded RAG mutation request and warn on failures."""
+
+        try:
+            result = await self.bus.request(
+                method,
+                payload,
+                timeout=2.0,
+                priority=get_system_priority(),
+            )
+        except Exception as exc:
+            log_warning(f"Failed to {action}: {exc}")
+            return
+
+        if not result.ok:
+            log_warning(f"Failed to {action}: {result.error}")
 
     async def initialize(self) -> None:
         """Initialize all tools in the correct order.
@@ -288,11 +323,8 @@ class ToolsManager:
             return
 
         try:
-            # Build tool lookup
-            self.tool_lookup.clear()
-            for tool in self.tools:
-                self.tool_lookup[tool.name] = tool
-                log_debug(f"Registered tool: {tool.name}")
+            # Build tool lookup before syncing so active tools and lookup agree.
+            self._rebuild_tool_lookup()
 
             # Get currently active tools (both core/plugin and MCP tools)
             active_tools = {}
@@ -315,6 +347,7 @@ class ToolsManager:
                 DBMethods.RAG_LIST,
                 DBRAGListRequest(namespace="main.tools", limit=4000),
                 timeout=5.0,
+                priority=get_system_priority(),
             )
 
             if result.ok and result.data and "items" in result.data:
@@ -324,9 +357,11 @@ class ToolsManager:
                 for name in existing_tools:
                     log_debug(f"  - '{name}'")
             else:
-                existing_tools = {}
                 if not result.ok:
-                    log_error(f"Error getting existing tools from database: {result.error}")
+                    log_warning(f"Error getting existing tools from database: {result.error}")
+                else:
+                    log_warning("Invalid RAG_LIST response while syncing tools; skipping mutation")
+                return
 
             # Find tools to add (active but not in database)
             tools_to_add = []
@@ -336,12 +371,12 @@ class ToolsManager:
                 elif existing_tools[name].get("description") != tool_data["description"]:
                     # Tool exists but description changed - update it
                     log_info(f"Updating tool '{name}' with new description")
-                    await self.bus.publish(
+                    await self._request_rag_mutation(
                         DBMethods.RAG_STORE,
                         DBRAGStoreRequest(
                             namespace="main.tools", key=name, value=tool_data, index=True
                         ),
-                        event=False,
+                        action=f"update tool '{name}' in database",
                     )
 
             # Find tools to remove (in database but not active)
@@ -354,21 +389,21 @@ class ToolsManager:
             # Add new tools via bus
             for name, tool_data in tools_to_add:
                 log_info(f"Adding new tool to database: {name}")
-                await self.bus.publish(
+                await self._request_rag_mutation(
                     DBMethods.RAG_STORE,
                     DBRAGStoreRequest(
                         namespace="main.tools", key=name, value=tool_data, index=True
                     ),
-                    event=False,
+                    action=f"add tool '{name}' to database",
                 )
 
             # Remove inactive tools via bus
             for name in tools_to_remove:
                 log_info(f"Removing inactive tool from database: {name}")
-                await self.bus.publish(
+                await self._request_rag_mutation(
                     DBMethods.RAG_DELETE,
                     DBRAGDeleteRequest(namespace="main.tools", key=name),
-                    event=False,
+                    action=f"remove inactive tool '{name}' from database",
                 )
 
             log_info(
@@ -413,6 +448,8 @@ class ToolsManager:
         Returns:
             Tool callable or None
         """
+        if not self.tool_lookup or self._tool_lookup_stale():
+            self._rebuild_tool_lookup()
         return self.tool_lookup.get(name)
 
     def get_all_tool_names(self) -> list[str]:
@@ -421,6 +458,8 @@ class ToolsManager:
         Returns:
             List of tool names
         """
+        if not self.tool_lookup or self._tool_lookup_stale():
+            self._rebuild_tool_lookup()
         return list(self.tool_lookup.keys())
 
     def get_stats(self) -> dict:

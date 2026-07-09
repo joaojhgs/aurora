@@ -310,8 +310,6 @@ async def test_rtc_client_incoming_manifest_registers_stable_remote_peer(mock_de
     assert client._stable_peer_sessions["stable-remote-peer"] == "session-peer"
 
 
-
-
 @pytest.mark.asyncio
 async def test_rtc_client_manifest_with_shared_tooling_requests_catalog_sync(mock_deps):
     """Negotiated peers that both share Tooling trigger immediate catalog sync."""

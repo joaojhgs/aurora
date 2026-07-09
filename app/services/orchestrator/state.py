@@ -12,3 +12,4 @@ class State(TypedDict):
     tool_bindings: NotRequired[dict]
     approval_candidates: NotRequired[dict]
     approval_pending: NotRequired[bool]
+    inference_override: NotRequired[dict]

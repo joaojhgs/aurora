@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -48,6 +50,7 @@ class LocalBus:
         """
         # Subscribers by topic
         self._subs: dict[str, list[Handler]] = defaultdict(list)
+        self._stream_handlers: dict[str, Callable[[Envelope], Awaitable[Any]]] = {}
 
         # Command queues (priority-based)
         self._cmd_queues: dict[str, asyncio.PriorityQueue] = defaultdict(
@@ -133,6 +136,29 @@ class LocalBus:
             log_debug(f"Unsubscribed handler from topic: {topic}")
         except ValueError:
             pass
+
+    def register_stream_handler(
+        self,
+        topic: str,
+        handler: Callable[[Envelope], Awaitable[Any]],
+    ) -> None:
+        """Register a direct streaming handler for a request/response topic.
+
+        Normal ``request()`` replies are serialized through reply topics. That
+        path cannot carry an async generator, so services with first-class
+        streaming contracts register a local direct handler used only by
+        ``stream_request()``.
+        """
+
+        self._stream_handlers[topic] = handler
+
+    def unregister_stream_handler(
+        self,
+        topic: str,
+        handler: Callable[[Envelope], Awaitable[Any]],
+    ) -> None:
+        if self._stream_handlers.get(topic) is handler:
+            self._stream_handlers.pop(topic, None)
 
     async def _deliver(self, topic: str, env: Envelope, raise_errors: bool = False) -> None:
         """Deliver a message to all matching subscribers concurrently.
@@ -473,6 +499,65 @@ class LocalBus:
         finally:
             self.unsubscribe(reply_topic, _on_reply)
 
+    async def stream_request(
+        self,
+        topic: str,
+        message: BaseModel,
+        *,
+        priority: int = 50,
+        origin: str = "internal",
+        timeout: float = 30.0,
+        ttl_ms: int | None = None,
+        max_attempts: int = 3,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        correlation_id: str | None = None,
+    ) -> AsyncIterator[Any]:
+        """Stream a local service response without reply-topic serialization."""
+
+        handler = self._stream_handlers.get(topic)
+        if handler is None:
+            result = await self.request(
+                topic,
+                message,
+                priority=priority,
+                origin=origin,
+                timeout=timeout,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                correlation_id=correlation_id,
+            )
+            if not result.ok:
+                raise RuntimeError(result.error or f"Stream request failed for {topic}")
+            async for item in _iterate_stream_data(result.data):
+                yield item
+            return
+
+        env = Envelope(
+            type=topic,
+            payload=message,
+            origin=origin,
+            priority=priority,
+            max_attempts=max_attempts,
+            principal_id=principal_id,
+            effective_perms=effective_perms,
+            identity_source=identity_source,
+            method_type=method_type,
+            caller_peer_id=caller_peer_id,
+            correlation_id=correlation_id,
+        )
+        result = await handler(env)
+        async for item in _iterate_stream_data(result):
+            yield item
+
     def get_stats(self) -> dict:
         """Get bus statistics.
 
@@ -480,3 +565,13 @@ class LocalBus:
             Dictionary containing bus metrics
         """
         return dict(self._stats)
+
+
+async def _iterate_stream_data(data: Any) -> AsyncIterator[Any]:
+    if data is None:
+        return
+    if hasattr(data, "__aiter__"):
+        async for item in data:
+            yield item
+        return
+    yield data

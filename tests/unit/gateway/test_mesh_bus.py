@@ -1,7 +1,6 @@
 """Unit tests for MeshBus routing decisions and fallback behavior."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import BaseModel
@@ -15,7 +14,10 @@ from app.shared.contracts.models.mesh import MeshAddressSelector
 
 class FakePayload(BaseModel):
     text: str = "hello"
+    dispatch_selector: MeshAddressSelector | None = None
     mesh_selector: MeshAddressSelector | None = None
+    selector: MeshAddressSelector | None = None
+    inference_selector: MeshAddressSelector | None = None
 
 
 @pytest.fixture
@@ -305,6 +307,153 @@ class TestMeshBusRequest:
         inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_dispatch_selector_precedes_legacy_and_inference_is_ignored(
+        self, mesh_bus, routing_table
+    ):
+        dispatch = MeshAddressSelector(peer_id="dispatch-peer")
+        legacy = MeshAddressSelector(peer_id="legacy-peer")
+        inference = MeshAddressSelector(peer_id="inference-peer")
+
+        await mesh_bus.request(
+            "TTS.Request",
+            FakePayload(
+                dispatch_selector=dispatch,
+                mesh_selector=legacy,
+                inference_selector=inference,
+            ),
+        )
+
+        routing_table.resolve.assert_called_once_with("TTS.Request", selector=dispatch)
+
+    @pytest.mark.asyncio
+    async def test_inference_selector_alone_does_not_affect_dispatch_routing(
+        self, mesh_bus, routing_table
+    ):
+        inference = MeshAddressSelector(peer_id="inference-peer")
+
+        await mesh_bus.request("TTS.Request", FakePayload(inference_selector=inference))
+
+        routing_table.resolve.assert_called_once_with("TTS.Request", selector=None)
+
+    @pytest.mark.asyncio
+    async def test_model_catalog_mesh_selector_is_business_input_not_dispatch_selector(
+        self, mesh_bus, routing_table
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+        payload = {"include_remote": True, "mesh_selector": {"peer_id": "catalog-peer"}}
+
+        await mesh_bus.request(OrchestratorMethods.GET_MODEL_CATALOG, payload)
+
+        routing_table.resolve.assert_called_once_with(
+            OrchestratorMethods.GET_MODEL_CATALOG, selector=None
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("selector_key", ["mesh_selector", "selector"])
+    async def test_dict_payload_selector_routes_selected_peer(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge, selector_key
+    ):
+        from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+        expected_selector = MeshAddressSelector(peer_id="assistant-peer")
+
+        def resolve_by_selector(topic, *, selector=None):
+            assert topic == OrchestratorMethods.EXTERNAL_USER_INPUT
+            if selector == expected_selector:
+                return RouteDecision(
+                    target="remote",
+                    peer_id="assistant-peer",
+                    module="Orchestrator",
+                    selector=selector,
+                )
+            return RouteDecision(target="local", module="Orchestrator", selector=selector)
+
+        routing_table.resolve.side_effect = resolve_by_selector
+        payload = {"text": "hello", selector_key: {"peer_id": "assistant-peer"}}
+
+        result = await mesh_bus.request(OrchestratorMethods.EXTERNAL_USER_INPUT, payload)
+
+        assert result.ok is True
+        routing_table.resolve.assert_called_once_with(
+            OrchestratorMethods.EXTERNAL_USER_INPUT, selector=expected_selector
+        )
+        peer_bridge.call.assert_awaited_once_with(
+            "assistant-peer",
+            OrchestratorMethods.EXTERNAL_USER_INPUT,
+            payload,
+            timeout=5.0,
+            correlation_id=peer_bridge.call.await_args.kwargs["correlation_id"],
+            principal_id=None,
+            effective_perms=None,
+            identity_source=None,
+            method_type=None,
+            caller_peer_id=None,
+        )
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_external_user_input_mesh_selector_routes_selected_peer(
+        self, mesh_bus, routing_table, peer_bridge
+    ):
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorMethods,
+            OrchestratorProcessRequest,
+        )
+
+        selector = MeshAddressSelector(peer_id="assistant-peer")
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote", peer_id="assistant-peer", module="Orchestrator", selector=selector
+        )
+
+        result = await mesh_bus.request(
+            OrchestratorMethods.EXTERNAL_USER_INPUT,
+            OrchestratorProcessRequest(text="hello", mesh_selector=selector),
+        )
+
+        assert result.ok is True
+        routing_table.resolve.assert_called_once_with(
+            OrchestratorMethods.EXTERNAL_USER_INPUT, selector=selector
+        )
+        peer_bridge.call.assert_awaited_once()
+        assert peer_bridge.call.await_args.args[:3] == (
+            "assistant-peer",
+            OrchestratorMethods.EXTERNAL_USER_INPUT,
+            OrchestratorProcessRequest(text="hello", mesh_selector=selector),
+        )
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_external_user_input_explicit_selector_failure_does_not_fallback(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge
+    ):
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorMethods,
+            OrchestratorProcessRequest,
+        )
+
+        selector = MeshAddressSelector(peer_id="assistant-peer")
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote", peer_id="assistant-peer", module="Orchestrator", selector=selector
+        )
+        peer_bridge.call.side_effect = Exception("offline")
+        routing_table.resolve_fallback.return_value = RouteDecision(
+            target="error",
+            module="Orchestrator",
+            selector=selector,
+            error_code="selector_target_failed",
+            error_message="Orchestrator explicit selector target failed; transparent fallback skipped",
+        )
+
+        result = await mesh_bus.request(
+            OrchestratorMethods.EXTERNAL_USER_INPUT,
+            OrchestratorProcessRequest(text="hello", mesh_selector=selector),
+        )
+
+        assert result.ok is False
+        assert "transparent fallback skipped" in result.error
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_remote_error_result_triggers_fallback(
         self, mesh_bus, inner_bus, routing_table, peer_bridge
     ):
@@ -329,6 +478,202 @@ class TestMeshBusRequest:
         routing_table.resolve.return_value = RouteDecision(target="none", module="TTS")
         result = await mesh_bus.request("TTS.Request", FakePayload())
         assert result.ok is False
+
+
+class TestMeshBusStreamRequest:
+    """Tests for MeshBus.stream_request()."""
+
+    @pytest.mark.asyncio
+    async def test_remote_stream_failure_before_first_chunk_uses_fallback(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge
+    ):
+        async def failing_remote_stream(*args, **kwargs):
+            raise RuntimeError("remote stream unavailable")
+            yield "unreachable"
+
+        async def local_stream(*args, **kwargs):
+            yield {"delta": "local fallback"}
+
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            module="Orchestrator",
+            peer_id="peer-gpu",
+        )
+        routing_table.resolve_fallback.return_value = RouteDecision(
+            target="local",
+            module="Orchestrator",
+        )
+        peer_bridge.stream_call = MagicMock(side_effect=failing_remote_stream)
+        inner_bus.stream_request = MagicMock(side_effect=local_stream)
+
+        chunks = [
+            chunk
+            async for chunk in mesh_bus.stream_request(
+                "Orchestrator.StreamInferChat",
+                FakePayload(),
+            )
+        ]
+
+        assert chunks == [{"delta": "local fallback"}]
+        inner_bus.stream_request.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_remote_stream_failure_after_first_chunk_raises_without_fallback(
+        self, mesh_bus, inner_bus, routing_table, peer_bridge
+    ):
+        async def failing_remote_stream(*args, **kwargs):
+            yield {"delta": "remote first"}
+            raise RuntimeError("remote stream interrupted")
+
+        async def local_stream(*args, **kwargs):
+            yield {"delta": "must not fallback"}
+
+        routing_table.resolve.return_value = RouteDecision(
+            target="remote",
+            module="Orchestrator",
+            peer_id="peer-gpu",
+        )
+        routing_table.resolve_fallback.return_value = RouteDecision(
+            target="local",
+            module="Orchestrator",
+        )
+        peer_bridge.stream_call = MagicMock(side_effect=failing_remote_stream)
+        inner_bus.stream_request = MagicMock(side_effect=local_stream)
+
+        chunks = []
+        with pytest.raises(RuntimeError, match="remote stream interrupted"):
+            async for chunk in mesh_bus.stream_request(
+                "Orchestrator.StreamInferChat",
+                FakePayload(),
+            ):
+                chunks.append(chunk)
+
+        assert chunks == [{"delta": "remote first"}]
+        routing_table.resolve_fallback.assert_not_called()
+        inner_bus.stream_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_stream_infer_explicit_selector_error_raises_without_local_stream(
+        self, mesh_bus, inner_bus, routing_table
+    ):
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorChatMessage,
+            OrchestratorInferChatRequest,
+            OrchestratorMethods,
+        )
+
+        selector = MeshAddressSelector(peer_id="assistant-peer")
+        inner_bus.stream_request = AsyncMock()
+        routing_table.resolve.return_value = RouteDecision(
+            target="error",
+            module="Orchestrator",
+            selector=selector,
+            error_code="selector_target_failed",
+            error_message="Orchestrator explicit selector target failed; transparent fallback skipped",
+        )
+
+        with pytest.raises(RuntimeError, match="transparent fallback skipped"):
+            _ = [
+                chunk
+                async for chunk in mesh_bus.stream_request(
+                    OrchestratorMethods.STREAM_INFER_CHAT,
+                    OrchestratorInferChatRequest(
+                        messages=[OrchestratorChatMessage(role="user", content="hello")],
+                        stream=True,
+                        mesh_selector=selector,
+                    ),
+                )
+            ]
+
+        routing_table.resolve.assert_called_once()
+        assert routing_table.resolve.call_args.args == (OrchestratorMethods.STREAM_INFER_CHAT,)
+        assert routing_table.resolve.call_args.kwargs == {"selector": selector}
+        inner_bus.stream_request.assert_not_called()
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_stream_infer_explicit_selector_none_raises_without_local_stream(
+        self, mesh_bus, inner_bus, routing_table
+    ):
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorChatMessage,
+            OrchestratorInferChatRequest,
+            OrchestratorMethods,
+        )
+
+        selector = MeshAddressSelector(peer_id="assistant-peer")
+        inner_bus.stream_request = AsyncMock()
+        routing_table.resolve.return_value = RouteDecision(
+            target="none",
+            module="Orchestrator",
+            selector=selector,
+            error_code="selector_target_failed",
+            error_message="Orchestrator explicit selector target failed; transparent fallback skipped",
+        )
+
+        with pytest.raises(RuntimeError, match="No route available"):
+            _ = [
+                chunk
+                async for chunk in mesh_bus.stream_request(
+                    OrchestratorMethods.STREAM_INFER_CHAT,
+                    OrchestratorInferChatRequest(
+                        messages=[OrchestratorChatMessage(role="user", content="hello")],
+                        stream=True,
+                        mesh_selector=selector,
+                    ),
+                )
+            ]
+
+        routing_table.resolve.assert_called_once()
+        assert routing_table.resolve.call_args.args == (OrchestratorMethods.STREAM_INFER_CHAT,)
+        assert routing_table.resolve.call_args.kwargs == {"selector": selector}
+        inner_bus.stream_request.assert_not_called()
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_local_stream_infer_requires_native_stream_request_without_request_fallback(
+        self, routing_table, peer_bridge, mesh_config
+    ):
+        """BullMQ-like local buses must not serialize async generators via request fallback."""
+        from app.shared.contracts.models.orchestrator import (
+            OrchestratorChatMessage,
+            OrchestratorInferChatRequest,
+            OrchestratorMethods,
+        )
+
+        class BullMQLikeBus:
+            def __init__(self):
+                self.request = AsyncMock(return_value=QueryResult(ok=True, data={"chunks": []}))
+                self.publish = AsyncMock()
+                self.subscribe = MagicMock()
+                self.unsubscribe = MagicMock()
+
+            async def start(self):
+                pass
+
+            async def stop(self):
+                pass
+
+        inner = BullMQLikeBus()
+        routing_table.resolve.return_value = RouteDecision(
+            target="local",
+            module="Orchestrator",
+        )
+        bus = MeshBus(inner, routing_table, peer_bridge, mesh_config)
+
+        with pytest.raises(RuntimeError, match="native stream_request"):
+            _ = [
+                chunk
+                async for chunk in bus.stream_request(
+                    OrchestratorMethods.STREAM_INFER_CHAT,
+                    OrchestratorInferChatRequest(
+                        messages=[OrchestratorChatMessage(role="user", content="hello")],
+                        stream=True,
+                    ),
+                )
+            ]
+
+        inner.request.assert_not_awaited()
 
 
 class TestMeshBusSubscribe:

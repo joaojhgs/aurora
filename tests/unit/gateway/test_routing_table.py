@@ -7,6 +7,7 @@ from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, Peer
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.stt import TranscriptionMethods, WakeWordMethods
 from app.shared.contracts.models.tts import TTSMethods
 
@@ -36,6 +37,7 @@ def mesh_config():
             "Transcription": MeshServiceConfig(prefer="network", fallback="local"),
             "Scheduler": MeshServiceConfig(prefer="local_only"),
             "Tooling": MeshServiceConfig(prefer="local", require_explicit_selector=True),
+            "Orchestrator": MeshServiceConfig(prefer="local"),
         },
     )
 
@@ -280,6 +282,69 @@ class TestRoutingTableResolve:
 
         assert route.target == "error"
         assert route.error_code == "selector_conflict"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "provider_id",
+        [
+            "remote:studio-gpu:Orchestrator",
+            "studio-gpu:Orchestrator",
+            "mesh:studio-gpu:Orchestrator",
+        ],
+    )
+    async def test_orchestrator_provider_aliases_route_to_selected_peer(
+        self, routing_table, peer_registry, provider_id
+    ):
+        peer = _make_negotiated_peer("studio-gpu", ["Orchestrator"], latency_ms=12.0)
+        await peer_registry.register_peer("studio-gpu")
+        await peer_registry.update_manifest("studio-gpu", peer.manifest)
+        await peer_registry.update_latency("studio-gpu", 12.0)
+
+        route = routing_table.resolve(
+            OrchestratorMethods.INFER_CHAT,
+            selector=MeshAddressSelector(provider_id=provider_id),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "studio-gpu"
+        assert route.module == "Orchestrator"
+
+    @pytest.mark.asyncio
+    async def test_infer_chat_selector_from_sdk_mesh_provider_alias_routes_to_peer(
+        self, routing_table, peer_registry
+    ):
+        peer = _make_negotiated_peer("studio-gpu", ["Orchestrator"], latency_ms=12.0)
+        await peer_registry.register_peer("studio-gpu")
+        await peer_registry.update_manifest("studio-gpu", peer.manifest)
+        await peer_registry.update_latency("studio-gpu", 12.0)
+
+        route = routing_table.resolve(
+            OrchestratorMethods.INFER_CHAT,
+            selector=MeshAddressSelector(
+                peer_id="studio-gpu",
+                service_instance_id="remote:studio-gpu:Orchestrator",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "studio-gpu"
+        assert route.module == "Orchestrator"
+        assert route.selector.service_instance_id == "remote:studio-gpu:Orchestrator"
+
+    @pytest.mark.asyncio
+    async def test_wrong_module_mesh_alias_returns_conflict(self, routing_table, peer_registry):
+        peer = _make_negotiated_peer("studio-gpu", ["Orchestrator"])
+        await peer_registry.register_peer("studio-gpu")
+        await peer_registry.update_manifest("studio-gpu", peer.manifest)
+
+        route = routing_table.resolve(
+            OrchestratorMethods.INFER_CHAT,
+            selector=MeshAddressSelector(provider_id="mesh:studio-gpu:TTS"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_conflict"
+        assert "targets TTS, not Orchestrator" in route.error_message
 
 
 class TestRoutingTableResolveFallback:

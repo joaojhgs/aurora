@@ -5,6 +5,15 @@
     "debug": false,
     "assistant": {
       "automatic_tts_readback": false
+    },
+    "desktop_overlay": {
+      "enabled": true,
+      "voice_overlay_enabled": true,
+      "text_hotkey": "CommandOrControl+K",
+      "close_behavior": "hide_to_tray",
+      "auto_close_delay_ms": 1200,
+      "visible_on_all_workspaces": true,
+      "persist_positions": true
     }
   },
   "system": {
@@ -226,6 +235,24 @@
               "chat_format": "chatml-function-calling"
             }
           }
+        },
+        "remote_peer": {
+          "resource_namespace": "inference",
+          "timeout_s": 60
+        },
+        "mesh_peer": {
+          "resource_namespace": "inference",
+          "timeout_s": 60
+        }
+      },
+      "routing": {
+        "dispatch_default": {
+          "enabled": false
+        },
+        "inference_default": {
+          "provider": "configured",
+          "resource_namespace": "inference",
+          "timeout_s": 60
         }
       }
     },

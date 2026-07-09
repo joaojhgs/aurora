@@ -137,7 +137,6 @@ def test_build_tool_bindings_hides_explicitly_blocked_tools():
     assert bindings == {}
 
 
-
 def test_build_tool_bindings_keeps_malformed_non_blocked_tools_visible():
     """Malformed schema metadata must not hide a non-blocked tool from the LLM."""
 
@@ -156,6 +155,7 @@ def test_build_tool_bindings_keeps_malformed_non_blocked_tools_visible():
     assert bindings["legacy_tool"]["tool_name"] == "legacy_tool"
     assert bindings["legacy_tool"]["args_schema"] == {"type": "object", "properties": {}}
     assert bindings["legacy_tool"]["schema_warning"]
+
 
 def test_build_tool_bindings_resolves_duplicate_names_deterministically():
     """Unexpected duplicate bind names are suffixed while preserving provider IDs."""

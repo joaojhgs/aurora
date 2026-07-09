@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
     ToolingApprovalGrantScope,
     ToolingExecuteToolResponse,
@@ -36,6 +37,8 @@ class OrchestratorMethods:
     IMPORT_MODEL = f"{OrchestratorModule.NAME}.ImportModel"
     DOWNLOAD_MODEL = f"{OrchestratorModule.NAME}.DownloadModel"
     BENCHMARK_MODEL = f"{OrchestratorModule.NAME}.BenchmarkModel"
+    INFER_CHAT = f"{OrchestratorModule.NAME}.InferChat"
+    STREAM_INFER_CHAT = f"{OrchestratorModule.NAME}.StreamInferChat"
     HEALTH_CHECK = f"{OrchestratorModule.NAME}.HealthCheck"
 
 
@@ -64,6 +67,12 @@ class OrchestratorProcessRequest(IOModel):
     correlation_id: str | None = None
     stream: bool = False
     client_tts_playback: bool | None = None
+    dispatch_selector: MeshAddressSelector | None = None
+    mesh_selector: MeshAddressSelector | None = None
+    selector: MeshAddressSelector | None = None
+    inference_selector: MeshAddressSelector | None = None
+    inference_provider_id: str | None = None
+    inference_model_id: str | None = None
 
 
 class OrchestratorResponse(IOModel):
@@ -74,6 +83,78 @@ class OrchestratorResponse(IOModel):
     request_id: str | None = None
     correlation_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestratorChatMessage(IOModel):
+    """Provider-neutral chat message for inference-only mesh calls."""
+
+    role: Literal["system", "user", "assistant", "tool"] = "user"
+    content: str = ""
+    name: str | None = None
+    tool_call_id: str | None = None
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestratorInferChatRequest(IOModel):
+    """Run a chat-model inference on the receiving Orchestrator runtime.
+
+    The caller may select a peer/provider/model and pass provider-neutral tool
+    schemas for binding, but may not override generation parameters such as
+    context size, max tokens, temperature, or credentials. ``params`` is accepted
+    only as caller metadata for tracing/debugging and must not be used as
+    generation configuration by the receiving peer. External callers need
+    ``Orchestrator.RemoteInference`` before selecting an explicit provider/model
+    that can expand cloud catalogs, spend cloud quota, or use non-default local
+    runtime resources.
+    """
+
+    messages: list[OrchestratorChatMessage] = Field(default_factory=list)
+    stream: bool = False
+    model_id: str | None = None
+    provider_id: str | None = None
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    tool_choice: dict[str, Any] | str | bool | None = None
+    params: dict[str, Any] = Field(default_factory=dict)
+    correlation_id: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    mesh_selector: MeshAddressSelector | None = None
+    selector: MeshAddressSelector | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestratorInferChatResponse(IOModel):
+    """Complete inference-only chat result."""
+
+    text: str = ""
+    message: OrchestratorChatMessage | None = None
+    model_id: str | None = None
+    provider_id: str | None = None
+    finish_reason: str | None = None
+    correlation_id: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    secrets_redacted: bool = True
+
+
+class OrchestratorInferChatChunk(IOModel):
+    """Streaming token/tool-call chunk for inference-only mesh calls."""
+
+    delta: str = ""
+    text: str = ""
+    sequence: int = 0
+    is_final: bool = False
+    model_id: str | None = None
+    provider_id: str | None = None
+    finish_reason: str | None = None
+    correlation_id: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    tool_call_chunks: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    secrets_redacted: bool = True
 
 
 AssistantStreamEventKind = Literal[
@@ -416,6 +497,24 @@ class ModelRuntimeProgressInfo(IOModel):
     updated_at: str | None = None
 
 
+class ModelRuntimeModelInfo(IOModel):
+    """One model exposed by a runtime provider catalog."""
+
+    model_id: str
+    display_name: str | None = None
+    provider_id: str | None = None
+    provider_kind: str | None = None
+    upstream_provider_type: str | None = None
+    source: str | None = None
+    context_window: int | None = None
+    generation_limit: int | None = None
+    capabilities: list[str] = Field(default_factory=list)
+    default: bool = False
+    available: bool | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    secrets_redacted: bool = True
+
+
 class ModelRuntimeProviderInfo(IOModel):
     """One model provider/runtime candidate known to the backend."""
 
@@ -423,16 +522,23 @@ class ModelRuntimeProviderInfo(IOModel):
     display_name: str
     backend_kind: str
     provider_type: str
+    provider_kind: str | None = None
+    upstream_provider_type: str | None = None
+    provider_peer_id: str | None = None
+    provider_service_instance_id: str | None = None
     enabled: bool = True
     selected: bool = False
     health: str = "unknown"
     health_reason: str | None = None
     model_id: str | None = None
+    default_model_id: str | None = None
     source: str | None = None
     license: str | None = None
     context_window: int | None = None
     generation_limit: int | None = None
     hardware: dict[str, Any] = Field(default_factory=dict)
+    models: list[ModelRuntimeModelInfo] = Field(default_factory=list)
+    model_catalog: dict[str, Any] = Field(default_factory=dict)
     model_files: list[ModelRuntimeFileInfo] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     benchmark: ModelRuntimeBenchmarkInfo = Field(default_factory=ModelRuntimeBenchmarkInfo)
@@ -457,6 +563,14 @@ class ModelRuntimeCatalogRequest(IOModel):
 
     include_unavailable: bool = True
     include_operations: bool = True
+    include_remote: bool = False
+    include_cloud_models: bool = False
+    dispatch_selector: MeshAddressSelector | None = None
+    catalog_selector: MeshAddressSelector | None = None
+    remote_catalog_selector: MeshAddressSelector | None = None
+    # Deprecated compatibility alias. New callers must use catalog_selector so
+    # MeshBus does not confuse catalog aggregation with transport dispatch.
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class ModelRuntimeCatalogResponse(IOModel):

@@ -236,7 +236,9 @@ async def test_on_wake_word_interrupts_tts_and_starts_session(service, mock_bus)
         backend=WakeWordBackendType.OPENWAKEWORD,
     )
 
-    await service._on_wake_word_detected(Envelope(payload=wake_word_event, type=WakeWordTopics.DETECTED))
+    await service._on_wake_word_detected(
+        Envelope(payload=wake_word_event, type=WakeWordTopics.DETECTED)
+    )
 
     assert service._state == STTState.LISTENING
     assert service._current_session_id is not None
@@ -410,9 +412,7 @@ async def test_realtime_partial_refreshes_listening_timeout(service, mock_bus):
     assert service._timeout_task is not None
     assert service._timeout_task is not first_timeout_task
 
-    partial_calls = [
-        c for c in mock_bus.publish.call_args_list if c.args[0] == STTMethods.PARTIAL
-    ]
+    partial_calls = [c for c in mock_bus.publish.call_args_list if c.args[0] == STTMethods.PARTIAL]
     assert partial_calls, "Realtime transcription should be published for UI updates"
 
     # Cleanup timeout tasks created by the session and refresh.

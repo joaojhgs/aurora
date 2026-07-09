@@ -12,7 +12,9 @@ from app.services.scheduler.scheduler_manager import (
 )
 
 
-def legacy_job(function: str, *, module: str = f"{LEGACY_TOOLING_MODULE_PREFIX}.scheduler_tool") -> CronJob:
+def legacy_job(
+    function: str, *, module: str = f"{LEGACY_TOOLING_MODULE_PREFIX}.scheduler_tool"
+) -> CronJob:
     now = datetime.now()
     return CronJob(
         id=f"job-{function}",
