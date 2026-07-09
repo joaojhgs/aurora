@@ -1,67 +1,23 @@
 {
   "version": 1,
-  "createdAt": "2026-07-06T02:50:50.006Z",
-  "updatedAt": "2026-07-06T05:54:17.262Z",
+  "createdAt": "2026-07-08T19:59:14.984Z",
+  "updatedAt": "2026-07-08T23:43:33.006Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
   "codexGoalMode": "aggregate",
   "goals": [
     {
-      "id": "G001-backend-contract-read-model-gap-clos",
-      "title": "Backend contract/read-model gap closure",
-      "objective": "Backend contract/read-model gap closure\nInspect current Tooling/Scheduler/Orchestrator contracts and implement any missing typed backend methods/read models required by the plan: policy summary, source list/detail, source/tool policy overrides, grants, pending approvals, policy audit/history, MCP/plugin onboarding/test where supported, mesh catalog status, scheduler dependencies.\nAdd/adjust config schema/defaults only when backend policy state requires it and regenerate config models/keys/defaults.\nAdd backend tests for redaction, policy precedence, grants, pending approvals, mesh catalog lifecycle/staleness, scheduler dependencies, and audit mutations.",
-      "status": "complete",
-      "attempt": 0,
-      "createdAt": "2026-07-06T02:50:50.006Z",
-      "updatedAt": "2026-07-06T05:51:45.058Z",
-      "completedAt": "2026-07-06T05:51:45.058Z",
-      "evidence": "Completed and verified Tooling Page UI execution scope for G001-backend-contract-read-model-gap-clos; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
-    },
-    {
-      "id": "G002-sdk-tooling-management-api",
-      "title": "SDK Tooling management API",
-      "objective": "SDK Tooling management API\nAdd typed SDK models and client methods for the backend read/write surfaces above.\nUpdate descriptors, fixtures, mock client, normalizers, package exports, and SDK tests.\nEnsure request paths are Gateway-compatible and redaction metadata is preserved.",
-      "status": "complete",
-      "attempt": 0,
-      "createdAt": "2026-07-06T02:50:50.006Z",
-      "updatedAt": "2026-07-06T05:51:45.518Z",
-      "completedAt": "2026-07-06T05:51:45.518Z",
-      "evidence": "Completed and verified Tooling Page UI execution scope for G002-sdk-tooling-management-api; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
-    },
-    {
-      "id": "G003-tools-ui-architecture-and-source-fir",
-      "title": "`/tools` UI architecture and source-first page",
-      "objective": "`/tools` UI architecture and source-first page\nReplace/split `packages/aurora-ui/src/tool-approval-panel.tsx` into a production source-first tooling console under `packages/aurora-ui/src/tooling/` as described in the plan.\nBuild responsive dark UI using existing Aurora/shadcn primitives and platform-surface truth.\nInclude source rail, summary/status, detail panel, on-demand tool expansion, empty/offline/error/loading states, and mock/demo labels.",
-      "status": "complete",
-      "attempt": 0,
-      "createdAt": "2026-07-06T02:50:50.006Z",
-      "updatedAt": "2026-07-06T05:51:45.978Z",
-      "completedAt": "2026-07-06T05:51:45.978Z",
-      "evidence": "Completed and verified Tooling Page UI execution scope for G003-tools-ui-architecture-and-source-fir; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
-    },
-    {
-      "id": "G004-policy-grants-approvals-onboarding-m",
-      "title": "Policy, grants, approvals, onboarding, mesh, scheduler, and audit UX",
-      "objective": "Policy, grants, approvals, onboarding, mesh, scheduler, and audit UX\nImplement global policy controls, source/package/tool trust controls, per-tool overrides, future-tool inheritance warnings, grant lifecycle, pending runtime approval queue, MCP/plugin onboarding wizard stubs/flows backed by real SDK methods, mesh catalog/staleness/re-announcement views, scheduled tool action grant dependencies, and policy audit/history timeline.\nPreserve assistant inline approval separation: `/tools` manages catalog policy/grants; assistant inline approval handles one exact runtime tool call with approve once/session/until-expiry/always and deny once/always.",
-      "status": "complete",
-      "attempt": 0,
-      "createdAt": "2026-07-06T02:50:50.006Z",
-      "updatedAt": "2026-07-06T05:51:46.424Z",
-      "completedAt": "2026-07-06T05:51:46.424Z",
-      "evidence": "Completed and verified Tooling Page UI execution scope for G004-policy-grants-approvals-onboarding-m; backend/SDK/UI targeted tests, broad pytest, typecheck/build/test gates, code-reviewer APPROVE, architect CLEAR, and quality gate artifacts are recorded."
-    },
-    {
-      "id": "G005-docs-verification-and-final-quality",
-      "title": "Docs, verification, and final quality gate",
-      "objective": "Docs, verification, and final quality gate\nUpdate docs/operator guidance for the real Tooling page behavior and platform limits.\nRun targeted backend, SDK, UI, and route tests. Add/adjust tests so previous placeholder/flat Tooling UI and missing policy surfaces would fail.\nRun final cleanup/no-op cleanup if appropriate, independent code review, architect invariant audit, and checkpoint final evidence.",
-      "status": "complete",
-      "attempt": 0,
-      "createdAt": "2026-07-06T02:50:50.006Z",
-      "updatedAt": "2026-07-06T05:54:17.262Z",
-      "evidence": "Docs, verification, aiSlopCleaner/code-simplifier evidence, code-reviewer APPROVE, architect CLEAR, quality gate JSON, and completed Codex goal snapshot recorded.",
-      "completedAt": "2026-07-06T05:54:17.262Z"
+      "id": "G001-fix-two-aurora-issues-in-parallel-wh",
+      "title": "Fix two Aurora issues in parallel while preserving concurrent fronten...",
+      "objective": "Fix two Aurora issues in parallel while preserving concurrent frontend changes: (1) tooling/orchestrator/mesh regression where the LLM sees no tools, including core tools such as web search. Investigate tooling policy, tool sharing via mesh peers, catalog negotiation, and orchestrator exposure. Restore rule: only policy-blocked tools are hidden; insecure or not-yet-trusted tools remain visible and require permission before execution. Ensure core tools remain visible and add/update focused regressions. (2) desktop Tauri voice overlay polish: reduce transparent visible corner/background from the effect without reducing animation, allow dragging from any non-interactive overlay area, and show drag cursor only during active drag except the three-dot handle. Acceptance: targeted Python tooling/orchestrator tests pass; targeted Tauri/UI overlay tests and typechecks pass; no unrelated files reverted; small focused changes.",
+      "status": "in_progress",
+      "attempt": 1,
+      "createdAt": "2026-07-08T19:59:14.984Z",
+      "updatedAt": "2026-07-08T23:43:33.006Z",
+      "startedAt": "2026-07-08T20:18:12.778Z"
     }
   ],
-  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json for the Tooling Page UI Production Execution brief, including backend contracts, SDK Tooling API, production /tools UI, policy/grants/approvals/onboarding/mesh/scheduler/audit UX, docs, verification, and final quality gates; use .omx/ultragoal/ledger.jsonl as the audit trail."
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+  "activeGoalId": "G001-fix-two-aurora-issues-in-parallel-wh"
 }

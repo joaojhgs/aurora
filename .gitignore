@@ -245,3 +245,10 @@ instructions
 .omx/cache/
 .omx/notepad.md
 .omx/project-memory.json
+
+# Local oh-my-claudecode session/tool state (never checked in)
+.omc/
+
+# Playwright run output (traces, HTML reports) - not the checked-in visual baselines
+apps/*/test-results/
+apps/*/reports/playwright-*/

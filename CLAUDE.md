@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **aurora** (8464 symbols, 26632 relationships, 300 execution flows).
+This project is indexed by GitNexus as **aurora** (10456 symbols, 32480 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 
