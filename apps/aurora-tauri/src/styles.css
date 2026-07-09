@@ -44,3 +44,21 @@
   min-height: 40px;
   padding: 0 14px;
 }
+
+html.aurora-overlay-surface,
+body.aurora-overlay-surface,
+html[data-aurora-surface='overlay'],
+body[data-aurora-surface='overlay'],
+html.aurora-overlay-surface #root,
+body.aurora-overlay-surface #root,
+html[data-aurora-surface='overlay'] #root,
+body[data-aurora-surface='overlay'] #root {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+body.aurora-overlay-surface,
+body[data-aurora-surface='overlay'] {
+  margin: 0;
+  overflow: hidden;
+}

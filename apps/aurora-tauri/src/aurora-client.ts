@@ -15,7 +15,7 @@ import { listen } from '@tauri-apps/api/event'
 
 export interface AuroraTauriRuntime {
   client: AuroraClient
-  mode: 'desktop-local' | 'desktop-thin' | 'mock'
+  mode: 'desktop-local' | 'desktop-thin' | 'mobile-native' | 'mock'
   modePreferenceStore?: AuroraModePreferenceStore
   sidecarStatus: () => Promise<TauriSidecarStatus | null>
   startSidecar: () => Promise<TauriSidecarStatus | null>
@@ -32,6 +32,15 @@ export interface AuroraTauriRuntime {
   iosSecureStorageStatus: () => Promise<TauriNativeFeatureStatus | null>
   iosBiometricStatus: () => Promise<TauriNativeFeatureStatus | null>
   androidBaselineStatus: () => Promise<TauriAndroidBaselineStatus | null>
+  overlayShow?: (mode: AuroraOverlayRuntimeMode) => Promise<AuroraOverlayCommandStatus | null>
+  overlayHide?: () => Promise<AuroraOverlayCommandStatus | null>
+  overlayStatus?: () => Promise<AuroraOverlayCommandStatus | null>
+  overlaySetPassthrough?: (enabled: boolean) => Promise<AuroraOverlayCommandStatus | null>
+  overlayStartDrag?: () => Promise<AuroraOverlayCommandStatus | null>
+  overlayMoveBy?: (dx: number, dy: number) => Promise<AuroraOverlayCommandStatus | null>
+  overlayRegisterHotkey?: (accelerator: string) => Promise<AuroraOverlayCommandStatus | null>
+  overlayUnregisterHotkey?: () => Promise<AuroraOverlayCommandStatus | null>
+  listenOverlayMode?: (handler: AuroraOverlayModeListener) => Promise<() => void>
   shutdown: () => Promise<void>
 }
 
@@ -41,6 +50,19 @@ export interface AuroraModePreferenceStore {
   writeSelectedMode: (modeId: string) => Promise<boolean>
 }
 
+export type AuroraOverlayRuntimeMode = 'voice' | 'text'
+export type AuroraOverlayModeListener = (payload: unknown) => void
+
+export interface AuroraOverlayCommandStatus {
+  ok?: boolean
+  mode?: AuroraOverlayRuntimeMode | 'hidden'
+  visible?: boolean
+  pointerPassthrough?: boolean
+  accelerator?: string
+  reason?: string
+  [key: string]: unknown
+}
+
 const ONBOARDING_MODE_KEY = 'aurora.session.onboarding-mode'
 
 export function createAuroraTauriRuntime(): AuroraTauriRuntime {
@@ -48,6 +70,40 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
 
   if (isTauriRuntime()) {
     const nativeTransport = new TauriLocalTransport({ invoke, listen })
+    const isMobileNative = isMobileTauriRuntime()
+
+    if (isMobileNative) {
+      const mobileTransport = configuredGatewayUrl
+        ? new HttpGatewayTransport({
+            baseUrl: configuredGatewayUrl,
+            bearerToken: import.meta.env.VITE_AURORA_GATEWAY_TOKEN
+          })
+        : nativeTransport
+
+      return {
+        client: new AuroraClient({ transport: mobileTransport }),
+        mode: 'mobile-native',
+        modePreferenceStore: secureModePreferenceStore(nativeTransport, 'Tauri secure storage for mobile native mode preference'),
+        sidecarStatus: async () => null,
+        startSidecar: async () => null,
+        stopSidecar: async () => null,
+        nativePermissionStatus: () => nativeTransport.getNativePermissionStatus(),
+        trayStatus: async () => null,
+        notificationStatus: () => nativeTransport.getNotificationStatus(),
+        iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
+        iosInvocationStatus: () => nativeTransport.getIosInvocationStatus(),
+        iosLocalLightInferenceStatus: () => nativeTransport.getIosLocalLightInferenceStatus(),
+        iosBackgroundStatus: () => nativeTransport.getIosBackgroundStatus(),
+        dialogStatus: () => nativeTransport.getDialogStatus(),
+        audioBridgeStatus: () => nativeTransport.getAudioBridgeStatus(),
+        iosSecureStorageStatus: () => nativeTransport.getIosSecureStorageStatus(),
+        iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
+        androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+        ...noopOverlayControls('mobile-native-runtime'),
+        shutdown: async () => undefined
+      }
+    }
+
     if (configuredGatewayUrl) {
       return {
         client: new AuroraClient({
@@ -73,6 +129,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
         iosSecureStorageStatus: () => nativeTransport.getIosSecureStorageStatus(),
         iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
         androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+        ...tauriOverlayControls(),
         shutdown: () => invoke<void>('aurora_shutdown')
       }
     }
@@ -96,6 +153,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       iosSecureStorageStatus: () => nativeTransport.getIosSecureStorageStatus(),
       iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
       androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+      ...tauriOverlayControls(),
       shutdown: () => invoke<void>('aurora_shutdown')
     }
   }
@@ -126,6 +184,7 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
       iosSecureStorageStatus: async () => null,
       iosBiometricStatus: async () => null,
       androidBaselineStatus: async () => null,
+      ...noopOverlayControls(),
       shutdown: async () => undefined
     }
   }
@@ -149,8 +208,63 @@ export function createAuroraTauriRuntime(): AuroraTauriRuntime {
     iosSecureStorageStatus: async () => null,
     iosBiometricStatus: async () => null,
     androidBaselineStatus: async () => null,
+    ...noopOverlayControls(),
     shutdown: async () => undefined
   }
+}
+
+function tauriOverlayControls(): Pick<
+  AuroraTauriRuntime,
+  'overlayShow' | 'overlayHide' | 'overlayStatus' | 'overlaySetPassthrough' | 'overlayStartDrag' | 'overlayMoveBy' | 'overlayRegisterHotkey' | 'overlayUnregisterHotkey' | 'listenOverlayMode'
+> {
+  return {
+    overlayShow: (mode) => invokeOverlayCommand('aurora_overlay_show', { mode }),
+    overlayHide: () => invokeOverlayCommand('aurora_overlay_hide'),
+    overlayStatus: () => invokeOverlayCommand('aurora_overlay_status'),
+    overlaySetPassthrough: (enabled) => invokeOverlayCommand('aurora_overlay_set_passthrough', { enabled }),
+    overlayStartDrag: () => invokeOverlayCommand('aurora_overlay_start_drag'),
+    overlayMoveBy: (dx, dy) => invokeOverlayCommand('aurora_overlay_move_by', { dx, dy }),
+    overlayRegisterHotkey: (accelerator) => invokeOverlayCommand('aurora_overlay_register_hotkey', { accelerator }),
+    overlayUnregisterHotkey: () => invokeOverlayCommand('aurora_overlay_unregister_hotkey'),
+    listenOverlayMode: (handler) => listen<unknown>('aurora://overlay-mode', (event) => handler(event.payload))
+  }
+}
+
+function noopOverlayControls(reason = 'not-tauri-runtime'): Pick<
+  AuroraTauriRuntime,
+  'overlayShow' | 'overlayHide' | 'overlayStatus' | 'overlaySetPassthrough' | 'overlayStartDrag' | 'overlayMoveBy' | 'overlayRegisterHotkey' | 'overlayUnregisterHotkey' | 'listenOverlayMode'
+> {
+  const unavailable = { ok: false, available: false, disabled: true, visible: false, hotkeyRegistered: false, reason }
+
+  return {
+    overlayShow: async (mode) => ({ ...unavailable, mode, visible: false }),
+    overlayHide: async () => ({ ...unavailable, mode: 'hidden', visible: false }),
+    overlayStatus: async () => ({ ...unavailable, mode: 'hidden', visible: false }),
+    overlaySetPassthrough: async (enabled) => ({ ...unavailable, pointerPassthrough: enabled }),
+    overlayStartDrag: async () => ({ ...unavailable }),
+    overlayMoveBy: async () => ({ ...unavailable }),
+    overlayRegisterHotkey: async (accelerator) => ({ ...unavailable, accelerator }),
+    overlayUnregisterHotkey: async () => ({ ...unavailable, mode: 'hidden' }),
+    listenOverlayMode: async () => () => undefined
+  }
+}
+
+async function invokeOverlayCommand(
+  command: string,
+  args?: Record<string, unknown>
+): Promise<AuroraOverlayCommandStatus | null> {
+  try {
+    return await invoke<AuroraOverlayCommandStatus | null>(command, args)
+  } catch (error) {
+    if (isUnavailableOverlayCommandError(error)) return null
+    console.warn(`Aurora overlay command failed: ${command}`, error)
+    return null
+  }
+}
+
+function isUnavailableOverlayCommandError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /command.+not found|unknown command|not allowed|permission denied|missing/i.test(message)
 }
 
 function secureModePreferenceStore(
@@ -185,6 +299,13 @@ function memoryOnlyModePreferenceStore(evidence: string): AuroraModePreferenceSt
 function isTauriRuntime(): boolean {
   if (typeof window === 'undefined') return false
   return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
+}
+
+function isMobileTauriRuntime(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const userAgent = navigator.userAgent
+  if (/Android|iPhone|iPad|iPod/i.test(userAgent)) return true
+  return /Macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1
 }
 
 function devLoopbackGatewayUrl(): string | undefined {

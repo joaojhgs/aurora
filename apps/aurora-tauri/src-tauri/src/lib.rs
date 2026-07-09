@@ -12,10 +12,15 @@ use std::thread;
 use std::time::{Duration, Instant};
 #[cfg(desktop)]
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
 };
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State};
+#[cfg(desktop)]
+use tauri::{WebviewUrl, WebviewWindowBuilder};
+#[cfg(desktop)]
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use thiserror::Error;
 use tokio::sync::watch;
 use url::Url;
@@ -27,6 +32,13 @@ const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
 const BUNDLED_SIDECAR_NAME: &str = "aurora-sidecar";
 const UPDATER_ENDPOINT: &str =
     "https://releases.aurora.local/latest/{{target}}/{{arch}}/{{current_version}}.json";
+const OVERLAY_WINDOW_LABEL: &str = "aurora-overlay";
+const DEFAULT_OVERLAY_HOTKEY: &str = "CommandOrControl+K";
+const OVERLAY_MARGIN: f64 = 24.0;
+const VOICE_OVERLAY_WIDTH: f64 = 220.0;
+const VOICE_OVERLAY_HEIGHT: f64 = 230.0;
+const TEXT_OVERLAY_WIDTH: f64 = 520.0;
+const TEXT_OVERLAY_HEIGHT: f64 = 360.0;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -367,6 +379,146 @@ struct IosAdminUnlockRequest {
 struct IosAuroraActionRequest {
     action: String,
     correlation_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum OverlayMode {
+    Voice,
+    Text,
+}
+
+impl OverlayMode {
+    fn parse(value: Option<String>) -> Result<Self, AuroraCommandError> {
+        match value
+            .unwrap_or_else(|| "voice".to_string())
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "voice" => Ok(Self::Voice),
+            "text" => Ok(Self::Text),
+            other => Err(AuroraCommandError::Gateway(format!(
+                "unsupported overlay mode: {other}"
+            ))),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Voice => "voice",
+            Self::Text => "text",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct OverlayState {
+    mode: Option<OverlayMode>,
+    visible: bool,
+    pointer_passthrough: bool,
+    hotkey_accelerator: String,
+    hotkey_registered: bool,
+    last_registration_error: Option<String>,
+    voice_position: Option<OverlayPoint>,
+    text_position: Option<OverlayPoint>,
+}
+
+impl OverlayState {
+    fn new() -> Self {
+        Self {
+            mode: None,
+            visible: false,
+            pointer_passthrough: true,
+            hotkey_accelerator: DEFAULT_OVERLAY_HOTKEY.to_string(),
+            hotkey_registered: false,
+            last_registration_error: None,
+            voice_position: None,
+            text_position: None,
+        }
+    }
+
+    fn saved_position(&self, mode: OverlayMode) -> Option<OverlayPoint> {
+        match mode {
+            OverlayMode::Voice => self.voice_position,
+            OverlayMode::Text => self.text_position,
+        }
+    }
+
+    fn save_position(&mut self, mode: OverlayMode, position: OverlayPoint) {
+        match mode {
+            OverlayMode::Voice => self.voice_position = Some(position),
+            OverlayMode::Text => self.text_position = Some(position),
+        }
+    }
+
+    fn status(&self) -> OverlayStatus {
+        OverlayStatus {
+            available: cfg!(desktop),
+            visible: self.visible,
+            mode: self.mode.map(OverlayMode::as_str).map(ToString::to_string),
+            pointer_passthrough: self.pointer_passthrough,
+            hotkey_accelerator: Some(self.hotkey_accelerator.clone()),
+            hotkey_registered: self.hotkey_registered,
+            last_registration_error: self.last_registration_error.clone(),
+            reason: if cfg!(desktop) {
+                None
+            } else {
+                Some(
+                    "Aurora overlay windows and global shortcuts require a desktop Tauri target"
+                        .to_string(),
+                )
+            },
+            secrets_redacted: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct OverlayPoint {
+    x: f64,
+    y: f64,
+}
+
+impl OverlayPoint {
+    fn to_logical_position(self) -> LogicalPosition<f64> {
+        LogicalPosition::new(self.x, self.y)
+    }
+}
+
+type SharedOverlayState = Arc<Mutex<OverlayState>>;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OverlayStatus {
+    available: bool,
+    visible: bool,
+    mode: Option<String>,
+    pointer_passthrough: bool,
+    hotkey_accelerator: Option<String>,
+    hotkey_registered: bool,
+    last_registration_error: Option<String>,
+    reason: Option<String>,
+    secrets_redacted: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClosePolicy {
+    HideToTray,
+    HideOverlay,
+    AllowClose,
+}
+
+fn close_policy_for_label(label: &str) -> ClosePolicy {
+    match label {
+        "main" => ClosePolicy::HideToTray,
+        OVERLAY_WINDOW_LABEL => ClosePolicy::HideOverlay,
+        _ => ClosePolicy::AllowClose,
+    }
+}
+
+fn should_suppress_overlay_for_main_focus(main_window_focused: bool) -> bool {
+    main_window_focused
 }
 
 struct SidecarState {
@@ -882,17 +1034,29 @@ async fn aurora_native_permission_status() -> Result<NativePermissionStatus, Aur
 
 #[tauri::command]
 async fn aurora_tray_status() -> Result<NativeFeatureStatus, AuroraCommandError> {
-    let mut details = BTreeMap::new();
-    details.insert("menuItems".to_string(), json!(["show", "quit"]));
-    details.insert("backendTruthRequired".to_string(), json!(false));
-    Ok(NativeFeatureStatus {
-        available: true,
-        permission: "aurora.trayStatus".to_string(),
-        capability: "desktop.tray".to_string(),
-        source: "tauri-core-tray-icon".to_string(),
-        reason: None,
-        details,
-    })
+    #[cfg(desktop)]
+    {
+        let mut details = BTreeMap::new();
+        details.insert("menuItems".to_string(), json!(["show", "quit"]));
+        details.insert("backendTruthRequired".to_string(), json!(false));
+        return Ok(NativeFeatureStatus {
+            available: true,
+            permission: "aurora.trayStatus".to_string(),
+            capability: "desktop.tray".to_string(),
+            source: "tauri-core-tray-icon".to_string(),
+            reason: None,
+            details,
+        });
+    }
+
+    #[cfg(not(desktop))]
+    {
+        denied_native_feature_status(
+            "aurora.trayStatus",
+            "desktop.tray",
+            "desktop tray is unsupported on mobile/native non-desktop targets",
+        )
+    }
 }
 
 #[tauri::command]
@@ -1789,23 +1953,332 @@ async fn aurora_secure_file_handle_open(
 }
 
 #[tauri::command]
+async fn aurora_overlay_show(
+    app: AppHandle,
+    overlay_state: State<'_, SharedOverlayState>,
+    mode: Option<String>,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    let mode = OverlayMode::parse(mode)?;
+    #[cfg(desktop)]
+    if should_suppress_overlay_for_main_focus(main_window_is_focused(&app)) {
+        hide_overlay_window(&app);
+        let status = overlay_hidden_status(&overlay_state, Some("main-window-focused"))?;
+        let _ = app.emit("aurora://overlay-mode", json!({ "mode": "hidden" }));
+        return Ok(status);
+    }
+    let saved_position = {
+        let overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.saved_position(mode)
+    };
+    #[cfg(desktop)]
+    {
+        let window = ensure_overlay_window(&app)?;
+        configure_overlay_for_mode(&window, mode, saved_position);
+        let _ = window.show();
+        set_overlay_passthrough_after_show(&window, false);
+        if mode == OverlayMode::Text {
+            let _ = window.set_focus();
+        }
+    }
+    let status = {
+        let mut overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.mode = Some(mode);
+        overlay.visible = cfg!(desktop);
+        overlay.pointer_passthrough = false;
+        overlay.status()
+    };
+    let _ = app.emit("aurora://overlay-mode", json!({ "mode": mode.as_str() }));
+    Ok(status)
+}
+
+#[tauri::command]
+async fn aurora_overlay_hide(
+    app: AppHandle,
+    overlay_state: State<'_, SharedOverlayState>,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    #[cfg(desktop)]
+    hide_overlay_window(&app);
+    let status = overlay_hidden_status(&overlay_state, None)?;
+    let _ = app.emit("aurora://overlay-mode", json!({ "mode": "hidden" }));
+    Ok(status)
+}
+
+#[tauri::command]
+async fn aurora_overlay_status(
+    overlay_state: State<'_, SharedOverlayState>,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    let overlay = overlay_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    Ok(overlay.status())
+}
+
+#[tauri::command]
+async fn aurora_overlay_set_passthrough(
+    app: AppHandle,
+    overlay_state: State<'_, SharedOverlayState>,
+    enabled: bool,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    let allow_native_passthrough = {
+        let overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        should_apply_overlay_passthrough_to_native(overlay.visible, overlay.mode, enabled)
+    };
+    #[cfg(desktop)]
+    if let Some(window) = app.get_webview_window(OVERLAY_WINDOW_LABEL) {
+        if allow_native_passthrough && overlay_window_is_visible(&window) {
+            set_overlay_passthrough(&window, enabled);
+        } else if overlay_window_is_visible(&window) {
+            set_overlay_passthrough(&window, false);
+        }
+    }
+    let mut overlay = overlay_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    overlay.pointer_passthrough = allow_native_passthrough && enabled;
+    Ok(overlay.status())
+}
+
+#[tauri::command]
+async fn aurora_overlay_start_drag(
+    app: AppHandle,
+    overlay_state: State<'_, SharedOverlayState>,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    let mode = {
+        let overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.mode
+    };
+
+    #[cfg(desktop)]
+    {
+        if should_suppress_overlay_for_main_focus(main_window_is_focused(&app)) {
+            hide_overlay_window(&app);
+            let status = overlay_hidden_status(&overlay_state, Some("main-window-focused"))?;
+            let _ = app.emit("aurora://overlay-mode", json!({ "mode": "hidden" }));
+            return Ok(status);
+        }
+
+        if mode.is_some() {
+            if let Some(window) = app.get_webview_window(OVERLAY_WINDOW_LABEL) {
+                if overlay_window_is_visible(&window) {
+                    set_overlay_passthrough(&window, false);
+                    window.start_dragging().map_err(|error| {
+                        AuroraCommandError::Gateway(format!(
+                            "failed to start overlay native drag: {error}"
+                        ))
+                    })?;
+                    let mut overlay = overlay_state
+                        .lock()
+                        .map_err(|_| AuroraCommandError::SidecarState)?;
+                    overlay.visible = true;
+                    overlay.pointer_passthrough = false;
+                    return Ok(overlay.status());
+                }
+            }
+        }
+    }
+
+    let overlay = overlay_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    Ok(overlay.status())
+}
+
+#[tauri::command]
+async fn aurora_overlay_move_by(
+    app: AppHandle,
+    overlay_state: State<'_, SharedOverlayState>,
+    dx: f64,
+    dy: f64,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    let mode = {
+        let overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.mode
+    };
+
+    #[cfg(desktop)]
+    if let (Some(mode), Some(window)) = (mode, app.get_webview_window(OVERLAY_WINDOW_LABEL)) {
+        let scale_factor = overlay_scale_factor(&window);
+        let current = window.outer_position().map_err(|error| {
+            AuroraCommandError::Gateway(format!("failed to read overlay position: {error}"))
+        })?;
+        let current_logical: LogicalPosition<f64> = current.to_logical(scale_factor);
+        let next = OverlayPoint {
+            x: current_logical.x + dx,
+            y: current_logical.y + dy,
+        };
+        let _ = window.set_position(next.to_logical_position());
+        let mut overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.save_position(mode, next);
+        overlay.pointer_passthrough = false;
+        return Ok(overlay.status());
+    }
+
+    let overlay = overlay_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    Ok(overlay.status())
+}
+
+#[tauri::command]
+async fn aurora_overlay_unregister_hotkey(
+    app: AppHandle,
+    overlay_state: State<'_, SharedOverlayState>,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    #[cfg(desktop)]
+    {
+        let (hotkey_accelerator, hotkey_registered) = {
+            let overlay = overlay_state
+                .lock()
+                .map_err(|_| AuroraCommandError::SidecarState)?;
+            (
+                overlay.hotkey_accelerator.clone(),
+                overlay.hotkey_registered,
+            )
+        };
+
+        if hotkey_registered {
+            if let Ok(previous_shortcut) = parse_overlay_shortcut(&hotkey_accelerator) {
+                let _ = app.global_shortcut().unregister(previous_shortcut);
+            }
+        }
+
+        let mut overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.hotkey_registered = false;
+        overlay.last_registration_error = None;
+        return Ok(overlay.status());
+    }
+
+    #[cfg(not(desktop))]
+    {
+        let _ = app;
+        let mut overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.hotkey_registered = false;
+        overlay.last_registration_error = None;
+        Ok(overlay.status())
+    }
+}
+
+#[tauri::command]
+async fn aurora_overlay_register_hotkey(
+    app: AppHandle,
+    overlay_state: State<'_, SharedOverlayState>,
+    accelerator: Option<String>,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    let accelerator = accelerator.unwrap_or_else(|| DEFAULT_OVERLAY_HOTKEY.to_string());
+    let parsed = parse_overlay_shortcut(&accelerator);
+    if let Err(error) = parsed.as_ref() {
+        let mut overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.last_registration_error = Some(error.to_string());
+        return Ok(overlay.status());
+    }
+
+    #[cfg(desktop)]
+    {
+        let shortcut = parsed.expect("overlay shortcut was parsed above");
+        let previous = {
+            let overlay = overlay_state
+                .lock()
+                .map_err(|_| AuroraCommandError::SidecarState)?;
+            (
+                overlay.hotkey_accelerator.clone(),
+                overlay.hotkey_registered,
+            )
+        };
+        if app
+            .try_state::<tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry>>()
+            .is_none()
+        {
+            let mut overlay = overlay_state
+                .lock()
+                .map_err(|_| AuroraCommandError::SidecarState)?;
+            overlay.hotkey_registered = false;
+            overlay.last_registration_error =
+                Some("Aurora overlay hotkey plugin was not installed".to_string());
+            return Ok(overlay.status());
+        }
+        if previous.1 && previous.0 == accelerator {
+            let mut overlay = overlay_state
+                .lock()
+                .map_err(|_| AuroraCommandError::SidecarState)?;
+            overlay.last_registration_error = None;
+            return Ok(overlay.status());
+        }
+        if previous.1 {
+            if let Ok(previous_shortcut) = parse_overlay_shortcut(&previous.0) {
+                let _ = app.global_shortcut().unregister(previous_shortcut);
+            }
+        }
+        let registration_error = register_overlay_shortcut(&app, shortcut).err();
+        let mut overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        if let Some(error) = registration_error {
+            overlay.hotkey_registered = false;
+            overlay.last_registration_error = Some(error.clone());
+            if previous.1 {
+                if let Ok(previous_shortcut) = parse_overlay_shortcut(&previous.0) {
+                    match register_overlay_shortcut(&app, previous_shortcut) {
+                        Ok(()) => {
+                            overlay.hotkey_accelerator = previous.0;
+                            overlay.hotkey_registered = true;
+                            overlay.last_registration_error =
+                                Some(format!("{error}; restored previous overlay hotkey"));
+                        }
+                        Err(restore_error) => {
+                            overlay.hotkey_accelerator = previous.0;
+                            overlay.last_registration_error = Some(format!(
+                                "{error}; failed to restore previous overlay hotkey: {restore_error}"
+                            ));
+                        }
+                    }
+                }
+            }
+        } else {
+            overlay.hotkey_accelerator = accelerator;
+            overlay.hotkey_registered = true;
+            overlay.last_registration_error = None;
+        }
+        return Ok(overlay.status());
+    }
+
+    #[cfg(not(desktop))]
+    {
+        let _ = (app, parsed);
+        let mut overlay = overlay_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        overlay.hotkey_registered = false;
+        overlay.last_registration_error =
+            Some("Aurora overlay hotkeys require a desktop Tauri target".to_string());
+        Ok(overlay.status())
+    }
+}
+
+#[tauri::command]
 async fn aurora_shutdown(
     app: AppHandle,
     state: State<'_, SharedSidecarState>,
     subscription_state: State<'_, SharedSubscriptionState>,
 ) -> Result<(), AuroraCommandError> {
-    {
-        let mut subscriptions = subscription_state
-            .lock()
-            .map_err(|_| AuroraCommandError::SidecarState)?;
-        subscriptions.abort_all();
-    }
-    {
-        let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
-        stop_sidecar(&mut sidecar)?;
-    }
-    app.exit(0);
-    Ok(())
+    shutdown_aurora(&app, state.inner(), subscription_state.inner())
 }
 
 impl AuroraCommandError {
@@ -1863,10 +2336,12 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.subscribe".to_string(), true);
     permissions.insert("aurora.nativeCapabilityManifest".to_string(), true);
     permissions.insert("aurora.sidecarStatus".to_string(), true);
-    permissions.insert("aurora.sidecarSession".to_string(), true);
-    permissions.insert("aurora.sidecarStart".to_string(), true);
-    permissions.insert("aurora.sidecarStop".to_string(), true);
-    permissions.insert("aurora.shutdown".to_string(), true);
+    permissions.insert("aurora.sidecarSession".to_string(), desktop_platform);
+    permissions.insert("aurora.sidecarStart".to_string(), desktop_platform);
+    permissions.insert("aurora.sidecarStop".to_string(), desktop_platform);
+    permissions.insert("aurora.shutdown".to_string(), desktop_platform);
+    permissions.insert("aurora.overlay".to_string(), desktop_platform);
+    permissions.insert("aurora.overlayHotkey".to_string(), desktop_platform);
     permissions.insert("aurora.logTail".to_string(), true);
     permissions.insert("aurora.updater".to_string(), false);
     permissions.insert("aurora.secureStorage".to_string(), desktop_platform);
@@ -1916,6 +2391,8 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         desktop_platform,
     );
     capabilities.insert("desktop.tray".to_string(), desktop_platform);
+    capabilities.insert("desktop.overlayWindow".to_string(), desktop_platform);
+    capabilities.insert("desktop.globalHotkey".to_string(), desktop_platform);
     capabilities.insert(
         "native.secureCredentialStorage".to_string(),
         desktop_platform,
@@ -3010,18 +3487,397 @@ fn is_loopback_http_origin(url: &Url) -> bool {
         )
 }
 
+fn shutdown_aurora(
+    app: &AppHandle,
+    sidecar_state: &SharedSidecarState,
+    subscription_state: &SharedSubscriptionState,
+) -> Result<(), AuroraCommandError> {
+    {
+        let mut subscriptions = subscription_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        subscriptions.abort_all();
+    }
+    {
+        let mut sidecar = sidecar_state
+            .lock()
+            .map_err(|_| AuroraCommandError::SidecarState)?;
+        stop_sidecar(&mut sidecar)?;
+    }
+    app.exit(0);
+    Ok(())
+}
+
+fn overlay_hidden_status(
+    overlay_state: &SharedOverlayState,
+    reason: Option<&str>,
+) -> Result<OverlayStatus, AuroraCommandError> {
+    let mut overlay = overlay_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    overlay.visible = false;
+    overlay.pointer_passthrough = true;
+    let mut status = overlay.status();
+    if let Some(reason) = reason {
+        status.reason = Some(reason.to_string());
+    }
+    Ok(status)
+}
+
+#[cfg(desktop)]
+fn main_window_is_focused(app: &AppHandle) -> bool {
+    app.get_webview_window("main")
+        .and_then(|window| window.is_focused().ok())
+        .unwrap_or(false)
+}
+
+#[cfg(desktop)]
+fn hide_overlay_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(OVERLAY_WINDOW_LABEL) {
+        let _ = window.hide();
+    }
+}
+
+#[cfg(desktop)]
+fn ensure_overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, AuroraCommandError> {
+    if let Some(window) = app.get_webview_window(OVERLAY_WINDOW_LABEL) {
+        return Ok(window);
+    }
+    WebviewWindowBuilder::new(
+        app,
+        OVERLAY_WINDOW_LABEL,
+        WebviewUrl::App("index.html?surface=overlay".into()),
+    )
+    .title("Aurora Overlay")
+    .inner_size(VOICE_OVERLAY_WIDTH, VOICE_OVERLAY_HEIGHT)
+    .position(32.0, 28.0)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .visible_on_all_workspaces(true)
+    .resizable(false)
+    .visible(false)
+    .focused(false)
+    .build()
+    .map_err(|error| AuroraCommandError::Gateway(format!("failed to create overlay: {error}")))
+}
+
+#[cfg(desktop)]
+fn configure_overlay_for_mode(
+    window: &tauri::WebviewWindow,
+    mode: OverlayMode,
+    saved_position: Option<OverlayPoint>,
+) {
+    if let Some((work_origin, work_size)) = overlay_work_area(window) {
+        let size = overlay_size_for_mode(mode);
+        let position = saved_position
+            .map(OverlayPoint::to_logical_position)
+            .unwrap_or_else(|| default_overlay_position(mode, work_origin, work_size));
+        let _ = window.set_size(size);
+        let _ = window.set_position(position);
+    } else {
+        let _ = window.set_size(overlay_size_for_mode(mode));
+    }
+    let _ = window.set_focusable(mode == OverlayMode::Text);
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_skip_taskbar(true);
+    let _ = window.set_visible_on_all_workspaces(true);
+}
+
+#[cfg(desktop)]
+fn overlay_work_area(
+    window: &tauri::WebviewWindow,
+) -> Option<(LogicalPosition<f64>, LogicalSize<f64>)> {
+    let monitor = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())?;
+    let work_area = monitor.work_area();
+    let scale_factor = monitor.scale_factor();
+    let origin: LogicalPosition<f64> = work_area.position.to_logical(scale_factor);
+    let size: tauri::LogicalSize<f64> = work_area.size.to_logical(scale_factor);
+    Some((origin, size))
+}
+
+fn overlay_size_for_mode(mode: OverlayMode) -> LogicalSize<f64> {
+    match mode {
+        OverlayMode::Voice => LogicalSize::new(VOICE_OVERLAY_WIDTH, VOICE_OVERLAY_HEIGHT),
+        OverlayMode::Text => LogicalSize::new(TEXT_OVERLAY_WIDTH, TEXT_OVERLAY_HEIGHT),
+    }
+}
+
+fn default_overlay_position(
+    mode: OverlayMode,
+    work_origin: LogicalPosition<f64>,
+    work_size: LogicalSize<f64>,
+) -> LogicalPosition<f64> {
+    let overlay_size = overlay_size_for_mode(mode);
+    match mode {
+        OverlayMode::Voice => LogicalPosition::new(
+            work_origin.x + work_size.width - overlay_size.width - OVERLAY_MARGIN,
+            work_origin.y + OVERLAY_MARGIN,
+        ),
+        OverlayMode::Text => LogicalPosition::new(
+            work_origin.x + (work_size.width - overlay_size.width) / 2.0,
+            work_origin.y + work_size.height - overlay_size.height - OVERLAY_MARGIN,
+        ),
+    }
+}
+
+fn should_apply_overlay_passthrough_to_native(
+    window_visible: bool,
+    mode: Option<OverlayMode>,
+    requested_enabled: bool,
+) -> bool {
+    requested_enabled && window_visible && mode.is_none()
+}
+
+#[cfg(desktop)]
+fn overlay_scale_factor(window: &tauri::WebviewWindow) -> f64 {
+    window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+        .map(|monitor| monitor.scale_factor())
+        .unwrap_or_else(|| window.scale_factor().unwrap_or(1.0))
+}
+
+#[cfg(desktop)]
+fn overlay_window_is_visible(window: &tauri::WebviewWindow) -> bool {
+    window.is_visible().unwrap_or(false)
+}
+
+#[cfg(desktop)]
+fn set_overlay_passthrough_after_show(window: &tauri::WebviewWindow, enabled: bool) {
+    if cfg!(target_os = "linux") {
+        let window = window.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if overlay_window_is_visible(&window) {
+                set_overlay_passthrough(&window, enabled);
+            }
+        });
+    } else if overlay_window_is_visible(window) {
+        set_overlay_passthrough(window, enabled);
+    }
+}
+
+#[cfg(desktop)]
+fn set_overlay_passthrough(window: &tauri::WebviewWindow, enabled: bool) {
+    let _ = window.set_ignore_cursor_events(enabled);
+}
+
+#[cfg(desktop)]
+fn parse_overlay_shortcut(accelerator: &str) -> Result<Shortcut, String> {
+    let (modifiers, code) = parse_overlay_shortcut_parts(accelerator)?;
+    Ok(Shortcut::new(Some(modifiers), code))
+}
+
+#[cfg(not(desktop))]
+fn parse_overlay_shortcut(accelerator: &str) -> Result<(), String> {
+    parse_overlay_shortcut_parts(accelerator).map(|_| ())
+}
+
+#[cfg(desktop)]
+fn parse_overlay_shortcut_parts(accelerator: &str) -> Result<(Modifiers, Code), String> {
+    let mut modifiers = Modifiers::empty();
+    let mut key: Option<Code> = None;
+    for part in accelerator.split('+') {
+        let token = part.trim();
+        if token.is_empty() {
+            return Err("empty hotkey segment".to_string());
+        }
+        match token.to_ascii_lowercase().as_str() {
+            "commandorcontrol" | "cmdorctrl" | "primary" => {
+                modifiers |= if cfg!(target_os = "macos") {
+                    Modifiers::META
+                } else {
+                    Modifiers::CONTROL
+                };
+            }
+            "control" | "ctrl" => modifiers |= Modifiers::CONTROL,
+            "command" | "cmd" | "meta" | "super" => modifiers |= Modifiers::META,
+            "shift" => modifiers |= Modifiers::SHIFT,
+            "alt" | "option" => modifiers |= Modifiers::ALT,
+            _ => {
+                if key.is_some() {
+                    return Err("hotkey must contain exactly one key".to_string());
+                }
+                key = Some(parse_overlay_key(token)?);
+            }
+        }
+    }
+    let key = key.ok_or_else(|| "hotkey must contain a key".to_string())?;
+    if modifiers.is_empty() {
+        return Err("hotkey must include at least one modifier".to_string());
+    }
+    Ok((modifiers, key))
+}
+
+#[cfg(not(desktop))]
+fn parse_overlay_shortcut_parts(accelerator: &str) -> Result<(), String> {
+    let mut has_modifier = false;
+    let mut key_count = 0;
+    for part in accelerator.split('+') {
+        let token = part.trim();
+        if token.is_empty() {
+            return Err("empty hotkey segment".to_string());
+        }
+        match token.to_ascii_lowercase().as_str() {
+            "commandorcontrol" | "cmdorctrl" | "primary" | "control" | "ctrl" | "command"
+            | "cmd" | "meta" | "super" | "shift" | "alt" | "option" => has_modifier = true,
+            _ => {
+                parse_overlay_key_name(token)?;
+                key_count += 1;
+            }
+        }
+    }
+    if key_count != 1 {
+        return Err("hotkey must contain exactly one key".to_string());
+    }
+    if !has_modifier {
+        return Err("hotkey must include at least one modifier".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn parse_overlay_key(token: &str) -> Result<Code, String> {
+    match parse_overlay_key_name(token)? {
+        OverlayKeyName::Letter(character) => match character {
+            'a' => Ok(Code::KeyA),
+            'b' => Ok(Code::KeyB),
+            'c' => Ok(Code::KeyC),
+            'd' => Ok(Code::KeyD),
+            'e' => Ok(Code::KeyE),
+            'f' => Ok(Code::KeyF),
+            'g' => Ok(Code::KeyG),
+            'h' => Ok(Code::KeyH),
+            'i' => Ok(Code::KeyI),
+            'j' => Ok(Code::KeyJ),
+            'k' => Ok(Code::KeyK),
+            'l' => Ok(Code::KeyL),
+            'm' => Ok(Code::KeyM),
+            'n' => Ok(Code::KeyN),
+            'o' => Ok(Code::KeyO),
+            'p' => Ok(Code::KeyP),
+            'q' => Ok(Code::KeyQ),
+            'r' => Ok(Code::KeyR),
+            's' => Ok(Code::KeyS),
+            't' => Ok(Code::KeyT),
+            'u' => Ok(Code::KeyU),
+            'v' => Ok(Code::KeyV),
+            'w' => Ok(Code::KeyW),
+            'x' => Ok(Code::KeyX),
+            'y' => Ok(Code::KeyY),
+            'z' => Ok(Code::KeyZ),
+            _ => unreachable!(),
+        },
+        OverlayKeyName::Digit(digit) => match digit {
+            '0' => Ok(Code::Digit0),
+            '1' => Ok(Code::Digit1),
+            '2' => Ok(Code::Digit2),
+            '3' => Ok(Code::Digit3),
+            '4' => Ok(Code::Digit4),
+            '5' => Ok(Code::Digit5),
+            '6' => Ok(Code::Digit6),
+            '7' => Ok(Code::Digit7),
+            '8' => Ok(Code::Digit8),
+            '9' => Ok(Code::Digit9),
+            _ => unreachable!(),
+        },
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OverlayKeyName {
+    Letter(char),
+    Digit(char),
+}
+
+fn parse_overlay_key_name(token: &str) -> Result<OverlayKeyName, String> {
+    let mut chars = token.chars();
+    let Some(character) = chars.next() else {
+        return Err("hotkey key is empty".to_string());
+    };
+    if chars.next().is_some() || !character.is_ascii_alphanumeric() {
+        return Err("hotkey key must be a single ASCII letter or digit".to_string());
+    }
+    let lower = character.to_ascii_lowercase();
+    if lower.is_ascii_alphabetic() {
+        Ok(OverlayKeyName::Letter(lower))
+    } else {
+        Ok(OverlayKeyName::Digit(lower))
+    }
+}
+
+#[cfg(desktop)]
+fn open_text_overlay_from_shortcut(app: &AppHandle) {
+    if let Some(overlay_state) = app.try_state::<SharedOverlayState>() {
+        let _ = tauri::async_runtime::block_on(aurora_overlay_show(
+            app.clone(),
+            overlay_state,
+            Some("text".to_string()),
+        ));
+    }
+}
+
+#[cfg(desktop)]
+fn register_overlay_shortcut(app: &AppHandle, shortcut: Shortcut) -> Result<(), String> {
+    app.global_shortcut()
+        .on_shortcut(shortcut, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                open_text_overlay_from_shortcut(app);
+            }
+        })
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
     let subscription_state: SharedSubscriptionState =
         Arc::new(Mutex::new(SubscriptionState::new()));
+    let overlay_state: SharedOverlayState = Arc::new(Mutex::new(OverlayState::new()));
     tauri::Builder::default()
         .plugin(aurora_mobile_native_plugin())
         .manage(sidecar_state.clone())
         .manage(subscription_state.clone())
+        .manage(overlay_state.clone())
         .setup(|app| {
             #[cfg(desktop)]
-            install_tray(app.handle())?;
+            {
+                match app
+                    .handle()
+                    .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+                {
+                    Ok(()) => {}
+                    Err(error) => {
+                        let message =
+                            format!("Aurora overlay hotkey plugin install failed: {error}");
+                        eprintln!("{message}");
+                        if let Some(overlay_state) = app.try_state::<SharedOverlayState>() {
+                            if let Ok(mut overlay) = overlay_state.lock() {
+                                overlay.hotkey_registered = false;
+                                overlay.last_registration_error = Some(message);
+                            }
+                        }
+                    }
+                };
+                if let (Some(window), Some(icon)) = (
+                    app.handle().get_webview_window("main"),
+                    aurora_desktop_icon(app.handle()),
+                ) {
+                    let _ = window.set_icon(icon);
+                }
+                install_tray(app.handle())?;
+                let overlay_window = ensure_overlay_window(app.handle())?;
+                configure_overlay_for_mode(&overlay_window, OverlayMode::Voice, None);
+                let _ = overlay_window.hide();
+            }
             #[cfg(target_os = "android")]
             {
                 log_android_baseline_status(&android_baseline_status());
@@ -3081,20 +3937,82 @@ pub fn run() {
             aurora_local_file_write,
             aurora_local_file_pick,
             aurora_secure_file_handle_open,
+            aurora_overlay_show,
+            aurora_overlay_hide,
+            aurora_overlay_status,
+            aurora_overlay_set_passthrough,
+            aurora_overlay_start_drag,
+            aurora_overlay_move_by,
+            aurora_overlay_unregister_hotkey,
+            aurora_overlay_register_hotkey,
             aurora_shutdown
         ])
-        .on_window_event(move |_window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                if let Ok(mut subscriptions) = subscription_state.lock() {
-                    subscriptions.abort_all();
+        .on_window_event(move |window, event| {
+            #[cfg(desktop)]
+            {
+                if window.label() == "main" && matches!(event, tauri::WindowEvent::Focused(true)) {
+                    let app = window.app_handle();
+                    if let Some(overlay_state) = app.try_state::<SharedOverlayState>() {
+                        let overlay_was_visible = overlay_state
+                            .lock()
+                            .map(|overlay| overlay.visible)
+                            .unwrap_or(false);
+                        if overlay_was_visible {
+                            hide_overlay_window(app);
+                            let _ = overlay_hidden_status(&overlay_state, None);
+                            let _ = app.emit("aurora://overlay-mode", json!({ "mode": "hidden" }));
+                        }
+                    }
                 }
-                if let Ok(mut sidecar) = sidecar_state.lock() {
-                    let _ = stop_sidecar(&mut sidecar);
+            }
+            #[cfg(desktop)]
+            if window.label() == OVERLAY_WINDOW_LABEL {
+                if let tauri::WindowEvent::Moved(position) = event {
+                    let app = window.app_handle();
+                    if let Some(overlay_state) = app.try_state::<SharedOverlayState>() {
+                        if let Ok(mut overlay) = overlay_state.lock() {
+                            if let Some(mode) = overlay.mode {
+                                let scale_factor = app
+                                    .get_webview_window(OVERLAY_WINDOW_LABEL)
+                                    .as_ref()
+                                    .map(overlay_scale_factor)
+                                    .unwrap_or_else(|| window.scale_factor().unwrap_or(1.0));
+                                let logical: LogicalPosition<f64> = position.to_logical(scale_factor);
+                                overlay.save_position(
+                                    mode,
+                                    OverlayPoint {
+                                        x: logical.x,
+                                        y: logical.y,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                match close_policy_for_label(window.label()) {
+                    ClosePolicy::HideToTray | ClosePolicy::HideOverlay => {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    ClosePolicy::AllowClose => {}
                 }
             }
         })
         .run(tauri::generate_context!())
         .expect("error while running Aurora Tauri shell");
+}
+
+#[cfg(desktop)]
+fn aurora_desktop_icon(app: &AppHandle) -> Option<Image<'static>> {
+    Image::from_bytes(include_bytes!("../icons/aurora-desktop-icon.png"))
+        .map(Image::to_owned)
+        .ok()
+        .or_else(|| {
+            app.default_window_icon()
+                .map(|icon| icon.clone().to_owned())
+        })
 }
 
 #[cfg(desktop)]
@@ -3110,14 +4028,24 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
             "show" => {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
+                    let _ = window.unminimize();
                     let _ = window.set_focus();
                 }
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                if let (Some(sidecar), Some(subscriptions)) = (
+                    app.try_state::<SharedSidecarState>(),
+                    app.try_state::<SharedSubscriptionState>(),
+                ) {
+                    let _ = shutdown_aurora(app, sidecar.inner(), subscriptions.inner());
+                } else {
+                    app.exit(0);
+                }
+            }
             _ => {}
         });
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
+    if let Some(icon) = aurora_desktop_icon(app) {
+        builder = builder.icon(icon);
     }
     builder.build(app)?;
     Ok(())
@@ -3134,8 +4062,22 @@ mod tests {
             manifest.capabilities.get("desktop.localSidecarSupervision"),
             Some(&true)
         );
-        assert_eq!(manifest.permissions.get("aurora.sidecarStart"), Some(&true));
-        assert_eq!(manifest.permissions.get("aurora.sidecarStop"), Some(&true));
+        assert_eq!(
+            manifest.permissions.get("aurora.sidecarSession"),
+            Some(&cfg!(desktop))
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.sidecarStart"),
+            Some(&cfg!(desktop))
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.sidecarStop"),
+            Some(&cfg!(desktop))
+        );
+        assert_eq!(
+            manifest.permissions.get("aurora.shutdown"),
+            Some(&cfg!(desktop))
+        );
         assert_eq!(manifest.permissions.get("aurora.updater"), Some(&false));
         assert_eq!(
             manifest.capabilities.get("desktop.signedUpdater"),
@@ -3185,6 +4127,19 @@ mod tests {
             Some(&false)
         );
         assert_eq!(manifest.capabilities.get("desktop.tray"), Some(&true));
+        assert_eq!(manifest.permissions.get("aurora.overlay"), Some(&true));
+        assert_eq!(
+            manifest.permissions.get("aurora.overlayHotkey"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("desktop.overlayWindow"),
+            Some(&true)
+        );
+        assert_eq!(
+            manifest.capabilities.get("desktop.globalHotkey"),
+            Some(&true)
+        );
         assert_eq!(
             manifest.permissions.get("aurora.notificationsSend"),
             Some(&false)
@@ -3364,6 +4319,12 @@ mod tests {
         if !cfg!(target_os = "ios") {
             assert!(denied.contains(&"aurora.iosKeychain".to_string()));
             assert!(denied.contains(&"aurora.iosBiometricUnlock".to_string()));
+        }
+        if !cfg!(desktop) {
+            assert!(denied.contains(&"aurora.sidecarSession".to_string()));
+            assert!(denied.contains(&"aurora.sidecarStart".to_string()));
+            assert!(denied.contains(&"aurora.sidecarStop".to_string()));
+            assert!(denied.contains(&"aurora.shutdown".to_string()));
         }
     }
 
@@ -3586,5 +4547,94 @@ mod tests {
         assert!(UPDATER_ENDPOINT.contains("{{target}}"));
         assert!(UPDATER_ENDPOINT.contains("{{arch}}"));
         assert!(UPDATER_ENDPOINT.contains("{{current_version}}"));
+    }
+
+    #[test]
+    fn close_policy_hides_main_and_overlay_without_quitting() {
+        assert_eq!(close_policy_for_label("main"), ClosePolicy::HideToTray);
+        assert_eq!(
+            close_policy_for_label(OVERLAY_WINDOW_LABEL),
+            ClosePolicy::HideOverlay
+        );
+        assert_eq!(close_policy_for_label("settings"), ClosePolicy::AllowClose);
+    }
+
+    #[test]
+    fn overlay_suppresses_when_main_window_is_focused() {
+        assert!(should_suppress_overlay_for_main_focus(true));
+        assert!(!should_suppress_overlay_for_main_focus(false));
+    }
+
+    #[test]
+    fn overlay_native_passthrough_only_applies_when_hidden() {
+        assert!(should_apply_overlay_passthrough_to_native(true, None, true));
+        assert!(!should_apply_overlay_passthrough_to_native(
+            false, None, true
+        ));
+        assert!(!should_apply_overlay_passthrough_to_native(
+            true,
+            Some(OverlayMode::Voice),
+            true
+        ));
+        assert!(!should_apply_overlay_passthrough_to_native(
+            true,
+            Some(OverlayMode::Text),
+            true
+        ));
+        assert!(!should_apply_overlay_passthrough_to_native(
+            true, None, false
+        ));
+    }
+
+    #[test]
+    fn overlay_dimensions_are_component_sized() {
+        assert_eq!(
+            overlay_size_for_mode(OverlayMode::Voice),
+            LogicalSize::new(220.0, 230.0)
+        );
+        assert_eq!(
+            overlay_size_for_mode(OverlayMode::Text),
+            LogicalSize::new(520.0, 360.0)
+        );
+    }
+
+    #[test]
+    fn overlay_default_positions_use_margin_and_work_area() {
+        let origin = LogicalPosition::new(10.0, 20.0);
+        let size = LogicalSize::new(1440.0, 900.0);
+        assert_eq!(
+            default_overlay_position(OverlayMode::Voice, origin, size),
+            LogicalPosition::new(1206.0, 44.0)
+        );
+        assert_eq!(
+            default_overlay_position(OverlayMode::Text, origin, size),
+            LogicalPosition::new(470.0, 536.0)
+        );
+    }
+
+    #[test]
+    fn overlay_state_preserves_per_mode_user_positions() {
+        let mut state = OverlayState::new();
+        let voice = OverlayPoint { x: 100.0, y: 48.0 };
+        let text = OverlayPoint { x: 460.0, y: 520.0 };
+        state.save_position(OverlayMode::Voice, voice);
+        state.save_position(OverlayMode::Text, text);
+        assert_eq!(state.saved_position(OverlayMode::Voice), Some(voice));
+        assert_eq!(state.saved_position(OverlayMode::Text), Some(text));
+    }
+
+    #[test]
+    fn hotkey_parser_accepts_default_and_common_modifiers() {
+        assert!(parse_overlay_shortcut_parts("CommandOrControl+K").is_ok());
+        assert!(parse_overlay_shortcut_parts("Ctrl+Shift+1").is_ok());
+        assert!(parse_overlay_shortcut_parts("Option+9").is_ok());
+    }
+
+    #[test]
+    fn hotkey_parser_rejects_ambiguous_or_broad_inputs() {
+        assert!(parse_overlay_shortcut_parts("K").is_err());
+        assert!(parse_overlay_shortcut_parts("Ctrl+F12").is_err());
+        assert!(parse_overlay_shortcut_parts("Ctrl+K+P").is_err());
+        assert!(parse_overlay_shortcut_parts("Ctrl++K").is_err());
     }
 }

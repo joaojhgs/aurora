@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "aurora-overlay",
+  "description": "Constrained Aurora overlay capability for the dedicated overlay window. Grants only overlay controls, the Aurora SDK bridge, and minimal app/event/window primitives.",
+  "windows": ["aurora-overlay"],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:window:default",
+    "aurora-overlay",
+    "aurora-command",
+    "aurora-sidecar-session",
+    "aurora-request",
+    "aurora-subscribe"
+  ]
+}

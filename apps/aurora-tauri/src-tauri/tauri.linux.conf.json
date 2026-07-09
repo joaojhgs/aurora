@@ -3,6 +3,7 @@
     "security": {
       "capabilities": [
         "aurora-main",
+        "aurora-overlay",
         "aurora-desktop-updater"
       ]
     }

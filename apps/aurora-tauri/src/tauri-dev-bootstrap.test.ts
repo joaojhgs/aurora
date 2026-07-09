@@ -74,7 +74,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(docs).toContain('pnpm --filter @aurora/tauri-ui tauri dev')
     expect(docs).toContain('Do not run `prepare:sidecar` or set `AURORA_TAURI_SIDECAR_SOURCE` just to use `tauri dev`.')
     expect(docs).toContain('Vite, Rust/Tauri, and Python service logs should appear in the same terminal')
-    expect(docs).toContain('Ctrl-C forwards shutdown to the Tauri child process')
+    expect(docs).toContain('Closing the Tauri window hides Aurora to the tray; explicit tray Quit or Ctrl-C stops the supervised Python sidecar.')
     expect(docs).toContain('`[vite]` for frontend bundler output')
     expect(docs).toContain('`[tauri]` for wrapper/Rust shell output')
     expect(docs).toContain('`[aurora][stdout]`')
