@@ -2,25 +2,29 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import {
   AdminAuditResource,
-  AdminContractsResource,
-  AdminDevicesResource,
   AdminOverviewContent,
-  AdminPluginsView,
+  AdminDevicesResource,
   AdminRbacResource,
   AdminSchedulerView,
   AdminServicesResource,
+  AdminContractsResource,
   AdminTokensResource,
+  AdminPluginsView,
   AppShell,
   AssistantView,
+  AURORA_OWL_LOADER_STAGES,
+  AuroraOwlLoader,
   BackupRestoreView,
   ConfigEditorView,
   MemoryView,
   DataPolicyResource,
+  EvidenceBadge,
   MeshDiagnosticsResource,
   MeshPeersResource,
   ModelsView,
   type OnboardingModePreferenceStore,
   OnboardingView,
+  PageHeader,
   PairingQueueView,
   RouteMatrix,
   RoutePolicyResource,
@@ -30,20 +34,25 @@ import {
   getAuroraSurfaceProfile,
   shouldShowForSurface,
   auroraNavSections,
+  auroraEmbeddedNavItems,
+  getAuroraNavItem,
   buildShellSnapshot,
   errorShellSnapshot,
   loadingShellSnapshot,
   navItemSnapshot,
   redactDiagnosticText,
   type AuroraNavItem,
+  type AuroraOwlLoaderStageId,
   type AuroraShellSnapshot,
   type RouteAvailability,
 } from "@aurora/ui";
+import owlSrc from './assets/aurora-owl.png'
 import { GATEWAY_METHODS } from "@aurora/client";
 import type {
   AdminOverviewManifest,
   AndroidLocalLightInferenceStatus,
   AuroraClient,
+  ServiceInfo,
   TauriAndroidBaselineStatus,
   TauriIosInvocationStatus,
   TauriNativeFeatureStatus,
@@ -53,6 +62,7 @@ import type {
 import { createAuroraTauriRuntime } from "./aurora-client";
 
 const navItems = auroraNavSections.flatMap((section) => section.items)
+const routePathItems = [...navItems, ...auroraEmbeddedNavItems]
 export type AuroraTauriRuntime = ReturnType<typeof createAuroraTauriRuntime>
 type AuroraTauriClient = AuroraTauriRuntime['client']
 type TauriRouteRenderer = (input: {
@@ -66,7 +76,7 @@ type TauriRouteRenderer = (input: {
   assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>
 }) => ReactElement
 
-const tauriRouteIds = [
+const primaryTauriRouteIds = [
   'assistant',
   'memory',
   'tools',
@@ -75,21 +85,26 @@ const tauriRouteIds = [
   'services',
   'access',
   'tokens',
+  'backups',
+  'scheduler',
+  'audit',
+  'settings',
+  'models',
+  'onboarding',
+] as const
+
+const embeddedTauriRouteIds = [
   'devices',
   'config',
   'contracts',
   'plugins',
   'pairing',
-  'backups',
-  'scheduler',
-  'audit',
-  'models',
   'diagnostics',
-  'onboarding',
-  'settings',
   'data',
   'native',
 ] as const
+
+const tauriRouteIds = [...primaryTauriRouteIds, ...embeddedTauriRouteIds] as const
 
 type TauriRouteId = typeof tauriRouteIds[number]
 
@@ -126,31 +141,33 @@ export const tauriRouteRegistry = {
       <RoutePolicyResource client={client} route={route} />
     </div>
   ),
-  admin: ({ client }) => <TauriAdminOverviewPage client={client} />,
+  admin: ({ route, snapshot, nativeContext, client, shutdown }) => (
+    <TauriAdminOverviewPage route={route} snapshot={snapshot} nativeContext={nativeContext} client={client} shutdown={shutdown} />
+  ),
   services: ({ client }) => <AdminServicesResource client={client} />,
   access: ({ client }) => <AdminRbacResource client={client} />,
   tokens: ({ client }) => <AdminTokensResource client={client} />,
+  backups: ({ route, client }) => <BackupRestoreView client={client} route={route} />,
+  scheduler: ({ route, client }) => <AdminSchedulerView client={client} route={route} />,
+  audit: ({ client }) => <AdminAuditResource client={client} />,
+  settings: ({ route, snapshot, nativeContext, client }) => (
+    <TauriSettingsPage route={route} snapshot={snapshot} nativeContext={nativeContext} client={client} />
+  ),
   devices: ({ client }) => <AdminDevicesResource client={client} />,
   config: ({ route, client }) => <ConfigEditorView client={client} route={route} />,
   contracts: ({ client }) => <AdminContractsResource client={client} />,
   plugins: ({ route, client }) => <AdminPluginsView client={client} route={route} />,
   pairing: ({ route, client }) => <PairingQueueView client={client} route={route} />,
-  backups: ({ route, client }) => <BackupRestoreView client={client} route={route} />,
-  scheduler: ({ route, client }) => <AdminSchedulerView client={client} route={route} />,
-  audit: ({ client }) => <AdminAuditResource client={client} />,
-  models: ({ client }) => <ModelsView client={client} />,
-  diagnostics: ({ route, snapshot, nativeContext, client, shutdown }) => (
-    <TauriDiagnosticsPage route={route} snapshot={snapshot} nativeContext={nativeContext} client={client} shutdown={shutdown} />
-  ),
-  onboarding: ({ snapshot, client, modePreferenceStore }) => <OnboardingView client={client} snapshot={snapshot} modePreferenceStore={modePreferenceStore} />,
-  settings: ({ snapshot }) => <SettingsPermissionsView snapshot={snapshot} surface="settings" currentPath="/settings" />,
+  diagnostics: ({ route, snapshot, nativeContext, client, shutdown }) => <TauriDiagnosticsPage route={route} snapshot={snapshot} nativeContext={nativeContext} client={client} shutdown={shutdown} />,
   data: ({ route, client }) => <DataPolicyResource client={client} route={route} />,
-  native: ({ snapshot, nativeContext }) => <TauriNativeSettingsPage snapshot={snapshot} nativeContext={nativeContext} />
+  native: ({ snapshot, nativeContext }) => <TauriNativeSettingsPage snapshot={snapshot} nativeContext={nativeContext} />,
+  models: ({ client }) => <ModelsView client={client} />,
+  onboarding: ({ snapshot, client, modePreferenceStore }) => <OnboardingView client={client} snapshot={snapshot} modePreferenceStore={modePreferenceStore} />
 } satisfies Record<TauriRouteId, TauriRouteRenderer>
 
 const tauriRouteIdSet = new Set<string>(tauriRouteIds)
 
-export const tauriRouteRegistryRouteIds = Object.freeze([...tauriRouteIds])
+export const tauriRouteRegistryRouteIds = Object.freeze([...primaryTauriRouteIds])
 
 const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000
 const DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS = 500
@@ -160,6 +177,9 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
   const runtime = useMemo(() => runtimeOverride ?? createAuroraTauriRuntime(), [runtimeOverride]);
   const [snapshot, setSnapshot] =
     useState<AuroraShellSnapshot>(loadingShellSnapshot);
+  const [loadingStage, setLoadingStage] = useState<AuroraOwlLoaderStageId>('boot');
+  const [loadingProgressPct, setLoadingProgressPct] = useState<number | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState(() => currentBrowserPath());
   const [sidecar, setSidecar] = useState<TauriSidecarStatus | null>(null);
   const [nativePermissions, setNativePermissions] =
@@ -176,10 +196,36 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
 
   useEffect(() => {
     let cancelled = false;
+    const reportStage = (stage: AuroraOwlLoaderStageId) => {
+      if (cancelled) return;
+      setLoadingStage(stage);
+      setLoadingProgressPct(null);
+      setLoadingDetail(null);
+    };
+    const reportProgress = (progressPct: number, detail: string) => {
+      if (cancelled) return;
+      setLoadingProgressPct(progressPct);
+      setLoadingDetail(detail);
+    };
     async function load() {
       let readySidecar: TauriSidecarStatus | null = null;
+      let modelsPhaseActive = false;
       try {
-        readySidecar = await runRuntimeReadinessProbes(runtime);
+        reportStage('core');
+        readySidecar = await runRuntimeReadinessProbes(runtime, reportStage, reportProgress);
+        reportStage('models');
+        const modelsTotal = 14;
+        let modelsCompleted = 0;
+        modelsPhaseActive = true;
+        const trackModelsProgress = <T,>(promise: Promise<T>): Promise<T> =>
+          promise.finally(() => {
+            modelsCompleted += 1;
+          });
+        void pollRegistryServices(
+          runtime,
+          () => modelsPhaseActive && !cancelled,
+          (detail) => reportProgress(modelsProgressPct(modelsCompleted, modelsTotal), detail),
+        );
         const [
           nextSnapshot,
           nextSidecar,
@@ -196,22 +242,25 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
           iosBiometrics,
           android,
         ] = await Promise.all([
-          buildRuntimeShellSnapshot(runtime.client, runtime.mode === "desktop-local"),
-          readySidecar ? Promise.resolve(readySidecar) : runtime.sidecarStatus().catch(() => null),
-          runtime.nativePermissionStatus().catch(() => null),
-          runtime.trayStatus().catch(() => null),
-          runtime.notificationStatus().catch(() => null),
-          runtime.iosVoiceStatus().catch(() => null),
-          runtime.iosInvocationStatus().catch(() => null),
-          runtime.iosLocalLightInferenceStatus().catch(() => null),
-          runtime.iosBackgroundStatus().catch(() => null),
-          runtime.dialogStatus().catch(() => null),
-          runtime.audioBridgeStatus().catch(() => null),
-          runtime.iosSecureStorageStatus().catch(() => null),
-          runtime.iosBiometricStatus().catch(() => null),
-          runtime.androidBaselineStatus().catch(() => null),
+          trackModelsProgress(buildRuntimeShellSnapshot(runtime.client, runtime.mode === "desktop-local")),
+          trackModelsProgress(readySidecar ? Promise.resolve(readySidecar) : runtime.sidecarStatus().catch(() => null)),
+          trackModelsProgress(runtime.nativePermissionStatus().catch(() => null)),
+          trackModelsProgress(runtime.trayStatus().catch(() => null)),
+          trackModelsProgress(runtime.notificationStatus().catch(() => null)),
+          trackModelsProgress(runtime.iosVoiceStatus().catch(() => null)),
+          trackModelsProgress(runtime.iosInvocationStatus().catch(() => null)),
+          trackModelsProgress(runtime.iosLocalLightInferenceStatus().catch(() => null)),
+          trackModelsProgress(runtime.iosBackgroundStatus().catch(() => null)),
+          trackModelsProgress(runtime.dialogStatus().catch(() => null)),
+          trackModelsProgress(runtime.audioBridgeStatus().catch(() => null)),
+          trackModelsProgress(runtime.iosSecureStorageStatus().catch(() => null)),
+          trackModelsProgress(runtime.iosBiometricStatus().catch(() => null)),
+          trackModelsProgress(runtime.androidBaselineStatus().catch(() => null)),
         ]);
+        modelsPhaseActive = false;
+        reportStage('assistant');
         if (!cancelled) {
+          reportStage('workspace');
           setSnapshot(nextSnapshot);
           setSidecar(nextSidecar);
           setNativePermissions(nextNativePermissions);
@@ -228,8 +277,10 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
           setIosInvocationStatus(iosInvocation);
           setIosLocalLightStatus(iosLocalLight);
           setAndroidBaseline(android);
+          reportStage('ready');
         }
       } catch (error) {
+        modelsPhaseActive = false;
         if (!cancelled) {
           setSnapshot(errorShellSnapshot(runtime.client.transport.kind, error));
           setSidecar(readySidecar);
@@ -284,25 +335,42 @@ export function AuroraTauriApp({ runtimeOverride }: { runtimeOverride?: AuroraTa
   };
 
   return (
-    <AppShell
-      snapshot={snapshot}
-      currentPath={currentPath}
-      onNavigate={navigate}
-    >
-      <TauriRouteContent
-        path={currentPath}
+    <>
+      {snapshot.loadState === "loading" ? (
+        <AuroraOwlLoader
+          owlSrc={owlSrc}
+          stageId={loadingStage}
+          progressPct={loadingProgressPct}
+          detail={loadingDetail}
+        />
+      ) : null}
+      <AppShell
         snapshot={snapshot}
-        nativeContext={nativeContext}
-        client={runtime.client}
-        modePreferenceStore={runtime.modePreferenceStore}
-        shutdown={runtime.shutdown}
-      />
-    </AppShell>
+        currentPath={currentPath}
+        onNavigate={navigate}
+      >
+        <TauriRouteContent
+          path={currentPath}
+          snapshot={snapshot}
+          nativeContext={nativeContext}
+          client={runtime.client}
+          modePreferenceStore={runtime.modePreferenceStore}
+          shutdown={runtime.shutdown}
+        />
+      </AppShell>
+    </>
   );
 }
 
-async function runRuntimeReadinessProbes(runtime: AuroraTauriRuntime): Promise<TauriSidecarStatus | null> {
-  if (runtime.mode !== "desktop-local") return null;
+async function runRuntimeReadinessProbes(
+  runtime: AuroraTauriRuntime,
+  reportStage: (stage: AuroraOwlLoaderStageId) => void,
+  reportProgress: (progressPct: number, detail: string) => void,
+): Promise<TauriSidecarStatus | null> {
+  if (runtime.mode !== "desktop-local") {
+    reportStage('mesh');
+    return null;
+  }
 
   const startedSidecar = await runtime.startSidecar();
   const statusSidecar = await runtime.sidecarStatus();
@@ -311,8 +379,16 @@ async function runRuntimeReadinessProbes(runtime: AuroraTauriRuntime): Promise<T
     throw new Error("Tauri local sidecar status command did not return readiness status");
   }
   assertReadySidecar(readySidecar);
+  reportProgress(CORE_PROGRESS_PCT, sidecarStartupDetail(readySidecar));
 
-  return waitForGatewayReadiness(runtime, readySidecar);
+  reportStage('mesh');
+  return waitForGatewayReadiness(runtime, readySidecar, reportProgress);
+}
+
+function sidecarStartupDetail(sidecar: TauriSidecarStatus): string {
+  const parts = [`sidecar ${sidecar.mode ?? 'process'}`];
+  if (sidecar.pid) parts.push(`pid ${sidecar.pid}`);
+  return parts.join(' · ');
 }
 
 function assertReadySidecar(sidecar: TauriSidecarStatus): void {
@@ -335,12 +411,18 @@ async function probeGatewayReadiness(client: AuroraClient): Promise<void> {
 async function waitForGatewayReadiness(
   runtime: AuroraTauriRuntime,
   initialSidecar: TauriSidecarStatus,
+  reportProgress: (progressPct: number, detail: string) => void,
 ): Promise<TauriSidecarStatus> {
   let latestSidecar = initialSidecar
   let lastError: unknown = null
-  const deadline = Date.now() + DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS
+  const startedAt = Date.now()
+  const deadline = startedAt + DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS
+  let attempt = 0
 
   while (Date.now() <= deadline) {
+    attempt += 1
+    const elapsedMs = Date.now() - startedAt
+    reportProgress(meshProgressPct(elapsedMs), meshAttemptDetail(attempt, elapsedMs, latestSidecar, lastError))
     try {
       await probeGatewayReadiness(runtime.client)
       return latestSidecar
@@ -355,6 +437,65 @@ async function waitForGatewayReadiness(
   throw new Error(
     `Tauri local Gateway did not become ready within ${DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS}ms. Last probe error: ${readinessErrorMessage(lastError)}`,
   )
+}
+
+const CORE_PROGRESS_PCT = AURORA_OWL_LOADER_STAGES.find((stage) => stage.id === 'core')!.progress
+const MESH_PROGRESS_FLOOR_PCT = CORE_PROGRESS_PCT
+const MESH_PROGRESS_CEILING_PCT = AURORA_OWL_LOADER_STAGES.find((stage) => stage.id === 'mesh')!.progress
+const MODELS_PROGRESS_FLOOR_PCT = MESH_PROGRESS_CEILING_PCT
+const MODELS_PROGRESS_CEILING_PCT = AURORA_OWL_LOADER_STAGES.find((stage) => stage.id === 'models')!.progress
+
+function meshProgressPct(elapsedMs: number): number {
+  const elapsedRatio = Math.min(1, elapsedMs / DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS)
+  return MESH_PROGRESS_FLOOR_PCT + Math.round(elapsedRatio * (MESH_PROGRESS_CEILING_PCT - MESH_PROGRESS_FLOOR_PCT))
+}
+
+function meshAttemptDetail(
+  attempt: number,
+  elapsedMs: number,
+  sidecar: TauriSidecarStatus,
+  lastError: unknown,
+): string {
+  const elapsedS = Math.round(elapsedMs / 1000)
+  const parts = [`attempt ${attempt}`, `${elapsedS}s elapsed`, `gateway ${sidecar.gatewayUrl ?? 'pending'}`]
+  if (lastError) parts.push(readinessErrorMessage(lastError))
+  return parts.join(' · ')
+}
+
+function modelsProgressPct(completed: number, total: number): number {
+  const ratio = total > 0 ? Math.min(1, completed / total) : 1
+  return MODELS_PROGRESS_FLOOR_PCT + Math.round(ratio * (MODELS_PROGRESS_CEILING_PCT - MODELS_PROGRESS_FLOOR_PCT))
+}
+
+const REGISTRY_POLL_INTERVAL_MS = 400
+
+/**
+ * Polls the real backend service registry (Gateway.GetServices) so the loader reflects
+ * genuine backend services as they announce themselves, instead of a synthetic counter.
+ */
+async function pollRegistryServices(
+  runtime: AuroraTauriRuntime,
+  isActive: () => boolean,
+  reportDetail: (detail: string) => void,
+): Promise<void> {
+  while (isActive()) {
+    try {
+      const { services } = await runtime.client.registry.listServices()
+      if (isActive()) reportDetail(registryPollDetail(services))
+    } catch {
+      // Registry momentarily unreachable mid-poll; keep retrying until the phase ends.
+    }
+    await delay(REGISTRY_POLL_INTERVAL_MS)
+  }
+}
+
+function registryPollDetail(services: ServiceInfo[]): string {
+  if (services.length === 0) return 'waiting for services to register…'
+  const healthy = services.filter((service) => service.status === 'healthy').length
+  const names = services.map((service) => service.module).sort()
+  const preview = names.slice(0, 4).join(', ')
+  const overflow = names.length > 4 ? ` +${names.length - 4} more` : ''
+  return `${healthy} / ${services.length} services healthy · ${preview}${overflow}`
 }
 
 async function buildRuntimeShellSnapshot(
@@ -483,40 +624,18 @@ function isTauriRouteId(routeId: string): routeId is TauriRouteId {
   return tauriRouteIdSet.has(routeId)
 }
 
-function AdminOverviewResource({ client }: { client: AuroraTauriClient }) {
-  const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
-  const [error, setError] = useState<unknown>(new Error('Loading admin overview.'))
-
-  useEffect(() => {
-    let cancelled = false
-    setManifest(null)
-    setError(new Error('Loading admin overview.'))
-    void client.adminOverview.getManifest().then(
-      (next) => {
-        if (!cancelled) {
-          setManifest(next)
-          setError(undefined)
-        }
-      },
-      (nextError: unknown) => {
-        if (!cancelled) {
-          setManifest(null)
-          setError(nextError)
-        }
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [client])
-
-  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
-}
-
 function TauriAdminOverviewPage({
-  client
+  route,
+  snapshot,
+  nativeContext,
+  client,
+  shutdown,
 }: {
-  client: ReturnType<typeof createAuroraTauriRuntime>['client']
+  route: RouteAvailability
+  snapshot: AuroraShellSnapshot
+  nativeContext: NativeContext
+  client: AuroraTauriClient
+  shutdown: () => Promise<void>
 }) {
   const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -542,7 +661,177 @@ function TauriAdminOverviewPage({
     }
   }, [client])
 
-  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
+  const [activeTab, setActiveTab] = useState<'overview' | 'diagnostics'>('overview')
+  const diagnosticsRoute = embeddedRoute('diagnostics', snapshot) ?? route
+  return (
+    <div className="ata-page-stack">
+      <div className="aui-tab-list" role="tablist" aria-label="Admin overview sections">
+        <button
+          type="button"
+          id="admin-overview-tab-overview"
+          role="tab"
+          aria-selected={activeTab === 'overview'}
+          aria-controls="admin-overview-panel-overview"
+          data-active={activeTab === 'overview'}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          id="admin-overview-tab-diagnostics"
+          role="tab"
+          aria-selected={activeTab === 'diagnostics'}
+          aria-controls="admin-overview-panel-diagnostics"
+          data-active={activeTab === 'diagnostics'}
+          onClick={() => setActiveTab('diagnostics')}
+        >
+          Diagnostics
+        </button>
+      </div>
+      <section
+        id="admin-overview-panel-overview"
+        role="tabpanel"
+        aria-labelledby="admin-overview-tab-overview"
+        hidden={activeTab !== 'overview'}
+        className="aui-tab-panel"
+      >
+        <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
+      </section>
+      <section
+        id="admin-overview-panel-diagnostics"
+        role="tabpanel"
+        aria-labelledby="admin-overview-tab-diagnostics"
+        hidden={activeTab !== 'diagnostics'}
+        className="aui-tab-panel"
+      >
+        <TauriDiagnosticsPage route={diagnosticsRoute} snapshot={snapshot} nativeContext={nativeContext} client={client} shutdown={shutdown} />
+      </section>
+    </div>
+  )
+}
+
+function TauriSettingsPage({
+  route,
+  snapshot,
+  nativeContext,
+  client,
+}: {
+  route: RouteAvailability
+  snapshot: AuroraShellSnapshot
+  nativeContext: NativeContext
+  client: AuroraTauriClient
+}) {
+  const configRoute = embeddedRoute('config', snapshot) ?? route
+  const dataRoute = embeddedRoute('data', snapshot) ?? route
+  const [activeTab, setActiveTab] = useState<'general' | 'configuration' | 'advanced'>('general')
+  return (
+    <div className="ata-page-stack">
+      <PageHeader
+        id="tauri-settings-title"
+        eyebrow="Settings"
+        title="Settings"
+        description="General permissions, schema-backed configuration, and advanced data-policy controls are grouped on one Settings page."
+        badges={
+          <>
+            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
+            <EvidenceBadge label={nativeContext.surfaceProfile.label} />
+          </>
+        }
+      />
+      <p className="aui-muted">
+        Settings includes Data policy and retention plus Native platform settings in the Advanced section.
+      </p>
+      <div className="aui-tab-list" role="tablist" aria-label="Settings sections">
+        <button
+          type="button"
+          id="settings-tab-general"
+          role="tab"
+          aria-selected={activeTab === 'general'}
+          aria-controls="settings-panel-general"
+          data-active={activeTab === 'general'}
+          onClick={() => setActiveTab('general')}
+        >
+          General
+        </button>
+        <button
+          type="button"
+          id="settings-tab-configuration"
+          role="tab"
+          aria-selected={activeTab === 'configuration'}
+          aria-controls="settings-panel-configuration"
+          data-active={activeTab === 'configuration'}
+          onClick={() => setActiveTab('configuration')}
+        >
+          Configuration
+        </button>
+        <button
+          type="button"
+          id="settings-tab-advanced"
+          role="tab"
+          aria-selected={activeTab === 'advanced'}
+          aria-controls="settings-panel-advanced"
+          data-active={activeTab === 'advanced'}
+          onClick={() => setActiveTab('advanced')}
+        >
+          Advanced
+        </button>
+      </div>
+      <section
+        id="settings-panel-general"
+        role="tabpanel"
+        aria-labelledby="settings-tab-general"
+        hidden={activeTab !== 'general'}
+        className="aui-tab-panel"
+      >
+        <SettingsPermissionsView snapshot={snapshot} surface="settings" currentPath="/settings" hideTabs />
+      </section>
+      <section
+        id="settings-panel-configuration"
+        role="tabpanel"
+        aria-labelledby="settings-tab-configuration"
+        hidden={activeTab !== 'configuration'}
+        className="aui-tab-panel"
+      >
+        <ConfigEditorView client={client} route={configRoute} />
+      </section>
+      <section
+        id="settings-panel-advanced"
+        role="tabpanel"
+        aria-labelledby="settings-tab-advanced"
+        hidden={activeTab !== 'advanced'}
+        className="aui-tab-panel"
+      >
+        <div className="ata-page-stack">
+          <DataPolicyResource client={client} route={dataRoute} />
+          <TauriNativeSettingsPage snapshot={snapshot} nativeContext={nativeContext} />
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function embeddedRoute(id: string, snapshot: AuroraShellSnapshot): RouteAvailability | null {
+  const existing = snapshot.routes.find((route) => route.item.id === id)
+  if (existing) return existing
+  const item = getAuroraNavItem(id)
+  if (!item) return null
+  return {
+    item: navItemSnapshot(item),
+    state: unavailableFallbackState(item),
+    explanation: 'Embedded route state is unavailable until the backend snapshot reports this capability.',
+    providerLabel: 'embedded route unavailable',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['embedded route fallback'],
+    selectorRequired: false,
+    approvalRequired: item.adminGated ?? false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: item.adminGated ?? false,
+  }
 }
 
 function TauriDiagnosticsPage({
@@ -727,7 +1016,7 @@ function MissingTauriRoute({ route }: { route: RouteAvailability }) {
 }
 
 
-function routeForPath(snapshot: AuroraShellSnapshot, path: string): RouteAvailability {
+export function routeForPath(snapshot: AuroraShellSnapshot, path: string): RouteAvailability {
   const normalized = normalizePath(path)
   const item = itemForPath(normalized) ?? navItems[0]!
   return snapshot.routes.find((route) => route.item.id === item.id) ?? fallbackRoute(item)
@@ -735,13 +1024,13 @@ function routeForPath(snapshot: AuroraShellSnapshot, path: string): RouteAvailab
 
 function itemForPath(path: string): AuroraNavItem | undefined {
   const normalized = normalizePath(path);
-  return navItems.find((item) => normalizePath(item.href) === normalized);
+  return routePathItems.find((item) => normalizePath(item.href) === normalized);
 }
 
 function fallbackRoute(item: AuroraNavItem): RouteAvailability {
   return {
     item: navItemSnapshot(item),
-    state: item.fallbackState,
+    state: unavailableFallbackState(item),
     explanation: "Capability state is loading.",
     providerLabel: "pending",
     blockers: ["loading"],
@@ -754,6 +1043,12 @@ function fallbackRoute(item: AuroraNavItem): RouteAvailability {
     disabled: true,
     requiresAdminAction: item.methodType === "manage",
   };
+}
+
+function unavailableFallbackState(item: AuroraNavItem): RouteAvailability['state'] {
+  return ['available-local', 'available-remote', 'degraded'].includes(item.fallbackState)
+    ? 'pending'
+    : item.fallbackState
 }
 
 function currentBrowserPath(): string {
@@ -809,14 +1104,14 @@ function commandUnavailableSource(nativeContext: NativeContext): string {
 }
 
 function runtimeModeLabel(mode: string): string {
-  if (mode === 'mock') return 'Demo mode'
+  if (mode === 'mock') return 'Local mode'
   if (mode === 'desktop-local') return 'desktop-local (Tauri sidecar supervised local stack)'
   if (mode === 'desktop-thin') return 'desktop-thin (remote Gateway, no local sidecar)'
   return mode
 }
 
 function transportKindLabel(transportKind: string, runtimeMode: string): string {
-  if (runtimeMode === 'mock') return 'Demo mode'
+  if (runtimeMode === 'mock') return 'Local mode'
   if (transportKind === 'pending' && runtimeMode === 'desktop-local') return 'tauri (pending local Gateway readiness)'
   if (transportKind === 'pending' && runtimeMode === 'desktop-thin') return 'http (pending remote Gateway readiness)'
   return transportKind
