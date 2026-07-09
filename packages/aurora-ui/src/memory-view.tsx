@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Database, Download, HardDrive, RefreshCw, Search, Trash2, Upload } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Database, Search, Trash2 } from 'lucide-react'
 import type {
   AuroraClient,
   AuroraError,
@@ -12,9 +12,12 @@ import type {
 } from '@aurora/client'
 import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PrivacyBadge, presentableSignal } from './status-badges'
 import { PageHeader } from './state-surface'
-import { Button, Card, MetaGrid, StatStrip, type StatItem } from './primitives'
+import { Button, Card, MetaGrid } from './primitives'
+import { Input } from '#components/ui/input'
+import { Badge } from '#components/ui/badge'
+import { cn } from '#lib/utils'
 
 export interface MemoryViewProps {
   client: AuroraClient
@@ -165,7 +168,6 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
   const [model, setModel] = useState<MemoryViewModel>(() => initialModel ?? emptyMemoryViewModel(route, initialQuery))
   const [query, setQuery] = useState(initialModel?.query ?? initialQuery)
   const [namespace, setNamespace] = useState(initialModel?.selectedNamespace?.info.namespace ?? '')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const canSearch = model.actions.search.supported && !model.actions.search.disabled
 
   useEffect(() => {
@@ -174,7 +176,6 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
   }, [initialModel, initialQuery, route])
 
   async function refresh(options: BuildMemoryViewModelOptions = {}) {
-    setIsRefreshing(true)
     setModel((current) => ({ ...current, loadState: 'loading' }))
     const next = await buildMemoryViewModel(client, route, {
       namespace: options.namespace ?? (namespace || null),
@@ -183,7 +184,6 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
     setModel(next)
     setNamespace(next.selectedNamespace?.info.namespace ?? '')
     setQuery(next.query)
-    setIsRefreshing(false)
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -192,267 +192,136 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
     void refresh({ namespace, query })
   }
 
-  const selectedPrivacy = model.selectedNamespace
-    ? normalizeRagPrivacyClass(model.selectedNamespace.info.policy.privacy_class)
-    : route.item.privacyClass
-  const statusCopy = useMemo(() => memoryStatusCopy(model), [model])
-  const statItems = useMemo(() => memoryStatItems(model), [model])
-
   return (
-    <section className="aui-memory" aria-labelledby="memory-title">
+    <section className="flex flex-col gap-5" aria-labelledby="memory-title">
       <PageHeader
         eyebrow="Memory"
         title="Memory & Knowledge"
-        description={statusCopy}
+        description="Conversation history, RAG collections, and retention. See exactly where each memory lives."
         id="memory-title"
-        badgesLabel="Memory service status"
-        badges={
-          <>
-            <StatusBadge state={route.state} />
-            <PrivacyBadge privacy={selectedPrivacy} />
-            <EvidenceBadge label={route.providerLabel} />
-            <EvidenceBadge label={client.transport.kind} />
-            {model.correlationId ? <EvidenceBadge label={`audit ${model.correlationId}`} /> : null}
-          </>
-        }
       />
 
-      <StatStrip ariaLabel="Memory summary cards" items={statItems} />
-
-      <Card
-        title="Memory & RAG collections"
-        actions={
-          <a className="aui-btn aui-btn-ghost aui-btn-sm" href="/memory/policy">
-            <span className="aui-btn-icon" aria-hidden><HardDrive size={15} /></span>
-            <span>Retention policy</span>
-          </a>
-        }
-      >
+      <div className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold">Collections</h2>
         {model.namespaces.length === 0 ? (
-          <div className="aui-memory-empty">
-            <strong>No collections reported</strong>
-            <span>DB.RAGListNamespaces returned no memory or RAG namespaces for this route. Aurora stores memory only after conversation history, approved tool/context ingestion, or imported knowledge snapshots are enabled by policy.</span>
+          <Card ariaLabel="Memory collections">
+            <div className="flex flex-col gap-1 py-1 text-sm">
+              <strong className="font-medium">No collections yet</strong>
+              <span className="text-muted-foreground">Collections appear after conversations, approved context, or imported knowledge are saved.</span>
+            </div>
+          </Card>
+        ) : (
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Memory collections">
+          {model.namespaces.map((candidate) => {
+            const active = candidate.info.namespace === model.selectedNamespace?.info.namespace
+            return (
+              <button
+                key={candidate.info.namespace}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => {
+                  setNamespace(candidate.info.namespace)
+                  void refresh({ namespace: candidate.info.namespace, query })
+                }}
+                className={cn(
+                  'flex flex-col gap-3 rounded-xl border bg-card p-4 text-left ring-1 ring-foreground/10 transition-colors',
+                  active ? 'border-primary' : 'border-border hover:border-foreground/30'
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-[13px] font-medium">
+                    <Database size={14} aria-hidden className="text-primary" />
+                    {namespaceCollectionTitle(candidate)}
+                  </span>
+                  <PrivacyBadge privacy={normalizeRagPrivacyClass(candidate.info.policy.privacy_class)} />
+                </div>
+                <p className="text-2xl leading-none font-semibold">{recordCountLabel(candidate.info.record_count)}</p>
+                <span className="text-[11.5px] text-muted-foreground">{namespaceStoreLabel(candidate)}</span>
+              </button>
+            )
+          })}
+        </div>
+        )}
+      </div>
+
+      <Card flush ariaLabel="Memory list">
+        <form className="flex items-center gap-2 border-b border-border px-4 py-3" onSubmit={onSubmit}>
+          <Search size={15} aria-hidden className="shrink-0 text-muted-foreground" />
+          <Input
+            id="memory-query"
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            disabled={!canSearch || model.loadState === 'loading'}
+            aria-label="Search conversations"
+            placeholder="Search conversations…"
+            className="h-7 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+          />
+          <button type="submit" className="sr-only" disabled={!canSearch || query.trim().length === 0 || model.loadState === 'loading'}>
+            Search
+          </button>
+        </form>
+
+        {model.error ? (
+          <p className="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
+            {model.error}
+          </p>
+        ) : null}
+        {model.denialReason ? (
+          <p className="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
+            {model.denialReason}
+          </p>
+        ) : null}
+
+        {model.searchItems.length > 0 ? (
+          <div className="flex flex-col divide-y divide-border">
+            {model.searchItems.map((item) => (
+              <MemoryResultCard
+                key={`${item.namespace}:${item.key}`}
+                item={item}
+                namespace={model.namespaces.find((candidate) => candidate.info.namespace === item.namespace) ?? null}
+              />
+            ))}
+          </div>
+        ) : model.conversations.length === 0 ? (
+          <div className="flex flex-col gap-1 px-4 py-6 text-sm">
+            <strong className="font-medium">No conversations yet</strong>
+            <span className="text-muted-foreground">Saved conversations will appear here.</span>
           </div>
         ) : (
-          <div className="aui-memory-collection-grid">
-            {model.namespaces.map((namespace) => (
-              <article key={namespace.info.namespace} className="aui-memory-collection-card">
-                <header>
-                  <div>
-                    <Database size={16} aria-hidden />
-                    <strong>{namespaceCollectionTitle(namespace)}</strong>
-                  </div>
-                  <PrivacyBadge privacy={normalizeRagPrivacyClass(namespace.info.policy.privacy_class)} />
-                </header>
-                <p>{recordCountLabel(namespace.info.record_count)}</p>
-                <span>{namespaceStoreLabel(namespace)} · {namespace.info.availability}</span>
+          <div className="flex flex-col divide-y divide-border">
+            {model.conversations.map((message) => (
+              <article key={message.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium">{message.content}</p>
+                  <p className="font-mono text-[11.5px] text-muted-foreground">
+                    {message.role} · {message.createdAt ?? 'Time not reported'} · {message.source}
+                  </p>
+                </div>
+                <PrivacyBadge privacy={message.privacyClass} />
+                <Button variant="ghost" disabled={model.actions.delete.disabled} disabledReason={model.actions.delete.reason} ariaLabel="Delete conversation" icon={<Trash2 size={15} />}>
+                  <span className="sr-only">Delete</span>
+                </Button>
               </article>
             ))}
           </div>
         )}
       </Card>
 
-      <Card title="Search memory and RAG" description="Search runs DB.RAGSearch through Aurora and returns provenance-backed records only.">
-        <form className="aui-memory-toolbar" onSubmit={onSubmit}>
-          <label htmlFor="memory-namespace">
-            <span>Namespace</span>
-            <select
-              id="memory-namespace"
-              value={namespace}
-              onChange={(event) => setNamespace(event.currentTarget.value)}
-              disabled={model.loadState === 'loading'}
-            >
-              {model.namespaces.length === 0 ? <option value="">No namespace reported</option> : null}
-              {model.namespaces.map((candidate) => (
-                <option key={candidate.info.namespace} value={candidate.info.namespace}>
-                  {candidate.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label htmlFor="memory-query" className="aui-memory-toolbar-search">
-            <span>Search</span>
-            <div className="aui-input-icon">
-              <Search size={15} aria-hidden />
-              <input
-                id="memory-query"
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-                disabled={!canSearch || model.loadState === 'loading'}
-                aria-label="Search memory and RAG"
-                placeholder={canSearch ? 'Search memory and RAG...' : 'Search unavailable'}
-              />
-            </div>
-          </label>
-
-          <div className="aui-memory-toolbar-actions">
-            <Button type="submit" disabled={!canSearch || query.trim().length === 0 || model.loadState === 'loading'} icon={<Search size={15} />}>
-              Search
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={isRefreshing}
-              onClick={() => void refresh({ namespace, query })}
-              icon={<RefreshCw size={15} />}
-              ariaLabel="Refresh memory and namespaces"
-            >
-              Refresh
-            </Button>
-          </div>
-        </form>
-        {!canSearch && model.actions.search.reason ? (
-          <p className="aui-memory-search-note">{model.actions.search.reason}</p>
-        ) : null}
-      </Card>
-
-      {model.error ? <div className="aui-inline-alert aui-inline-alert-danger" role="alert"><span>{model.error}</span></div> : null}
-      {model.denialReason ? <div className="aui-inline-alert aui-inline-alert-danger" role="alert"><span>{model.denialReason}</span></div> : null}
-
-      <div className="aui-memory-grid">
-        <Card title="Namespaces" ariaLabel="Namespaces">
-          <div className="aui-namespace-list">
-            {model.namespaces.map((candidate) => (
-              <button
-                key={candidate.info.namespace}
-                type="button"
-                className={candidate.info.namespace === model.selectedNamespace?.info.namespace ? 'active' : ''}
-                onClick={() => {
-                  setNamespace(candidate.info.namespace)
-                  void refresh({ namespace: candidate.info.namespace, query })
-                }}
-              >
-                <strong>{candidate.label}</strong>
-                <span>{candidate.stateCopy}</span>
-                {candidate.repairCopy ? <em>{candidate.repairCopy}</em> : null}
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="Search results" ariaLabel="Search results">
-          <div aria-live="polite">
-            {model.searchItems.length === 0 ? (
-              <div className="aui-memory-empty">
-                <strong>{model.searchDecision === 'not-requested' ? 'Search has not run' : 'No visible results'}</strong>
-                <span>{model.searchDecision === 'not-requested' ? 'Submit a query to ask the backend for provenance-backed records.' : model.denialReason ?? 'The backend returned no records for this namespace.'}</span>
-              </div>
-            ) : (
-              <div className="aui-memory-results">
-                {model.searchItems.map((item) => (
-                  <MemoryResultCard
-                    key={`${item.namespace}:${item.key}`}
-                    item={item}
-                    namespace={model.namespaces.find((candidate) => candidate.info.namespace === item.namespace) ?? null}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card title="Conversation history" ariaLabel="Conversation history">
-          {model.conversations.length === 0 ? (
-            <div className="aui-memory-empty">
-              <strong>No conversations reported</strong>
-              <span>History remains empty until DB.GetMessages returns backend rows from a retained assistant conversation; transient prompts are not stored as memory.</span>
-            </div>
-          ) : (
-            <div className="aui-conversation-list">
-              {model.conversations.map((message) => (
-                <article key={message.id}>
-                  <header>
-                    <strong>{message.role}</strong>
-                    <PrivacyBadge privacy={message.privacyClass} />
-                  </header>
-                  <p>{message.content}</p>
-                  <span>{message.createdAt ?? 'time not reported'} / {message.source}</span>
-                </article>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <Card title="Data controls" ariaLabel="Data controls" description="Export, delete, and import actions remain governed by namespace policy and AdminAction.">
-        <div className="aui-memory-actions-row">
-          <MemoryActionButton icon="download" action={model.actions.export} />
-          <MemoryActionButton icon="trash" action={model.actions.delete} />
-          <MemoryActionButton icon="upload" action={model.actions.importPreview} />
-        </div>
-        <MetaGrid
-          items={[
-            { label: 'Policy', value: model.selectedNamespace?.info.policy.sharing_mode ?? 'none' },
-            { label: 'Provider', value: model.selectedNamespace?.info.provider_peer_id ?? 'not reported' },
-            { label: 'Source peer', value: model.selectedNamespace?.info.source_peer_id ?? 'not reported' },
-            { label: 'Policy decision', value: model.policyDecisionId ?? 'pending search', mono: true },
-            { label: 'Correlation', value: model.correlationId ?? 'pending search', mono: true }
-          ]}
-        />
-      </Card>
+      <p className="text-xs text-muted-foreground">Deleting a memory previews affected DB and RAG records before removal.</p>
     </section>
   )
-}
-
-function memoryStatItems(model: MemoryViewModel): StatItem[] {
-  const knownRecords = model.namespaces.reduce((total, namespace) => total + (namespace.info.record_count ?? 0), 0)
-  const unknownRecords = model.namespaces.filter((namespace) => namespace.info.record_count === null).length
-  const sharingModes = [...new Set(model.namespaces.map((namespace) => namespace.info.policy.sharing_mode))]
-  const embeddingModels = [...new Set(model.namespaces.map((namespace) => namespace.info.embedding_model).filter((value): value is string => Boolean(value)))]
-  const missingEmbeddings = model.namespaces.filter((namespace) => !namespace.info.embedding_model)
-  const legacyEmbeddings = model.namespaces.filter((namespace) => namespace.info.embedding_model?.includes('legacy'))
-  const embeddingState = missingEmbeddings.length > 0
-    ? 'Embedding setup required'
-    : legacyEmbeddings.length > 0
-      ? 'Embedding compatibility check required'
-      : embeddingModels.length > 0
-        ? 'Embedding health reported'
-        : model.loadState === 'loading'
-          ? 'Embedding health loading'
-          : 'No embedding status reported'
-  const embeddingCopy = missingEmbeddings.length > 0
-    ? `Configure or reconnect the embedding provider for ${missingEmbeddings.map((namespace) => namespace.info.namespace).join(', ')} and rerun DB.RAGListNamespaces before enabling semantic search.`
-    : legacyEmbeddings.length > 0
-      ? `Refresh or migrate legacy embeddings for ${legacyEmbeddings.map((namespace) => namespace.info.namespace).join(', ')} before trusting similarity search.`
-      : embeddingModels.length > 0
-        ? embeddingModels.join(', ')
-        : 'Waiting for backend namespace metadata.'
-
-  return [
-    {
-      label: 'Namespaces',
-      value: model.namespaces.length,
-      caption: model.selectedNamespace?.info.namespace ?? 'No namespace selected'
-    },
-    {
-      label: 'Records',
-      value: knownRecords.toLocaleString(),
-      caption: unknownRecords > 0 ? `${unknownRecords} namespace(s) did not report counts` : 'All selected namespaces report counts'
-    },
-    {
-      label: 'Retention',
-      value: sharingModes.length > 0 ? sharingModes.join(', ') : 'policy pending',
-      caption: 'Actions remain governed by namespace policy and AdminAction.'
-    },
-    {
-      label: 'Embedding health',
-      value: embeddingState,
-      caption: embeddingCopy,
-      tone: missingEmbeddings.length > 0 ? 'warning' : 'default'
-    }
-  ]
 }
 
 function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; namespace: MemoryNamespaceView | null }) {
   const text = typeof item.value === 'string' ? item.value : JSON.stringify(item.value)
   return (
-    <article className="aui-memory-result">
-      <header>
-        <strong>{item.key}</strong>
-        {item.redacted ? <span className="aui-badge aui-badge-privacy-blocked">redacted</span> : null}
+    <article className="flex flex-col gap-2 px-4 py-3">
+      <header className="flex items-center gap-2">
+        <strong className="text-[13px] font-medium">{item.key}</strong>
+        {item.redacted ? <Badge variant="destructive">Redacted</Badge> : null}
       </header>
-      <p>{text}</p>
+      <p className="text-sm">{text}</p>
       <MetaGrid
         items={[
           { label: 'Namespace', value: item.namespace },
@@ -470,17 +339,8 @@ function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; name
           { label: 'Tombstone', value: item.provenance.tombstone ? item.provenance.delete_reason ?? 'deleted' : 'active' }
         ]}
       />
-      {item.redaction_reasons.length > 0 ? <small>{item.redaction_reasons.join(', ')}</small> : null}
+      {item.redaction_reasons.length > 0 ? <small className="text-xs text-muted-foreground">{item.redaction_reasons.join(', ')}</small> : null}
     </article>
-  )
-}
-
-function MemoryActionButton({ action, icon }: { action: MemoryActionState; icon: 'download' | 'trash' | 'upload' }) {
-  const Icon = icon === 'download' ? Download : icon === 'trash' ? Trash2 : Upload
-  return (
-    <Button variant="outline" disabled={action.disabled} disabledReason={action.reason} icon={<Icon size={15} />}>
-      {action.label}
-    </Button>
   )
 }
 
@@ -505,7 +365,7 @@ function namespaceStoreLabel(namespace: MemoryNamespaceView): string {
   if (namespace.kind === 'remote-peer') return namespace.info.provider_peer_id ? `Remote peer ${namespace.info.provider_peer_id}` : 'Remote peer'
   if (namespace.kind === 'stale') return 'Stale remote peer'
   if (namespace.kind === 'denied') return 'Policy denied remote peer'
-  return 'Unavailable store'
+  return 'Store pending'
 }
 
 function namespaceView(info: DBRAGNamespaceInfo): MemoryNamespaceView {
@@ -609,15 +469,6 @@ function errorModel(
     error,
     actions: buildActionStates(route, selectedNamespace)
   }
-}
-
-function memoryStatusCopy(model: MemoryViewModel): string {
-  if (model.loadState === 'loading') return 'Loading conversation and namespace status from Aurora.'
-  if (model.loadState === 'error') return model.error ?? 'Memory data could not be loaded.'
-  if (!model.selectedNamespace) return 'No memory namespace was reported by the backend.'
-  if (model.searchDecision === 'denied') return 'Backend policy denied this namespace search.'
-  if (model.searchDecision === 'unavailable') return 'Selected namespace is unavailable or stale.'
-  return 'Browse conversations, select a namespace, and inspect provenance before any data action.'
 }
 
 function memoryErrorMessage(error: AuroraError): string {

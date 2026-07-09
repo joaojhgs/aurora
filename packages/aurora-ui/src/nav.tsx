@@ -50,46 +50,50 @@ export const auroraNavSections: AuroraNavSection[] = [
     items: [
       item('assistant', 'Assistant', '/', Sparkles, 'Orchestrator', 'ExternalUserInput', 'use', 'personal', 'unsupported', 'service contract'),
       item('memory', 'Memory & Knowledge', '/memory', MessagesSquare, 'DB', 'RAGSearch', 'use', 'personal', 'stale', 'service contract'),
-      item('tools', 'Tools & Automations', '/tools', Wrench, 'Tooling', 'GetToolCatalog', 'use', 'sensitive', 'unsupported', 'service contract'),
+      item('tools', 'Tools & Plugins', '/tools', Wrench, 'Tooling', 'GetToolCatalog', 'use', 'sensitive', 'unsupported', 'service contract'),
       item('mesh', 'Mesh & Peers', '/mesh', Network, 'Gateway', 'GetMeshStatus', 'use', 'personal', 'degraded', 'service contract')
     ]
   },
   {
-    label: 'Operate',
+    label: 'Operate · admin only',
     items: [
       item('admin', 'Admin Overview', '/admin', LayoutDashboard, 'Gateway', 'GetCapabilityCatalog', 'use', 'admin-critical', 'available-local', 'service contract', true),
       item('services', 'Services', '/admin/services', Boxes, 'Gateway', 'GetServices', 'use', 'admin-critical', 'available-local', 'service contract', true),
       item('access', 'Access & RBAC', '/admin/access', ShieldCheck, 'Auth', 'ListPrincipals', 'use', 'admin-critical', 'degraded', 'service contract', true),
       item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'use', 'credential', 'unsupported', 'service contract', true),
-      item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'service contract', true),
-      item('config', 'Configuration', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
-      item('contracts', 'Contracts', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'service contract', true),
-      item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'use', 'admin-critical', 'unsupported', 'service contract', true),
-      item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'use', 'credential', 'unsupported', 'service contract', true),
       item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'use', 'admin-critical', 'unsupported', 'service contract', true),
       item('scheduler', 'Scheduler', '/admin/scheduler', CalendarClock, 'Scheduler', 'ListJobs', 'use', 'admin-critical', 'unsupported', 'service contract', true),
-      item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'service contract', true)
+      item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'service contract', true),
+      item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true)
     ]
   },
   {
     label: 'Runtime',
     items: [
       item('models', 'Models & Runtime', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract'),
-      item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetWebRTCDiagnostics', 'use', 'sensitive', 'available-local', 'service contract'),
-      item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'service contract'),
-      item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract'),
-      item('data', 'Data Policy', '/memory/policy', Database, 'DB', 'RAGSearch', 'use', 'sensitive', 'privacy-blocked', 'service contract'),
-      item('native', 'Native', '/settings/native', MemoryStick, 'Native', 'GetCapabilityManifest', 'use', 'credential', 'unsupported', 'service contract')
+      item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'service contract')
     ]
   }
 ]
 
+export const auroraEmbeddedNavItems: AuroraNavItem[] = [
+  item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'service contract', true),
+  item('config', 'Configuration', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
+  item('contracts', 'Contracts', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'service contract', true),
+  item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'use', 'admin-critical', 'unsupported', 'service contract', true),
+  item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'use', 'credential', 'unsupported', 'service contract', true),
+  item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetWebRTCDiagnostics', 'use', 'sensitive', 'unsupported', 'service contract', true),
+  item('data', 'Data Policy', '/memory/policy', Database, 'DB', 'RAGSearch', 'use', 'sensitive', 'privacy-blocked', 'service contract', true),
+  item('native', 'Native', '/settings/native', MemoryStick, 'Native', 'GetCapabilityManifest', 'use', 'credential', 'unsupported', 'service contract', true)
+]
+
+
 export const auroraMobileTabs = [
   auroraNavSections[0]!.items[0]!,
-  auroraNavSections[2]!.items[1]!,
+  auroraNavSections[0]!.items[1]!,
   auroraNavSections[0]!.items[3]!,
   auroraNavSections[1]!.items[0]!,
-  auroraNavSections[2]!.items[3]!
+  auroraNavSections[1]!.items[7]!
 ]
 
 export const auroraAssistantCancellationItem = item(
@@ -173,7 +177,7 @@ export function getAuroraNavItem(id: string): AuroraNavItem | undefined {
     const match = section.items.find((item) => item.id === id)
     if (match) return match
   }
-  return undefined
+  return auroraEmbeddedNavItems.find((item) => item.id === id)
 }
 
 export function navItemSnapshot(item: AuroraNavItem): AuroraNavItemSnapshot {

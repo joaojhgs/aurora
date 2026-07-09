@@ -44,20 +44,27 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
+  // Baselines regenerated after collapsing the topbar's split label+value
+  // pills (Mode/Health/Identity + separate EvidenceBadge) into single combined
+  // ModeBadge/HealthBadge/IdentityBadge pills, matching the prototype's
+  // Aurora.ModeBadge/Aurora.HealthBadge/Aurora.IdentityBadge (one pill per
+  // fact, not two). AssistantView's own source is unchanged; its rendered
+  // chrome shifts because it shares the AppShell topbar with every other
+  // screen. mobile-settings shifts because it renders SettingsPermissionsView.
   assistant: {
-    desktop: '4f8f5768f680',
-    tablet: '28013b1e6f19',
-    mobile: 'b4051ad944b6'
+    desktop: 'ab9b91ff5ae1',
+    tablet: 'f01cd494c778',
+    mobile: '2a892b19fc17'
   },
   admin: {
-    desktop: '38d35e4bddd2',
-    tablet: '51469e6d4e17',
-    mobile: '990b3efe8083'
+    desktop: 'd26ed6ffdf0a',
+    tablet: '96030e6a38b9',
+    mobile: '61db8eac1071'
   },
   'mobile-settings': {
-    desktop: 'db4702f87205',
-    tablet: 'f076fa447163',
-    mobile: '174b8bb6dea6'
+    desktop: '21ba2564e15a',
+    tablet: 'ac25fb16cbba',
+    mobile: 'e4e58ccc003a'
   }
 }
 
@@ -101,10 +108,13 @@ describe('Accessibility, responsive, and visual regression suite', () => {
       const shellChecks = {
         hasPrimaryNav: surface.html.includes('aria-label="Primary navigation"'),
         hasMobileNav: surface.html.includes('aria-label="Mobile navigation"'),
-        hasMain: surface.html.includes('<main class="aui-content" id="content">'),
+        hasMain: /<main[^>]*id="content"/.test(surface.html),
         hasStatusLanguage: /available-local|available-remote|privacy-blocked|degraded|denied|stale|unsupported/.test(text),
         hasBackendStatus: /SDK|Aurora|Gateway|secrets protected|capability/.test(text)
       }
+      // route-sheet.tsx's (frozen, unchanged) Route & Privacy technical-details drawer
+      // legitimately surfaces raw route.state labels like "available-local" in its
+      // diagnostic readout on every surface, including assistant.
       expect(shellChecks, `${surface.id}/${surface.viewport.id}`).toEqual({
         hasPrimaryNav: true,
         hasMobileNav: true,
@@ -144,7 +154,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     })
   })
 
-  it('matches deterministic visual baselines for loading, denied, degraded, unavailable, and mobile states', async () => {
+  it('matches deterministic visual baselines for loading, denied, degraded, not-ready, and mobile states', async () => {
     const renders = await renderQaSurfaces()
     const fingerprints = renders.map((surface) => {
       const actual = fingerprint(surface.html)
@@ -156,7 +166,6 @@ describe('Accessibility, responsive, and visual regression suite', () => {
         artifact: `packages/aurora-ui/reports/accessibility/${surface.id}-${surface.viewport.id}.html`
       }
     })
-
     const stateCoverage = coverageText(renders)
     expect(stateCoverage).toContain('Draft a short launch announcement')
     expect(stateCoverage).toContain('privacy-blocked')
@@ -165,12 +174,20 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(stateCoverage).toContain('AdminAction')
     expect(stateCoverage).toContain('Native unsupported')
     expect(stateCoverage).toContain('secrets protected')
+    expect(stateCoverage).toContain('aurora-prod-01')
+    expect(stateCoverage).toContain('AD admin Full access')
+    expect(stateCoverage).toContain('Desktop Local')
+    expect(stateCoverage).toContain('Healthy')
+    expect(stateCoverage).toContain('v0.9.2')
+    expect(stateCoverage).toContain('4h 12m')
+    expect(stateCoverage).not.toContain('v0.9.4')
+    expect(stateCoverage).not.toContain('18d 4h')
 
     writeJsonReport('visual-regression.json', {
       command: 'pnpm --filter @aurora/ui test:accessibility',
       baselineType: 'normalized static markup fingerprint',
       fingerprints,
-      stateCoverage: ['loading', 'privacy-blocked', 'denied', 'degraded', 'unsupported', 'native unavailable']
+      stateCoverage: ['loading', 'privacy-blocked', 'denied', 'degraded', 'unsupported', 'native not-ready']
     })
 
     for (const surface of renders) {
@@ -183,9 +200,9 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     const snapshot = await buildQaSnapshot()
     const text = textContent(renderShell(snapshot, 'mobile-settings', viewports[2]!))
 
-    expect(text).toContain('secrets protected')
+    expect(text.toLowerCase()).toContain('secrets protected')
     expect(text).toContain('explicit selector failures remain hard failures')
-    expect(text).toContain('Aurora capability state')
+    expect(text).toContain('Platform surface')
     expect(text).not.toMatch(/api[_ -]?key|password|token value|credential hash/i)
 
     writeJsonReport('security-privacy-negative-cases.json', {

@@ -191,7 +191,7 @@ function surfaceLabel(kind: AuroraSurfaceKind): string {
     case 'mobile':
       return 'Mobile thin'
     case 'mock':
-      return 'Demo mode'
+      return 'Local mode'
     case 'unknown':
       return 'Unknown surface'
   }

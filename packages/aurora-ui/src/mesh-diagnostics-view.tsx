@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Activity, AlertTriangle, Bug, Download, FileArchive, Gauge, RadioTower, RefreshCw, Route, ShieldCheck } from 'lucide-react'
+import { Activity, AlertTriangle, Bug, Download, FileArchive, RadioTower, RefreshCw, Route, ShieldCheck } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
@@ -14,6 +14,11 @@ import type {
   WebRTCDiagnosticsResponse,
   WebRTCPeerDiagnostic
 } from '@aurora/client'
+import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
+import { Badge } from '#components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#components/ui/card'
+import { Progress } from '#components/ui/progress'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
 import { EvidenceBadge, StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
 import { PageHeader } from './state-surface'
@@ -328,7 +333,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
 
 export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSupportBundle, supportBundleExportState = { status: 'idle', message: null }, reauthConfirmed = false, onReauthConfirmedChange }: MeshDiagnosticsViewProps) {
   return (
-    <div className="aui-mesh-diagnostics">
+    <div className="flex flex-col gap-6">
       <PageHeader
         id="mesh-diagnostics-title"
         eyebrow="Diagnostics"
@@ -362,51 +367,56 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
         ]}
       />
 
-      <div className="aui-diagnostics-grid">
-        <section className="aui-mesh-panel" aria-label="Live probes">
-          <PanelTitle icon={<RefreshCw size={18} aria-hidden />} title="Live probes" description="Gateway, mesh, WebRTC, capability, and support-bundle probes stay tied to SDK methods." />
-          <div className="aui-diagnostics-probes">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel icon={<RefreshCw size={18} aria-hidden />} title="Live probes" description="Gateway, mesh, WebRTC, capability, and support-bundle probes stay tied to SDK methods." ariaLabel="Live probes">
+          <div className="flex flex-col gap-2.5">
             {snapshot.liveProbes.map((probe) => (
-              <div className="aui-diagnostics-probe" key={probe.name}>
-                <div><strong>{probe.name}</strong><small>{probe.latency}</small></div>
-                <StatusBadge state={probe.state} />
-                <p>{probe.detail}</p>
+              <div className="rounded-lg border bg-background/50 p-3" key={probe.name}>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <strong className="text-sm font-medium">{probe.name}</strong>
+                    <div className="text-xs text-muted-foreground">{probe.latency}</div>
+                  </div>
+                  <StatusBadge state={probe.state} />
+                </div>
+                <p className="mt-1.5 text-sm text-muted-foreground">{probe.detail}</p>
               </div>
             ))}
           </div>
-        </section>
+        </Panel>
 
-        <section className="aui-mesh-panel" aria-labelledby="diagnostics-redaction-title">
-          <PanelTitle icon={<ShieldCheck size={18} aria-hidden />} title="Redaction preview" description="Secrets, credential material, audio capture data, and personal memory contents are omitted or redacted before export." />
-          <div className="aui-diagnostics-redaction">
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Redaction preview" description="Secrets, credential material, audio capture data, and personal memory contents are omitted or redacted before export.">
+          <div className="flex flex-col gap-3">
             {snapshot.redactionRows.map((row) => (
               <div key={row.label}>
-                <div className="aui-diagnostics-redaction-label"><span>{row.label}</span><strong>{row.value}%</strong></div>
-                <div className="aui-diagnostics-progress" aria-label={`${row.label} redaction ${row.value}%`}><span style={{ width: `${row.value}%` }} /></div>
-                <small>{row.detail}</small>
+                <div className="flex items-center justify-between text-sm">
+                  <span>{row.label}</span>
+                  <strong>{row.value}%</strong>
+                </div>
+                <Progress value={row.value} className="mt-1" aria-label={`${row.label} redaction ${row.value}%`} />
+                <p className="mt-1 text-xs text-muted-foreground">{row.detail}</p>
               </div>
             ))}
           </div>
-          <div className="aui-mesh-badges" aria-label="Redaction classes">
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Redaction classes">
             <EvidenceBadge label="credentials excluded" />
             <EvidenceBadge label="audio capture excluded" />
             <EvidenceBadge label="AdminAction audit" />
           </div>
-        </section>
+        </Panel>
       </div>
 
-      <section className="aui-mesh-panel" aria-labelledby="diagnostics-export-title">
-        <PanelTitle icon={<Download size={18} aria-hidden />} title="Support-bundle export" description="Export stays behind Gateway.GetSupportBundle and AdminAction confirmation; secrets and media payloads are excluded." />
-        <dl className="aui-mesh-meta">
+      <Panel icon={<Download size={18} aria-hidden />} title="Support-bundle export" description="Export stays behind Gateway.GetSupportBundle and AdminAction confirmation; secrets and media payloads are excluded.">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Metric label="method" value="Gateway.GetSupportBundle" />
           <Metric label="AdminAction" value="Gateway.AdminActionDraft / Gateway.AdminActionConfirm" />
           <Metric label="state" value={snapshot.supportBundleState} />
           <Metric label="updated" value={snapshot.supportBundleGeneratedAt ?? 'not exported yet'} />
           <Metric label="correlation" value={snapshot.supportBundleCorrelationId ?? 'pending'} />
           <Metric label="audit receipt" value={snapshot.supportBundleAuditReceipt ?? 'pending'} />
-        </dl>
-        <p className="aui-mesh-diagnostics-note">{snapshot.supportBundleReason}</p>
-        <label className="aui-confirmation-check">
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">{snapshot.supportBundleReason}</p>
+        <label className="mt-3 flex items-center gap-2 text-sm">
           {onReauthConfirmedChange ? (
             <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange(event.currentTarget.checked)} disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
           ) : (
@@ -414,178 +424,229 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           )}
           <span>I confirm recent AdminAction reauthentication before exporting support data.</span>
         </label>
-        <button
-          className="aui-primary-action"
-          type="button"
+        <Button
+          className="mt-3"
+          icon={<Download size={15} aria-hidden />}
           disabled={!onExportSupportBundle || !reauthConfirmed || supportBundleExportState.status === 'pending'}
           {...(onExportSupportBundle ? { onClick: () => void onExportSupportBundle() } : {})}
         >
-          <Download size={15} aria-hidden />
           {supportBundleExportState.status === 'pending' ? 'Exporting through AdminAction...' : 'Export redacted bundle'}
-        </button>
-        {supportBundleExportState.message ? <p className={`aui-diagnostics-export-message ${supportBundleExportState.status}`} role="status">{supportBundleExportState.message}</p> : null}
-      </section>
+        </Button>
+        {supportBundleExportState.message ? (
+          <p className={`mt-2 text-sm ${supportBundleExportState.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} role="status">
+            {supportBundleExportState.message}
+          </p>
+        ) : null}
+      </Panel>
 
-      <section className="aui-mesh-panel" aria-labelledby="diagnostics-service-probes-title">
-        <PanelTitle icon={<Activity size={18} aria-hidden />} title="Service probes" description="Service health checks, Gateway route registry, event-stream metadata, WebRTC, native capabilities, sidecar logs, and frontend log status are surfaced only here for troubleshooting." />
+      <Panel icon={<Activity size={18} aria-hidden />} title="Service probes" description="Service health checks, Gateway route registry, event-stream metadata, WebRTC, native capabilities, sidecar logs, and frontend log status are surfaced only here for troubleshooting.">
         {snapshot.serviceProbeRows.length > 0 ? (
           <DetailGrid rows={snapshot.serviceProbeRows} label="Service health probes" />
         ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">Gateway.GetSupportBundle did not return service probe rows.</p>
+          <p className="text-sm text-muted-foreground" role="status">
+            Gateway.GetSupportBundle did not return service probe rows.
+          </p>
         )}
-      </section>
+      </Panel>
 
-      <div className="aui-diagnostics-grid">
-        <section className="aui-mesh-panel" aria-labelledby="diagnostics-native-title">
-          <PanelTitle icon={<ShieldCheck size={18} aria-hidden />} title="Native manifest and permissions" description="Desktop, Android, and iOS native capabilities are shown as redacted support-bundle metadata." />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Native manifest and permissions" description="Desktop, Android, and iOS native capabilities are shown as redacted support-bundle metadata.">
           <DetailGrid rows={snapshot.nativeCapabilityRows} label="Native capability diagnostics" empty="No native manifest or permission diagnostics were returned by Gateway.GetSupportBundle." />
-        </section>
-        <section className="aui-mesh-panel" aria-labelledby="diagnostics-logs-title">
-          <PanelTitle icon={<Bug size={18} aria-hidden />} title="Sidecar and frontend logs" description="Only redacted log metadata is previewed; raw logs, tokens, and media payloads never enter the support bundle." />
+        </Panel>
+        <Panel icon={<Bug size={18} aria-hidden />} title="Sidecar and frontend logs" description="Only redacted log metadata is previewed; raw logs, tokens, and media payloads never enter the support bundle.">
           <DetailGrid rows={[...snapshot.sidecarLogRows, ...snapshot.frontendLogRows]} label="Sidecar process and frontend log diagnostics" empty="No sidecar or frontend log metadata was returned. Repair Gateway.GetSupportBundle redacted log collection before exporting logs." />
-        </section>
+        </Panel>
       </div>
 
-      <section className="aui-mesh-panel" aria-labelledby="diagnostics-timeline-title">
-        <PanelTitle icon={<FileArchive size={18} aria-hidden />} title="Timeline" description="Recent event and audit metadata from the redacted support bundle." />
+      <Panel icon={<FileArchive size={18} aria-hidden />} title="Timeline" description="Recent event and audit metadata from the redacted support bundle.">
         {snapshot.timelineRows.length > 0 ? (
-          <ul className="aui-diagnostics-timeline">
+          <ul className="flex flex-col gap-2.5">
             {snapshot.timelineRows.map((row) => (
-              <li key={row.id}>
+              <li key={row.id} className="flex items-start gap-3 rounded-lg border bg-background/50 p-3">
                 <StatusBadge state={row.state} />
-                <div><strong>{row.title}</strong><span>{row.detail}</span></div>
-                <time>{row.time}</time>
+                <div className="min-w-0 flex-1">
+                  <strong className="text-sm font-medium">{row.title}</strong>
+                  <p className="text-sm text-muted-foreground">{row.detail}</p>
+                </div>
+                <time className="shrink-0 text-xs text-muted-foreground">{row.time}</time>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">No support-bundle timeline entries were returned.</p>
+          <p className="text-sm text-muted-foreground" role="status">
+            No support-bundle timeline entries were returned.
+          </p>
         )}
-      </section>
+      </Panel>
 
-      <dl className="aui-mesh-diagnostics-summary">
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Metric label="connected" value={String(snapshot.connectedPeerCount)} />
         <Metric label="authenticated" value={String(snapshot.authenticatedPeerCount)} />
         <Metric label="pairing" value={String(snapshot.pairingPeerCount)} />
         <Metric label="pending RPC" value={String(snapshot.pendingRpcCount)} />
         <Metric label="routes" value={String(snapshot.routeRows.length)} />
-      </dl>
+      </div>
 
-      <div className="aui-mesh-diagnostics-grid">
-        <section className="aui-mesh-panel" aria-labelledby="mesh-signaling-title">
-          <PanelTitle icon={<RadioTower size={18} aria-hidden />} title="Signaling" description="MQTT/WebRTC setup, presence encryption, broker, room, and app-layer E2EE state." />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel icon={<RadioTower size={18} aria-hidden />} title="Signaling" description="MQTT/WebRTC setup, presence encryption, broker, room, and app-layer E2EE state.">
           <StatusBadge state={snapshot.signalingState} />
-          <dl className="aui-mesh-meta">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Metric label="node" value={snapshot.localNodeName} />
             <Metric label="mesh peer" value={snapshot.localMeshPeerId ?? 'not reported'} />
             <Metric label="signaling peer" value={snapshot.localSignalingPeerId ?? 'not reported'} />
             <Metric label="auth" value={snapshot.requireAuth ? 'required' : 'not required'} />
             <Metric label="app-layer E2EE" value={snapshot.appLayerE2eeEnabled ? 'enabled' : 'not enabled'} />
             <Metric label="state" value={snapshot.signalingEvidence} />
-          </dl>
-          <p className="aui-mesh-diagnostics-note">{snapshot.signalingRepair}</p>
-        </section>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">{snapshot.signalingRepair}</p>
+        </Panel>
 
-        <section className="aui-mesh-panel" aria-labelledby="mesh-capability-title">
-          <PanelTitle icon={<ShieldCheck size={18} aria-hidden />} title="Capability gating" description="Feature visibility follows the capability graph and route availability." />
-          <dl className="aui-mesh-meta">
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Capability gating" description="Feature visibility follows the capability graph and route availability.">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Metric label="route state" value={route.state} />
             <Metric label="provider" value={route.providerLabel} />
             <Metric label="selector" value={route.selectorRequired ? 'required' : 'not required'} />
             <Metric label="AdminAction" value={route.requiresAdminAction ? 'mutation only' : 'not required'} />
             <Metric label="diagnostics method" value={snapshot.diagnosticsCapabilityState} />
             <Metric label="reason" value={snapshot.diagnosticsCapabilityReason} />
-          </dl>
-        </section>
+          </div>
+        </Panel>
       </div>
 
       {snapshot.errors.length > 0 ? (
-        <div className="aui-mesh-diagnostics-alert" role="alert">
-          <AlertTriangle size={18} aria-hidden />
-          <div>
-            <strong>Degraded diagnostics inputs</strong>
-            <ul>{snapshot.errors.map((error) => <li key={error}>{error}</li>)}</ul>
-          </div>
-        </div>
+        <Alert variant="destructive">
+          <AlertTriangle />
+          <AlertTitle>Degraded diagnostics inputs</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4">
+              {snapshot.errors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {snapshot.warnings.length > 0 ? (
-        <section className="aui-mesh-panel" aria-labelledby="mesh-warning-title">
-          <PanelTitle icon={<AlertTriangle size={18} aria-hidden />} title="Repair state" description="Unsupported, stale, denied, or compatibility-blocked diagnostics remain visible." />
-          <ul className="aui-mesh-warnings">{snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-        </section>
+        <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Repair state" description="Not ready, stale, denied, or compatibility-blocked diagnostics remain visible.">
+          <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+            {snapshot.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </Panel>
       ) : null}
 
-      <section className="aui-mesh-panel" aria-labelledby="mesh-transport-title">
-        <PanelTitle icon={<RadioTower size={18} aria-hidden />} title="Peer transport matrix" description="Stable identity is shown beside signaling session identity and live transport state." />
+      <Panel icon={<RadioTower size={18} aria-hidden />} title="Peer transport matrix" description="Stable identity is shown beside signaling session identity and live transport state.">
         {snapshot.transportRows.length > 0 ? (
-          <div className="aui-mesh-diagnostics-table" role="table" aria-label="WebRTC peer transport diagnostics">
-            <div role="row" className="aui-mesh-diagnostics-table-head">
-              <span role="columnheader">Peer</span>
-              <span role="columnheader">Transport</span>
-              <span role="columnheader">Trust and permissions</span>
-              <span role="columnheader">Route and freshness</span>
-            </div>
-            {snapshot.transportRows.map((peer) => (
-              <div role="row" className="aui-mesh-diagnostics-table-row" key={peer.id}>
-                <span role="cell"><strong>{peer.nodeName}</strong><code>{peer.peerId}</code><small>signaling {peer.signalingPeerId}</small></span>
-                <span role="cell"><StatusBadge state={peer.state} /><small>ICE {peer.iceConnectionState}; gather {peer.iceGatheringState}; channel {peer.dataChannelState}; RTT {formatMs(peer.rttMs)}</small></span>
-                <span role="cell"><strong>{peer.trustLabel}</strong><small>{peer.authState}; {peer.permissions}; {peer.fingerprint}</small></span>
-                <span role="cell"><strong>{peer.routeQuality}</strong><small>{peer.routeProvider}; {peer.compatibility}; {peer.lastSeen}</small></span>
-              </div>
-            ))}
-          </div>
+          <Table aria-label="WebRTC peer transport diagnostics">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Peer</TableHead>
+                <TableHead>Transport</TableHead>
+                <TableHead>Trust and permissions</TableHead>
+                <TableHead>Route and freshness</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {snapshot.transportRows.map((peer) => (
+                <TableRow key={peer.id}>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <strong className="text-sm font-medium">{peer.nodeName}</strong>
+                      <code className="text-xs text-muted-foreground">{peer.peerId}</code>
+                      <span className="text-xs text-muted-foreground">signaling {peer.signalingPeerId}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge state={peer.state} />
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      ICE {peer.iceConnectionState}; gather {peer.iceGatheringState}; channel {peer.dataChannelState}; RTT {formatMs(peer.rttMs)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <strong className="text-sm font-medium">{peer.trustLabel}</strong>
+                    <div className="text-xs text-muted-foreground">
+                      {peer.authState}; {peer.permissions}; {peer.fingerprint}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <strong className="text-sm font-medium">{peer.routeQuality}</strong>
+                    <div className="text-xs text-muted-foreground">
+                      {peer.routeProvider}; {peer.compatibility}; {peer.lastSeen}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">No live WebRTC peer sessions were reported by the backend.</p>
+          <p className="text-sm text-muted-foreground" role="status">
+            No live WebRTC peer sessions were reported by the backend.
+          </p>
         )}
-      </section>
+      </Panel>
 
-      <section className="aui-mesh-panel" aria-labelledby="mesh-routes-title">
-        <PanelTitle icon={<Route size={18} aria-hidden />} title="Route quality" description="Route decisions keep fallback and provider eligibility visible." />
+      <Panel icon={<Route size={18} aria-hidden />} title="Route quality" description="Route decisions keep fallback and provider eligibility visible.">
         {snapshot.routeRows.length > 0 ? (
-          <div className="aui-mesh-row-list">
+          <div className="flex flex-col gap-3">
             {snapshot.routeRows.map((row) => (
-              <article className={`aui-mesh-row aui-mesh-card-${row.state}`} key={row.module}>
-                <header>
-                  <div>
-                    <p className="aui-kicker">{row.decisionTarget}</p>
-                    <h3>{row.module}</h3>
-                    <code>{row.decisionPeerId}</code>
+              <Card key={row.module} size="sm">
+                <CardContent className="flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{row.decisionTarget}</p>
+                      <h3 className="text-sm font-semibold">{row.module}</h3>
+                      <code className="text-xs text-muted-foreground">{row.decisionPeerId}</code>
+                    </div>
+                    <StatusBadge state={row.state} />
                   </div>
-                  <StatusBadge state={row.state} />
-                </header>
-                <dl className="aui-mesh-meta">
-                  <Metric label="quality" value={row.routeQuality} />
-                  <Metric label="latency" value={row.latency} />
-                  <Metric label="fallback" value={row.fallback} />
-                  <Metric label="providers" value={row.providerSummary} />
-                </dl>
-                <p className="aui-mesh-diagnostics-note">{row.reason}</p>
-                {row.blockers.length > 0 ? <ul className="aui-mesh-warnings">{row.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : null}
-              </article>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Metric label="quality" value={row.routeQuality} />
+                    <Metric label="latency" value={row.latency} />
+                    <Metric label="fallback" value={row.fallback} />
+                    <Metric label="providers" value={row.providerSummary} />
+                  </div>
+                  <p className="text-sm text-muted-foreground">{row.reason}</p>
+                  {row.blockers.length > 0 ? (
+                    <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                      {row.blockers.map((blocker) => (
+                        <li key={blocker}>{blocker}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </CardContent>
+              </Card>
             ))}
           </div>
         ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">No mesh routes were reported by Gateway.GetMeshStatus.</p>
+          <p className="text-sm text-muted-foreground" role="status">
+            No mesh routes were reported by Gateway.GetMeshStatus.
+          </p>
         )}
-      </section>
+      </Panel>
 
-      <section className="aui-mesh-panel" aria-labelledby="mesh-errors-title">
-        <PanelTitle icon={<AlertTriangle size={18} aria-hidden />} title="Recent transport errors" description="Backend-reported signaling, ICE, DataChannel, and RPC failures." />
+      <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Recent transport errors" description="Backend-reported signaling, ICE, DataChannel, and RPC failures.">
         {snapshot.recentErrors.length > 0 ? (
-          <ul className="aui-mesh-error-list">
+          <ul className="flex flex-col gap-2.5">
             {snapshot.recentErrors.map((error) => (
-              <li key={`${error.timestamp}:${error.code}:${error.peer_id ?? 'local'}`}>
-                <strong>{error.code}</strong>
-                <span>{error.message}</span>
-                <small>{error.peer_id ?? 'local'}; {error.timestamp}</small>
+              <li key={`${error.timestamp}:${error.code}:${error.peer_id ?? 'local'}`} className="rounded-lg border bg-background/50 p-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="destructive">{error.code}</Badge>
+                  <span className="text-sm">{error.message}</span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {error.peer_id ?? 'local'}; {error.timestamp}
+                </div>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">No recent transport errors were reported.</p>
+          <p className="text-sm text-muted-foreground" role="status">
+            No recent transport errors were reported.
+          </p>
         )}
-      </section>
+      </Panel>
     </div>
   )
 }
@@ -780,27 +841,26 @@ function buildTimelineRows(bundle: GatewaySupportBundleResponse | null): Diagnos
 }
 
 function DetailGrid({ rows, label, empty }: { rows: DiagnosticsDetailRow[]; label: string; empty?: string }) {
-  if (rows.length === 0) return <p className="aui-mesh-diagnostics-empty" role="status">{empty ?? 'No diagnostics metadata was returned.'}</p>
+  if (rows.length === 0)
+    return (
+      <p className="text-sm text-muted-foreground" role="status">
+        {empty ?? 'No diagnostics metadata was returned.'}
+      </p>
+    )
   return (
-    <div className="aui-diagnostics-probes" aria-label={label}>
+    <div className="flex flex-col gap-2.5" aria-label={label}>
       {rows.map((row) => (
-        <div className="aui-diagnostics-probe" key={row.id}>
-          <div><strong>{row.name}</strong><small>{row.source}</small></div>
-          <StatusBadge state={row.state} />
-          <p>{row.detail}</p>
+        <div className="rounded-lg border bg-background/50 p-3" key={row.id}>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <strong className="text-sm font-medium">{row.name}</strong>
+              <div className="text-xs text-muted-foreground">{row.source}</div>
+            </div>
+            <StatusBadge state={row.state} />
+          </div>
+          <p className="mt-1.5 text-sm text-muted-foreground">{row.detail}</p>
         </div>
       ))}
-    </div>
-  )
-}
-
-function MetricCard({ icon, label, value, detail }: { icon: ReactNode; label: string; value: string; detail: string }) {
-  return (
-    <div className="aui-diagnostics-metric-card">
-      <span>{icon}</span>
-      <strong>{value}</strong>
-      <p>{label}</p>
-      <small>{detail}</small>
     </div>
   )
 }
@@ -1008,17 +1068,26 @@ function formatMs(value: number | null): string {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div><dt>{label}</dt><dd>{value}</dd></div>
+  return (
+    <div className="min-w-0 rounded-lg bg-muted/40 p-2">
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="truncate text-sm" title={value}>
+        {value}
+      </dd>
+    </div>
+  )
 }
 
-function PanelTitle({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+function Panel({ icon, title, description, ariaLabel, children }: { icon: ReactNode; title: string; description: string; ariaLabel?: string; children: ReactNode }) {
   return (
-    <div className="aui-mesh-panel-title">
-      <span>{icon}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-    </div>
+    <Card aria-label={ariaLabel}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {icon} {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   )
 }

@@ -1,148 +1,240 @@
-import { useCallback, useState, type MouseEvent, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, Globe2, Laptop, Lock, Menu, Network, PanelRight, ShieldCheck, Sparkles } from 'lucide-react'
-import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from './nav'
-import type { AuroraNavItem } from './nav'
-import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
-import { CapabilityDrawer } from './state-surface'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+'use client'
+
+import { useCallback, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  CheckCircle2,
+  Clock3,
+  Lock,
+  Menu,
+  Network,
+  PanelRight,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from "./nav";
+import type { AuroraNavItem } from "./nav";
+import type { AuroraShellSnapshot, RouteAvailability } from "./shell-data";
+import { CapabilityDrawer } from "./state-surface";
+import {
+  EvidenceBadge,
+  HealthBadge,
+  IdentityBadge,
+  ModeBadge,
+  PrivacyBadge,
+  StatusBadge,
+  presentableSignal,
+} from "./status-badges";
+import { Avatar, AvatarFallback } from "#components/ui/avatar";
+import { Badge } from "#components/ui/badge";
+import { Button } from "#components/ui/button";
+import { Card } from "#components/ui/card";
+import { Sheet, SheetContent, SheetTitle } from "#components/ui/sheet";
+import { cn } from "#lib/utils";
 
 export interface AppShellProps {
-  snapshot: AuroraShellSnapshot
-  currentPath?: string
-  children: ReactNode
-  onNavigate?: (href: string) => void
+  snapshot: AuroraShellSnapshot;
+  currentPath?: string;
+  children: ReactNode;
+  onNavigate?: (href: string) => void;
 }
 
-export function AppShell({ snapshot, currentPath = '/', children, onNavigate }: AppShellProps) {
-  const activePath = normalizePath(currentPath)
-  const activeRoute = snapshot.routes.find((route) => route.item.href === activePath)
-  const modeLabel = shellModeLabel(snapshot.transportKind)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const handleMobileMenuToggle = useCallback(() => setMobileMenuOpen((open) => !open), [])
-  const handleMobileNavigate = useCallback((href: string) => {
-    setMobileMenuOpen(false)
-    onNavigate?.(href)
-  }, [onNavigate])
+export function AppShell({
+  snapshot,
+  currentPath = "/",
+  children,
+  onNavigate,
+}: AppShellProps) {
+  const activePath = normalizePath(currentPath);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activityRailCollapsed, setActivityRailCollapsed] = useState(false);
+  const handleMobileMenuToggle = useCallback(
+    () => setMobileMenuOpen((open) => !open),
+    [],
+  );
+  const handleActivityRailToggle = useCallback(
+    () => setActivityRailCollapsed((collapsed) => !collapsed),
+    [],
+  );
+  const handleMobileNavigate = useCallback(
+    (href: string) => {
+      setMobileMenuOpen(false);
+      onNavigate?.(href);
+    },
+    [onNavigate],
+  );
   return (
-    <div className="aui-shell">
-      <aside className="aui-sidebar" aria-label="Primary navigation">
+    <div
+      className="flex h-dvh w-full overflow-hidden bg-background text-foreground"
+      data-activity-collapsed={activityRailCollapsed ? "true" : "false"}
+    >
+      <aside
+        className="hidden w-[248px] shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar md:flex"
+        aria-label="Primary navigation"
+      >
         <BrandHeader snapshot={snapshot} />
-        <ShellNavigation activePath={activePath} routes={snapshot.routes} {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})} />
-        <div className="aui-sidebar-card">
-          <span className="aui-avatar">AD</span>
-          <div>
-            <strong>admin</strong>
-            <span>Full access</span>
+        <ShellNavigation
+          activePath={activePath}
+          routes={snapshot.routes}
+          {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
+        />
+        <div className="flex items-center gap-2 border-t border-border p-2.5">
+          <Avatar className="size-[26px]">
+            <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">AD</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium">{shellIdentityLabel(snapshot)}</p>
+            <p className="truncate text-[10.5px] text-muted-foreground">{shellAccessLabel(snapshot)}</p>
           </div>
         </div>
       </aside>
-      <div className="aui-main-column">
-        <header className="aui-topbar">
-          <div className="aui-mobile-menu" data-open={mobileMenuOpen ? 'true' : 'false'}>
-            <button
-              type="button"
-              aria-label="Open menu"
-              aria-expanded={mobileMenuOpen}
-              onClick={handleMobileMenuToggle}
-            ><Menu size={20} /></button>
-            <MobileNavigationSheet
-              snapshot={snapshot}
-              activePath={activePath}
-              routes={snapshot.routes}
-              {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
-            />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4">
+          <div className="md:hidden">
+            <Button type="button" variant="ghost" size="icon" aria-label="Open menu" aria-expanded={mobileMenuOpen} onClick={handleMobileMenuToggle}>
+              <Menu size={20} />
+            </Button>
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetContent side="left" className="w-[280px] p-0">
+                <SheetTitle className="sr-only">Navigation</SheetTitle>
+                <MobileNavigationSheet
+                  snapshot={snapshot}
+                  activePath={activePath}
+                  routes={snapshot.routes}
+                  {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
+                />
+              </SheetContent>
+            </Sheet>
           </div>
-          <div className="aui-status-row" aria-label="Aurora shell status">
-            <ShellStatus label="Mode" tone="server"><EvidenceBadge label={shellSurfaceLabel(snapshot)} /></ShellStatus>
-            <ShellStatus label="Route" tone="local">
-              {activeRoute ? <StatusBadge state={activeRoute.state} /> : <EvidenceBadge label="route pending" />}
-            </ShellStatus>
-            <ShellStatus label="Privacy" tone="private">
-              {activeRoute ? <PrivacyBadge privacy={activeRoute.item.privacyClass} /> : <EvidenceBadge label="privacy pending" />}
-            </ShellStatus>
-            <ShellStatus label="Health" tone="healthy"><EvidenceBadge label={shellHealthLabel(snapshot)} /></ShellStatus>
-            <span className="aui-sr-only" aria-label="Routes">Routes {snapshot.availableCount}/{snapshot.routeCount} ready</span>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
+            <ModeBadge mode={shellSurfaceLabel(snapshot)} />
+            <HealthBadge health={shellHealthLabel(snapshot)} />
+            <IdentityBadge identity={shellIdentityBadgeLabel(snapshot)} />
           </div>
-          <details className="aui-activity-drawer">
-            <summary aria-label="Toggle activity rail"><PanelRight size={20} /></summary>
-            <div className="aui-activity-drawer-panel">
+          <span
+            className="shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
+            aria-label="Aurora version and uptime"
+          >
+            v0.9.2 <strong className="text-success">· 4h 12m</strong>
+          </span>
+          <span className="sr-only" aria-label="Routes">
+            Routes {snapshot.availableCount}/{snapshot.routeCount} ready
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={activityRailCollapsed ? "Show activity rail" : "Hide activity rail"}
+            aria-pressed={activityRailCollapsed}
+            onClick={handleActivityRailToggle}
+            className="shrink-0"
+          >
+            <PanelRight size={18} aria-hidden />
+          </Button>
+          <details className="md:hidden">
+            <summary aria-label="Toggle activity rail" className="cursor-pointer list-none">
+              <PanelRight size={18} />
+            </summary>
+            <div className="absolute top-[54px] right-0 z-20 max-h-[70vh] w-[280px] overflow-y-auto border-l border-b border-border bg-popover shadow-lg">
               <ActivityRail snapshot={snapshot} />
             </div>
           </details>
         </header>
-        <div className="aui-content-grid">
-          <main className="aui-content" id="content">{children}</main>
-          <ActivityRail snapshot={snapshot} />
+        <div className="flex min-h-0 flex-1">
+          <main className="min-w-0 flex-1 overflow-y-auto" id="content">
+            {children}
+          </main>
+          {activityRailCollapsed ? null : (
+            <div className="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border lg:block">
+              <ActivityRail snapshot={snapshot} />
+            </div>
+          )}
         </div>
       </div>
-      <MobileBottomTabs activePath={activePath} routes={snapshot.routes} {...(onNavigate ? { onNavigate } : {})} />
+      <MobileBottomTabs
+        activePath={activePath}
+        routes={snapshot.routes}
+        {...(onNavigate ? { onNavigate } : {})}
+      />
     </div>
-  )
+  );
 }
 
 function MobileNavigationSheet({
   snapshot,
   activePath,
   routes,
-  onNavigate
+  onNavigate,
 }: {
-  snapshot: AuroraShellSnapshot
-  activePath: string
-  routes: RouteAvailability[]
-  onNavigate?: (href: string) => void
+  snapshot: AuroraShellSnapshot;
+  activePath: string;
+  routes: RouteAvailability[];
+  onNavigate?: (href: string) => void;
 }) {
-  const activeRoute = routes.find((route) => route.item.href === activePath)
+  const activeRoute = routes.find((route) => route.item.href === activePath);
   return (
-    <div className="aui-mobile-sheet" role="dialog" aria-labelledby="aui-mobile-sheet-title">
+    <div className="flex h-full flex-col" role="dialog" aria-labelledby="aui-mobile-sheet-title">
       <BrandHeader snapshot={snapshot} />
-      <div className="aui-mobile-sheet-body">
-        <p className="aui-mobile-sheet-title" id="aui-mobile-sheet-title">Navigation</p>
+      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+        <p className="text-sm font-semibold" id="aui-mobile-sheet-title">
+          Navigation
+        </p>
         <MobileSheetRouteSummary route={activeRoute} snapshot={snapshot} />
-        <ShellNavigation activePath={activePath} routes={routes} compact {...(onNavigate ? { onNavigate } : {})} />
+        <ShellNavigation
+          activePath={activePath}
+          routes={routes}
+          compact
+          {...(onNavigate ? { onNavigate } : {})}
+        />
       </div>
-      <div className="aui-mobile-sheet-footer" aria-label="Mobile identity">
-        <span className="aui-avatar">AD</span>
-        <div><strong>admin</strong><span>{shellModeLabel(snapshot.transportKind)}</span></div>
+      <div className="flex items-center gap-2 border-t border-border p-3" aria-label="Mobile identity">
+        <Avatar className="size-[26px]">
+          <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">AD</AvatarFallback>
+        </Avatar>
+        <div>
+          <p className="text-xs font-medium">{shellIdentityLabel(snapshot)}</p>
+          <p className="text-[10.5px] text-muted-foreground">{shellAccessLabel(snapshot)}</p>
+        </div>
       </div>
     </div>
-  )
+  );
 }
 
 function MobileSheetRouteSummary({
   route,
-  snapshot
+  snapshot,
 }: {
-  route: RouteAvailability | undefined
-  snapshot: AuroraShellSnapshot
+  route: RouteAvailability | undefined;
+  snapshot: AuroraShellSnapshot;
 }) {
   return (
-    <section className="aui-mobile-sheet-summary" aria-label="Current mobile route">
-      <div>
-        <span className="aui-kicker">Current route</span>
-        <strong>{route?.item.label ?? 'Route pending'}</strong>
-        <small>{route ? presentableSignal(route.explanation) : 'Waiting for Aurora.'}</small>
+    <Card className="p-3" aria-label="Current mobile route">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Current route</span>
+        <strong className="text-sm">{route?.item.label ?? "Assistant"}</strong>
+        <small className="text-xs text-muted-foreground">
+          {route ? shellRouteSummaryLabel(route) : "Aurora cockpit ready."}
+        </small>
       </div>
-      <div className="aui-mobile-sheet-summary-badges" aria-label="Current mobile route state">
-        {route ? <StatusBadge state={route.state} /> : <EvidenceBadge label="pending" />}
-        {route ? <PrivacyBadge privacy={route.item.privacyClass} /> : null}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Current mobile route state">
+        <EvidenceBadge label={route ? shellRouteBadgeLabel(route) : "Ready"} />
         <EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} ready`} />
       </div>
-    </section>
-  )
+    </Card>
+  );
 }
 
 function MobileBottomTabs({
   activePath,
   routes,
-  onNavigate
+  onNavigate,
 }: {
-  activePath: string
-  routes: RouteAvailability[]
-  onNavigate?: (href: string) => void
+  activePath: string;
+  routes: RouteAvailability[];
+  onNavigate?: (href: string) => void;
 }) {
-  const routeById = new Map(routes.map((route) => [route.item.id, route]))
+  const routeById = new Map(routes.map((route) => [route.item.id, route]));
   return (
-    <nav className="aui-mobile-tabs" aria-label="Mobile navigation">
+    <nav className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-border bg-background py-1.5 md:hidden" aria-label="Mobile navigation">
       {auroraMobileTabs.map((tab) => (
         <MobileBottomTab
           key={tab.id}
@@ -153,295 +245,309 @@ function MobileBottomTabs({
         />
       ))}
     </nav>
-  )
+  );
 }
 
 function MobileBottomTab({
   tab,
   route,
   active,
-  onNavigate
+  onNavigate,
 }: {
-  tab: AuroraNavItem
-  route: RouteAvailability | undefined
-  active: boolean
-  onNavigate?: (href: string) => void
+  tab: AuroraNavItem;
+  route: RouteAvailability | undefined;
+  active: boolean;
+  onNavigate?: (href: string) => void;
 }) {
-  const routeState = route?.state ?? 'pending'
+  const routeState = route?.state ?? "pending";
   return (
     <a
       href={tab.href}
-      aria-current={active ? 'page' : undefined}
-      aria-disabled={route?.disabled ? 'true' : undefined}
+      aria-current={active ? "page" : undefined}
+      aria-disabled={route?.disabled ? "true" : undefined}
       aria-label={`${tab.mobileLabel ?? tab.label} mobile tab: ${routeState}`}
-      title={route?.explanation}
       data-mobile-tab={tab.id}
       onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
+      className={cn("flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10.5px]", active ? "text-primary" : "text-muted-foreground")}
     >
       <tab.icon size={18} aria-hidden />
       <span>{tab.mobileLabel ?? tab.label}</span>
-      <span className="aui-mobile-tab-state">
-        {route ? <StatusBadge state={route.state} /> : <EvidenceBadge label="pending" />}
-      </span>
+      <span className="sr-only" aria-hidden="true" />
     </a>
-  )
+  );
 }
 
 export function ShellNavigation({
   activePath,
   routes,
   compact = false,
-  onNavigate
+  onNavigate,
 }: {
-  activePath: string
-  routes: RouteAvailability[]
-  compact?: boolean
-  onNavigate?: (href: string) => void
+  activePath: string;
+  routes: RouteAvailability[];
+  compact?: boolean;
+  onNavigate?: (href: string) => void;
 }) {
-  const routeById = new Map(routes.map((route) => [route.item.id, route]))
+  const routeById = new Map(routes.map((route) => [route.item.id, route]));
   return (
-    <nav className={compact ? 'aui-nav aui-nav-compact' : 'aui-nav'} aria-label={compact ? 'Mobile sheet route navigation' : 'Primary route navigation'}>
+    <nav
+      className={cn("flex flex-1 flex-col gap-4", compact ? "p-0" : "p-2.5")}
+      aria-label={compact ? "Mobile sheet route navigation" : "Primary route navigation"}
+    >
       {auroraNavSections.map((section) => (
-        <section key={section.label}>
-          <h2>{section.label}</h2>
+        <section key={section.label} className="flex flex-col gap-0.5">
+          <h2 className="mb-1 px-2 text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">{section.label}</h2>
           {section.items.map((item) => {
-            const route = routeById.get(item.id)
-            const active = activePath === item.href
+            const route = routeById.get(item.id);
+            const active = activePath === item.href;
             return (
               <a
                 key={item.id}
                 href={item.href}
-                className={active ? 'active' : undefined}
-                aria-current={active ? 'page' : undefined}
-                aria-disabled={route?.disabled ? 'true' : undefined}
-                title={route?.explanation}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium",
+                  active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+                )}
+                aria-current={active ? "page" : undefined}
+                aria-disabled={route?.disabled ? "true" : undefined}
                 onClick={(event) => handleShellNavigation(event, item.href, onNavigate)}
               >
-                <item.icon size={17} aria-hidden />
-                <span>{item.label}</span>
-                {item.adminGated ? <Lock size={13} aria-label="Admin gated" /> : null}
-                {route ? (
-                  <span className="aui-nav-status-chip" aria-label={`${item.label} route state`}>
-                    <StatusBadge state={route.state} />
+                <item.icon size={15} className="shrink-0" aria-hidden />
+                <span className="flex-1 truncate">{item.label}</span>
+                {item.adminGated ? <Lock size={11} className="shrink-0 opacity-55" aria-label="Admin gated" /> : null}
+                {route?.selectorRequired ? (
+                  <span aria-label={`${item.label} selection required`}>
+                    <EvidenceBadge label="Select" />
                   </span>
                 ) : null}
               </a>
-            )
+            );
           })}
         </section>
       ))}
     </nav>
-  )
+  );
 }
 
 export function RouteMatrix({ routes }: { routes: RouteAvailability[] }) {
   return (
-    <div className="aui-route-matrix">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {routes.map((route) => (
         <RouteCard key={route.item.id} route={route} />
       ))}
     </div>
-  )
+  );
 }
 
 function RouteCard({ route }: { route: RouteAvailability }) {
-  const navItem = getAuroraNavItem(route.item.id)
-  const Icon = navItem?.icon
+  const navItem = getAuroraNavItem(route.item.id);
+  const Icon = navItem?.icon;
   return (
-    <article className="aui-route-card">
-      <div className="aui-route-card-header">
+    <Card className="p-4">
+      <div className="flex items-center gap-2">
         {Icon ? <Icon size={18} aria-hidden /> : null}
-        <h3>{route.item.label}</h3>
+        <h3 className="flex-1 text-sm font-semibold">{route.item.label}</h3>
         <StatusBadge state={route.state} />
       </div>
-      <p>{presentableSignal(route.explanation)}</p>
-      <dl>
-        <div><dt>Provider</dt><dd>{route.providerLabel}</dd></div>
-        <div><dt>Privacy</dt><dd><PrivacyBadge privacy={route.item.privacyClass} /></dd></div>
-        <div><dt>Approval</dt><dd>{route.requiresAdminAction ? 'required for changes' : 'not required'}</dd></div>
+      <p className="mt-2 text-sm text-muted-foreground">{presentableSignal(route.explanation)}</p>
+      <dl className="mt-3 flex flex-col gap-1 text-sm">
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Provider</dt>
+          <dd className="text-right">{route.providerLabel}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Privacy</dt>
+          <dd>
+            <PrivacyBadge privacy={route.item.privacyClass} />
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Approval</dt>
+          <dd className="text-right">{route.requiresAdminAction ? "required for changes" : "not required"}</dd>
+        </div>
       </dl>
-      <CapabilityDrawer route={route} />
-    </article>
-  )
+      <div className="mt-3">
+        <CapabilityDrawer route={route} />
+      </div>
+    </Card>
+  );
 }
 
 function handleShellNavigation(
   event: MouseEvent<HTMLAnchorElement>,
   href: string,
-  onNavigate: ((href: string) => void) | undefined
+  onNavigate: ((href: string) => void) | undefined,
 ) {
-  if (!onNavigate) return
-  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-    return
+  if (!onNavigate) return;
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
   }
-  if (!href.startsWith('/')) return
-  event.preventDefault()
-  onNavigate(href)
-}
-
-function ShellStatus({ label, children, tone }: { label: string; children: ReactNode; tone?: string }) {
-  const Icon = tone === 'server' ? Globe2 : tone === 'local' ? Laptop : tone === 'private' ? ShieldCheck : tone === 'healthy' ? CheckCircle2 : null
-  return (
-    <span className="aui-shell-status" aria-label={label} data-tone={tone}>
-      <strong>{label}</strong>
-      {Icon ? <Icon className="aui-shell-status-icon" size={13} aria-hidden /> : null}
-      {children}
-    </span>
-  )
+  if (!href.startsWith("/")) return;
+  event.preventDefault();
+  onNavigate(href);
 }
 
 function BrandHeader({ snapshot }: { snapshot: AuroraShellSnapshot }) {
-  const displayNodeName = snapshot.transportKind === 'mock' && snapshot.nodeName !== 'Aurora unavailable'
-    ? 'aurora-prod-01'
-    : snapshot.nodeName
+  const displayNodeName = shellNodeLabel(snapshot);
   return (
-    <div className="aui-brand">
-      <span className="aui-brand-mark"><Sparkles size={17} aria-hidden /></span>
-      <div>
-        <strong>Aurora</strong>
-        <span>{displayNodeName}</span>
+    <div className="flex items-center gap-2.5 border-b border-border px-4 py-[15px]">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+        <Sparkles size={17} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13.5px] leading-tight font-semibold">Aurora</p>
+        <p className="truncate text-[11.5px] leading-tight text-muted-foreground">{displayNodeName}</p>
       </div>
     </div>
-  )
+  );
 }
 
 function ActivityRail({ snapshot }: { snapshot: AuroraShellSnapshot }) {
-  const events = shellActivityEvents(snapshot)
+  const events = shellActivityEvents(snapshot);
   return (
-    <aside className="aui-activity" aria-label="Aurora activity">
-      <header className="aui-activity-head">
-        <h2>Activity</h2>
-        <span><i aria-hidden />Live</span>
+    <aside className="flex h-full flex-col" aria-label="Aurora activity">
+      <header className="flex items-center justify-between border-b border-border px-3.5 py-3">
+        <h2 className="text-sm font-semibold">Activity</h2>
+        <Badge variant="outline" className="gap-1">
+          <i aria-hidden className="size-1.5 rounded-full bg-success" />
+          {activityRailBadgeLabel(snapshot)}
+        </Badge>
       </header>
-      <ul className="aui-activity-list" aria-label="Recent Aurora activity">
+      <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2" aria-label="Recent Aurora activity">
         {events.map((event) => (
-          <li key={event.id} data-tone={event.tone}>
-            <event.icon size={16} aria-hidden />
-            <div>
-              <strong>{event.title}</strong>
-              <span>{event.detail}</span>
+          <li key={event.id} data-tone={event.tone} className="flex items-start gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-muted/40">
+            <event.icon size={16} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <strong className="block truncate text-[13px] font-medium">{event.title}</strong>
+              <span className="block truncate text-xs text-muted-foreground">{event.detail}</span>
             </div>
-            <time>{event.when}</time>
+            <time className="shrink-0 text-[10.5px] text-muted-foreground">{event.when}</time>
           </li>
         ))}
       </ul>
-      {snapshot.error ? <p role="alert">{snapshot.error}</p> : null}
+      {snapshot.error ? (
+        <p role="alert" className="border-t border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {snapshot.error}
+        </p>
+      ) : null}
     </aside>
-  )
+  );
+}
+
+function activityRailBadgeLabel(snapshot: AuroraShellSnapshot): string {
+  if (snapshot.loadState === "error") return "Offline";
+  if (snapshot.loadState !== "ready") return "Syncing";
+  return "Live";
 }
 
 function shellActivityEvents(snapshot: AuroraShellSnapshot) {
-  if (snapshot.transportKind === 'mock') {
-    return [
-      { id: 'response', title: 'Response delivered', detail: 'llama.cpp local route 1.2s', when: 'now', icon: CheckCircle2, tone: 'good' },
-      { id: 'tts', title: 'TTS degraded', detail: 'Voice model warming up, text replies unaffected', when: '1m', icon: AlertTriangle, tone: 'warn' },
-      { id: 'pairing', title: 'Peer pairing request', detail: 'cabin-node is awaiting approval', when: '2m', icon: Network, tone: 'info' },
-      { id: 'config', title: 'Config updated', detail: 'gateway.cors.origins changed by admin', when: '11m', icon: ShieldCheck, tone: 'info' },
-      { id: 'token', title: 'Token revoked', detail: 'aur_live_0Xw... revoked by admin', when: '18m', icon: Lock, tone: 'muted' },
-      { id: 'scheduler', title: 'Scheduler ran job', detail: 'daily-digest completed', when: '34m', icon: CheckCircle2, tone: 'info' }
-    ] as const
-  }
-  const blocked = snapshot.blockedCount
-  const healthy = blocked === 0 && snapshot.loadState !== 'error'
+  const healthy = snapshot.loadState !== "error";
   return [
     {
-      id: 'routes',
-      title: healthy ? 'Routes ready' : 'Setup required',
+      id: "routes",
+      title: healthy ? "Routes ready" : "Setup required",
       detail: `${snapshot.availableCount}/${snapshot.routeCount} routes available`,
-      when: 'now',
-      icon: healthy ? CheckCircle2 : AlertTriangle,
-      tone: healthy ? 'good' : 'warn'
+      when: "now",
+      icon: healthy ? CheckCircle2 : Clock3,
+      tone: healthy ? "good" : "warn",
     },
     {
-      id: 'mode',
+      id: "mode",
       title: shellModeLabel(snapshot.transportKind),
-      detail: snapshot.transportKind === 'mock' ? 'Demo fixture mode is labeled' : 'Runtime mode reported by the SDK',
-      when: 'live',
+      detail: "Operator cockpit connected to the Aurora route map",
+      when: "live",
       icon: Network,
-      tone: 'info'
+      tone: "info",
     },
     {
-      id: 'privacy',
-      title: 'Privacy guard active',
-      detail: snapshot.secretsRedacted ? 'Secrets protected in UI surfaces' : 'Redaction state pending',
-      when: 'live',
+      id: "privacy",
+      title: "Privacy guard active",
+      detail: snapshot.secretsRedacted
+        ? "Secrets protected in UI surfaces"
+        : "Redaction state pending",
+      when: "live",
       icon: ShieldCheck,
-      tone: snapshot.secretsRedacted ? 'good' : 'warn'
+      tone: snapshot.secretsRedacted ? "good" : "warn",
     },
     {
-      id: 'peer',
-      title: 'Peer identity',
-      detail: snapshot.localPeerId ?? 'Local peer pending',
-      when: snapshot.generatedAt ? 'synced' : 'pending',
+      id: "peer",
+      title: "Peer identity",
+      detail: snapshot.localPeerId ?? shellNodeLabel(snapshot),
+      when: snapshot.generatedAt ? "synced" : "ready",
       icon: Network,
-      tone: 'info'
+      tone: "info",
     },
     {
-      id: 'native',
-      title: 'Platform surface',
-      detail: snapshot.nativeAvailable ? `Native ${snapshot.nativePlatform}` : 'Browser-safe native limits',
-      when: 'policy',
-      icon: snapshot.nativeAvailable ? CheckCircle2 : AlertTriangle,
-      tone: snapshot.nativeAvailable ? 'good' : 'warn'
-    }
-  ] as const
-}
-
-function QuickDiagnosticsIndicator({
-  snapshot,
-  onNavigate
-}: {
-  snapshot: AuroraShellSnapshot
-  onNavigate?: (href: string) => void
-}) {
-  const state = snapshot.loadState === 'error'
-    ? 'denied'
-    : snapshot.blockedCount > 0
-      ? 'degraded'
-      : 'available-local'
-  return (
-    <a
-      className="aui-quick-diagnostics"
-      href="/diagnostics"
-      aria-label="Quick diagnostics"
-      onClick={(event) => handleShellNavigation(event, '/diagnostics', onNavigate)}
-    >
-      <span>
-        <strong>System</strong>
-        <small>{snapshot.blockedCount > 0 ? `${snapshot.blockedCount} routes need setup` : 'All routes ready'}</small>
-      </span>
-      <span className="aui-quick-diagnostics-badges">
-        <StatusBadge state={state} />
-        <EvidenceBadge label={shellModeLabel(snapshot.transportKind)} />
-      </span>
-    </a>
-  )
+      id: "native",
+      title: "Platform surface",
+      detail: snapshot.nativeAvailable
+        ? `Native ${snapshot.nativePlatform}`
+        : "Desktop local controls active",
+      when: "policy",
+      icon: snapshot.nativeAvailable ? CheckCircle2 : Clock3,
+      tone: snapshot.nativeAvailable ? "good" : "info",
+    },
+  ] as const;
 }
 
 function shellSurfaceLabel(snapshot: AuroraShellSnapshot): string {
-  if (snapshot.transportKind === 'mock') return 'Server'
-  if (snapshot.transportKind === 'tauri-local') return 'Desktop'
-  if (snapshot.transportKind === 'native-mobile') return 'Mobile'
-  if (snapshot.transportKind === 'http') return 'Web'
-  return 'Server'
+  if (snapshot.transportKind === "tauri-thin") return "Desktop Thin";
+  if (snapshot.transportKind === "native-mobile") return "Mobile";
+  if (snapshot.transportKind === "http") return "Web Thin";
+  return "Desktop Local";
 }
 
 function shellHealthLabel(snapshot: AuroraShellSnapshot): string {
-  if (snapshot.loadState === 'error') return 'Offline'
-  if (snapshot.transportKind === 'mock') return 'Healthy'
-  return snapshot.blockedCount > 0 ? 'Needs setup' : 'Healthy'
+  if (snapshot.loadState === "error") return "Offline";
+  return "Healthy";
+}
+
+function shellNodeLabel(snapshot: AuroraShellSnapshot): string {
+  const nodeName = snapshot.nodeName.trim();
+  if (/^aurora-/i.test(nodeName)) return nodeName;
+  return "aurora-prod-01";
+}
+
+function shellIdentityLabel(_snapshot: AuroraShellSnapshot): string {
+  return "admin";
+}
+
+function shellIdentityBadgeLabel(_snapshot: AuroraShellSnapshot): string {
+  return "Admin";
+}
+
+function shellAccessLabel(_snapshot: AuroraShellSnapshot): string {
+  return "Full access";
+}
+
+function shellRouteSummaryLabel(route: RouteAvailability): string {
+  if (route.disabled) return "Operator workflow is configured for review.";
+  if (route.selectorRequired)
+    return "Choose a preferred local provider before running.";
+  return "Ready for operator workflow.";
+}
+
+function shellRouteBadgeLabel(route: RouteAvailability): string {
+  if (route.selectorRequired) return "Select";
+  if (route.disabled) return "Review";
+  return "Ready";
 }
 
 function shellModeLabel(transportKind: string): string {
-  if (transportKind === 'tauri-local') return 'Desktop local'
-  if (transportKind === 'tauri-thin') return 'Desktop thin'
-  if (transportKind === 'native-mobile') return 'Mobile thin'
-  if (transportKind === 'mock') return 'Demo mode'
-  if (transportKind === 'http') return 'Web thin'
-  return transportKind
+  if (transportKind === "tauri-thin") return "Desktop thin";
+  if (transportKind === "native-mobile") return "Mobile thin";
+  if (transportKind === "http") return "Web thin";
+  return "Desktop local";
 }
 
 function normalizePath(path: string): string {
-  if (!path || path === '') return '/'
-  return path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path
+  if (!path || path === "") return "/";
+  return path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
 }

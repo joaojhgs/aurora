@@ -7,11 +7,13 @@ import {
   buildShellSnapshot,
   DataPolicyView,
   MemoryView,
-  type RouteAvailability
+  type RouteAvailability,
+  auroraEmbeddedNavItems,
+  navItemSnapshot
 } from '../src/index'
 
 describe('Memory and data policy production stories', () => {
-  it('renders Memory & Knowledge cards, search, history, provenance, and gated actions', async () => {
+  it('renders prototype-density Memory & Knowledge collections and search list', async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() })
     const memoryRoute = await enabledRoute(client, 'memory')
     const model = await buildMemoryViewModel(client, memoryRoute, {
@@ -22,15 +24,14 @@ describe('Memory and data policy production stories', () => {
     const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />)
 
     expect(markup).toContain('Memory &amp; Knowledge')
-    expect(markup).toContain('Memory &amp; RAG collections')
-    expect(markup).toContain('Conversation history')
-    expect(markup).toContain('Remote peer: peer-studio-gpu.memories')
+    expect(markup).toContain('Collections')
+    expect(markup).toContain('Search conversations')
+    expect(markup).toContain('Remote peer')
     expect(markup).toContain('Search hit for &quot;mesh pairing&quot;')
-    expect(markup).toContain('Route path')
-    expect(markup).toContain('Policy')
-    expect(markup).toContain('Audit')
-    expect(markup).toContain('Export snapshot unsupported')
-    expect(markup).toContain('Delete record unsupported')
+    expect(markup).not.toContain('Memory &amp; RAG collections')
+    expect(markup).not.toContain('Export snapshot unsupported')
+    expect(markup).not.toContain('Delete record unsupported')
+    expect(markup).not.toContain('Evidence')
   })
 
   it('explains the no-memory state without duplicating a generic browse or capability report', async () => {
@@ -43,9 +44,9 @@ describe('Memory and data policy production stories', () => {
 
     const markup = renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />)
 
-    expect(markup).toContain('No collections reported')
-    expect(markup).toContain('Aurora stores memory only after conversation history, approved tool/context ingestion, or imported knowledge snapshots are enabled by policy.')
-    expect(markup).toContain('transient prompts are not stored as memory')
+    expect(markup).toContain('No collections yet')
+    expect(markup).toContain('Collections appear after conversations, approved context, or imported knowledge are saved.')
+    expect(markup).toContain('No conversations yet')
     expect(markup).not.toContain('Runtime snapshot')
     expect(markup).not.toContain('Backend capability report')
   })
@@ -73,6 +74,7 @@ describe('Memory and data policy production stories', () => {
 async function enabledRoute(client: Aurora, id: string): Promise<RouteAvailability> {
   const snapshot = await buildShellSnapshot(client)
   const route = snapshot.routes.find((candidate) => candidate.item.id === id)
+    ?? embeddedTestRoute(id)
   if (!route) throw new Error(`missing route ${id}`)
   return {
     ...route,
@@ -81,5 +83,25 @@ async function enabledRoute(client: Aurora, id: string): Promise<RouteAvailabili
     providerLabel: 'local / DB',
     blockers: [],
     routeable: true
+  }
+}
+
+function embeddedTestRoute(id: string): RouteAvailability | null {
+  const item = auroraEmbeddedNavItems.find((candidate) => candidate.id === id)
+  if (!item) return null
+  return {
+    item: navItemSnapshot(item),
+    state: item.fallbackState,
+    explanation: 'Embedded in a primary route for this nav revision.',
+    providerLabel: 'embedded SDK route',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['embedded primary route'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: false,
   }
 }

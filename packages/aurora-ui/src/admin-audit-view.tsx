@@ -11,9 +11,13 @@ import {
   type JsonObject,
   type JsonValue
 } from '@aurora/client'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
-import { PageHeader } from './state-surface'
-import { Button, Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
+import { Alert, AlertDescription } from '#components/ui/alert'
+import { Input } from '#components/ui/input'
+import { EvidenceBadge, StatusBadge } from './status-badges'
+import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
+
+const filterLabelClass = 'flex flex-col gap-1 text-xs text-muted-foreground'
+const selectControlClass = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
 
 export type AdminAuditLoadState =
   | 'loading'
@@ -211,7 +215,7 @@ export async function buildAdminAuditSnapshot(
       total: auditResult.data.total,
       warnings: unsupportedFilterWarnings(effectiveFilters, backendFilter),
       error: null,
-      evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora Auth.AuditLog response',
+      evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora Auth.AuditLog response',
       exportState: rows.length > 0 ? 'available-local' : 'unsupported',
       exportReason: rows.length > 0
         ? 'Export includes the redacted normalized rows, payload hashes, receipts, and support-bundle correlation IDs.'
@@ -246,7 +250,6 @@ export function AdminAuditView({
   )
   const [selectedRowId, setSelectedRowId] = useState<string | null>(visibleRows[0]?.id ?? null)
   const selectedRow = visibleRows.find((row) => row.id === selectedRowId) ?? visibleRows[0] ?? null
-  const totals = auditTotals(visibleRows)
 
   useEffect(() => {
     if (visibleRows.length === 0) {
@@ -263,9 +266,9 @@ export function AdminAuditView({
       key: 'time',
       header: 'Time',
       render: (row) => (
-        <span className="aui-cell-stack">
-          <strong>{row.createdAt}</strong>
-          <small>{row.lifecycleLabel}</small>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <strong className="text-sm font-medium">{row.createdAt}</strong>
+          <small className="text-xs text-muted-foreground">{row.lifecycleLabel}</small>
         </span>
       )
     },
@@ -273,21 +276,21 @@ export function AdminAuditView({
       key: 'event',
       header: 'Event / action',
       render: (row) => (
-        <span className="aui-cell-stack">
-          <strong>{row.event}</strong>
-          <small>{row.action}</small>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <strong className="text-sm font-medium">{row.event}</strong>
+          <small className="text-xs text-muted-foreground">{row.action}</small>
         </span>
       )
     },
-    { key: 'principal', header: 'Principal', render: (row) => <span className="aui-cell-text">{row.principalId}</span> },
+    { key: 'principal', header: 'Principal', render: (row) => <span className="block min-w-0 text-sm break-words">{row.principalId}</span> },
     {
       key: 'resource',
       header: 'Route / resource',
       hideAt: 'lg',
       render: (row) => (
-        <span className="aui-cell-stack">
-          <strong>{row.routePath}</strong>
-          <small>{row.peerId} / {row.providerId}</small>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <strong className="text-sm font-medium">{row.routePath}</strong>
+          <small className="text-xs text-muted-foreground">{row.peerId} / {row.providerId}</small>
         </span>
       )
     },
@@ -295,9 +298,9 @@ export function AdminAuditView({
       key: 'result',
       header: 'Result',
       render: (row) => (
-        <div className="aui-state-line">
+        <div className="flex items-center gap-2">
           <StatusBadge state={statusAvailability(row.status)} />
-          <span>{row.status}</span>
+          <span className="min-w-0 break-words text-sm">{row.status}</span>
         </div>
       )
     },
@@ -306,78 +309,60 @@ export function AdminAuditView({
       header: 'Correlation / receipt',
       hideAt: 'md',
       render: (row) => (
-        <span className="aui-cell-stack">
-          <code className="aui-mono">{row.correlationId}</code>
-          <small className="aui-mono">{row.receipt}</small>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <code className="font-mono text-xs">{row.correlationId}</code>
+          <small className="font-mono text-xs text-muted-foreground">{row.receipt}</small>
         </span>
       )
     }
   ]
 
   return (
-    <section className="aui-admin-audit" aria-labelledby="admin-audit-title">
-      <PageHeader
-        eyebrow="Admin"
-        id="admin-audit-title"
-        title="Audit log"
-        description="Audit search, mesh trace filters, event receipts, redacted payload previews, and export are loaded through Aurora."
-        badges={
-          <>
-            {isStatusBadgeState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-            <EvidenceBadge label={snapshot.evidenceSource} />
-            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-            <PrivacyBadge privacy="admin-critical" />
-          </>
-        }
-      />
+    <div className="flex h-full flex-col" aria-labelledby="admin-audit-title">
+      <div className="border-b border-border px-6 py-5">
+        <h1 id="admin-audit-title" className="text-xl font-semibold tracking-tight">Audit log</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Audit search, mesh trace filters, event receipts, redacted payload previews, and export are loaded through Aurora.</p>
+      </div>
 
-      <AuditStatusPanel snapshot={snapshot} />
+      <div className="flex flex-col gap-4 px-6 py-5">
+        <AuditStatusPanel snapshot={snapshot} />
 
-      <StatStrip
-        ariaLabel="Audit summary"
-        items={[
-          { label: 'Events', value: visibleRows.length, caption: `${snapshot.total} returned by Auth.AuditLog` },
-          { label: 'Denied', value: totals.denied, caption: 'policy, auth, replay, or selector denial', tone: totals.denied > 0 ? 'danger' : 'default' },
-          { label: 'Approvals', value: totals.approvals, caption: 'approval lifecycle events' },
-          { label: 'Correlations', value: totals.correlations, caption: 'support-bundle trace IDs' }
-        ]}
-      />
+        <Card
+          ariaLabel="Filters"
+          title="Search actor, action, resource, and time"
+          description={snapshot.exportReason}
+          actions={
+            <Button
+              variant="outline"
+              icon={<Download size={15} aria-hidden />}
+              disabled={snapshot.exportState === 'unsupported' || visibleRows.length === 0}
+              disabledReason={snapshot.exportReason}
+              onClick={() => onExport?.(visibleRows)}
+            >
+              Export redacted
+            </Button>
+          }
+        >
+          <div role="group" aria-label="Filters">
+            <AuditFilters
+              filters={effectiveFilters}
+              {...(onFiltersChange ? { onChange: onFiltersChange } : {})}
+            />
+          </div>
+        </Card>
 
-      <Card
-        ariaLabel="Filters"
-        title="Search actor, action, resource, and time"
-        description={snapshot.exportReason}
-        actions={
-          <Button
-            variant="outline"
-            icon={<Download size={15} aria-hidden />}
-            disabled={snapshot.exportState === 'unsupported' || visibleRows.length === 0}
-            disabledReason={snapshot.exportReason}
-            onClick={() => onExport?.(visibleRows)}
-          >
-            Export redacted
-          </Button>
-        }
-      >
-        <div role="group" aria-label="Filters">
-          <AuditFilters
-            filters={effectiveFilters}
-            {...(onFiltersChange ? { onChange: onFiltersChange } : {})}
+        <Card ariaLabel="Events" title="Redacted event details" flush>
+          <DataTable
+            columns={eventColumns}
+            rows={visibleRows}
+            getRowKey={(row) => row.id}
+            onRowClick={(row) => setSelectedRowId(row.id)}
+            empty={<p>No audit events match the current SDK-backed filters.</p>}
           />
-        </div>
-      </Card>
-
-      <Card ariaLabel="Events" title="Redacted event details">
-        <DataTable
-          columns={eventColumns}
-          rows={visibleRows}
-          getRowKey={(row) => row.id}
-          onRowClick={(row) => setSelectedRowId(row.id)}
-          empty={<div className="aui-empty-inline"><p>No audit events match the current SDK-backed filters.</p></div>}
-        />
-      </Card>
-      {selectedRow ? <AuditDetailDrawer row={selectedRow} /> : null}
-    </section>
+        </Card>
+        {selectedRow ? <AuditDetailDrawer row={selectedRow} /> : null}
+      </div>
+    </div>
   )
 }
 
@@ -425,18 +410,18 @@ function AuditFilters({
   }
 
   return (
-    <div className="aui-audit-filterbar">
-      <div className="aui-audit-filterbar-row">
-        <label className="aui-audit-search">
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2.5">
+        <label className={`col-span-2 ${filterLabelClass}`}>
           <span>Search</span>
-          <div className="aui-input-icon">
-            <Search size={15} aria-hidden />
-            <input value={filters.query} onChange={(event) => update('query', event.currentTarget.value)} placeholder="actor, event, receipt, route" />
+          <div className="relative">
+            <Search size={15} aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground" />
+            <Input className="pl-8" value={filters.query} onChange={(event) => update('query', event.currentTarget.value)} placeholder="actor, event, receipt, route" />
           </div>
         </label>
-        <label>
+        <label className={filterLabelClass}>
           <span>Event</span>
-          <select value={filters.event} onChange={(event) => update('event', event.currentTarget.value)}>
+          <select className={selectControlClass} value={filters.event} onChange={(event) => update('event', event.currentTarget.value)}>
             <option value="all">All events</option>
             <option value="admin_action.requested">Requested</option>
             <option value="admin_action.confirmed">Approved</option>
@@ -448,9 +433,9 @@ function AuditFilters({
             <option value="tooling.execute.dry_run">Dry-run</option>
           </select>
         </label>
-        <label>
+        <label className={filterLabelClass}>
           <span>Result</span>
-          <select value={filters.status} onChange={(event) => update('status', event.currentTarget.value)}>
+          <select className={selectControlClass} value={filters.status} onChange={(event) => update('status', event.currentTarget.value)}>
             <option value="all">All results</option>
             <option value="requested">Requested</option>
             <option value="approved">Approved</option>
@@ -466,18 +451,18 @@ function AuditFilters({
         <FilterInput label="Created after" type="datetime-local" value={filters.createdAfter ?? ''} onChange={(value) => update('createdAfter', value)} />
         <FilterInput label="Created before" type="datetime-local" value={filters.createdBefore ?? ''} onChange={(value) => update('createdBefore', value)} />
       </div>
-      <details className="aui-audit-more-filters">
-        <summary>More filters</summary>
-        <div className="aui-audit-filterbar-row aui-audit-filterbar-grid">
+      <details className="border-t border-dashed border-border pt-3">
+        <summary className="cursor-pointer text-sm font-medium text-primary">More filters</summary>
+        <div className="mt-2.5 grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2.5">
           <FilterInput label="Actor" value={filters.actor ?? ''} onChange={(value) => update('actor', value)} />
           <FilterInput label="Action" value={filters.action ?? ''} onChange={(value) => update('action', value)} />
           <FilterInput label="Resource" value={filters.resource ?? ''} onChange={(value) => update('resource', value)} />
           <FilterInput label="Principal" value={filters.principalId} onChange={(value) => update('principalId', value)} />
           <FilterInput label="Peer/provider" value={filters.peerOrProvider} onChange={(value) => update('peerOrProvider', value)} />
           <FilterInput label="Route path" value={filters.routePath} onChange={(value) => update('routePath', value)} />
-          <label>
+          <label className={filterLabelClass}>
             <span>Approval mode</span>
-            <select value={filters.approvalMode} onChange={(event) => update('approvalMode', event.currentTarget.value)}>
+            <select className={selectControlClass} value={filters.approvalMode} onChange={(event) => update('approvalMode', event.currentTarget.value)}>
               <option value="all">All modes</option>
               <option value="none">None</option>
               <option value="single">Single approval</option>
@@ -500,9 +485,9 @@ function AuditFilters({
 
 function FilterInput({ label, type = 'text', value, onChange }: { label: string; type?: string; value: string; onChange: (value: string) => void }) {
   return (
-    <label>
+    <label className={filterLabelClass}>
       <span>{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.currentTarget.value)} />
+      <Input type={type} value={value} onChange={(event) => onChange(event.currentTarget.value)} />
     </label>
   )
 }
@@ -534,9 +519,9 @@ function AuditDetailDrawer({ row }: { row: AdminAuditRow }) {
           { label: 'Support-bundle correlations', value: row.supportBundleCorrelationIds.join(', ') || 'none' }
         ]}
       />
-      <div className="aui-redacted-preview">
-        <h3>Redacted payload preview</h3>
-        <code>{row.redactedPreview}</code>
+      <div className="mt-3 flex flex-col gap-1.5">
+        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Redacted payload preview</h3>
+        <code className="block overflow-x-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs whitespace-pre">{row.redactedPreview}</code>
       </div>
     </Card>
   )
@@ -545,7 +530,7 @@ function AuditDetailDrawer({ row }: { row: AdminAuditRow }) {
 function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   if (snapshot.loadState === 'loading') {
     return (
-      <div className="aui-inline-alert" aria-live="polite">
+      <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-2.5 text-sm" aria-live="polite">
         <Activity size={18} aria-hidden />
         <span>Loading audit events and redaction metadata through Aurora.</span>
       </div>
@@ -554,17 +539,17 @@ function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   if (snapshot.loadState === 'ready') return null
   if (snapshot.loadState === 'empty') {
     return (
-      <div className="aui-inline-alert" role="status">
+      <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-2.5 text-sm" role="status">
         <ShieldCheck size={18} aria-hidden />
         <span>No audit rows match the active search and trace filters.</span>
       </div>
     )
   }
   return (
-    <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
+    <Alert variant="destructive">
       <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'Audit status is degraded or unavailable. Export remains disabled until redacted SDK data is present.'}</span>
-    </div>
+      <AlertDescription>{snapshot.error ?? 'Audit status is degraded or unavailable. Export remains disabled until redacted SDK data is present.'}</AlertDescription>
+    </Alert>
   )
 }
 
@@ -758,14 +743,6 @@ function statusAvailability(status: AdminAuditStatus): AvailabilityState {
   return 'available-local'
 }
 
-function auditTotals(rows: AdminAuditRow[]) {
-  return {
-    denied: rows.filter((row) => ['denied', 'failed', 'replay-rejected'].includes(row.status)).length,
-    approvals: rows.filter((row) => approvalLifecycleEvents.some((event) => row.lifecycleLabel.includes(event))).length,
-    correlations: sortedUnique(rows.flatMap((row) => row.supportBundleCorrelationIds)).length
-  }
-}
-
 function downloadAuditExport(rows: AdminAuditRow[]) {
   if (typeof document === 'undefined') return
   const payload = JSON.stringify(buildAuditExport(rows), null, 2)
@@ -853,20 +830,6 @@ function errorMessage(error: unknown): string {
 function isDeniedError(error: unknown): boolean {
   const maybe = error as Partial<AuroraError>
   return maybe.code === 'auth' || maybe.code === 'permission'
-}
-
-function isStatusBadgeState(value: string): value is AvailabilityState {
-  return [
-    'available-local',
-    'available-remote',
-    'pending',
-    'offline',
-    'denied',
-    'degraded',
-    'stale',
-    'privacy-blocked',
-    'unsupported'
-  ].includes(value)
 }
 
 type AdminAuditStatus =

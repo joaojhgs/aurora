@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
 import { ConfigEditorView, buildConfigEditorModel } from '../src/config-editor-view'
+import { auroraEmbeddedNavItems, navItemSnapshot } from '../src/nav'
 import { AdminContractsView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 import { buildShellSnapshot, type RouteAvailability } from '../src/shell-data'
 import { productionSurfaceContracts } from '../src/production-surface-contracts'
@@ -86,6 +87,22 @@ describe('admin route checkpoint status', () => {
 
 function route(routes: RouteAvailability[], id: string): RouteAvailability {
   const match = routes.find((candidate) => candidate.item.id === id)
-  if (!match) throw new Error(`missing route ${id}`)
-  return match
+  if (match) return match
+  const item = auroraEmbeddedNavItems.find((candidate) => candidate.id === id)
+  if (!item) throw new Error(`missing route ${id}`)
+  return {
+    item: navItemSnapshot(item),
+    state: item.fallbackState,
+    explanation: 'Embedded in a primary route for this nav revision.',
+    providerLabel: 'embedded SDK route',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: ['embedded primary route'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: false,
+  }
 }

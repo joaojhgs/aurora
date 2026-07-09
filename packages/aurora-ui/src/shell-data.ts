@@ -161,7 +161,7 @@ export function snapshotFromGraph(
     nodeName: graph.localNodeName || 'Aurora node',
     localPeerId: graph.localPeerId,
     transportKind,
-    evidenceSource: transportKind === 'mock' ? 'Demo transport' : 'Aurora service response',
+    evidenceSource: transportKind === 'mock' ? 'Local transport' : 'Aurora service response',
     generatedAt: graph.generatedAt,
     secretsRedacted: graph.secretsRedacted,
     routeCount: routes.length,
@@ -194,7 +194,7 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
       item: navItemSnapshot(item),
       state: 'unsupported' as const,
       explanation: 'Capability state could not be loaded from Aurora.',
-      providerLabel: 'Unavailable',
+      providerLabel: 'Select runtime',
         blockers: ['sdk_error'],
         repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
         candidateProviders: [],
@@ -210,7 +210,7 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     item: navItemSnapshot(auroraAssistantCancellationItem),
     state: 'unsupported',
     explanation: 'Capability state could not be loaded from Aurora.',
-    providerLabel: 'Unavailable',
+    providerLabel: 'Select runtime',
     blockers: ['sdk_error'],
     repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
     candidateProviders: [],
@@ -312,7 +312,7 @@ function routeAvailability(
   native: NativeCapabilityManifest | null
 ): RouteAvailability {
   if (item.capabilityModule === 'Native') return nativeRouteAvailability(item, native)
-  const state = graphStateForItem(item, explanation)
+  const state = graphStateForExplanation(explanation)
   const blockers = sortedUnique([
     explanation.disabledReason,
     ...explanation.providerCandidates.flatMap((provider) => provider.disabledReasons),
@@ -357,9 +357,17 @@ function providerLabel(explanation: CapabilityExplanation, item: AuroraNavItem):
   return `${provider.providerIdentity} / ${provider.module}.${provider.method}`
 }
 
-function graphStateForItem(item: AuroraNavItem, explanation: CapabilityExplanation): AvailabilityState {
-  if (explanation.providerCandidates.length === 0) return item.fallbackState
+function graphStateForExplanation(explanation: CapabilityExplanation): AvailabilityState {
+  if (explanation.providerCandidates.length === 0) return nonAvailableStateForMissingEvidence(explanation.state)
   return explanation.state
+}
+
+function nonAvailableStateForMissingEvidence(state: AvailabilityState): AvailabilityState {
+  return isAvailableRouteState(state) ? 'unsupported' : state
+}
+
+function isAvailableRouteState(state: AvailabilityState): boolean {
+  return ['available-local', 'available-remote', 'degraded'].includes(state)
 }
 
 function featureIdForNavItem(item: AuroraNavItem): string {

@@ -4,10 +4,10 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { AuroraClient as Aurora, AuroraError, AUTH_METHODS, GATEWAY_METHODS, MockAuroraTransport, ORCHESTRATOR_METHODS, ORCHESTRATOR_MODEL_METHODS, STT_METHODS, TOOLING_METHODS, capabilityCatalogFixture, cloneFixture, modelRuntimeCatalogFixture, nativeCapabilityManifestFixture, routeExplainFixture, type AuroraTransportRequest } from '@aurora/client'
-import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
+import { auroraNavSections, buildShellSnapshot, getProductionRouteOracle } from '@aurora/ui'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAuroraTauriRuntime } from './aurora-client'
-import { AuroraTauriApp, tauriRouteRegistryRouteIds, type AuroraTauriRuntime } from './tauri-app'
+import { AuroraTauriApp, routeForPath, tauriRouteRegistryRouteIds, type AuroraTauriRuntime } from './tauri-app'
 
 const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
 
@@ -38,11 +38,6 @@ const adminRouteIds = new Set([
   'services',
   'access',
   'tokens',
-  'devices',
-  'config',
-  'contracts',
-  'plugins',
-  'pairing',
   'backups',
   'scheduler',
   'audit',
@@ -51,7 +46,12 @@ const adminRouteIds = new Set([
 
 const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<string, readonly string[]> = {
   native: ['Native platform settings', 'Native permissions and capabilities'],
-  tools: ['Tools & Automations', 'Tooling policy', 'Source catalog', 'Core tools'],
+  tools: ['Tools & Plugins', 'Core tools, MCP servers, plugins and mesh peer tools'],
+  mesh: ['Mesh & Peers', 'Peer trust, pairing and permissions'],
+  backups: ['Backups', 'Snapshots, verification and restore'],
+  settings: ['Settings', 'General permissions, schema-backed configuration'],
+  models: ['Models & Runtime', 'Loading model runtime catalog from Aurora'],
+  onboarding: ['Welcome to Aurora', 'Detected installation'],
 }
 
 function expectedRenderedLandmarks(routeId: string, oracle: ReturnType<typeof getProductionRouteOracle>): readonly string[] {
@@ -59,12 +59,9 @@ function expectedRenderedLandmarks(routeId: string, oracle: ReturnType<typeof ge
 }
 
 const runtimeRouteIds = new Set([
-  'models',
-  'diagnostics',
-  'onboarding',
   'settings',
-  'data',
-  'native',
+  'models',
+  'onboarding',
 ])
 
 class RecordingMockAuroraTransport extends MockAuroraTransport {
@@ -160,6 +157,25 @@ async function clickButtonByLabel(container: HTMLElement, label: string) {
     .find((candidate) => candidate.getAttribute('aria-label') === label || candidate.textContent?.includes(label))
   expect(button, `button ${label}`).toBeDefined()
   expect(button?.disabled, `button ${label} should be enabled`).toBe(false)
+  await act(async () => {
+    button!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await flushReactWork()
+  })
+}
+
+async function clickButtonInRegion(container: HTMLElement, regionText: string, label: string) {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+    .find((candidate) => {
+      if (!candidate.textContent?.includes(label)) return false
+      let current: HTMLElement | null = candidate
+      while (current && current !== container) {
+        if (current.textContent?.includes(regionText)) return true
+        current = current.parentElement
+      }
+      return false
+    })
+  expect(button, `button ${label} in region ${regionText}`).toBeDefined()
+  expect(button?.disabled, `button ${label} in region ${regionText} should be enabled`).toBe(false)
   await act(async () => {
     button!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     await flushReactWork()
@@ -639,6 +655,42 @@ describe('Aurora Tauri runtime wrapper', () => {
     await expect(runtime.iosBiometricStatus()).resolves.toBeNull()
     await expect(runtime.iosLocalLightInferenceStatus()).resolves.toBeNull()
     await expect(runtime.androidBaselineStatus()).resolves.toBeNull()
+    await expect(runtime.overlayShow?.('voice')).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      reason: 'not-tauri-runtime',
+    })
+    await expect(runtime.overlayStatus?.()).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      reason: 'not-tauri-runtime',
+    })
+    await expect(runtime.overlayRegisterHotkey?.('CommandOrControl+K')).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      hotkeyRegistered: false,
+      reason: 'not-tauri-runtime',
+    })
+    await expect(runtime.overlayStartDrag?.()).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      reason: 'not-tauri-runtime',
+    })
+    await expect(runtime.overlayMoveBy?.(12, -6)).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      reason: 'not-tauri-runtime',
+    })
     await expect(runtime.shutdown()).resolves.toBeUndefined()
   })
 
@@ -670,6 +722,35 @@ describe('Aurora Tauri runtime wrapper', () => {
     await expect(runtime.iosSecureStorageStatus()).resolves.toBeNull()
     await expect(runtime.iosLocalLightInferenceStatus()).resolves.toBeNull()
     await expect(runtime.androidBaselineStatus()).resolves.toBeNull()
+    await expect(runtime.overlayShow?.('text')).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      reason: 'not-tauri-runtime',
+    })
+    await expect(runtime.overlayStatus?.()).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      reason: 'not-tauri-runtime',
+    })
+    await expect(runtime.overlayRegisterHotkey?.('CommandOrControl+K')).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      hotkeyRegistered: false,
+      reason: 'not-tauri-runtime',
+    })
+    await expect(runtime.overlayStartDrag?.()).resolves.toMatchObject({
+      ok: false,
+      available: false,
+      disabled: true,
+      visible: false,
+      reason: 'not-tauri-runtime',
+    })
   })
 
   it('renders the assistant page at the root instead of the diagnostics dashboard', () => {
@@ -679,14 +760,14 @@ describe('Aurora Tauri runtime wrapper', () => {
 
     expect(markup).toContain('Assistant')
     expect(markup).toContain('Prompt')
-    expect(markup).toContain('Assistant capability is unavailable')
+    expect(markup).toContain('Text chat')
     expect(markup).not.toContain('Native boundary')
     expect(markup).not.toContain('Denied native defaults')
   })
 
   it('routes the diagnostics dashboard away from the assistant landing page', () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', '')
-    window.history.replaceState({}, '', '/diagnostics')
+    window.history.replaceState({}, '', '/admin')
 
     const markup = renderToStaticMarkup(<AuroraTauriApp />)
 
@@ -697,7 +778,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     expect(markup).not.toContain('Android baseline')
     expect(markup).not.toContain('Assistant role probe')
     expect(markup).toContain('Denied native defaults')
-    expect(markup).toContain('Demo mode')
+    expect(markup).toContain('Diagnostics overview')
   })
 
   it('renders the models page for the models route', () => {
@@ -706,7 +787,7 @@ describe('Aurora Tauri runtime wrapper', () => {
 
     const markup = renderToStaticMarkup(<AuroraTauriApp />)
 
-    expect(markup).toContain('Models and runtime')
+    expectMarkupToContainText(markup, 'Models & Runtime', '/models')
     expect(markup).toContain('Loading model runtime catalog from Aurora')
     expect(markup).not.toContain('Native boundary')
   })
@@ -754,7 +835,7 @@ describe('Aurora Tauri runtime wrapper', () => {
     vi.stubEnv('VITE_AURORA_GATEWAY_URL', 'http://127.0.0.1:8000')
     vi.stubEnv('VITE_AURORA_GATEWAY_TOKEN', 'test-token')
 
-    for (const href of ['/', '/diagnostics', '/admin/tokens', '/settings/native']) {
+    for (const href of ['/', '/admin', '/admin/tokens', '/settings']) {
       window.history.replaceState({}, '', href)
       const markup = renderToStaticMarkup(<AuroraTauriApp />)
 
@@ -790,7 +871,7 @@ describe('Tauri CI/E2E route gates', () => {
 
   it('e2e:routes renders every registered route without placeholder or debug dashboard UI', () => {
     const routes = auroraNavSections.flatMap((section) => section.items)
-    expect(routes).toHaveLength(22)
+    expect(routes).toHaveLength(14)
     expect(new Set(tauriRouteRegistryRouteIds)).toEqual(
       new Set(routes.map((route) => route.id)),
     )
@@ -804,11 +885,11 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:routes keeps the diagnostics dashboard exclusive to /diagnostics', () => {
+  it('e2e:routes embeds the diagnostics dashboard only in Admin Overview', () => {
     for (const route of primaryNavItems) {
       const markup = renderTauriRoute(route.href)
 
-      if (route.id === 'diagnostics') {
+      if (route.id === 'admin') {
         for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
           expect(markup, marker).toContain(marker)
         }
@@ -821,69 +902,58 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:routes renders /admin/services and /admin/contracts as distinct runtime surfaces', () => {
+  it('e2e:routes keeps services primary while contracts are no longer a registered primary route', () => {
     const servicesMarkup = renderTauriRoute('/admin/services')
-    const contractsMarkup = renderTauriRoute('/admin/contracts')
+    const adminMarkup = renderTauriRoute('/admin')
     const servicesText = mainContentText(servicesMarkup)
-    const contractsText = mainContentText(contractsMarkup)
+    const adminText = mainContentText(adminMarkup)
 
     expectNoPlaceholderOrDebugUi(servicesMarkup, 'services')
-    expectNoPlaceholderOrDebugUi(contractsMarkup, 'contracts')
+    expectNoPlaceholderOrDebugUi(adminMarkup, 'admin')
+    expect(tauriRouteRegistryRouteIds).toContain('services')
+    expect(tauriRouteRegistryRouteIds).not.toContain('contracts')
     expect(servicesText).toContain('Services')
-    expect(servicesText).toContain('Service registry health')
+    expect(servicesText).toContain('Backend service health and restart control')
     expect(servicesText).not.toContain('Contracts registry')
 
-    expect(contractsText).toContain('Contracts registry')
-    expect(contractsText).toContain('Service lifecycle controls stay on /admin/services')
-    expect(contractsText).not.toContain('Service registry health')
-    expect(contractsText).not.toBe(servicesText)
+    expect(adminText).toContain('Diagnostics')
+    expect(adminText).not.toBe(servicesText)
   })
 
-  it('e2e:routes renders /settings and /settings/native as distinct runtime surfaces', () => {
+  it('e2e:routes embeds configuration, data policy, and native settings inside Settings', () => {
     const settingsMarkup = renderTauriRoute('/settings')
-    const nativeMarkup = renderTauriRoute('/settings/native')
     const settingsText = mainContentText(settingsMarkup)
-    const nativeText = mainContentText(nativeMarkup)
 
     expectNoPlaceholderOrDebugUi(settingsMarkup, 'settings')
-    expectNoPlaceholderOrDebugUi(nativeMarkup, 'native')
-    expect(settingsText).toContain('Settings and permissions')
+    expect(settingsText).toContain('General permissions, schema-backed configuration')
     expect(settingsText).toContain('Privacy defaults')
     expect(settingsText).toContain('Voice behavior')
     expect(settingsText).toContain('Theme, accessibility, and local storage')
     expect(settingsText).toContain('Route and fallback policy')
-    expect(settingsText).not.toContain('Native permissions and capabilities')
-
-    expect(nativeText).toContain('Native platform settings')
-    expect(nativeText).toContain('Native permissions and capabilities')
-    expect(nativeText).toContain('Request buttons are enabled only when the platform advertises a native request command')
-    expect(nativeText).not.toContain('Theme, accessibility, and local storage')
-    expect(nativeText).not.toBe(settingsText)
+    expect(settingsText).toContain('Configuration')
+    expect(settingsText).toContain('Data policy and retention')
+    expect(settingsText).toContain('Current platform surface')
+    expect(settingsText).toContain('Native controls')
   })
 
-  it('e2e:routes renders the memory cockpit with summaries, search, provenance, and gated actions', async () => {
+  it('e2e:routes renders the memory cockpit with collections, search, conversations, and policy-safe actions', async () => {
     const runtime = testRuntime(new Aurora({ transport: memoryGatewayTransport() }))
     window.history.replaceState({}, '', '/memory')
     const memory = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
         expect(memory.container.textContent).toContain('Memory & Knowledge')
-        expect(memory.container.querySelector('[aria-label="Memory summary cards"]')).not.toBeNull()
-        expect(memory.container.textContent).toContain('Namespaces')
-        expect(memory.container.textContent).toContain('Records')
-        expect(memory.container.textContent).toContain('Retention')
-        expect(memory.container.textContent).toContain('Embedding health')
-        expect(memory.container.textContent).toContain('Memory & RAG collections')
-        expect(memory.container.querySelector<HTMLInputElement>('#memory-query')?.placeholder).toContain('Search memory and RAG')
+        expect(memory.container.textContent).toContain('Collections')
+        expect(memory.container.textContent).toContain('Search')
+        const searchInput = memory.container.querySelector<HTMLInputElement>('#memory-query')
+        expect(searchInput?.getAttribute('aria-label')).toContain('Search conversations')
+        expect(searchInput?.placeholder).toContain('Search conversations')
         expect(memory.container.textContent).toContain('Conversation history')
-        expect(memory.container.textContent).toContain('Embedding setup required')
-        expect(memory.container.textContent).toContain('DB.RAGListNamespaces')
-        expect(memory.container.textContent).toContain('Export snapshot')
-        expect(memory.container.textContent).toContain('Delete record')
+        expect(memory.container.textContent).toContain('Deleting a memory previews affected DB and RAG records before removal')
       })
       const queryInput = memory.container.querySelector<HTMLInputElement>('#memory-query')
-      const searchForm = memory.container.querySelector<HTMLFormElement>('form.aui-memory-toolbar')
       expect(queryInput).not.toBeNull()
+      const searchForm = queryInput!.closest('form')
       expect(searchForm).not.toBeNull()
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
       await act(async () => {
@@ -901,10 +971,10 @@ describe('Tauri CI/E2E route gates', () => {
         expect(memory.container.textContent).toContain('Search hit for "mesh pairing"')
         expect(memory.container.textContent).toContain('Route path')
         expect(memory.container.textContent).toContain('Privacy class')
-        expect(memory.container.textContent).toContain('Policy decision')
-        expect(memory.container.textContent).toContain('Correlation')
+        expect(memory.container.textContent).toContain('Policy')
+        expect(memory.container.textContent).toContain('Audit')
       })
-      writeOutcomeArtifact('memory-route-summary-provenance', memory.container.innerHTML)
+      writeOutcomeArtifact('memory-route-collections-search', memory.container.innerHTML)
     } finally {
       await act(async () => memory.root.unmount())
       memory.container.remove()
@@ -912,7 +982,7 @@ describe('Tauri CI/E2E route gates', () => {
   })
 
 
-  it('e2e:routes covers memory empty, error, and unavailable namespace states', async () => {
+  it('e2e:routes covers memory empty and error states', async () => {
     const emptyTransport = memoryGatewayTransport()
     emptyTransport.register('DB.GetMessages', () => ({ messages: [], total: 0, has_more: false }))
     emptyTransport.register('DB.RAGListNamespaces', () => ({ namespaces: [] }))
@@ -920,10 +990,10 @@ describe('Tauri CI/E2E route gates', () => {
     const emptyMemory = await mountOutcomeApp(testRuntime(new Aurora({ transport: emptyTransport })))
     try {
       await waitUntil(() => {
-        expect(emptyMemory.container.textContent).toContain('No collections reported')
-        expect(emptyMemory.container.textContent).toContain('DB.RAGListNamespaces returned no memory or RAG namespaces')
-        expect(emptyMemory.container.textContent).toContain('No conversations reported')
-        expect(emptyMemory.container.textContent).toContain('History remains empty until DB.GetMessages returns backend rows from a retained assistant conversation')
+        expect(emptyMemory.container.textContent).toContain('No collections yet')
+        expect(emptyMemory.container.textContent).toContain('Collections appear after conversations')
+        expect(emptyMemory.container.textContent).toContain('No conversations yet')
+        expect(emptyMemory.container.textContent).toContain('Saved conversations will appear here')
       })
     } finally {
       await act(async () => emptyMemory.root.unmount())
@@ -936,55 +1006,19 @@ describe('Tauri CI/E2E route gates', () => {
     try {
       await waitUntil(() => {
         expect(errorMemory.container.textContent).toContain('Memory request denied by authentication or permissions')
-        expect(errorMemory.container.textContent).toContain('No namespace reported')
+        expect(errorMemory.container.textContent).toContain('No collections yet')
       })
+      writeOutcomeArtifact('memory-route-empty-error', errorMemory.container.innerHTML)
     } finally {
       await act(async () => errorMemory.root.unmount())
       errorMemory.container.remove()
-    }
-
-    const staleMemory = await mountOutcomeApp(testRuntime(new Aurora({ transport: memoryGatewayTransport() })))
-    try {
-      await waitUntil(() => {
-        expect(staleMemory.container.textContent).toContain('stale: peer-cabin-node.archive')
-      })
-      const queryInput = staleMemory.container.querySelector<HTMLInputElement>('#memory-query')
-      const namespaceSelect = staleMemory.container.querySelector<HTMLSelectElement>('#memory-namespace')
-      const searchForm = staleMemory.container.querySelector<HTMLFormElement>('form.aui-memory-toolbar')
-      expect(queryInput).not.toBeNull()
-      expect(namespaceSelect).not.toBeNull()
-      expect(searchForm).not.toBeNull()
-      const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      const selectSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
-      await act(async () => {
-        selectSetter?.call(namespaceSelect, 'peer-cabin-node.archive')
-        namespaceSelect!.dispatchEvent(new Event('change', { bubbles: true }))
-        inputSetter?.call(queryInput, 'archive')
-        queryInput!.dispatchEvent(new Event('input', { bubbles: true }))
-        queryInput!.dispatchEvent(new Event('change', { bubbles: true }))
-        await flushReactWork()
-      })
-      await act(async () => {
-        searchForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-        await flushReactWork()
-        await flushReactWork()
-      })
-      await waitUntil(() => {
-        expect(staleMemory.container.textContent).toContain('stale peer')
-        expect(staleMemory.container.textContent).toContain('policy-stale-memory')
-        expect(staleMemory.container.textContent).toContain('corr-memory-stale')
-      })
-      writeOutcomeArtifact('memory-route-empty-error-unavailable', staleMemory.container.innerHTML)
-    } finally {
-      await act(async () => staleMemory.root.unmount())
-      staleMemory.container.remove()
     }
   })
 
 
   it('e2e:routes renders data policy retention and audit status instead of the memory search page', async () => {
     const runtime = testRuntime(new Aurora({ transport: memoryGatewayTransport() }))
-    window.history.replaceState({}, '', '/memory/policy')
+    window.history.replaceState({}, '', '/settings')
     const dataPolicy = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
@@ -999,7 +1033,7 @@ describe('Tauri CI/E2E route gates', () => {
         expect(dataPolicy.container.textContent).toContain('Audit trail for policy changes')
         expect(dataPolicy.container.textContent).toContain('Policy edits require AdminAction draft/confirm/audit through Config.Set')
       })
-      expect(dataPolicy.container.querySelector('#memory-query')).toBeNull()
+      expect(dataPolicy.container.querySelector('#data-policy-title')).not.toBeNull()
       writeOutcomeArtifact('data-policy-route-retention-audit', dataPolicy.container.innerHTML)
     } finally {
       await act(async () => dataPolicy.root.unmount())
@@ -1007,16 +1041,17 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:routes covers tools catalog search detail validation approval and execution error paths', async () => {
+  it('e2e:routes covers tools source rail, source detail, and search filtering', async () => {
     const transport = toolsGatewayTransport()
     const runtime = testRuntime(new Aurora({ transport }))
     window.history.replaceState({}, '', '/tools')
     const tools = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
-        expect(tools.container.textContent).toContain('Tools & Automations')
-        expect(tools.container.textContent).toContain('Source-first Tooling control center')
-        expect(tools.container.textContent).toContain(TOOLING_METHODS.listCatalog)
+        expect(tools.container.textContent).toContain('Tools & Plugins')
+        expect(tools.container.textContent).toContain('Core tools, MCP servers, plugins and mesh peer tools')
+        expect(tools.container.textContent).toContain('Sources')
+        expect(tools.container.textContent).toContain('Selected source tool inventory')
         expect(requestMethods(transport)).toContain(TOOLING_METHODS.listCatalog)
       })
 
@@ -1027,34 +1062,13 @@ describe('Tauri CI/E2E route gates', () => {
         expect(tools.container.textContent).toContain('Send email draft')
         expect(tools.container.textContent).not.toContain('Open garage door')
       })
-      await waitUntil(() => {
-        expect(tools.container.textContent).toContain('Advanced details and redacted payloads')
-        expect(tools.container.textContent).toContain('Arguments schema summary')
-        expect(tools.container.textContent).toContain('Dry-run preview')
-        expect(tools.container.textContent).toContain('Permissions')
-        expect(tools.container.textContent).toContain('Capability')
-        expect(tools.container.textContent).toContain('Dry-run only until backend policy permits execution.')
-      })
-      const dryRunButton = Array.from(tools.container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((button) => button.textContent?.includes('Dry run'))
-      const approveOnceButton = Array.from(tools.container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((button) => button.textContent?.includes('Approve once'))
-      expect(dryRunButton, 'dry-run approval path control').toBeDefined()
-      expect(approveOnceButton, 'disabled approval-required execution control').toBeDefined()
-      expect(approveOnceButton?.disabled).toBe(true)
 
       await setInputValue(searchInput!, 'serviceHealth')
       await waitUntil(() => {
         expect(tools.container.textContent).toContain('diagnostics.serviceHealth')
-        expect(tools.container.textContent).toContain('Execute safe local')
         expect(tools.container.textContent).not.toContain('Send email draft')
       })
-      await clickButtonByLabel(tools.container, 'Execute safe local through Tooling.ExecuteTool')
-      await waitUntil(() => {
-        expect(requestMethods(transport)).toContain(TOOLING_METHODS.executeTool)
-        expect(tools.container.textContent).toContain('Tool execution backend refused safe local tool')
-      })
-      writeOutcomeArtifact('tools-route-catalog-search-detail-execution-error', tools.container.innerHTML)
+      writeOutcomeArtifact('tools-route-source-rail-search', tools.container.innerHTML)
     } finally {
       await act(async () => tools.root.unmount())
       tools.container.remove()
@@ -1067,14 +1081,12 @@ describe('Tauri CI/E2E route gates', () => {
     const mesh = await mountOutcomeApp(testRuntime(new Aurora({ transport: meshTransport })))
     try {
       await waitUntil(() => {
-        expect(mesh.container.textContent).toContain('Mesh peers')
-        expect(mesh.container.textContent).toContain('Overview')
-        expect(mesh.container.textContent).toContain('Peers')
-        expect(mesh.container.textContent).toContain('Pending requests')
+        expect(mesh.container.textContent).toContain('Mesh & Peers')
+        expect(mesh.container.textContent).toContain('Pending pairing requests')
         expect(mesh.container.textContent).toContain('Route policy')
-        expect(mesh.container.textContent).toContain('Runtime state')
-        expect(mesh.container.textContent).toContain('Shared module summary')
-        expect(mesh.container.textContent).toContain('Review request')
+        expect(mesh.container.textContent).toContain('Network')
+        expect(mesh.container.textContent).toContain('All peer records')
+        expect(mesh.container.textContent).toContain('Review & approve')
         expect(mesh.container.textContent).toContain('Gateway.ExplainRoute')
         expect(requestMethods(meshTransport)).toContain(GATEWAY_METHODS.getMeshStatus)
         expect(requestMethods(meshTransport)).toContain(AUTH_METHODS.meshListPeers)
@@ -1083,9 +1095,9 @@ describe('Tauri CI/E2E route gates', () => {
         expect(requestMethods(meshTransport)).toContain(GATEWAY_METHODS.getWebRTCDiagnostics)
       })
       const reviewButtons = Array.from(mesh.container.querySelectorAll<HTMLButtonElement>('button'))
-        .filter((button) => button.textContent?.includes('Review request'))
+        .filter((button) => button.textContent?.includes('Review & approve'))
       expect(reviewButtons.length, 'mesh review request controls').toBeGreaterThan(0)
-      expect(mesh.container.textContent).toContain('Peer trust decisions waiting for approval or refusal.')
+      expect(mesh.container.textContent).toContain('Peer permissions and actions')
       writeOutcomeArtifact('mesh-route-status-pair-actions-route-preview', mesh.container.innerHTML)
     } finally {
       await act(async () => mesh.root.unmount())
@@ -1093,7 +1105,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
 
     const diagnosticsTransport = new RecordingMockAuroraTransport().fail(GATEWAY_METHODS.getWebRTCDiagnostics, 'unavailable_service', 'diagnostics down')
-    window.history.replaceState({}, '', '/diagnostics')
+    window.history.replaceState({}, '', '/admin')
     const diagnostics = await mountOutcomeApp(testRuntime(new Aurora({ transport: diagnosticsTransport })))
     try {
       await waitUntil(() => {
@@ -1275,13 +1287,13 @@ describe('Tauri CI/E2E route gates', () => {
     const fallback = await mountOutcomeApp(fallbackRuntime)
     try {
       await waitUntil(() => {
-        expect(fallback.container.textContent).toContain('no model configured / awaiting backend model status')
+        expect(fallback.container.textContent).toContain('Model')
+        expect(fallback.container.textContent).toContain('pending backend response')
         expect(fallback.container.textContent).toContain('Route & privacy sheet')
       })
       await submitAssistantPrompt(fallback.container, 'exercise fallback path')
       await waitUntil(() => {
         expect(fallback.container.textContent).toContain('Fallback final response from local Orchestrator.')
-        expect(fallback.container.textContent).toContain('Streaming was unavailable; Aurora returned a final non-streaming response.')
         expect(fallback.container.textContent).toContain('Route & privacy sheet')
         expect(fallback.container.textContent).toContain('Route & privacy sheet')
       })
@@ -1320,8 +1332,8 @@ describe('Tauri CI/E2E route gates', () => {
       expect(live.container.textContent).not.toContain('Retry')
       await navigateByHref(live.container, '/tools')
       await waitUntil(() => {
-        expect(live.container.textContent).toContain('Tools & Automations')
-        expect(live.container.textContent).toContain('Source-first Tooling control center')
+        expect(live.container.textContent).toContain('Tools & Plugins')
+        expect(live.container.textContent).toContain('Core tools, MCP servers, plugins and mesh peer tools')
       })
       writeOutcomeArtifact('assistant-live-stream-tool-stop-retry-tools', live.container.innerHTML)
     } finally {
@@ -1335,13 +1347,11 @@ describe('Tauri CI/E2E route gates', () => {
     const mainText = mainContentText(markup)
 
     expectNoPlaceholderOrDebugUi(markup, 'assistant')
-    expect(mainText).toContain('Assistant')
-    expect(mainText).toContain('Text chat')
+    expect(mainText).toContain('Text chat with Aurora')
     expect(mainText).toContain('Prompt')
     expect(mainText).toContain('Push to talk')
     expect(mainText).not.toContain('Voice modes')
-    expect(mainText).toContain('Assistant send is disabled: loading.')
-    expect(mainText).toContain('Route & privacy sheet')
+        expect(mainText).toContain('Route & privacy sheet')
     expect(mainText).not.toContain('Runtime snapshot')
     for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
       expect(mainText, `assistant main content must not render diagnostics/dashboard marker ${marker}`).not.toContain(marker)
@@ -1356,11 +1366,6 @@ describe('Tauri CI/E2E route gates', () => {
       'services',
       'access',
       'tokens',
-      'devices',
-      'config',
-      'contracts',
-      'plugins',
-      'pairing',
       'backups',
       'scheduler',
       'audit',
@@ -1427,24 +1432,26 @@ describe('Tauri CI/E2E route gates', () => {
     const { container, root } = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
-        expect(container.textContent).toContain('Models and runtime')
+        expect(container.textContent).toContain('Models & Runtime')
         expect(container.textContent).toContain('llama.cpp desktop')
-        expect(container.textContent).toContain('Provider route policy')
-        expect(container.textContent).toContain('yes; writes llama_cpp through Config.Set AdminAction')
+        expect(container.textContent).toContain('Active provider (chat)')
+        expect(container.textContent).toContain('OpenAI-compatible gateway')
         expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
       })
-      await clickButtonByLabel(container, 'Select llama.cpp desktop')
+      await clickButtonInRegion(container, 'llama.cpp desktop', 'Set as active')
       await waitUntil(() => {
-        expect(container.querySelector('.aui-modal[role="dialog"]')).not.toBeNull()
+        expect(document.body.textContent).toContain('Select llama.cpp desktop')
+        expect(document.body.querySelector('.aui-modal[role="dialog"], [role="alertdialog"]')).not.toBeNull()
       })
-      const dialog = container.querySelector('.aui-modal[role="dialog"]')!
-      const dialogReauth = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      const dialog = document.body.querySelector<HTMLElement>('.aui-modal[role="dialog"], [role="alertdialog"]')!
+      const dialogReauth = dialog.querySelector<HTMLElement>('button[role="checkbox"], [data-slot="checkbox"]')
       expect(dialogReauth, 'model provider AdminAction reauth checkbox in dialog').not.toBeNull()
       await act(async () => {
         dialogReauth!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
         await flushReactWork()
       })
-      const confirmButton = dialog.querySelector<HTMLButtonElement>('.aui-modal-foot .aui-btn-primary')
+      const confirmButton = Array.from(dialog.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.includes('Select llama.cpp desktop'))
       expect(confirmButton, 'model provider confirm button').not.toBeNull()
       await act(async () => {
         confirmButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
@@ -1481,7 +1488,7 @@ describe('Tauri CI/E2E route gates', () => {
     const { container, root } = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
-        expect(container.textContent).toContain('Models and runtime')
+        expect(container.textContent).toContain('Models & Runtime')
         expect(container.textContent).toContain('No model runtime providers were returned by the backend catalog.')
       })
       expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
@@ -1492,7 +1499,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:runtime renders mobile local-light unsupported status without claiming native model support', async () => {
+  it('e2e:runtime renders mobile local-light planned status without claiming active native model support', async () => {
     const transport = new RecordingMockAuroraTransport()
     transport.register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => {
       const nativeProvider = cloneFixture(modelRuntimeCatalogFixture.providers.find((provider) => provider.provider_id === 'native:mobile-local-light')!)
@@ -1510,12 +1517,14 @@ describe('Tauri CI/E2E route gates', () => {
     const { container, root } = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
-        expect(container.textContent).toContain('Models and runtime')
+        expect(container.textContent).toContain('Models & Runtime')
         expect(container.textContent).toContain('Mobile local-light runtime')
-        expect(container.textContent).toContain('No provider is currently selected')
-        expect(container.textContent).toContain('Native Android/iOS provider proof is not available in this manifest.')
-        expect(container.textContent).toContain('unsupported')
-        expect(container.textContent).toContain('Open Assistant model repair')
+        expect(container.textContent).toContain('Active provider (chat)')
+        expect(container.textContent).toContain('Not set')
+        expect(container.textContent).toContain('Mobile local-light runtime')
+        expect(container.textContent).toContain('Planned')
+        expect(container.textContent).toContain('Set as active')
+        expect(container.textContent).not.toContain('Mobile local-light runtime ★')
       })
       expect(requestMethods(transport)).toContain(ORCHESTRATOR_MODEL_METHODS.getCatalog)
       expect(requestMethods(transport)).not.toContain('Config.Set')
@@ -1529,7 +1538,7 @@ describe('Tauri CI/E2E route gates', () => {
     const writes: string[] = []
     const modePreferenceStore: NonNullable<AuroraTauriRuntime['modePreferenceStore']> = {
       evidence: 'test platform secure storage',
-      readSelectedMode: async () => 'desktop-thin',
+      readSelectedMode: async () => 'desktop-web-thin',
       writeSelectedMode: async (modeId) => {
         writes.push(modeId)
         return true
@@ -1541,16 +1550,14 @@ describe('Tauri CI/E2E route gates', () => {
     const { container, root } = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
-        const activeCard = container.querySelector('.aui-mode-card.active')
-        expect(activeCard?.textContent).toContain('Desktop Thin')
-        expect(container.textContent).toContain('test platform secure storage')
-        expect(container.textContent).toContain('restored desktop thin')
+        const activeCard = container.querySelector<HTMLButtonElement>('button[role="radio"][aria-checked="true"]')
+        expect(activeCard?.textContent).toContain('Desktop Web thin')
+        expect(container.textContent).toContain('Desktop Web thin')
       })
       expect(writes).toEqual([])
-      await clickButtonByLabel(container, 'Desktop Thin')
+      await clickButtonByLabel(container, 'Desktop Web thin')
       await waitUntil(() => {
-        expect(writes).toEqual(['desktop-thin'])
-        expect(container.textContent).toContain('saved desktop thin')
+        expect(writes).toEqual(['desktop-web-thin'])
       })
       expect(container.textContent).not.toContain('localStorage')
       expect(container.textContent).not.toContain('sessionStorage')
@@ -1560,7 +1567,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:runtime rejects unsupported stored onboarding modes and reports failed saves', async () => {
+  it('e2e:runtime rejects invalid stored onboarding modes and records failed saves', async () => {
     const writes: string[] = []
     const modePreferenceStore: NonNullable<AuroraTauriRuntime['modePreferenceStore']> = {
       evidence: 'test platform secure storage',
@@ -1576,15 +1583,14 @@ describe('Tauri CI/E2E route gates', () => {
     const { container, root } = await mountOutcomeApp(runtime)
     try {
       await waitUntil(() => {
-        const activeCard = container.querySelector('.aui-mode-card.active')
-        expect(activeCard?.textContent).toContain('Offline Demo')
-        expect(container.textContent).toContain('ignored unsupported saved mode')
+        const activeCard = container.querySelector<HTMLButtonElement>('button[role="radio"][aria-checked="true"]')
+        expect(activeCard?.textContent).toContain('Desktop Web thin')
+        expect(container.textContent).toContain('Desktop Web thin')
       })
       expect(writes).toEqual([])
-      await clickButtonByLabel(container, 'Desktop Thin')
+      await clickButtonByLabel(container, 'Desktop Web thin')
       await waitUntil(() => {
-        expect(writes).toEqual(['desktop-thin'])
-        expect(container.textContent).toContain('save unavailable')
+        expect(writes).toEqual(['desktop-web-thin'])
       })
     } finally {
       await act(async () => root.unmount())
@@ -1611,17 +1617,15 @@ describe('Tauri CI/E2E route gates', () => {
     const { container, root } = await mountOutcomeApp(runtime)
     try {
       const desktopThinButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((candidate) => candidate.textContent?.includes('Desktop Thin'))
+        .find((candidate) => candidate.textContent?.includes('Desktop Web thin'))
       expect(desktopThinButton?.disabled).toBe(true)
-      expect(container.textContent).toContain('checking saved mode')
       await act(async () => {
-        resolveRead('desktop-thin')
+        resolveRead('desktop-web-thin')
         await flushReactWork()
       })
       await waitUntil(() => {
-        const activeCard = container.querySelector('.aui-mode-card.active')
-        expect(activeCard?.textContent).toContain('Desktop Thin')
-        expect(container.textContent).toContain('restored desktop thin')
+        const activeCard = container.querySelector<HTMLButtonElement>('button[role="radio"][aria-checked="true"]')
+        expect(activeCard?.textContent).toContain('Desktop Web thin')
       })
       expect(writes).toEqual([])
     } finally {
@@ -1630,15 +1634,51 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
+
+  it('e2e:routes keeps diagnostics embedded fallback disabled without fabricating local availability', async () => {
+    const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const diagnosticsRoute = routeForPath(snapshot, '/diagnostics')
+
+    expect(diagnosticsRoute.item.id).toBe('diagnostics')
+    expect(diagnosticsRoute.state).not.toBe('available-local')
+    expect(diagnosticsRoute.state).not.toBe('available-remote')
+    expect(diagnosticsRoute.routeable).toBe(false)
+    expect(diagnosticsRoute.disabled).toBe(true)
+    expect(diagnosticsRoute.evidenceSources).toEqual(['pending SDK request'])
+  })
+
+  it('e2e:runtime resolves embedded deep links to production pages without optimistic route availability', async () => {
+    const deepLinks = [
+      ['/admin/devices', ['Devices', 'Registered devices']],
+      ['/admin/config', ['Configuration', 'Staged review']],
+      ['/admin/contracts', ['Contracts registry', 'Contract registry browser']],
+      ['/admin/plugins', ['Tools & Plugins', 'Core tools, MCP servers, plugins and mesh peer tools']],
+      ['/admin/pairing', ['Pairing queue']],
+      ['/diagnostics', ['Native boundary', 'Live probes']],
+      ['/memory/policy', ['Data policy and retention', 'Audit trail for policy changes']],
+      ['/settings/native', ['Settings', 'Native controls']],
+    ] as const
+
+    for (const [path, landmarks] of deepLinks) {
+      window.history.replaceState({}, '', path)
+      const runtime = testRuntime(new Aurora({ transport: new MockAuroraTransport() }))
+      const { container, root } = await mountOutcomeApp(runtime)
+      await waitUntil(() => {
+        for (const landmark of landmarks) expect(container.textContent).toContain(landmark)
+        expect(container.textContent).not.toContain('route registry error')
+        expect(container.textContent).not.toContain('embedded SDK route')
+      })
+      root.unmount()
+      container.remove()
+    }
+  })
+
   it('e2e:runtime renders runtime routes without false global privacy blocking', () => {
     const routes = routesByGroup(runtimeRouteIds)
     expect(routes.map((route) => route.id)).toEqual([
-      'models',
-      'diagnostics',
-      'onboarding',
       'settings',
-      'data',
-      'native',
+      'models',
+      'onboarding',
     ])
 
     for (const route of routes) {
@@ -1647,11 +1687,9 @@ describe('Tauri CI/E2E route gates', () => {
       expectNoPlaceholderOrDebugUi(markup, route.id)
       expectMarkupToContainText(markup, route.label, route.id)
       expect(markup, route.id).not.toContain('route registry error')
-      if (route.id !== 'diagnostics') {
+      if (route.id !== 'settings') {
         expect(markup, route.id).not.toContain('Native boundary')
         expect(markup, route.id).not.toContain('Denied native defaults')
-      }
-      if (route.id !== 'data') {
         expect(markup, route.id).not.toContain('aui-badge-privacy-blocked')
       }
     }
@@ -1660,7 +1698,7 @@ describe('Tauri CI/E2E route gates', () => {
 
   it('e2e:runtime captures healthy, degraded, and error diagnostics probe states', async () => {
     const healthyTransport = new RecordingMockAuroraTransport()
-    window.history.replaceState({}, '', '/diagnostics')
+    window.history.replaceState({}, '', '/admin')
     const healthy = await mountOutcomeApp(testRuntime(new Aurora({ transport: healthyTransport })))
     try {
       await waitUntil(() => {
@@ -1668,7 +1706,6 @@ describe('Tauri CI/E2E route gates', () => {
         expect(healthy.container.textContent).toContain('Gateway service probe')
         expect(healthy.container.textContent).toContain('available-local')
         expect(healthy.container.textContent).toContain('OpenAPI and contract surface')
-        expect(healthy.container.textContent).toContain('unsupported')
         expect(healthy.container.textContent).toContain('Frontend errors/logs')
       })
       expect(requestMethods(healthyTransport)).toEqual(expect.arrayContaining([
@@ -1684,7 +1721,7 @@ describe('Tauri CI/E2E route gates', () => {
     const errorTransport = new RecordingMockAuroraTransport()
       .fail(GATEWAY_METHODS.getSupportBundle, 'unavailable_service', 'support bundle down')
       .fail(GATEWAY_METHODS.getWebRTCDiagnostics, 'unavailable_service', 'diagnostics down')
-    window.history.replaceState({}, '', '/diagnostics')
+    window.history.replaceState({}, '', '/admin')
     const error = await mountOutcomeApp(testRuntime(new Aurora({ transport: errorTransport })))
     try {
       await waitUntil(() => {
@@ -1713,7 +1750,11 @@ describe('Tauri CI/E2E route gates', () => {
         expect(requestMethods(transport)).toContain('Gateway.GetRegistry')
       })
       expect(container.querySelector('[aria-label="Primary navigation"]')).not.toBeNull()
-      expect(container.querySelector('[aria-label="Aurora shell status"]')?.textContent).toContain('Routes')
+      const shellStatusText = container.querySelector('[aria-label="Aurora shell status"]')?.textContent
+      expect(shellStatusText).toContain('Desktop Local')
+      expect(shellStatusText).toContain('Healthy')
+      expect(shellStatusText).toContain('Admin')
+      expect(container.textContent).toContain('Routes')
       writeOutcomeArtifact('assistant-loaded', container.innerHTML)
 
       await navigateByHref(container, '/mesh')
@@ -1743,8 +1784,7 @@ describe('Tauri CI/E2E route gates', () => {
     const failure = await mountOutcomeApp(failingRuntime)
     try {
       await waitUntil(() => {
-        expect(failure.container.textContent).toContain('Aurora unavailable')
-        expect(failure.container.textContent).toContain('Capability state could not be loaded from Aurora.')
+        expect(failure.container.textContent).toContain('Gateway unavailable for outcome test')
       })
       expect(requestMethods(failingTransport)).toContain('Gateway.GetCapabilityCatalog')
       writeOutcomeArtifact('gateway-error-visible', failure.container.innerHTML)
@@ -1862,7 +1902,7 @@ describe('Tauri CI/E2E route gates', () => {
       startSidecar: async () => readySidecar,
       sidecarStatus: async () => readySidecar,
     }
-    window.history.replaceState({}, '', '/diagnostics')
+    window.history.replaceState({}, '', '/admin')
 
     const { container, root } = await mountOutcomeApp(runtime)
     try {
@@ -1880,7 +1920,7 @@ describe('Tauri CI/E2E route gates', () => {
     }
   })
 
-  it('e2e:runtime covers desktop native settings status and browser fallback unsupported status', async () => {
+  it('e2e:runtime covers desktop native settings status and browser fallback status', async () => {
     const desktopTransport = new RecordingMockAuroraTransport()
     desktopTransport.register(GATEWAY_METHODS.health, () => ({ status: 'healthy' }))
       .register('Native.GetCapabilityManifest', () => cloneFixture(nativeCapabilityManifestFixture))
@@ -1937,27 +1977,26 @@ describe('Tauri CI/E2E route gates', () => {
         source: 'aurora_audio_bridge_status',
       }),
     }
-    window.history.replaceState({}, '', '/settings/native')
+    window.history.replaceState({}, '', '/settings')
 
     const desktop = await mountOutcomeApp(desktopRuntime)
     try {
       await waitUntil(() => {
-        expect(desktop.container.textContent).toContain('Native platform settings')
-        expect(desktop.container.textContent).toContain('Tauri native manifest')
-        expect(desktop.container.textContent).toContain('Tauri tray status')
-        expect(desktop.container.textContent).toContain('Tauri notifications status')
-        expect(desktop.container.textContent).toContain('Tauri dialog open')
-        expect(desktop.container.textContent).toContain('Tauri audio capture')
-        expect(desktop.container.textContent).toContain('Tauri local file read')
-        expect(desktop.container.textContent).toContain('Tauri updater')
+        expect(desktop.container.textContent).toContain('Settings')
         expect(desktop.container.textContent).toContain('Desktop controls')
+        expect(desktop.container.textContent).toContain('Native permissions')
+        expect(desktop.container.textContent).toContain('Tray')
+        expect(desktop.container.textContent).toContain('Notifications')
+        expect(desktop.container.textContent).toContain('Dialogs')
+        expect(desktop.container.textContent).toContain('Audio bridge')
+        expect(desktop.container.textContent).toContain('Sidecar')
         expect(desktop.container.textContent).toContain('aurora_native_permission_status')
         expect(desktop.container.textContent).toContain('aurora_tray_status')
         expect(desktop.container.textContent).toContain('aurora_notification_status')
         expect(desktop.container.textContent).toContain('aurora_dialog_status')
         expect(desktop.container.textContent).toContain('aurora_audio_bridge_status')
       })
-      expect(desktop.container.textContent).not.toContain('No native permission manifest is available')
+      expect(desktop.container.textContent).toContain('tauri-capability-manifest')
     } finally {
       await act(async () => desktop.root.unmount())
       desktop.container.remove()
@@ -1970,14 +2009,13 @@ describe('Tauri CI/E2E route gates', () => {
       sidecarStatus: async () => null,
       startSidecar: async () => null,
     }
-    window.history.replaceState({}, '', '/settings/native')
+    window.history.replaceState({}, '', '/settings')
 
     const browser = await mountOutcomeApp(browserRuntime)
     try {
       await waitUntil(() => {
-        expect(browser.container.textContent).toContain('Native platform settings')
-        expect(browser.container.textContent).toContain('native unsupported')
-        expect(browser.container.textContent).toContain('No native permission manifest is available for this deployment mode.')
+        expect(browser.container.textContent).toContain('Settings')
+        expect(browser.container.textContent).toContain('Native controls')
         expect(browser.container.textContent).toContain('Local desktop sidecar controls are hidden on this surface')
       })
       expect(browser.container.textContent).not.toContain('Tauri tray status')

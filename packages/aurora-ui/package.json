@@ -55,6 +55,7 @@
     "heat-graph": "^0.0.12",
     "lucide-react": "^1.16.0",
     "motion": "^12.42.2",
+    "next-themes": "^0.4.6",
     "parse-diff": "^0.12.0",
     "qrcode": "^1.5.4",
     "radix-ui": "^1.6.1",
@@ -63,6 +64,7 @@
     "react-shiki": "^0.10.1",
     "react-syntax-highlighter": "^16.1.1",
     "remark-gfm": "^4.0.1",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "tw-shimmer": "^0.4.11",
     "zustand": "^5.0.14"

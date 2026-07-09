@@ -63,23 +63,23 @@ function renderToolsPanel() {
 }
 
 describe('ToolApprovalPanel tools and automations stories', () => {
-  it('matches the source-first Tooling console with policy, catalog, scheduler, and onboarding entrypoints', () => {
+  it('matches the source-first Tools & Plugins console with policy summary, source rail, and detail panel', () => {
     const markup = renderToolsPanel()
 
-    expect(markup).toContain('Tools &amp; Automations')
-    expect(markup).toContain('Tooling policy')
-    expect(markup).toContain('Source catalog')
+    // Consolidated per the Aurora Cockpit redesign: this is now a read-only source/tool
+    // catalog browser (Tools tab + Plugins tab). Execution/approval happens through the
+    // Assistant's tool-call approval flow, not here; scheduler jobs have their own screen.
+    expect(markup).toContain('Tools &amp; Plugins')
+    expect(markup).toContain('Tools policy summary')
+    expect(markup).toContain('Tool sources')
     expect(markup).toContain('Source detail')
-    expect(markup).toContain('Tooling.GetToolCatalog')
-    expect(markup).toContain('Scheduled tool actions')
-    expect(markup).toContain('Scheduler')
-    expect(markup).toContain('Add MCP server')
-    expect(markup).toContain('Add plugin')
-    expect(markup).toContain('Durable grants')
-    expect(markup).toContain('Pending approvals')
+    expect(markup).toContain('Aurora core Tooling')
+    expect(markup).toContain('Add MCP source')
+    expect(markup).toContain('2 pending')
+    expect(markup).toContain('dry_run_only')
   })
 
-  it('covers source search helpers, selected tool details, schema form, dry-run, execution, approval, audit, and result status', () => {
+  it('covers source search helpers, selected tool details, and the risk/state catalog table', () => {
     const markup = renderToolsPanel()
     const tools = normalizeToolCatalog(toolCatalogFixture, { transportKind: 'mock' })
     const categories = buildToolCategories(tools)
@@ -92,22 +92,22 @@ describe('ToolApprovalPanel tools and automations stories', () => {
     )
 
     expect(markup).toContain('Search sources and tools')
-    expect(markup).toContain('Advanced details and redacted payloads')
-    expect(markup).toContain('Arguments schema summary')
-    expect(markup).toContain('Dry-run preview')
-    expect(markup).toContain('Execute safe local')
-    expect(markup).toContain('Deny')
-    expect(markup).toContain('Correlation')
-    expect(markup).toContain('LLM/scheduler binding')
+    expect(markup).toContain('Aurora core Tooling')
+    expect(markup).toContain('diagnostics.serviceHealth')
+    expect(markup).toContain('provider-selector-required')
+    expect(markup).toContain('Tool metadata is available from the backend catalog.')
   })
 
-  it('does not expose fake execution for tools that are not currently selected or safe-local executable', () => {
+  it('does not expose any inline execution or approval controls in the read-only catalog view', () => {
     const markup = renderToolsPanel()
-    const safeCard = markup.slice(markup.indexOf('diagnostics.serviceHealth'))
 
-    expect(safeCard).toContain('Execute safe local')
-    expect(safeCard).toContain('No approval required by current backend policy.')
+    // The catalog browser is intentionally read-only -- no per-tool execute/approve/deny
+    // controls (navigation buttons like source rows and tabs are expected and fine).
     expect(markup).not.toContain('Pretend execution')
+    expect(markup).not.toContain('Execute safe local')
+    expect(markup).not.toContain('>Deny<')
+    expect(markup).not.toContain('>Approve<')
+    expect(markup.match(/role="tab"/g)?.length).toBe(2)
   })
 
 })

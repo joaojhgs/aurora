@@ -14,6 +14,10 @@ import {
   type PendingPairingEntry,
   type TokenRevokeResponse
 } from '@aurora/client'
+import { Alert, AlertDescription } from '#components/ui/alert'
+import { Input } from '#components/ui/input'
+import { Label } from '#components/ui/label'
+import { Textarea } from '#components/ui/textarea'
 import { PageHeader } from './state-surface'
 import { StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
@@ -419,9 +423,9 @@ export function PairingQueueSurface({
       key: 'device',
       header: 'Device / peer',
       render: (entry) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <strong>{entry.device_name || 'Unnamed device'}</strong>
-          <small>{peerLabel(entry)}</small>
+          <small className="text-xs text-muted-foreground">{peerLabel(entry)}</small>
         </span>
       )
     },
@@ -433,14 +437,14 @@ export function PairingQueueSurface({
       key: 'code',
       header: 'Pairing code',
       hideAt: 'lg',
-      render: (entry) => <span className="aui-mono">{redactedCodeLabel(entry.code)}</span>
+      render: (entry) => <span className="font-mono text-xs">{redactedCodeLabel(entry.code)}</span>
     },
     {
       key: 'actions',
       header: 'Actions',
       align: 'end',
       render: (entry) => (
-        <div className="aui-action-row aui-action-row-tight">
+        <div className="flex flex-wrap justify-end gap-1.5">
           <Button
             variant="ghost"
             disabled={actionDisabled || entry.status !== 'pending' || !entry.code || (!onCopyValue && !onCopyCode)}
@@ -470,7 +474,7 @@ export function PairingQueueSurface({
   ]
 
   return (
-    <div className="aui-stack-lg">
+    <div className="flex flex-col gap-6">
       <PageHeader
         eyebrow="Admin"
         title="Pairing queue"
@@ -499,33 +503,31 @@ export function PairingQueueSurface({
       />
 
       <Card title="AdminAction options" ariaLabel="Pairing AdminAction options">
-        <p className="aui-card-note">Approve, deny, create, and exchange all route through Aurora AdminAction; provide a reason and confirm the in-session unlock before submitting.</p>
-        <div className="aui-two-col">
-          <div className="aui-field">
-            <label className="aui-field-label" htmlFor="pairing-reason">AdminAction reason</label>
-            <textarea
+        <p className="text-sm text-muted-foreground">Approve, deny, create, and exchange all route through Aurora AdminAction; provide a reason and confirm the in-session unlock before submitting.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pairing-reason">AdminAction reason</Label>
+            <Textarea
               id="pairing-reason"
-              className="aui-input aui-textarea"
               value={adminReason}
               rows={2}
               disabled={controlsDisabled}
               onChange={(event) => onAdminReasonChange?.(event.currentTarget.value)}
             />
           </div>
-          <div className="aui-field">
-            <label className="aui-field-label" htmlFor="pairing-permissions">Approve permissions</label>
-            <input
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pairing-permissions">Approve permissions</Label>
+            <Input
               id="pairing-permissions"
-              className="aui-input"
               value={permissions}
               disabled={controlsDisabled}
               placeholder="Auth.use, Gateway.use"
               onChange={(event) => onPermissionsChange?.(event.currentTarget.value)}
             />
-            <p className="aui-field-helper">Space or comma separated permissions granted on approval.</p>
+            <p className="text-xs text-muted-foreground">Space or comma separated permissions granted on approval.</p>
           </div>
         </div>
-        <div className="aui-switch-row">
+        <div className="flex flex-col gap-2">
           <Switch
             checked={includeNonPending}
             disabled={controlsDisabled}
@@ -547,24 +549,24 @@ export function PairingQueueSurface({
         </div>
       </Card>
 
-      <div className="aui-two-col">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Card title="Create pairing code" icon={<KeyRound size={18} aria-hidden />} ariaLabel="Create pairing code">
-          <p className="aui-card-note">
-            Uses <code className="aui-mono">{AUTH_METHODS.pairingStart}</code>. QR image is unavailable until a renderer or backend QR contract exists; the deep-link payload is provided for native handoff.
+          <p className="text-sm text-muted-foreground">
+            Uses <code className="font-mono text-xs">{AUTH_METHODS.pairingStart}</code>. QR image is unavailable until a renderer or backend QR contract exists; the deep-link payload is provided for native handoff.
           </p>
-          <div className="aui-field">
-            <label className="aui-field-label" htmlFor="pairing-device">Device name</label>
-            <input id="pairing-device" className="aui-input" value={createDeviceName} disabled={controlsDisabled} onChange={(event) => onCreateDeviceNameChange?.(event.currentTarget.value)} />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pairing-device">Device name</Label>
+            <Input id="pairing-device" value={createDeviceName} disabled={controlsDisabled} onChange={(event) => onCreateDeviceNameChange?.(event.currentTarget.value)} />
           </div>
-          <div className="aui-field">
-            <label className="aui-field-label" htmlFor="pairing-peer">Remote peer id</label>
-            <input id="pairing-peer" className="aui-input" value={createRemotePeerId} disabled={controlsDisabled} placeholder="optional mesh peer id" onChange={(event) => onCreateRemotePeerIdChange?.(event.currentTarget.value)} />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pairing-peer">Remote peer id</Label>
+            <Input id="pairing-peer" value={createRemotePeerId} disabled={controlsDisabled} placeholder="optional mesh peer id" onChange={(event) => onCreateRemotePeerIdChange?.(event.currentTarget.value)} />
           </div>
-          <div className="aui-field">
-            <label className="aui-field-label" htmlFor="pairing-node">Remote node name</label>
-            <input id="pairing-node" className="aui-input" value={createRemoteNodeName} disabled={controlsDisabled} placeholder="optional node name" onChange={(event) => onCreateRemoteNodeNameChange?.(event.currentTarget.value)} />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pairing-node">Remote node name</Label>
+            <Input id="pairing-node" value={createRemoteNodeName} disabled={controlsDisabled} placeholder="optional node name" onChange={(event) => onCreateRemoteNodeNameChange?.(event.currentTarget.value)} />
           </div>
-          <div className="aui-action-row">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="primary"
               icon={<Plus size={16} aria-hidden />}
@@ -577,18 +579,18 @@ export function PairingQueueSurface({
             </Button>
           </div>
           {createdCredential ? (
-            <section className="aui-op-result aui-op-result-success" aria-label="Created pairing credential">
+            <section className="rounded-lg border border-success/35 bg-success/5 p-3" aria-label="Created pairing credential">
               <MetaGrid
                 columns={1}
                 items={[
-                  { label: 'One-time pairing code', value: <code className="aui-mono">{createdCredential.code}</code> },
+                  { label: 'One-time pairing code', value: <code className="font-mono text-xs">{createdCredential.code}</code> },
                   { label: 'Expires', value: createdCredential.expiresAt ? formatDate(createdCredential.expiresAt) : `${createdCredential.expiresInSeconds ?? 'unknown'} seconds` },
-                  { label: 'Deep link', value: <code className="aui-mono">{createdCredential.deepLink}</code> },
+                  { label: 'Deep link', value: <code className="font-mono text-xs">{createdCredential.deepLink}</code> },
                   { label: 'QR', value: createdCredential.qrUnavailableReason },
                   { label: 'Audit', value: createdCredential.auditReceipt ?? 'audit receipt pending' }
                 ]}
               />
-              <div className="aui-action-row">
+              <div className="mt-2 flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => onCopyValue?.(createdCredential.code, 'created-code')}>Copy one-time code</Button>
                 <Button variant="outline" onClick={() => onCopyValue?.(createdCredential.deepLink, 'created-link')}>Copy deep link</Button>
               </div>
@@ -597,14 +599,14 @@ export function PairingQueueSurface({
         </Card>
 
         <Card title="Exchange and revoke" icon={<RotateCcw size={18} aria-hidden />} ariaLabel="Pairing exchange and revoke">
-          <p className="aui-card-note">
-            Exchange uses <code className="aui-mono">{AUTH_METHODS.pairingExchange}</code>. Exchanged tokens revoke through <code className="aui-mono">{AUTH_METHODS.revokeToken}</code> when the backend returns a token id.
+          <p className="text-sm text-muted-foreground">
+            Exchange uses <code className="font-mono text-xs">{AUTH_METHODS.pairingExchange}</code>. Exchanged tokens revoke through <code className="font-mono text-xs">{AUTH_METHODS.revokeToken}</code> when the backend returns a token id.
           </p>
-          <div className="aui-field">
-            <label className="aui-field-label" htmlFor="pairing-exchange-code">Pairing code to exchange</label>
-            <input id="pairing-exchange-code" className="aui-input" value={exchangeCode} disabled={controlsDisabled} placeholder="paste code from device" onChange={(event) => onExchangeCodeChange?.(event.currentTarget.value)} />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pairing-exchange-code">Pairing code to exchange</Label>
+            <Input id="pairing-exchange-code" value={exchangeCode} disabled={controlsDisabled} placeholder="paste code from device" onChange={(event) => onExchangeCodeChange?.(event.currentTarget.value)} />
           </div>
-          <div className="aui-action-row">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="primary"
               disabled={!canExchange}
@@ -624,9 +626,9 @@ export function PairingQueueSurface({
               {pendingAction === 'revoke-token' ? 'Revoking through AdminAction' : 'Revoke exchanged token via AdminAction'}
             </Button>
           </div>
-          <p className="aui-card-note" role="note">Pending pairing revoke unavailable: missing backend contract Auth.PairingRevoke.</p>
+          <p className="text-sm text-muted-foreground" role="note">Pending pairing revoke unavailable: missing backend contract Auth.PairingRevoke.</p>
           {exchangeResult ? (
-            <section className="aui-op-result aui-op-result-success" aria-label="Pairing exchange result">
+            <section className="rounded-lg border border-success/35 bg-success/5 p-3" aria-label="Pairing exchange result">
               <MetaGrid
                 columns={1}
                 items={[
@@ -641,13 +643,37 @@ export function PairingQueueSurface({
         </Card>
       </div>
 
-      {operation.message ? <p className={`aui-inline-alert${operation.status === 'error' ? ' aui-inline-alert-danger' : ''}`} role={operation.status === 'error' ? 'alert' : 'status'}>{operation.message}</p> : null}
-      {operation.auditReceipt ? <p className="aui-card-note">AdminAction audit receipt: {operation.auditReceipt}</p> : null}
-      {mutationError ? <p className="aui-inline-alert aui-inline-alert-danger" role="alert">{mutationError}</p> : null}
-      {copyError ? <p className="aui-inline-alert aui-inline-alert-danger" role="alert">{copyError}</p> : null}
-      {copiedRequestId ? <p className="aui-card-note" role="status">Pairing code copied from controlled Admin pairing surface; secrets stay scoped to clipboard and are not logged.</p> : null}
-      {model.disabledReason ? <p className="aui-inline-alert" role="note">{model.disabledReason}</p> : null}
-      {model.error ? <p className="aui-inline-alert aui-inline-alert-danger" role="alert">{model.error}</p> : null}
+      {operation.message ? (
+        <Alert variant={operation.status === 'error' ? 'destructive' : 'default'} role={operation.status === 'error' ? 'alert' : 'status'}>
+          <AlertDescription>{operation.message}</AlertDescription>
+        </Alert>
+      ) : null}
+      {operation.auditReceipt ? <p className="text-sm text-muted-foreground">AdminAction audit receipt: {operation.auditReceipt}</p> : null}
+      {mutationError ? (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{mutationError}</AlertDescription>
+        </Alert>
+      ) : null}
+      {copyError ? (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{copyError}</AlertDescription>
+        </Alert>
+      ) : null}
+      {copiedRequestId ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          Pairing code copied from controlled Admin pairing surface; secrets stay scoped to clipboard and are not logged.
+        </p>
+      ) : null}
+      {model.disabledReason ? (
+        <Alert role="note">
+          <AlertDescription>{model.disabledReason}</AlertDescription>
+        </Alert>
+      ) : null}
+      {model.error ? (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{model.error}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card title="Pending requests" ariaLabel="Pending device and peer pairing requests" flush>
         <DataTable
@@ -655,7 +681,7 @@ export function PairingQueueSurface({
           rows={model.entries}
           getRowKey={(entry) => entry.request_id}
           empty={
-            <div className="aui-empty-inline">
+            <div className="p-6 text-sm text-muted-foreground">
               {model.state === 'loading'
                 ? <p aria-live="polite">Loading pairing queue from Aurora.</p>
                 : model.disabledReason

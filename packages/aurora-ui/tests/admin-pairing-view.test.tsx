@@ -11,7 +11,7 @@ import {
   buildPairingTokenRevokeAdminActionRequest,
   pairingDeepLink
 } from '../src/pairing-queue-view'
-import { auroraNavSections, navItemSnapshot } from '../src/nav'
+import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
 describe('PairingQueueView admin pairing surface', () => {
@@ -148,7 +148,7 @@ describe('PairingQueueView admin pairing surface', () => {
 })
 
 function pairingRoute(): RouteAvailability {
-  const item = auroraNavSections.flatMap((section) => section.items).find((candidate) => candidate.id === 'pairing')
+  const item = [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems].find((candidate) => candidate.id === 'pairing')
   if (!item) throw new Error('pairing route missing')
   return {
     item: navItemSnapshot(item),

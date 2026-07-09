@@ -19,6 +19,10 @@ import {
   type PendingPairingEntry,
   type TokenResponse
 } from '@aurora/client'
+import { Alert, AlertDescription } from '#components/ui/alert'
+import { Badge } from '#components/ui/badge'
+import { Label } from '#components/ui/label'
+import { Textarea } from '#components/ui/textarea'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
@@ -331,7 +335,7 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
       .sort(),
     warnings: failures,
     error: failures.find((message) => !message.includes('native manifest')) ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response'
   }
 }
 
@@ -352,7 +356,7 @@ export function AdminDevicesView({
   const visibleDevices = snapshot.devices.filter((device) => device.id !== optimisticDeviceId)
 
   return (
-    <div className="aui-admin-devices">
+    <div className="flex flex-col gap-6">
       <PageHeader
         id="admin-devices-title"
         eyebrow="Admin"
@@ -360,7 +364,7 @@ export function AdminDevicesView({
         description="Registered devices, token-backed active sessions, trust state, and platform capabilities are loaded through Aurora."
         badges={
           <>
-            {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
+            {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <Badge variant="outline">{snapshot.loadState}</Badge>}
             <EvidenceBadge label={snapshot.evidenceSource} />
             <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
             <PrivacyBadge privacy="credential" />
@@ -388,21 +392,22 @@ export function AdminDevicesView({
       <DevicePlatformSecurityPanel snapshot={snapshot} reauthConfirmed={reauthConfirmed} onRunAdminAction={onRunAdminAction} />
 
       <Card title="AdminAction boundary" description="Device, pairing, and mesh trust mutations require AdminAction draft, confirm, and audit.">
-        <div className="aui-device-controls">
-          <label>
-            <span>AdminAction reason</span>
-            <textarea
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="admin-devices-reason">AdminAction reason</Label>
+            <Textarea
+              id="admin-devices-reason"
               value={adminReason}
               disabled={snapshot.deleteState === 'pending' || snapshot.deleteState === 'unsupported' || snapshot.deleteState === 'denied'}
               rows={2}
               onChange={(event) => onAdminReasonChange?.(event.currentTarget.value)}
             />
-          </label>
-          <label className="aui-inline-field">
+          </div>
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange?.(event.currentTarget.checked)} disabled={snapshot.deleteState === 'pending' || snapshot.deleteState === 'unsupported' || snapshot.deleteState === 'denied'} />
             <span>I confirm recent AdminAction reauthentication for device, pairing, and mesh trust mutations.</span>
           </label>
-          <div className="aui-device-capability-grid">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <CapabilityFact label="List devices" state={snapshot.listState} reason={snapshot.listReason} />
             <CapabilityFact label="List tokens" state={snapshot.tokenState} reason={snapshot.tokenReason} />
             <CapabilityFact label="Pending pairings" state={snapshot.pairingState} reason={snapshot.pairingReason} />
@@ -447,11 +452,11 @@ function DevicesDataTable({
       key: 'device',
       header: 'Device',
       render: (device) => (
-        <div className="aui-device-identity">
-          <span className="aui-device-icon"><Laptop size={18} aria-hidden /></span>
-          <div>
-            <strong>{device.name}</strong>
-            <span>{device.id}</span>
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted"><Laptop size={16} aria-hidden /></span>
+          <div className="flex flex-col">
+            <strong className="text-sm font-medium">{device.name}</strong>
+            <span className="text-xs text-muted-foreground">{device.id}</span>
           </div>
         </div>
       )
@@ -462,7 +467,7 @@ function DevicesDataTable({
       render: (device) => (
         <div>
           <StatusBadge state={device.trustState} />
-          <p className="aui-muted">{device.trustLabel}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{device.trustLabel}</p>
         </div>
       )
     },
@@ -471,19 +476,19 @@ function DevicesDataTable({
       header: 'Sessions',
       render: (device) => (
         <div>
-          <strong>{device.activeSessionCount}</strong>
-          <p className="aui-muted">{device.tokenCount} token records</p>
-          <details className="aui-service-details">
-            <summary>Token state</summary>
+          <strong className="text-sm font-medium">{device.activeSessionCount}</strong>
+          <p className="text-xs text-muted-foreground">{device.tokenCount} token records</p>
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer text-muted-foreground">Token state</summary>
             {device.activeTokens.length === 0 ? (
-              <p>No active token state was returned for this device.</p>
+              <p className="mt-1 text-muted-foreground">No active token state was returned for this device.</p>
             ) : (
-              <ul className="aui-device-token-list">
+              <ul className="mt-1 flex flex-col gap-1">
                 {device.activeTokens.map((token) => (
-                  <li key={token.id}>
+                  <li key={token.id} className="flex items-center gap-1.5">
                     <StatusBadge state={token.state} />
                     <span>{token.prefix || token.id}</span>
-                    <small>{token.scopes.join(', ') || 'no scopes'}</small>
+                    <small className="text-muted-foreground">{token.scopes.join(', ') || 'no scopes'}</small>
                   </li>
                 ))}
               </ul>
@@ -498,8 +503,8 @@ function DevicesDataTable({
       hideAt: 'lg',
       render: (device) => (
         <div>
-          <strong>{device.platformLabel}</strong>
-          <p className="aui-muted">{device.platformEvidence}</p>
+          <strong className="text-sm font-medium">{device.platformLabel}</strong>
+          <p className="text-xs text-muted-foreground">{device.platformEvidence}</p>
         </div>
       )
     },
@@ -509,10 +514,12 @@ function DevicesDataTable({
       hideAt: 'md',
       render: (device) => (
         <div>
-          <Link2 size={16} aria-hidden />
-          <StatusBadge state={device.meshPeerState} />
-          <p className="aui-muted">{device.linkedMeshPeerLabel}</p>
-          <small>{device.meshPeerEvidence}</small>
+          <div className="flex items-center gap-1.5">
+            <Link2 size={14} aria-hidden className="text-muted-foreground" />
+            <StatusBadge state={device.meshPeerState} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{device.linkedMeshPeerLabel}</p>
+          <small className="text-muted-foreground">{device.meshPeerEvidence}</small>
         </div>
       )
     },
@@ -521,10 +528,10 @@ function DevicesDataTable({
       header: 'State',
       hideAt: 'xl',
       render: (device) => (
-        <dl className="aui-device-facts">
-          <div><dt>Principal</dt><dd>{device.principalId ?? 'not reported'}</dd></div>
-          <div><dt>Created</dt><dd>{formatDate(device.createdAt)}</dd></div>
-          <div><dt>Last seen</dt><dd>{formatDate(device.lastSeen)}</dd></div>
+        <dl className="flex flex-col gap-0.5 text-xs">
+          <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Principal</dt><dd>{device.principalId ?? 'not reported'}</dd></div>
+          <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Created</dt><dd>{formatDate(device.createdAt)}</dd></div>
+          <div className="flex justify-between gap-2"><dt className="text-muted-foreground">Last seen</dt><dd>{formatDate(device.lastSeen)}</dd></div>
         </dl>
       )
     },
@@ -533,28 +540,26 @@ function DevicesDataTable({
       header: 'Action',
       align: 'end',
       render: (device) => (
-        <div className="aui-action-row-tight">
-          <button
-            className="aui-button aui-danger-button"
-            type="button"
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <Button
+            variant="danger"
+            icon={<Trash2 size={16} aria-hidden />}
             disabled={!reauthConfirmed || !device.deleteAction || Boolean(pendingDeviceId)}
+            disabledReason={device.deleteReason}
             onClick={() => onDeleteDevice?.(device)}
           >
-            <Trash2 size={16} aria-hidden />
             {pendingDeviceId === device.id ? 'Submitting AdminAction' : 'Revoke'}
-          </button>
+          </Button>
           {device.trustAction ? (
-            <button
-              className="aui-button"
-              type="button"
+            <Button
+              variant="outline"
+              icon={<CheckCircle2 size={16} aria-hidden />}
               disabled={!reauthConfirmed || Boolean(pendingDeviceId)}
-              onClick={() => device.trustAction ? onRunAdminAction?.(device.trustAction, device.id) : undefined}
+              onClick={() => (device.trustAction ? onRunAdminAction?.(device.trustAction, device.id) : undefined)}
             >
-              <CheckCircle2 size={16} aria-hidden />
               Trust via AdminAction
-            </button>
+            </Button>
           ) : null}
-          <span className="aui-sr-only">{device.deleteReason}</span>
         </div>
       )
     }
@@ -565,61 +570,84 @@ function DevicesDataTable({
       columns={columns}
       rows={devices}
       getRowKey={(device) => device.id}
-      empty={loadState === 'loading' ? null : <p className="aui-muted">No registered devices were returned by Auth.ListDevices.</p>}
+      empty={loadState === 'loading' ? null : <p className="p-6 text-sm text-muted-foreground">No registered devices were returned by Auth.ListDevices.</p>}
     />
   )
 }
 
 function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminAction }: { snapshot: AdminDevicesSnapshot; reauthConfirmed: boolean; onRunAdminAction?: ((action: AdminDeviceAction, optimisticId: string) => void) | undefined }) {
   return (
-    <section className="aui-admin-panel" aria-labelledby="device-platform-title">
-      <div className="aui-panel-heading">
+    <section aria-labelledby="device-platform-title" className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="aui-kicker">Trust posture</p>
-          <h2 id="device-platform-title">Pending pairings and platform security</h2>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Trust posture</p>
+          <h2 id="device-platform-title" className="text-base font-semibold">
+            Pending pairings and platform security
+          </h2>
         </div>
-        <a className="aui-action-chip" href="/admin/pairing">Open pairing queue</a>
+        <a href="/admin/pairing" className="rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">
+          Open pairing queue
+        </a>
       </div>
-      <div className="aui-device-posture-grid">
-        <article>
-          <h3>Pending pairing requests</h3>
-          {snapshot.pendingPairings.length === 0 ? (
-            <p className="aui-muted">No pending pairings were returned by Auth.ListPendingPairings.</p>
-          ) : (
-            <ul className="aui-device-pairing-list">
-              {snapshot.pendingPairings.map((pairing) => (
-                <li key={pairing.requestId}>
-                  <StatusBadge state={pairing.status === 'pending' ? 'pending' : 'unsupported'} />
-                  <Link2 size={16} aria-hidden />
-                  <div>
-                    <strong>{pairing.deviceName}</strong>
-                    <span>{pairing.remoteNodeName || pairing.remotePeerId} from {pairing.clientIp}</span>
-                    <small>{pairing.permissionCount} permissions requested; admin={String(pairing.adminRequested)}; mesh={pairing.linkedMeshPeerLabel}; expires {formatDate(pairing.expiresAt)}</small>
-                    <small>AdminAction approve={pairing.approveAction?.methodId ?? 'unsupported'} deny={pairing.denyAction?.methodId ?? 'unsupported'}; pairing secret redacted</small>
-                    <div className="aui-admin-actions">
-                      <button className="aui-button" type="button" disabled={!reauthConfirmed || !pairing.approveAction} onClick={() => pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined}>
-                        <CheckCircle2 size={16} aria-hidden />
-                        Approve/trust via AdminAction
-                      </button>
-                      <button className="aui-button aui-danger-button" type="button" disabled={!reauthConfirmed || !pairing.denyAction} onClick={() => pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined}>
-                        <XCircle size={16} aria-hidden />
-                        Deny via AdminAction
-                      </button>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="flex flex-col gap-3">
+            <h3 className="text-sm font-semibold">Pending pairing requests</h3>
+            {snapshot.pendingPairings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No pending pairings were returned by Auth.ListPendingPairings.</p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {snapshot.pendingPairings.map((pairing) => (
+                  <li key={pairing.requestId} className="flex items-start gap-2.5 rounded-lg border bg-background/50 p-3">
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <StatusBadge state={pairing.status === 'pending' ? 'pending' : 'unsupported'} />
+                      <Link2 size={14} aria-hidden className="text-muted-foreground" />
                     </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-        <article>
-          <h3>Platform security status</h3>
-          <dl className="aui-device-facts">
-            <div><dt>Platform</dt><dd>{snapshot.nativePlatform ?? 'native manifest unavailable'}</dd></div>
-            <div><dt>Capabilities</dt><dd>{snapshot.nativeCapabilities.length > 0 ? snapshot.nativeCapabilities.join(', ') : 'no native capabilities advertised'}</dd></div>
-            <div><dt>Boundary</dt><dd>Device trust uses Auth records; native capability claims use the SDK native manifest only.</dd></div>
-          </dl>
-        </article>
+                    <div className="min-w-0 flex-1">
+                      <strong className="text-sm font-medium">{pairing.deviceName}</strong>
+                      <div className="text-xs text-muted-foreground">
+                        {pairing.remoteNodeName || pairing.remotePeerId} from {pairing.clientIp}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {pairing.permissionCount} permissions requested; admin={String(pairing.adminRequested)}; mesh={pairing.linkedMeshPeerLabel}; expires {formatDate(pairing.expiresAt)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        AdminAction approve={pairing.approveAction?.methodId ?? 'unsupported'} deny={pairing.denyAction?.methodId ?? 'unsupported'}; pairing secret redacted
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button variant="outline" icon={<CheckCircle2 size={16} aria-hidden />} disabled={!reauthConfirmed || !pairing.approveAction} onClick={() => (pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined)}>
+                          Approve/trust via AdminAction
+                        </Button>
+                        <Button variant="danger" icon={<XCircle size={16} aria-hidden />} disabled={!reauthConfirmed || !pairing.denyAction} onClick={() => (pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined)}>
+                          Deny via AdminAction
+                        </Button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Card>
+        <Card>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Platform security status</h3>
+            <dl className="flex flex-col gap-1.5 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Platform</dt>
+                <dd>{snapshot.nativePlatform ?? 'native manifest unavailable'}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Capabilities</dt>
+                <dd className="text-right">{snapshot.nativeCapabilities.length > 0 ? snapshot.nativeCapabilities.join(', ') : 'no native capabilities advertised'}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Boundary</dt>
+                <dd className="text-right">Device trust uses Auth records; native capability claims use the SDK native manifest only.</dd>
+              </div>
+            </dl>
+          </div>
+        </Card>
       </div>
     </section>
   )
@@ -860,62 +888,52 @@ function DeviceStatusPanel({
 }) {
   if (optimisticDeviceId) {
     return (
-      <div className="aui-admin-notice" aria-live="polite">
-        <ShieldCheck size={18} aria-hidden />
-        <span>AdminAction submitted for {optimisticDeviceId}; refreshing device state before committing the row removal.</span>
-      </div>
+      <Alert aria-live="polite">
+        <ShieldCheck />
+        <AlertDescription>AdminAction submitted for {optimisticDeviceId}; refreshing device state before committing the row removal.</AlertDescription>
+      </Alert>
     )
   }
   if (mutationError) {
     return (
-      <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
-        <Lock size={18} aria-hidden />
-        <span>Rollback required after AdminAction device deletion failed: {mutationError}</span>
-      </div>
+      <Alert variant="destructive" role="alert">
+        <Lock />
+        <AlertDescription>Rollback required after AdminAction device deletion failed: {mutationError}</AlertDescription>
+      </Alert>
     )
   }
   if (snapshot.loadState === 'loading') {
     return (
-      <div className="aui-admin-notice" aria-live="polite">
-        <Activity size={18} aria-hidden />
-        <span>Loading devices, token-backed sessions, capabilities, and native manifest through Aurora.</span>
-      </div>
+      <Alert aria-live="polite">
+        <Activity />
+        <AlertDescription>Loading devices, token-backed sessions, capabilities, and native manifest through Aurora.</AlertDescription>
+      </Alert>
     )
   }
   if (snapshot.loadState === 'ready') return null
   if (snapshot.loadState === 'empty') {
     return (
-      <div className="aui-admin-notice" role="status">
-        <Laptop size={18} aria-hidden />
-        <span>No registered devices were returned by Auth.ListDevices.</span>
-      </div>
+      <Alert role="status">
+        <Laptop />
+        <AlertDescription>No registered devices were returned by Auth.ListDevices.</AlertDescription>
+      </Alert>
     )
   }
   return (
-    <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
-      <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'Device/session status is degraded. Unsupported or denied controls remain disabled.'}</span>
-    </div>
-  )
-}
-
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="aui-admin-metric">
-      <p>{label}</p>
-      <strong>{value}</strong>
-      <span>{detail}</span>
-    </div>
+    <Alert variant="destructive" role="alert">
+      <Lock />
+      <AlertDescription>{snapshot.error ?? 'Device/session status is degraded. Not ready or denied controls remain disabled.'}</AlertDescription>
+    </Alert>
   )
 }
 
 function CapabilityFact({ label, state, reason }: { label: string; state: AvailabilityState; reason: string }) {
   return (
-    <div className="aui-device-capability">
+    <div className="flex items-start gap-2.5 rounded-lg border bg-background/50 p-3">
       <StatusBadge state={state} />
-      <div>
-        <strong>{label}</strong>
-        <span>{reason}</span>
+      <div className="min-w-0">
+        <strong className="block text-sm font-medium">{label}</strong>
+        <span className="text-xs text-muted-foreground">{reason}</span>
       </div>
     </div>
   )

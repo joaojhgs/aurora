@@ -248,6 +248,9 @@ importers:
       motion:
         specifier: ^12.42.2
         version: 12.42.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      next-themes:
+        specifier: ^0.4.6
+        version: 0.4.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       parse-diff:
         specifier: ^0.12.0
         version: 0.12.0
@@ -272,6 +275,9 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
+      sonner:
+        specifier: ^2.0.7
+        version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.6.0

@@ -12,7 +12,7 @@ import {
 import { AdminServicesView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 
 describe('AdminServicesView', () => {
-  it('renders service status, routes, detail logs/errors posture, and restart/reload controls from real contract status', async () => {
+  it('renders prototype-density service cards with restart control', async () => {
     const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: servicesTransport() }))
     const config = snapshot.services.find((service) => service.module === 'Config')
 
@@ -30,14 +30,16 @@ describe('AdminServicesView', () => {
 
     const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
     expect(markup).toContain('Services')
-    expect(markup).toContain('Heartbeat')
-    expect(markup).toContain('Details: routes, methods, and backend exposure')
-    expect(markup).toContain('Errors/logs')
-    expect(markup).toContain('detailed logs require diagnostics export')
-    expect(markup).toContain('Config.ReloadService')
-    expect(markup).toContain('Preview requires AdminAction draft/confirm/audit')
-    expect(markup).toContain('Method contract browsing lives on /admin/contracts')
-    expect(markup).not.toContain('Contract registry browser grouped by service module')
+    expect(markup).toContain('Backend service health and restart control. Admins only.')
+    expect(markup).toContain('Config')
+    expect(markup).toContain('Config service with reload control')
+    expect(markup).toContain('1 methods')
+    expect(markup).toContain('Restart')
+    expect(markup).not.toContain('Details')
+    expect(markup).not.toContain('Reload')
+    expect(markup).not.toContain('Stop')
+    expect(markup).not.toContain('Evidence')
+    expect(markup).not.toContain('Demo')
   })
 })
 

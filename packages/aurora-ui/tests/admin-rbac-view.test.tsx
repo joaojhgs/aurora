@@ -8,21 +8,23 @@ import {
 } from '../src/index'
 
 describe('AdminRbacView', () => {
-  it('renders roles, principals, permission matrix, audit status, and the honest Auth.ListRoles backend gap', async () => {
+  it('renders prototype-density roles and principal table', async () => {
     const snapshot = await buildAdminRbacSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminRbacView snapshot={snapshot} />)
 
     expect(snapshot.principals.length).toBeGreaterThan(0)
     expect(snapshot.roles.length).toBeGreaterThan(0)
     expect(snapshot.permissions.length).toBeGreaterThan(0)
-    expect(markup).toContain('Access and RBAC')
+    expect(markup).toContain('Access &amp; RBAC')
+    expect(markup).toContain('Roles define permission sets; principals are assigned a role.')
     expect(markup).toContain('Roles')
     expect(markup).toContain('Principals')
-    expect(markup).toContain('Permission matrix')
-    expect(markup).toContain('Recent access changes')
-    expect(markup).toContain('Auth.ListRoles is not advertised')
-    expect(markup).toContain('Preview patch')
-    expect(markup).toContain('AdminAction')
+    expect(markup).toContain('Last active')
+    expect(markup).toContain('Change role')
+    expect(markup).not.toContain('Permission matrix')
+    expect(markup).not.toContain('Recent access changes')
+    expect(markup).not.toContain('Auth.ListRoles')
+    expect(markup).not.toContain('Evidence')
   })
 
   it('builds permission patch AdminAction previews without secret payloads', () => {

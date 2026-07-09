@@ -4,28 +4,75 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useId,
   useMemo,
   useState,
+  type KeyboardEvent,
   type ReactNode
 } from 'react'
-import { AlertTriangle, Check, Search, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, Search, ShieldCheck, X } from 'lucide-react'
+import { toast as sonnerToast, Toaster as SonnerToaster } from 'sonner'
+import { cn } from '#lib/utils'
+import { Button as ShadButton } from '#components/ui/button'
+import {
+  Card as ShadCard,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
+} from '#components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '#components/ui/table'
+import { Switch as ShadSwitch } from '#components/ui/switch'
+import { Checkbox as ShadCheckbox } from '#components/ui/checkbox'
+import { Input } from '#components/ui/input'
+import { Textarea } from '#components/ui/textarea'
+import { Label } from '#components/ui/label'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle
+} from '#components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle
+} from '#components/ui/alert-dialog'
+import { Empty, EmptyDescription, EmptyHeader } from '#components/ui/empty'
+import { Spinner } from '#components/ui/spinner'
 
 /**
  * Aurora UI foundation primitives.
  *
- * These mirror the shadcn vocabulary used by the mock cockpit while keeping the
- * project's `aui-*` class conventions and real-not-fake truthfulness rules. They
- * are SSR-safe: controlled components own their open state and render nothing
- * when closed so `renderToStaticMarkup` gates stay deterministic.
+ * Every screen in `packages/aurora-ui/src/*-view.tsx` imports these instead of
+ * hand-rolling cards/tables/switches/modals. This file is the single place
+ * that composes the real shadcn/ui primitives (`#components/ui/*`) so that
+ * fixing it once fixes visual fidelity everywhere it's used. Exported names,
+ * prop shapes and behavior (e.g. "renders nothing while closed" for
+ * DetailSheet/AdminConfirmDialog, which SSR snapshot tests rely on) are kept
+ * identical to the previous `.aui-*`-class implementation - only the internal
+ * rendering changed.
  */
 
 type ResponsiveHide = 'md' | 'lg' | 'xl'
-
-function cx(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(' ')
-}
 
 // ---------------------------------------------------------------------------
 // Card / SectionCard
@@ -46,22 +93,26 @@ export interface CardProps {
 export function Card({ title, icon, description, actions, footer, flush, className, ariaLabel, children }: CardProps) {
   const hasHeader = Boolean(title || icon || actions || description)
   return (
-    <section className={cx('aui-card', flush && 'aui-card-flush', className)} aria-label={ariaLabel}>
+    <ShadCard className={cn(flush && '[--card-spacing:0px]', className)} aria-label={ariaLabel}>
       {hasHeader ? (
-        <header className="aui-card-head">
-          <div className="aui-card-head-main">
-            {icon ? <span className="aui-card-icon" aria-hidden>{icon}</span> : null}
-            <div className="aui-card-head-text">
-              {title ? <h3 className="aui-card-title">{title}</h3> : null}
-              {description ? <p className="aui-card-desc">{description}</p> : null}
+        <CardHeader className={cn(actions && 'grid-cols-[1fr_auto]')}>
+          <div className="flex items-start gap-2.5">
+            {icon ? (
+              <span className="mt-0.5 text-muted-foreground" aria-hidden>
+                {icon}
+              </span>
+            ) : null}
+            <div className="flex flex-col gap-1">
+              {title ? <CardTitle>{title}</CardTitle> : null}
+              {description ? <CardDescription>{description}</CardDescription> : null}
             </div>
           </div>
-          {actions ? <div className="aui-card-actions">{actions}</div> : null}
-        </header>
+          {actions ? <CardAction className="static col-start-2 row-span-2 flex items-center gap-2 self-start">{actions}</CardAction> : null}
+        </CardHeader>
       ) : null}
-      {children ? <div className="aui-card-body">{children}</div> : null}
-      {footer ? <footer className="aui-card-foot">{footer}</footer> : null}
-    </section>
+      {children ? <CardContent>{children}</CardContent> : null}
+      {footer ? <CardFooter>{footer}</CardFooter> : null}
+    </ShadCard>
   )
 }
 
@@ -85,13 +136,22 @@ export interface StatStripProps {
 
 export function StatStrip({ items, ariaLabel = 'Summary metrics', className }: StatStripProps) {
   return (
-    <div className={cx('aui-stat-strip', className)} role="list" aria-label={ariaLabel}>
+    <div className={cn('flex flex-wrap items-stretch gap-3', className)} role="list" aria-label={ariaLabel}>
       {items.map((item) => (
-        <div key={item.label} role="listitem" className={cx('aui-stat', item.tone && item.tone !== 'default' && `aui-stat-${item.tone}`)}>
-          <span className="aui-stat-label">{item.label}</span>
-          <span className="aui-stat-value">{item.value}</span>
-          {item.caption ? <span className="aui-stat-caption">{item.caption}</span> : null}
-          {item.badge ? <span className="aui-stat-badge">{item.badge}</span> : null}
+        <div
+          key={item.label}
+          role="listitem"
+          className={cn(
+            'flex min-w-[150px] flex-1 flex-col gap-1 rounded-xl border border-border bg-card px-4 py-3 ring-1 ring-foreground/10',
+            item.tone === 'success' && 'border-success/30 bg-success/5',
+            item.tone === 'warning' && 'border-warning/30 bg-warning/5',
+            item.tone === 'danger' && 'border-destructive/30 bg-destructive/5'
+          )}
+        >
+          <span className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">{item.label}</span>
+          <span className="text-lg leading-tight font-semibold">{item.value}</span>
+          {item.caption ? <span className="text-xs text-muted-foreground">{item.caption}</span> : null}
+          {item.badge ? <span>{item.badge}</span> : null}
         </div>
       ))}
     </div>
@@ -117,11 +177,11 @@ export interface MetaGridProps {
 
 export function MetaGrid({ items, columns = 2, ariaLabel, className }: MetaGridProps) {
   return (
-    <dl className={cx('aui-meta-grid', columns === 1 && 'aui-meta-grid-1', className)} aria-label={ariaLabel}>
+    <dl className={cn('grid gap-x-6 gap-y-1.5 text-sm', columns === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2', className)} aria-label={ariaLabel}>
       {items.map((item) => (
-        <div key={item.label} className="aui-meta">
-          <dt className="aui-meta-label">{item.label}</dt>
-          <dd className={cx('aui-meta-value', item.mono && 'aui-mono')}>{item.value}</dd>
+        <div key={item.label} className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1 last:border-0">
+          <dt className="text-muted-foreground">{item.label}</dt>
+          <dd className={cn('text-right font-medium', item.mono && 'font-mono text-xs')}>{item.value}</dd>
         </div>
       ))}
     </dl>
@@ -152,41 +212,57 @@ export interface DataTableProps<T> {
   className?: string | undefined
 }
 
+function hideAtClass(hideAt: ResponsiveHide | undefined): string | false {
+  if (hideAt === 'md') return 'hidden md:table-cell'
+  if (hideAt === 'lg') return 'hidden lg:table-cell'
+  if (hideAt === 'xl') return 'hidden xl:table-cell'
+  return false
+}
+
 export function DataTable<T>({ columns, rows, getRowKey, onRowClick, caption, empty, className }: DataTableProps<T>) {
   if (rows.length === 0 && empty) {
-    return <div className="aui-table-empty">{empty}</div>
+    return (
+      <Empty className={className}>
+        <EmptyHeader>
+          <EmptyDescription>{empty}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
   }
   return (
-    <div className={cx('aui-table-wrap', className)}>
-      <table className="aui-table">
-        {caption ? <caption className="aui-table-caption">{caption}</caption> : null}
-        <thead>
-          <tr>
+    <div className={cn('overflow-hidden rounded-xl border border-border', className)}>
+      <Table>
+        {caption ? <TableCaption className="px-4 pb-2 text-left">{caption}</TableCaption> : null}
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
             {columns.map((col) => (
-              <th
+              <TableHead
                 key={col.key}
-                scope="col"
-                className={cx(col.hideAt && `aui-hide-${col.hideAt}`, col.align && `aui-col-${col.align}`)}
+                className={cn(
+                  col.align === 'end' && 'text-right',
+                  col.align === 'center' && 'text-center',
+                  hideAtClass(col.hideAt)
+                )}
                 style={col.width ? { width: col.width } : undefined}
               >
                 {col.header}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row, index) => {
             const clickable = Boolean(onRowClick)
             return (
-              <tr
+              <TableRow
                 key={getRowKey(row, index)}
-                className={cx(clickable && 'aui-row-clickable')}
+                className={cn(clickable && 'cursor-pointer')}
                 tabIndex={clickable ? 0 : undefined}
                 role={clickable ? 'button' : undefined}
                 onClick={clickable ? () => onRowClick?.(row) : undefined}
                 onKeyDown={
                   clickable
-                    ? (event) => {
+                    ? (event: KeyboardEvent<HTMLTableRowElement>) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault()
                           onRowClick?.(row)
@@ -196,18 +272,23 @@ export function DataTable<T>({ columns, rows, getRowKey, onRowClick, caption, em
                 }
               >
                 {columns.map((col) => (
-                  <td
+                  <TableCell
                     key={col.key}
-                    className={cx(col.hideAt && `aui-hide-${col.hideAt}`, col.align && `aui-col-${col.align}`, col.mono && 'aui-mono')}
+                    className={cn(
+                      col.align === 'end' && 'text-right',
+                      col.align === 'center' && 'text-center',
+                      hideAtClass(col.hideAt),
+                      col.mono && 'font-mono text-xs'
+                    )}
                   >
                     {col.render(row)}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             )
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }
@@ -227,41 +308,27 @@ export interface DetailSheetProps {
   labelledBy?: string | undefined
 }
 
-export function DetailSheet({ open, onClose, title, description, badge, actions, children, labelledBy }: DetailSheetProps) {
-  const generatedId = useId()
-  const titleId = labelledBy ?? generatedId
-  useEffect(() => {
-    if (!open) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+export function DetailSheet({ open, onClose, title, description, badge, actions, children }: DetailSheetProps) {
   if (!open) return null
   return (
-    <div className="aui-sheet-overlay" role="presentation" onClick={onClose}>
-      <aside
-        className="aui-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="aui-sheet-head">
-          <div className="aui-sheet-head-text">
-            <h2 id={titleId} className="aui-sheet-title">{title}</h2>
-            {description ? <p className="aui-sheet-desc">{description}</p> : null}
+    <Sheet
+      open
+      onOpenChange={(next: boolean) => {
+        if (!next) onClose()
+      }}
+    >
+      <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetHeader className="flex-row items-start justify-between gap-3 border-b border-border pb-4">
+          <div className="flex flex-col gap-1">
+            <SheetTitle>{title}</SheetTitle>
+            {description ? <SheetDescription>{description}</SheetDescription> : null}
           </div>
-          {badge ? <div className="aui-sheet-badge">{badge}</div> : null}
-          <button type="button" className="aui-icon-button" aria-label="Close details" onClick={onClose}>
-            <X size={16} aria-hidden />
-          </button>
-        </header>
-        <div className="aui-sheet-body">{children}</div>
-        {actions ? <footer className="aui-sheet-foot">{actions}</footer> : null}
-      </aside>
-    </div>
+          {badge ? <div>{badge}</div> : null}
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto px-4">{children}</div>
+        {actions ? <SheetFooter className="border-t border-border">{actions}</SheetFooter> : null}
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -281,14 +348,23 @@ export interface FormFieldProps {
 
 export function FormField({ label, htmlFor, helper, error, required, children, className }: FormFieldProps) {
   return (
-    <div className={cx('aui-field', error && 'aui-field-error', className)}>
-      <label className="aui-field-label" htmlFor={htmlFor}>
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      <Label htmlFor={htmlFor} className={cn(error && 'text-destructive')}>
         {label}
-        {required ? <span className="aui-field-required" aria-hidden> *</span> : null}
-      </label>
+        {required ? (
+          <span aria-hidden className="text-destructive">
+            {' '}
+            *
+          </span>
+        ) : null}
+      </Label>
       {children}
-      {helper && !error ? <p className="aui-field-helper">{helper}</p> : null}
-      {error ? <p className="aui-field-error-text" role="alert">{error}</p> : null}
+      {helper && !error ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
+      {error ? (
+        <p className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -306,21 +382,14 @@ export function Switch({ checked, onChange, label, disabled, disabledReason, id 
   const generatedId = useId()
   const switchId = id ?? generatedId
   return (
-    <button
-      type="button"
+    <ShadSwitch
       id={switchId}
-      role="switch"
-      aria-checked={checked}
+      checked={checked}
       aria-label={label}
-      className={cx('aui-switch', checked && 'aui-switch-on')}
       disabled={disabled}
       title={disabled ? disabledReason : undefined}
-      onClick={disabled || !onChange ? undefined : () => onChange(!checked)}
-    >
-      <span className="aui-switch-track" aria-hidden>
-        <span className="aui-switch-thumb" />
-      </span>
-    </button>
+      onCheckedChange={disabled || !onChange ? undefined : (value: boolean) => onChange(value)}
+    />
   )
 }
 
@@ -336,16 +405,17 @@ export function Checkbox({ checked, onChange, label, disabled, id }: CheckboxPro
   const generatedId = useId()
   const boxId = id ?? generatedId
   return (
-    <label className={cx('aui-checkbox', disabled && 'aui-checkbox-disabled')} htmlFor={boxId}>
-      <input
+    <label
+      className={cn('group flex cursor-pointer items-center gap-2 text-sm', disabled && 'cursor-not-allowed opacity-50')}
+      htmlFor={boxId}
+    >
+      <ShadCheckbox
         id={boxId}
-        type="checkbox"
         checked={checked}
         disabled={disabled}
-        onChange={onChange ? (event) => onChange(event.target.checked) : undefined}
+        onCheckedChange={onChange ? (value: boolean) => onChange(value) : undefined}
       />
-      <span className="aui-checkbox-mark" aria-hidden>{checked ? <Check size={12} /> : null}</span>
-      <span className="aui-checkbox-label">{label}</span>
+      <span>{label}</span>
     </label>
   )
 }
@@ -368,18 +438,18 @@ export interface FilterBarProps {
 }
 
 export function FilterBar({ search, controls, actions, moreFilters, className }: FilterBarProps) {
-  const [showMore, setShowMore] = useState(false)
   const searchId = useId()
+  const [showMore, setShowMore] = useState(false)
   return (
-    <div className={cx('aui-filterbar', className)}>
-      <div className="aui-filterbar-row">
+    <div className={cn('flex flex-col gap-2', className)}>
+      <div className="flex flex-wrap items-center gap-2">
         {search ? (
-          <div className="aui-search">
-            <Search size={15} aria-hidden className="aui-search-icon" />
-            <input
+          <div className="relative min-w-[200px] flex-1">
+            <Search size={15} aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
               id={searchId}
               type="search"
-              className="aui-search-input"
+              className="pl-8"
               value={search.value}
               placeholder={search.placeholder ?? 'Search'}
               aria-label={search.label ?? search.placeholder ?? 'Search'}
@@ -387,21 +457,16 @@ export function FilterBar({ search, controls, actions, moreFilters, className }:
             />
           </div>
         ) : null}
-        {controls ? <div className="aui-filterbar-controls">{controls}</div> : null}
-        <div className="aui-filterbar-spacer" />
+        {controls ? <div className="flex flex-wrap items-center gap-2">{controls}</div> : null}
+        <div className="flex-1" />
         {moreFilters ? (
-          <button
-            type="button"
-            className="aui-button aui-button-ghost"
-            aria-expanded={showMore}
-            onClick={() => setShowMore((value) => !value)}
-          >
+          <ShadButton type="button" variant="ghost" size="sm" aria-expanded={showMore} onClick={() => setShowMore((value) => !value)}>
             {showMore ? 'Fewer filters' : 'More filters'}
-          </button>
+          </ShadButton>
         ) : null}
-        {actions ? <div className="aui-filterbar-actions">{actions}</div> : null}
+        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
       </div>
-      {moreFilters && showMore ? <div className="aui-filterbar-more">{moreFilters}</div> : null}
+      {moreFilters && showMore ? <div className="rounded-lg border border-border bg-card p-3">{moreFilters}</div> : null}
     </div>
   )
 }
@@ -424,24 +489,53 @@ export interface ButtonProps {
   className?: string | undefined
   ariaLabel?: string | undefined
   ariaPressed?: boolean | undefined
+  ariaExpanded?: boolean | undefined
+  ariaControls?: string | undefined
 }
 
-export function Button({ children, onClick, variant = 'outline', type = 'button', disabled, disabledReason, icon, busy, className, ariaLabel, ariaPressed }: ButtonProps) {
+function shadVariantFor(variant: ButtonVariant): 'default' | 'outline' | 'ghost' | 'destructive' {
+  if (variant === 'primary') return 'default'
+  if (variant === 'danger') return 'destructive'
+  return variant
+}
+
+export function Button({
+  children,
+  onClick,
+  variant = 'outline',
+  type = 'button',
+  disabled,
+  disabledReason,
+  icon,
+  busy,
+  className,
+  ariaLabel,
+  ariaPressed,
+  ariaExpanded,
+  ariaControls
+}: ButtonProps) {
   const isDisabled = Boolean(disabled || busy)
   return (
-    <button
+    <ShadButton
       type={type}
-      className={cx('aui-btn', `aui-btn-${variant}`, className)}
+      variant={shadVariantFor(variant)}
+      className={className}
       disabled={isDisabled}
       aria-disabled={isDisabled}
       aria-label={ariaLabel}
       aria-pressed={ariaPressed}
+      aria-expanded={ariaExpanded}
+      aria-controls={ariaControls}
       title={isDisabled ? disabledReason : undefined}
       onClick={isDisabled || !onClick ? undefined : onClick}
     >
-      {icon ? <span className="aui-btn-icon" aria-hidden>{icon}</span> : null}
+      {busy ? <Spinner data-icon="inline-start" /> : icon ? (
+        <span data-icon="inline-start" aria-hidden>
+          {icon}
+        </span>
+      ) : null}
       <span>{children}</span>
-    </button>
+    </ShadButton>
   )
 }
 
@@ -453,12 +547,16 @@ export interface DisabledActionProps {
 
 export function DisabledAction({ label, reason, icon }: DisabledActionProps) {
   return (
-    <span className="aui-disabled-action">
-      <button type="button" className="aui-btn aui-btn-outline" disabled aria-disabled title={reason}>
-        {icon ? <span className="aui-btn-icon" aria-hidden>{icon}</span> : null}
+    <span className="inline-flex items-center gap-2">
+      <ShadButton type="button" variant="outline" disabled aria-disabled title={reason}>
+        {icon ? (
+          <span data-icon="inline-start" aria-hidden>
+            {icon}
+          </span>
+        ) : null}
         <span>{label}</span>
-      </button>
-      <span className="aui-disabled-reason">{reason}</span>
+      </ShadButton>
+      <span className="text-xs text-muted-foreground">{reason}</span>
     </span>
   )
 }
@@ -475,7 +573,7 @@ export interface BadgeClusterProps {
 
 export function BadgeCluster({ children, label, className }: BadgeClusterProps) {
   return (
-    <div className={cx('aui-badge-cluster', className)} aria-label={label}>
+    <div className={cn('flex flex-wrap items-center gap-1.5', className)} aria-label={label}>
       {children}
     </div>
   )
@@ -522,7 +620,7 @@ export function AdminConfirmDialog({
   requireTypedPhrase,
   typedValue = '',
   onTypedChange,
-  confirmLabel = 'Confirm via AdminAction',
+  confirmLabel = 'Confirm',
   onConfirm,
   onCancel,
   busy,
@@ -532,55 +630,46 @@ export function AdminConfirmDialog({
   extraInvalidReason,
   children
 }: AdminConfirmDialogProps) {
-  const titleId = useId()
   const reasonId = useId()
   const typedId = useId()
-  useEffect(() => {
-    if (!open) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onCancel()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onCancel])
   if (!open) return null
   const reasonOk = !requireReason || reasonValue.trim().length > 0
   const phraseOk = !requireTypedPhrase || typedValue.trim() === requireTypedPhrase.trim()
   const canConfirm = reasonOk && phraseOk && extraValid && !busy
+  const isSimple = !methodId && !affected?.length && !requireReason && !requireTypedPhrase && !children && !receipt && !error
+
   return (
-    <div className="aui-modal-overlay" role="presentation" onClick={onCancel}>
-      <div
-        className={cx('aui-modal', severity === 'destructive' && 'aui-modal-destructive')}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="aui-modal-head">
-          <span className="aui-modal-icon" aria-hidden>
-            {severity === 'destructive' ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
-          </span>
-          <div>
-            <h2 id={titleId} className="aui-modal-title">{title}</h2>
-            {methodId ? <p className="aui-modal-method aui-mono">{methodId}</p> : null}
-          </div>
-        </header>
-        <p className="aui-modal-desc">{description}</p>
+    <AlertDialog
+      open
+      onOpenChange={(next: boolean) => {
+        if (!next) onCancel()
+      }}
+    >
+      <AlertDialogContent size={isSimple ? 'sm' : 'default'}>
+        {severity === 'destructive' ? (
+          <AlertDialogMedia className="bg-destructive/10 text-destructive">
+            <AlertTriangle />
+          </AlertDialogMedia>
+        ) : null}
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          {methodId ? <p className="font-mono text-xs text-muted-foreground">{methodId}</p> : null}
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
         {affected && affected.length > 0 ? (
-          <div className="aui-modal-affected">
-            <p className="aui-modal-affected-label">Affected</p>
-            <ul>
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Affected</p>
+            <ul className="flex flex-col gap-0.5 font-mono text-xs">
               {affected.map((item) => (
-                <li key={item} className="aui-mono">{item}</li>
+                <li key={item}>{item}</li>
               ))}
             </ul>
           </div>
         ) : null}
         {requireReason ? (
-          <FormField label="AdminAction reason" htmlFor={reasonId} required>
-            <textarea
+          <FormField label="Reason" htmlFor={reasonId} required>
+            <Textarea
               id={reasonId}
-              className="aui-textarea"
               rows={3}
               value={reasonValue}
               onChange={onReasonChange ? (event) => onReasonChange(event.target.value) : undefined}
@@ -588,38 +677,49 @@ export function AdminConfirmDialog({
           </FormField>
         ) : null}
         {requireTypedPhrase ? (
-          <FormField
-            label={`Type ${requireTypedPhrase} to confirm`}
-            htmlFor={typedId}
-            required
-          >
-            <input
+          <FormField label={`Type ${requireTypedPhrase} to confirm`} htmlFor={typedId} required>
+            <Input
               id={typedId}
               type="text"
-              className="aui-input"
               value={typedValue}
               autoComplete="off"
               onChange={onTypedChange ? (event) => onTypedChange(event.target.value) : undefined}
             />
           </FormField>
         ) : null}
-        {children ? <div className="aui-modal-extra">{children}</div> : null}
-        {error ? <p className="aui-modal-error" role="alert">{error}</p> : null}
-        {receipt ? <p className="aui-modal-receipt">Audit receipt: <span className="aui-mono">{receipt}</span></p> : null}
-        <footer className="aui-modal-foot">
-          <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-          <Button
-            variant={severity === 'destructive' ? 'danger' : 'primary'}
+        {children ? <div className="flex flex-col gap-2">{children}</div> : null}
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {receipt ? (
+          <p className="text-xs text-muted-foreground">
+            Audit receipt: <span className="font-mono">{receipt}</span>
+          </p>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant={severity === 'destructive' ? 'destructive' : 'default'}
             onClick={onConfirm}
             disabled={!canConfirm}
-            busy={busy}
-            disabledReason={!reasonOk ? 'Provide an AdminAction reason.' : !phraseOk ? 'Type the confirmation phrase exactly.' : !extraValid ? (extraInvalidReason ?? 'Complete required confirmations.') : undefined}
+            title={
+              !reasonOk
+                ? 'Provide a reason.'
+                : !phraseOk
+                  ? 'Type the confirmation phrase exactly.'
+                  : !extraValid
+                    ? (extraInvalidReason ?? 'Complete required confirmations.')
+                    : undefined
+            }
           >
+            {busy ? <Spinner data-icon="inline-start" /> : null}
             {busy ? 'Working' : confirmLabel}
-          </Button>
-        </footer>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
@@ -643,45 +743,18 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [messages, setMessages] = useState<ToastMessage[]>([])
   const toast = useCallback((message: Omit<ToastMessage, 'id'>) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    setMessages((current) => [...current, { ...message, id }])
-  }, [])
-  const dismiss = useCallback((id: string) => {
-    setMessages((current) => current.filter((message) => message.id !== id))
+    const description = message.detail
+    if (message.tone === 'success') sonnerToast.success(message.title, { description })
+    else if (message.tone === 'error') sonnerToast.error(message.title, { description })
+    else sonnerToast.info(message.title, { description })
   }, [])
   const value = useMemo(() => ({ toast }), [toast])
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="aui-toast-region" role="status" aria-live="polite">
-        {messages.map((message) => (
-          <ToastCard key={message.id} message={message} onDismiss={() => dismiss(message.id)} />
-        ))}
-      </div>
+      <SonnerToaster theme="dark" position="bottom-right" />
     </ToastContext.Provider>
-  )
-}
-
-function ToastCard({ message, onDismiss }: { message: ToastMessage; onDismiss: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onDismiss, 6000)
-    return () => clearTimeout(timer)
-  }, [onDismiss])
-  return (
-    <div className={cx('aui-toast', `aui-toast-${message.tone}`)}>
-      <span className="aui-toast-icon" aria-hidden>
-        {message.tone === 'success' ? <Check size={15} /> : message.tone === 'error' ? <AlertTriangle size={15} /> : <ShieldCheck size={15} />}
-      </span>
-      <div className="aui-toast-text">
-        <strong>{message.title}</strong>
-        {message.detail ? <span>{message.detail}</span> : null}
-      </div>
-      <button type="button" className="aui-icon-button" aria-label="Dismiss notification" onClick={onDismiss}>
-        <X size={14} aria-hidden />
-      </button>
-    </div>
   )
 }
 
@@ -692,3 +765,6 @@ export function useToast(): ToastContextValue {
   }
   return context
 }
+
+// re-exported so screens that want a plain shield/x icon affordance keep a single import surface
+export { ShieldCheck, X }

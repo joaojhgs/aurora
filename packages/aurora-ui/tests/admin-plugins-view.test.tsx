@@ -1,154 +1,118 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import {
-  AuroraClient as Aurora,
-  MockAuroraTransport,
-  type GetRegistryResponse,
-  type ToolCatalogResponse
-} from '@aurora/client'
-import {
-  AdminPluginsView,
-  buildAdminPluginsSnapshot
-} from '../src/admin-plugins-view'
-import { auroraNavSections, navItemSnapshot } from '../src/nav'
+import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
+import { AdminPluginsView, buildAdminPluginsSnapshot, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
+import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
 describe('AdminPluginsView', () => {
-  it('renders plugin/MCP catalog health, provider status, errors, logs, and AdminAction-ready reload only with route status', async () => {
-    const client = new Aurora({
-      transport: pluginsTransport(liveRegistryFixture())
-    })
+  it('wires Tooling sources, policy, and fallback tools from Aurora for the Tools & Plugins screen', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())
-    const markup = renderToStaticMarkup(
-      <AdminPluginsView
-        client={client}
-        route={pluginsRoute()}
-        initialSnapshot={snapshot}
-      />
-    )
 
     expect(snapshot.loadState).toBe('ready')
-    expect(
-      snapshot.tools.map((tool) => [
-        tool.id,
-        tool.providerGroup,
-        tool.enabledState,
-        tool.healthState
-      ])
-    ).toEqual([
-      ['plugin.local.weather', 'local-plugin', 'enabled', 'available-local'],
-      [
-        'mcp.remote.calendar',
-        'remote-peer-plugin-mcp',
-        'read-only-remote',
-        'available-remote'
-      ],
-      ['plugin.stale.notes', 'unavailable-stale', 'disabled', 'stale']
-    ])
-    expect(snapshot.tools[2]?.providerErrors).toContain(
-      'provider process exited'
-    )
-    expect(snapshot.tools[0]?.providerLogs).toContain(
-      'correlation=corr-weather'
-    )
-    expect(snapshot.tools[1]?.providerLogs).toContain(
-      'audit=audit-calendar-001'
-    )
+    expect(snapshot.policy.mode).toBe('enforce')
+    expect(snapshot.policy.pendingApprovalCount).toBeGreaterThanOrEqual(1)
+    expect(snapshot.sourceSummaries.length).toBeGreaterThan(0)
+    expect(snapshot.fallbackTools.length).toBeGreaterThan(0)
 
-    const reload = snapshot.actions.find(
-      (action) => action.id === 'reload-plugins'
-    )
-    expect(reload).toMatchObject({
-      available: true,
-      repairState: 'admin-action-ready',
-      routePath: '/api/Tooling/ReloadPlugins'
-    })
-    expect(snapshot.actions.every((action) => action.available)).toBe(true)
+    const markup = renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={snapshot} />)
 
-    expect(markup).toContain('Plugins, MCP, and tools')
-    expect(markup).toContain('Local plugin')
-    expect(markup).toContain('Remote peer plugin/MCP')
-    expect(markup).toContain('Unavailable or stale provider')
-    expect(markup).toContain('Health')
-    expect(markup).toContain('enabled')
-    expect(markup).toContain('read-only-remote')
-    expect(markup).toContain('disabled: provider process exited')
-    expect(markup).toContain('Errors: provider process exited')
-    expect(markup).toContain('Provider logs')
-    expect(markup).toContain('correlation=corr-weather')
-    expect(markup).toContain('audit-calendar-001')
-    expect(markup).toContain(
-      'Available through a real Gateway route after AdminAction draft/confirm/audit.'
-    )
-    expect(markup).toContain('/api/Tooling/ReloadPlugins')
+    expect(markup).toContain('Tools &amp; Plugins')
+    expect(markup).toContain('Policy:')
+    expect(markup).toContain('enforce')
+    expect(markup).toContain('pending')
+    expect(markup).toContain('Add MCP source')
+    expect(markup).toContain('Tools')
+    expect(markup).toContain('Plugins')
+    expect(markup).toContain('Core tools')
+    expect(markup).toContain('MCP servers')
+    expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('diagnostics.serviceHealth')
   })
 
-  it('keeps reload disabled in explicit missing-contract repair state when backend does not advertise a route', async () => {
-    const registry = liveRegistryFixture().modules.map((module) => ({
-      ...module,
-      methods: module.methods.filter(
-        (method) => method.bus_topic !== 'Tooling.ReloadPlugins'
-      )
-    }))
-    const client = new Aurora({
-      transport: pluginsTransport({
-        ...liveRegistryFixture(),
-        modules: registry
-      })
-    })
+  it('renders unconfigured plugin templates as Configure cards in the Plugins tab', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())
     const markup = renderToStaticMarkup(
-      <AdminPluginsView
-        client={client}
-        route={pluginsRoute()}
-        initialSnapshot={snapshot}
-      />
+      <AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={snapshot} initialTab="plugins" />
     )
 
-    const reload = snapshot.actions.find(
-      (action) => action.id === 'reload-plugins'
-    )
-    expect(reload).toMatchObject({
-      available: false,
-      repairState: 'missing-contract',
-      routePath: null
-    })
-    expect(reload?.reason).toContain('repair the backend contract')
-    expect(markup).toContain('Repair state: missing-contract')
-    expect(markup).toContain(
-      'Tooling.ReloadPlugins is not advertised by Gateway registry'
-    )
-    expect(markup).toContain('disabled=""')
+    // Default fixtures report no `plugin`-kind sources, so both onboarding
+    // templates should render as unconfigured "Configure" cards.
+    expect(markup).toContain('notion-plugin')
+    expect(markup).toContain('home-assistant-plugin')
+    expect(markup).toContain('Configure')
   })
 
-  it('keeps reload disabled when a contract exists without AdminAction gateway support', async () => {
-    const registry = liveRegistryFixture().modules.map((module) => ({
-      ...module,
-      methods: module.methods.filter(
-        (method) => !(method.bus_topic ?? '').startsWith('Gateway.AdminAction')
-      )
-    }))
-    const client = new Aurora({
-      transport: pluginsTransport({
-        ...liveRegistryFixture(),
-        modules: registry
-      })
-    })
-    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())
-
+  it('renders loading, empty, denied, service-unavailable, and route-disabled states', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
     expect(
-      snapshot.actions.find((action) => action.id === 'reload-plugins')
-    ).toMatchObject({
-      available: false,
-      repairState: 'missing-admin-action'
-    })
+      renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={loadingSnapshot()} />)
+    ).toContain('Loading Tooling catalog')
+
+    const emptyTransport = MockAuroraTransport.empty()
+      .register('Tooling.GetToolCatalog', () => ({ tools: [], secrets_redacted: true }))
+      .register('Tooling.ListToolSources', () => ({ sources: [], count: 0, secrets_redacted: true }))
+      .register('Tooling.GetSharingPolicy', () => ({ policy: { default_share: true, default_approval_mode: 'approve_all_local_safe', policy_mode: 'enforce', default_token_ttl_seconds: 300, rules: [] } }))
+      .register('Tooling.ListApprovalGrants', () => ({ count: 0, grants: [] }))
+      .register('Orchestrator.ListPendingToolApprovals', () => ({ count: 0, approvals: [] }))
+      .register('Auth.AuditLog', () => ({ events: [], total: 0 }))
+      .register('Tooling.GetMCPStatus', () => ({ started: false, servers: [], total_servers: 0, active_servers: 0 }))
+    const emptySnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: emptyTransport }), pluginsRoute())
+    expect(emptySnapshot.loadState).toBe('empty')
+    expect(
+      renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={emptySnapshot} />)
+    ).toContain('No Tooling catalog entries')
+
+    const deniedTransport = MockAuroraTransport.empty().fail('Tooling.GetToolCatalog', 'permission', 'tool catalog denied')
+    const deniedSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: deniedTransport }), pluginsRoute())
+    expect(deniedSnapshot.loadState).toBe('denied')
+    expect(
+      renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={deniedSnapshot} />)
+    ).toContain('tool catalog denied')
+
+    const unavailableTransport = MockAuroraTransport.empty().lose('Tooling.GetToolCatalog')
+    const unavailableSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: unavailableTransport }), pluginsRoute())
+    expect(unavailableSnapshot.loadState).toBe('service-unavailable')
+
+    const disabledRoute: RouteAvailability = { ...pluginsRoute(), disabled: true, state: 'denied', blockers: ['missing:Tooling.manage'] }
+    const disabledSnapshot = await buildAdminPluginsSnapshot(client, disabledRoute)
+    expect(disabledSnapshot.loadState).toBe('denied')
+    expect(
+      renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)
+    ).toContain('missing:Tooling.manage')
   })
 })
 
+function loadingSnapshot(): AdminPluginsSnapshot {
+  return {
+    loadState: 'loading' as const,
+    policy: {
+      mode: 'enforce',
+      defaultBehavior: 'Loading Tooling policy through Aurora.',
+      activeGrantCount: 0,
+      pendingApprovalCount: 0,
+      blockedCount: 0,
+      sourceCount: 0,
+      bypassEnabled: false,
+      dryRunOnly: false,
+      denyAll: false,
+      lastChanged: 'not reported',
+      actor: 'not reported',
+      evidence: 'pending Aurora service calls'
+    },
+    sourceSummaries: [],
+    sourceDetails: {},
+    fallbackTools: [],
+    warnings: [],
+    error: null,
+    evidenceSource: 'pending Aurora service calls'
+  }
+}
+
 function pluginsRoute(): RouteAvailability {
-  const item = auroraNavSections
-    .flatMap((section) => section.items)
-    .find((candidate) => candidate.id === 'plugins')
+  const item = [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems].find((candidate) => candidate.id === 'plugins')
   if (!item) throw new Error('plugins route missing')
   return {
     item: navItemSnapshot(item),
@@ -164,189 +128,5 @@ function pluginsRoute(): RouteAvailability {
     routeable: true,
     disabled: false,
     requiresAdminAction: true
-  }
-}
-
-function pluginsTransport(registry: GetRegistryResponse): MockAuroraTransport {
-  return MockAuroraTransport.empty()
-    .register('Tooling.GetToolCatalog', () => toolCatalogFixture())
-    .register('Gateway.GetRegistry', () => registry)
-}
-
-function liveRegistryFixture(): GetRegistryResponse {
-  return {
-    digest: 'plugins-registry',
-    service_count: 2,
-    method_count: 6,
-    modules: [
-      {
-        module: 'Tooling',
-        version: '9.9.9',
-        summary: 'Tooling service from test transport',
-        capabilities: ['catalog', 'plugins'],
-        methods: [
-          method(
-            'Tooling.GetToolCatalog',
-            'GetToolCatalog',
-            'use',
-            '/api/Tooling/GetToolCatalog'
-          ),
-          method(
-            'Tooling.ReloadPlugins',
-            'ReloadPlugins',
-            'manage',
-            '/api/Tooling/ReloadPlugins'
-          ),
-          method(
-            'Tooling.InstallPlugin',
-            'InstallPlugin',
-            'manage',
-            '/api/Tooling/InstallPlugin'
-          ),
-          method(
-            'Tooling.UpdateToolSharingPolicy',
-            'UpdateToolSharingPolicy',
-            'manage',
-            '/api/Tooling/UpdateToolSharingPolicy'
-          )
-        ]
-      },
-      {
-        module: 'Gateway',
-        version: '9.9.9',
-        summary: 'Gateway AdminAction controller',
-        capabilities: ['admin-action'],
-        methods: [
-          method(
-            'Gateway.AdminActionDraft',
-            'AdminActionDraft',
-            'manage',
-            '/api/Gateway/AdminActionDraft'
-          ),
-          method(
-            'Gateway.AdminActionConfirm',
-            'AdminActionConfirm',
-            'manage',
-            '/api/Gateway/AdminActionConfirm'
-          )
-        ]
-      }
-    ]
-  }
-}
-
-function method(
-  busTopic: string,
-  name: string,
-  methodType: 'use' | 'manage',
-  routePath: string
-) {
-  return {
-    name,
-    summary: `${busTopic} test method`,
-    bus_topic: busTopic,
-    route_path: routePath,
-    exposure: 'external' as const,
-    method_type: methodType,
-    input_model: `${name}Request`,
-    output_model: `${name}Response`,
-    required_perms: [`${busTopic}.use`],
-    input_schema: { type: 'object' },
-    output_schema: { type: 'object' }
-  }
-}
-
-function toolCatalogFixture(): ToolCatalogResponse {
-  return {
-    generated_at: '2026-07-02T00:00:00Z',
-    secrets_redacted: true,
-    tools: [
-      {
-        global_tool_id: 'plugin.local.weather',
-        display_name: 'Weather plugin',
-        description: 'Local plugin provider.',
-        provider_label: 'Local plugin host',
-        provider_peer_id: 'local-peer',
-        service_instance_id: 'tooling-local-1',
-        provider_kind: 'plugin',
-        transport: 'local',
-        route_path: ['/api/Tooling/ExecuteTool'],
-        risk_class: 'standard',
-        approval_required: false,
-        mutating: false,
-        correlation_id: 'corr-weather',
-        policy_decision_id: 'policy-weather',
-        providers: [
-          {
-            id: 'local-plugin-host',
-            label: 'Local plugin host',
-            provider_peer_id: 'local-peer',
-            service_instance_id: 'tooling-local-1',
-            provider_kind: 'plugin',
-            transport: 'local',
-            selectable: true,
-            reason: 'healthy plugin host heartbeat'
-          }
-        ]
-      },
-      {
-        global_tool_id: 'mcp.remote.calendar',
-        display_name: 'Calendar MCP',
-        description: 'Remote MCP provider.',
-        provider_label: 'Peer calendar MCP',
-        provider_peer_id: 'peer-b',
-        service_instance_id: 'mcp-calendar-1',
-        provider_kind: 'mesh',
-        transport: 'mcp',
-        route_path: ['/mesh/peer-b/tools/calendar'],
-        risk_class: 'sensitive',
-        approval_required: true,
-        requested_approval_scope: 'session',
-        approval_status: 'approved',
-        result: {
-          status: 'success',
-          ok: true,
-          audit_receipt: 'audit-calendar-001',
-          redaction_status: 'redacted',
-          duration_ms: 42
-        },
-        providers: [
-          {
-            id: 'peer-calendar',
-            label: 'Peer calendar MCP',
-            provider_peer_id: 'peer-b',
-            service_instance_id: 'mcp-calendar-1',
-            provider_kind: 'mesh',
-            transport: 'mcp',
-            selectable: true,
-            reason: 'remote peer is healthy'
-          }
-        ]
-      },
-      {
-        global_tool_id: 'plugin.stale.notes',
-        display_name: 'Notes plugin',
-        description: 'Stale plugin provider.',
-        provider_label: 'Stale notes plugin',
-        provider_peer_id: 'local-peer',
-        service_instance_id: 'notes-plugin-1',
-        provider_kind: 'plugin',
-        transport: 'local',
-        risk_class: 'admin-critical',
-        disabled_reason: 'provider process exited',
-        providers: [
-          {
-            id: 'notes-plugin',
-            label: 'Stale notes plugin',
-            provider_peer_id: 'local-peer',
-            service_instance_id: 'notes-plugin-1',
-            provider_kind: 'plugin',
-            transport: 'local',
-            selectable: false,
-            reason: 'provider process exited'
-          }
-        ]
-      }
-    ]
   }
 }

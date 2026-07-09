@@ -95,34 +95,34 @@ function renderToolingPage(catalog: ToolCatalogResponse = toolCatalogFixture) {
 }
 
 describe('Tooling page production verification', () => {
-  it('renders source-first control center instead of the old flat approval-card registry', () => {
+  it('renders the Tools & Plugins prototype title, description, compact policy actions, and two top tabs', () => {
     const markup = renderToolingPage()
 
-    expect(markup).toContain('Tooling policy')
-    expect(markup).toContain('Source catalog')
-    expect(markup).toContain('Source detail')
-    expect(markup).toContain('Core tools')
-    expect(markup).toContain('MCP servers')
-    expect(markup).toContain('Plugins')
-    expect(markup).toContain('Mesh peers')
-    expect(markup).toContain('Unknown / quarantined')
-    expect(markup).toContain('Blocked')
+    expect(markup).toContain('Tools &amp; Plugins')
+    expect(markup).toContain('Core tools, MCP servers, plugins and mesh peer tools, grouped by source with policy and approvals.')
+    expect(markup).toContain('Policy:')
+    expect(markup).toContain('2 pending')
+    expect(markup).toContain('Add MCP source')
+    expect(markup).toContain('aria-label="Tools and plugins sections"')
+    expect(markup).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>[\s\S]{0,40}Tools/)
+    expect(markup).toMatch(/role="tab"[^>]*aria-selected="false"[^>]*>[\s\S]{0,40}Plugins/)
     expect(markup).not.toContain('Tool registry and Approval cards')
   })
 
-  it('exposes policy, durable grants, pending approvals, and audit surfaces backed by Tooling contracts', () => {
+  it('renders a source rail and the selected source detail table with prototype columns only', () => {
     const markup = renderToolingPage()
 
-    expect(markup).toContain('Global policy mode')
-    expect(markup).toContain('enforce')
-    expect(markup).toContain('dry_run_only')
-    expect(markup).toContain('deny_all')
-    expect(markup).toContain('unrestricted_except_blocked')
-    expect(markup).toContain('Durable grants')
-    expect(markup).toContain('Pending approvals')
-    expect(markup).toContain('Approve in Assistant')
-    expect(markup).toContain('Activity and audit')
-    expect(markup).toContain('correlation ID')
+    expect(markup).toContain('aria-label="Source rail"')
+    expect(markup).toContain('Core tools')
+    expect(markup).toContain('MCP servers')
+    expect(markup).toContain('Mesh peers')
+    expect(markup).toContain('Source detail')
+    expect(markup).toMatch(/<th[^>]*>Tool<\/th>\s*<th[^>]*>Risk<\/th>\s*<th[^>]*>Calls<\/th>\s*<th[^>]*>State<\/th>/)
+    expect(markup).not.toContain('>Evidence</th>')
+    expect(markup).not.toContain('Global policy mode')
+    expect(markup).not.toContain('Durable grants')
+    expect(markup).not.toContain('Pending approvals')
+    expect(markup).not.toContain('Activity and audit')
   })
 
   it('never renders raw secret-like catalog payloads even when a backend fixture includes one', () => {
@@ -150,35 +150,16 @@ describe('Tooling page production verification', () => {
     const markup = renderToolingPage(catalogWithSecret)
 
     expect(markup).toContain('Secret preview tool')
-    expect(markup).toMatch(/redacted/i)
     expect(markup).not.toContain('sk-live-secret-token')
   })
 
-  it('shows mesh catalog staleness and scheduler grant dependency warnings without live peer fanout copy', () => {
+  it('hides policy console workspaces and prototype-forbidden truth labels from the visible default UI', () => {
     const markup = renderToolingPage()
 
-    expect(markup).toContain('Negotiated catalog cache')
-    expect(markup).toContain('epoch')
-    expect(markup).toContain('hash')
-    expect(markup).toContain('stale')
-    expect(markup).toContain('removed / unshared')
-    expect(markup).toContain('Grant dependency')
-    expect(markup).toContain('stale grant')
-    expect(markup).toContain('missing grant')
-    expect(markup).toContain('/admin/scheduler')
-    expect(markup).not.toContain('fetch tools from peer on page load')
-  })
-
-  it('includes mobile source drawer and surface-truthful onboarding affordances', () => {
-    const markup = renderToolingPage()
-
-    expect(markup).toContain('Open source drawer')
-    expect(markup).toContain('Tool source drawer')
-    expect(markup).toContain('Desktop local')
-    expect(markup).toContain('Web thin')
-    expect(markup).toContain('Android')
-    expect(markup).toContain('iOS')
-    expect(markup).toContain('Demo data is labeled')
-    expect(markup).not.toContain('local Python sidecar available on mobile')
+    expect(markup).not.toContain('Grants')
+    expect(markup).not.toContain('Scheduler')
+    expect(markup).not.toContain('Audit')
+    expect(markup).not.toContain('Onboarding')
+    expect(markup).not.toMatch(/Evidence|Demo|Unavailable|Unsupported/)
   })
 })

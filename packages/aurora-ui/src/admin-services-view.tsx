@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, FileCode2, Lock, RefreshCw, RotateCw, Search, Square } from 'lucide-react'
+import { Activity, FileCode2, Lock } from 'lucide-react'
 import {
   AuroraError,
   summarizeCapabilities,
@@ -15,19 +15,20 @@ import {
   type PrivacyClass,
   type ServiceInfo
 } from '@aurora/client'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
-import { PageHeader } from './state-surface'
+import { Card as ShadCard } from '#components/ui/card'
+import { Badge } from '#components/ui/badge'
 import {
-  AdminConfirmDialog,
-  Button,
-  Card,
-  DataTable,
-  DetailSheet,
-  MetaGrid,
-  StatStrip,
-  FilterBar,
-  type DataColumn
-} from './primitives'
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '#components/ui/table'
+import { HealthBadge, ToneBadge, type BadgeTone } from './status-badges'
+import { ConfirmDialog } from './shared-components'
+import { Button, Card, StatStrip, FilterBar } from './primitives'
 
 export type AdminServicesLoadState =
   | 'loading'
@@ -189,141 +190,36 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
     contracts,
     warnings: failures,
     error: failures[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response'
   }
 }
 
 export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServicesViewProps) {
-  const totals = useMemo(() => serviceTotals(snapshot.services), [snapshot.services])
-  const state = snapshot.loadState
-  const [selectedModule, setSelectedModule] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<AdminServiceControlAction | null>(null)
-  const [reason, setReason] = useState('')
-  const [typedPhrase, setTypedPhrase] = useState('')
-  const selectedService = snapshot.services.find((service) => service.module === selectedModule) ?? null
-
-  const stats = useMemo(
-    () => [
-      { label: 'Services', value: String(snapshot.services.length), caption: `${totals.selectable} selectable` },
-      { label: 'Methods', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} manage/admin` },
-      { label: 'Unavailable', value: String(totals.unavailable), caption: 'denied, stale, blocked, or unsupported' },
-      { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'catalog timestamp' }
-    ],
-    [snapshot.contracts.length, snapshot.generatedAt, snapshot.services.length, totals.manageMethods, totals.selectable, totals.unavailable]
-  )
 
   return (
-    <div className="aui-admin-services">
-      <PageHeader
-        id="admin-services-title"
-        eyebrow="Admin"
-        title="Services"
-        description="Service registry health, route status, and AdminAction service controls are rendered from Aurora SDK responses. Method contract browsing lives on /admin/contracts."
-        badges={
-          <>
-            {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
-            <EvidenceBadge label={snapshot.evidenceSource} />
-            <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
-            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          </>
-        }
+    <div className="flex h-full flex-col" aria-labelledby="admin-services-title">
+      <div className="border-b border-border px-6 py-5">
+        <h1 id="admin-services-title" className="text-xl font-semibold tracking-tight">Services</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Backend service health and restart control. Admins only.</p>
+      </div>
+      <div className="flex flex-col gap-4 px-6 py-5">
+        <StatusPanel snapshot={snapshot} />
+        <ServiceCardGrid services={snapshot.services} onPreviewControl={setPendingAction} />
+      </div>
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        title={pendingAction?.title ?? ''}
+        description={pendingAction?.description ?? ''}
+        confirmLabel="Restart"
+        destructive={pendingAction?.severity === 'critical'}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction) onPreviewAdminAction?.(pendingAction)
+          setPendingAction(null)
+        }}
       />
-
-      <StatusPanel snapshot={snapshot} />
-      <StatStrip items={stats} ariaLabel="Service coverage summary" />
-
-      <Card
-        title="Services"
-        description="Details: routes, methods, and backend exposure"
-        flush
-      >
-        <ServicesDataTable
-          services={snapshot.services}
-          onSelect={(service) => setSelectedModule(service.module)}
-          onPreviewControl={(action) => {
-            setReason('')
-            setTypedPhrase('')
-            setPendingAction(action)
-          }}
-        />
-      </Card>
-
-      <DetailSheet
-        open={selectedService !== null}
-        onClose={() => setSelectedModule(null)}
-        title={selectedService?.module ?? 'Service detail'}
-        description={selectedService?.summary || `${selectedService?.module ?? 'Service'} service`}
-        badge={selectedService ? <StatusBadge state={selectedService.healthState} /> : null}
-        actions={
-          selectedService ? (
-            <div className="aui-action-row-tight">
-              {selectedService.controls.map((control) => (
-                <Button
-                  key={control.verb}
-                  variant={control.verb === 'stop' ? 'danger' : 'primary'}
-                  disabled={!control.available || !control.action}
-                  disabledReason={control.reason}
-                  onClick={() => {
-                    if (control.action) {
-                      setReason('')
-                      setTypedPhrase('')
-                      setPendingAction(control.action)
-                    }
-                  }}
-                >
-                  {serviceControlLabel(control.verb)} {selectedService.module}
-                </Button>
-              ))}
-            </div>
-          ) : null
-        }
-      >
-        {selectedService ? (
-          <>
-            <MetaGrid
-              items={[
-                { label: 'Version', value: selectedService.version },
-                { label: 'Last seen', value: selectedService.lastSeen },
-                { label: 'Provider', value: selectedService.providerLabel },
-                { label: 'Route state', value: selectedService.routeReason },
-                { label: 'Capabilities', value: String(selectedService.capabilities.length) },
-                { label: 'Control posture', value: controlPosture(selectedService.controls) },
-                { label: 'Errors/logs', value: serviceLogsAndErrorsLabel(selectedService) }
-              ]}
-            />
-            <MethodList methods={selectedService.methods} />
-          </>
-        ) : null}
-      </DetailSheet>
-
-      {pendingAction ? (
-        <AdminConfirmDialog
-          open
-          title={pendingAction.title}
-          description={pendingAction.description}
-          methodId={pendingAction.methodId}
-          severity={pendingAction.severity === 'critical' ? 'destructive' : 'standard'}
-          affected={[pendingAction.serviceModule]}
-          requireReason={pendingAction.requiresReason}
-          reasonValue={reason}
-          onReasonChange={setReason}
-          confirmLabel={pendingAction.title}
-          onConfirm={() => {
-            onPreviewAdminAction?.(pendingAction)
-            setPendingAction(null)
-          }}
-          onCancel={() => setPendingAction(null)}
-          requireTypedPhrase={pendingAction.requiresTypedPhrase ?? undefined}
-          typedValue={typedPhrase}
-          onTypedChange={setTypedPhrase}
-          extraValid={!pendingAction.requiresTypedPhrase || typedPhrase === pendingAction.requiresTypedPhrase}
-          extraInvalidReason={
-            pendingAction.requiresTypedPhrase
-              ? `Type ${pendingAction.requiresTypedPhrase} to confirm this service control.`
-              : undefined
-          }
-        />
-      ) : null}
     </div>
   )
 }
@@ -350,76 +246,70 @@ export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapsh
   const state = snapshot.loadState
 
   return (
-    <div className="aui-admin-services">
-      <PageHeader
-        id="admin-contracts-title"
-        eyebrow="Admin"
-        title="Contracts registry"
-        description="Method exposure, Gateway routes, schemas, permissions, and conformance status are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services."
-        badges={
-          <>
-            {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
-            <EvidenceBadge label={snapshot.evidenceSource} />
-            <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
-            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          </>
-        }
-      />
+    <div className="flex flex-col gap-4" aria-labelledby="admin-contracts-title">
+      <div className="flex items-start justify-between gap-3 border-b border-border px-6 py-5">
+        <div>
+          <h1 id="admin-contracts-title" className="text-xl font-semibold tracking-tight">Contracts registry</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Method exposure, Gateway routes, schemas, permissions, and conformance status are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services.
+          </p>
+        </div>
+        <div aria-label="Contracts registry status">
+          <AvailabilityBadge state={state} />
+        </div>
+      </div>
 
-      <StatusPanel snapshot={snapshot} />
+      <div className="flex flex-col gap-4 px-6 pb-6">
+        <StatusPanel snapshot={snapshot} />
 
-      <StatStrip
-        ariaLabel="Contract registry coverage summary"
-        items={[
-          { label: 'Contracts', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} manage/admin` },
-          { label: 'Services', value: String(snapshot.services.length), caption: 'registry modules with descriptors' },
-          { label: 'Unavailable', value: String(totals.unavailable), caption: 'denied, stale, blocked, or unsupported' },
-          { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'catalog timestamp' }
-        ]}
-      />
+        <StatStrip
+          ariaLabel="Contract registry coverage summary"
+          items={[
+            { label: 'Contracts', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} manage/admin` },
+            { label: 'Services', value: String(snapshot.services.length), caption: 'registry modules with descriptors' },
+            { label: 'Needs attention', value: String(totals.unavailable), caption: 'denied, stale, blocked, or awaiting support' },
+            { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'catalog timestamp' }
+          ]}
+        />
 
-      <ContractsPanel contracts={snapshot.contracts} />
+        <ContractsPanel contracts={snapshot.contracts} />
+      </div>
     </div>
   )
 }
 
-function AdminEvidenceHeader({
-  title,
-  titleId,
-  description,
-  snapshot,
-  state,
-  badgeLabel
-}: {
-  title: string
-  titleId: string
-  description: string
-  snapshot: AdminServicesSnapshot
-  state: AdminServicesLoadState
-  badgeLabel: string
-}) {
-  return (
-    <header className="aui-admin-header">
-      <div>
-        <p className="aui-kicker">Admin</p>
-        <h1 id={titleId}>{title}</h1>
-        <p>{description}</p>
-      </div>
-      <div className="aui-admin-badges" aria-label={badgeLabel}>
-        {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
-        <EvidenceBadge label={snapshot.evidenceSource} />
-        <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
-        <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-      </div>
-    </header>
-  )
+/** Availability-state tone mapper for this screen's badges (route/health/contract state). */
+function availabilityTone(state: AvailabilityState): BadgeTone {
+  if (state === 'available-local' || state === 'available-remote') return 'success'
+  if (state === 'degraded' || state === 'stale' || state === 'pending') return 'warning'
+  if (state === 'denied' || state === 'privacy-blocked') return 'danger'
+  return 'neutral'
+}
+
+function AvailabilityBadge({ state }: { state: AvailabilityState | AdminServicesLoadState }) {
+  const normalized: AvailabilityState = isAvailabilityState(state) ? state : 'pending'
+  return <ToneBadge tone={availabilityTone(normalized)}>{state}</ToneBadge>
+}
+
+function isAvailabilityState(value: string): value is AvailabilityState {
+  return [
+    'available-local',
+    'available-remote',
+    'pending',
+    'offline',
+    'denied',
+    'degraded',
+    'stale',
+    'privacy-blocked',
+    'unsupported'
+  ].includes(value)
 }
 
 function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
   if (snapshot.loadState === 'loading') {
     return (
-      <div className="aui-admin-notice" aria-live="polite">
-        <Activity size={18} aria-hidden />
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" aria-live="polite">
+        <Activity size={16} aria-hidden />
         <span>Loading services, contracts, and capability catalog through Aurora.</span>
       </div>
     )
@@ -427,173 +317,57 @@ function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
   if (snapshot.loadState === 'ready') return null
   if (snapshot.loadState === 'empty') {
     return (
-      <div className="aui-admin-notice" role="status">
-        <FileCode2 size={18} aria-hidden />
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" role="status">
+        <FileCode2 size={16} aria-hidden />
         <span>No service registry or method contracts were returned by the SDK.</span>
       </div>
     )
   }
   return (
-    <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
-      <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'Some service status is unavailable. Unsupported controls remain disabled.'}</span>
+    <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" role="alert">
+      <Lock size={16} aria-hidden />
+      <span>{snapshot.error ?? 'Some service status needs attention. Controls remain disabled until Aurora marks them ready.'}</span>
     </div>
   )
 }
 
-function ServicesDataTable({
+function ServiceCardGrid({
   services,
-  onSelect,
   onPreviewControl
 }: {
   services: AdminServiceRow[]
-  onSelect: (service: AdminServiceRow) => void
   onPreviewControl: (action: AdminServiceControlAction) => void
 }) {
-  const columns: DataColumn<AdminServiceRow>[] = [
-    {
-      key: 'module',
-      header: 'Module',
-      render: (service) => (
-        <div>
-          <strong>{service.module}</strong>
-          <small>{service.summary || `${service.module} service`}</small>
-          <span className="aui-sr-only">
-            Errors/logs: {serviceLogsAndErrorsLabel(service)}
-            {' '}
-            {service.routeReason}
-            {' '}
-            {service.methods.map((method) => `${method.busTopic} ${methodExposureLabel(method.exposure)}`).join(' ')}
-            {' '}
-            {service.controls.map((control) => `${control.methodId} ${control.reason}`).join(' ')}
-          </span>
-        </div>
-      )
-    },
-    {
-      key: 'health',
-      header: 'Health',
-      render: (service) => <StatusBadge state={service.healthState} />
-    },
-    {
-      key: 'route',
-      header: 'Route',
-      render: (service) => (
-        <div className="aui-state-line">
-          <StatusBadge state={service.routeState} />
-          <span>{service.providerLabel}</span>
-        </div>
-      )
-    },
-    {
-      key: 'capabilities',
-      header: 'Capabilities',
-      hideAt: 'lg',
-      render: (service) => (
-        <div className="aui-chip-list">
-          {service.capabilities.slice(0, 4).map((capability) => (
-            <span className="aui-chip" key={capability}>{capability}</span>
-          ))}
-          {service.capabilities.length === 0 ? <span className="aui-muted">none reported</span> : null}
-        </div>
-      )
-    },
-    {
-      key: 'heartbeat',
-      header: 'Heartbeat',
-      hideAt: 'xl',
-      render: (service) => <time className="aui-cell-text" dateTime={service.lastSeen}>{service.lastSeen}</time>
-    },
-    {
-      key: 'methods',
-      header: 'Methods',
-      render: (service) => (
-        <div>
-          <strong>{service.methodCount}</strong>
-          <small>{service.controls.filter((control) => control.available).length} AdminAction-ready controls</small>
-        </div>
-      )
-    },
-    {
-      key: 'instance',
-      header: 'Instance',
-      hideAt: 'md',
-      render: (service) => <code>{service.instanceId ?? 'not reported'}</code>
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      align: 'end',
-      render: (service) => (
-        <div className="aui-icon-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-          {service.controls.map((control) => (
-            <button
-              key={control.verb}
-              type="button"
-              aria-label={`${control.verb} ${service.module}`}
-              title={control.reason}
-              disabled={!control.available || !control.action}
-              onClick={() => {
-                if (control.action) onPreviewControl(control.action)
-              }}
-            >
-              {control.verb === 'restart'
-                ? <RotateCw size={16} aria-hidden />
-                : control.verb === 'reload'
-                  ? <RefreshCw size={16} aria-hidden />
-                  : control.available
-                    ? <Square size={16} aria-hidden />
-                    : <Lock size={16} aria-hidden />}
-            </button>
-          ))}
-        </div>
-      )
-    }
-  ]
-
+  if (services.length === 0) return <p className="text-sm text-muted-foreground">No services to show.</p>
   return (
-    <DataTable
-      columns={columns}
-      rows={services}
-      getRowKey={(service) => service.module}
-      onRowClick={onSelect}
-      caption="Services table with health, route state, capabilities, heartbeat, instance, and AdminAction controls"
-      empty={<p className="aui-muted">No services were returned by Gateway.GetServices.</p>}
-    />
-  )
-}
-
-
-function serviceLogsAndErrorsLabel(service: AdminServiceRow): string {
-  if (service.healthState === 'available-local' || service.healthState === 'available-remote') {
-    return 'No active errors reported by the service registry; detailed logs require diagnostics export.'
-  }
-  return `${service.status || service.healthState}; inspect diagnostics export for service logs.`
-}
-
-function controlPosture(controls: AdminServiceControlPreview[]): string {
-  const ready = controls.filter((control) => control.available).length
-  if (ready === 0) return 'No executable control surfaced to this SDK transport.'
-  return `${ready}/${controls.length} controls require AdminAction draft/confirm/audit before execution.`
-}
-
-function methodExposureLabel(exposure: ContractExposure): string {
-  return exposure === 'internal' ? 'internal-only' : exposure
-}
-
-function MethodList({ methods }: { methods: MethodDescriptor[] }) {
-  if (methods.length === 0) return <p className="aui-muted">No registry methods were reported for this service.</p>
-  return (
-    <ul className="aui-method-list" aria-label="Service methods">
-      {methods.map((method) => (
-        <li key={method.busTopic}>
-          <code>{method.busTopic}</code>
-          <span>{methodExposureLabel(method.exposure)}</span>
-          <span>{method.methodType}</span>
-          <small>{method.summary || 'No summary provided.'}</small>
-        </li>
-      ))}
-    </ul>
+    <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+      {services.map((service) => {
+        const restart = service.controls.find((control) => control.verb === 'restart') ?? null
+        return (
+          <ShadCard key={service.module} className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[13.5px] font-semibold">{service.module}</p>
+                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{service.instanceId ?? service.version}</p>
+              </div>
+              <HealthBadge health={service.status} />
+            </div>
+            <p className="my-2.5 text-xs leading-relaxed text-muted-foreground">{service.summary || `${service.module} service`}</p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-muted-foreground">{service.methodCount} methods · {service.lastSeen}</span>
+              <Button
+                variant="outline"
+                disabled={!restart?.available || !restart.action}
+                disabledReason={restart?.reason ?? 'Restart control is not available for this service.'}
+                onClick={() => { if (restart?.action) onPreviewControl(restart.action) }}
+              >
+                Restart
+              </Button>
+            </div>
+          </ShadCard>
+        )
+      })}
+    </div>
   )
 }
 
@@ -628,9 +402,9 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
   return (
     <Card title="Contracts" flush>
       {contracts.length === 0 ? (
-        <p className="aui-muted">No method descriptors were returned by Gateway.GetRegistry.</p>
+        <p className="text-sm text-muted-foreground">No method descriptors were returned by Gateway.GetRegistry.</p>
       ) : (
-        <div className="aui-contract-browser">
+        <div className="flex flex-col gap-4">
           <FilterBar
             search={{
               value: query,
@@ -640,16 +414,21 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
             }}
             controls={
               <>
-                <label className="aui-filter-control">
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   <span>Service/module</span>
-                  <select value={moduleFilter} onChange={(event) => setModuleFilter(event.currentTarget.value)}>
+                  <select
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    value={moduleFilter}
+                    onChange={(event) => setModuleFilter(event.currentTarget.value)}
+                  >
                     <option value="all">All modules</option>
                     {modules.map((module) => <option key={module} value={module}>{module}</option>)}
                   </select>
                 </label>
-                <label className="aui-filter-control">
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                   <span>Exposure</span>
                   <select
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
                     value={exposureFilter}
                     onChange={(event) => setExposureFilter(event.currentTarget.value as ContractExposure | 'all')}
                   >
@@ -660,7 +439,7 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
                     <option value="gateway_builtin">gateway_builtin</option>
                   </select>
                 </label>
-                <label className="aui-filter-control aui-sr-only">
+                <label className="sr-only">
                   <span>Method detail</span>
                   <select
                     value={selectedContract?.busTopic ?? ''}
@@ -687,26 +466,26 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
           />
 
           {filteredContracts.length === 0 ? (
-            <p className="aui-muted">No contracts match the current search and filters.</p>
+            <p className="text-sm text-muted-foreground">No contracts match the current search and filters.</p>
           ) : (
-            <div className="aui-table-scroll">
-              <table className="aui-table">
-                <caption className="aui-sr-only">
+            <div className="overflow-hidden rounded-xl border border-border">
+              <Table>
+                <TableCaption className="sr-only">
                   Contract registry browser grouped by service module with method detail controls
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Service/module</th>
-                    <th>Method</th>
-                    <th>Type</th>
-                    <th>Exposure</th>
-                    <th>Backend</th>
-                    <th>Gateway route</th>
-                    <th>Conformance</th>
-                    <th>Permissions</th>
-                  </tr>
-                </thead>
-                <tbody>
+                </TableCaption>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Service/module</TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Exposure</TableHead>
+                    <TableHead>Backend</TableHead>
+                    <TableHead>Gateway route</TableHead>
+                    <TableHead>Conformance</TableHead>
+                    <TableHead>Permissions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {groupedContracts.map((group) => (
                     <ContractModuleGroup
                       key={group.module}
@@ -716,8 +495,8 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
                       onSelect={setSelectedTopic}
                     />
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
 
@@ -741,89 +520,79 @@ function ContractModuleGroup({
 }) {
   return (
     <>
-      <tr className="aui-table-group-row">
-        <th colSpan={8} scope="rowgroup">{module} module / {contracts.length} contracts</th>
-      </tr>
+      <TableRow className="hover:bg-transparent">
+        <TableHead colSpan={8} scope="rowgroup" className="bg-muted/40 text-xs font-semibold text-foreground">
+          {module} module / {contracts.length} contracts
+        </TableHead>
+      </TableRow>
       {contracts.map((contract) => (
-        <tr key={contract.busTopic} aria-selected={contract.busTopic === selectedTopic}>
-          <td><strong>{contract.module}</strong></td>
-          <td>
-            <button type="button" className="aui-link-button" onClick={() => onSelect(contract.busTopic)}>
+        <TableRow key={contract.busTopic} aria-selected={contract.busTopic === selectedTopic}>
+          <TableCell className="font-medium">{contract.module}</TableCell>
+          <TableCell>
+            <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => onSelect(contract.busTopic)}>
               {contract.busTopic}
             </button>
-            <small>{contract.summary || 'No summary provided.'}</small>
-          </td>
-          <td><MethodTypeBadge type={contract.methodType} /></td>
-          <td><ExposureBadge exposure={contract.exposure} /></td>
-          <td><BackendCoverageBadge coverage={contract.backendCoverage} /></td>
-          <td>
-            <div className="aui-state-line">
-              <StatusBadge state={contract.availability} />
-              <span>{contract.generatedRoutePath ?? 'not HTTP-exposed'}</span>
+            <p className="text-xs text-muted-foreground">{contract.summary || 'No summary provided.'}</p>
+          </TableCell>
+          <TableCell><MethodTypeBadge type={contract.methodType} /></TableCell>
+          <TableCell><ExposureBadge exposure={contract.exposure} /></TableCell>
+          <TableCell><BackendCoverageBadge coverage={contract.backendCoverage} /></TableCell>
+          <TableCell>
+            <div className="flex items-center gap-1.5">
+              <AvailabilityBadge state={contract.availability} />
+              <span className="text-xs text-muted-foreground">{contract.generatedRoutePath ?? 'not HTTP-exposed'}</span>
             </div>
-          </td>
-          <td>
-            <div className="aui-chip-list">
-              <span className="aui-chip">{contract.liveRegistryStatus}</span>
-              <span className="aui-chip">{contract.conformanceStatus}</span>
+          </TableCell>
+          <TableCell>
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="secondary" className="font-mono text-[10.5px]">{contract.liveRegistryStatus}</Badge>
+              <Badge variant="secondary" className="font-mono text-[10.5px]">{contract.conformanceStatus}</Badge>
             </div>
-          </td>
-          <td><PermissionChips permissions={contract.requiredPermissions} /></td>
-        </tr>
+          </TableCell>
+          <TableCell><PermissionChips permissions={contract.requiredPermissions} /></TableCell>
+        </TableRow>
       ))}
     </>
   )
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <article className="aui-admin-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
-  )
-}
-
 function MethodTypeBadge({ type }: { type: ContractMethodType }) {
-  return <span className={`aui-badge aui-method-${type}`}>{type}</span>
+  return <Badge variant="outline" className="capitalize">{type}</Badge>
 }
 
 function ExposureBadge({ exposure }: { exposure: ContractExposure }) {
-  return <span className={`aui-badge aui-exposure-${exposure}`}>{exposure}</span>
+  return <Badge variant="outline" className="capitalize">{exposure}</Badge>
 }
 
 function BackendCoverageBadge({ coverage }: { coverage: AdminContractRow['backendCoverage'] }) {
-  return <span className={`aui-badge aui-backend-${coverage}`}>{coverage}</span>
+  return <Badge variant="outline" className="capitalize">{coverage}</Badge>
 }
 
 function ContractDetail({ contract }: { contract: AdminContractRow }) {
   return (
-    <aside className="aui-admin-detail" aria-labelledby="contract-detail-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Method detail</p>
-          <h3 id="contract-detail-title">{contract.busTopic}</h3>
-          <p>{contract.summary || 'No summary provided by the live registry descriptor.'}</p>
-        </div>
+    <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4" aria-labelledby="contract-detail-title">
+      <div>
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Method detail</p>
+        <h3 id="contract-detail-title" className="font-mono text-sm font-semibold">{contract.busTopic}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{contract.summary || 'No summary provided by the live registry descriptor.'}</p>
       </div>
-      <dl className="aui-detail-grid">
-        <div><dt>Service/module</dt><dd>{contract.module}</dd></div>
-        <div><dt>Method</dt><dd>{contract.name}</dd></div>
-        <div><dt>Input model</dt><dd>{contract.inputModel ?? 'none'}</dd></div>
-        <div><dt>Output model</dt><dd>{contract.outputModel ?? 'none'}</dd></div>
-        <div><dt>Exposure</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
-        <div><dt>Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
-        <div><dt>Capability permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
-        <div><dt>Gateway route path</dt><dd><code>{contract.generatedRoutePath ?? 'not HTTP-exposed'}</code></dd></div>
-        <div><dt>OpenAPI/export state</dt><dd>{contract.openApiState}</dd></div>
-        <div><dt>Export state</dt><dd>{contract.exportState}</dd></div>
-        <div><dt>Live-registry status</dt><dd>{contract.liveRegistryStatus}</dd></div>
-        <div><dt>Contract conformance</dt><dd>{contract.conformanceStatus}</dd></div>
-        <div><dt>Capability route status</dt><dd>{contract.routeReason}</dd></div>
-        <div><dt>Schema state</dt><dd>{contract.schemaState}</dd></div>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Service/module</dt><dd className="font-medium">{contract.module}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Method</dt><dd className="font-medium">{contract.name}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Input model</dt><dd className="font-medium">{contract.inputModel ?? 'none'}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Output model</dt><dd className="font-medium">{contract.outputModel ?? 'none'}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Exposure</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Capability permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Gateway route path</dt><dd className="font-mono text-xs">{contract.generatedRoutePath ?? 'not HTTP-exposed'}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">OpenAPI/export state</dt><dd className="font-medium">{contract.openApiState}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Export state</dt><dd className="font-medium">{contract.exportState}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Live-registry status</dt><dd className="font-medium">{contract.liveRegistryStatus}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Contract conformance</dt><dd className="font-medium">{contract.conformanceStatus}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Capability route status</dt><dd className="font-medium">{contract.routeReason}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Schema state</dt><dd className="font-medium">{contract.schemaState}</dd></div>
       </dl>
-      <div className="aui-schema-grid" aria-label="Input and output schema detail">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Input and output schema detail">
         <SchemaBlock title="Input schema" schema={contract.inputSchema} />
         <SchemaBlock title="Output schema" schema={contract.outputSchema} />
       </div>
@@ -833,20 +602,24 @@ function ContractDetail({ contract }: { contract: AdminContractRow }) {
 
 function PermissionChips({ permissions }: { permissions: string[] }) {
   return (
-    <div className="aui-chip-list">
+    <div className="flex flex-wrap gap-1">
       {permissions.map((permission) => (
-        <code className="aui-chip" key={permission}>{permission}</code>
+        <code key={permission} className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[10.5px]">{permission}</code>
       ))}
-      {permissions.length === 0 ? <span className="aui-muted">none</span> : null}
+      {permissions.length === 0 ? <span className="text-xs text-muted-foreground">none</span> : null}
     </div>
   )
 }
 
 function SchemaBlock({ title, schema }: { title: string; schema: MethodDescriptor['inputSchema'] }) {
   return (
-    <section>
-      <h4>{title}</h4>
-      {schema ? <code className="aui-schema-code">{JSON.stringify(schema, null, 2)}</code> : <p className="aui-muted">No JSON Schema exported by this registry descriptor.</p>}
+    <section className="flex flex-col gap-1.5">
+      <h4 className="text-xs font-semibold text-foreground">{title}</h4>
+      {schema ? (
+        <code className="block max-h-48 overflow-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-[11px] whitespace-pre-wrap">{JSON.stringify(schema, null, 2)}</code>
+      ) : (
+        <p className="text-xs text-muted-foreground">No JSON Schema exported by this registry descriptor.</p>
+      )}
     </section>
   )
 }
@@ -1103,18 +876,4 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 function errorMessage(error: unknown): string {
   const maybe = error as Partial<AuroraError>
   return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
-}
-
-function isAvailabilityState(value: string): value is AvailabilityState {
-  return [
-    'available-local',
-    'available-remote',
-    'pending',
-    'offline',
-    'denied',
-    'degraded',
-    'stale',
-    'privacy-blocked',
-    'unsupported'
-  ].includes(value)
 }

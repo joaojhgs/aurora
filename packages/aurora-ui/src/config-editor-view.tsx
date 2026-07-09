@@ -13,9 +13,14 @@ import type {
   JsonValue
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, ToneBadge, presentableSignal } from './status-badges'
 import { EmptyState, PageHeader } from './state-surface'
 import { AdminConfirmDialog, Button, Card, Checkbox, DataTable, StatStrip, type DataColumn } from './primitives'
+import { cn } from '#lib/utils'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '#components/ui/accordion'
+import { Badge } from '#components/ui/badge'
+import { Input } from '#components/ui/input'
+import { Textarea } from '#components/ui/textarea'
 
 export interface ConfigEditorViewProps {
   client: AuroraClient
@@ -197,9 +202,9 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       key: 'field',
       header: 'Field',
       render: (version) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <strong>{version.key_path}</strong>
-          <small className="aui-mono">{version.version_id}</small>
+          <small className="font-mono text-xs text-muted-foreground">{version.version_id}</small>
         </span>
       )
     },
@@ -207,7 +212,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       key: 'when',
       header: 'When and visibility',
       render: (version) => (
-        <span className="aui-cell-text">{version.timestamp}; {version.secret ? 'secret redacted' : 'value visible'}</span>
+        <span className="text-sm text-muted-foreground">{version.timestamp}; {version.secret ? 'secret redacted' : 'value visible'}</span>
       )
     },
     {
@@ -223,7 +228,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   ]
 
   return (
-    <section className="aui-config" aria-labelledby="config-editor-title">
+    <section className="flex flex-col gap-4" aria-labelledby="config-editor-title">
       <PageHeader
         eyebrow="Admin configuration"
         id="config-editor-title"
@@ -249,22 +254,25 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         ]}
       />
 
-      {model.state === 'loading' ? <p className="aui-message">Loading config from Aurora.</p> : null}
+      {model.state === 'loading' ? <p className="text-sm text-muted-foreground">Loading config from Aurora.</p> : null}
       {model.state === 'empty' ? <EmptyState title="No config fields" message="Config schema metadata returned no editable fields." /> : null}
       {model.state === 'denied' || model.state === 'unavailable' || model.state === 'error'
         ? <EmptyState title="Configuration editor is unavailable" message={presentableSignal(model.error ?? route.explanation)} />
         : null}
       {model.validationErrors.length > 0 ? (
-        <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
+        <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
           <strong>Validation errors</strong>
-          <ul>{model.validationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+          <ul className="list-disc pl-4">{model.validationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
         </div>
       ) : null}
-      {message ? <div className="aui-inline-alert" role="status"><span>{message}</span></div> : null}
+      {message ? (
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm" role="status">
+          <span>{message}</span>
+        </div>
+      ) : null}
 
-      <div className="aui-config-grid">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card
-          className="aui-config-panel"
           title="Schema-backed config accordion"
           actions={
             <Button variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={() => setEdits({})} disabled={changes.length === 0 || busy}>
@@ -272,86 +280,91 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
             </Button>
           }
         >
-          <div className="aui-config-accordion">
-            {sections.length === 0 ? <p className="aui-muted">No schema sections are available.</p> : null}
+          {sections.length === 0 ? <p className="text-sm text-muted-foreground">No schema sections are available.</p> : null}
+          <Accordion multiple defaultValue={sections.map(([section]) => section)}>
             {sections.map(([section, fields]) => (
-              <details key={section} className="aui-config-section" open>
-                <summary>
-                  <span>
-                    <strong>{configSectionTitle(section)}</strong>
-                    <small>Config section: {section}</small>
+              <AccordionItem key={section} value={section}>
+                <AccordionTrigger>
+                  <span className="flex flex-1 flex-col gap-0.5 text-left">
+                    <strong className="text-sm font-semibold">{configSectionTitle(section)}</strong>
+                    <small className="text-xs font-normal text-muted-foreground">Config section: {section}</small>
                   </span>
-                  <span className="aui-config-section-badges" aria-label={`${section} section badges`}>
-                    <em>{fields.length} fields</em>
-                    <em>{countChanged(fields, changes)} staged</em>
-                    {fields.some((field) => field.secret) ? <em>secret redacted</em> : null}
-                    {fields.some((field) => field.restart_required) ? <em>restart required</em> : null}
+                  <span className="flex flex-wrap items-center gap-1.5" aria-label={`${section} section badges`}>
+                    <Badge variant="secondary">{fields.length} fields</Badge>
+                    <Badge variant="secondary">{countChanged(fields, changes)} staged</Badge>
+                    {fields.some((field) => field.secret) ? <Badge variant="outline">secret redacted</Badge> : null}
+                    {fields.some((field) => field.restart_required) ? <ToneBadge tone="warning">restart required</ToneBadge> : null}
                   </span>
-                </summary>
-                <div className="aui-config-fields">
-                  {fields.map((field) => {
-                    const editedValue = edits[field.key_path] ?? stringifyValue(field.current_value)
-                    const changed = changes.some((change) => change.key_path === field.key_path)
-                    return (
-                      <label key={field.key_path} className="aui-config-field">
-                        <span>
-                          <strong>{field.title ?? field.key_path}</strong>
-                          <code>{field.key_path}</code>
-                          <small>{field.description || 'No schema description provided.'}</small>
-                        </span>
-                        <ConfigFieldControl
-                          field={field}
-                          value={field.secret ? '[REDACTED]' : editedValue}
-                          disabled={!canMutate || field.secret || busy}
-                          invalid={fieldHasValidationError(field.key_path, model.validationErrors, localValidationErrors)}
-                          changed={changed}
-                          onChange={(value) => setEdits((current) => ({ ...current, [field.key_path]: value }))}
-                        />
-                        <em>
-                          {field.source_layer}; {fieldModeLabel(field)}
-                          {field.secret ? '; secret redacted' : ''}
-                          {field.affected_services.length > 0 ? `; affects ${field.affected_services.join(', ')}` : ''}
-                        </em>
-                      </label>
-                    )
-                  })}
-                </div>
-              </details>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="flex flex-col gap-4">
+                    {fields.map((field) => {
+                      const editedValue = edits[field.key_path] ?? stringifyValue(field.current_value)
+                      const changed = changes.some((change) => change.key_path === field.key_path)
+                      return (
+                        <label key={field.key_path} className="grid grid-cols-1 gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_minmax(0,260px)] sm:items-start">
+                          <span className="flex flex-col gap-1">
+                            <strong className="text-sm font-medium">{field.title ?? field.key_path}</strong>
+                            <code className="font-mono text-xs text-muted-foreground">{field.key_path}</code>
+                            <small className="text-xs text-muted-foreground">{field.description || 'No schema description provided.'}</small>
+                          </span>
+                          <span className="flex flex-col gap-1">
+                            <ConfigFieldControl
+                              field={field}
+                              value={field.secret ? '[REDACTED]' : editedValue}
+                              disabled={!canMutate || field.secret || busy}
+                              invalid={fieldHasValidationError(field.key_path, model.validationErrors, localValidationErrors)}
+                              changed={changed}
+                              onChange={(value) => setEdits((current) => ({ ...current, [field.key_path]: value }))}
+                            />
+                            <em className="text-[11px] not-italic text-muted-foreground">
+                              {field.source_layer}; {fieldModeLabel(field)}
+                              {field.secret ? '; secret redacted' : ''}
+                              {field.affected_services.length > 0 ? `; affects ${field.affected_services.join(', ')}` : ''}
+                            </em>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
             ))}
-          </div>
+          </Accordion>
         </Card>
 
         <Card
-          className="aui-config-panel"
           title="Staged review"
           icon={<ShieldCheck size={18} aria-hidden />}
           description="Preview Config.PreviewDiff and Config.PreviewReloadImpact before Config.Set is submitted through AdminAction. Secret values stay redacted."
         >
-          <DiffList diff={diff} />
-          <ImpactList impact={impact} />
-          {localValidationErrors.length > 0 ? (
-            <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
-              <strong>Staged validation</strong>
-              <ul>{localValidationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
-            </div>
-          ) : null}
-          <Button
-            variant="primary"
-            icon={<Save size={16} aria-hidden />}
-            disabled={!canMutate || reviewBlocked || busy}
-            onClick={() => setDialogKind('apply')}
-          >
-            Review Apply through AdminAction
-          </Button>
+          <div className="flex flex-col gap-4">
+            <DiffList diff={diff} />
+            <ImpactList impact={impact} />
+            {localValidationErrors.length > 0 ? (
+              <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+                <strong>Staged validation</strong>
+                <ul className="list-disc pl-4">{localValidationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+              </div>
+            ) : null}
+            <Button
+              variant="primary"
+              icon={<Save size={16} aria-hidden />}
+              disabled={!canMutate || reviewBlocked || busy}
+              onClick={() => setDialogKind('apply')}
+            >
+              Review Apply through AdminAction
+            </Button>
+          </div>
         </Card>
       </div>
 
-      <Card className="aui-config-panel" title="Rollback history" icon={<History size={18} aria-hidden />}>
+      <Card title="Rollback history" icon={<History size={18} aria-hidden />}>
         <DataTable
           columns={rollbackColumns}
           rows={model.versions}
           getRowKey={(version) => version.version_id}
-          empty={<div className="aui-empty-inline"><p>No version history reported.</p></div>}
+          empty="No version history reported."
         />
       </Card>
 
@@ -407,9 +420,10 @@ function ConfigFieldControl({
     'aria-invalid': invalid,
     'data-changed': changed ? 'true' : undefined
   } as const
+  const changedRing = 'data-changed:border-primary data-changed:ring-1 data-changed:ring-primary/40'
   if (field.choices && field.choices.length > 0 && !field.secret) {
     return (
-      <select value={value} onChange={(event) => onChange(event.target.value)} {...common}>
+      <select className={cn(SELECT_CLASSNAME, changedRing)} value={value} onChange={(event) => onChange(event.target.value)} {...common}>
         {field.choices.map((choice) => {
           const option = stringifyValue(choice)
           return <option key={option} value={option}>{option}</option>
@@ -419,17 +433,18 @@ function ConfigFieldControl({
   }
   if (field.type === 'boolean' && !field.secret) {
     return (
-      <select value={value || 'false'} onChange={(event) => onChange(event.target.value)} {...common}>
+      <select className={cn(SELECT_CLASSNAME, changedRing)} value={value || 'false'} onChange={(event) => onChange(event.target.value)} {...common}>
         <option value="true">true</option>
         <option value="false">false</option>
       </select>
     )
   }
   if ((field.type === 'array' || field.type === 'object') && !field.secret) {
-    return <textarea value={value} onChange={(event) => onChange(event.target.value)} {...common} />
+    return <Textarea className={cn('font-mono text-xs', changedRing)} rows={4} value={value} onChange={(event) => onChange(event.target.value)} {...common} />
   }
   return (
-    <input
+    <Input
+      className={changedRing}
       type={field.type === 'integer' || field.type === 'number' ? 'number' : field.secret ? 'password' : 'text'}
       value={value}
       onChange={(event) => onChange(event.target.value)}
@@ -439,16 +454,19 @@ function ConfigFieldControl({
   )
 }
 
+const SELECT_CLASSNAME =
+  'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20'
+
 function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
   return (
-    <div className="aui-config-review-block" aria-label="Preview diff">
-      <h3 id="config-diff-preview-title">Diff preview</h3>
-      {diff.length === 0 ? <p>No staged changes.</p> : null}
+    <div className="flex flex-col gap-2" aria-label="Preview diff">
+      <h3 id="config-diff-preview-title" className="text-sm font-semibold">Diff preview</h3>
+      {diff.length === 0 ? <p className="text-sm text-muted-foreground">No staged changes.</p> : null}
       {diff.map((row) => (
-        <div key={row.key_path} className="aui-config-diff-row">
-          <code>{row.key_path}</code>
-          <span>{displayDiffValue(row)}</span>
-          <span>{displayDiffValue(row, 'new')}</span>
+        <div key={row.key_path} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+          <code className="font-mono">{row.key_path}</code>
+          <span className="text-muted-foreground line-through">{displayDiffValue(row)}</span>
+          <span className="font-medium">{displayDiffValue(row, 'new')}</span>
         </div>
       ))}
     </div>
@@ -457,12 +475,12 @@ function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
 
 function ImpactList({ impact }: { impact: ConfigReloadImpactEntry[] }) {
   return (
-    <div className="aui-config-review-block">
-      <h3>Reload impact</h3>
-      {impact.length === 0 ? <p>No reload impact reported.</p> : null}
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">Reload impact</h3>
+      {impact.length === 0 ? <p className="text-sm text-muted-foreground">No reload impact reported.</p> : null}
       {impact.map((entry) => (
-        <p key={entry.key_path}>
-          <strong>{entry.key_path}</strong>: {entry.restart_required ? 'restart' : entry.reload_required ? 'reload' : 'hot update'}; {entry.affected_services.join(', ') || 'no service'}.
+        <p key={entry.key_path} className="text-xs text-muted-foreground">
+          <strong className="font-mono text-foreground">{entry.key_path}</strong>: {entry.restart_required ? 'restart' : entry.reload_required ? 'reload' : 'hot update'}; {entry.affected_services.join(', ') || 'no service'}.
         </p>
       ))}
     </div>
@@ -495,12 +513,12 @@ function errorModel(error: unknown, source: string): ConfigEditorModel {
   }
 }
 
-function stringifyValue(value: JsonValue | undefined): string {
+export function stringifyValue(value: JsonValue | undefined): string {
   if (value === undefined || value === null) return ''
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }
 
-function parseFieldValue(value: string, type: string): JsonValue {
+export function parseFieldValue(value: string, type: string): JsonValue {
   if (type === 'integer' || type === 'number') return Number(value)
   if (type === 'boolean') return value === 'true'
   if (type === 'array' || type === 'object') {

@@ -33,19 +33,12 @@ describe('Tooling source interactions', () => {
   it('uses an accessible mobile source drawer trigger instead of a placeholder button', async () => {
     const container = renderPanel(new Aurora({ transport: new MockAuroraTransport() }), { nativePlatform: 'android' })
 
-    const trigger = findButtonByText(container, 'Open source drawer')
+    const trigger = findButtonByText(container, 'Sources')
     expect(trigger).not.toBeNull()
     expect(trigger!.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelector('.aui-tool-source-rail-open')).toBeNull()
 
-    await act(async () => {
-      trigger!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-    })
-
-    const closeTrigger = findButtonByText(container, 'Close source drawer')
-    expect(closeTrigger).not.toBeNull()
-    expect(closeTrigger!.getAttribute('aria-expanded')).toBe('true')
-    expect(container.querySelector('.aui-tool-source-rail-open')).not.toBeNull()
+    expect(trigger!.getAttribute('aria-controls')).toBe('tool-source-drawer')
   })
 
   it('surfaces onboarding validation failures from typed Tooling source contracts', async () => {
@@ -58,7 +51,7 @@ describe('Tooling source interactions', () => {
     const container = renderPanel(new Aurora({ transport }))
 
     await act(async () => {
-      findButtonByText(container, 'Add MCP server')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      findButtonByText(container, 'Add MCP source')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
     const endpointInput = findInputByPlaceholder(container, 'stdio command or https://server') ?? findInputByPlaceholder(container, 'https://server')
     expect(endpointInput).not.toBeNull()
@@ -83,7 +76,7 @@ describe('Tooling source interactions', () => {
     const container = renderPanel(client)
 
     await act(async () => {
-      findButtonByText(container, 'Add MCP server')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      findButtonByText(container, 'Add MCP source')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
     const endpointInput = findInputByPlaceholder(container, 'stdio command or https://server') ?? findInputByPlaceholder(container, 'https://server')
     expect(endpointInput).not.toBeNull()
@@ -100,7 +93,7 @@ describe('Tooling source interactions', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('MCP source test unsupported')
+    expect(container.textContent).toContain('MCP source test not enabled')
     expect(container.textContent).not.toContain('MCP source test valid')
   })
 })

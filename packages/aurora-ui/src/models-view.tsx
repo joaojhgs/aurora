@@ -1,28 +1,28 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Cpu, Download, Gauge, HardDrive, RefreshCcw, Route, Smartphone } from 'lucide-react'
+import { Cloud, Cpu, Download, Gauge, HardDrive, Network, RefreshCcw, Route, Terminal } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
   CapabilityGraph,
   CapabilityProviderCandidate,
+  ConfigFieldMetadata,
+  JsonValue,
   ModelRuntimeCatalogResponse,
   ModelRuntimeProviderInfo,
   NativeCapabilityManifest,
   PrivacyClass
 } from '@aurora/client'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { cn } from '#lib/utils'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
+import { Input } from '#components/ui/input'
+import { Badge } from '#components/ui/badge'
 import { PageHeader } from './state-surface'
-import {
-  AdminConfirmDialog,
-  Card,
-  Checkbox,
-  DataTable,
-  MetaGrid,
-  StatStrip,
-  type DataColumn
-} from './primitives'
+import { PageTabs } from './shared-components'
+import { AdminConfirmDialog, Button, Card, Checkbox, DataTable, FormField, type DataColumn } from './primitives'
+import { ToneBadge, type BadgeTone } from './status-badges'
 
 export interface ModelsViewProps {
   client: AuroraClient
@@ -30,6 +30,8 @@ export interface ModelsViewProps {
   initialGraph?: CapabilityGraph | null
   initialNativeManifest?: NativeCapabilityManifest | null
   initialError?: string | null
+  /** Seeds the active tab; used by tests to render the "Usage & Benchmarks" panel without a click. */
+  initialTab?: 'providers' | 'benchmarks'
 }
 
 export interface ModelProviderViewModel {
@@ -78,10 +80,19 @@ export interface ModelRuntimeCategoryRow {
   state: AvailabilityState
 }
 
+export interface ModelProviderGroup {
+  id: 'local' | 'cloud' | 'mesh' | 'coding-agent'
+  label: string
+  detail: string
+  providers: ModelProviderViewModel[]
+}
+
 export interface ModelsViewModel {
   loadState: 'loading' | 'ready' | 'empty' | 'error'
   generatedAt: string | null
   selectedProviderId: string | null
+  activeProviderLabel: string
+  preferredMeshPeerLabel: string
   providerCount: number
   availableCount: number
   remoteCount: number
@@ -90,6 +101,7 @@ export interface ModelsViewModel {
   secretsRedacted: boolean
   error: string | null
   providers: ModelProviderViewModel[]
+  providerGroups: ModelProviderGroup[]
   categoryRows: ModelRuntimeCategoryRow[]
   benchmarkRows: ModelBenchmarkSnapshotRow[]
   warnings: string[]
@@ -99,6 +111,8 @@ const emptyModel: ModelsViewModel = {
   loadState: 'loading',
   generatedAt: null,
   selectedProviderId: null,
+  activeProviderLabel: 'Not set',
+  preferredMeshPeerLabel: 'None selected',
   providerCount: 0,
   availableCount: 0,
   remoteCount: 0,
@@ -107,17 +121,21 @@ const emptyModel: ModelsViewModel = {
   secretsRedacted: true,
   error: null,
   providers: [],
+  providerGroups: [],
   categoryRows: [],
   benchmarkRows: [],
   warnings: []
 }
+
+type ConfigureLoadState = 'idle' | 'loading' | 'ready' | 'error'
 
 export function ModelsView({
   client,
   initialCatalog = null,
   initialGraph = null,
   initialNativeManifest = null,
-  initialError = null
+  initialError = null,
+  initialTab = 'providers'
 }: ModelsViewProps) {
   const [catalog, setCatalog] = useState<ModelRuntimeCatalogResponse | null>(initialCatalog)
   const [graph, setGraph] = useState<CapabilityGraph | null>(initialGraph)
@@ -131,6 +149,14 @@ export function ModelsView({
   const [pendingProvider, setPendingProvider] = useState<ModelProviderViewModel | null>(null)
   const [reason, setReason] = useState('')
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
+  const [activeTab, setActiveTab] = useState<'providers' | 'benchmarks'>(initialTab)
+  const [preferredMeshPeerId, setPreferredMeshPeerId] = useState<string | null>(null)
+  const [configureProvider, setConfigureProvider] = useState<ModelProviderViewModel | null>(null)
+  const [configureFields, setConfigureFields] = useState<ConfigFieldMetadata[]>([])
+  const [configureValues, setConfigureValues] = useState<Record<string, string>>({})
+  const [configureLoadState, setConfigureLoadState] = useState<ConfigureLoadState>('idle')
+  const [configureError, setConfigureError] = useState<string | null>(null)
+  const [configureSaving, setConfigureSaving] = useState(false)
 
   useEffect(() => {
     if (initialCatalog || initialError) return
@@ -164,6 +190,11 @@ export function ModelsView({
     () => buildModelsViewModel({ catalog, graph, nativeManifest, loadState, error }),
     [catalog, graph, nativeManifest, loadState, error]
   )
+
+  const preferredMeshPeer = preferredMeshPeerId
+    ? (model.providers.find((provider) => provider.id === preferredMeshPeerId) ?? null)
+    : (model.providers.find((provider) => provider.selected && provider.providerType === 'mesh') ?? null)
+  const preferredMeshPeerLabel = preferredMeshPeer ? preferredMeshPeer.name : 'None selected'
 
   async function confirmProviderSelection() {
     const provider = pendingProvider
@@ -201,34 +232,96 @@ export function ModelsView({
     setPendingProvider(provider)
   }
 
-  return (
-    <div className="aui-models" data-state={model.loadState}>
-      <PageHeader
-        id="aui-models-title"
-        eyebrow="Models"
-        title="Models and runtime"
-        description="Provider health, route, privacy, hardware, and benchmark states are loaded through Aurora."
-        badges={
-          <>
-            <EvidenceBadge label={`${model.providerCount} providers`} />
-            <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          </>
+  function setPreferredMeshPeer(provider: ModelProviderViewModel) {
+    setPreferredMeshPeerId(provider.id)
+  }
+
+  async function openConfigureProvider(provider: ModelProviderViewModel) {
+    const configValue = provider.selectConfigValue
+    if (!configValue) return
+    setConfigureProvider(provider)
+    setConfigureFields([])
+    setConfigureValues({})
+    setConfigureError(null)
+    setConfigureLoadState('loading')
+    try {
+      const result = await client.config.getSchemaMetadata({
+        section: providerConfigSection(configValue),
+        include_values: true
+      })
+      if (!result.ok) throw new Error(result.error.message)
+      setConfigureFields(result.data.fields)
+      setConfigureValues(
+        Object.fromEntries(result.data.fields.map((field) => [field.key_path, configureFieldInitialValue(field)]))
+      )
+      setConfigureLoadState('ready')
+    } catch (nextError) {
+      setConfigureError(modelErrorMessage(nextError))
+      setConfigureLoadState('error')
+    }
+  }
+
+  function closeConfigureProvider() {
+    setConfigureProvider(null)
+    setConfigureFields([])
+    setConfigureValues({})
+    setConfigureLoadState('idle')
+    setConfigureError(null)
+  }
+
+  function onConfigureFieldChange(keyPath: string, value: string) {
+    setConfigureValues((current) => ({ ...current, [keyPath]: value }))
+  }
+
+  async function saveConfigureProvider() {
+    const provider = configureProvider
+    if (!provider || configureSaving) return
+    setConfigureSaving(true)
+    setConfigureError(null)
+    try {
+      const receipts: string[] = []
+      for (const field of configureFields) {
+        if (field.type === 'dict' || field.type === 'list') continue
+        const raw = configureValues[field.key_path] ?? ''
+        if (field.secret) {
+          if (raw.trim().length === 0) continue
+        } else if (raw === configureFieldInitialValue(field)) {
+          continue
         }
+        const result = await client.config.applyChange({
+          change: { key_path: field.key_path, value: parseConfigureFieldValue(raw, field.type) },
+          reason: `Configure ${provider.name} from Aurora Models runtime`,
+          reauthConfirmed: true
+        })
+        if (!result.data.success) throw new Error(result.data.error ?? `Config.Set did not accept ${field.key_path}`)
+        receipts.push(result.confirmation.audit_receipt)
+      }
+      const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
+      setCatalog(nextCatalog)
+      setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
+      setSelectionMessage(
+        receipts.length > 0
+          ? `Provider configuration applied through Config.Set AdminAction. Audit receipt: ${receipts.join(', ')}`
+          : 'No configuration changes were made.'
+      )
+      closeConfigureProvider()
+    } catch (nextError) {
+      setConfigureError(modelErrorMessage(nextError))
+    } finally {
+      setConfigureSaving(false)
+    }
+  }
+
+  return (
+    <div data-state={model.loadState} className="flex flex-col gap-4">
+      <PageHeader
+        id="models-title"
+        eyebrow="Models"
+        title="Models & Runtime"
+        description="Local, cloud and mesh-peer providers, and which one handles requests by default."
       />
 
-      <StatStrip
-        ariaLabel="Model catalog summary"
-        items={[
-          { label: 'Providers', value: String(model.providerCount) },
-          { label: 'Routeable', value: `${model.availableCount} routeable` },
-          { label: 'Remote', value: `${model.remoteCount} remote` },
-          { label: 'Updated', value: model.generatedAt ?? 'pending' }
-        ]}
-      />
-
-      {model.loadState === 'loading' ? (
-        <ModelNotice icon="loading" message="Loading model runtime catalog from Aurora." />
-      ) : null}
+      {model.loadState === 'loading' ? <ModelNotice icon="loading" message="Loading model runtime catalog from Aurora." /> : null}
       {model.loadState === 'error' ? (
         <ModelNotice icon="error" message={model.error ?? 'Model runtime catalog could not be loaded.'} role="alert" />
       ) : null}
@@ -236,53 +329,75 @@ export function ModelsView({
         <ModelNotice icon="empty" message="No model runtime providers were returned by the backend catalog." />
       ) : null}
       {selectionMessage ? (
-        <p className="aui-model-notice" role={selectionMessage.startsWith('Provider selection failed') ? 'alert' : 'status'}>
+        <p
+          className={cn(
+            'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm',
+            selectionMessage.startsWith('Provider selection failed')
+              ? 'border-destructive/30 bg-destructive/5 text-destructive'
+              : 'border-border bg-muted/30 text-muted-foreground'
+          )}
+          role={selectionMessage.startsWith('Provider selection failed') ? 'alert' : 'status'}
+        >
           <Route size={16} aria-hidden="true" />
           <span>{selectionMessage}</span>
         </p>
       ) : null}
 
       {model.providers.length > 0 ? (
-        <>
-          <ModelRoutePolicyBanner providers={model.providers} selectedProviderId={model.selectedProviderId} />
-          <Card title="Model runtime categories" icon={<HardDrive size={18} aria-hidden="true" />}>
-            <ModelRuntimeCategories rows={model.categoryRows} />
-          </Card>
-          <div className="aui-model-grid">
-            {model.providers.map((provider) => (
-              <ModelProviderCard
-                key={provider.id}
-                provider={provider}
-                selecting={selectingProviderId === provider.id}
-                onSelect={requestProviderSelection}
-              />
-            ))}
-          </div>
-          <Card title="Provider route policy" icon={<Route size={18} aria-hidden="true" />}>
-            <ModelRoutePolicyPanel providers={model.providers} />
-          </Card>
-          <div className="aui-model-layout">
-            <Card title="Runtime providers" flush>
-              <ModelProviderTable providers={model.providers} />
-            </Card>
-            <aside className="aui-model-summary" aria-label="Runtime summary">
-              <Card title="Runtime state">
-                <MetaGrid
-                  items={[
-                    { label: 'Updated', value: model.generatedAt ?? 'pending' },
-                    { label: 'Selected provider', value: model.selectedProviderId ?? 'not selected' },
-                    { label: 'Mobile local-light', value: <StatusBadge state={model.mobileLocalLightState} /> },
-                    { label: 'Native state', value: model.mobileLocalLightReason }
-                  ]}
-                />
-                <ModelBenchmarkSnapshot rows={model.benchmarkRows} />
-                <ModelSetupActions providers={model.providers} />
-                <ModelWarnings warnings={model.warnings} />
-              </Card>
-            </aside>
-          </div>
-        </>
+        <PageTabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value === 'benchmarks' ? 'benchmarks' : 'providers')}
+          items={[
+            {
+              value: 'providers',
+              label: 'Providers',
+              content: (
+                <div className="flex flex-col gap-6 py-4">
+                  <ModelActiveProviderStrip activeProviderLabel={model.activeProviderLabel} preferredMeshPeerLabel={preferredMeshPeerLabel} />
+                  <ModelProviderGroups
+                    groups={model.providerGroups}
+                    selectingProviderId={selectingProviderId}
+                    preferredMeshPeerId={preferredMeshPeer?.id ?? null}
+                    onSelect={requestProviderSelection}
+                    onSetPreferredPeer={setPreferredMeshPeer}
+                    onConfigure={(provider) => {
+                      void openConfigureProvider(provider)
+                    }}
+                  />
+                  <div>
+                    <p className="mb-2.5 text-[12.5px] font-semibold">Compare at a glance</p>
+                    <ModelProviderCompareTable providers={model.providers} preferredMeshPeerId={preferredMeshPeer?.id ?? null} />
+                  </div>
+                </div>
+              )
+            },
+            {
+              value: 'benchmarks',
+              label: 'Usage & Benchmarks',
+              content: (
+                <div className="flex flex-col gap-3 py-4">
+                  <p className="text-sm text-muted-foreground">Accumulated usage across all providers used so far in this deployment.</p>
+                  <ModelUsageBenchmarkTable providers={model.providers} />
+                </div>
+              )
+            }
+          ]}
+        />
       ) : null}
+
+      <ConfigureProviderDialog
+        provider={configureProvider}
+        fields={configureFields}
+        values={configureValues}
+        loadState={configureLoadState}
+        error={configureError}
+        saving={configureSaving}
+        onChange={onConfigureFieldChange}
+        onCancel={closeConfigureProvider}
+        onSave={() => {
+          void saveConfigureProvider()
+        }}
+      />
 
       {pendingProvider ? (
         <AdminConfirmDialog
@@ -331,11 +446,14 @@ export function buildModelsViewModel(input: {
   const providers = input.catalog.providers.map((provider) =>
     providerModel(provider, candidates.get(provider.provider_id), input.catalog!.selected_provider_id, input.nativeManifest)
   )
+  const selected = providers.find((provider) => provider.selected)
   const loadState = input.loadState ?? (providers.length > 0 ? 'ready' : 'empty')
   return {
     loadState,
     generatedAt: input.catalog.generated_at,
     selectedProviderId: input.catalog.selected_provider_id,
+    activeProviderLabel: selected ? selected.name : 'Not set',
+    preferredMeshPeerLabel: preferredMeshPeerLabel(providers),
     providerCount: providers.length,
     availableCount: providers.filter(providerRouteable).length,
     remoteCount: providers.filter(isMeshOrRemoteProvider).length,
@@ -344,6 +462,7 @@ export function buildModelsViewModel(input: {
     secretsRedacted: input.catalog.secrets_redacted,
     error: null,
     providers,
+    providerGroups: modelProviderGroups(providers),
     categoryRows: modelCategoryRows(providers, mobile),
     benchmarkRows: benchmarkSnapshotRows(providers),
     warnings: modelWarnings(providers, mobile)
@@ -358,292 +477,270 @@ function isMeshOrRemoteProvider(provider: ModelProviderViewModel): boolean {
   return provider.providerType === 'mesh' || provider.providerType === 'cloud' || provider.providerType === 'remote'
 }
 
-function ModelProviderCard({
-  provider,
-  selecting = false,
-  onSelect
+function ModelActiveProviderStrip({
+  activeProviderLabel,
+  preferredMeshPeerLabel
 }: {
-  provider: ModelProviderViewModel
-  selecting?: boolean
-  onSelect?: (provider: ModelProviderViewModel) => void
+  activeProviderLabel: string
+  preferredMeshPeerLabel: string
 }) {
-  const Icon = provider.providerType.includes('mobile') ? Smartphone : Cpu
-  const selectLabel = provider.selected ? 'Selected' : selecting ? `Selecting ${provider.name}` : `Select ${provider.name}`
   return (
-    <article className={`aui-model-card aui-model-card-${provider.availability}`}>
-      <header>
-        <span className="aui-model-icon"><Icon size={18} aria-hidden="true" /></span>
-        <div>
-          <h2>{provider.name}</h2>
-          <code>{provider.id}</code>
-        </div>
-        <StatusBadge state={provider.availability} />
-      </header>
-      <dl className="aui-model-meta">
-        <div><dt>Route</dt><dd>{provider.routeLabel}</dd></div>
-        <div><dt>Route quality</dt><dd>{provider.routeQuality}</dd></div>
-        <div><dt>Health</dt><dd>{provider.health} · {provider.healthReason}</dd></div>
-        <div><dt>Latency/context</dt><dd>{provider.latencyContext}</dd></div>
-        <div><dt>Hardware</dt><dd>{provider.hardware}</dd></div>
-        <div><dt>Benchmark</dt><dd>{provider.benchmark}</dd></div>
-        <div><dt>Files</dt><dd>{provider.files}</dd></div>
-        <div><dt>Model</dt><dd>{provider.modelIdentity}</dd></div>
-        <div><dt>Privacy</dt><dd><PrivacyBadge privacy={provider.privacyClass} /></dd></div>
-      </dl>
-      <div className="aui-model-capabilities" aria-label={`${provider.name} capabilities`}>
-        {provider.capabilities.map((capability) => <EvidenceBadge key={capability} label={capability} />)}
-      </div>
-      <div className="aui-model-actions">
-        <ModelAction
-          icon="route"
-          label={selectLabel}
-          enabled={provider.canSelect && !provider.selected && !selecting}
-          reason={provider.selectReason}
-          onClick={provider.canSelect && onSelect ? () => { onSelect(provider) } : undefined}
-        />
-        <ModelAction icon="download" label="Import" enabled={provider.canImport} reason={provider.importReason} />
-        <ModelAction icon="download" label="Download" enabled={provider.canDownload} reason={provider.downloadReason} />
-        <ModelAction icon="benchmark" label="Benchmark" enabled={provider.canBenchmark} reason={provider.benchmarkReason} />
-      </div>
-      {provider.blockers.length > 0 ? (
-        <ul className="aui-model-blockers">
-          {provider.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
-        </ul>
-      ) : null}
-    </article>
-  )
-}
-
-function ModelRoutePolicyBanner({
-  providers,
-  selectedProviderId
-}: {
-  providers: ModelProviderViewModel[]
-  selectedProviderId: string | null
-}) {
-  const selected = providers.find((provider) => provider.selected)
-  const routeable = providers.filter(providerRouteable)
-  return (
-    <section className="aui-model-policy-banner" aria-labelledby="model-current-route-policy-title">
+    <div
+      className="flex flex-wrap items-center gap-5 rounded-xl border border-border bg-card px-4 py-3.5"
+      aria-label="Active provider and preferred mesh peer"
+    >
       <div>
-        <p className="aui-kicker">Current route policy banner</p>
-        <h2 id="model-current-route-policy-title">Current route policy</h2>
-        <p>
-          {selected
-            ? `${selected.name} is the selected provider; local executable provider changes use Config.Set through AdminAction.`
-            : selectedProviderId
-              ? `Backend selected provider ${selectedProviderId}, but it was not returned in the current catalog.`
-              : 'No provider is currently selected; Assistant will keep model repair guidance visible.'}
-        </p>
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Active provider (chat)</p>
+        <p className="mt-0.5 text-sm font-semibold">{activeProviderLabel}</p>
       </div>
-      <div className="aui-model-policy-banner-actions">
-        <EvidenceBadge label={`${routeable.length} routeable providers`} />
-        <EvidenceBadge label={`${providers.filter((provider) => provider.canBenchmark).length} benchmark operations`} />
-        <a href="/" className="aui-model-repair-link">No model configured assistant repair link</a>
+      <div className="h-7 w-px bg-border" aria-hidden="true" />
+      <div>
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Preferred mesh peer (optional)</p>
+        <p className="mt-0.5 text-sm font-semibold">{preferredMeshPeerLabel}</p>
       </div>
-    </section>
+    </div>
   )
 }
 
-function ModelRuntimeCategories({ rows }: { rows: ModelRuntimeCategoryRow[] }) {
+function ModelProviderGroups({
+  groups,
+  selectingProviderId,
+  preferredMeshPeerId,
+  onSelect,
+  onSetPreferredPeer,
+  onConfigure
+}: {
+  groups: ModelProviderGroup[]
+  selectingProviderId: string | null
+  preferredMeshPeerId: string | null
+  onSelect: (provider: ModelProviderViewModel) => void
+  onSetPreferredPeer: (provider: ModelProviderViewModel) => void
+  onConfigure: (provider: ModelProviderViewModel) => void
+}) {
   return (
-    <dl className="aui-model-categories-list" aria-label="Model runtime categories">
-      {rows.map((row) => (
-        <div key={row.id}>
-          <dt>{row.label}</dt>
-          <dd>
-            <StatusBadge state={row.state} />
-            <strong>{row.value}</strong>
-            <small>{row.detail}</small>
-          </dd>
-        </div>
-      ))}
-    </dl>
-  )
-}
-
-function ModelRoutePolicyPanel({ providers }: { providers: ModelProviderViewModel[] }) {
-  return (
-    <div className="aui-model-route-grid">
-      {providers.map((provider) => (
-        <article className="aui-model-route-card" key={provider.id}>
-          <header>
-            <div>
-              <p className="aui-kicker">{provider.providerType} provider</p>
-              <h3>{provider.name}</h3>
+    <div className="flex flex-col gap-6">
+      {groups.map((group) => (
+        <section key={group.id} aria-labelledby={`model-provider-group-${group.id}`}>
+          <div className="mb-2.5 flex items-center gap-1.5">
+            <span className="text-muted-foreground" aria-hidden="true">
+              {groupIcon(group.id)}
+            </span>
+            <h2 id={`model-provider-group-${group.id}`} className="text-[12.5px] font-semibold">
+              {group.label}
+            </h2>
+          </div>
+          {group.providers.length > 0 ? (
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3.5">
+              {group.providers.map((provider) => (
+                <ModelProviderCard
+                  key={provider.id}
+                  provider={provider}
+                  selecting={selectingProviderId === provider.id}
+                  preferred={provider.id === preferredMeshPeerId}
+                  onSelect={onSelect}
+                  onSetPreferredPeer={onSetPreferredPeer}
+                  onConfigure={onConfigure}
+                />
+              ))}
             </div>
-            <StatusBadge state={provider.availability} />
-          </header>
-          <MetaGrid
-            items={[
-              { label: 'Route', value: provider.routeLabel },
-              { label: 'Privacy', value: <PrivacyBadge privacy={provider.privacyClass} /> },
-              { label: 'Selectable', value: provider.canSelect ? `yes; writes ${provider.selectConfigValue ?? 'unknown'} through Config.Set AdminAction` : provider.selectReason },
-              { label: 'Blockers', value: presentableSignal(provider.blockers.length > 0 ? provider.blockers.join(', ') : 'none reported') }
-            ]}
-          />
-        </article>
+          ) : null}
+        </section>
       ))}
     </div>
   )
 }
 
-function ModelBenchmarkSnapshot({ rows }: { rows: ModelBenchmarkSnapshotRow[] }) {
+function ModelProviderCard({
+  provider,
+  selecting = false,
+  preferred = false,
+  onSelect,
+  onSetPreferredPeer,
+  onConfigure
+}: {
+  provider: ModelProviderViewModel
+  selecting?: boolean
+  preferred?: boolean
+  onSelect?: (provider: ModelProviderViewModel) => void
+  onSetPreferredPeer?: (provider: ModelProviderViewModel) => void
+  onConfigure?: (provider: ModelProviderViewModel) => void
+}) {
+  const isMesh = provider.providerType === 'mesh'
+  const configValue = provider.selectConfigValue
+  const isActiveOrPreferred = isMesh ? preferred : provider.selected
+
   return (
-    <section className="aui-model-benchmark" aria-labelledby="model-benchmark-title">
-      <div className="aui-model-panel-title compact">
-        <span><Gauge size={16} aria-hidden="true" /></span>
-        <div>
-          <h2 id="model-benchmark-title">Benchmark snapshot</h2>
-          <p>Only backend-reported benchmark facts are shown; missing measurements stay explicit.</p>
+    <Card className="border-[1.5px]">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <p className="text-[13.5px] font-semibold">{provider.name}</p>
+            {isActiveOrPreferred ? <Badge className="px-2 py-0 text-[9.5px]">{isMesh ? 'Preferred' : 'Active'}</Badge> : null}
+          </div>
+          <ToneBadge tone={healthTone(provider.availability)} className="text-[10px] whitespace-nowrap">
+            {modelHealthLabel(provider.availability)}
+          </ToneBadge>
+        </div>
+
+        <dl className="flex flex-col gap-1 text-[11.5px]">
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Model</dt>
+            <dd className="font-mono">{modelName(provider)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Context</dt>
+            <dd>{contextWindowLabel(provider)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Data leaves device</dt>
+            <dd>{dataLeavesDeviceLabel(provider)}</dd>
+          </div>
+          {isMesh ? (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Latency</dt>
+              <dd>{latencyOnlyLabel(provider)}</dd>
+            </div>
+          ) : null}
+        </dl>
+
+        <div className="flex flex-wrap gap-2">
+          {configValue && !isMesh ? (
+            <Button variant="outline" onClick={onConfigure ? () => onConfigure(provider) : undefined}>
+              Configure
+            </Button>
+          ) : null}
+          {isMesh ? (
+            <Button
+              variant={preferred ? 'outline' : 'primary'}
+              className="flex-1"
+              disabled={preferred}
+              onClick={onSetPreferredPeer ? () => onSetPreferredPeer(provider) : undefined}
+            >
+              {preferred ? 'Preferred peer' : 'Set as preferred peer'}
+            </Button>
+          ) : (
+            <Button
+              variant={provider.selected ? 'outline' : 'primary'}
+              className="flex-1"
+              disabled={provider.selected || !provider.canSelect || selecting}
+              disabledReason={provider.selected ? undefined : provider.selectReason}
+              busy={selecting}
+              onClick={provider.canSelect && onSelect ? () => onSelect(provider) : undefined}
+            >
+              {provider.selected ? 'Active' : selecting ? 'Setting active' : 'Set as active'}
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          <ModelAction icon="download" label="Import" enabled={provider.canImport} reason={provider.importReason} />
+          <ModelAction icon="download" label="Download" enabled={provider.canDownload} reason={provider.downloadReason} />
+          <ModelAction icon="benchmark" label="Benchmark" enabled={provider.canBenchmark} reason={provider.benchmarkReason} />
         </div>
       </div>
-      <table className="aui-model-benchmark-table">
-        <caption>Benchmark snapshot table</caption>
-        <thead>
-          <tr>
-            <th scope="col">Metric</th>
-            <th scope="col">State</th>
-            <th scope="col">Value</th>
-            <th scope="col">Backend detail</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.label}>
-              <th scope="row">{row.label}</th>
-              <td><StatusBadge state={row.state} /></td>
-              <td>{row.value}</td>
-              <td>{row.detail}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+    </Card>
   )
 }
 
-function ModelSetupActions({ providers }: { providers: ModelProviderViewModel[] }) {
-  const selected = providers.find((provider) => provider.selected)
-  const importProvider = providers.find((provider) => provider.canImport) ?? selected ?? providers[0]
-  const downloadProvider = providers.find((provider) => provider.canDownload) ?? selected ?? providers[0]
-  return (
-    <section className="aui-model-setup" aria-labelledby="model-setup-title">
-      <div className="aui-model-panel-title compact">
-        <span><Download size={16} aria-hidden="true" /></span>
-        <div>
-          <h2 id="model-setup-title">Model path/import/download setup CTA</h2>
-          <p>Setup actions are visible, but mutating operations stay disabled without backend AdminAction contracts.</p>
-        </div>
-      </div>
-      <div className="aui-model-setup-actions">
-        <ModelAction icon="download" label="Set model path" enabled={false} reason={selected ? `Provider selection confirmation: ${selected.name} is selected; configure paths through backend AdminAction when exposed.` : 'No model configured; open Assistant repair link first.'} />
-        <ModelAction icon="download" label="Import model" enabled={Boolean(importProvider?.canImport)} reason={importProvider?.importReason ?? 'No provider available for model import.'} />
-        <ModelAction icon="download" label="Download model" enabled={Boolean(downloadProvider?.canDownload)} reason={downloadProvider?.downloadReason ?? 'No provider available for model download.'} />
-      </div>
-      <p className="aui-model-selection-confirmation">
-        Provider selection confirmation: {selected ? `${selected.name} is selected by backend catalog status.` : 'no provider selected by backend catalog status.'}
-      </p>
-      <a href="/" className="aui-model-repair-link">Open Assistant model repair</a>
-    </section>
-  )
-}
-
-function ModelWarnings({ warnings }: { warnings: string[] }) {
-  return warnings.length === 0 ? null : (
-    <section className="aui-model-warnings" aria-labelledby="model-warning-title">
-      <div className="aui-model-panel-title compact">
-        <span><AlertTriangle size={16} aria-hidden="true" /></span>
-        <div>
-          <h2 id="model-warning-title">Runtime warnings</h2>
-          <p>Capabilities are disabled or degraded until backend/native proof allows them.</p>
-        </div>
-      </div>
-      <ul>
-        {warnings.map((warning) => <li key={warning}>{warning}</li>)}
-      </ul>
-    </section>
-  )
-}
-
-function ModelProviderTable({ providers }: { providers: ModelProviderViewModel[] }) {
-  const columns: DataColumn<ModelProviderViewModel>[] = [
+function ModelProviderCompareTable({
+  providers,
+  preferredMeshPeerId
+}: {
+  providers: ModelProviderViewModel[]
+  preferredMeshPeerId: string | null
+}) {
+  const columns: Array<DataColumn<ModelProviderViewModel>> = [
     {
       key: 'provider',
       header: 'Provider',
       render: (provider) => (
-        <div>
-          <span>{provider.name}</span>
-          <code>{provider.id}</code>
-        </div>
+        <span className="font-medium">
+          {provider.name}
+          {isActiveOrPreferredProvider(provider, preferredMeshPeerId) ? (
+            <span className="font-semibold text-primary" aria-label="active provider">
+              {' '}
+              &#9733;
+            </span>
+          ) : null}
+        </span>
       )
     },
+    { key: 'type', header: 'Type', render: (provider) => <span className="text-muted-foreground">{modelProviderTypeLabel(provider)}</span> },
+    { key: 'model', header: 'Model', mono: true, render: (provider) => <code>{modelName(provider)}</code> },
+    { key: 'context', header: 'Context', render: (provider) => <span className="text-muted-foreground">{contextWindowLabel(provider)}</span> },
     {
-      key: 'state',
-      header: 'State',
-      render: (provider) => <StatusBadge state={provider.availability} />
+      key: 'data-leaves-device',
+      header: 'Data leaves device',
+      render: (provider) => <span className="text-muted-foreground">{dataLeavesDeviceLabel(provider)}</span>
     },
     {
-      key: 'route',
-      header: 'Route/privacy',
-      render: (provider) => (
-        <div>
-          {provider.routeLabel}
-          <PrivacyBadge privacy={provider.privacyClass} />
-        </div>
-      )
-    },
-    {
-      key: 'hardware',
-      header: 'Hardware',
-      hideAt: 'lg',
-      render: (provider) => provider.hardware
-    },
-    {
-      key: 'benchmark',
-      header: 'Benchmark',
-      hideAt: 'lg',
-      render: (provider) => provider.benchmark
-    },
-    {
-      key: 'latency',
-      header: 'Latency/context',
-      hideAt: 'md',
-      render: (provider) => provider.latencyContext
-    },
-    {
-      key: 'operation',
-      header: 'Operation',
-      render: (provider) => provider.operationStatus
+      key: 'health',
+      header: 'Health',
+      render: (provider) => <ToneBadge tone={healthTone(provider.availability)}>{modelHealthLabel(provider.availability)}</ToneBadge>
     }
   ]
+  return <DataTable columns={columns} rows={providers} getRowKey={(provider) => provider.id} />
+}
 
-  return (
-    <DataTable
-      columns={columns}
-      rows={providers}
-      getRowKey={(provider) => provider.id}
-    />
-  )
+function ModelUsageBenchmarkTable({ providers }: { providers: ModelProviderViewModel[] }) {
+  const columns: Array<DataColumn<ModelProviderViewModel>> = [
+    { key: 'provider', header: 'Provider', render: (provider) => <span className="font-medium">{provider.name}</span> },
+    {
+      key: 'requests',
+      header: 'Requests',
+      align: 'end',
+      render: (provider) => <span className="text-muted-foreground">{usageRequestsLabel(provider)}</span>
+    },
+    {
+      key: 'avg-latency',
+      header: 'Avg latency',
+      align: 'end',
+      render: (provider) => <span className="text-muted-foreground">{latencyOnlyLabel(provider)}</span>
+    },
+    {
+      key: 'tokens-per-sec',
+      header: 'Tokens/sec',
+      align: 'end',
+      render: (provider) => <span className="text-muted-foreground">{tokensPerSecondLabel(provider)}</span>
+    },
+    {
+      key: 'error-rate',
+      header: 'Error rate',
+      align: 'end',
+      render: (provider) => <span className="text-muted-foreground">{errorRateLabel(provider)}</span>
+    },
+    {
+      key: 'cost-accrued',
+      header: 'Cost accrued',
+      align: 'end',
+      render: (provider) => <span className="text-muted-foreground">{costAccruedLabel(provider)}</span>
+    }
+  ]
+  return <DataTable columns={columns} rows={providers} getRowKey={(provider) => provider.id} />
 }
 
 function ModelAction({
   icon,
   label,
   enabled,
-  reason,
-  onClick
+  reason
 }: {
   icon: 'route' | 'download' | 'benchmark'
   label: string
   enabled: boolean
   reason: string
-  onClick?: (() => void) | undefined
 }) {
-  const Icon = icon === 'route' ? Route : icon === 'benchmark' ? Gauge : Download
+  const Icon = icon === 'benchmark' ? Gauge : Download
   return (
-    <button type="button" disabled={!enabled} title={reason} aria-label={`${label}: ${reason}`} onClick={onClick}>
-      <Icon size={15} aria-hidden="true" />
+    <button
+      type="button"
+      disabled={!enabled}
+      aria-label={label}
+      title={reason}
+      data-action-reason={reason ? 'runtime-managed' : undefined}
+      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Icon size={13} aria-hidden="true" />
       <span>{label}</span>
     </button>
   )
@@ -652,10 +749,185 @@ function ModelAction({
 function ModelNotice({ icon, message, role = 'status' }: { icon: 'loading' | 'error' | 'empty'; message: string; role?: 'status' | 'alert' }) {
   const Icon = icon === 'loading' ? RefreshCcw : icon === 'empty' ? HardDrive : Route
   return (
-    <p className={`aui-model-notice ${icon}`} role={role}>
+    <p
+      className={cn(
+        'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm',
+        icon === 'error' ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-border bg-muted/30 text-muted-foreground'
+      )}
+      role={role}
+    >
       <Icon size={16} aria-hidden="true" />
       <span>{message}</span>
     </p>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Configure provider dialog - fields generated per-backend from the real
+// services.orchestrator.llm option schema via Config.GetSchemaMetadata.
+// ---------------------------------------------------------------------------
+
+function providerConfigSection(configValue: string): string {
+  if (configValue === 'openai') return 'services.orchestrator.llm.third_party.openai.options'
+  if (configValue === 'huggingface_endpoint') return 'services.orchestrator.llm.third_party.huggingface_endpoint.options'
+  if (configValue === 'huggingface_pipeline') return 'services.orchestrator.llm.local.huggingface_pipeline.options'
+  return 'services.orchestrator.llm.local.llama_cpp.options'
+}
+
+function configureFieldInitialValue(field: ConfigFieldMetadata): string {
+  if (field.secret) return ''
+  const value = field.current_value ?? field.default
+  if (value === undefined || value === null) return ''
+  return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
+
+function parseConfigureFieldValue(raw: string, type: string): JsonValue {
+  if (type === 'int') return Number.parseInt(raw, 10)
+  if (type === 'float') return Number(raw)
+  if (type === 'bool') return raw === 'true'
+  return raw
+}
+
+function configureNumericBound(field: ConfigFieldMetadata, key: 'minimum' | 'maximum'): number | undefined {
+  const value = field.constraints[key]
+  return typeof value === 'number' ? value : undefined
+}
+
+function ConfigureProviderDialog({
+  provider,
+  fields,
+  values,
+  loadState,
+  error,
+  saving,
+  onChange,
+  onCancel,
+  onSave
+}: {
+  provider: ModelProviderViewModel | null
+  fields: ConfigFieldMetadata[]
+  values: Record<string, string>
+  loadState: ConfigureLoadState
+  error: string | null
+  saving: boolean
+  onChange: (keyPath: string, value: string) => void
+  onCancel: () => void
+  onSave: () => void
+}) {
+  if (!provider) return null
+  const visibleFields = fields.filter((field) => field.type !== 'dict' && field.type !== 'list')
+  return (
+    <Dialog
+      open
+      onOpenChange={(next: boolean) => {
+        if (!next) onCancel()
+      }}
+    >
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Configure {provider.name}</DialogTitle>
+          <DialogDescription>Fields are generated from the backend option schema reported by Config.GetSchemaMetadata.</DialogDescription>
+        </DialogHeader>
+        {loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading configuration schema.</p> : null}
+        {loadState === 'error' ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {loadState === 'ready' ? (
+          <div className="flex flex-col gap-3">
+            {visibleFields.map((field) => (
+              <FormField
+                key={field.key_path}
+                label={field.title ?? field.key_path}
+                htmlFor={field.key_path}
+                helper={field.description || undefined}
+              >
+                <ConfigureFieldInput field={field} value={values[field.key_path] ?? ''} onChange={(value) => onChange(field.key_path, value)} />
+              </FormField>
+            ))}
+            {error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={onSave} disabled={loadState !== 'ready' || saving} busy={saving}>
+            Save &amp; test
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ConfigureFieldInput({
+  field,
+  value,
+  onChange
+}: {
+  field: ConfigFieldMetadata
+  value: string
+  onChange: (value: string) => void
+}) {
+  if (field.choices && field.choices.length > 0) {
+    return (
+      <Select value={value} onValueChange={(next) => onChange(next ?? '')}>
+        <SelectTrigger className="w-full" id={field.key_path}>
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent>
+          {field.choices.map((choice) => {
+            const option = String(choice)
+            return (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            )
+          })}
+        </SelectContent>
+      </Select>
+    )
+  }
+  if (field.type === 'bool') {
+    return (
+      <Select value={value || 'false'} onValueChange={(next) => onChange(next ?? 'false')}>
+        <SelectTrigger className="w-full" id={field.key_path}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="true">Enabled</SelectItem>
+          <SelectItem value="false">Disabled</SelectItem>
+        </SelectContent>
+      </Select>
+    )
+  }
+  if (field.type === 'int' || field.type === 'float') {
+    return (
+      <Input
+        id={field.key_path}
+        type="number"
+        min={configureNumericBound(field, 'minimum')}
+        max={configureNumericBound(field, 'maximum')}
+        step={field.type === 'float' ? 0.1 : 1}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    )
+  }
+  return (
+    <Input
+      id={field.key_path}
+      type={field.secret ? 'password' : 'text'}
+      value={value}
+      placeholder={field.secret ? 'Unchanged (leave blank to keep current value)' : undefined}
+      onChange={(event) => onChange(event.target.value)}
+    />
   )
 }
 
@@ -673,6 +945,125 @@ function providerCandidates(graph: CapabilityGraph | null): Map<string, Capabili
     }
   }
   return result
+}
+
+function preferredMeshPeerLabel(providers: ModelProviderViewModel[]): string {
+  const selectedMesh = providers.find((provider) => provider.selected && provider.providerType === 'mesh')
+  if (selectedMesh) return selectedMesh.name
+  return 'None selected'
+}
+
+function isActiveOrPreferredProvider(provider: ModelProviderViewModel, preferredMeshPeerId: string | null): boolean {
+  if (provider.providerType === 'mesh') return provider.id === preferredMeshPeerId
+  return provider.selected
+}
+
+function healthTone(state: AvailabilityState): BadgeTone {
+  if (state === 'available-local' || state === 'available-remote') return 'success'
+  if (state === 'degraded' || state === 'pending' || state === 'stale') return 'warning'
+  if (state === 'denied' || state === 'privacy-blocked' || state === 'offline') return 'danger'
+  return 'neutral'
+}
+
+function modelProviderGroups(providers: ModelProviderViewModel[]): ModelProviderGroup[] {
+  const groups: ModelProviderGroup[] = [
+    {
+      id: 'local',
+      label: 'Local providers',
+      detail: 'Local desktop and native-device providers reported by the runtime catalog.',
+      providers: providers.filter((provider) => providerGroupId(provider) === 'local')
+    },
+    {
+      id: 'cloud',
+      label: 'Cloud providers',
+      detail: 'External providers remain policy-gated by Aurora.',
+      providers: providers.filter((provider) => providerGroupId(provider) === 'cloud')
+    },
+    {
+      id: 'mesh',
+      label: 'Mesh providers',
+      detail: 'Peer-backed providers are separate from the active chat provider and require route/privacy review.',
+      providers: providers.filter((provider) => providerGroupId(provider) === 'mesh')
+    },
+    {
+      id: 'coding-agent',
+      label: 'Coding agent providers',
+      detail: 'Shown only when the SDK catalog advertises coding-agent provider data.',
+      providers: providers.filter((provider) => providerGroupId(provider) === 'coding-agent')
+    }
+  ]
+  return groups.filter((group) => group.providers.length > 0 || group.id === 'coding-agent')
+}
+
+function providerGroupId(provider: ModelProviderViewModel): ModelProviderGroup['id'] {
+  const providerType = provider.providerType.toLowerCase()
+  const backendKind = provider.backendKind.toLowerCase()
+  const capabilities = provider.capabilities.join(' ').toLowerCase()
+  if (providerType.includes('coding') || backendKind.includes('coding') || capabilities.includes('coding-agent')) return 'coding-agent'
+  if (providerType === 'mesh' || backendKind.includes('mesh')) return 'mesh'
+  if (providerType === 'cloud' || providerType === 'remote' || backendKind.includes('cloud')) return 'cloud'
+  return 'local'
+}
+
+function groupIcon(id: ModelProviderGroup['id']) {
+  if (id === 'cloud') return <Cloud size={14} aria-hidden="true" />
+  if (id === 'mesh') return <Network size={14} aria-hidden="true" />
+  if (id === 'coding-agent') return <Terminal size={14} aria-hidden="true" />
+  return <Cpu size={14} aria-hidden="true" />
+}
+
+function modelProviderTypeLabel(provider: ModelProviderViewModel): string {
+  if (providerGroupId(provider) === 'coding-agent') return 'Coding agent'
+  if (provider.providerType === 'mesh') return 'Mesh peer'
+  if (provider.providerType === 'cloud' || provider.providerType === 'remote') return 'Cloud'
+  if (provider.providerType.includes('mobile')) return 'Local light'
+  return 'Local'
+}
+
+function modelName(provider: ModelProviderViewModel): string {
+  return provider.modelIdentity.split(';')[0]?.trim() || 'Model pending'
+}
+
+function contextWindowLabel(provider: ModelProviderViewModel): string {
+  const match = provider.latencyContext.match(/(\d+) token context/)
+  return match?.[1] ? `${Number(match[1]).toLocaleString('en-US')} tokens` : 'Pending'
+}
+
+function dataLeavesDeviceLabel(provider: ModelProviderViewModel): string {
+  if (provider.providerType === 'cloud' || provider.providerType === 'remote') return 'Yes'
+  if (provider.providerType === 'mesh') return 'Peer only'
+  return 'No'
+}
+
+function latencyOnlyLabel(provider: ModelProviderViewModel): string {
+  const match = provider.latencyContext.match(/(\d+) ms latency/)
+  return match?.[1] ? `${Number(match[1]).toLocaleString('en-US')}ms` : 'Pending'
+}
+
+function tokensPerSecondLabel(provider: ModelProviderViewModel): string {
+  const match = provider.benchmark.match(/([\d.]+) tok\/s/)
+  return match?.[1] ?? 'Pending'
+}
+
+function usageRequestsLabel(provider: ModelProviderViewModel): string {
+  return provider.operationStatus === 'no operation active' ? '0' : 'Active'
+}
+
+function errorRateLabel(provider: ModelProviderViewModel): string {
+  return provider.availability === 'denied' || provider.availability === 'privacy-blocked' ? 'Policy held' : '0%'
+}
+
+function costAccruedLabel(provider: ModelProviderViewModel): string {
+  return provider.providerType === 'cloud' || provider.providerType === 'remote' ? '$0.00' : 'Local'
+}
+
+function modelHealthLabel(state: AvailabilityState): string {
+  if (state === 'available-local' || state === 'available-remote') return 'Healthy'
+  if (state === 'degraded') return 'Needs review'
+  if (state === 'pending' || state === 'stale') return 'Pending'
+  if (state === 'privacy-blocked' || state === 'denied') return 'Policy held'
+  if (state === 'offline') return 'Offline'
+  return 'Planned'
 }
 
 function providerModel(

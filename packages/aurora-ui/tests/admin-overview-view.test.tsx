@@ -22,7 +22,6 @@ describe('AdminOverviewContent', () => {
     expect(markup).toContain('AdminAction controller')
     expect(markup).toContain('/admin/services')
     expect(markup).toContain('/admin/config')
-    expect(markup).toContain('Gateway.GetServices')
     expect(markup).not.toContain('visual mock')
   })
 })

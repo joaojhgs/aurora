@@ -10,9 +10,10 @@ import type {
   DeploymentTopologyResponse,
   MethodDescriptor
 } from '@aurora/client'
+import { buttonVariants } from '#components/ui/button'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
-import { Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
+import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
 
 export interface AdminOverviewViewProps {
   client: AuroraClient
@@ -30,6 +31,10 @@ interface ActivityItem {
   label: string
   detail: string
 }
+
+const emptyPanelClass = 'flex flex-col items-start gap-2 rounded-lg border border-dashed border-border p-4 text-sm'
+const gapListItemClass = 'grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-lg border border-border p-3'
+const chipLinkClass = buttonVariants({ variant: 'outline', size: 'sm' })
 
 export function AdminOverviewView({ client }: AdminOverviewViewProps) {
   const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
@@ -68,24 +73,17 @@ export async function buildAdminOverviewSnapshot(client: AuroraClient): Promise<
 export function AdminOverviewContent({ manifest, transportKind, error }: AdminOverviewContentProps) {
   if (!manifest) {
     return (
-      <div className="aui-admin-overview">
+      <div className="flex flex-col gap-6">
         <PageHeader
           id="admin-overview-title"
           eyebrow="Admin"
           title="Admin overview"
           description="Aurora could not load the admin overview manifest. Controls stay disabled until service status is available."
-          badges={
-            <>
-              <EvidenceBadge label={transportKind} />
-              <EvidenceBadge label="secrets protected" />
-              <EvidenceBadge label="pending" />
-            </>
-          }
         />
-        <div className="aui-admin-empty" role="alert">
-          <h2>Service overview unavailable</h2>
-          <p>{errorMessage(error)}</p>
-          <a className="aui-action-chip" href="/diagnostics">Open diagnostics</a>
+        <div className={emptyPanelClass} role="alert">
+          <h2 className="text-base font-semibold">Service overview unavailable</h2>
+          <p className="text-muted-foreground">{errorMessage(error)}</p>
+          <a className={chipLinkClass} href="/diagnostics">Open diagnostics</a>
         </div>
       </div>
     )
@@ -97,31 +95,22 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
   const manageMethods = manifest.methods.filter((method) => method.methodType === 'manage')
 
   return (
-    <div className="aui-admin-overview">
+    <div className="flex flex-col gap-6">
       <PageHeader
         id="admin-overview-title"
         eyebrow="Admin"
         title="Admin overview"
         description="Deployment posture, service health, capability gaps, and repair paths are rendered from the SDK admin overview manifest."
-        badges={
-          <>
-            <EvidenceBadge label={transportKind} />
-            <EvidenceBadge label={manifest.privacy.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-            <EvidenceBadge label={manifest.generatedAt} />
-          </>
-        }
         actions={
-          <div className="aui-action-row-tight">
-            <a className="aui-btn aui-btn-ghost" href="/diagnostics">Diagnostics export</a>
-            <a className="aui-btn aui-btn-ghost" href="/admin/services">Services</a>
-            <a className="aui-btn aui-btn-ghost" href="/admin/contracts">Contracts registry</a>
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/diagnostics">Diagnostics export</a>
+            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/admin/services">Services</a>
+            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/admin/contracts">Contracts registry</a>
           </div>
         }
       />
 
-      <AdminOverviewMetrics manifest={manifest} gaps={gaps} posture={posture} />
-
-      <div className="aui-admin-grid">
+      <div className="flex flex-col gap-3.5">
         <PosturePanel manifest={manifest} posture={posture} />
         <DeploymentTopologyPanel manifest={manifest} transportKind={transportKind} />
         <ServiceHealthPanel services={manifest.services} />
@@ -129,62 +118,36 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
         <ActivityPanel items={activity} />
       </div>
 
-      <section className="aui-admin-panel" aria-labelledby="admin-action-title">
-        <div className="aui-admin-panel-header">
-          <div>
-            <p className="aui-kicker">Mutation boundary</p>
-            <h2 id="admin-action-title">AdminAction controller</h2>
-          </div>
-          <EvidenceBadge label={`${manageMethods.length} manage methods`} />
-        </div>
-        <p>
+      <Card
+        description="Mutation boundary"
+        actions={<EvidenceBadge label={`${manageMethods.length} manage methods`} />}
+        ariaLabel="AdminAction controller"
+      >
+        <h2 id="admin-action-title" className="text-base font-semibold">AdminAction controller</h2>
+        <p className="text-sm text-muted-foreground">
           Manage/admin-critical operations are visible for audit planning only. They remain disabled here until a dedicated AdminAction flow provides draft, confirm, submit, rollback, and error state.
         </p>
         {manageMethods.length > 0 ? (
-          <div className="aui-admin-action-list">
+          <div className="flex flex-wrap gap-1.5">
             {manageMethods.slice(0, 8).map((method) => (
-              <button
+              <Button
                 key={`${method.module}.${method.name}`}
                 type="button"
-                className="aui-action-chip"
+                variant="outline"
                 disabled
-                title="AdminAction draft/confirm/audit is required before this mutation can run."
+                disabledReason="AdminAction draft/confirm/audit is required before this mutation can run."
               >
                 {method.module}.{method.name}
-              </button>
+              </Button>
             ))}
           </div>
         ) : (
-          <p>No manage methods were reported by the registry.</p>
+          <p className="text-sm text-muted-foreground">No manage methods were reported by the registry.</p>
         )}
-      </section>
+      </Card>
     </div>
   )
 }
-
-function AdminOverviewMetrics({
-  manifest,
-  gaps,
-  posture
-}: {
-  manifest: AdminOverviewManifest
-  gaps: CapabilitySummary[]
-  posture: AvailabilityState
-}) {
-  const healthyServices = manifest.services.filter((service) => service.status.toLowerCase() === 'healthy').length
-  return (
-    <StatStrip
-      ariaLabel="Deployment metrics"
-      items={[
-        { label: 'Services', value: String(manifest.totals.services), caption: `${healthyServices}/${manifest.totals.services} healthy from Gateway.GetServices and registry summaries` },
-        { label: 'Capability gaps', value: String(gaps.length), caption: `${manifest.totals.capabilityActions} catalog actions; denied/stale/privacy-blocked/unsupported stay visible` },
-        { label: 'Mesh peers', value: String(manifest.totals.peers), caption: `Peer summaries reported by SDK; peer state invented=${String(manifest.privacy.peerStateInvented)}` },
-        { label: 'Deployment posture', value: <StatusBadge state={posture} />, caption: manifest.deploymentTopology ? deploymentModeLabel(manifest.deploymentTopology) : 'topology status unavailable' }
-      ]}
-    />
-  )
-}
-
 
 function PosturePanel({ manifest, posture }: { manifest: AdminOverviewManifest; posture: AvailabilityState }) {
   const topology = manifest.deploymentTopology
@@ -194,7 +157,7 @@ function PosturePanel({ manifest, posture }: { manifest: AdminOverviewManifest; 
       actions={<StatusBadge state={posture} />}
       ariaLabel="Deployment posture"
     >
-      <h2 className="aui-section-title">Posture</h2>
+      <h2 className="text-base font-semibold">Posture</h2>
       <MetaGrid
         ariaLabel="Deployment posture facts"
         items={[
@@ -241,7 +204,7 @@ function DeploymentTopologyPanel({
       ariaLabel="Deployment topology"
       flush={visibleServices.length > 0}
     >
-      <h2 className="aui-section-title">Deployment topology</h2>
+      <h2 className="text-base font-semibold">Deployment topology</h2>
       {topology ? (
         <>
           <MetaGrid
@@ -259,21 +222,21 @@ function DeploymentTopologyPanel({
           />
 
           {degradedReasons.length > 0 ? (
-            <ul className="aui-admin-gap-list" aria-label="Deployment degraded reasons">
+            <ul className="grid list-none gap-2 p-0" aria-label="Deployment degraded reasons">
               {degradedReasons.map((reason) => (
-                <li key={reason}>
-                  <div>
-                    <strong>{reason}</strong>
-                    <small>{degradedReasonCopy(reason)}</small>
+                <li key={reason} className={gapListItemClass}>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <strong className="text-sm font-medium">{reason}</strong>
+                    <small className="text-xs text-muted-foreground">{degradedReasonCopy(reason)}</small>
                   </div>
                   <StatusBadge state="degraded" />
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="aui-admin-empty">
-              <h3>No topology degradation reported</h3>
-              <p>BE-016 did not report Redis, BullMQ, process registry, or mesh topology degradation in this snapshot.</p>
+            <div className={emptyPanelClass}>
+              <h3 className="font-medium">No topology degradation reported</h3>
+              <p className="text-muted-foreground">BE-016 did not report Redis, BullMQ, process registry, or mesh topology degradation in this snapshot.</p>
             </div>
           )}
 
@@ -287,31 +250,31 @@ function DeploymentTopologyPanel({
           ) : null}
         </>
       ) : (
-        <div className="aui-admin-empty" role="status">
-          <h3>Deployment topology unavailable</h3>
-          <p>{manifest.deploymentTopologyError ?? 'Gateway.GetDeploymentTopology did not return service contract status.'}</p>
-          <a className="aui-action-chip" href="/diagnostics">Open diagnostics</a>
+        <div className={emptyPanelClass} role="status">
+          <h3 className="font-medium">Deployment topology unavailable</h3>
+          <p className="text-muted-foreground">{manifest.deploymentTopologyError ?? 'Gateway.GetDeploymentTopology did not return service contract status.'}</p>
+          <a className={chipLinkClass} href="/diagnostics">Open diagnostics</a>
         </div>
       )}
 
-      <div className="aui-admin-action-list" aria-label="Deployment topology links and controls">
-        <a className="aui-action-chip" href="/diagnostics">Diagnostics export</a>
-        <a className="aui-action-chip" href="/admin/services">Services</a>
-        <a className="aui-action-chip" href="/admin/contracts">Contracts registry</a>
-        <a className="aui-action-chip" href="/admin/config">Config reload impact</a>
-        <a className="aui-action-chip" href="https://github.com/joaojhgs/aurora/blob/main/README.process-mode.md">Process runbook</a>
-        <button
+      <div className="flex flex-wrap gap-1.5" aria-label="Deployment topology links and controls">
+        <a className={chipLinkClass} href="/diagnostics">Diagnostics export</a>
+        <a className={chipLinkClass} href="/admin/services">Services</a>
+        <a className={chipLinkClass} href="/admin/contracts">Contracts registry</a>
+        <a className={chipLinkClass} href="/admin/config">Config reload impact</a>
+        <a className={chipLinkClass} href="https://github.com/joaojhgs/aurora/blob/main/README.process-mode.md">Process runbook</a>
+        <Button
           type="button"
-          className="aui-action-chip"
+          variant="outline"
           disabled={!controlsSupported}
-          title={
+          disabledReason={
             controlsSupported
               ? 'service contract process controls are present, but this overview remains read-only.'
               : 'Process restart/control requires service contract capability and AdminAction wiring.'
           }
         >
           Process controls {controlsSupported ? 'read-only here' : 'unsupported'}
-        </button>
+        </Button>
       </div>
     </Card>
   )
@@ -319,46 +282,29 @@ function DeploymentTopologyPanel({
 
 function ServiceHealthPanel({ services }: { services: AdminOverviewServiceSummary[] }) {
   const visible = services.slice(0, 10)
+  const columns: Array<DataColumn<AdminOverviewServiceSummary>> = [
+    { key: 'service', header: 'Service', render: (service) => service.module },
+    { key: 'status', header: 'Status', render: (service) => service.status },
+    { key: 'methods', header: 'Methods', render: (service) => `${service.externalMethodCount} external / ${service.internalMethodCount} internal` },
+    { key: 'permissions', header: 'Permissions', render: (service) => service.requiredPermissions.join(', ') || 'none' }
+  ]
   return (
-    <section className="aui-admin-panel" aria-labelledby="service-health-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Services</p>
-          <h2 id="service-health-title">Health</h2>
-        </div>
-        <EvidenceBadge label={`${services.length} reported`} />
-      </div>
+    <Card
+      description="Services"
+      actions={<EvidenceBadge label={`${services.length} reported`} />}
+      ariaLabel="Service health"
+    >
+      <h2 className="text-base font-semibold">Health</h2>
       {visible.length > 0 ? (
-        <div className="aui-table-wrap">
-          <table className="aui-admin-table">
-            <thead>
-              <tr>
-                <th scope="col">Service</th>
-                <th scope="col">Status</th>
-                <th scope="col">Methods</th>
-                <th scope="col">Permissions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((service) => (
-                <tr key={service.module}>
-                  <th scope="row">{service.module}</th>
-                  <td>{service.status}</td>
-                  <td>{service.externalMethodCount} external / {service.internalMethodCount} internal</td>
-                  <td>{service.requiredPermissions.join(', ') || 'none'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} rows={visible} getRowKey={(service) => service.module} caption="Service health" />
       ) : (
-        <div className="aui-admin-empty">
-          <h3>No services reported</h3>
-          <p>The registry loaded, but no service summaries were returned by the SDK.</p>
-          <a className="aui-action-chip" href="/diagnostics">Inspect registry</a>
+        <div className={emptyPanelClass}>
+          <h3 className="font-medium">No services reported</h3>
+          <p className="text-muted-foreground">The registry loaded, but no service summaries were returned by the SDK.</p>
+          <a className={chipLinkClass} href="/diagnostics">Inspect registry</a>
         </div>
       )}
-    </section>
+    </Card>
   )
 }
 
@@ -370,22 +316,20 @@ function CapabilityGapPanel({
   internalOnly: MethodDescriptor[]
 }) {
   return (
-    <section className="aui-admin-panel" aria-labelledby="capability-gaps-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Capabilities</p>
-          <h2 id="capability-gaps-title">Gaps</h2>
-        </div>
-        <EvidenceBadge label={`${gaps.length} gaps`} />
-      </div>
+    <Card
+      description="Capabilities"
+      actions={<EvidenceBadge label={`${gaps.length} gaps`} />}
+      ariaLabel="Capability gaps"
+    >
+      <h2 className="text-base font-semibold">Gaps</h2>
       {gaps.length > 0 ? (
-        <ul className="aui-admin-gap-list">
+        <ul className="grid list-none gap-2 p-0">
           {gaps.slice(0, 8).map((gap) => (
-            <li key={gap.id}>
-              <div>
-                <strong>{gap.module}.{gap.method}</strong>
-                <small>{gap.providerId} / {gap.serviceInstanceId}</small>
-                <span>{gap.routeBlockers.join(', ') || 'backend reported unavailable'}</span>
+            <li key={gap.id} className={gapListItemClass}>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <strong className="text-sm font-medium">{gap.module}.{gap.method}</strong>
+                <small className="text-xs text-muted-foreground">{gap.providerId} / {gap.serviceInstanceId}</small>
+                <span className="text-xs text-muted-foreground">{gap.routeBlockers.join(', ') || 'backend reported unavailable'}</span>
               </div>
               <StatusBadge state={gap.availability} />
               <PrivacyBadge privacy={gap.privacyClass} />
@@ -393,48 +337,53 @@ function CapabilityGapPanel({
           ))}
         </ul>
       ) : (
-        <div className="aui-admin-empty">
-          <h3>No capability gaps reported</h3>
-          <p>The capability catalog did not report denied, stale, privacy-blocked, or unsupported actions.</p>
+        <div className={emptyPanelClass}>
+          <h3 className="font-medium">No capability gaps reported</h3>
+          <p className="text-muted-foreground">The capability catalog did not report denied, stale, privacy-blocked, or unsupported actions.</p>
         </div>
       )}
       {internalOnly.length > 0 ? (
-        <details className="aui-admin-details">
-          <summary>Internal-only methods</summary>
-          <ul>
+        <details className="border-t border-border pt-3">
+          <summary className="cursor-pointer text-sm font-medium text-primary">Internal-only methods</summary>
+          <ul className="mt-2 flex flex-col gap-1 pl-4 text-xs text-muted-foreground">
             {internalOnly.slice(0, 10).map((method) => (
               <li key={`${method.module}.${method.name}`}>{method.module}.{method.name}</li>
             ))}
           </ul>
         </details>
       ) : null}
-    </section>
+    </Card>
   )
 }
 
 function ActivityPanel({ items }: { items: ActivityItem[] }) {
   return (
-    <section className="aui-admin-panel" aria-labelledby="activity-rail-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Activity</p>
-          <h2 id="activity-rail-title">Rail</h2>
-        </div>
-        <EvidenceBadge label="SDK snapshot" />
-      </div>
-      <ol className="aui-admin-activity">
+    <Card
+      description="Activity"
+      actions={<EvidenceBadge label="SDK snapshot" />}
+      ariaLabel="Activity rail"
+    >
+      <h2 className="text-base font-semibold">Rail</h2>
+      <ol className="grid list-none gap-2 p-0">
         {items.map((item) => (
-          <li key={item.id}>
-            <span className={`aui-admin-activity-dot aui-dot-${item.state}`} aria-hidden />
-            <div>
-              <strong>{item.label}</strong>
-              <small>{item.detail}</small>
+          <li key={item.id} className="flex items-start gap-2.5 rounded-lg border border-border p-3">
+            <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${activityDotClass(item.state)}`} aria-hidden />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <strong className="text-sm font-medium">{item.label}</strong>
+              <small className="text-xs text-muted-foreground">{item.detail}</small>
             </div>
           </li>
         ))}
       </ol>
-    </section>
+    </Card>
   )
+}
+
+function activityDotClass(state: ActivityItem['state']): string {
+  if (state === 'available-local' || state === 'available-remote') return 'bg-success'
+  if (state === 'pending' || state === 'degraded' || state === 'offline') return 'bg-warning'
+  if (state === 'denied' || state === 'privacy-blocked') return 'bg-destructive'
+  return 'bg-muted-foreground/40'
 }
 
 function deploymentPosture(manifest: AdminOverviewManifest): AvailabilityState {
@@ -486,7 +435,7 @@ function clientBoundaryLabel(transportKind: string, topology: DeploymentTopology
   if (transportKind === 'tauri') return `Desktop local through SDK; ${deploymentModeLabel(topology)}`
   if (transportKind === 'mesh') return `Mesh transport through SDK; ${deploymentModeLabel(topology)}`
   if (transportKind === 'http') return `Supported remote Gateway client through SDK HTTP transport; ${deploymentModeLabel(topology)}`
-  if (transportKind === 'mock') return `Demo transport; ${deploymentModeLabel(topology)}`
+  if (transportKind === 'mock') return `Local transport; ${deploymentModeLabel(topology)}`
   return `${transportKind} transport; ${deploymentModeLabel(topology)}`
 }
 

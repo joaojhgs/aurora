@@ -15,9 +15,9 @@ import type {
 } from '@aurora/client'
 import { SCHEDULER_METHODS, routePath } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
-import { PageHeader } from './state-surface'
+import { EvidenceBadge, PrivacyBadge, StatusBadge, ToneBadge, presentableSignal, type BadgeTone } from './status-badges'
 import {
+  BadgeCluster,
   Button,
   Card,
   DataTable,
@@ -185,7 +185,7 @@ export async function buildAdminSchedulerSnapshot(
     totals: schedulerTotals(rows),
     warnings: [...warnings, ...permissionWarnings],
     error: warnings[0] ?? permissionWarnings[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Demo transport' : 'Aurora service response',
+    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response',
     secretsRedacted: catalog?.secrets_redacted ?? true,
     toolOptions: schedulerToolOptions(toolCards)
   }
@@ -297,34 +297,18 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
   )
 
   return (
-    <div className="aui-stack-lg">
-      <PageHeader
-        eyebrow="Admin"
-        title="Scheduler jobs"
-        description="Review ownership-scoped jobs, delegation, and approval policy, then schedule or manage automation through audited AdminAction."
-        badgesLabel="Scheduler service status"
-        badges={
-          <>
-            {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-            <StatusBadge state={route.state} />
-            <PrivacyBadge privacy="admin-critical" />
-            <EvidenceBadge label={snapshot.evidenceSource} />
-            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          </>
-        }
-      />
+    <div className="flex flex-col gap-5" aria-labelledby="admin-scheduler-title">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-6 py-5">
+        <div>
+          <h1 id="admin-scheduler-title" className="text-xl font-semibold tracking-tight">Scheduler</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Recurring jobs and automations running on this node.
+          </p>
+        </div>
+      </div>
 
+      <div className="flex flex-col gap-5 px-6 pb-6">
       <SchedulerStatusPanel snapshot={snapshot} route={route} operation={operation} />
-
-      <StatStrip
-        ariaLabel="Scheduler job ownership summary"
-        items={[
-          { label: 'Local', value: String(snapshot.totals.local), caption: 'owned and running here' },
-          { label: 'Delegated', value: String(snapshot.totals.delegatedOwned), caption: 'owned here, target remote' },
-          { label: 'Remote running', value: String(snapshot.totals.remoteRunning), caption: 'foreign owner visible here' },
-          { label: 'Denied', value: String(snapshot.totals.foreignDenied), tone: snapshot.totals.foreignDenied > 0 ? 'warning' : 'default', caption: 'foreign namespace blocked' }
-        ]}
-      />
 
       <Card title="Ownership-scoped job table" icon={<CalendarClock size={18} aria-hidden />} ariaLabel="Jobs" flush>
         <SchedulerJobsTable
@@ -336,61 +320,61 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
         />
       </Card>
 
-      <div className="aui-two-col">
-        <Card title="Schedule automation" icon={<ShieldCheck size={18} aria-hidden />} ariaLabel="Schedule automation">
-          <p className="aui-card-note">{snapshot.createControl.reason}</p>
-          <form className="aui-stack" onSubmit={submitCreate}>
-            <div className="aui-field">
-              <label className="aui-field-label" htmlFor="scheduler-job-name">Job name</label>
-              <input id="scheduler-job-name" className="aui-input" value={jobName} onChange={(event) => setJobName(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card title="New job" icon={<ShieldCheck size={18} aria-hidden />} ariaLabel="Schedule automation">
+          <p className="text-sm text-muted-foreground">{snapshot.createControl.reason}</p>
+          <form className="flex flex-col gap-3" onSubmit={submitCreate}>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-job-name">Job name</label>
+              <input id="scheduler-job-name" className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={jobName} onChange={(event) => setJobName(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
             </div>
-            <div className="aui-field">
-              <label className="aui-field-label" htmlFor="scheduler-cron">Schedule</label>
-              <input id="scheduler-cron" className="aui-input aui-mono" value={cron} onChange={(event) => setCron(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-cron">Schedule</label>
+              <input id="scheduler-cron" className="rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-sm" value={cron} onChange={(event) => setCron(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
             </div>
-            <div className="aui-two-col">
-              <div className="aui-field">
-                <label className="aui-field-label" htmlFor="scheduler-action">Action</label>
-                <select id="scheduler-action" className="aui-select" value={actionKind} onChange={(event) => setActionKind(event.currentTarget.value as 'orchestrator.user_input' | 'tooling.execute')} disabled={!snapshot.createControl.available}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-action">Action</label>
+                <select id="scheduler-action" className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={actionKind} onChange={(event) => setActionKind(event.currentTarget.value as 'orchestrator.user_input' | 'tooling.execute')} disabled={!snapshot.createControl.available}>
                   <option value="orchestrator.user_input">Assistant prompt</option>
                   <option value="tooling.execute">Tooling catalog action</option>
                 </select>
               </div>
-              <div className="aui-field">
-                <label className="aui-field-label" htmlFor="scheduler-target">Target peer/provider</label>
-                <select id="scheduler-target" className="aui-select" value={targetPeer} onChange={(event) => setTargetPeer(event.currentTarget.value)} disabled={!snapshot.createControl.available}>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-target">Target peer/provider</label>
+                <select id="scheduler-target" className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={targetPeer} onChange={(event) => setTargetPeer(event.currentTarget.value)} disabled={!snapshot.createControl.available}>
                   {snapshot.createControl.targetOptions.map((option) => (
                     <option key={option.id} value={option.id} disabled={option.disabled}>{option.label}</option>
                   ))}
                 </select>
               </div>
             {actionKind === 'orchestrator.user_input' ? (
-              <div className="aui-field">
-                <label className="aui-field-label" htmlFor="scheduler-prompt">Assistant prompt</label>
-                <textarea id="scheduler-prompt" className="aui-input aui-textarea" value={orchestratorText} rows={3} onChange={(event) => setOrchestratorText(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-prompt">Assistant prompt</label>
+                <textarea id="scheduler-prompt" className="resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={orchestratorText} rows={3} onChange={(event) => setOrchestratorText(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
               </div>
             ) : (
-              <div className="aui-stack">
-                <div className="aui-field">
-                  <label className="aui-field-label" htmlFor="scheduler-tool">Tooling catalog entry</label>
-                  <select id="scheduler-tool" className="aui-select" value={selectedTool?.id ?? ''} onChange={(event) => setSelectedToolId(event.currentTarget.value)} disabled={!snapshot.createControl.available || snapshot.toolOptions.length === 0}>
+              <div className="flex flex-col gap-3 sm:col-span-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-tool">Tooling catalog entry</label>
+                  <select id="scheduler-tool" className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={selectedTool?.id ?? ''} onChange={(event) => setSelectedToolId(event.currentTarget.value)} disabled={!snapshot.createControl.available || snapshot.toolOptions.length === 0}>
                     {snapshot.toolOptions.map((tool) => (
                       <option key={tool.id} value={tool.id} disabled={tool.disabled}>{tool.label}</option>
                     ))}
                   </select>
                 </div>
-                <div className="aui-field">
-                  <label className="aui-field-label" htmlFor="scheduler-tool-args">Tool arguments JSON</label>
-                  <textarea id="scheduler-tool-args" className="aui-input aui-textarea aui-mono" value={toolArguments} rows={4} onChange={(event) => setToolArguments(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-tool-args">Tool arguments JSON</label>
+                  <textarea id="scheduler-tool-args" className="resize-none rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-sm" value={toolArguments} rows={4} onChange={(event) => setToolArguments(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
                 </div>
               </div>
             )}
             </div>
-            <div className="aui-field">
-              <label className="aui-field-label" htmlFor="scheduler-reason">AdminAction reason</label>
-              <textarea id="scheduler-reason" className="aui-input aui-textarea" value={reason} rows={3} onChange={(event) => setReason(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-reason">AdminAction reason</label>
+              <textarea id="scheduler-reason" className="resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={reason} rows={3} onChange={(event) => setReason(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
             </div>
-            <label className="aui-inline-field">
+            <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={reauthConfirmed}
@@ -399,7 +383,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
               />
               <span>I confirm recent AdminAction reauthentication for scheduler mutations</span>
             </label>
-            <div className="aui-action-row">
+            <div className="flex items-center gap-2">
               <Button type="submit" variant="primary" icon={<Plus size={16} aria-hidden />} disabled={!canCreate} disabledReason={snapshot.createControl.reason}>
                 Create via AdminAction
               </Button>
@@ -418,6 +402,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
             ]}
           />
         </Card>
+      </div>
       </div>
 
       <DetailSheet
@@ -457,16 +442,18 @@ function SchedulerStatusPanel({
   route: RouteAvailability
   operation: SchedulerOperationState | null
 }) {
-  if (snapshot.loadState === 'loading') return <div className="aui-admin-notice" aria-live="polite"><CalendarClock size={18} aria-hidden />Loading scheduler jobs through Aurora.</div>
-  if (route.disabled) return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{presentableSignal(route.blockers.join(', ') || route.explanation)}</div>
-  if (snapshot.loadState === 'empty') return <div className="aui-admin-notice" role="status"><CalendarClock size={18} aria-hidden />No scheduler jobs were returned for this namespace.</div>
-  if (snapshot.error) return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{snapshot.error}</div>
+  const noticeClass = 'flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground'
+  const warningClass = 'flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning'
+  if (snapshot.loadState === 'loading') return <div className={noticeClass} aria-live="polite"><CalendarClock size={16} aria-hidden />Loading scheduler jobs through Aurora.</div>
+  if (route.disabled) return <div className={warningClass} role="alert"><AlertTriangle size={16} aria-hidden />{presentableSignal(route.blockers.join(', ') || route.explanation)}</div>
+  if (snapshot.loadState === 'empty') return <div className={noticeClass} role="status"><CalendarClock size={16} aria-hidden />No scheduler jobs were returned for this namespace.</div>
+  if (snapshot.error) return <div className={warningClass} role="alert"><AlertTriangle size={16} aria-hidden />{snapshot.error}</div>
   if (operation) {
     return (
-      <div className={operation.status === 'failed' ? 'aui-admin-notice aui-admin-notice-warning' : 'aui-admin-notice'} role={operation.status === 'failed' ? 'alert' : 'status'}>
-        <ShieldCheck size={18} aria-hidden />
+      <div className={operation.status === 'failed' ? warningClass : noticeClass} role={operation.status === 'failed' ? 'alert' : 'status'}>
+        <ShieldCheck size={16} aria-hidden />
         <span>{operation.message}</span>
-        {operation.auditReceipt ? <code>{operation.auditReceipt}</code> : null}
+        {operation.auditReceipt ? <code className="font-mono text-xs">{operation.auditReceipt}</code> : null}
       </div>
     )
   }
@@ -491,21 +478,21 @@ function SchedulerJobsTable({
       key: 'job',
       header: 'Job',
       render: (job) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <strong>{job.name}</strong>
-          <small>{job.toolIntegration}</small>
+          <small className="text-muted-foreground">{job.toolIntegration}</small>
         </span>
       )
     },
-    { key: 'schedule', header: 'Schedule', hideAt: 'md', render: (job) => <span className="aui-mono">{job.schedule}</span> },
+    { key: 'schedule', header: 'Schedule', hideAt: 'md', render: (job) => <span className="font-mono text-xs">{job.schedule}</span> },
     {
       key: 'ownership',
       header: 'Ownership',
       hideAt: 'lg',
       render: (job) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <strong>{ownershipLabel(job.ownership)}</strong>
-          <small>{job.ownerLabel}</small>
+          <small className="text-muted-foreground">{job.ownerLabel}</small>
         </span>
       )
     },
@@ -514,19 +501,19 @@ function SchedulerJobsTable({
       header: 'Target and approval',
       hideAt: 'lg',
       render: (job) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <span>{job.targetLabel}</span>
-          <small>{job.approvalLabel}</small>
+          <small className="text-muted-foreground">{job.approvalLabel}</small>
         </span>
       )
     },
     {
       key: 'runs',
-      header: 'Status and runs',
+      header: 'Status and next run',
       render: (job) => (
-        <span className="aui-cell-stack">
-          <span className="aui-badge-cluster"><StatusBadge state={stateForJob(job)} /><PrivacyBadge privacy={privacyForJob(job)} /></span>
-          <small>next {job.nextRun}; {job.runHistory}</small>
+        <span className="flex flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-1.5"><StatusBadge state={stateForJob(job)} /><PrivacyBadge privacy={privacyForJob(job)} /></span>
+          <small className="text-muted-foreground">next {job.nextRun}; {job.runHistory}</small>
         </span>
       )
     },
@@ -534,26 +521,45 @@ function SchedulerJobsTable({
       key: 'actions',
       header: 'Actions',
       align: 'end',
-      render: (job) => (
-        <div className="aui-action-row aui-action-row-tight">
-          {job.operationControls.map((control) => (
-            <Button
-              key={control.action}
-              variant={control.action === 'cancel' ? 'danger' : 'ghost'}
-              icon={control.action === 'edit' ? <Edit3 size={15} aria-hidden /> : control.action === 'cancel' ? <Trash2 size={15} aria-hidden /> : control.action === 'pause' ? <Pause size={15} aria-hidden /> : <Play size={15} aria-hidden />}
-              disabled={pending || !reauthConfirmed || !control.available}
-              disabledReason={control.reason}
-              onClick={() => void onRun(
-                `${control.action} ${job.name}`,
-                control.methodId,
-                { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
-              )}
-            >
-              {control.action}
-            </Button>
-          ))}
-        </div>
-      )
+      render: (job) => {
+        const toggle = job.operationControls.find((control) => control.action === (job.enabled ? 'pause' : 'resume'))
+        const secondary = job.operationControls.filter((control) => control.action === 'edit' || control.action === 'cancel')
+        return (
+          <div className="flex items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+            {toggle ? (
+              <Button
+                variant="outline"
+                disabled={pending || !reauthConfirmed || !toggle.available}
+                disabledReason={toggle.reason}
+                icon={toggle.action === 'pause' ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}
+                onClick={() => void onRun(
+                  `${toggle.action} ${job.name}`,
+                  toggle.methodId,
+                  { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
+                )}
+              >
+                {toggle.action === 'pause' ? 'Pause' : 'Resume'}
+              </Button>
+            ) : null}
+            {secondary.map((control) => (
+              <Button
+                key={control.action}
+                variant={control.action === 'cancel' ? 'danger' : 'ghost'}
+                icon={control.action === 'edit' ? <Edit3 size={15} aria-hidden /> : <Trash2 size={15} aria-hidden />}
+                disabled={pending || !reauthConfirmed || !control.available}
+                disabledReason={control.reason}
+                onClick={() => void onRun(
+                  `${control.action} ${job.name}`,
+                  control.methodId,
+                  { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
+                )}
+              >
+                {control.action}
+              </Button>
+            ))}
+          </div>
+        )
+      }
     }
   ]
   return (
@@ -562,7 +568,7 @@ function SchedulerJobsTable({
       rows={jobs}
       getRowKey={(job) => job.id}
       onRowClick={(job) => onSelect(job.id)}
-      empty={<div className="aui-empty-inline"><p>No scheduler jobs available.</p></div>}
+      empty={<p className="text-sm text-muted-foreground">No scheduler jobs available.</p>}
     />
   )
 }
@@ -865,6 +871,12 @@ function isAvailabilityState(value: string): value is AvailabilityState {
     'privacy-blocked',
     'unsupported'
   ].includes(value)
+}
+
+function loadStateTone(state: SchedulerLoadState): BadgeTone {
+  if (state === 'ready') return 'success'
+  if (state === 'error' || state === 'service-unavailable') return 'danger'
+  return 'neutral'
 }
 
 function errorMessage(error: unknown): string {

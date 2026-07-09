@@ -14,7 +14,7 @@ import {
   type ConfigVersionHistoryResponse
 } from '@aurora/client'
 import { AdminConfigView, buildAdminConfigModel } from '../src/admin-config-view'
-import { auroraNavSections, navItemSnapshot } from '../src/nav'
+import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
@@ -71,30 +71,33 @@ describe('AdminConfigView', () => {
     })
 
     expect(calls).toEqual(['Config.PreviewDiff', 'Config.PreviewReloadImpact'])
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
 
     const reviewButton = findButtonByText(container, 'Review Apply through AdminAction')
     expect(reviewButton).not.toBeNull()
     await act(async () => {
       reviewButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      // Base UI's AlertDialog mounts its portal content over two animation-frame
+      // ticks (unmounted -> starting-style -> open); flush both before asserting.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     })
 
-    const dialog = container.querySelector('[role="dialog"]')
+    const dialog = document.body.querySelector('[role="alertdialog"]')
     expect(dialog).not.toBeNull()
     expect(dialog!.textContent).toContain('Apply staged config changes')
     expect(calls).not.toContain('Config.Set')
 
-    const confirmButton = findButtonByText(container, 'Confirm Apply through AdminAction')
+    const confirmButton = findButtonByText(document.body, 'Confirm Apply through AdminAction')
     expect(confirmButton).not.toBeNull()
     expect(confirmButton!.hasAttribute('disabled')).toBe(true)
 
-    const unlock = container.querySelector('[role="dialog"] input[type="checkbox"]') as HTMLInputElement | null
+    const unlock = document.body.querySelector('[role="alertdialog"] input[type="checkbox"]') as HTMLInputElement | null
     expect(unlock).not.toBeNull()
     await act(async () => {
       unlock!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
 
-    const armedConfirmButton = findButtonByText(container, 'Confirm Apply through AdminAction')
+    const armedConfirmButton = findButtonByText(document.body, 'Confirm Apply through AdminAction')
     expect(armedConfirmButton!.hasAttribute('disabled')).toBe(false)
     await act(async () => {
       armedConfirmButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
@@ -108,12 +111,12 @@ describe('AdminConfigView', () => {
       'Gateway.AdminActionConfirm',
       'Config.Set'
     ])
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
   })
 })
 
 function configRoute(): RouteAvailability {
-  const item = auroraNavSections.flatMap((section) => section.items).find((candidate) => candidate.id === 'config')
+  const item = [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems].find((candidate) => candidate.id === 'config')
   if (!item) throw new Error('config route missing')
   return {
     item: navItemSnapshot(item),

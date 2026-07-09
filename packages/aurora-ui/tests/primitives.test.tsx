@@ -50,10 +50,10 @@ describe('foundation primitives', () => {
         <p>content</p>
       </Card>
     )
-    expect(markup).toContain('aui-card')
-    expect(markup).toContain('aui-card-title')
+    expect(markup).toContain('data-slot="card"')
+    expect(markup).toContain('data-slot="card-title"')
     expect(markup).toContain('Backups')
-    expect(markup).toContain('aui-card-actions')
+    expect(markup).toContain('data-slot="card-action"')
     expect(markup).toContain('content')
   })
 
@@ -61,9 +61,9 @@ describe('foundation primitives', () => {
     const markup = renderToStaticMarkup(
       <StatStrip items={[{ label: 'Snapshots', value: 12 }, { label: 'Failed', value: 0, tone: 'danger' }]} />
     )
-    expect(markup).toContain('aui-stat-strip')
+    expect(markup).toContain('role="list"')
     expect(markup).toContain('Snapshots')
-    expect(markup).toContain('aui-stat-danger')
+    expect(markup).toContain('bg-destructive/5')
     expect((markup.match(/role="listitem"/g) ?? []).length).toBe(2)
   })
 
@@ -71,9 +71,9 @@ describe('foundation primitives', () => {
     const markup = renderToStaticMarkup(
       <MetaGrid items={[{ label: 'Owner', value: 'admin' }, { label: 'Digest', value: 'abc', mono: true }]} />
     )
-    expect(markup).toContain('aui-meta-grid')
-    expect(markup).toContain('<dt class="aui-meta-label">Owner</dt>')
-    expect(markup).toContain('aui-mono')
+    expect(markup).toContain('<dt class="text-muted-foreground">Owner</dt>')
+    expect(markup).toContain('admin')
+    expect(markup).toContain('font-mono')
   })
 
   it('DataTable renders rows and empty state', () => {
@@ -84,13 +84,13 @@ describe('foundation primitives', () => {
     const populated = renderToStaticMarkup(
       <DataTable columns={columns} rows={[{ id: '1', name: 'daily-digest' }]} getRowKey={(row) => row.id} />
     )
-    expect(populated).toContain('aui-table')
+    expect(populated).toContain('data-slot="table"')
     expect(populated).toContain('daily-digest')
 
     const empty = renderToStaticMarkup(
       <DataTable columns={columns} rows={[]} getRowKey={(row) => row.id} empty={<span>No jobs</span>} />
     )
-    expect(empty).toContain('aui-table-empty')
+    expect(empty).toContain('data-slot="empty"')
     expect(empty).toContain('No jobs')
   })
 
@@ -105,7 +105,7 @@ describe('foundation primitives', () => {
         onRowClick={(row) => clicked.push(row.id)}
       />
     )
-    const row = container.querySelector('tr.aui-row-clickable') as HTMLElement | null
+    const row = container.querySelector('tr[role="button"]') as HTMLElement | null
     expect(row).not.toBeNull()
     expect(row?.getAttribute('tabindex')).toBe('0')
     act(() => {
@@ -118,26 +118,31 @@ describe('foundation primitives', () => {
     const closed = renderToStaticMarkup(<DetailSheet open={false} onClose={() => undefined} title="Job" />)
     expect(closed).toBe('')
 
-    const open = renderToStaticMarkup(<DetailSheet open onClose={() => undefined} title="Job detail" description="info" />)
-    expect(open).toContain('role="dialog"')
-    expect(open).toContain('aria-modal="true"')
-    expect(open).toContain('Job detail')
+    // Base UI's Sheet/Dialog primitives portal their content to document.body, which
+    // renderToStaticMarkup cannot capture (it only serializes the returned tree, not
+    // portals) -- mount into real jsdom and inspect document.body instead.
+    mount(<DetailSheet open onClose={() => undefined} title="Job detail" description="info" />)
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog?.textContent).toContain('Job detail')
+    expect(dialog?.textContent).toContain('info')
   })
 
   it('Switch toggles through onChange', () => {
     const changes: boolean[] = []
     const container = mount(<Switch checked={false} label="Dark mode" onChange={(next) => changes.push(next)} />)
-    const button = container.querySelector('button[role="switch"]') as HTMLButtonElement
-    expect(button.getAttribute('aria-checked')).toBe('false')
+    const control = container.querySelector('[role="switch"]') as HTMLElement
+    expect(control).not.toBeNull()
+    expect(control.getAttribute('aria-checked')).toBe('false')
     act(() => {
-      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      control.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(changes).toEqual([true])
   })
 
   it('AdminConfirmDialog gates confirm until reason and phrase satisfied', () => {
     let confirmed = 0
-    const container = mount(
+    mount(
       <AdminConfirmDialog
         open
         title="Delete backup"
@@ -153,7 +158,7 @@ describe('foundation primitives', () => {
         onCancel={() => undefined}
       />
     )
-    const confirmButton = Array.from(container.querySelectorAll('button')).find((button) =>
+    const confirmButton = Array.from(document.body.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Confirm')
     )
     expect(confirmButton?.hasAttribute('disabled')).toBe(true)
@@ -165,7 +170,7 @@ describe('foundation primitives', () => {
 
   it('AdminConfirmDialog confirms when requirements met', () => {
     let confirmed = 0
-    const container = mount(
+    mount(
       <AdminConfirmDialog
         open
         title="Delete backup"
@@ -180,7 +185,7 @@ describe('foundation primitives', () => {
         onCancel={() => undefined}
       />
     )
-    const confirmButton = Array.from(container.querySelectorAll('button')).find((button) =>
+    const confirmButton = Array.from(document.body.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Confirm')
     )
     expect(confirmButton?.hasAttribute('disabled')).toBe(false)
@@ -196,7 +201,6 @@ describe('foundation primitives', () => {
         <span>app</span>
       </ToastProvider>
     )
-    expect(markup).toContain('aui-toast-region')
     expect(markup).toContain('aria-live="polite"')
     expect(markup).toContain('app')
   })

@@ -1,34 +1,23 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArchiveRestore, Download, FileCheck2, RotateCcw } from 'lucide-react'
+import { Archive } from 'lucide-react'
 import type {
   AuroraClient,
   AuroraError,
   AuroraResponse,
   BackupComponentName,
+  BackupComponentResult,
   BackupCreateResponse,
   BackupListResponse,
   BackupManifestSummary,
   BackupRestoreResponse,
-  BackupRollbackResponse,
   BackupVerifyResponse
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
-import { PageHeader } from './state-surface'
-import {
-  AdminConfirmDialog,
-  BadgeCluster,
-  Button,
-  Card,
-  Checkbox,
-  DataTable,
-  DetailSheet,
-  MetaGrid,
-  StatStrip,
-  type DataColumn
-} from './primitives'
+import { presentableSignal, ToneBadge, type BadgeTone } from './status-badges'
+import { ConfirmDialog } from './shared-components'
+import { Button, Card, DataTable, useToast, type DataColumn } from './primitives'
 
 export interface BackupRestoreViewProps {
   client: AuroraClient
@@ -38,63 +27,48 @@ export interface BackupRestoreViewProps {
 }
 
 type BackupLoadState = 'loading' | 'ready' | 'empty' | 'denied' | 'degraded' | 'unavailable' | 'error'
-type BackupOperationKind = 'create' | 'verify' | 'restore-dry-run' | 'rollback-dry-run'
+type BackupOperationKind = 'create' | 'verify' | 'restore'
 
-interface BackupOperationState {
+interface PendingOperation {
   kind: BackupOperationKind
-  status: 'pending' | 'ok' | 'failed'
-  message: string
-  auditReceipt: string | null
+  backup: BackupManifestSummary | null
 }
 
 const defaultComponents: BackupComponentName[] = ['config', 'db', 'rag', 'models']
 
-const operationCopy: Record<BackupOperationKind, { title: string; description: string; confirm: string; destructive: boolean }> = {
+const operationCopy: Record<BackupOperationKind, { title: string; confirmLabel: string; destructive: boolean; describe: (backup: BackupManifestSummary | null) => string }> = {
   create: {
     title: 'Create backup',
-    description: 'Aurora drafts and confirms an AdminAction, then submits Backup.Create with your reason, affected components, and an audit receipt.',
-    confirm: 'Create backup',
-    destructive: false
+    confirmLabel: 'Create backup',
+    destructive: false,
+    describe: () => 'Aurora will create a new snapshot of this node and record the action in the audit log.'
   },
   verify: {
     title: 'Verify manifest',
-    description: 'Aurora drafts and confirms an AdminAction before verifying the selected manifest integrity. No data is modified.',
-    confirm: 'Verify manifest',
-    destructive: false
+    confirmLabel: 'Verify',
+    destructive: false,
+    describe: (backup) => `Aurora will verify the integrity of ${backup?.backup_id ?? 'this manifest'} and record the action in the audit log.`
   },
-  'restore-dry-run': {
-    title: 'Preview restore impact',
-    description: 'This runs a restore dry-run only. Aurora previews the impact plan and creates a rollback point; it never applies a destructive restore.',
-    confirm: 'Run restore dry-run',
-    destructive: false
-  },
-  'rollback-dry-run': {
-    title: 'Preview rollback impact',
-    description: 'This runs a rollback dry-run only. Aurora previews the rollback impact plan and does not roll back any data.',
-    confirm: 'Run rollback dry-run',
-    destructive: false
+  restore: {
+    title: 'Restore backup',
+    confirmLabel: 'Restore',
+    destructive: true,
+    describe: () => 'This is an admin-critical action and will be recorded in the audit log with your reason.'
   }
 }
 
 export function BackupRestoreView({ client, route, initialList = null, initialError = null }: BackupRestoreViewProps) {
+  const { toast } = useToast()
   const [list, setList] = useState<BackupListResponse | null>(initialList)
   const [loadState, setLoadState] = useState<BackupLoadState>(() => initialLoadState(route, initialList, initialError))
   const [loadError, setLoadError] = useState<string | null>(initialError)
-  const [selectedBackupId, setSelectedBackupId] = useState(initialList?.backups[0]?.backup_id ?? '')
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [dialogKind, setDialogKind] = useState<BackupOperationKind | null>(null)
-  const [reason, setReason] = useState('Routine operator backup review')
-  const [includePersonalData, setIncludePersonalData] = useState(false)
-  const [reauthConfirmed, setReauthConfirmed] = useState(false)
-  const [operation, setOperation] = useState<BackupOperationState | null>(null)
-  const [lastVerify, setLastVerify] = useState<BackupVerifyResponse | null>(null)
-  const [lastRestore, setLastRestore] = useState<BackupRestoreResponse | null>(null)
-  const [lastRollback, setLastRollback] = useState<BackupRollbackResponse | null>(null)
+  const [pending, setPending] = useState<PendingOperation | null>(null)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     let active = true
     if (route.disabled) return
-    setLoadState((current) => current === 'ready' || current === 'empty' ? current : 'loading')
+    setLoadState((current) => (current === 'ready' || current === 'empty' ? current : 'loading'))
     client.backups.list({ limit: 50, include_failed: true }).then((result) => {
       if (!active) return
       if (!result.ok) {
@@ -104,7 +78,6 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
       }
       setList(result.data)
       setLoadState(result.data.backups.length === 0 ? 'empty' : route.state === 'degraded' ? 'degraded' : 'ready')
-      setSelectedBackupId((current) => current || result.data.backups[0]?.backup_id || '')
       setLoadError(null)
     })
     return () => {
@@ -113,404 +86,222 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
   }, [client, route.disabled, route.state])
 
   const backups = list?.backups ?? []
-  const selectedBackup = useMemo(
-    () => backups.find((backup) => backup.backup_id === selectedBackupId) ?? backups[0] ?? null,
-    [backups, selectedBackupId]
-  )
-  const operationPending = operation?.status === 'pending'
   const mutationRouteReady = !route.disabled && route.routeable
   const disabledReason = backupDisabledReason(route, loadError)
-  const rollbackBackupId = lastRestore?.rollback_backup_id ?? null
 
-  const encryptedCount = backups.filter((backup) => backup.encrypted).length
-  const secretsProtected = list?.secrets_redacted !== false
-
-  const dialogValid = reason.trim().length > 0 && reauthConfirmed && !operationPending
-
-  function openDialog(kind: BackupOperationKind) {
-    setReauthConfirmed(false)
-    setDialogKind(kind)
-  }
-
-  function selectBackup(backupId: string) {
-    setSelectedBackupId(backupId)
-    setSheetOpen(true)
-  }
-
-  async function runOperation(kind: BackupOperationKind, call: () => Promise<AuroraResponse<BackupCreateResponse | BackupVerifyResponse | BackupRestoreResponse | BackupRollbackResponse>>) {
-    setOperation({ kind, status: 'pending', message: adminActionPendingMessage(kind), auditReceipt: null })
-    const result = await call()
-    if (!result.ok) {
-      setOperation({ kind, status: 'failed', message: backupErrorMessage(result.error), auditReceipt: result.audit.correlationId })
-      return
-    }
-    applyOperationResult(kind, result.data)
-  }
-
-  function applyOperationResult(
-    kind: BackupOperationKind,
-    data: BackupCreateResponse | BackupVerifyResponse | BackupRestoreResponse | BackupRollbackResponse
-  ) {
-    if (kind === 'create') {
-      const created = data as BackupCreateResponse
-      if (created.backup) {
-        setList((current) => ({
-          backups: [created.backup!, ...(current?.backups ?? [])],
-          total: (current?.total ?? 0) + 1,
-          secrets_redacted: created.backup!.secrets_redacted
-        }))
-        setSelectedBackupId(created.backup.backup_id)
+  async function confirmPending() {
+    if (!pending) return
+    const kind = pending.kind
+    setBusy(true)
+    try {
+      if (kind === 'create') {
+        const result = await client.backups.create(
+          { reason: 'Backup created from Aurora admin cockpit.', components: defaultComponents, include_personal_data: false, storage: localStorageTarget() },
+          { reauthConfirmed: true }
+        )
+        applyResult(result, (created) => {
+          if (created.backup) {
+            setList((current) => ({
+              backups: [created.backup!, ...(current?.backups ?? [])],
+              total: (current?.total ?? 0) + 1,
+              secrets_redacted: created.backup!.secrets_redacted
+            }))
+          }
+          return created.message ?? 'Backup created.'
+        })
+      } else if (kind === 'verify' && pending.backup) {
+        const backup = pending.backup
+        const result = await client.backups.verify(
+          { backup_id: backup.backup_id, storage: backup.storage },
+          'Backup manifest verified from Aurora admin cockpit.',
+          { reauthConfirmed: true }
+        )
+        applyResult(result, (verified) => verified.message ?? (verified.verified ? 'Backup manifest verified.' : 'Backup manifest failed verification.'))
+      } else if (kind === 'restore' && pending.backup) {
+        const backup = pending.backup
+        const result = await client.backups.restore(
+          {
+            backup_id: backup.backup_id,
+            storage: backup.storage,
+            components: backup.components.map((component) => component.component),
+            dry_run: true,
+            create_rollback: true,
+            reason: 'Backup restore dry-run requested from Aurora admin cockpit.'
+          },
+          { reauthConfirmed: true }
+        )
+        applyResult(result, (restored) => restored.message ?? 'Restore dry-run complete; no data was overwritten.')
       }
-      setOperation({ kind, status: created.status === 'ok' ? 'ok' : 'failed', message: created.message ?? `Backup create returned ${created.status}.`, auditReceipt: created.audit_receipt })
-      return
+    } finally {
+      setBusy(false)
+      setPending(null)
     }
-    if (kind === 'verify') {
-      const verified = data as BackupVerifyResponse
-      setLastVerify(verified)
-      setOperation({ kind, status: verified.verified ? 'ok' : 'failed', message: verified.message ?? (verified.verified ? 'Backup manifest verified.' : `Backup verify returned ${verified.status}.`), auditReceipt: verified.manifest_digest ?? null })
-      return
-    }
-    if (kind === 'restore-dry-run') {
-      const restore = data as BackupRestoreResponse
-      setLastRestore(restore)
-      setOperation({ kind, status: restore.status === 'ok' ? 'ok' : 'failed', message: restore.message ?? `Restore dry-run returned ${restore.status}.`, auditReceipt: restore.audit_receipt })
-      return
-    }
-    const rollback = data as BackupRollbackResponse
-    setLastRollback(rollback)
-    setOperation({ kind, status: rollback.status === 'ok' ? 'ok' : 'failed', message: rollback.message ?? `Rollback dry-run returned ${rollback.status}.`, auditReceipt: rollback.audit_receipt })
   }
 
-  function confirmDialog() {
-    const kind = dialogKind
-    if (!kind || !dialogValid) return
-    const trimmedReason = reason.trim()
-    if (kind === 'create') {
-      void runOperation('create', () => client.backups.create({
-        reason: trimmedReason,
-        components: defaultComponents,
-        include_personal_data: includePersonalData,
-        storage: localStorageTarget()
-      }, { reauthConfirmed }))
-    } else if (kind === 'verify' && selectedBackup) {
-      void runOperation('verify', () => client.backups.verify({ backup_id: selectedBackup.backup_id, storage: selectedBackup.storage }, trimmedReason, { reauthConfirmed }))
-    } else if (kind === 'restore-dry-run' && selectedBackup) {
-      void runOperation('restore-dry-run', () => client.backups.restore({
-        backup_id: selectedBackup.backup_id,
-        storage: selectedBackup.storage,
-        components: selectedBackup.components.map((component) => component.component),
-        dry_run: true,
-        create_rollback: true,
-        reason: trimmedReason
-      }, { reauthConfirmed }))
-    } else if (kind === 'rollback-dry-run' && rollbackBackupId) {
-      void runOperation('rollback-dry-run', () => client.backups.rollback({ rollback_backup_id: rollbackBackupId, dry_run: true, reason: trimmedReason }, { reauthConfirmed }))
+  function applyResult<T extends BackupCreateResponse | BackupVerifyResponse | BackupRestoreResponse>(
+    result: AuroraResponse<T>,
+    onOk: (data: T) => string
+  ) {
+    if (!result.ok) {
+      toast({ tone: 'error', title: 'Backup action failed', detail: backupErrorMessage(result.error) })
+      return
     }
-    setDialogKind(null)
+    toast({ tone: 'success', title: onOk(result.data) })
   }
 
   const columns: Array<DataColumn<BackupManifestSummary>> = [
     {
       key: 'backup',
-      header: 'Backup',
+      header: 'Snapshot',
+      mono: true,
+      render: (backup) => backup.backup_id
+    },
+    { key: 'created', header: 'Created', hideAt: 'md', render: (backup) => formatBackupTimestamp(backup.created_at) },
+    { key: 'scope', header: 'Scope', hideAt: 'lg', render: (backup) => scopeLabel(backup.components) },
+    { key: 'size', header: 'Size', hideAt: 'lg', render: (backup) => sizeLabel(backup.components) },
+    { key: 'status', header: 'Status', render: (backup) => <ToneBadge tone={statusTone(backup.status)}>{backup.status}</ToneBadge> },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'end',
       render: (backup) => (
-        <span className="aui-cell-stack">
-          <strong>{backup.backup_id}</strong>
-          <small>{backup.created_at}</small>
-        </span>
-      )
-    },
-    { key: 'status', header: 'Status', render: (backup) => backup.status },
-    {
-      key: 'components',
-      header: 'Components',
-      hideAt: 'lg',
-      render: (backup) => backup.components.map((component) => `${component.component}:${component.status}`).join(', ')
-    },
-    {
-      key: 'storage',
-      header: 'Storage',
-      hideAt: 'md',
-      render: (backup) => `${backup.storage.kind} / ${backup.encrypted ? 'encrypted' : 'not encrypted'} / ${backup.storage.encryption}`
-    },
-    {
-      key: 'integrity',
-      header: 'Manifest integrity',
-      hideAt: 'lg',
-      render: (backup) => (
-        <span className="aui-cell-stack">
-          <code className="aui-mono">{backup.manifest_digest}</code>
-          <small>Schema {backup.schema_version}; {backup.secrets_redacted ? 'secrets protected' : 'redaction pending'}; {backup.audit_receipt ?? 'no audit receipt'}</small>
-        </span>
+        <div className="flex items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+          <Button
+            variant="outline"
+            disabled={!mutationRouteReady}
+            disabledReason={disabledReason}
+            onClick={() => setPending({ kind: 'verify', backup })}
+          >
+            Verify
+          </Button>
+          <Button
+            variant="danger"
+            disabled={!mutationRouteReady}
+            disabledReason={disabledReason}
+            onClick={() => setPending({ kind: 'restore', backup })}
+          >
+            Restore
+          </Button>
+        </div>
       )
     }
   ]
 
-  const dialogConfig = dialogKind ? operationCopy[dialogKind] : null
-  const dialogAffected = dialogKind === 'create'
-    ? defaultComponents.map(String)
-    : dialogKind === 'rollback-dry-run'
-      ? [rollbackBackupId ?? 'rollback point']
-      : selectedBackup
-        ? [selectedBackup.backup_id]
-        : []
+  const dialogCopy = pending ? operationCopy[pending.kind] : null
 
   return (
-    <div className="aui-stack-lg">
-      <PageHeader
-        eyebrow="Admin"
-        title="Backups & Restore"
-        description="Create redacted backup manifests, verify integrity, download manifest summaries, and preview restore impact before destructive actions."
-        badges={
-          <BadgeCluster label="Backup service status">
-            <StatusBadge state={route.state} />
-            <PrivacyBadge privacy="admin-critical" />
-            <EvidenceBadge label={route.providerLabel} />
-            <EvidenceBadge label={client.transport.kind} />
-            <EvidenceBadge label={secretsProtected ? 'secrets protected' : 'redaction pending'} />
-          </BadgeCluster>
-        }
-        actions={
-          <Button
-            variant="primary"
-            icon={<ArchiveRestore size={16} aria-hidden />}
-            disabled={!mutationRouteReady}
-            disabledReason={`Create is disabled: ${disabledReason}`}
-            onClick={() => openDialog('create')}
-          >
-            Create via AdminAction
-          </Button>
-        }
-      />
+    <div className="flex h-full flex-col" aria-labelledby="admin-backups-title">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
+        <div>
+          <h1 id="admin-backups-title" className="text-xl font-semibold tracking-tight">Backups</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Snapshots, verification and restore. Restore and rollback require admin confirmation.</p>
+        </div>
+        <Button
+          variant="primary"
+          icon={<Archive size={14} aria-hidden />}
+          disabled={!mutationRouteReady}
+          disabledReason={disabledReason}
+          onClick={() => setPending({ kind: 'create', backup: null })}
+        >
+          Create backup now
+        </Button>
+      </div>
 
-      {!mutationRouteReady ? <p className="aui-inline-alert" role="alert">Create is disabled: {disabledReason}</p> : null}
+      <div className="flex flex-col gap-4 px-6 py-5">
+        <BackupStatusNotice loadState={loadState} route={route} loadError={loadError} />
 
-      <StatStrip
-        items={[
-          { label: 'Snapshots', value: list?.total ?? backups.length },
-          { label: 'Encrypted', value: `${encryptedCount}/${backups.length}` },
-          { label: 'Secrets', value: secretsProtected ? 'Protected' : 'Pending', tone: secretsProtected ? 'success' : 'warning' },
-          { label: 'Service', value: presentableSignal(loadState) }
-        ]}
-      />
-
-      <div className="aui-two-col">
-        <Card title="Availability" icon={<FileCheck2 size={18} aria-hidden />}>
-          <MetaGrid
-            columns={1}
-            items={[
-              { label: 'State', value: loadState },
-              { label: 'Route', value: presentableSignal(route.explanation) },
-              { label: 'AdminAction', value: 'required for create, verify, restore dry-run and rollback dry-run' },
-              { label: 'Mutation gate', value: mutationRouteReady ? 'enabled through Aurora AdminAction draft/confirm/audit' : disabledReason },
-              { label: 'Blockers', value: presentableSignal(route.blockers.join(', ') || loadError || 'none') }
-            ]}
+        <Card title="Manifests" flush>
+          <DataTable
+            columns={columns}
+            rows={backups}
+            getRowKey={(backup) => backup.backup_id}
+            empty={<p className="text-sm text-muted-foreground">No backup manifests were returned by the Backup service.</p>}
           />
-          {route.disabled ? <p className="aui-inline-alert" role="alert">Backup operations are disabled until backend Backup.List capability state and Backup.* AdminAction contracts are available.</p> : null}
-          {loadError ? <p className="aui-inline-alert" role="alert">{loadError}</p> : null}
-          {route.repairActions.length > 0 ? (
-            <ul className="aui-repair-list" aria-label="Backup repair actions">
-              {route.repairActions.map((action) => (
-                <li key={action.id}>
-                  <strong>{action.label}</strong>
-                  <span>{action.disabled ? 'disabled' : 'available'}</span>
-                  <small>{action.reason}</small>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </Card>
-
-        <Card title="Restore safety" icon={<RotateCcw size={18} aria-hidden />}>
-          <p className="aui-card-note">These controls never call Backup.* directly; Aurora creates and confirms an AdminAction before submitting.</p>
-          <div className="aui-action-row">
-            <Button
-              disabled={!mutationRouteReady || !selectedBackup}
-              disabledReason={!mutationRouteReady ? disabledReason : 'Select a manifest first.'}
-              onClick={() => openDialog('verify')}
-            >
-              Verify via AdminAction
-            </Button>
-            <Button
-              disabled={!mutationRouteReady || !selectedBackup}
-              disabledReason={!mutationRouteReady ? disabledReason : 'Select a manifest first.'}
-              onClick={() => openDialog('restore-dry-run')}
-            >
-              Preview restore impact
-            </Button>
-            <Button
-              disabled={!mutationRouteReady || !rollbackBackupId}
-              disabledReason={!mutationRouteReady ? disabledReason : 'Run a restore dry-run first to create a rollback point.'}
-              onClick={() => openDialog('rollback-dry-run')}
-            >
-              Preview rollback dry-run
-            </Button>
-          </div>
-          <p className="aui-card-note" role="alert">Destructive restore is intentionally unavailable here; only dry-run impact preview is enabled until the backend exposes a confirmed destructive restore contract.</p>
-          <Button disabled disabledReason="Backend has not returned a destructive restore contract.">Full restore disabled until backend returns destructive restore support</Button>
-          <h3 className="aui-subhead">Rollback visibility</h3>
-          <p className="aui-card-note">Rollback is warning-only until a restore dry-run returns a rollback backup id; this view previews rollback impact and does not roll back data.</p>
         </Card>
       </div>
 
-      <Card title="Manifests" icon={<Download size={18} aria-hidden />} flush>
-        <DataTable
-          columns={columns}
-          rows={backups}
-          getRowKey={(backup) => backup.backup_id}
-          onRowClick={(backup) => selectBackup(backup.backup_id)}
-          empty={
-            <div className="aui-empty-inline">
-              {loadState === 'loading'
-                ? <p aria-live="polite">Loading backup manifests from Aurora...</p>
-                : <p>No backup manifests were returned by the Backup service.</p>}
-            </div>
-          }
-        />
-      </Card>
-
-      {operation || lastVerify || lastRestore || lastRollback ? (
-        <Card title="Operation results" icon={<FileCheck2 size={18} aria-hidden />}>
-          {operation ? (
-            <div className={`aui-op-result aui-op-result-${operation.status}`} role={operation.status === 'failed' ? 'alert' : 'status'}>
-              <strong>{operation.kind}</strong>
-              <p>{operation.message}</p>
-              {operation.auditReceipt ? <code className="aui-mono">{operation.auditReceipt}</code> : null}
-            </div>
-          ) : null}
-          {lastVerify ? <BackupComponents components={lastVerify.components} title="Last verification components" /> : null}
-          {lastRestore ? <ImpactPlan plan={lastRestore.impact_plan} title="Restore impact plan" /> : null}
-          {lastRollback ? <ImpactPlan plan={lastRollback.impact_plan} title="Rollback impact plan" /> : null}
-        </Card>
-      ) : null}
-
-      <DetailSheet
-        open={sheetOpen && Boolean(selectedBackup)}
-        onClose={() => setSheetOpen(false)}
-        title={selectedBackup?.backup_id ?? 'Backup manifest'}
-        description={selectedBackup ? `Created ${selectedBackup.created_at}` : undefined}
-        badge={selectedBackup ? <StatusBadge state={route.state} /> : undefined}
-        actions={selectedBackup ? <ManifestDownload backup={selectedBackup} /> : undefined}
-      >
-        {selectedBackup ? (
-          <>
-            <MetaGrid
-              items={[
-                { label: 'Status', value: selectedBackup.status },
-                { label: 'Schema', value: selectedBackup.schema_version },
-                { label: 'Storage', value: `${selectedBackup.storage.kind} / ${selectedBackup.storage.encryption}` },
-                { label: 'Encryption', value: selectedBackup.encrypted ? 'encrypted' : 'not encrypted' },
-                { label: 'Secrets', value: selectedBackup.secrets_redacted ? 'secrets protected' : 'redaction pending' },
-                { label: 'Audit receipt', value: selectedBackup.audit_receipt ?? 'no audit receipt', mono: true }
-              ]}
-            />
-            <div>
-              <p className="aui-meta-label">Manifest digest</p>
-              <code className="aui-mono aui-code-block">{selectedBackup.manifest_digest}</code>
-            </div>
-            <BackupComponents
-              components={selectedBackup.components.map((component) => ({
-                component: component.component,
-                status: component.status,
-                message: null,
-                redacted: selectedBackup.secrets_redacted
-              }))}
-              title="Components"
-            />
-          </>
-        ) : null}
-      </DetailSheet>
-
-      {dialogConfig ? (
-        <AdminConfirmDialog
-          open={dialogKind !== null}
-          title={dialogConfig.title}
-          description={dialogConfig.description}
-          methodId={dialogMethodId(dialogKind)}
-          severity={dialogConfig.destructive ? 'destructive' : 'standard'}
-          affected={dialogAffected}
-          requireReason
-          reasonValue={reason}
-          onReasonChange={setReason}
-          confirmLabel={dialogConfig.confirm}
-          onConfirm={confirmDialog}
-          onCancel={() => setDialogKind(null)}
-          busy={operationPending}
-          extraValid={reauthConfirmed}
-          extraInvalidReason="Confirm AdminAction reauthentication before backup mutations."
-        >
-          {dialogKind === 'create' ? (
-            <Checkbox
-              checked={includePersonalData}
-              onChange={setIncludePersonalData}
-              label="Include personal RAG metadata when backend policy allows it"
-            />
-          ) : null}
-          <Checkbox
-            checked={reauthConfirmed}
-            onChange={setReauthConfirmed}
-            label="I confirm recent AdminAction reauthentication before backup mutations."
-          />
-        </AdminConfirmDialog>
-      ) : null}
+      <ConfirmDialog
+        open={pending !== null}
+        title={dialogCopy?.title ?? ''}
+        description={dialogCopy ? dialogCopy.describe(pending?.backup ?? null) : ''}
+        confirmLabel={dialogCopy?.confirmLabel ?? 'Confirm'}
+        destructive={Boolean(dialogCopy?.destructive)}
+        busy={busy}
+        onCancel={() => setPending(null)}
+        onConfirm={() => void confirmPending()}
+      />
     </div>
   )
 }
 
-function ManifestDownload({ backup }: { backup: BackupManifestSummary }) {
-  const href = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backup, null, 2))}`
-  return <a className="aui-btn aui-btn-outline" href={href} download={`${backup.backup_id}.json`}><span>Download manifest</span></a>
+function BackupStatusNotice({ loadState, route, loadError }: { loadState: BackupLoadState; route: RouteAvailability; loadError: string | null }) {
+  if (loadState === 'loading') {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" aria-live="polite">
+        Loading backup manifests from Aurora...
+      </div>
+    )
+  }
+  if (loadState === 'ready') return null
+  if (route.disabled) {
+    return (
+      <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" role="alert">
+        Backup operations are disabled until backend Backup.List capability state and Backup.* AdminAction contracts are available.
+        {route.blockers.length > 0 ? ` ${presentableSignal(route.blockers.join(', '))}` : null}
+      </div>
+    )
+  }
+  if (loadState === 'empty') return null
+  if (loadError) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+        {loadError}
+      </div>
+    )
+  }
+  return null
 }
 
-interface BackupComponentRow {
-  component: string
-  status: string
-  message?: string | null
-  redacted?: boolean
+export function backupErrorMessage(error: AuroraError): string {
+  if (error.code === 'auth' || error.code === 'permission') return 'Backup request denied by authentication or permissions.'
+  if (error.code === 'privacy_blocked') return 'Backup request is blocked by privacy policy until required approval exists.'
+  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'Backup service is unavailable in this backend or deployment mode.'
+  if (error.code === 'timeout' || error.code === 'transport_loss') return 'Backup request could not reach Aurora reliably; retry after service health recovers.'
+  return error.message || 'Backup request failed.'
 }
 
-function BackupComponents({ components, title }: { components: BackupComponentRow[]; title: string }) {
-  return (
-    <section>
-      <h3 className="aui-subhead">{title}</h3>
-      <ul className="aui-repair-list">
-        {components.map((component) => (
-          <li key={component.component}><strong>{component.component}</strong><span>{component.status}</span><small>{component.message ?? (component.redacted ? 'redacted' : 'not redacted')}</small></li>
-        ))}
-      </ul>
-    </section>
-  )
+function statusTone(status: BackupManifestSummary['status']): BadgeTone {
+  if (status === 'ok') return 'success'
+  if (status === 'unsupported') return 'neutral'
+  return 'danger'
 }
 
-function ImpactPlan({ plan, title }: { plan: import('@aurora/client').BackupImpactPlan; title: string }) {
-  return (
-    <section>
-      <h3 className="aui-subhead">{title}</h3>
-      <MetaGrid
-        items={[
-          { label: 'Admin critical', value: plan.admin_critical ? 'yes' : 'no' },
-          { label: 'Quiesce', value: plan.requires_quiesce ? 'required' : 'skipped' },
-          { label: 'Restart', value: plan.requires_restart ? 'required' : 'skipped' }
-        ]}
-      />
-      <ul className="aui-repair-list">
-        {plan.affected_services.map((service) => (
-          <li key={`${service.service}-${service.action}`}><strong>{service.service}</strong><span>{service.action}</span><small>{service.reason}</small></li>
-        ))}
-        {plan.warnings.map((warning) => (
-          <li key={warning}><strong>warning</strong><span>review</span><small>{warning}</small></li>
-        ))}
-      </ul>
-    </section>
-  )
+function scopeLabel(components: BackupComponentResult[]): string {
+  const included = components.filter((component) => component.status === 'included')
+  if (included.length === defaultComponents.length) return 'Full node'
+  if (included.length === 0) return 'None'
+  return included.map((component) => titleCase(component.component)).join(' + ')
 }
 
-function dialogMethodId(kind: BackupOperationKind | null): string {
-  if (kind === 'create') return 'Backup.Create'
-  if (kind === 'verify') return 'Backup.Verify'
-  if (kind === 'restore-dry-run') return 'Backup.Restore (dry-run)'
-  if (kind === 'rollback-dry-run') return 'Backup.Rollback (dry-run)'
-  return 'Backup'
+function sizeLabel(components: BackupComponentResult[]): string {
+  const totalBytes = components.reduce((sum, component) => sum + (component.bytes ?? 0), 0)
+  if (totalBytes <= 0) return 'not reported'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = totalBytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`
+}
+
+function formatBackupTimestamp(createdAt: string): string {
+  return createdAt.replace('T', ' ').replace('Z', '')
+}
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 function initialLoadState(route: RouteAvailability, initialList: BackupListResponse | null, initialError: string | null): BackupLoadState {
@@ -538,21 +329,6 @@ function backupDisabledReason(route: RouteAvailability, loadError: string | null
   if (!route.routeable) return 'Backup route is not routeable from current capability status.'
   if (route.disabled) return 'Backup backend contract is not advertised by the current SDK/capability graph.'
   return 'Backup AdminAction mutation contract is not ready.'
-}
-
-export function backupErrorMessage(error: AuroraError): string {
-  if (error.code === 'auth' || error.code === 'permission') return 'Backup request denied by authentication or permissions.'
-  if (error.code === 'privacy_blocked') return 'Backup request is blocked by privacy policy until required approval exists.'
-  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'Backup service is unavailable in this backend or deployment mode.'
-  if (error.code === 'timeout' || error.code === 'transport_loss') return 'Backup request could not reach Aurora reliably; retry after service health recovers.'
-  return error.message || 'Backup request failed.'
-}
-
-function adminActionPendingMessage(kind: BackupOperationKind): string {
-  if (kind === 'create') return 'Creating AdminAction draft and confirmation for backup create.'
-  if (kind === 'verify') return 'Creating AdminAction draft and confirmation for backup verification.'
-  if (kind === 'restore-dry-run') return 'Creating AdminAction draft and confirmation for restore impact preview.'
-  return 'Creating AdminAction draft and confirmation for rollback impact preview.'
 }
 
 function localStorageTarget() {

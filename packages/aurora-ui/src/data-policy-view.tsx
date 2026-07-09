@@ -15,6 +15,7 @@ import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
+import { cn } from '#lib/utils'
 
 export type DataPolicyLoadState = 'loading' | 'ready' | 'degraded' | 'denied' | 'empty' | 'error'
 
@@ -158,9 +159,9 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       key: 'namespace',
       header: 'Namespace',
       render: (namespace) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <strong>{namespace.namespace}</strong>
-          <small>{namespace.record_count === null ? 'records unknown' : `${namespace.record_count} records`}</small>
+          <small className="text-xs text-muted-foreground">{namespace.record_count === null ? 'records unknown' : `${namespace.record_count} records`}</small>
         </span>
       )
     },
@@ -169,20 +170,20 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       key: 'retention',
       header: 'Retention and sharing',
       render: (namespace) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <span>{namespace.policy.sharing_mode}</span>
-          <small>{namespace.freshness ?? 'freshness not reported'}</small>
+          <small className="text-xs text-muted-foreground">{namespace.freshness ?? 'freshness not reported'}</small>
         </span>
       )
     },
-    { key: 'visibility', header: 'Visibility', hideAt: 'lg', render: (namespace) => <span className="aui-cell-text">{namespaceVisibility(namespace)}</span> },
-    { key: 'flows', header: 'Data flows', hideAt: 'md', render: (namespace) => <span className="aui-cell-text">{dataFlowText(namespace)}</span> },
+    { key: 'visibility', header: 'Visibility', hideAt: 'lg', render: (namespace) => <span className="text-sm text-muted-foreground">{namespaceVisibility(namespace)}</span> },
+    { key: 'flows', header: 'Data flows', hideAt: 'md', render: (namespace) => <span className="text-sm text-muted-foreground">{dataFlowText(namespace)}</span> },
     {
       key: 'audit',
       header: 'Audit and AdminAction',
       hideAt: 'lg',
       render: (namespace) => (
-        <span className="aui-cell-text">
+        <span className="text-sm text-muted-foreground">
           {namespace.policy.requires_admin_approval ? 'AdminAction required for export/import/delete' : namespace.policy.denial_reason ?? 'read/search policy only'}
         </span>
       )
@@ -190,7 +191,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
   ]
 
   return (
-    <section className="aui-route-policy-view" aria-labelledby="data-policy-title">
+    <section className="flex flex-col gap-4" aria-labelledby="data-policy-title">
       <PageHeader
         eyebrow="Memory"
         id="data-policy-title"
@@ -216,11 +217,15 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         ]}
       />
 
-      {snapshot.error ? <div className="aui-inline-alert aui-inline-alert-danger" role="alert"><span>{snapshot.error}</span></div> : null}
-      {snapshot.loadState === 'loading' ? <p className="aui-message">Loading data policy from Aurora.</p> : null}
-      {snapshot.loadState === 'empty' ? <p className="aui-message">No namespaces or transcript records were returned by the backend.</p> : null}
+      {snapshot.error ? (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+          <span>{snapshot.error}</span>
+        </div>
+      ) : null}
+      {snapshot.loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading data policy from Aurora.</p> : null}
+      {snapshot.loadState === 'empty' ? <p className="text-sm text-muted-foreground">No namespaces or transcript records were returned by the backend.</p> : null}
       {snapshot.warnings.length > 0 ? (
-        <ul className="aui-mesh-warnings" aria-label="Data policy warnings">
+        <ul className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning" aria-label="Data policy warnings">
           {snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}
         </ul>
       ) : null}
@@ -235,17 +240,17 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
           columns={retentionColumns}
           rows={snapshot.namespaces}
           getRowKey={(namespace) => namespace.namespace}
-          empty={<div className="aui-empty-inline"><p>No namespace policy rows returned.</p></div>}
+          empty="No namespace policy rows returned."
         />
       </Card>
 
-      <div className="aui-two-col">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card
           title="Raw audio, transcripts, and fallback rules"
           description="Storage toggles are represented as policy state until backend AdminAction mutation endpoints exist."
           icon={<Mic size={18} aria-hidden />}
         >
-          <div className="aui-policy-toggles">
+          <div className="flex flex-col gap-3">
             <DataPolicyToggle label="Raw audio storage" value="Off by default" detail="Raw audio is transient unless the selected route, consent, privacy indicator, and backend policy allow retention." />
             <DataPolicyToggle label="Transcript storage" value={`${snapshot.conversations.length} recent transcript record(s)`} detail="Conversation text is loaded via DB.GetMessages and inherits each record privacy class; retention changes require AdminAction audit." />
             <DataPolicyToggle label="Remote/mesh fallback" value={totals.remoteFallback} detail="Remote RAG and audio routes require explicit selector, consent/privacy indicators where applicable, and cannot silently fall back to cloud." />
@@ -258,7 +263,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
           description="Each flow is enabled only when namespace policy and AdminAction permit it; no raw payloads or tokens are rendered."
           icon={<ShieldCheck size={18} aria-hidden />}
         >
-          <div className="aui-route-scenarios" aria-label="Data policy flow cards">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Data policy flow cards">
             <FlowCard icon={<FileDown size={18} aria-hidden />} label="Export snapshot" value={`${totals.exportableNamespaces} namespace(s)`} detail="Exports require namespace policy support plus AdminAction approval before records leave this node." />
             <FlowCard icon={<Trash2 size={18} aria-hidden />} label="Delete record" value={`${totals.deleteableNamespaces} namespace(s)`} detail="Deletes remain admin-critical and must carry reason, policy decision, and audit correlation." />
             <FlowCard icon={<Upload size={18} aria-hidden />} label="Import preview" value={`${totals.importableNamespaces} namespace(s)`} detail="Imports are previewed before write; owner overwrite and remote source metadata remain policy-gated." />
@@ -271,18 +276,33 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         title="Audit trail for policy changes"
         description="Route policy dry-runs show the audit target, policy decision, fallback behavior, and blockers that would accompany data-policy changes."
         icon={<History size={18} aria-hidden />}
-        actions={<a className="aui-btn aui-btn-ghost aui-btn-sm" href="/admin/audit">Open audit log</a>}
+        actions={
+          <a
+            href="/admin/audit"
+            className="inline-flex h-7 items-center rounded-lg px-2.5 text-xs font-medium text-foreground hover:bg-muted"
+          >
+            Open audit log
+          </a>
+        }
       >
-        <div className="aui-route-scenarios" role="list" aria-label="Data policy audit trail">
+        <div className="flex flex-col gap-3" role="list" aria-label="Data policy audit trail">
           {snapshot.checks.map((check) => (
-            <article key={check.id} className="aui-route-candidate" role="listitem" data-selected={check.evaluation?.allowed ?? false}>
-              <header>
-                <strong>{check.label}</strong>
+            <article
+              key={check.id}
+              className={cn(
+                'flex flex-col gap-2 rounded-lg border border-border bg-card p-3',
+                (check.evaluation?.allowed ?? false) && 'border-success/30 bg-success/5'
+              )}
+              role="listitem"
+              data-selected={check.evaluation?.allowed ?? false}
+            >
+              <header className="flex flex-wrap items-center justify-between gap-2">
+                <strong className="text-sm">{check.label}</strong>
                 <StatusBadge state={check.evaluation?.availability ?? (check.error ? 'unsupported' : 'pending')} />
               </header>
-              <p>{check.description}</p>
-              {check.error ? <p className="aui-message aui-message-danger">{check.error}</p> : null}
-              <dl className="aui-route-policy-summary">
+              <p className="text-xs text-muted-foreground">{check.description}</p>
+              {check.error ? <p className="text-xs text-destructive" role="alert">{check.error}</p> : null}
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
                 <PolicyFact label="Privacy class" value={check.evaluation?.privacyClass ?? check.privacyClass} />
                 <PolicyFact label="Decision" value={check.evaluation ? `${check.evaluation.decision}: ${check.evaluation.reasonCode}` : 'pending'} />
                 <PolicyFact label="Fallback" value={check.evaluation?.preview.fallbackBehavior ?? 'not evaluated'} />
@@ -291,7 +311,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
             </article>
           ))}
         </div>
-        <p className="aui-message" role="alert">Policy edits require AdminAction draft/confirm/audit through Config.Set; this route does not mutate retention, raw audio, transcript, fallback, export, delete, or import policy directly.</p>
+        <p className="mt-3 text-xs text-muted-foreground" role="alert">Policy edits require AdminAction draft/confirm/audit through Config.Set; this route does not mutate retention, raw audio, transcript, fallback, export, delete, or import policy directly.</p>
       </Card>
     </section>
   )
@@ -396,15 +416,37 @@ function dataFlowText(namespace: DBRAGNamespaceInfo) {
 }
 
 function PolicyFact({ label, value }: { label: string; value: string }) {
-  return <div><dt>{label}</dt><dd>{value}</dd></div>
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium">{value}</dd>
+    </div>
+  )
 }
 
 function DataPolicyToggle({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <label><span>{label}</span><strong>{value}</strong><small>{detail}</small></label>
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-border/60 pb-3 last:border-0 last:pb-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm">{label}</span>
+        <strong className="text-sm font-medium">{value}</strong>
+      </div>
+      <small className="text-xs text-muted-foreground">{detail}</small>
+    </div>
+  )
 }
 
 function FlowCard({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-  return <article className="aui-route-candidate"><header>{icon}<strong>{label}</strong></header><p>{value}</p><small>{detail}</small></article>
+  return (
+    <article className="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-3">
+      <header className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <strong className="text-sm text-foreground">{label}</strong>
+      </header>
+      <p className="text-sm font-medium">{value}</p>
+      <small className="text-xs text-muted-foreground">{detail}</small>
+    </article>
+  )
 }
 
 function settledValue<T>(result: PromiseSettledResult<T>): T | null {

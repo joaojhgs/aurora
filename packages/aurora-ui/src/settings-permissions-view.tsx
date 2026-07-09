@@ -12,9 +12,11 @@ import type {
   PrivacyClass
 } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
+import { cn } from '#lib/utils'
+import { Input } from '#components/ui/input'
 
 export type SettingsMutationState = 'idle' | 'optimistic' | 'rollback-error' | 'disabled'
 
@@ -102,16 +104,17 @@ export interface SettingsPermissionsViewProps {
   snapshot: AuroraShellSnapshot
   surface?: SettingsPermissionsSurface
   currentPath?: string
+  hideTabs?: boolean | undefined
 }
 
-export function SettingsPermissionsView({ snapshot, surface, currentPath }: SettingsPermissionsViewProps) {
+export function SettingsPermissionsView({ snapshot, surface, currentPath, hideTabs = false }: SettingsPermissionsViewProps) {
   const routePath = currentPath ?? browserPathname()
   const activeSurface = surface ?? (routePath === '/settings/native' ? 'native' : 'settings')
   const model = buildSettingsPermissionsModel(snapshot)
   if (activeSurface === 'native') {
-    return <NativeSettingsSurface snapshot={snapshot} model={model} />
+    return <NativeSettingsSurface snapshot={snapshot} model={model} hideTabs={hideTabs} />
   }
-  return <RouteSettingsSurface snapshot={snapshot} model={model} />
+  return <RouteSettingsSurface snapshot={snapshot} model={model} hideTabs={hideTabs} />
 }
 
 function browserPathname(): string | null {
@@ -120,35 +123,31 @@ function browserPathname(): string | null {
 
 function RouteSettingsSurface({
   snapshot,
-  model
+  model,
+  hideTabs
 }: {
   snapshot: AuroraShellSnapshot
   model: SettingsPermissionsModel
+  hideTabs: boolean
 }) {
   return (
-    <div className="aui-settings">
+    <div className="flex flex-col gap-4">
+      {hideTabs ? null : <SettingsTabs active="general" />}
       <PageHeader
         id="settings-permissions-title"
         eyebrow="Settings"
-        title="Settings and permissions"
-        description="Route privacy defaults, voice defaults, assistant behavior, theme/accessibility/local storage posture, and fallback behavior are rendered from Aurora capability state. Native permission details live on /settings/native."
-        badges={
-          <>
-            <EvidenceBadge label={snapshot.evidenceSource} />
-            <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
-            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          </>
-        }
+        title="General"
+        description="Privacy defaults, voice behavior, and assistant preferences."
       />
 
       {model.error ? (
-        <div className="aui-settings-alert aui-inline-alert-danger" role="alert">
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
           <AlertTriangle size={17} aria-hidden />
           <span>{model.error}</span>
         </div>
       ) : null}
 
-      <div className="aui-settings-grid">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
           <PanelTitle
             icon={<ShieldCheck size={18} aria-hidden />}
@@ -156,7 +155,7 @@ function RouteSettingsSurface({
             description="Route, selector, and fallback controls remain AdminAction-gated whenever the backend marks them manage/admin-critical."
             id="privacy-defaults-title"
           />
-          <div className="aui-settings-controls">
+          <div className="flex flex-col gap-3">
             {model.privacyControls.map((control) => (
               <PrivacyControlRow key={control.id} control={control} />
             ))}
@@ -170,7 +169,7 @@ function RouteSettingsSurface({
             description="Push-to-talk, wake behavior, and spoken replies are shown from Assistant voice route status plus native microphone constraints; switches are disabled until Config/AdminAction support exists."
             id="voice-behavior-title"
           />
-          <div className="aui-settings-controls">
+          <div className="flex flex-col gap-3">
             {model.voiceBehavior.map((item) => (
               <VoiceBehaviorRow key={item.id} item={item} />
             ))}
@@ -184,16 +183,9 @@ function RouteSettingsSurface({
             description="Assistant defaults stay tied to route status and explicit controls; native foreground/background constraints live on /settings/native."
             id="assistant-behavior-title"
           />
-          <div className="aui-route-defaults">
+          <div className="flex flex-col gap-2.5">
             {model.assistantBehavior.map((item) => (
-              <article key={item.id}>
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.detail}</span>
-                </div>
-                <StatusBadge state={item.state} />
-                <code>{item.value}</code>
-              </article>
+              <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
             ))}
           </div>
         </Card>
@@ -206,16 +198,9 @@ function RouteSettingsSurface({
           description="Display and local persistence defaults are user-scoped and do not imply native platform permission state."
           id="theme-accessibility-storage-title"
         />
-        <div className="aui-route-defaults">
+        <div className="flex flex-col gap-2.5">
           {model.userExperienceDefaults.map((item) => (
-            <article key={item.id}>
-              <div>
-                <strong>{item.label}</strong>
-                <span>{item.detail}</span>
-              </div>
-              <StatusBadge state={item.state} />
-              <code>{item.value}</code>
-            </article>
+            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
           ))}
         </div>
       </Card>
@@ -227,23 +212,15 @@ function RouteSettingsSurface({
           description="Fallback success is shown only when route/capability status supports it; explicit selector failures remain hard failures."
           id="route-policy-title"
         />
-        <div className="aui-route-defaults">
+        <div className="flex flex-col gap-2.5">
           {model.routeDefaults.map((item) => (
-            <article key={item.id}>
-              <div>
-                <strong>{item.label}</strong>
-                <span>{item.detail}</span>
-              </div>
-              <StatusBadge state={item.state} />
-              <code>{item.value}</code>
-            </article>
+            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
           ))}
         </div>
         <MetaGrid
           items={[
             { label: 'Admin confirmation', value: model.adminActionLabel },
             { label: 'Fallback behavior', value: model.fallbackLabel },
-            { label: 'Backend truth', value: snapshot.evidenceSource }
           ]}
           columns={1}
         />
@@ -252,12 +229,29 @@ function RouteSettingsSurface({
   )
 }
 
+function RouteDefaultRow({ label, detail, state, value }: { label: string; detail: string; state: AvailabilityState; value: string }) {
+  return (
+    <article className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2">
+      <div className="flex flex-col gap-0.5">
+        <strong className="text-sm">{label}</strong>
+        <span className="text-xs text-muted-foreground">{detail}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <StatusBadge state={state} />
+        <code className="font-mono text-xs text-muted-foreground">{value}</code>
+      </div>
+    </article>
+  )
+}
+
 function NativeSettingsSurface({
   snapshot,
-  model
+  model,
+  hideTabs
 }: {
   snapshot: AuroraShellSnapshot
   model: SettingsPermissionsModel
+  hideTabs: boolean
 }) {
   const grantedCount = model.nativePermissions.filter((permission) => permission.granted).length
   const manifestNote = snapshot.nativePlatform.includes('android')
@@ -271,9 +265,9 @@ function NativeSettingsSurface({
       key: 'capability',
       header: 'Capability',
       render: (permission) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-0.5">
           <strong>{permission.label}</strong>
-          {permission.detail && permission.detail !== manifestNote ? <small>{permission.detail}</small> : null}
+          {permission.detail && permission.detail !== manifestNote ? <small className="text-xs text-muted-foreground">{permission.detail}</small> : null}
         </span>
       )
     },
@@ -281,9 +275,9 @@ function NativeSettingsSurface({
       key: 'status',
       header: 'Status',
       render: (permission) => (
-        <span className="aui-cell-stack">
+        <span className="flex flex-col gap-1">
           <StatusBadge state={permission.state} />
-          <small>{permission.capabilityEnabled ? 'capability enabled' : 'capability disabled'}; {presentableSignal(permission.blockers.length > 0 ? permission.blockers.join(', ') : 'no blocker reported')}</small>
+          <small className="text-xs text-muted-foreground">{permission.capabilityEnabled ? 'capability enabled' : 'capability disabled'}; {presentableSignal(permission.blockers.length > 0 ? permission.blockers.join(', ') : 'no blocker reported')}</small>
         </span>
       )
     },
@@ -292,9 +286,9 @@ function NativeSettingsSurface({
       header: 'Native permission id',
       hideAt: 'md',
       render: (permission) => (
-        <span className="aui-cell-stack">
-          <span className="aui-mono">{permission.id}</span>
-          {permission.evidence.length > 0 ? <small>{permission.evidence.join(', ')}</small> : null}
+        <span className="flex flex-col gap-0.5">
+          <span className="font-mono text-xs">{permission.id}</span>
+          {permission.evidence.length > 0 ? <small className="text-xs text-muted-foreground">{permission.evidence.join(', ')}</small> : null}
         </span>
       )
     },
@@ -315,150 +309,106 @@ function NativeSettingsSurface({
   ]
 
   return (
-    <section className="aui-settings" aria-labelledby="settings-native-title">
+    <section className="flex flex-col gap-4" aria-labelledby="settings-native-title">
+      {hideTabs ? null : <SettingsTabs active="advanced" />}
       <PageHeader
         eyebrow="Settings"
         id="settings-native-title"
-        title="Native platform settings"
-        description="Native desktop, Android, and iOS capability claims are rendered only from the SDK/native manifest. Browser deployments show unsupported status instead of pretending native permission state exists."
-        badges={
-          <>
-            <EvidenceBadge label={snapshot.evidenceSource} />
-            <EvidenceBadge label={snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native unsupported'} />
-            <EvidenceBadge label={model.nativeRoute?.providerLabel ?? 'Native.GetCapabilityManifest'} />
-          </>
-        }
+        title="Advanced"
+        description="Service sections without their own management page, grouped by schema section."
       />
 
       {model.error ? (
-        <div className="aui-inline-alert aui-inline-alert-danger" role="alert">
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
           <AlertTriangle size={17} aria-hidden />
           <span>{model.error}</span>
         </div>
       ) : null}
 
-      <StatStrip
-        items={[
-          { label: 'Platform', value: snapshot.nativePlatform },
-          { label: 'Native manifest', value: snapshot.nativeAvailable ? 'present' : 'unsupported' },
-          { label: 'Capabilities granted', value: `${grantedCount}/${model.nativePermissions.length}` },
-          { label: 'Mode', value: snapshot.transportKind }
-        ]}
-      />
-
-      <Card
-        title="Native permissions and capabilities"
-        description="Request buttons are enabled only when the platform advertises a native request command."
-        icon={<Smartphone size={18} aria-hidden />}
-      >
-        <p className="aui-card-note">{manifestNote}</p>
-        {model.nativePermissions.length > 0 ? (
-          <DataTable
-            columns={permissionColumns}
-            rows={model.nativePermissions}
-            getRowKey={(permission) => permission.id}
-            empty={<div className="aui-empty-inline"><p>No native permission manifest is available for this deployment mode.</p></div>}
-          />
-        ) : (
-          <div className="aui-empty-inline">
-            <EvidenceBadge label="empty" />
-            <p>No native permission manifest is available for this deployment mode.</p>
-          </div>
-        )}
-      </Card>
-
-      <Card
-        title="Native integrations"
-        description="Android assistant role, foreground voice, notifications, share/deep-link entrypoints, and iOS app-owned App Intents/Shortcuts/widgets/share/deep-link surfaces remain separated from browser settings."
-        icon={<Smartphone size={18} aria-hidden />}
-      >
-        {model.nativeIntegrations.length > 0 ? (
-          <div className="aui-native-list" aria-label="Native integrations">
-            {model.nativeIntegrations.map((integration) => (
-              <NativeIntegrationRow key={integration.id} integration={integration} />
-            ))}
-          </div>
-        ) : (
-          <div className="aui-empty-inline">
-            <EvidenceBadge label="native-integrations" />
-            <p>No mobile integration manifest is available for this platform.</p>
-          </div>
-        )}
-      </Card>
-
-      <Card
-        title="iOS App Intents, Shortcuts, widgets, share, and deep links"
-        description="iOS uses app-owned invocation surfaces and foreground constraints. It is not advertised as the system Siri assistant."
-        icon={<Smartphone size={18} aria-hidden />}
-      >
-        {model.nativePlatformIntegrations.length > 0 || model.nativeReleaseGates.length > 0 ? (
-          <div className="aui-route-defaults">
-            {model.nativePlatformIntegrations.map((integration) => (
-              <article key={integration.id}>
-                <div>
-                  <strong>{integration.label}</strong>
-                  <span>{integration.detail}</span>
-                </div>
-                <StatusBadge state={integrationStatusState(integration.status)} />
-                <code>{presentableSignal(integration.evidence.join(', ') || 'native manifest')}</code>
-              </article>
-            ))}
-            {model.nativeReleaseGates.map((gate) => (
-              <article key={gate.id}>
-                <div>
-                  <strong>{gate.label}</strong>
-                  <span>{gate.detail}</span>
-                </div>
-                <StatusBadge state={releaseGateState(gate.status)} />
-                <code>{gate.command ?? gate.requiredEvidence}</code>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="aui-empty-inline">
-            <EvidenceBadge label="native-manifest" />
-            <p>No iOS integration or preflight manifest is available for this deployment mode.</p>
-          </div>
-        )}
-        {model.nativePolicyNotes.length > 0 ? (
-          <ul className="aui-provider-list" aria-label="iOS policy notes">
-            {model.nativePolicyNotes.map((note) => <li key={note}><span>{note}</span></li>)}
-          </ul>
-        ) : null}
-        {model.nativeDeviceMatrix.length > 0 ? (
-          <dl className="aui-settings-facts">
-            {model.nativeDeviceMatrix.map((row) => (
-              <div key={row.id}>
-                <dt>{row.target}</dt>
-                <dd>{row.status}: {presentableSignal(row.evidence)}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-      </Card>
-
-      <Card
-        title="Native limitations and foreground constraints"
-        description="Unsupported native surfaces are explicit blockers, not browser fallbacks."
-        icon={<AlertTriangle size={18} aria-hidden />}
-      >
-        {model.nativeLimitations.length > 0 ? (
-          <dl className="aui-settings-facts">
-            {model.nativeLimitations.map((limitation) => (
-              <div key={limitation.id}>
-                <dt>{limitation.label}</dt>
-                <dd>{limitation.detail} State: {presentableSignal(limitation.evidence)}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <div className="aui-empty-inline">
-            <EvidenceBadge label="native-limitations" />
-            <p>No native platform limitation manifest is available for this deployment mode.</p>
-          </div>
-        )}
-      </Card>
+      <AdvancedSettingsSections model={model} snapshot={snapshot} />
+      <SettingsDataBlock />
     </section>
+  )
+}
+
+function SettingsTabs({ active }: { active: 'general' | 'configuration' | 'advanced' }) {
+  const tabs = [
+    { id: 'general' as const, label: 'General', href: '/settings' },
+    { id: 'configuration' as const, label: 'Configuration', href: '/admin/config' },
+    { id: 'advanced' as const, label: 'Advanced', href: '/settings/native' }
+  ]
+  return (
+    <nav className="flex items-center gap-1 border-b border-border" aria-label="Settings sections">
+      {tabs.map((tab) => (
+        <a
+          key={tab.id}
+          href={tab.href}
+          className={cn(
+            'border-b-2 border-transparent px-3.5 py-2 text-sm font-medium text-muted-foreground -mb-px',
+            tab.id === active && 'border-primary text-foreground'
+          )}
+        >
+          {tab.label}
+        </a>
+      ))}
+    </nav>
+  )
+}
+
+function AdvancedSettingsSections({ model, snapshot }: { model: SettingsPermissionsModel; snapshot: AuroraShellSnapshot }) {
+  const sections = [
+    {
+      section: 'Routes',
+      entries: model.routeDefaults.map((item) => ({ key: item.id, description: item.detail, value: item.value }))
+    },
+    {
+      section: 'Experience',
+      entries: model.userExperienceDefaults.map((item) => ({ key: item.id, description: item.detail, value: item.value }))
+    },
+    {
+      section: 'Platform',
+      entries: [
+        { key: 'transport', description: 'Current UI transport.', value: snapshot.transportKind },
+        { key: 'platform', description: 'Current platform surface.', value: snapshot.nativePlatform },
+        { key: 'capabilities', description: 'Granted capability rows.', value: String(model.nativePermissions.filter((permission) => permission.granted).length) }
+      ]
+    }
+  ]
+  return (
+    <div className="flex flex-col gap-4">
+      {sections.map((section) => (
+        <Card key={section.section} title={section.section}>
+          <div className="flex flex-col gap-3">
+            {section.entries.map((entry) => (
+              <label key={entry.key} className="grid grid-cols-1 gap-1.5 sm:grid-cols-[1fr_minmax(0,260px)] sm:items-center">
+                <span className="flex flex-col gap-0.5">
+                  <code className="font-mono text-xs">{entry.key}</code>
+                  <small className="text-xs text-muted-foreground">{entry.description}</small>
+                </span>
+                <Input value={entry.value} readOnly className="font-mono text-xs" />
+              </label>
+            ))}
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+function SettingsDataBlock() {
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <strong className="text-sm font-medium">Export or delete your data</strong>
+          <p className="mt-0.5 text-xs text-muted-foreground">Preview affected records before either action runs.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline">Export my data</Button>
+          <Button variant="danger">Delete my data</Button>
+        </div>
+      </div>
+    </Card>
   )
 }
 
@@ -635,52 +585,56 @@ function userExperienceDefaults(
 function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
   const icon = item.enabled ? <CheckCircle2 size={18} aria-hidden /> : <Mic size={18} aria-hidden />
   return (
-    <article className="aui-settings-control" data-state={item.enabled ? 'optimistic' : 'disabled'}>
-      <div className="aui-settings-control-icon">{icon}</div>
-      <div>
-        <h3>{item.label}</h3>
-        <p>{item.detail}</p>
-        <div className="aui-settings-inline">
+    <article className="flex items-start gap-3 rounded-lg border border-border/60 p-3" data-state={item.enabled ? 'optimistic' : 'disabled'}>
+      <div className="mt-0.5 text-muted-foreground">{icon}</div>
+      <div className="flex flex-1 flex-col gap-1.5">
+        <h3 className="text-sm font-medium">{item.label}</h3>
+        <p className="text-xs text-muted-foreground">{item.detail}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge state={item.state} />
           <PrivacyBadge privacy={item.privacyClass} />
-          <EvidenceBadge label={item.defaultLabel} />
-          <EvidenceBadge label={item.providerLabel} />
         </div>
-        <small>{presentableSignal(item.blockers.length > 0 ? item.blockers.join(', ') : 'No blocker reported.')}</small>
+        <small className="text-xs text-muted-foreground">{item.enabled ? 'Configured' : 'Needs configuration'}</small>
       </div>
-      <button type="button" disabled>
-        {item.enabled ? 'Config/AdminAction required' : 'Unavailable'}
-      </button>
+      <Button variant="ghost" disabled>
+        {item.enabled ? 'Config/AdminAction required' : 'Not ready'}
+      </Button>
     </article>
   )
 }
 
 function NativeIntegrationRow({ integration }: { integration: SettingsNativeIntegrationCard }) {
   return (
-    <article className="aui-native-card">
-      <div className="aui-settings-control-icon">
+    <article className="flex items-start gap-3 rounded-lg border border-border/60 p-3">
+      <div className="mt-0.5 text-muted-foreground">
         {integration.state === 'unsupported' ? <AlertTriangle size={18} aria-hidden /> : <CheckCircle2 size={18} aria-hidden />}
       </div>
-      <div>
-        <h3>{integration.label}</h3>
-        <p>{integration.detail}</p>
-        <div className="aui-settings-inline">
+      <div className="flex flex-1 flex-col gap-1.5">
+        <h3 className="text-sm font-medium">{integration.label}</h3>
+        <p className="text-xs text-muted-foreground">{integration.detail}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge state={integration.state} />
           <PrivacyBadge privacy={integration.privacyClass} />
-          <EvidenceBadge label={integration.support} />
-          {integration.invocation ? <EvidenceBadge label={integration.invocation} /> : null}
-          {integration.requiresConfirmation ? <EvidenceBadge label="confirmation required" /> : null}
         </div>
-        <small>{presentableSignal(integration.blockers.length > 0 ? integration.blockers.join(', ') : 'No blocker reported.')}</small>
-        <dl className="aui-settings-facts">
-          <div><dt>Backend method</dt><dd>{integration.backendMethod ?? 'service status required'}</dd></div>
-          <div><dt>Permission</dt><dd>{integration.permission ?? 'none'}</dd></div>
-          <div><dt>System assistant role</dt><dd>{integration.siriReplacement ? 'claimed' : 'false'}</dd></div>
+        <small className="text-xs text-muted-foreground">{integration.capability}</small>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-3">
+          <div className="flex items-baseline justify-between gap-2 sm:flex-col sm:items-start sm:gap-0.5">
+            <dt className="text-muted-foreground">Backend method</dt>
+            <dd className="font-medium">{integration.backendMethod ?? 'service status required'}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 sm:flex-col sm:items-start sm:gap-0.5">
+            <dt className="text-muted-foreground">Permission</dt>
+            <dd className="font-medium">{integration.permission ?? 'none'}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 sm:flex-col sm:items-start sm:gap-0.5">
+            <dt className="text-muted-foreground">System assistant role</dt>
+            <dd className="font-medium">{integration.siriReplacement ? 'claimed' : 'false'}</dd>
+          </div>
         </dl>
       </div>
-      <button type="button" disabled>
-        {integration.state === 'unsupported' ? 'Unsupported' : 'Requires native verification'}
-      </button>
+      <Button variant="ghost" disabled>
+        {integration.state === 'unsupported' ? 'Not ready' : 'Requires native verification'}
+      </Button>
     </article>
   )
 }
@@ -692,21 +646,20 @@ function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
       ? <CheckCircle2 size={18} aria-hidden />
       : <ToggleLeft size={18} aria-hidden />
   return (
-    <article className="aui-settings-control" data-state={control.mutationState}>
-      <div className="aui-settings-control-icon">{icon}</div>
-      <div>
-        <h3>{control.label}</h3>
-        <p>{control.description}</p>
-        <div className="aui-settings-inline">
+    <article className="flex items-start gap-3 rounded-lg border border-border/60 p-3" data-state={control.mutationState}>
+      <div className="mt-0.5 text-muted-foreground">{icon}</div>
+      <div className="flex flex-1 flex-col gap-1.5">
+        <h3 className="text-sm font-medium">{control.label}</h3>
+        <p className="text-xs text-muted-foreground">{control.description}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge state={control.state} />
           <PrivacyBadge privacy={control.privacyClass} />
-          <EvidenceBadge label={control.providerLabel} />
         </div>
-        <small>{presentableSignal(control.blockers.length > 0 ? control.blockers.join(', ') : 'No blocker reported.')}</small>
+        <small className="text-xs text-muted-foreground">{control.providerLabel}</small>
       </div>
-      <button type="button" disabled={control.disabled || control.requiresAdminAction}>
-        {control.requiresAdminAction ? 'AdminAction required' : control.enabled ? 'Enabled' : 'Unavailable'}
-      </button>
+      <Button variant="ghost" disabled={control.disabled || control.requiresAdminAction}>
+        {control.requiresAdminAction ? 'AdminAction required' : control.enabled ? 'Enabled' : 'Not ready'}
+      </Button>
     </article>
   )
 }
@@ -723,11 +676,11 @@ function PanelTitle({
   id: string
 }) {
   return (
-    <header className="aui-settings-panel-title">
-      <span>{icon}</span>
-      <div>
-        <h2 id={id}>{title}</h2>
-        <p>{description}</p>
+    <header className="mb-3 flex items-start gap-2.5">
+      <span className="mt-0.5 text-muted-foreground" aria-hidden>{icon}</span>
+      <div className="flex flex-col gap-0.5">
+        <h2 id={id} className="text-sm font-semibold">{title}</h2>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </header>
   )
@@ -1121,7 +1074,7 @@ function nativePermissionLabel(name: string): string {
     'aurora.iosBackgroundStatus': 'iOS background voice status',
     'aurora.iosMicrophoneCapture': 'iOS microphone capture',
     'aurora.iosBackgroundAudio': 'iOS background voice',
-    'aurora.iosSiriReplacement': 'iOS System Assistant Role Unsupported',
+    'aurora.iosSiriReplacement': 'iOS System Assistant Role',
     'aurora.iosAppIntents': 'iOS App Intents',
     'aurora.iosShortcuts': 'iOS Shortcuts',
     'aurora.iosShareExtension': 'iOS share extension',
