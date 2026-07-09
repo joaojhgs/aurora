@@ -3052,7 +3052,12 @@ fn filtered_headers(headers: Option<BTreeMap<String, String>>) -> HeaderMap {
         let lower = key.to_ascii_lowercase();
         if !matches!(
             lower.as_str(),
-            "x-correlation-id" | "x-request-id" | "content-type"
+            "x-correlation-id"
+                | "x-request-id"
+                | "content-type"
+                | "x-aurora-adminaction-id"
+                | "x-aurora-adminaction-token"
+                | "x-aurora-adminaction-digest"
         ) {
             continue;
         }
@@ -4054,6 +4059,31 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filtered_headers_forwards_admin_action_confirmation_headers() {
+        let mut headers = BTreeMap::new();
+        headers.insert("X-Aurora-AdminAction-Id".to_string(), "aa_1".to_string());
+        headers.insert("X-Aurora-AdminAction-Token".to_string(), "tok_1".to_string());
+        headers.insert("X-Aurora-AdminAction-Digest".to_string(), "dig_1".to_string());
+        headers.insert("X-Some-Unrelated-Header".to_string(), "drop-me".to_string());
+
+        let filtered = filtered_headers(Some(headers));
+
+        assert_eq!(
+            filtered.get("x-aurora-adminaction-id").map(|v| v.to_str().unwrap()),
+            Some("aa_1")
+        );
+        assert_eq!(
+            filtered.get("x-aurora-adminaction-token").map(|v| v.to_str().unwrap()),
+            Some("tok_1")
+        );
+        assert_eq!(
+            filtered.get("x-aurora-adminaction-digest").map(|v| v.to_str().unwrap()),
+            Some("dig_1")
+        );
+        assert!(filtered.get("x-some-unrelated-header").is_none());
+    }
 
     #[test]
     fn local_manifest_advertises_sidecar_supervision_without_broad_native_access() {
