@@ -555,7 +555,7 @@ describe('AuroraClient', () => {
             selector_required: false,
             mesh_visible: false,
             local_only: false,
-            allowed_peers: null,
+            allowed_provider_peer_ids: null,
             operation_class: null,
             resource_scope: null,
             denial_reasons: []
@@ -1280,7 +1280,7 @@ describe('AuroraClient', () => {
             selector_required: false,
             mesh_visible: false,
             local_only: false,
-            allowed_peers: null,
+            allowed_provider_peer_ids: null,
             operation_class: 'admin',
             resource_scope: null,
             denial_reasons: []
@@ -1444,6 +1444,9 @@ describe('AuroraClient', () => {
 
     expect(registry.digest).toBe('fixture')
     expect(services.services[0]?.module).toBe('Gateway')
+    expect(services.services.find((service) => service.module === 'Scheduler')?.callable_features).toEqual(
+      gatewayServicesFixture.services.find((service) => service.module === 'Scheduler')?.callable_features
+    )
     expect(summaries.map((summary) => summary.availability)).toEqual(
       expect.arrayContaining(['available-local', 'privacy-blocked', 'stale'])
     )
@@ -1461,7 +1464,7 @@ describe('AuroraClient', () => {
         })
       })
     )
-    expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
+    expect(toolCatalog.tools[0]?.global_tool_id).toBe('aurora-tool:v1:local-peer:Tooling:core.diagnostics.service-health')
     expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
   })
 
@@ -2555,6 +2558,66 @@ describe('AuroraClient', () => {
     }))
   })
 
+  it('commits config change sets through Config.CommitChangeSet AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> | undefined }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string> | undefined) => {
+      calls.push({ method, payload, headers })
+    }
+    const payload = {
+      changes: [
+        { key_path: 'services.tts.mesh_sharing.share', value: true },
+        { key_path: 'services.tts.mesh_routing.prefer', value: 'network' }
+      ],
+      base_revision: 7,
+      preview_token: 'cfgprev-test-token'
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual({
+          method_id: CONFIG_METHODS.commitChangeSet,
+          payload,
+          affected_resources: [
+            'services.tts.mesh_sharing.share',
+            'services.tts.mesh_routing.prefer'
+          ]
+        })
+        return adminDraftFixture(CONFIG_METHODS.commitChangeSet)
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return adminConfirmFixture((request.payload as { action_id: string }).action_id)
+      })
+      .register(CONFIG_METHODS.commitChangeSet, (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          success: true,
+          revision: 8,
+          version_id: 'cfgv-change-set',
+          changed_paths: payload.changes.map((change) => change.key_path),
+          transaction_id: 'cfgtx-change-set'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.config.commitChangeSet({
+      request: payload,
+      reason: 'Update service sharing and routing atomically',
+      reauthConfirmed: true
+    })
+
+    expect(result.data.success).toBe(true)
+    expect(calls.map((call) => call.method)).toEqual([
+      'Gateway.AdminActionDraft',
+      'Gateway.AdminActionConfirm',
+      CONFIG_METHODS.commitChangeSet
+    ])
+    expect(calls.at(-1)).toEqual(expect.objectContaining({
+      method: CONFIG_METHODS.commitChangeSet,
+      payload
+    }))
+  })
+
   it('provides UI-lane helpers for route explanation, AdminAction aliasing, local cancel, and stable error states', async () => {
     const calls: Array<{ method: string; payload: unknown }> = []
     const transport = new MockAuroraTransport({ fixtures: false })
@@ -2641,8 +2704,12 @@ describe('AuroraClient', () => {
     expect(schema.ok).toBe(true)
     expect(schema.ok && schema.data.fields.some((field) => field.key_path === 'services.gateway.api.token_secret' && field.secret)).toBe(true)
     expect(diff.ok && diff.data.diffs[0]?.restart_required).toBe(true)
+    expect(diff.ok && diff.data.changed_paths).toEqual(['services.gateway.api.port'])
     expect(impact.ok && impact.data.impacts[0]?.affected_services).toContain('gateway')
     expect(history.ok && history.data.versions[0]?.version_id).toBe('cfgv-gateway-port-001')
+    expect(history.ok && history.data.versions[0]?.changed_paths).toEqual(['services.gateway.api.port'])
+    expect(history.ok && history.data.versions[0]?.transaction_kind).toBe('commit_change_set')
+    expect(history.ok && history.data.versions[0]?.actor).toBe('principal_id:admin')
     expect(calls.map((call) => [call.method, call.path])).toEqual([
       ['Config.GetSchemaMetadata', '/api/Config/GetSchemaMetadata'],
       ['Config.PreviewDiff', '/api/Config/PreviewDiff'],
@@ -2798,6 +2865,14 @@ describe('AuroraClient', () => {
 
     expect(preview.ok).toBe(true)
     if (preview.ok) {
+      expect(preview.data.mesh_rollout).toEqual(
+        expect.objectContaining({
+          secrets_redacted: true,
+          denied_by_reason: { method_not_shared: 1 },
+          provider_mesh_tooling_enabled: true,
+          consumer_mesh_tooling_enabled: true
+        })
+      )
       expect(preview.data.redaction).toEqual(
         expect.objectContaining({
           secrets_redacted: true,
@@ -3604,7 +3679,8 @@ describe('AuroraClient', () => {
       [{ error: { reason_code: 'no_route', message: 'No route to provider' } }, 'unavailable_service'],
       [{ error: { reason_code: 'privacy_blocked', message: 'Explicit selector required' } }, 'privacy_blocked'],
       [{ error: { code: 'unsupported_feature', message: 'Unsupported method' } }, 'unsupported_feature'],
-      [new TypeError('DataChannel closed'), 'transport_loss']
+      [new TypeError('DataChannel closed'), 'transport_loss'],
+      [new Error('programming invariant violated'), 'unknown']
     ] as const
 
     for (const [bridgeResult, expected] of cases) {
@@ -5449,6 +5525,7 @@ describe('AuroraClient assistant namespace', () => {
         payload: {
           text: 'hello',
           source: 'ui',
+          session_id: 'corr-stream',
           request_id: 'corr-stream',
           correlation_id: 'corr-stream',
           stream: true
@@ -5504,7 +5581,7 @@ describe('AuroraClient assistant namespace', () => {
       },
       eventSourceFactory: (url) => {
         expect(url).toBe(
-          'http://aurora.local/api/events/stream?stream=assistant&topic=Orchestrator.Response&topic=TTS.AudioChunk&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&kind=tool.requested&kind=tool.running&kind=tool.completed&kind=tool.failed&kind=tts.audio_chunk&kind=tts.audio.chunk&kind=tts.chunk&correlation_id=corr-http-sdk&backfill=true'
+          'http://aurora.local/api/events/stream?stream=assistant&topic=Orchestrator.Response&topic=TTS.AudioChunk&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&kind=tool.requested&kind=tool.running&kind=tool.completed&kind=tool.failed&kind=tool.requires_action&kind=tts.audio_chunk&kind=tts.audio.chunk&kind=tts.chunk&correlation_id=corr-http-sdk&backfill=true'
         )
         sourceReady()
         return {
@@ -5556,6 +5633,7 @@ describe('AuroraClient assistant namespace', () => {
         body: {
           text: 'hello',
           source: 'ui',
+          session_id: 'corr-http-sdk',
           request_id: 'corr-http-sdk',
           correlation_id: 'corr-http-sdk',
           stream: true
@@ -5752,7 +5830,8 @@ describe('AuroraClient assistant namespace', () => {
           request_id: 'corr-structured',
           tool_call: {
             tool_call_id: 'call-weather-1',
-            name: 'Weather.GetForecast',
+            name: 'aurora-da2c3842004492c887b3ce878c8eb0cb_weather',
+            display_name: 'aurora-2.weather',
             status: 'requested',
             risk_class: 'local-read',
             target: 'local tool registry',
@@ -5774,6 +5853,24 @@ describe('AuroraClient assistant namespace', () => {
             name: 'Weather.GetForecast',
             status: 'completed',
             result_preview: 'Rain later'
+          }
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'tool-approval-1',
+        kind: 'tool.requires_action',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          tool: {
+            tool_call_id: 'call-email-approval',
+            name: 'Gmail.Send',
+            risk_class: 'dangerous',
+            summary: 'Approval required before sending email.',
+            pending_id: 'pending-email-1',
+            approval_request_id: 'approval-email-1',
+            approval_expires_at: 1234567890
           }
         },
         correlation_id: 'corr-structured'
@@ -5811,12 +5908,12 @@ describe('AuroraClient assistant namespace', () => {
     }))
     const client = new AuroraClient({ transport })
 
-    const events = await collectEvents(client.assistant.streamMessage({ text: 'weather', requestId: 'corr-structured' }), 4)
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'weather', requestId: 'corr-structured' }), 5)
 
-    expect(events.map((event) => event.kind)).toEqual(['tool', 'tool', 'tts_audio_chunk', 'completed'])
+    expect(events.map((event) => event.kind)).toEqual(['tool', 'tool', 'tool', 'tts_audio_chunk', 'completed'])
     expect(events[0]?.tool).toEqual(expect.objectContaining({
       id: 'call-weather-1',
-      name: 'Weather.GetForecast',
+      name: 'aurora-2.weather',
       status: 'requested',
       riskClass: 'local-read',
       target: 'local tool registry',
@@ -5828,7 +5925,15 @@ describe('AuroraClient assistant namespace', () => {
       status: 'completed',
       resultPreview: 'Rain later'
     }))
-    expect(events[2]).toEqual(expect.objectContaining({
+    expect(events[2]?.tool).toEqual(expect.objectContaining({
+      id: 'call-email-approval',
+      name: 'Gmail.Send',
+      status: 'requires_action',
+      pendingId: 'pending-email-1',
+      approvalRequestId: 'approval-email-1',
+      approvalExpiresAt: 1234567890
+    }))
+    expect(events[3]).toEqual(expect.objectContaining({
       textDelta: '',
       ttsAudio: expect.objectContaining({
         chunkId: 'chunk-1',

@@ -63,6 +63,7 @@ export interface MeshRpcRequest<TPayload = unknown> {
   candidates: MeshRouteCandidate[]
   correlationId?: string | undefined
   audit?: Partial<AuditReceipt> | undefined
+  signal?: AbortSignal | undefined
 }
 
 export interface MeshRpcResponse<TData = unknown> {
@@ -160,10 +161,12 @@ export class MeshP2PTransport implements AuroraTransport {
       busTopic: topic,
       payload: request.payload,
       timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
+      signal: request.signal,
       candidates
     }
     if (resolution.selector) callRequest.selector = resolution.selector
-    if (request.audit?.correlationId) callRequest.correlationId = request.audit.correlationId
+    const correlationId = request.audit?.correlationId ?? readString(request.payload, 'correlation_id', 'correlationId', 'request_id', 'requestId')
+    if (correlationId) callRequest.correlationId = correlationId
     if (request.audit) callRequest.audit = request.audit
 
     try {
@@ -357,16 +360,25 @@ function normalizeMeshTransportError(error: unknown, request: AuroraTransportReq
   if (error instanceof DOMException && error.name === 'AbortError') {
     return meshError('timeout', 'Mesh RPC request timed out', request, error)
   }
-  if (error instanceof TypeError) {
-    return meshError('transport_loss', error.message, request, error)
-  }
   if (error instanceof Error && error.name === 'TimeoutError') {
     return meshError('timeout', error.message, request, error)
   }
-  if (error instanceof Error) {
-    return meshError('transport_loss', error.message, request, error)
+  if (isExplicitMeshTransportLoss(error)) {
+    return meshError('transport_loss', readMeshErrorMessage(error), request, error)
   }
   return meshError(classifyMeshError(error), readMeshErrorMessage(error), request, error)
+}
+
+function isExplicitMeshTransportLoss(error: unknown): boolean {
+  const code = readDetailCode(error)?.toLowerCase()
+  const text = readMeshErrorMessage(error).toLowerCase()
+  if (code?.includes('transport') || code?.includes('datachannel') || code?.includes('channel_closed')) return true
+  if (error instanceof Error) {
+    const name = error.name.toLowerCase()
+    if (name === 'transportclosederror' || name === 'datachannelclosederror' || name === 'channelclosederror') return true
+  }
+  return /\b(datachannel|data channel|transport|mesh channel|rtcdatachannel)\b/u.test(text)
+    && /\b(closed|closing|lost|disconnected|not connected|failed|unavailable|aborted)\b/u.test(text)
 }
 
 function meshError(
@@ -398,7 +410,7 @@ function classifyMeshError(error: unknown): AuroraErrorCode {
   if (code?.includes('unavailable') || code?.includes('no_route') || text.includes('unavailable') || text.includes('no route')) {
     return 'unavailable_service'
   }
-  if (code?.includes('transport') || text.includes('datachannel') || text.includes('not connected')) return 'transport_loss'
+  if (isExplicitMeshTransportLoss(error)) return 'transport_loss'
   return 'unknown'
 }
 

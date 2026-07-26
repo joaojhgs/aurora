@@ -253,7 +253,7 @@ client.auth.updateFromPairingExchange({
 client.permissions.check(['TTS.Synthesize'], 'use').allowed
 ```
 
-`MeshP2PTransport` is an interface over peer RPC rather than a WebRTC implementation. The bridge owns DataChannel/native details; the SDK preserves `method`, `busTopic`, selector, route candidates, fallback hints, timeout, peer IDs, correlation ID, and redaction metadata. Route resolution can come from `Gateway.ExplainRoute`, `Gateway.GetCapabilityCatalog`, a Tauri local command, or a deterministic test resolver, but UI code should still use the same `AuroraClient` calls.
+`MeshP2PTransport` remains the transport-facing interface over peer RPC. The implemented WebRTC bridge lives under `@aurora/client/webrtc` (`WebRtcMeshPeerBridge` and the browser runtime), owns DataChannel/signaling details, and preserves `method`, `busTopic`, selector, route candidates, fallback hints, timeout, peer IDs, correlation ID, and redaction metadata. Route resolution can come from `Gateway.ExplainRoute`, `Gateway.GetCapabilityCatalog`, a Tauri local command, the WebRTC peer runtime, or a deterministic test resolver, but UI code should still use the same `AuroraClient` calls.
 
 Mesh errors are classified into the shared SDK codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
 

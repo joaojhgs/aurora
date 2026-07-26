@@ -35,8 +35,12 @@ import {
   loadToolApprovalCards,
   normalizePolicyAuditEvents,
   normalizePendingApprovals,
+  normalizeBlockedToolCatalog,
   normalizeToolCatalog,
   normalizeToolGrants,
+  normalizeRetainedRemoteTools,
+  normalizeToolExportDecision,
+  normalizeToolExportPolicy,
   validateMcpSourceDraft,
   validatePluginSourceDraft,
   submitToolDenialDecision,
@@ -53,6 +57,8 @@ import {
   type ToolPolicyAuditEventModel,
   type ToolPolicyOverrideModel,
   type ToolPendingApprovalModel,
+  type ToolExportDecisionModel,
+  type ToolExportPolicyModel,
   type ToolSourceDetailModel,
   type ToolSourceSummaryModel
 } from './tools.js'
@@ -86,6 +92,7 @@ import type {
   AttachmentContextIngestResponse,
   AssistantSendMessageRequest,
   AssistantSendMessageResult,
+  AssistantRoutePolicy,
   AssistantCancelRequest,
   AssistantToolStreamEvent,
   AssistantTtsAudioChunkEvent,
@@ -168,19 +175,33 @@ import type {
   ToolingCreateApprovalGrantResponse,
   ToolingEvaluateApprovalGrantRequest,
   ToolingEvaluateApprovalGrantResponse,
+  ToolingClearToolExportOverrideRequest,
+  ToolingClearToolExportOverrideResponse,
+  ToolingGetExportCatalogRequest,
+  ToolingGetExportCatalogResponse,
+  ToolingGetToolExportPolicyRequest,
+  ToolingGetToolExportPolicyResponse,
   ToolingGetMcpStatusResponse,
   ToolingGetSharingPolicyResponse,
   ToolingListApprovalGrantsRequest,
   ToolingListApprovalGrantsResponse,
   ToolingPrepareExecutionRequest,
   ToolingPrepareExecutionResponse,
+  ToolingPreviewToolExportDecisionRequest,
+  ToolingPreviewToolExportDecisionResponse,
   ToolingRevokeApprovalGrantRequest,
   ToolingRevokeApprovalGrantResponse,
   ToolingSetSharingPolicyRequest,
   ToolingSetSharingPolicyResponse,
+  ToolingSetToolExportDefaultRequest,
+  ToolingSetToolExportDefaultResponse,
   ToolingSharingPolicy,
   ToolingSharingPolicyRule,
   ToolingStatsResponse,
+  ToolingUpsertToolExportOverrideRequest,
+  ToolingUpsertToolExportOverrideResponse,
+  ToolingUpsertToolGroupExportPolicyRequest,
+  ToolingUpsertToolGroupExportPolicyResponse,
   WebRTCDiagnosticsResponse
 } from './types.js'
 import type { VoiceRuntimeEvent } from './voice.js'
@@ -814,6 +835,7 @@ export class AssistantClient {
       source: 'ui'
     }
     if (input.sessionId !== undefined) payload.session_id = input.sessionId
+    applyAssistantRouting(payload, input)
 
     const requestOptions: { path: string; timeoutMs?: number } = {
       path: routePath('Orchestrator', 'ExternalUserInput')
@@ -863,16 +885,21 @@ export class AssistantClient {
       return
     }
 
+    const requestId = input.requestId ?? `assistant-${cryptoRandomId()}`
     const payload: OrchestratorProcessRequest = {
       text,
       source: 'ui'
     }
-    if (input.sessionId !== undefined) payload.session_id = input.sessionId
-    const requestId = input.requestId ?? `assistant-${cryptoRandomId()}`
+    if (input.sessionId !== undefined) {
+      payload.session_id = input.sessionId
+    } else if (transportHasAssistantStream(this.client.transport)) {
+      payload.session_id = requestId
+    }
     payload.request_id = requestId
     payload.correlation_id = requestId
     payload.stream = true
     if (input.clientTtsPlayback !== undefined) payload.client_tts_playback = input.clientTtsPlayback
+    applyAssistantRouting(payload, input)
 
     let sawEvent = false
     const requestState: { response: AuroraResponse<OrchestratorResponse> | null } = { response: null }
@@ -1046,7 +1073,7 @@ export class AssistantClient {
           requestId,
           error: null,
           audit: fallback.audit,
-          metadata: fallback.data.metadata,
+          metadata: fallbackStreamMetadata(fallback.data.metadata, this.client.transport.kind),
           tool: null,
           ttsAudio: null
         }
@@ -1082,8 +1109,8 @@ export class AssistantClient {
     options: AuroraSubscribeOptions = {}
   ): AsyncIterable<AssistantStreamUpdate> {
     const stream = this.client.events.streamAssistant<Record<string, unknown>, unknown>(undefined, {
-      topics: [ORCHESTRATOR_METHODS.response, TTS_METHODS.audioChunk],
-      kinds: ['assistant.completed', 'assistant.delta', 'assistant.failed', 'tool.requested', 'tool.running', 'tool.completed', 'tool.failed', 'tts.audio_chunk', 'tts.audio.chunk', 'tts.chunk'],
+      topics: [ORCHESTRATOR_METHODS.response],
+      kinds: ['assistant.completed', 'assistant.delta', 'assistant.failed', 'tool.requested', 'tool.running', 'tool.completed', 'tool.failed', 'tool.requires_action'],
       reconnect: { maxAttempts: 120, initialDelayMs: 250, maxDelayMs: 2_000 },
       ...options,
       audit: {
@@ -1383,7 +1410,7 @@ function fallbackUpdateFromResponse(
   requestId: string
 ): AssistantStreamUpdate {
   const sessionId = response.data.session_id ?? input.sessionId ?? stableSessionId()
-  const metadata = response.data.metadata ?? {}
+  const metadata = fallbackStreamMetadata(response.data.metadata ?? {}, response.audit.transport ?? 'unknown')
   return {
     kind: 'fallback',
     eventId: response.audit.correlationId ?? response.data.correlation_id ?? requestId,
@@ -1399,6 +1426,79 @@ function fallbackUpdateFromResponse(
     tool: null,
     ttsAudio: null
   }
+}
+
+function fallbackStreamMetadata(metadata: JsonObject, transport: string): JsonObject {
+  return {
+    ...metadata,
+    assistant_stream_contract: 'single_response_fallback',
+    assistant_stream_transport: transport,
+    assistant_stream_fallback: true
+  }
+}
+
+function applyAssistantRouting(
+  payload: OrchestratorProcessRequest,
+  input: AssistantSendMessageRequest
+): void {
+  const dispatchSelector = assistantRouteSelector(input.routePolicy)
+  if (dispatchSelector) {
+    payload.dispatch_selector = dispatchSelector
+    payload.mesh_selector = { ...dispatchSelector }
+    payload.selector = { ...dispatchSelector }
+  }
+  const inference = input.inferencePolicy
+  if (!inference) return
+  const inferenceSelector = assistantRouteSelector(inference)
+  if (inferenceSelector) payload.inference_selector = inferenceSelector
+  const remoteRuntime = remoteRuntimeProviderId(inference.providerId)
+  const runtimeProviderId = inference.runtimeProviderId ?? remoteRuntime
+  if (runtimeProviderId) payload.inference_provider_id = runtimeProviderId
+  if (inference.modelId) payload.inference_model_id = inference.modelId
+}
+
+function assistantRouteSelector(policy: AssistantRoutePolicy | null | undefined): JsonObject | null {
+  if (!policy) return null
+  const remote = remoteProviderSelector(policy.providerId)
+  const peerId = policy.peerId ?? remote?.peer_id ?? null
+  const serviceInstanceId = policy.serviceInstanceId ?? remote?.service_instance_id ?? null
+  if (!peerId && !serviceInstanceId && !remote) return null
+  const selector: JsonObject = {}
+  if (remote?.provider_id) selector.provider_id = remote.provider_id
+  if (serviceInstanceId) selector.service_instance_id = serviceInstanceId
+  if (peerId) selector.peer_id = peerId
+  return selector
+}
+
+function remoteProviderSelector(providerId: string | null | undefined): {
+  provider_id?: string
+  peer_id: string
+  service_instance_id: string
+} | null {
+  if (!providerId) return null
+  const parts = providerId.split(':')
+  if (parts[0] === 'remote' && parts.length >= 3) {
+    return {
+      provider_id: providerId,
+      peer_id: parts[1]!,
+      service_instance_id: parts.slice(0, 3).join(':')
+    }
+  }
+  if (parts[0] === 'mesh' && parts.length >= 3) {
+    return {
+      peer_id: parts[1]!,
+      service_instance_id: `remote:${parts[1]}:${parts[2]}`
+    }
+  }
+  return null
+}
+
+function remoteRuntimeProviderId(providerId: string | null | undefined): string | null {
+  if (!providerId) return null
+  const parts = providerId.split(':')
+  if (parts[0] === 'remote' && parts.length > 3) return parts.slice(3).join(':') || null
+  if (parts[0] === 'remote' || parts[0] === 'mesh') return null
+  return providerId
 }
 
 async function raceEventIterator<TResult>(
@@ -1479,8 +1579,8 @@ function assistantToolStreamEventFromPayload(
 ): AssistantToolStreamEvent {
   const toolPayload = streamObject(payload, 'tool', 'tool_call', 'toolCall') ?? payload
   const status = toolStatusFromEvent(event.kind, toolPayload, metadata)
-  const name = streamString(toolPayload, 'name', 'tool_name', 'toolName')
-    ?? streamString(metadata, 'name', 'tool_name', 'toolName')
+  const name = streamString(toolPayload, 'display_name', 'displayName', 'name', 'tool_name', 'toolName')
+    ?? streamString(metadata, 'display_name', 'displayName', 'name', 'tool_name', 'toolName')
     ?? event.audit.toolId
     ?? 'tool.requested'
   const payloadPreview = streamObject(toolPayload, 'payload_preview', 'payloadPreview', 'redacted_args_preview', 'argsPreview')
@@ -1540,6 +1640,7 @@ function toolStatusFromEvent(
   const status = (streamString(payload, 'status', 'state') ?? streamString(metadata, 'status', 'state'))?.toLowerCase()
   if (status) return status
   const normalized = kind.toLowerCase()
+  if (normalized.includes('requires_action') || normalized.includes('requires.action')) return 'requires_action'
   if (normalized.includes('completed')) return 'completed'
   if (normalized.includes('failed') || normalized.includes('error')) return 'failed'
   if (normalized.includes('running') || normalized.includes('started')) return 'running'
@@ -1718,6 +1819,119 @@ export class ToolClient {
     )
   }
 
+  getExportCatalog(
+    request: ToolingGetExportCatalogRequest = {}
+  ): Promise<ToolingGetExportCatalogResponse> {
+    return this.client.request<ToolingGetExportCatalogResponse, ToolingGetExportCatalogRequest>(
+      TOOLING_METHODS.getExportCatalog,
+      request,
+      { path: routePath('Tooling', 'GetExportCatalog') }
+    )
+  }
+
+  getToolExportPolicy(
+    request: ToolingGetToolExportPolicyRequest = {}
+  ): Promise<ToolingGetToolExportPolicyResponse> {
+    return this.client.request<ToolingGetToolExportPolicyResponse, ToolingGetToolExportPolicyRequest>(
+      TOOLING_METHODS.getToolExportPolicy,
+      request,
+      { path: routePath('Tooling', 'GetToolExportPolicy') }
+    )
+  }
+
+  async getToolExportPolicyModel(
+    request: ToolingGetToolExportPolicyRequest = {},
+    presentation: { label?: string; stale?: boolean } = {}
+  ): Promise<ToolExportPolicyModel> {
+    const response = await this.getToolExportPolicy(request)
+    return normalizeToolExportPolicy(response, {
+      peerId: request.peer_id ?? null,
+      ...(presentation.label === undefined ? {} : { label: presentation.label }),
+      ...(presentation.stale === undefined ? {} : { stale: presentation.stale })
+    })
+  }
+
+  setToolExportDefault(
+    request: ToolingSetToolExportDefaultRequest
+  ): Promise<ToolingSetToolExportDefaultResponse> {
+    return this.executeExportMutation(
+      TOOLING_METHODS.setToolExportDefault,
+      request,
+      ['tool-export-policy:default'],
+      'SetToolExportDefault'
+    )
+  }
+
+  upsertToolGroupExportPolicy(
+    request: ToolingUpsertToolGroupExportPolicyRequest
+  ): Promise<ToolingUpsertToolGroupExportPolicyResponse> {
+    const peerScope = request.peer_id ? `:peer:${request.peer_id}` : ''
+    return this.executeExportMutation(
+      TOOLING_METHODS.upsertToolGroupExportPolicy,
+      request,
+      [`tool-export-group:${request.share_group_id}${peerScope}`],
+      'UpsertToolGroupExportPolicy'
+    )
+  }
+
+  upsertToolExportOverride(
+    request: ToolingUpsertToolExportOverrideRequest
+  ): Promise<ToolingUpsertToolExportOverrideResponse> {
+    const peerScope = request.peer_id ? `:peer:${request.peer_id}` : ''
+    return this.executeExportMutation(
+      TOOLING_METHODS.upsertToolExportOverride,
+      request,
+      [`tool-export:${request.global_tool_id}${peerScope}`],
+      'UpsertToolExportOverride'
+    )
+  }
+
+  clearToolExportOverride(
+    request: ToolingClearToolExportOverrideRequest
+  ): Promise<ToolingClearToolExportOverrideResponse> {
+    const peerScope = request.peer_id ? `:peer:${request.peer_id}` : ''
+    return this.executeExportMutation(
+      TOOLING_METHODS.clearToolExportOverride,
+      request,
+      [`tool-export-${request.scope_type}:${request.scope_id}${peerScope}`],
+      'ClearToolExportOverride'
+    )
+  }
+
+  previewToolExportDecision(
+    request: ToolingPreviewToolExportDecisionRequest
+  ): Promise<ToolingPreviewToolExportDecisionResponse> {
+    return this.client.request<ToolingPreviewToolExportDecisionResponse, ToolingPreviewToolExportDecisionRequest>(
+      TOOLING_METHODS.previewToolExportDecision,
+      request,
+      { path: routePath('Tooling', 'PreviewToolExportDecision') }
+    )
+  }
+
+  async previewToolExportDecisionModel(
+    request: ToolingPreviewToolExportDecisionRequest
+  ): Promise<ToolExportDecisionModel> {
+    const response = await this.previewToolExportDecision(request)
+    return normalizeToolExportDecision(response.decision)
+  }
+
+  private async executeExportMutation<TRequest extends { reason: string; confirmation_text: string }, TResponse>(
+    methodId: string,
+    request: TRequest,
+    affectedResources: string[],
+    methodName: string
+  ): Promise<TResponse> {
+    const result = await this.client.admin.execute<TResponse>({
+      methodId,
+      payload: { ...request },
+      reason: request.reason,
+      reauthConfirmed: true,
+      affectedResources,
+      path: routePath('Tooling', methodName)
+    })
+    return result.data
+  }
+
   listGrants(request: ToolingListApprovalGrantsRequest = {}): Promise<ToolingListApprovalGrantsResponse> {
     return this.client.request<ToolingListApprovalGrantsResponse, ToolingListApprovalGrantsRequest>(
       TOOLING_METHODS.listApprovalGrants,
@@ -1815,11 +2029,39 @@ export class ToolClient {
       generated_at: null,
       secrets_redacted: response.secrets_redacted !== false
     }
+    const grants = normalizeToolGrants(Array.isArray(response.grants) ? response.grants as never[] : [])
+    const withConfiguredTrust = (tool: ToolApprovalCardModel): ToolApprovalCardModel => {
+      const override = grants.find((grant) =>
+        grant.active &&
+        grant.type === 'trust' &&
+        grant.metadata.policy_scope === 'tool' &&
+        (grant.toolId === tool.id || (
+          grant.localToolName != null &&
+          (grant.localToolName === tool.localToolName || grant.localToolName === tool.name)
+        ))
+      )
+      const configuredTrustTier = override?.trustTier ?? null
+      const effectiveTrustTier = configuredTrustTier ?? source.configuredTrustTier ?? tool.trustTier
+      return {
+        ...tool,
+        configuredTrustTier,
+        trustTier: effectiveTrustTier,
+        approvalRequired: effectiveTrustTier === 'trusted'
+          ? false
+          : effectiveTrustTier === 'untrusted'
+            ? true
+            : tool.approvalRequired,
+      }
+    }
     return {
       source,
-      tools: normalizeToolCatalog(catalog, { transportKind: this.client.transport.kind }),
-      blockedTools: normalizeToolCatalog({ tools: blockedRows.map((blocked) => blocked.tool), secrets_redacted: response.secrets_redacted !== false }, { transportKind: this.client.transport.kind }).map((tool) => ({ ...tool, state: 'unavailable' as const })),
-      grants: normalizeToolGrants(Array.isArray(response.grants) ? response.grants as never[] : []),
+      tools: normalizeToolCatalog(catalog, { transportKind: this.client.transport.kind }).map(withConfiguredTrust),
+      blockedTools: normalizeBlockedToolCatalog(catalog, this.client.transport.kind).map(withConfiguredTrust),
+      retainedTools: normalizeRetainedRemoteTools(
+        Array.isArray(response.retained_tools) ? response.retained_tools : [],
+        this.client.transport.kind
+      ),
+      grants,
       overrides: Array.isArray(response.policy_rules) ? (response.policy_rules as ToolingSharingPolicyRule[]).map((rule) => normalizeToolingRuleOverride(rule, source.id)) : [],
       pendingApprovals: Array.isArray(response.pending_approvals) ? response.pending_approvals.map(normalizeToolingPendingApproval) : [],
       auditEvents: [],
@@ -1893,20 +2135,55 @@ export class ToolClient {
     actorPrincipalId?: string | null
     correlationId?: string | null
   }): Promise<unknown> {
-    return this.client.request<unknown, Record<string, unknown>>(TOOLING_METHODS.upsertSourcePolicy, {
-      source_id: input.sourceId,
-      trust_tier: input.trustTier,
-      actor_principal_id: input.actorPrincipalId ?? this.client.auth.snapshot().principalId ?? 'current-principal',
-      reason: input.reason ?? `Updated source policy for ${input.sourceId}`,
-      include_future_tools: input.includeFutureTools ?? false,
-      provider_peer_id: input.providerPeerId ?? null,
-      provider_service_instance_id: input.providerServiceInstanceId ?? null,
-      correlation_id: input.correlationId ?? null
-    }, { path: routePath('Tooling', 'UpsertSourcePolicy') })
+    // Mutating policy write: goes through the AdminAction draft/confirm ceremony
+    // like Config.Set, since the gateway fails these closed with 428 otherwise.
+    const reason = input.reason ?? `Updated source policy for ${input.sourceId}`
+    const result = await this.client.admin.execute<unknown>({
+      methodId: TOOLING_METHODS.upsertSourcePolicy,
+      payload: {
+        source_id: input.sourceId,
+        trust_tier: input.trustTier,
+        actor_principal_id: input.actorPrincipalId ?? this.client.auth.snapshot().principalId ?? 'current-principal',
+        reason,
+        include_future_tools: input.includeFutureTools ?? false,
+        provider_peer_id: input.providerPeerId ?? null,
+        provider_service_instance_id: input.providerServiceInstanceId ?? null,
+        correlation_id: input.correlationId ?? null
+      },
+      reason,
+      reauthConfirmed: true,
+      affectedResources: [`tool-source:${input.sourceId}`],
+      path: routePath('Tooling', 'UpsertSourcePolicy')
+    })
+    return result.data
+  }
+
+  async clearSourcePolicy(input: {
+    sourceId: string
+    reason?: string | null
+    actorPrincipalId?: string | null
+    correlationId?: string | null
+  }): Promise<unknown> {
+    const reason = input.reason ?? `Cleared source policy for ${input.sourceId} to inherit`
+    const result = await this.client.admin.execute<unknown>({
+      methodId: TOOLING_METHODS.clearSourcePolicy,
+      payload: {
+        source_id: input.sourceId,
+        actor_principal_id: input.actorPrincipalId ?? this.client.auth.snapshot().principalId ?? 'current-principal',
+        reason,
+        correlation_id: input.correlationId ?? null
+      },
+      reason,
+      reauthConfirmed: true,
+      affectedResources: [`tool-source:${input.sourceId}`],
+      path: routePath('Tooling', 'ClearSourcePolicy')
+    })
+    return result.data
   }
 
   async upsertToolOverride(input: {
     toolId: string
+    localToolName?: string | null
     approvalMode: string
     share?: boolean
     providerPeerId?: string | null
@@ -1916,15 +2193,54 @@ export class ToolClient {
     actorPrincipalId?: string | null
     correlationId?: string | null
   }): Promise<unknown> {
-    return this.client.request<unknown, Record<string, unknown>>(TOOLING_METHODS.upsertToolPolicyOverride, {
-      global_tool_id: input.toolId,
-      trust_tier: toolOverrideTrustTier(input.approvalMode, input.share),
-      actor_principal_id: input.actorPrincipalId ?? this.client.auth.snapshot().principalId ?? 'current-principal',
-      reason: input.reason ?? `Updated tool override for ${input.toolId}`,
-      expected_schema_hash: null,
-      include_future_tools: false,
-      correlation_id: input.correlationId ?? null
-    }, { path: routePath('Tooling', 'UpsertToolPolicyOverride') })
+    // Mutating policy write: AdminAction ceremony required (see upsertSourcePolicy).
+    const reason = input.reason ?? `Updated tool override for ${input.toolId}`
+    const result = await this.client.admin.execute<unknown>({
+      methodId: TOOLING_METHODS.upsertToolPolicyOverride,
+      payload: {
+        global_tool_id: input.toolId,
+        local_tool_name: input.localToolName ?? null,
+        provider_peer_id: input.providerPeerId ?? null,
+        provider_service_instance_id: input.providerServiceInstanceId ?? null,
+        trust_tier: toolOverrideTrustTier(input.approvalMode),
+        actor_principal_id: input.actorPrincipalId ?? this.client.auth.snapshot().principalId ?? 'current-principal',
+        reason,
+        expected_schema_hash: null,
+        include_future_tools: false,
+        correlation_id: input.correlationId ?? null
+      },
+      reason,
+      reauthConfirmed: true,
+      affectedResources: [`tool:${input.toolId}`],
+      path: routePath('Tooling', 'UpsertToolPolicyOverride')
+    })
+    return result.data
+  }
+
+  async clearToolOverride(input: {
+    toolId?: string | null
+    localToolName?: string | null
+    reason?: string | null
+    actorPrincipalId?: string | null
+    correlationId?: string | null
+  }): Promise<unknown> {
+    const identity = input.toolId ?? input.localToolName ?? 'unknown-tool'
+    const reason = input.reason ?? `Cleared tool override for ${identity} to inherit`
+    const result = await this.client.admin.execute<unknown>({
+      methodId: TOOLING_METHODS.clearToolPolicyOverride,
+      payload: {
+        global_tool_id: input.toolId ?? null,
+        local_tool_name: input.localToolName ?? null,
+        actor_principal_id: input.actorPrincipalId ?? this.client.auth.snapshot().principalId ?? 'current-principal',
+        reason,
+        correlation_id: input.correlationId ?? null
+      },
+      reason,
+      reauthConfirmed: true,
+      affectedResources: [`tool:${identity}`],
+      path: routePath('Tooling', 'ClearToolPolicyOverride')
+    })
+    return result.data
   }
 
   async testMcpSource(input: McpSourceWizardDraft): Promise<ToolOnboardingValidationResult> {
@@ -2060,14 +2376,18 @@ function normalizeToolingSourceSummary(raw: unknown, defaultSecretsRedacted = tr
   return {
     id: sourceId,
     kind,
-    label: stringValue(source.display_name) ?? sourceId,
+    label: stringValue(source.display_name ?? source.provider_label) ?? sourceId,
     providerPeerId: stringValue(source.provider_peer_id),
     providerServiceInstanceId: stringValue(source.provider_service_instance_id),
-    providerKind: stringValue(source.provider_kind),
+    providerKind: stringValue(source.provider_kind) ?? (kind === 'mesh_peer' ? 'mesh_peer' : null),
     transport: stringValue(source.transport),
     trustTier: stringValue(source.trust_tier),
+    configuredTrustTier: stringValue(source.configured_trust_tier),
     status: sourceStatusFromBackend(stringValue(source.status) ?? (source.shared_by_policy === false ? 'unshared' : 'active')),
     toolCount: numberValue(source.tool_count) ?? 0,
+    retainedToolCount: numberValue(source.retained_tool_count) ?? 0,
+    inactiveToolCount: numberValue(source.inactive_tool_count) ?? 0,
+    availabilityCounts: numericRecord(source.availability_counts),
     blockedToolCount: numberValue(source.blocked_tool_count ?? source.blocked_count) ?? 0,
     approvalRequiredCount: numberValue(source.pending_approval_count) ?? 0,
     newOrReviewCount: numberValue(source.unreviewed_tool_count ?? source.new_child_count) ?? 0,
@@ -2079,6 +2399,10 @@ function normalizeToolingSourceSummary(raw: unknown, defaultSecretsRedacted = tr
     catalogHash: stringValue(source.catalog_hash),
     generatedAt: stringValue(source.generated_at),
     lastAnnouncementAt: stringValue(source.last_announcement_at ?? source.updated_at),
+    removedAt: numberValue(source.removed_at),
+    sharedByPolicy: source.shared_by_policy !== false,
+    reasonCode: stringValue(source.reason_code),
+    reason: stringValue(source.reason),
     secretsRedacted: source.secrets_redacted !== false && defaultSecretsRedacted,
     sourceId,
     sourceType: kind,
@@ -2165,7 +2489,7 @@ function normalizeToolingRuleOverride(rule: ToolingSharingPolicyRule, sourceId: 
     sourceType: rule.source_type ?? null,
     approvalMode: rule.approval_mode ?? 'ask_each_time',
     share: rule.share ?? true,
-    trustTier: rule.share === false ? 'blocked' : null,
+    trustTier: toolingRuleTrustTier(rule.approval_mode),
     includeFutureTools: !rule.global_tool_id && !rule.tool_name,
     tokenTtlSeconds: rule.token_ttl_seconds ?? null,
     rawRule: rule
@@ -2178,8 +2502,13 @@ function toolingRuleTargetKind(rule: ToolingSharingPolicyRule): ToolPolicyOverri
   return 'provider'
 }
 
-function toolOverrideTrustTier(approvalMode: string, share: boolean | undefined): 'trusted' | 'untrusted' | 'blocked' {
-  if (approvalMode === 'deny_all' || share === false) return 'blocked'
+function toolingRuleTrustTier(approvalMode: string | null | undefined): 'trusted' | 'untrusted' | 'blocked' | null {
+  if (!approvalMode) return null
+  return toolOverrideTrustTier(approvalMode)
+}
+
+function toolOverrideTrustTier(approvalMode: string): 'trusted' | 'untrusted' | 'blocked' {
+  if (approvalMode === 'deny_all') return 'blocked'
   if (approvalMode === 'approve_all_for_peer') return 'trusted'
   return 'untrusted'
 }
@@ -2294,6 +2623,13 @@ function numberValue(value: unknown): number | null {
   return null
 }
 
+function numericRecord(value: unknown): Record<string, number> {
+  const record = asRecord(value)
+  return Object.fromEntries(
+    Object.entries(record).filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+  )
+}
+
 function booleanValue(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null
 }
@@ -2334,13 +2670,34 @@ function errorText(error: unknown): string {
 }
 
 
+function serializeModelRuntimeCatalogRequest(
+  request: ModelRuntimeCatalogRequest
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {}
+  if (request.include_unavailable !== undefined) payload.include_unavailable = request.include_unavailable
+  if (request.include_operations !== undefined) payload.include_operations = request.include_operations
+  if (request.includeRemote !== undefined) payload.include_remote = request.includeRemote
+  if (request.includeCloudModels !== undefined) payload.include_cloud_models = request.includeCloudModels
+  const selector = request.meshSelector
+  if (selector) {
+    const catalogSelector: Record<string, string> = {}
+    if (selector.peerId) catalogSelector.peer_id = selector.peerId
+    if (selector.providerId) catalogSelector.provider_id = selector.providerId
+    if (selector.serviceInstanceId) catalogSelector.service_instance_id = selector.serviceInstanceId
+    if (selector.dataScope) catalogSelector.data_scope = selector.dataScope
+    if (Object.keys(catalogSelector).length > 0) payload.catalog_selector = catalogSelector
+  }
+  return payload
+}
+
 export class ModelRuntimeClient {
   constructor(private readonly client: AuroraClient) {}
 
   listCatalog(request: ModelRuntimeCatalogRequest = {}): Promise<ModelRuntimeCatalogResponse> {
-    return this.client.request<ModelRuntimeCatalogResponse, ModelRuntimeCatalogRequest>(
+    const payload = serializeModelRuntimeCatalogRequest(request)
+    return this.client.request<ModelRuntimeCatalogResponse, Record<string, unknown>>(
       ORCHESTRATOR_MODEL_METHODS.getCatalog,
-      request,
+      payload,
       { path: routePath('Orchestrator', 'GetModelCatalog') }
     )
   }

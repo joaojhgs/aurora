@@ -54,6 +54,7 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.GetDeploymentTopology', () => cloneFixture(fixtures.deploymentTopology))
       .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
       .register('Gateway.GetMeshStatus', () => cloneFixture(fixtures.meshStatus))
+      .register('Gateway.GetMeshInviteConfig', () => cloneFixture(fixtures.meshInviteConfig))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Backup.List', () => cloneFixture(fixtures.backups))
@@ -146,7 +147,9 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Tooling.GetOnboardingStatus', () => ({ capabilities: [], secrets_redacted: true }))
       .register('Tooling.SetPolicyMode', (request) => ({ ok: true, policy: cloneFixture(fixtures.toolingSharingPolicy), correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
       .register('Tooling.UpsertSourcePolicy', (request) => ({ ok: true, grant: null, correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.ClearSourcePolicy', (request) => ({ ok: true, cleared: true, revoked_grant_ids: [], correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
       .register('Tooling.UpsertToolPolicyOverride', (request) => ({ ok: true, grant: null, correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.ClearToolPolicyOverride', (request) => ({ ok: true, cleared: true, revoked_grant_ids: [], correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
       .register('Tooling.TestMCPSource', () => ({ ok: false, source_id: 'local:mcp:default', error: 'unsupported_in_mock', secrets_redacted: true }))
       .register('Tooling.CreateMCPSource', () => ({ ok: false, source_id: 'local:mcp:default', created: false, error: 'unsupported_in_mock', secrets_redacted: true }))
       .register('Tooling.TestPluginSource', () => ({ ok: false, source_id: 'local:plugin:default', error: 'unsupported_in_mock', secrets_redacted: true }))
@@ -188,6 +191,15 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Config.GetVersionHistory', () => cloneFixture(fixtures.configVersionHistory))
       .register('Config.PreviewReloadImpact', () => cloneFixture(fixtures.configReloadImpact))
       .register('Config.Set', () => cloneFixture(fixtures.configSet))
+      .register('Config.CommitChangeSet', () => ({
+        success: true,
+        revision: 8,
+        version_id: 'cfgv-change-set-001',
+        changed_paths: ['services.gateway.api.port'],
+        transaction_id: 'cfgtx-change-set-001',
+        error: null,
+        error_code: null
+      }))
       .register('Config.Rollback', () => cloneFixture(fixtures.configRollback))
       .register('Orchestrator.GetModelCatalog', () => cloneFixture(fixtures.modelRuntimeCatalog))
       .register('Orchestrator.GetModelRuntime', () => ({

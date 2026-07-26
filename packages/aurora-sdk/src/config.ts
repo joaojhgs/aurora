@@ -57,7 +57,7 @@ export interface ConfigSchemaMetadataResponse {
   secrets_redacted: boolean
 }
 
-export interface ConfigChange {
+export interface ConfigChange extends JsonObject {
   key_path: string
   value: JsonValue
 }
@@ -83,6 +83,26 @@ export interface ConfigDiffPreviewResponse {
   diffs: ConfigDiffEntry[]
   errors: string[]
   secrets_redacted: boolean
+  base_revision?: number | null
+  preview_token?: string | null
+  changed_paths: string[]
+}
+
+export interface ConfigCommitChangeSetRequest extends JsonObject {
+  changes: ConfigChange[]
+  base_revision: number
+  preview_token: string
+}
+
+export interface ConfigCommitChangeSetResponse {
+  success: boolean
+  revision?: number | null
+  version_id?: string | null
+  changed_paths: string[]
+  transaction_id?: string | null
+  error?: string | null
+  error_code?: string | null
+  diff?: ConfigDiffPreviewResponse | null
 }
 
 export interface ConfigVersionHistoryRequest {
@@ -98,6 +118,9 @@ export interface ConfigVersionEntry {
   new_value?: JsonValue | undefined
   affected_sections: string[]
   secret: boolean
+  changed_paths?: string[] | null
+  transaction_kind?: string | null
+  actor?: string | null
 }
 
 export interface ConfigVersionHistoryResponse {
@@ -178,6 +201,7 @@ export class ConfigClient {
   }
 
   previewDiff(request: ConfigDiffPreviewRequest): Promise<AuroraResponse<ConfigDiffPreviewResponse>> {
+    assertDistinctConfigChanges(request.changes)
     return this.client.requestResult<ConfigDiffPreviewResponse, ConfigDiffPreviewRequest>(
       CONFIG_METHODS.previewDiff,
       request,
@@ -194,6 +218,8 @@ export class ConfigClient {
   }
 
   previewReloadImpact(request: ConfigReloadImpactRequest): Promise<AuroraResponse<ConfigReloadImpactResponse>> {
+    if (request.key_paths) assertDistinctConfigPaths(request.key_paths)
+    if (request.changes) assertDistinctConfigChanges(request.changes, true)
     return this.client.requestResult<ConfigReloadImpactResponse, ConfigReloadImpactRequest>(
       CONFIG_METHODS.previewReloadImpact,
       request,
@@ -206,6 +232,7 @@ export class ConfigClient {
     confirmation: Awaited<ReturnType<AdminActionClient['confirm']>>
     data: ConfigSetResponse
   }> {
+    assertDistinctConfigChanges([input.change])
     const request: Parameters<AdminActionClient['execute']>[0] = {
       methodId: CONFIG_METHODS.set,
       payload: { key_path: input.change.key_path, value: input.change.value },
@@ -215,6 +242,23 @@ export class ConfigClient {
     }
     if (input.phrase !== undefined) request.phrase = input.phrase
     return this.client.admin.execute<ConfigSetResponse>(request)
+  }
+
+  commitChangeSet(input: { request: ConfigCommitChangeSetRequest; reason: string; reauthConfirmed: boolean; phrase?: string }): Promise<{
+    draft: Awaited<ReturnType<AdminActionClient['draft']>>
+    confirmation: Awaited<ReturnType<AdminActionClient['confirm']>>
+    data: ConfigCommitChangeSetResponse
+  }> {
+    assertDistinctConfigChanges(input.request.changes)
+    const request: Parameters<AdminActionClient['execute']>[0] = {
+      methodId: CONFIG_METHODS.commitChangeSet,
+      payload: input.request,
+      reason: input.reason,
+      reauthConfirmed: input.reauthConfirmed,
+      affectedResources: input.request.changes.map((change) => change.key_path)
+    }
+    if (input.phrase !== undefined) request.phrase = input.phrase
+    return this.client.admin.execute<ConfigCommitChangeSetResponse>(request)
   }
 
   rollback(input: { versionId: string; reason: string; reauthConfirmed: boolean; phrase?: string }): Promise<{
@@ -231,5 +275,25 @@ export class ConfigClient {
     }
     if (input.phrase !== undefined) request.phrase = input.phrase
     return this.client.admin.execute<ConfigRollbackResponse>(request)
+  }
+}
+
+function assertDistinctConfigChanges(changes: ConfigChange[], allowEmpty = false): void {
+  if (!allowEmpty && changes.length === 0) {
+    throw new Error('Config changes must not be empty')
+  }
+  assertDistinctConfigPaths(changes.map((change) => change.key_path))
+}
+
+function assertDistinctConfigPaths(paths: string[]): void {
+  const seen = new Set<string>()
+  for (const path of paths) {
+    if (!path || path.trim() === '' || path.split('.').some((part) => part === '')) {
+      throw new Error('Config key_path must not be blank')
+    }
+    if (seen.has(path)) {
+      throw new Error(`Duplicate config key_path: ${path}`)
+    }
+    seen.add(path)
   }
 }

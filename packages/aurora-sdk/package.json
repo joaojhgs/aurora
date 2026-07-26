@@ -18,6 +18,16 @@
       "types": "./dist/test-utils.d.ts",
       "import": "./dist/test-utils.js",
       "default": "./dist/test-utils.js"
+    },
+    "./webrtc-protocol-contract": {
+      "types": "./dist/webrtc-protocol-contract.d.ts",
+      "import": "./dist/webrtc-protocol-contract.js",
+      "default": "./dist/webrtc-protocol-contract.js"
+    },
+    "./webrtc": {
+      "types": "./dist/webrtc/index.d.ts",
+      "import": "./dist/webrtc/index.js",
+      "default": "./dist/webrtc/index.js"
     }
   },
   "files": [
@@ -33,5 +43,9 @@
   "devDependencies": {
     "typescript": "5.7.3",
     "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.2.0",
+    "mqtt": "5.15.2"
   }
 }

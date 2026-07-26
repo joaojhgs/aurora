@@ -11,6 +11,7 @@ import type {
   GetRegistryResponse,
   GetServicesResponse,
   ListPendingPairingsResponse,
+  MeshInviteConfigResponse,
   MeshPeerListResponse,
   MeshStatusResponse,
   AuditLogResponse,
@@ -535,7 +536,7 @@ const standardPolicy: CapabilityPolicyDecisionInfo = {
   selector_required: false,
   mesh_visible: false,
   local_only: false,
-  allowed_peers: null,
+  allowed_provider_peer_ids: null,
   operation_class: null,
   resource_scope: null,
   denial_reasons: []
@@ -738,7 +739,7 @@ const basePolicy: CapabilityPolicyDecisionInfo = {
   selector_required: false,
   mesh_visible: false,
   local_only: false,
-  allowed_peers: null,
+  allowed_provider_peer_ids: null,
   operation_class: null,
   resource_scope: null,
   denial_reasons: []
@@ -1509,6 +1510,29 @@ export const gatewayServicesFixture: GetServicesResponse = {
       version: '0.1.0',
       summary: 'Scheduler jobs and delegated automation management',
       capabilities: ['jobs', 'delegation', 'automation'],
+      callable_features: [
+        {
+          feature_id: 'job_scheduling',
+          module: 'Scheduler',
+          label: 'Job Scheduling',
+          summary: 'Schedule legacy and typed jobs.',
+          method_ids: ['Scheduler.ScheduleAction', 'Scheduler.Schedule']
+        },
+        {
+          feature_id: 'job_lifecycle',
+          module: 'Scheduler',
+          label: 'Job Lifecycle',
+          summary: 'Cancel, pause, and resume scheduled jobs.',
+          method_ids: ['Scheduler.Cancel', 'Scheduler.Pause', 'Scheduler.Resume']
+        },
+        {
+          feature_id: 'job_discovery',
+          module: 'Scheduler',
+          label: 'Job Discovery',
+          summary: 'List scheduled jobs.',
+          method_ids: ['Scheduler.ListJobs']
+        }
+      ],
       method_count: 5,
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
@@ -1663,7 +1687,52 @@ export const meshStatusFixture: MeshStatusResponse = {
         local_unused: ['DB'],
         remote_compatible: ['Gateway'],
         remote_incompatible: [],
-        remote_unused: []
+        remote_unused: [],
+        local_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-kitchen-7',
+          export_policy_revision: 'export-kitchen-4',
+          auth_grant_revision: 9,
+          projection_digest: 'projection-kitchen-safe-digest'
+        },
+        remote_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-local-12',
+          export_policy_revision: 'export-local-8',
+          auth_grant_revision: 14,
+          projection_digest: 'projection-local-safe-digest'
+        },
+        local_services: [
+          {
+            service_id: 'TTS',
+            service_label: '',
+            status: 'compatible',
+            reason_codes: [],
+            reason: 'compatible'
+          },
+          {
+            service_id: 'DB',
+            service_label: '',
+            status: 'unused',
+            reason_codes: [],
+            reason: 'not configured for remote routing'
+          }
+        ],
+        remote_services: [
+          {
+            service_id: 'Gateway',
+            service_label: '',
+            status: 'compatible',
+            reason_codes: [],
+            reason: 'compatible'
+          }
+        ]
       }
     },
     {
@@ -1702,7 +1771,29 @@ export const meshStatusFixture: MeshStatusResponse = {
         local_unused: [],
         remote_compatible: ['Gateway', 'Auth'],
         remote_incompatible: [],
-        remote_unused: []
+        remote_unused: [],
+        local_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-studio-3',
+          export_policy_revision: 'export-studio-2',
+          auth_grant_revision: 5,
+          projection_digest: 'projection-studio-safe-digest'
+        },
+        remote_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-local-12',
+          export_policy_revision: 'export-local-8',
+          auth_grant_revision: 14,
+          projection_digest: 'projection-local-safe-digest'
+        },
+        local_services: [],
+        remote_services: []
       }
     },
     {
@@ -1720,7 +1811,37 @@ export const meshStatusFixture: MeshStatusResponse = {
         local_unused: [],
         remote_compatible: [],
         remote_incompatible: [],
-        remote_unused: []
+        remote_unused: [],
+        local_revision: {
+          active_protocol: 'legacy-unfiltered-v0',
+          active_version: 'v0',
+          active_tier: 'legacy',
+          protocol_revision: null,
+          registry_revision: '',
+          export_policy_revision: '',
+          auth_grant_revision: null,
+          projection_digest: ''
+        },
+        remote_revision: {
+          active_protocol: '',
+          active_version: '',
+          active_tier: '',
+          protocol_revision: null,
+          registry_revision: '',
+          export_policy_revision: '',
+          auth_grant_revision: null,
+          projection_digest: ''
+        },
+        local_services: [
+          {
+            service_id: 'Tooling',
+            service_label: '',
+            status: 'incompatible',
+            reason_codes: ['legacy_unverifiable'],
+            reason: 'legacy manifest cannot prove recipient-specific authority'
+          }
+        ],
+        remote_services: []
       }
     }
   ],
@@ -1799,7 +1920,66 @@ export const meshStatusFixture: MeshStatusResponse = {
       peer_id: 'peer-den',
       module: 'Tooling',
       direction: 'local',
+      reason_code: 'manifest_projection_stale',
       reason: 'remote manifest stale'
+    }
+  ],
+  export_summaries: [
+    {
+      service_id: 'TTS',
+      service_label: '',
+      shared: true,
+      policy_revision: 8,
+      reason_codes: ['method_not_shared'],
+      excluded_method_count: 1,
+      excluded_feature_count: 0
+    },
+    {
+      service_id: 'Scheduler',
+      service_label: '',
+      shared: false,
+      policy_revision: 8,
+      reason_codes: ['service_not_shared'],
+      excluded_method_count: 0,
+      excluded_feature_count: 0
+    }
+  ],
+  routing_summaries: [
+    {
+      service_id: 'TTS',
+      service_label: '',
+      configured: true,
+      prefer: 'remote',
+      fallback: 'local',
+      policy_revision: 8,
+      eligible_provider_ids: ['peer-kitchen'],
+      ineligible_provider_ids: ['peer-den'],
+      reason_codes: [
+        'provider_not_allowed',
+        'service_not_shared',
+        'method_not_shared',
+        'service_not_advertised',
+        'method_not_advertised',
+        'permissions_unknown',
+        'permission_denied',
+        'missing_required_features',
+        'missing_required_capability_tags',
+        'manifest_projection_stale',
+        'incompatible_version',
+        'provider_at_capacity',
+        'legacy_unverifiable'
+      ]
+    },
+    {
+      service_id: 'Scheduler',
+      service_label: '',
+      configured: true,
+      prefer: 'local',
+      fallback: 'none',
+      policy_revision: 8,
+      eligible_provider_ids: [],
+      ineligible_provider_ids: [],
+      reason_codes: []
     }
   ],
   secrets_redacted: true
@@ -1976,7 +2156,7 @@ export const tokenListFixture: TokenListResponse = {
       user_id: 'principal-owner',
       scopes: ['*'],
       created_at: '2026-06-19T00:35:00Z',
-      expires_at: '2026-07-19T00:35:00Z'
+      expires_at: '2099-07-19T00:35:00Z'
     },
     {
       id: 'token-ops-tablet-active',
@@ -1985,7 +2165,7 @@ export const tokenListFixture: TokenListResponse = {
       user_id: 'principal-ops',
       scopes: ['Auth.manage', 'Gateway.manage'],
       created_at: '2026-06-19T00:45:00Z',
-      expires_at: '2026-07-19T00:45:00Z'
+      expires_at: '2099-07-19T00:45:00Z'
     },
     {
       id: 'token-assistant-phone-expired',
@@ -4337,11 +4517,27 @@ export const toolCatalogFixture = {
   generated_at: '2026-06-19T00:00:00Z',
   tools: [
     {
-      global_tool_id: 'tool:local:diagnostics.serviceHealth',
+      global_tool_id: 'aurora-tool:v1:local-peer:Tooling:core.diagnostics.service-health',
+      tool_id_scheme: 'aurora-tool',
+      tool_id_version: 1,
+      tool_contract_id: 'core.diagnostics.service-health',
+      share_group_id: 'core:diagnostics',
+      share_group_label: 'Diagnostics',
+      legacy_global_tool_ids: ['tool:local:diagnostics.serviceHealth'],
+      exportable: true,
       provider_peer_id: 'local-peer',
       provider_id: 'local:Tooling',
       service_instance_id: 'tool-1a9e',
       display_name: 'diagnostics.serviceHealth',
+      provenance: {
+        provider_peer_id: 'local-peer',
+        provider_service_instance_id: 'tool-1a9e',
+        provider_kind: 'local',
+        source: 'core',
+        advertised_name: 'diagnostics.serviceHealth',
+        stable_source_id: 'core:aurora',
+        provider_tool_id: 'diagnostics.service-health'
+      },
       safety_class: 'standard',
       approval_required: false,
       required_permissions: ['Tooling.use'],
@@ -4390,6 +4586,13 @@ export const toolCatalogFixture = {
     },
     {
       global_tool_id: 'tool:remote:garageDoor.open',
+      tool_id_scheme: 'aurora-tool',
+      tool_id_version: 1,
+      tool_contract_id: 'hardware.garage-door-open',
+      share_group_id: 'core:hardware',
+      share_group_label: 'Hardware controls',
+      legacy_global_tool_ids: ['tool:remote:garageDoor.open'],
+      exportable: true,
       local_name: 'garageDoor.open',
       display_name: 'Open garage door',
       description: 'Controls remote hardware through a mesh peer.',
@@ -4420,6 +4623,15 @@ export const toolCatalogFixture = {
       correlation_id: 'corr-remote-danger',
       policy_decision_id: 'policy-remote-danger',
       approval_request_id: 'approval-remote-danger',
+      provenance: {
+        provider_peer_id: 'peer-garage',
+        provider_service_instance_id: 'tooling-garage',
+        provider_kind: 'mesh_peer',
+        source: 'core',
+        advertised_name: 'garageDoor.open',
+        stable_source_id: 'core:aurora',
+        provider_tool_id: 'garage-door-open'
+      },
       providers: [
         {
           id: 'mesh:garage:Tooling',
@@ -5116,6 +5328,12 @@ export const configGetFixture: ConfigGetResponse = {
   }
 }
 
+export const meshInviteConfigFixture: MeshInviteConfigResponse = {
+  app_id: 'aurora-dev',
+  room: 'aurora-studio-room',
+  room_password: 'secret-room-key'
+}
+
 export const configValidateFixture: ConfigValidateResponse = {
   errors: []
 }
@@ -5517,7 +5735,10 @@ export const configDiffPreviewFixture: ConfigDiffPreviewResponse = {
     }
   ],
   errors: [],
-  secrets_redacted: true
+  secrets_redacted: true,
+  base_revision: 7,
+  preview_token: 'cfgprev-fixture-token',
+  changed_paths: ['services.gateway.api.port']
 }
 
 export const configVersionHistoryFixture: ConfigVersionHistoryResponse = {
@@ -5529,7 +5750,10 @@ export const configVersionHistoryFixture: ConfigVersionHistoryResponse = {
       old_value: 7000,
       new_value: 8000,
       affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
-      secret: false
+      secret: false,
+      changed_paths: ['services.gateway.api.port'],
+      transaction_kind: 'commit_change_set',
+      actor: 'principal_id:admin'
     },
     {
       version_id: 'cfgv-token-secret-001',
@@ -5538,7 +5762,10 @@ export const configVersionHistoryFixture: ConfigVersionHistoryResponse = {
       old_value: null,
       new_value: '[REDACTED]',
       affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
-      secret: true
+      secret: true,
+      changed_paths: ['services.gateway.api.token_secret'],
+      transaction_kind: 'rollback',
+      actor: 'principal_id:admin'
     }
   ],
   secrets_redacted: true
@@ -5672,6 +5899,30 @@ export const supportBundleFixture: GatewaySupportBundleResponse = {
       redacted: true
     }
   ],
+  mesh_rollout: {
+    counters: { manifest_sent: 1, catalog_refetched: 1 },
+    denied_by_reason: { method_not_shared: 1 },
+    peers: [
+      {
+        peer_id: 'stable-peer',
+        manifest_revision: 4,
+        catalog_revision: 8,
+        export_policy_revision: 3,
+        auth_grant_revision: 2,
+        switch_revision: 1,
+        projection_size: 5,
+        last_sync_duration_ms: 12.5,
+        protocol_status: 'projection_v1',
+        last_reason_code: 'method_not_shared',
+        counters: { manifest_sent: 1, catalog_refetched: 1 }
+      }
+    ],
+    provider_mesh_tooling_enabled: true,
+    consumer_mesh_tooling_enabled: true,
+    rbac_preflight_release_blocking: false,
+    downgrade_status: 'not_applicable',
+    secrets_redacted: true
+  },
   config_shape: {
     api: {
       token_secret: '[REDACTED]',
@@ -5944,6 +6195,7 @@ export interface MockAuroraFixtureSet {
   toolingApprovalGrants: ToolingListApprovalGrantsResponse
   toolingMcpStatus: ToolingGetMcpStatusResponse
   pendingToolApprovals: OrchestratorListPendingToolApprovalsResponse
+  meshInviteConfig: MeshInviteConfigResponse
   configGet: ConfigGetResponse
   configValidate: ConfigValidateResponse
   configSchemaMetadata: ConfigSchemaMetadataResponse
@@ -5984,6 +6236,7 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   toolingApprovalGrants: toolingApprovalGrantsFixture,
   toolingMcpStatus: toolingMcpStatusFixture,
   pendingToolApprovals: pendingToolApprovalsFixture,
+  meshInviteConfig: meshInviteConfigFixture,
   configGet: configGetFixture,
   configValidate: configValidateFixture,
   configSchemaMetadata: configSchemaMetadataFixture,

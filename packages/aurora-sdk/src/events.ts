@@ -82,6 +82,7 @@ export class EventStreamClient {
           'tool.running',
           'tool.completed',
           'tool.failed',
+          'tool.requires_action',
           'tts.audio_chunk',
           'tts.audio.chunk',
           'tts.chunk'

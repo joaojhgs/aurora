@@ -19,6 +19,7 @@ export const GATEWAY_METHODS = {
   getDeploymentTopology: 'Gateway.GetDeploymentTopology',
   getWebRTCDiagnostics: 'Gateway.GetWebRTCDiagnostics',
   getMeshStatus: 'Gateway.GetMeshStatus',
+  getMeshInviteConfig: 'Gateway.GetMeshInviteConfig',
   getCapabilityGraph: 'Gateway.GetCapabilityGraph',
   getCapabilityCatalog: 'Gateway.GetCapabilityCatalog',
   explainRoute: 'Gateway.ExplainRoute',
@@ -66,6 +67,13 @@ export const TOOLING_METHODS = {
   getSharingPolicy: 'Tooling.GetSharingPolicy',
   setSharingPolicy: 'Tooling.SetSharingPolicy',
   testSharingPolicy: 'Tooling.TestSharingPolicy',
+  getExportCatalog: 'Tooling.GetExportCatalog',
+  getToolExportPolicy: 'Tooling.GetToolExportPolicy',
+  setToolExportDefault: 'Tooling.SetToolExportDefault',
+  upsertToolGroupExportPolicy: 'Tooling.UpsertToolGroupExportPolicy',
+  upsertToolExportOverride: 'Tooling.UpsertToolExportOverride',
+  clearToolExportOverride: 'Tooling.ClearToolExportOverride',
+  previewToolExportDecision: 'Tooling.PreviewToolExportDecision',
   prepareExecution: 'Tooling.PrepareExecution',
   requestApproval: 'Tooling.RequestApproval',
   confirmExecution: 'Tooling.ConfirmExecution',
@@ -78,7 +86,9 @@ export const TOOLING_METHODS = {
   getToolSourceDetail: 'Tooling.GetToolSourceDetail',
   setPolicyMode: 'Tooling.SetPolicyMode',
   upsertSourcePolicy: 'Tooling.UpsertSourcePolicy',
+  clearSourcePolicy: 'Tooling.ClearSourcePolicy',
   upsertToolPolicyOverride: 'Tooling.UpsertToolPolicyOverride',
+  clearToolPolicyOverride: 'Tooling.ClearToolPolicyOverride',
   listPendingApprovals: 'Tooling.ListPendingApprovals',
   listPolicyAuditEvents: 'Tooling.ListPolicyAuditEvents',
   getOnboardingStatus: 'Tooling.GetOnboardingStatus',
@@ -88,6 +98,8 @@ export const TOOLING_METHODS = {
   createPluginSource: 'Tooling.CreatePluginSource',
   executeTool: 'Tooling.ExecuteTool'
 } as const
+
+export const TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT = 'CONFIRM TOOL EXPORT POLICY CHANGE' as const
 
 export const ORCHESTRATOR_METHODS = {
   userInput: 'Orchestrator.UserInput',
@@ -155,6 +167,7 @@ export const CONFIG_METHODS = {
   previewDiff: 'Config.PreviewDiff',
   getVersionHistory: 'Config.GetVersionHistory',
   rollback: 'Config.Rollback',
+  commitChangeSet: 'Config.CommitChangeSet',
   previewReloadImpact: 'Config.PreviewReloadImpact'
 } as const
 
@@ -195,6 +208,9 @@ export function describeMethod(module: string, method: MethodInfo): MethodDescri
     inputModel: method.input_model,
     outputModel: method.output_model,
     requiredPermissions: [...method.required_perms],
+    callableFeatureIds: [...(method.callable_feature_ids ?? [])],
+    callableFeatures: [...(method.callable_features ?? [])],
+    publicInfrastructure: method.public_infrastructure ?? false,
     inputSchema: method.input_schema ?? null,
     outputSchema: method.output_schema ?? null,
     availableOverHttp
@@ -234,6 +250,9 @@ export function describeBackendInventoryMethod(method: BackendInventoryMethod): 
     inputModel: method.input_model ?? null,
     outputModel: method.output_model ?? null,
     requiredPermissions: [...method.required_perms],
+    callableFeatureIds: [...(method.callable_feature_ids ?? [])],
+    callableFeatures: [...(method.callable_features ?? [])],
+    publicInfrastructure: method.public_infrastructure ?? false,
     inputSchema: cloneSchema(method.input_schema),
     outputSchema: cloneSchema(method.output_schema),
     availableOverHttp,

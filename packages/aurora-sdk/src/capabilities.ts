@@ -45,6 +45,7 @@ export function summarizeCapabilities(catalog: CapabilityCatalogResponse): Capab
 export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGraph {
   const candidatesByFeature = new Map<string, CapabilityProviderCandidate[]>()
   const rawActionsByFeature = new Map<string, CapabilityActionInfo[]>()
+  const callableFeatureMembers = new Map<string, Set<string>>()
   const providersById = new Map(input.catalog.providers.map((provider) => [provider.provider_id, provider]))
   const registryMethods = input.registry ? describeRegistry(input.registry) : []
   const catalogFeatureIds = new Set<string>()
@@ -52,12 +53,19 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
   for (const action of input.catalog.actions) {
     const featureId = featureIdForAction(action)
     catalogFeatureIds.add(featureId)
+    addCallableFeatureMembership(
+      callableFeatureMembers,
+      featureId,
+      callableFeatureIdsForAction(action),
+      action.module
+    )
     addCandidate(candidatesByFeature, candidateFromAction(action, featureId, providersById.get(action.provider_id)))
     addRawAction(rawActionsByFeature, featureId, action)
   }
 
   for (const method of registryMethods) {
     const featureId = featureIdForMethod(method)
+    addCallableFeatureMembership(callableFeatureMembers, featureId, method.callableFeatureIds, method.module)
     if (catalogFeatureIds.has(featureId)) continue
     if (method.exposure === 'internal' && !transportSupportsInternalBus(input.transportKind ?? null)) {
       addCandidate(candidatesByFeature, candidateFromMethod(method, featureId, 'internal-only over this transport'))
@@ -75,11 +83,23 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
     .sort((a, b) => a.featureId.localeCompare(b.featureId))
   const byFeatureId = Object.fromEntries(nodes.map((node) => [node.featureId, node]))
   const providerIndex = normalizeIndex(input.catalog.provider_index)
+  const callableFeatureIndex = normalizeSetIndex(callableFeatureMembers)
+  const callableCandidateProviderIndex = Object.fromEntries(
+    Object.entries(callableFeatureIndex).map(([groupKey, memberFeatureIds]) => [
+      groupKey,
+      sortedUnique(
+        memberFeatureIds.flatMap((featureId) =>
+          (byFeatureId[featureId]?.providers ?? []).map((provider) => provider.id)
+        )
+      )
+    ])
+  )
   const candidateProviderIndex = {
     ...providerIndex,
     ...Object.fromEntries(
       nodes.map((node) => [node.featureId, node.providers.map((provider) => provider.id)])
-    )
+    ),
+    ...callableCandidateProviderIndex
   }
 
   return {
@@ -90,6 +110,7 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
     nodes,
     byFeatureId,
     providerIndex,
+    callableFeatureIndex,
     candidateProviderIndex,
     explain(featureId: string): CapabilityExplanation {
       const node = byFeatureId[featureId]
@@ -227,8 +248,27 @@ function featureIdForMethod(method: MethodDescriptor): string {
   return methodFeatureId(method.module, method.name, method.busTopic)
 }
 
+function callableFeatureId(module: string, featureId: string): string {
+  return `callable:${module}:${featureId}`
+}
+
+function callableFeatureIdsForAction(action: CapabilityActionInfo): string[] {
+  const callableFeatureIds = action.callable_feature_ids ?? []
+  return callableFeatureIds.length
+    ? callableFeatureIds
+    : action.policy.required_callable_feature_ids ?? []
+}
+
 function methodFeatureId(module: string, method: string, busTopic: string | null): string {
   return `method:${busTopic ?? `${module}.${method}`}`
+}
+
+function actionInvocationId(action: CapabilityActionInfo): string {
+  return action.action_id || action.topic || `${action.module}.${action.method}`
+}
+
+function methodInvocationId(method: MethodDescriptor): string {
+  return method.busTopic ?? `${method.module}.${method.name}`
 }
 
 function candidateFromAction(
@@ -245,12 +285,13 @@ function candidateFromAction(
   const selectorRequired = action.policy.explicit_selector_required || action.policy.selector_required
   const privacyBlocked = hardPrivacyBlockForAction(action)
   return {
-    id: `${featureId}@${action.provider_id}`,
+    id: `${featureId}:${actionInvocationId(action)}@${action.provider_id}`,
     featureId,
     providerIdentity: providerIdentityFor(action.provider_kind, action.peer_id, action.provider_id),
     providerId: action.provider_id,
     providerKind: action.provider_kind,
     peerId: action.peer_id,
+    nodeName: provider?.node_name || null,
     serviceInstanceId: action.service_instance_id,
     module: action.module,
     method: action.method,
@@ -279,7 +320,7 @@ function candidateFromMethod(
   reason: string
 ): CapabilityProviderCandidate {
   return {
-    id: `${featureId}@unavailable:http`,
+    id: `${featureId}:${methodInvocationId(method)}@unavailable:http`,
     featureId,
     providerIdentity: 'unavailable',
     providerId: 'unavailable:http',
@@ -304,6 +345,20 @@ function candidateFromMethod(
     selector: null,
     source: 'registry',
     raw: method
+  }
+}
+
+function addCallableFeatureMembership(
+  index: Map<string, Set<string>>,
+  memberFeatureId: string,
+  callableFeatureIds: string[],
+  module: string
+): void {
+  for (const featureId of callableFeatureIds) {
+    const groupKey = callableFeatureId(module, featureId)
+    const members = index.get(groupKey) ?? new Set<string>()
+    members.add(memberFeatureId)
+    index.set(groupKey, members)
   }
 }
 
@@ -812,11 +867,20 @@ function normalizeIndex(index: Record<string, string[]>): Record<string, string[
   return Object.fromEntries(Object.entries(index).map(([key, value]) => [key, [...value].sort()]))
 }
 
+function normalizeSetIndex(index: Map<string, Set<string>>): Record<string, string[]> {
+  return Object.fromEntries(
+    [...index.entries()]
+      .map(([key, values]) => [key, [...values].sort()] as const)
+      .sort(([a], [b]) => a.localeCompare(b))
+  )
+}
+
 function addCandidate(
   map: Map<string, CapabilityProviderCandidate[]>,
   candidate: CapabilityProviderCandidate
 ): void {
   const existing = map.get(candidate.featureId) ?? []
+  if (existing.some((item) => item.id === candidate.id)) return
   existing.push(candidate)
   map.set(candidate.featureId, existing)
 }
