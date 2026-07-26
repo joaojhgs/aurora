@@ -176,6 +176,13 @@ make check   # Run all quality checks
 make unit    # Run unit tests
 ```
 
+### Commit Discipline
+
+- During substantial multi-step work, commit each coherent, verified slice as soon as it is complete; do not leave an entire session as one unrelated dirty tree.
+- Inspect `git status` and the staged diff before every commit. Never absorb, rewrite, or discard unrelated work from another agent or an earlier session.
+- Keep commits purpose-based and reviewable (for example: Python protocol/backend, SDK, UI, packaging, tests/docs) and include the verification evidence in the commit message.
+- Defer pushing until the user requests it and all intended local commits are complete and verified. When a push is requested, push once from a clean tree.
+
 ### Testing
 
 ```bash

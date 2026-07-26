@@ -12,7 +12,7 @@ This index separates current documentation from historical/provenance material. 
 | What Aurora is and how the repo is organized | [`../readme.md`](../readme.md), [`ARCHITECTURE.md`](ARCHITECTURE.md), [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md) |
 | Install or run locally | [`INSTALL.md`](INSTALL.md), [`UV_USAGE.md`](UV_USAGE.md) |
 | Run services in process mode or Docker | [`../README.process-mode.md`](../README.process-mode.md), [`TILT.md`](TILT.md), [`docker/DB-SERVICE-EMBEDDINGS.md`](docker/DB-SERVICE-EMBEDDINGS.md), [`docker/ORCHESTRATOR-SERVICE-LLM-MODES.md`](docker/ORCHESTRATOR-SERVICE-LLM-MODES.md) |
-| Understand CI and tests | [`CI_CD.md`](CI_CD.md), [`../tests/README.md`](../tests/README.md), [`TESTING_PROCESS_MODE.md`](TESTING_PROCESS_MODE.md) |
+| Understand CI and tests | [`CI_CD.md`](CI_CD.md), [`TEST_HARNESS_INVENTORY.md`](TEST_HARNESS_INVENTORY.md), [`../tests/README.md`](../tests/README.md), [`TESTING_PROCESS_MODE.md`](TESTING_PROCESS_MODE.md) |
 | Work on configuration | [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md) |
 | Work on messaging/contracts/API | [`MESSAGING_ARCHITECTURE.md`](MESSAGING_ARCHITECTURE.md), [`API_AND_CONTRACTS.md`](API_AND_CONTRACTS.md), [`SERVICE_METHODS_REFERENCE.md`](SERVICE_METHODS_REFERENCE.md) |
 | Work on Gateway, auth, permissions, or mesh | [`GATEWAY.md`](GATEWAY.md), [`AUTH_AND_PERMISSIONS.md`](AUTH_AND_PERMISSIONS.md), [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md), [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md), [`MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md`](MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md), [`security/README.md`](security/README.md) |
@@ -33,6 +33,7 @@ This index separates current documentation from historical/provenance material. 
 | [`UV_USAGE.md`](UV_USAGE.md) | Current | `uv` and optional dependency usage. |
 | [`DEPENDENCIES.md`](DEPENDENCIES.md) | Current | Service extras, local model profiles, sidecar profiles, and generated dependency-artifact policy. |
 | [`CI_CD.md`](CI_CD.md) | Current | GitHub Actions lanes and local equivalents. |
+| [`TEST_HARNESS_INVENTORY.md`](TEST_HARNESS_INVENTORY.md) | Current | Ownership and conversion decisions for executable build, migration, browser, mesh, and WebRTC harness scripts. |
 | [`CONTRIBUTE.md`](CONTRIBUTE.md) | Current | Contributor workflow and links to current checks. |
 
 ## Runtime and backend docs

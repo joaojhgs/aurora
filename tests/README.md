@@ -22,6 +22,11 @@ Aurora's test suite is divided into several categories:
    - Location: `tests/performance/`
    - Run with: `pytest tests/performance`
 
+5. **Browser E2E Tests** - Run real browser-engine storage, UI, and WebRTC scenarios
+   - Locations: `tests/e2e/browser_persistence/`, `tests/e2e/webrtc_interop/`
+   - Run hosted peer persistence with: `pnpm test:web-persistence`
+   - Run live browser/Python WebRTC lanes with the root `test:webrtc:*` scripts
+
 ## Running Tests
 
 ### Running All Tests
@@ -105,6 +110,7 @@ make check-docs
 ## CI/CD Pipeline
 
 Aurora's CI/CD pipeline is configured with durable workflow lanes. See `docs/CI_CD.md` for the full map.
+See `docs/TEST_HARNESS_INVENTORY.md` for which executable scripts are product/build runners, which assertions already have normal tests, and which live harnesses still merit partial conversion.
 
 1. **Python Tests** - Unit, integration, and Redis-backed process-mode tests
    - Workflow file: `.github/workflows/python-tests.yml`
@@ -117,6 +123,9 @@ Aurora's CI/CD pipeline is configured with durable workflow lanes. See `docs/CI_
 
 4. **Frontend and SDK** - TypeScript SDK/UI/web tests and builds
    - Workflow file: `.github/workflows/frontend-sdk.yml`
+
+5. **Browser persistence and WebRTC interoperability** - Cross-engine encrypted refresh restoration plus live browser/Python direct, STUN, and TURN lanes
+   - Workflow file: `.github/workflows/webrtc-interop.yml`
 
 ## Writing Tests
 

@@ -60,3 +60,10 @@ RETURN caller.name, caller.filePath
 ```
 
 <!-- gitnexus:end -->
+
+## Repository commit discipline
+
+- Follow the root `AGENTS.md` as the canonical development contract.
+- Commit coherent, verified slices as work progresses instead of accumulating unrelated changes for the end of a session.
+- Review `git status`, the staged diff, and test evidence before every commit; preserve all pre-existing user/agent work.
+- Do not push partial work. Push only when requested, after all intended commits are complete and the tree is clean.

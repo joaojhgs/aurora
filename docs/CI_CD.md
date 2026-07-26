@@ -9,7 +9,7 @@ Aurora CI is organized around durable product lanes rather than one-off issue ga
 | `quality.yml` | Fast static feedback. | Generated config check, docs hygiene, Ruff lint/format, TypeScript typechecks. |
 | `python-tests.yml` | Backend unit/integration coverage. | Unit tests, non-process integration tests, Redis-backed process-mode integration tests. |
 | `e2e.yml` | Executable cross-surface E2E evidence. | Mesh transport harness and redacted support-bundle artifacts. |
-| `webrtc-interop.yml` | Live browser ↔ Python Gateway WebRTC interop. | Required Chromium/Firefox/WebKit direct matrix plus Chromium, Firefox, and Playwright-WebKit STUN/TURN with MQTT signaling, Python HTTP API disabled, strict browser availability, and uploaded redacted reports. |
+| `webrtc-interop.yml` | Live browser ↔ Python Gateway WebRTC interop and browser credential persistence. | Required Chromium/Firefox/WebKit encrypted IndexedDB refresh restoration, direct WebRTC matrix, plus Chromium, Firefox, and Playwright-WebKit STUN/TURN with MQTT signaling, Python HTTP API disabled, strict browser availability, and uploaded redacted reports. |
 | `frontend-sdk.yml` | TypeScript SDK, shared UI, web app, and Tauri frontend. | SDK tests/build, UI tests/build, accessibility/responsive/visual suite, web app tests/build, Tauri frontend tests/typecheck/build. |
 | `sdk-backend-contract-conformance.yml` | Backend/SDK contract drift protection. | Generated backend inventory, SDK fixture/type conformance, SDK package checks. |
 | `tauri-desktop.yml` | Desktop Tauri shell and sidecar packaging smoke. | Rust check, desktop-local sidecar/smoke lanes, and a Python-free WSS-only desktop-thin AppImage/deb build plus artifact proof. |
@@ -48,6 +48,7 @@ pnpm --filter @aurora/tauri-ui test:e2e:outcomes
 pnpm --filter @aurora/tauri-ui tauri:smoke:linux
 
 # WebRTC live interop
+pnpm test:web-persistence
 pnpm test:webrtc:interop
 pnpm test:webrtc:turn
 pnpm test:webrtc:browsers
@@ -91,6 +92,8 @@ Use these commands when preparing or reproducing the production UI gate:
 ### WebRTC interop commands
 
 Use [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md) for report schema and current proof boundaries. Current local reports prove direct, STUN, and forced-TURN sessions in Chromium, Firefox, and Playwright WebKit, with lane category taken from browser `RTCPeerConnection.getStats()` selected pairs. A matrix skip in an environment missing an optional browser runtime remains unproven, not a pass; required CI sets strict browser availability.
+
+`pnpm test:web-persistence` is a separate real-browser Playwright test. It builds the SDK/UI modules, stores a non-extractable AES-GCM key plus encrypted peer material in IndexedDB, reloads the page, and proves restoration in Chromium, Firefox, and WebKit without finding plaintext bearer or room secrets in IndexedDB/localStorage. It does not establish resistance to active same-origin XSS or a compromised browser profile.
 
 ## Branch protection compatibility
 
