@@ -1,0 +1,169 @@
+{
+  "assertions": {
+    "authorizedPeerCount": 0,
+    "eventOverDataChannel": true,
+    "eventSentByPython": true,
+    "mutationAtMostOnce": true,
+    "mutationUncertainLossWindow": true,
+    "reconnectWithoutSas": true,
+    "registryReadOverDataChannel": true,
+    "revokedCredentialFailsClosed": true,
+    "rtcStarted": true,
+    "ttsEventOverDataChannel": true,
+    "ttsEventSentByPython": true,
+    "wildcardDelivered": false,
+    "wildcardInterestedByPython": false,
+    "wrongCorrelationDelivered": false
+  },
+  "browserReport": "reports/webrtc-interop/direct/browser-report.json",
+  "candidateProof": {
+    "acceptanceReason": "selected-peer-reflexive-host-pair-without-stun",
+    "configuredStunServerCount": null,
+    "configuredStunServerEvidence": "unproven",
+    "laneIntent": "direct",
+    "rawAddressRedacted": true,
+    "selectedPairAcceptedForLane": true,
+    "selectedPairCategory": "prflx",
+    "statsSource": "RTCPeerConnection.getStats",
+    "stunServerReflexiveCandidateGathered": false,
+    "stunServerReflexiveCandidateMatchesConfiguredServer": null
+  },
+  "commands": {
+    "docker": "docker compose -f docker-compose.webrtc-interop.yml up -d webrtc-interop-mqtt webrtc-interop-turn",
+    "lane": "./scripts/webrtc_interop.sh direct"
+  },
+  "hostileCaseEvidence": {
+    "live": {
+      "failClosedObserved": true,
+      "liveMalformedFrames": "not injected in browser live lane to avoid destabilizing shared DataChannel; see unitVectorTests in aggregate report"
+    },
+    "unitVectorTests": [
+      "tests/unit/gateway/test_webrtc_web_thin_protocol_vectors.py",
+      "tests/unit/gateway/test_webrtc_scoped_subscriptions_integration.py"
+    ]
+  },
+  "httpDisabledProof": {
+    "browserHttpFetchCalls": [],
+    "gatewayApiEnabled": false,
+    "gatewayHttpReachable": false,
+    "noHttpFetchTransportUsed": true
+  },
+  "iceCandidatePolicy": {
+    "source": "browser default ICE candidate policy",
+    "suppressHostCandidates": false
+  },
+  "lane": "direct",
+  "laneIntent": "direct",
+  "mutationEvidence": {
+    "executionCountAtMostOnce": true,
+    "mutationCount": {
+      "execution_count": 1,
+      "mutation_id": "g009-direct-ms26avoe"
+    },
+    "mutationId": "g009-direct-ms26avoe",
+    "mutationResult": {
+      "message": "g009 uncertain transport loss before mutation response settled",
+      "settled": "rejected",
+      "settled_after_disconnect": true
+    },
+    "mutationStartedEvent": {
+      "audit": {
+        "busTopic": "G009Interop.MutationStarted",
+        "correlationId": "g009-direct-ms26avoe",
+        "eventKind": "mutation.started",
+        "method": null,
+        "peerId": "python-gateway-g009",
+        "principalId": null,
+        "redaction": {
+          "redactedFields": [],
+          "secretsRedacted": true,
+          "source": "sdk",
+          "warnings": []
+        },
+        "resourceId": null,
+        "status": null,
+        "targetPeerId": "python-gateway-g009",
+        "toolId": null,
+        "transport": "mesh"
+      },
+      "busTopic": "G009Interop.MutationStarted",
+      "id": null,
+      "kind": "mutation.started",
+      "method": null,
+      "payload": {
+        "correlation_id": "g009-direct-ms26avoe",
+        "execution_count": 1,
+        "kind": "mutation.started",
+        "mutation_id": "g009-direct-ms26avoe",
+        "request_id": "webrtc-3ysn8pv4lq9-ms26avoe",
+        "timing_category": "started_before_response_delay"
+      },
+      "receivedAt": "2026-07-26T19:10:33.234Z",
+      "redaction": {
+        "redactedFields": [],
+        "secretsRedacted": true,
+        "source": "sdk",
+        "warnings": []
+      },
+      "topic": "G009Interop.MutationStarted"
+    },
+    "pairingPromptsDuringMutationReconnect": 0,
+    "uncertainLossWindow": {
+      "browserResultCategory": "transport_lost_before_response",
+      "disconnectBeforeResponseSettled": true,
+      "requestStartedToDisconnectMs": 52,
+      "responseSettledBeforeDisconnect": false,
+      "startedAckBeforeDisconnect": true
+    }
+  },
+  "pathAcceptanceReason": "selected-peer-reflexive-host-pair-without-stun",
+  "pathCategory": "prflx",
+  "pathCategoryAccepted": true,
+  "pythonReport": "reports/webrtc-interop/direct/python-gateway-report.json",
+  "reconnectEvidence": {
+    "authorizedWithoutSas": true,
+    "pendingPairingPrompts": 0,
+    "registryModuleCount": 6
+  },
+  "redaction": {
+    "findings": [],
+    "passed": true,
+    "scannedFileCount": 4
+  },
+  "revocationEvidence": {
+    "finalState": "awaiting-sas-confirmation",
+    "pendingPairingPrompts": 3,
+    "revokeResult": {
+      "revoked": true,
+      "route": "datachannel"
+    },
+    "routeAuthorizedAfterRevocation": false
+  },
+  "schema": "aurora.webrtc_interop.report.v1",
+  "scopedEventEvidence": {
+    "python": {
+      "wildcardInterested": false,
+      "wrongCorrelationInterested": false
+    },
+    "wildcardDelivered": false,
+    "wrongCorrelationDelivered": false
+  },
+  "secretsRedacted": true,
+  "selectedCandidatePair": {
+    "category": "prflx",
+    "localCandidateType": "prflx",
+    "localProtocol": "udp",
+    "nominated": true,
+    "pairState": "succeeded",
+    "rawAddressRedacted": true,
+    "remoteCandidateType": "host",
+    "remoteProtocol": "udp",
+    "selected": true,
+    "statsSource": "RTCPeerConnection.getStats"
+  },
+  "status": "passed",
+  "timings": {
+    "browserDurationMs": 5365,
+    "pythonDurationMs": 6147
+  }
+}

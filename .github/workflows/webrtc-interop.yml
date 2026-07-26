@@ -1,0 +1,104 @@
+name: WebRTC live interop
+
+on:
+  pull_request:
+    paths:
+      - "app/services/gateway/webrtc/**"
+      - "packages/aurora-sdk/src/webrtc/**"
+      - "tests/e2e/webrtc_interop/**"
+      - "scripts/webrtc_interop*"
+      - "docker-compose.webrtc-interop.yml"
+      - "tests/fixtures/webrtc_interop/**"
+      - ".github/workflows/webrtc-interop.yml"
+  workflow_dispatch:
+
+jobs:
+  chromium-direct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: uv sync --all-extras
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:webrtc:interop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webrtc-interop-direct
+          path: reports/webrtc-interop/direct/
+
+  chromium-turn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: uv sync --all-extras
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:webrtc:turn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webrtc-interop-turn
+          path: reports/webrtc-interop/turn/
+
+  cross-engine-network-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: uv sync --all-extras
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Run strict direct and supported network-path matrix
+        env:
+          WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS: "1"
+        run: |
+          set -euo pipefail
+          trap 'scripts/webrtc_interop_services.sh down' EXIT
+          pnpm test:webrtc:browsers
+          WEBRTC_INTEROP_BROWSER=chromium \
+            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/stun \
+            scripts/webrtc_interop.sh stun
+          WEBRTC_INTEROP_BROWSER=firefox \
+            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/firefox-stun \
+            scripts/webrtc_interop.sh stun
+          WEBRTC_INTEROP_BROWSER=firefox \
+            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/firefox-turn \
+            scripts/webrtc_interop.sh turn
+          WEBRTC_INTEROP_BROWSER=webkit \
+            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/webkit-stun \
+            scripts/webrtc_interop.sh stun
+          WEBRTC_INTEROP_BROWSER=webkit \
+            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/webkit-turn \
+            scripts/webrtc_interop.sh turn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webrtc-interop-cross-engine-network-paths
+          path: reports/webrtc-interop/

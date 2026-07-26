@@ -5,7 +5,10 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "test:webrtc:interop": "scripts/webrtc_interop_services.sh up && scripts/webrtc_interop.sh direct",
+    "test:webrtc:turn": "scripts/webrtc_interop_services.sh up && scripts/webrtc_interop.sh turn",
+    "test:webrtc:browsers": "scripts/webrtc_interop_browser_matrix.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
