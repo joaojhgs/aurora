@@ -2,11 +2,14 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "aurora-main",
   "description": "Main Aurora shell capability. Grants only the TAURI-004 SDK bridge, native manifest, sidecar health, log-tail status, explicit denied native helper commands, shutdown, and minimal window/app/event primitives.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:app:default",
     "core:event:default",
     "core:window:default",
+    "deep-link:default",
     "aurora-command",
     "aurora-request",
     "aurora-subscribe",
@@ -18,6 +21,7 @@
     "aurora-sidecar-stop",
     "aurora-log-tail",
     "aurora-secure-storage",
+    "aurora-thin-peer-credentials",
     "aurora-native-permissions",
     "aurora-tray",
     "aurora-notifications",

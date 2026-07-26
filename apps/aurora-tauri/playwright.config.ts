@@ -16,11 +16,12 @@ export default defineConfig({
   webServer: {
     command: 'pnpm dev -- --host 127.0.0.1',
     url: 'http://127.0.0.1:1420',
-    reuseExistingServer: !process.env.CI,
+    // Always start the route-crawl dev server from the current source tree;
+    // reusing a local Vite server made repeated CI-gate runs order-dependent.
+    reuseExistingServer: false,
     env: {
       ...process.env,
       VITE_AURORA_GATEWAY_URL: '',
-      VITE_AURORA_GATEWAY_TOKEN: '',
     },
     timeout: 120_000,
   },

@@ -14,8 +14,11 @@ on:
 
 jobs:
   android-tauri:
-    name: Android APK build and emulator smoke
+    name: Android thin APK/AAB build and emulator smoke
     runs-on: ubuntu-latest
+    env:
+      AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: "wss://signaling.example.invalid"
+      AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +43,7 @@ jobs:
           sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
+            "platforms;android-36" \
             "build-tools;35.0.0" \
             "ndk;27.0.12077973" \
             "emulator" \
@@ -48,7 +52,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -67,11 +71,10 @@ jobs:
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
 
-      - name: Build Tauri frontend bundle
-        run: pnpm --filter @aurora/tauri-ui build
-
-      - name: Test Tauri runtime wrapper
-        run: pnpm --filter @aurora/tauri-ui test
+      - name: Test Tauri runtime wrapper and Android thin proof
+        run: |
+          pnpm --filter @aurora/tauri-ui test
+          pnpm --filter @aurora/tauri-ui test:android-thin-bundle
 
       - name: Initialize Tauri Android project
         run: pnpm --filter @aurora/tauri-ui android:init
@@ -86,14 +89,44 @@ jobs:
           path: apps/aurora-tauri/reports/android-preflight.json
           if-no-files-found: error
 
-      - name: Build Android APK
-        run: pnpm --filter @aurora/tauri-ui android:build:apk:x86_64:debug
+      - name: Build Android thin debug APK
+        run: pnpm --filter @aurora/tauri-ui android:build:thin:apk
 
-      - name: Upload Android APK
+      - name: Verify Android thin debug APK contents
+        run: pnpm --filter @aurora/tauri-ui android:verify:thin:apk
+
+      - name: Upload Android thin APK proof
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-tauri-android-apk
+          name: aurora-android-thin-apk-proof
+          path: apps/aurora-tauri/reports/android-thin-apk-artifact-proof.json
+          if-no-files-found: error
+
+      - name: Upload Android thin debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-thin-debug-apk
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+
+      - name: Build Android thin debug AAB
+        run: pnpm --filter @aurora/tauri-ui android:build:thin:aab
+
+      - name: Verify Android thin debug AAB contents
+        run: pnpm --filter @aurora/tauri-ui android:verify:thin:aab
+
+      - name: Upload Android thin AAB proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-thin-aab-proof
+          path: apps/aurora-tauri/reports/android-thin-aab-artifact-proof.json
+          if-no-files-found: error
+
+      - name: Upload Android thin debug AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-thin-debug-aab
+          path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
           if-no-files-found: error
 
       - name: Emulator install and native payload smoke

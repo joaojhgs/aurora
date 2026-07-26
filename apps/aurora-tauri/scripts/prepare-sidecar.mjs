@@ -8,7 +8,8 @@ const srcTauriRoot = join(packageRoot, 'src-tauri')
 const binaryStem = 'aurora-sidecar'
 const source = process.env.AURORA_TAURI_SIDECAR_SOURCE
 const cliProfile = readCliValue('--profile')
-const sidecarProfile = cliProfile ?? process.env.AURORA_TAURI_SIDECAR_PROFILE ?? 'thin'
+const sidecarProfile = cliProfile ?? process.env.AURORA_TAURI_SIDECAR_PROFILE ?? 'desktop-local-minimal'
+const buildProfile = sidecarProfile === 'desktop-local-minimal' ? 'thin' : sidecarProfile
 const targetTriple = process.env.AURORA_TAURI_TARGET_TRIPLE ?? detectHostTriple()
 const extension = process.platform === 'win32' ? '.exe' : ''
 const outputDir = join(srcTauriRoot, 'binaries')
@@ -17,7 +18,7 @@ const releaseConfigPath = join(srcTauriRoot, 'tauri.release.conf.json')
 const reportDir = join(packageRoot, 'reports')
 const reportPath = join(reportDir, 'sidecar-prepare.json')
 const sidecarProfiles = new Set([
-  'thin',
+  'desktop-local-minimal',
   'local-cpu',
   'local-cuda',
   'local-rocm',
@@ -28,7 +29,7 @@ const sidecarProfiles = new Set([
   'full'
 ])
 const profileSizeLimitsMb = {
-  thin: 350,
+  'desktop-local-minimal': 350,
   'local-cpu': 1800,
   'local-cuda': 6500,
   'local-rocm': 6500,
@@ -100,9 +101,9 @@ function findBuiltSidecar() {
   const allowLegacyOutput = process.env.AURORA_TAURI_SIDECAR_ALLOW_LEGACY_OUTPUT === '1'
   const candidates = [
     explicitOutput ? resolve(explicitOutput) : null,
-    join(repoRoot, 'dist', 'sidecars', sidecarProfile, `${binaryStem}${extension}`),
-    join(repoRoot, 'dist', 'sidecars', sidecarProfile, binaryStem, `${binaryStem}${extension}`),
-    join(repoRoot, 'dist', `${binaryStem}-${sidecarProfile}${extension}`),
+    join(repoRoot, 'dist', 'sidecars', buildProfile, `${binaryStem}${extension}`),
+    join(repoRoot, 'dist', 'sidecars', buildProfile, binaryStem, `${binaryStem}${extension}`),
+    join(repoRoot, 'dist', `${binaryStem}-${buildProfile}${extension}`),
     allowLegacyOutput ? join(repoRoot, 'dist', `${binaryStem}${extension}`) : null,
     allowLegacyOutput ? join(repoRoot, 'dist', binaryStem, `${binaryStem}${extension}`) : null,
     allowLegacyOutput ? join(repoRoot, 'dist', `Aurora${extension}`) : null,
@@ -138,7 +139,7 @@ function runSidecarBuild() {
     '--clean',
     '--sidecar',
     '--sidecar-profile',
-    sidecarProfile
+    buildProfile
   ]
   console.log(`Building Aurora sidecar automatically in an isolated uv environment: ${command.join(' ')}`)
   let result = spawnSync(command[0], command.slice(1), { cwd: repoRoot, stdio: 'inherit', env: process.env })
@@ -151,7 +152,7 @@ function runSidecarBuild() {
       '--clean',
       '--sidecar',
       '--sidecar-profile',
-      sidecarProfile
+      buildProfile
     ]
     console.log(`uv was not found; falling back to: ${fallback.join(' ')}`)
     result = spawnSync(fallback[0], fallback.slice(1), { cwd: repoRoot, stdio: 'inherit', env: process.env })

@@ -37,7 +37,7 @@
   },
   "app": {
     "security": {
-      "capabilities": ["aurora-ios-baseline"]
+      "capabilities": ["aurora-ios-baseline", "aurora-mobile-mesh"]
     }
   }
 }

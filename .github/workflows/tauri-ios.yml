@@ -71,6 +71,15 @@ jobs:
           CODE_SIGNING_REQUIRED: "NO"
         run: pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim --config src-tauri/tauri.ios.conf.json
 
+      - name: Build Python-free Tauri iOS thin simulator app
+        env:
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+          AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS: "wss://signaling.example.invalid"
+          AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"
+        run: pnpm --filter @aurora/tauri-ui ios:build:thin:simulator
+
       - name: Smoke invoke Aurora App Intent handoff
         run: |
           xcrun swiftc \
@@ -116,3 +125,9 @@ jobs:
         with:
           name: aurora-ios-entrypoint-payload-smoke
           path: /tmp/aurora-ios-entrypoint-payload-smoke.json
+
+      - name: Upload iOS thin build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-thin-build-provenance
+          path: apps/aurora-tauri/reports/ios-thin-simulator-build-provenance.json

@@ -30,7 +30,10 @@ const child = spawn(command, args, {
     ...process.env,
     AURORA_TAURI_DEV_AUTOSIDECAR: process.env.AURORA_TAURI_DEV_AUTOSIDECAR ?? '1'
   },
-  stdio: ['ignore', 'pipe', 'pipe']
+  stdio: ['ignore', 'pipe', 'pipe'],
+  // Own the complete Tauri/Vite/Rust/Python descendant tree on POSIX so a
+  // smoke timeout cannot leave a headless sidecar behind.
+  detached: process.platform !== 'win32'
 })
 
 child.stdout.on('data', (chunk) => captureLog('stdout', chunk))
@@ -102,8 +105,26 @@ function finish(exitCode, reason) {
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
   console.log(`[tauri] dev smoke report: ${reportPath}`)
   process.exitCode = exitCode
-  if (!child.killed) child.kill('SIGINT')
-  setTimeout(() => process.exit(exitCode), 500)
+  terminateOwnedTree('SIGINT')
+  const forceTimer = setTimeout(() => {
+    terminateOwnedTree('SIGKILL')
+    process.exit(exitCode)
+  }, 5_000)
+  forceTimer.unref()
+  child.once('exit', () => {
+    clearTimeout(forceTimer)
+    process.exit(exitCode)
+  })
+}
+
+function terminateOwnedTree(signal) {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  try {
+    if (process.platform === 'win32') child.kill(signal)
+    else process.kill(-child.pid, signal)
+  } catch (error) {
+    if (error?.code !== 'ESRCH') console.error(`[tauri] failed to stop owned process group: ${error.message}`)
+  }
 }
 
 function splitArgs(value) {

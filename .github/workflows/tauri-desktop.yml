@@ -14,8 +14,20 @@ on:
 
 jobs:
   linux-tauri:
-    name: Linux Tauri check and smoke launch
+    name: Desktop Tauri bundle (${{ matrix.bundle_mode }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - bundle_mode: desktop-local
+            upload_suffix: local
+            needs_python: true
+            smoke_local: true
+          - bundle_mode: desktop-thin
+            upload_suffix: thin
+            needs_python: false
+            smoke_local: false
 
     steps:
       - uses: actions/checkout@v4
@@ -35,15 +47,20 @@ jobs:
             librsvg2-dev \
             webkit2gtk-driver \
             portaudio19-dev \
-            python3-dev \
             xvfb
 
+      - name: Install desktop-local Python prerequisites
+        if: matrix.needs_python
+        run: sudo apt-get install -y python3-dev
+
       - name: Set up Python
+        if: matrix.needs_python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install uv
+        if: matrix.needs_python
         uses: astral-sh/setup-uv@v5
 
       - name: Set up Rust
@@ -72,13 +89,34 @@ jobs:
       - name: Test Tauri frontend runtime wrapper
         run: pnpm --filter @aurora/tauri-ui test
 
-      - name: Prepare bundled desktop sidecar automatically
-        run: pnpm --filter @aurora/tauri-ui prepare:sidecar:thin
+      - name: Prepare Python-free desktop thin overlay
+        if: matrix.bundle_mode == 'desktop-thin'
+        env:
+          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: wss://signaling.example.invalid
+          AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only
+        run: |
+          pnpm --filter @aurora/tauri-ui prepare:bundle:desktop-thin
+          pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin -- --allow-missing-bundle
 
-      - name: Upload sidecar prepare report
+      - name: Upload desktop thin prepare proof
+        if: matrix.bundle_mode == 'desktop-thin'
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-sidecar-prepare-report-thin
+          name: tauri-desktop-thin-prepare-proof
+          path: |
+            apps/aurora-tauri/reports/desktop-thin-bundle-prepare.json
+            apps/aurora-tauri/reports/desktop-thin-bundle-proof.json
+          if-no-files-found: error
+
+      - name: Prepare bundled desktop sidecar automatically
+        if: matrix.bundle_mode == 'desktop-local'
+        run: pnpm --filter @aurora/tauri-ui prepare:sidecar:desktop-local-minimal
+
+      - name: Upload sidecar prepare report
+        if: matrix.bundle_mode == 'desktop-local'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-sidecar-prepare-report-desktop-local-minimal
           path: apps/aurora-tauri/reports/sidecar-prepare.json
           if-no-files-found: error
 
@@ -86,24 +124,44 @@ jobs:
         run: cargo check
         working-directory: apps/aurora-tauri/src-tauri
 
-      - name: Build lean Linux Tauri bundle
-        run: pnpm --filter @aurora/tauri-ui build:bundle:thin
+      - name: Build Linux Tauri bundle
+        env:
+          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: wss://signaling.example.invalid
+          AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only
+        run: pnpm --filter @aurora/tauri-ui build:bundle:${{ matrix.bundle_mode }}
+
+      - name: Verify Python-free desktop thin artifact contents
+        if: matrix.bundle_mode == 'desktop-thin'
+        env:
+          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: wss://signaling.example.invalid
+          AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only
+        run: pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
+
+      - name: Upload desktop thin artifact proof
+        if: matrix.bundle_mode == 'desktop-thin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-thin-artifact-proof
+          path: apps/aurora-tauri/reports/desktop-thin-bundle-proof.json
+          if-no-files-found: error
 
       - name: Smoke launch Tauri shell
+        if: matrix.smoke_local
         run: xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke
 
       - name: Upload Tauri dev smoke report
-        if: always()
+        if: always() && matrix.smoke_local
         uses: actions/upload-artifact@v4
         with:
           name: tauri-dev-smoke-report
           path: apps/aurora-tauri/reports/tauri-dev-smoke.json
 
       - name: Smoke Tauri EventStream bridge
+        if: matrix.smoke_local
         run: xvfb-run -a pnpm --filter @aurora/tauri-ui eventstream:smoke
 
       - name: Upload EventStream smoke report
-        if: always()
+        if: always() && matrix.smoke_local
         uses: actions/upload-artifact@v4
         with:
           name: tauri-eventstream-smoke-report
@@ -117,7 +175,7 @@ jobs:
       fail-fast: false
       matrix:
         profile:
-          - thin
+          - desktop-local-minimal
           - local-cpu
           - local-cuda
           - local-rocm

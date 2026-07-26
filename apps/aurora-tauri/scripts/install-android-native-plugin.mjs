@@ -67,5 +67,18 @@ function mergePluginManifest(content) {
     patched = patched.replace(/\s*<\/application>/, `${components}\n    </application>`)
   }
 
+  // aurora:// deep links (mesh invites). The Tauri deep-link plugin only generates intent
+  // filters for https app links, so the custom scheme is injected into MainActivity here.
+  if (!patched.includes('android:scheme="aurora"')) {
+    const deepLinkFilter = `
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aurora" />
+            </intent-filter>`
+    patched = patched.replace(/(<activity[^>]*MainActivity[^>]*>)/, `$1${deepLinkFilter}`)
+  }
+
   return patched
 }

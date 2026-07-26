@@ -1,4 +1,10 @@
 [[permission]]
 identifier = "aurora-android-native-plugin"
-description = "Allow the Android smoke harness and frontend SDK adapter to read the native Android Kotlin plugin capability payload."
-commands.allow = ["aurora_android_baseline_status", "aurora_android_native_plugin_payload"]
+description = "Allow Android thin/mobile runtime to read native Android status and policy wrappers. Wrappers call the native plugin without exposing raw Kotlin commands or secret getters."
+commands.allow = [
+  "aurora_android_baseline_status",
+  "aurora_android_native_plugin_payload",
+  "aurora_android_lifecycle_status",
+  "aurora_android_webview_microphone_permission_decision",
+  "aurora_android_voice_foreground_service_status"
+]

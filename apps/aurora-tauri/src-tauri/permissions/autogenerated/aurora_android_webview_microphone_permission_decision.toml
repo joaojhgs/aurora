@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-android-webview-microphone-permission-decision"
+description = "Enables the aurora_android_webview_microphone_permission_decision command without any pre-configured scope."
+commands.allow = ["aurora_android_webview_microphone_permission_decision"]
+
+[[permission]]
+identifier = "deny-aurora-android-webview-microphone-permission-decision"
+description = "Denies the aurora_android_webview_microphone_permission_decision command without any pre-configured scope."
+commands.deny = ["aurora_android_webview_microphone_permission_decision"]

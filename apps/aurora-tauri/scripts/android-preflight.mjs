@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative as pathRelative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
@@ -16,20 +16,37 @@ const reportPath = resolve(
 
 const packageJson = readJson(join(appDir, 'package.json'))
 const tauriConfig = readJson(join(appDir, 'src-tauri/tauri.conf.json'))
-const generatedAndroidProject = firstExistingPath([
-  join(appDir, 'src-tauri/gen/android'),
-  join(appDir, 'gen/android')
-])
+const generatedAndroidProject = process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR
+  ? resolve(process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR)
+  : firstExistingPath([
+      join(appDir, 'src-tauri/gen/android'),
+      join(appDir, 'gen/android')
+    ])
+const canonicalPluginSourceDir = join(appDir, 'src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin')
+const generatedPluginSourceDir = generatedAndroidProject
+  ? join(generatedAndroidProject, 'app/src/main/java/dev/aurora/tauri/nativeplugin')
+  : null
+const pluginParity = androidNativePluginParity()
 const signingEvidence = signingInputs()
 const expectedCommands = {
-  aab: 'pnpm --filter @aurora/tauri-ui tauri android build --aab',
-  apk: 'pnpm --filter @aurora/tauri-ui tauri android build --apk --split-per-abi'
+  prepareThin: 'pnpm --filter @aurora/tauri-ui android:prepare:thin',
+  apk: 'pnpm --filter @aurora/tauri-ui android:build:thin:apk',
+  verifyApk: 'pnpm --filter @aurora/tauri-ui android:verify:thin:apk',
+  aab: 'pnpm --filter @aurora/tauri-ui android:build:thin:aab',
+  verifyAab: 'pnpm --filter @aurora/tauri-ui android:verify:thin:aab'
 }
 
 const checks = [
   check('tauri-cli-script', Boolean(packageJson.scripts?.tauri), 'package exposes the Tauri CLI script'),
-  check('android-aab-command-documented', true, expectedCommands.aab),
-  check('android-apk-command-documented', true, expectedCommands.apk),
+  check('android-thin-prepare-command', packageJson.scripts?.['android:prepare:thin'] === 'node ./scripts/prepare-android-thin-bundle.mjs', packageJson.scripts?.['android:prepare:thin'] ?? 'missing'),
+  check('android-thin-apk-command', isAndroidThinBuildWrapper(packageJson.scripts?.['android:build:thin:apk'], 'apk'), packageJson.scripts?.['android:build:thin:apk'] ?? 'missing'),
+  check('android-thin-aab-command', isAndroidThinBuildWrapper(packageJson.scripts?.['android:build:thin:aab'], 'aab'), packageJson.scripts?.['android:build:thin:aab'] ?? 'missing'),
+  check('android-thin-apk-proof-command', packageJson.scripts?.['android:verify:thin:apk']?.includes('assert-android-thin-artifact-clean.mjs --kind apk'), packageJson.scripts?.['android:verify:thin:apk'] ?? 'missing'),
+  check('android-thin-aab-proof-command', packageJson.scripts?.['android:verify:thin:aab']?.includes('assert-android-thin-artifact-clean.mjs --kind aab'), packageJson.scripts?.['android:verify:thin:aab'] ?? 'missing'),
+  check('android-thin-scripts-python-free', thinScriptsPythonFree(packageJson.scripts ?? {}), 'all *:thin scripts avoid uv/python/prepare-sidecar'),
+  check('android-sync-native-plugin-script', packageJson.scripts?.['android:sync-native-plugin'] === 'node ./scripts/install-android-native-plugin.mjs', packageJson.scripts?.['android:sync-native-plugin'] ?? 'missing'),
+  check('android-init-syncs-native-plugin', packageJson.scripts?.['android:init']?.includes('android:sync-native-plugin'), packageJson.scripts?.['android:init'] ?? 'missing'),
+  check('android-preflight-syncs-native-plugin', ['android:preflight', 'android:preflight:ci', 'android:preflight:strict'].every((name) => packageJson.scripts?.[name]?.includes('android:sync-native-plugin')), 'android preflight package scripts run android:sync-native-plugin before node ./scripts/android-preflight.mjs'),
   check(
     'generated-android-project',
     Boolean(generatedAndroidProject),
@@ -38,8 +55,20 @@ const checks = [
       : 'run pnpm --filter @aurora/tauri-ui tauri android init before strict release builds',
     requireAndroidProject
   ),
+  check(
+    'android-native-plugin-parity',
+    pluginParity.matched,
+    pluginParity.detail,
+    Boolean(generatedAndroidProject)
+  ),
   check('bundle-identifier', Boolean(tauriConfig.identifier), tauriConfig.identifier ?? 'missing identifier', true),
   check('bundle-version', Boolean(tauriConfig.version), tauriConfig.version ?? 'missing version', true),
+  check(
+    'android-thin-capability-observable',
+    androidThinCapabilityObservable(),
+    androidThinCapabilityDetail(),
+    false
+  ),
   check(
     'android-signing-inputs',
     signingEvidence.configured,
@@ -126,6 +155,7 @@ const report = {
   tauriVersion: tauriConfig.version,
   strict,
   generatedAndroidProject: generatedAndroidProject ? relative(generatedAndroidProject) : null,
+  nativePluginParity: pluginParity.report,
   commands: expectedCommands,
   checks,
   signing: {
@@ -172,6 +202,86 @@ function check(id, passed, detail, required = false) {
     required,
     detail
   }
+}
+
+function thinScriptsPythonFree(scripts) {
+  return Object.entries(scripts).every(([name, value]) => !name.includes(':thin') || isPythonFreeThinScript(value))
+}
+
+function isPythonFreeThinScript(value) {
+  return typeof value === 'string' && !/prepare-sidecar|\bpython\b|\buv\b/i.test(value)
+}
+
+function isAndroidThinBuildWrapper(value, kind) {
+  return isPythonFreeThinScript(value)
+    && value === `node ./scripts/build-android-thin-bundle.mjs --kind ${kind}`
+}
+
+function androidThinCapabilityObservable() {
+  return existsSync(join(appDir, 'src-tauri/capabilities/aurora-android-thin.json'))
+}
+
+function androidThinCapabilityDetail() {
+  return androidThinCapabilityObservable()
+    ? 'capabilities/aurora-android-thin.json present'
+    : 'capabilities/aurora-android-thin.json not present in this lane; Android-thin packaging overlay expects it from the security capability lane before actual Tauri build'
+}
+
+function androidNativePluginParity() {
+  if (!generatedPluginSourceDir || !existsSync(generatedPluginSourceDir)) {
+    return {
+      matched: false,
+      detail: generatedAndroidProject
+        ? `generated Android native plugin source is missing at ${relative(generatedPluginSourceDir ?? '')}; run pnpm --filter @aurora/tauri-ui android:sync-native-plugin`
+        : 'generated Android project is missing; plugin parity is checked after android:init',
+      report: { checked: false, reason: generatedAndroidProject ? 'generated-plugin-source-missing' : 'generated-android-project-missing' }
+    }
+  }
+
+  const canonicalFiles = sourceFiles(canonicalPluginSourceDir)
+  const generatedFiles = sourceFiles(generatedPluginSourceDir)
+  const canonicalRel = new Set(canonicalFiles.map((file) => pathRelative(canonicalPluginSourceDir, file)))
+  const generatedRel = new Set(generatedFiles.map((file) => pathRelative(generatedPluginSourceDir, file)))
+  const missing = [...canonicalRel].filter((file) => !generatedRel.has(file)).sort()
+  const extra = [...generatedRel].filter((file) => !canonicalRel.has(file)).sort()
+  const mismatched = [...canonicalRel]
+    .filter((file) => generatedRel.has(file))
+    .filter((file) => readFileSync(join(canonicalPluginSourceDir, file), 'utf8') !== readFileSync(join(generatedPluginSourceDir, file), 'utf8'))
+    .sort()
+  const matched = missing.length === 0 && extra.length === 0 && mismatched.length === 0
+  return {
+    matched,
+    detail: matched
+      ? `generated Android native plugin source matches canonical source (${canonicalFiles.length} files)`
+      : `generated Android native plugin source is stale: missing=${missing.join(',') || 'none'}; extra=${extra.join(',') || 'none'}; mismatched=${mismatched.join(',') || 'none'}`,
+    report: {
+      checked: true,
+      canonicalSource: relative(canonicalPluginSourceDir),
+      generatedSource: relative(generatedPluginSourceDir),
+      canonicalFileCount: canonicalFiles.length,
+      generatedFileCount: generatedFiles.length,
+      missing,
+      extra,
+      mismatched,
+      matched
+    }
+  }
+}
+
+function sourceFiles(root) {
+  if (!existsSync(root)) return []
+  const files = []
+  const stack = [root]
+  while (stack.length) {
+    const current = stack.pop()
+    const stat = statSync(current)
+    if (stat.isDirectory()) {
+      for (const child of readdirSync(current)) stack.push(join(current, child))
+    } else if (stat.isFile()) {
+      files.push(current)
+    }
+  }
+  return files.sort()
 }
 
 function signingInputs() {

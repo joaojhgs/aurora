@@ -199,6 +199,8 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.entrypointPayload": true,
         "aurora.iosLocalLightInference": false,
         "aurora.iosKeychain": true,
+        "aurora.iosThinPeerProof": true,
+        "aurora.iosThinProfile": true,
         "aurora.iosBiometricUnlock": true,
         "aurora.iosVoiceStatus": true,
         "aurora.iosBackgroundStatus": true,
@@ -220,6 +222,8 @@ public final class AuroraNativePlugin: Plugin {
         "ios.localLightInference.modelRuntime": false,
         "ios.localLightInference.fallback": true,
         "ios.keychain.secureCredentialStorage": true,
+        "ios.thinPeerProof": true,
+        "ios.thinProfile": true,
         "ios.biometric.adminUnlock": true,
         "ios.voiceForegroundCapture": false,
         "ios.notifications": false,
@@ -239,6 +243,8 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.entrypointPayload": "available",
         "aurora.iosLocalLightInference": "degraded",
         "aurora.iosKeychain": "available",
+        "aurora.iosThinPeerProof": "available",
+        "aurora.iosThinProfile": "available",
         "aurora.iosBiometricUnlock": "available",
         "aurora.iosMicrophoneCapture": "needs_native_permission",
         "aurora.iosBackgroundAudio": "unsupported_platform",
@@ -256,6 +262,8 @@ public final class AuroraNativePlugin: Plugin {
         "ios.localLightInference.modelRuntime": "needs_native_permission",
         "ios.localLightInference.fallback": "fallback",
         "ios.keychain.secureCredentialStorage": "available",
+        "ios.thinPeerProof": "available",
+        "ios.thinProfile": "available",
         "ios.biometric.adminUnlock": "available",
         "ios.voiceForegroundCapture": "needs_native_permission",
         "ios.notifications": "needs_native_permission",
@@ -420,6 +428,85 @@ public final class AuroraNativePlugin: Plugin {
         ]
       ]
     ])
+  }
+
+  @objc public func thinPeerCredentialSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinPeerCredentialSetArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.setCredential(args))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_peer_credential_set_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func thinPeerCredentialStatus(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinPeerCredentialLookupArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.credentialStatus(peerId: args.peerId))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_peer_credential_status_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func thinPeerCredentialDelete(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinPeerCredentialLookupArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.deleteCredential(peerId: args.peerId))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_peer_credential_delete_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func thinPeerReconnectProve(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinPeerReconnectProveArgs.self)
+      invoke.resolve(
+        try AuroraThinPeerStorage.reconnectProof(
+          peerId: args.peerId,
+          challenge: args.challenge
+        )
+      )
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_peer_reconnect_prove_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func thinProfileGet(_ invoke: Invoke) {
+    invoke.resolve(AuroraThinPeerStorage.thinProfileGet())
+  }
+
+  @objc public func thinProfileSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinProfileSetArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.thinProfileSet(value: args.value))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_profile_set_failed"
+        )
+      )
+    }
   }
 
   @objc public func iosBiometricStatus(_ invoke: Invoke) throws {

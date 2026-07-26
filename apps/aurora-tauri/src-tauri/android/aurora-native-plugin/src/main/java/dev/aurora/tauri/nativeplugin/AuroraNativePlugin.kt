@@ -7,14 +7,31 @@ import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.Message
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.webkit.ConsoleMessage
+import android.webkit.GeolocationPermissions
+import android.webkit.JsPromptResult
+import android.webkit.JsResult
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebStorage
+import android.webkit.WebView
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.service.voice.VoiceInteractionService
 import android.util.Base64
+import android.util.Log
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
+import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
@@ -22,24 +39,89 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import org.json.JSONObject
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
+import javax.crypto.Mac
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 private const val ASSISTANT_ROLE_REQUEST_CODE = 4202
 private const val ANDROID_PERMISSION_REQUEST_CODE = 4204
 private const val ADMIN_UNLOCK_REQUEST_CODE = 4206
 private const val SECURE_STORAGE_PREFS = "aurora_secure_storage"
+private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
+private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
 private const val SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
+private const val PEER_PROOF_PREFIX = "aurora.mesh.peer-proof."
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
 private const val AES_GCM_TRANSFORMATION = "AES/GCM/NoPadding"
 private const val AES_GCM_TAG_BITS = 128
+private const val LOG_TAG = "AuroraNativePlugin"
 
 @TauriPlugin
 class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private var lastAssistantRoleDenied: Boolean = false
     private var lastAdminUnlockDenied: Boolean = false
+    private var foreground: Boolean = true
+    private var focused: Boolean = true
+    private var configuredMicOrigins: Array<String> = emptyArray()
+    private var webChromeClientDelegateCaptured: Boolean = false
+    private var micDenyFailureCount: Long = 0
+    private var lastMicDenyFailureReason: String? = null
+    private val pendingMicRequests = mutableSetOf<PermissionRequest>()
+
+    override fun onResume() {
+        foreground = true
+        focused = true
+        emitLifecycle("resume")
+    }
+
+    override fun onPause() {
+        focused = false
+        denyPendingMicRequests()
+        emitLifecycle("pause")
+    }
+
+    override fun onStop() {
+        foreground = false
+        focused = false
+        denyPendingMicRequests()
+        emitLifecycle("stop")
+    }
+
+    override fun onDestroy(activity: AppCompatActivity) {
+        foreground = false
+        focused = false
+        denyPendingMicRequests()
+        emitLifecycle("destroy")
+    }
+
+    override fun onRestart(activity: AppCompatActivity) {
+        foreground = true
+        emitLifecycle("restart")
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        emitLifecycle("configurationChanged")
+    }
+
+    override fun load(webView: WebView) {
+        configuredMicOrigins = try {
+            getConfig(AuroraNativePluginConfig::class.java).microphoneOrigins
+        } catch (_: Exception) {
+            emptyArray()
+        }
+        val existing = existingWebChromeClient(webView)
+        if (existing !is AuroraMicWebChromeClient) {
+            webChromeClientDelegateCaptured = existing != null
+            webView.webChromeClient = AuroraMicWebChromeClient(this, existing)
+        } else {
+            webChromeClientDelegateCaptured = true
+        }
+        emitLifecycle("load")
+    }
 
     @Command
     fun nativeCapabilityManifest(invoke: Invoke) {
@@ -71,6 +153,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.notificationsRequest", !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         permissions.put("aurora.android.biometric", biometricReady)
         permissions.put("aurora.android.secureStorage", secureStorageReady)
+        permissions.put("aurora.android.thinPeerProof", secureStorageReady)
+        permissions.put("aurora.android.thinProfile", true)
+        permissions.put("aurora.android.webviewMicMediation", true)
+        permissions.put("aurora.android.lifecycleEvents", true)
         permissions.put("aurora.android.adminUnlock", adminUnlock.getBoolean("requestable"))
         permissions.put("aurora.android.localNetwork", localNetworkReady)
         permissions.put("aurora.android.foregroundServiceMicrophone", foregroundServiceReady)
@@ -101,6 +187,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.notificationPermissionRequest", !notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         capabilities.put("android.biometric", biometricReady)
         capabilities.put("android.secureCredentialStorage", secureStorageReady)
+        capabilities.put("android.thinPeerProof", secureStorageReady)
+        capabilities.put("android.thinProfile", true)
+        capabilities.put("android.webviewMicMediation", true)
+        capabilities.put("android.lifecycleEvents", true)
         capabilities.put("android.adminUnlock", adminUnlock.getBoolean("available"))
         capabilities.put("android.localNetwork", localNetworkReady)
         capabilities.put("android.foregroundService", foregroundServiceReady)
@@ -130,6 +220,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.notificationsRequest", permissionRequestState(notificationsGranted, Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU))
         permissionStates.put("aurora.android.biometric", if (biometricReady) "available" else "unsupported_platform")
         permissionStates.put("aurora.android.secureStorage", if (secureStorageReady) "available" else "unsupported_platform")
+        permissionStates.put("aurora.android.thinPeerProof", if (secureStorageReady) "available" else "unsupported_platform")
+        permissionStates.put("aurora.android.thinProfile", "available")
+        permissionStates.put("aurora.android.webviewMicMediation", "available")
+        permissionStates.put("aurora.android.lifecycleEvents", if (foreground && focused) "available" else "degraded")
         permissionStates.put("aurora.android.adminUnlock", adminUnlock.getString("state"))
         permissionStates.put("aurora.android.localNetwork", if (localNetworkReady) "available" else "degraded")
         permissionStates.put("aurora.android.foregroundServiceMicrophone", permissionState(foregroundServiceReady))
@@ -160,6 +254,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.notificationPermissionRequest", permissionRequestState(notificationsGranted, Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU))
         capabilityStates.put("android.biometric", if (biometricReady) "available" else "unsupported_platform")
         capabilityStates.put("android.secureCredentialStorage", if (secureStorageReady) "available" else "unsupported_platform")
+        capabilityStates.put("android.thinPeerProof", if (secureStorageReady) "available" else "unsupported_platform")
+        capabilityStates.put("android.thinProfile", "available")
+        capabilityStates.put("android.webviewMicMediation", "available")
+        capabilityStates.put("android.lifecycleEvents", if (foreground && focused) "available" else "degraded")
         capabilityStates.put("android.adminUnlock", adminUnlock.getString("state"))
         capabilityStates.put("android.localNetwork", if (localNetworkReady) "available" else "degraded")
         capabilityStates.put("android.foregroundService", permissionState(foregroundServiceReady))
@@ -193,6 +291,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("voiceForegroundService", voiceForeground)
         ret.put("adminUnlock", adminUnlock)
         ret.put("secureStorage", secureStorageStatusObject())
+        ret.put("thinPeerCredentialStorage", thinPeerCredentialStorageStatusObject())
+        ret.put("thinProfileStorage", thinProfileStatusObject())
+        ret.put("webviewMicrophonePolicy", webviewMicrophonePolicyStatusObject())
+        ret.put("lifecycle", lifecycleStatusObject())
         ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
         ret.put("lastEntrypointPayload", lastEntrypointPayloadObject())
         ret.put("evidenceSource", "android-rolemanager-package-manager")
@@ -388,6 +490,123 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         } catch (error: Exception) {
             invoke.reject(error.message ?: "secure_storage_delete_failed")
         }
+    }
+
+
+    @Command
+    fun thinPeerCredentialSet(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinPeerCredentialSetArgs::class.java)
+        try {
+            validateThinPeerSetArgs(args)
+            if (args.expiresAtMs > 0 && args.expiresAtMs <= currentUnixMs()) {
+                securePrefs().edit().remove(thinPeerCredentialKey(args.peerId)).apply()
+                throw IllegalArgumentException("credential_expired")
+            }
+            val record = JSONObject()
+            record.put("tokenId", args.tokenId)
+            record.put("claimantPeerId", args.claimantPeerId)
+            record.put("verifierPeerId", args.verifierPeerId)
+            record.put("claimantSignalingPeerId", args.claimantSignalingPeerId)
+            record.put("verifierSignalingPeerId", args.verifierSignalingPeerId)
+            record.put("roomName", args.roomName)
+            record.put("rawBearerToken", args.rawBearerToken)
+            record.put("createdAtMs", if (args.createdAtMs > 0) args.createdAtMs else currentUnixMs())
+            if (args.expiresAtMs > 0) record.put("expiresAtMs", args.expiresAtMs)
+            securePrefs().edit().putString(thinPeerCredentialKey(args.peerId), encryptSecureValue(record.toString())).apply()
+            invoke.resolve(thinPeerStatusResponse(args.peerId, record, true))
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_peer_credential_set_failed")
+        }
+    }
+
+    @Command
+    fun thinPeerCredentialStatus(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinPeerCredentialLookupArgs::class.java)
+        try {
+            validateNonEmpty("peerId", args.peerId, 256)
+            val record = loadUnexpiredThinPeerCredential(args.peerId)
+            invoke.resolve(thinPeerStatusResponse(args.peerId, record, record?.optString("rawBearerToken").orEmpty().isNotEmpty()))
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_peer_credential_status_failed")
+        }
+    }
+
+    @Command
+    fun thinPeerCredentialDelete(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinPeerCredentialLookupArgs::class.java)
+        try {
+            validateNonEmpty("peerId", args.peerId, 256)
+            securePrefs().edit().remove(thinPeerCredentialKey(args.peerId)).apply()
+            invoke.resolve(thinPeerStatusResponse(args.peerId, null, false))
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_peer_credential_delete_failed")
+        }
+    }
+
+    @Command
+    fun thinPeerReconnectProve(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinPeerReconnectProveArgs::class.java)
+        try {
+            validateNonEmpty("peerId", args.peerId, 256)
+            val challenge = args.challenge
+            validateReconnectChallenge(challenge)
+            val record = loadUnexpiredThinPeerCredential(args.peerId)
+            if (record == null) {
+                invoke.resolve(thinPeerProofResponse(args.peerId, null, false, null))
+                return
+            }
+            if (!reconnectChallengeMatches(record, challenge)) {
+                invoke.resolve(thinPeerProofResponse(args.peerId, record, false, null))
+                return
+            }
+            val proof = JSONObject()
+            proof.put("type", "mesh_auth_proof_v1")
+            proof.put("token_id", record.getString("tokenId"))
+            proof.put("challenge", challenge.challenge)
+            proof.put("proof", computeReconnectProofHex(record.getString("rawBearerToken"), record, challenge))
+            proof.put("channel_binding", challenge.channelBindingValue())
+            proof.put("claimant_peer_id", record.getString("claimantPeerId"))
+            proof.put("verifier_peer_id", record.getString("verifierPeerId"))
+            proof.put("claimant_signaling_peer_id", challenge.claimantSignalingPeerIdValue())
+            proof.put("verifier_signaling_peer_id", challenge.verifierSignalingPeerIdValue())
+            proof.put("room_name", record.getString("roomName"))
+            invoke.resolve(thinPeerProofResponse(args.peerId, record, true, proof))
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_peer_reconnect_prove_failed")
+        }
+    }
+
+    @Command
+    fun thinProfileGet(invoke: Invoke) {
+        val ret = thinProfileStatusObject()
+        ret.put("key", THIN_PROFILE_KEY)
+        ret.put("value", activity.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE).getString(THIN_PROFILE_KEY, null))
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun thinProfileSet(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinProfileSetArgs::class.java)
+        if (args.value.length > 65536) {
+            invoke.reject("thin profile value length must be <= 65536 bytes")
+            return
+        }
+        activity.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE).edit().putString(THIN_PROFILE_KEY, args.value).apply()
+        val ret = thinProfileStatusObject()
+        ret.put("key", THIN_PROFILE_KEY)
+        ret.put("ok", true)
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun webviewMicrophonePermissionDecision(invoke: Invoke) {
+        val args = invoke.parseArgs(WebviewMicrophonePermissionArgs::class.java)
+        invoke.resolve(evaluateWebviewMicrophonePermission(args))
+    }
+
+    @Command
+    fun androidLifecycleStatus(invoke: Invoke) {
+        invoke.resolve(lifecycleStatusObject())
     }
 
     @Command
@@ -857,6 +1076,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     private fun validateSecureStorageKey(key: String) {
+        if (key.startsWith(PEER_PROOF_PREFIX)) {
+            throw IllegalArgumentException("peer reconnect credential namespace is opaque-only")
+        }
         if (key.isEmpty() || key.length > 128) {
             throw IllegalArgumentException("secure storage key length must be 1..128 characters")
         }
@@ -875,6 +1097,315 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+
+    private fun thinPeerCredentialStorageStatusObject(): JSObject {
+        val ret = secureStorageStatusObject()
+        ret.put("backend", "android-keystore")
+        ret.put("privacyClass", "opaque-peer-reconnect-proof")
+        ret.put("rawGetter", false)
+        ret.put("allowedGenericSecureStorage", false)
+        ret.put("evidenceSource", "android-keystore-peer-proof-namespace")
+        return ret
+    }
+
+    private fun thinProfileStatusObject(): JSObject {
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("backend", "android-private-shared-preferences")
+        ret.put("persisted", true)
+        ret.put("privacyClass", "nonsecret-connection-profile")
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    private fun webviewMicrophonePolicyStatusObject(): JSObject {
+        val ret = JSObject()
+        ret.put("available", true)
+        ret.put("allowWildcard", false)
+        ret.put("allowHttp", false)
+        ret.put("requiresForeground", true)
+        ret.put("requiresFocused", true)
+        ret.put("requiresRecordAudio", true)
+        ret.put("resource", PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+        ret.put("configuredHttpsOrigins", JSArray().apply { configuredMicOrigins.forEach { put(it) } })
+        ret.put("installedWebChromeClient", true)
+        ret.put("delegateWebChromeClientCaptured", webChromeClientDelegateCaptured)
+        ret.put("micDenyFailureCount", micDenyFailureCount)
+        ret.put("lastMicDenyFailureReason", lastMicDenyFailureReason ?: JSONObject.NULL)
+        ret.put("evidenceSource", "android-webview-permission-policy")
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    private fun lifecycleStatusObject(phase: String? = null): JSObject {
+        val ret = JSObject()
+        ret.put("platform", "android")
+        if (phase != null) ret.put("phase", phase)
+        ret.put("eventName", "aurora://android-lifecycle")
+        ret.put("foreground", foreground)
+        ret.put("focused", focused)
+        ret.put("mustReleaseMicrophone", !foreground || !focused)
+        ret.put("backgroundWakeword", false)
+        ret.put("reason", if (foreground && focused) "foreground_focused" else "release_mic_until_explicit_resume")
+        ret.put("micDenyFailureCount", micDenyFailureCount)
+        ret.put("lastMicDenyFailureReason", lastMicDenyFailureReason ?: JSONObject.NULL)
+        ret.put("evidenceSource", "android-activity-lifecycle-callbacks")
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    private fun emitLifecycle(phase: String) {
+        trigger("aurora://android-lifecycle", lifecycleStatusObject(phase))
+    }
+
+    private fun denyPendingMicRequests() {
+        val pending = synchronized(pendingMicRequests) {
+            val copy = pendingMicRequests.toList()
+            pendingMicRequests.clear()
+            copy
+        }
+        pending.forEach { request ->
+            try {
+                request.deny()
+            } catch (error: Exception) {
+                recordMicDenyFailure("pending_mic_deny_failed", error)
+            }
+        }
+    }
+
+    internal fun recordMicDenyFailure(reason: String, error: Exception) {
+        micDenyFailureCount += 1
+        lastMicDenyFailureReason = reason
+        Log.w(LOG_TAG, "redacted_mic_permission_deny_failure reason=$reason error=${error.javaClass.simpleName}")
+    }
+
+    private fun existingWebChromeClient(webView: WebView): WebChromeClient? =
+        try {
+            WebView::class.java.getMethod("getWebChromeClient").invoke(webView) as? WebChromeClient
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun thinPeerCredentialKey(peerId: String): String =
+        PEER_PROOF_PREFIX + sha256Hex(peerId.toByteArray(Charsets.UTF_8))
+
+    private fun loadUnexpiredThinPeerCredential(peerId: String): JSONObject? {
+        val key = thinPeerCredentialKey(peerId)
+        val stored = securePrefs().getString(key, null) ?: return null
+        val record = JSONObject(decryptSecureValue(stored))
+        val expiresAt = record.optLong("expiresAtMs", 0L)
+        if (expiresAt > 0 && expiresAt <= currentUnixMs()) {
+            securePrefs().edit().remove(key).apply()
+            return null
+        }
+        return record
+    }
+
+    private fun thinPeerStatusResponse(peerId: String, record: JSONObject?, hasToken: Boolean): JSObject {
+        val ret = thinPeerCredentialStorageStatusObject()
+        ret.put("peerId", peerId)
+        ret.put("found", record != null)
+        ret.put("hasBearerToken", hasToken)
+        ret.put("credential", record?.let { thinPeerMetadata(peerId, it) })
+        ret.put("redactedFields", redactedFields())
+        return ret
+    }
+
+    private fun thinPeerProofResponse(peerId: String, record: JSONObject?, matched: Boolean, proof: JSONObject?): JSObject {
+        val ret = thinPeerCredentialStorageStatusObject()
+        ret.put("peerId", peerId)
+        ret.put("found", record != null)
+        ret.put("matched", matched)
+        ret.put("proof", proof)
+        ret.put("credential", record?.let { thinPeerMetadata(peerId, it) })
+        ret.put("redactedFields", redactedFields())
+        return ret
+    }
+
+    private fun thinPeerMetadata(peerId: String, record: JSONObject): JSObject {
+        val metadata = JSObject()
+        metadata.put("peerId", peerId)
+        metadata.put("tokenId", record.getString("tokenId"))
+        metadata.put("claimantPeerId", record.getString("claimantPeerId"))
+        metadata.put("verifierPeerId", record.getString("verifierPeerId"))
+        metadata.put("claimantSignalingPeerId", record.getString("claimantSignalingPeerId"))
+        metadata.put("verifierSignalingPeerId", record.getString("verifierSignalingPeerId"))
+        metadata.put("roomName", record.getString("roomName"))
+        if (record.has("createdAtMs")) metadata.put("createdAtMs", record.getLong("createdAtMs"))
+        if (record.has("expiresAtMs")) metadata.put("expiresAtMs", record.getLong("expiresAtMs"))
+        return metadata
+    }
+
+    private fun redactedFields(): JSArray {
+        val fields = JSArray()
+        fields.put("rawBearerToken")
+        return fields
+    }
+
+    private fun validateThinPeerSetArgs(args: ThinPeerCredentialSetArgs) {
+        validateNonEmpty("peerId", args.peerId, 256)
+        validateNonEmpty("tokenId", args.tokenId, 128)
+        validateNonEmpty("claimantPeerId", args.claimantPeerId, 256)
+        validateNonEmpty("verifierPeerId", args.verifierPeerId, 256)
+        validateNonEmpty("claimantSignalingPeerId", args.claimantSignalingPeerId, 256)
+        validateNonEmpty("verifierSignalingPeerId", args.verifierSignalingPeerId, 256)
+        validateNonEmpty("roomName", args.roomName, 512)
+        validateNonEmpty("rawBearerToken", args.rawBearerToken, 4096)
+    }
+
+    private fun validateReconnectChallenge(challenge: MeshReconnectChallengeFrameArgs) {
+        if (challenge.type != "mesh_auth_challenge_v1") throw IllegalArgumentException("reconnect challenge type must be mesh_auth_challenge_v1")
+        validateHex64("challenge", challenge.challenge)
+        validateHex64("channelBinding", challenge.channelBindingValue())
+        validateNonEmpty("claimantPeerId", challenge.claimantPeerIdValue(), 256)
+        validateNonEmpty("verifierPeerId", challenge.verifierPeerIdValue(), 256)
+        validateNonEmpty("claimantSignalingPeerId", challenge.claimantSignalingPeerIdValue(), 256)
+        validateNonEmpty("verifierSignalingPeerId", challenge.verifierSignalingPeerIdValue(), 256)
+        validateNonEmpty("roomName", challenge.roomNameValue(), 512)
+    }
+
+    private fun validateHex64(field: String, value: String) {
+        if (value.length != 64 || !value.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+            throw IllegalArgumentException("$field must be 64 hex characters")
+        }
+    }
+
+    private fun validateNonEmpty(field: String, value: String, maxLen: Int) {
+        if (value.isEmpty() || value.length > maxLen) throw IllegalArgumentException("$field length must be 1..$maxLen bytes")
+    }
+
+    private fun reconnectChallengeMatches(record: JSONObject, challenge: MeshReconnectChallengeFrameArgs): Boolean =
+        challenge.claimantPeerIdValue() == record.getString("claimantPeerId") &&
+            challenge.verifierPeerIdValue() == record.getString("verifierPeerId") &&
+            challenge.roomNameValue() == record.getString("roomName")
+
+    private fun computeReconnectProofHex(rawBearerToken: String, record: JSONObject, challenge: MeshReconnectChallengeFrameArgs): String {
+        val key = sha256(rawBearerToken.toByteArray(Charsets.UTF_8))
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(key, "HmacSHA256"))
+        return hex(mac.doFinal(buildReconnectProofMessage(record, challenge)))
+    }
+
+    private fun buildReconnectProofMessage(record: JSONObject, challenge: MeshReconnectChallengeFrameArgs): ByteArray {
+        val transcript = "{" +
+            "\"challenge\":${canonicalJsonQuote(challenge.challenge)}," +
+            "\"channel_binding\":${canonicalJsonQuote(challenge.channelBindingValue())}," +
+            "\"claimant_peer_id\":${canonicalJsonQuote(challenge.claimantPeerIdValue())}," +
+            "\"room_name\":${canonicalJsonQuote(challenge.roomNameValue())}," +
+            "\"token_id\":${canonicalJsonQuote(record.getString("tokenId"))}," +
+            "\"verifier_peer_id\":${canonicalJsonQuote(challenge.verifierPeerIdValue())}," +
+            "\"version\":1}"
+        return "aurora.mesh.reconnect-proof.v1\u0000".toByteArray(Charsets.UTF_8) + transcript.toByteArray(Charsets.UTF_8)
+    }
+
+    private fun canonicalJsonQuote(value: String): String = buildString(value.length + 2) {
+        append('"')
+        value.forEach { character ->
+            when (character) {
+                '"' -> append("\\\"")
+                '\\' -> append("\\\\")
+                '\b' -> append("\\b")
+                '\t' -> append("\\t")
+                '\n' -> append("\\n")
+                '\u000c' -> append("\\f")
+                '\r' -> append("\\r")
+                in '\u0000'..'\u001f', in '\u007f'..'\uffff' -> {
+                    append("\\u")
+                    append(character.code.toString(16).padStart(4, '0'))
+                }
+                else -> append(character)
+            }
+        }
+        append('"')
+    }
+
+    private fun evaluateWebviewMicrophonePermission(args: WebviewMicrophonePermissionArgs): JSObject {
+        val resources = args.resources.filter { it.isNotBlank() }
+        val resourceAllowed = resources.isNotEmpty() && resources.all { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }
+        val originAllowed = isTrustedMicOrigin(args.origin, args.configuredHttpsOrigins.ifEmpty { configuredMicOrigins })
+        val runtimeGranted = hasRuntimePermission(Manifest.permission.RECORD_AUDIO)
+        val active = args.foreground && args.focused && foreground && focused
+        val granted = resourceAllowed && originAllowed && runtimeGranted && active
+        val ret = JSObject()
+        ret.put("grant", granted)
+        val grantResources = JSArray()
+        if (granted) grantResources.put(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+        ret.put("resources", grantResources)
+        ret.put("reason", when {
+            !resourceAllowed -> "audio_capture_resource_only"
+            !originAllowed -> "untrusted_origin"
+            !runtimeGranted -> "record_audio_permission_missing"
+            !active -> "webview_not_foreground_focused"
+            else -> "trusted_foreground_audio_capture"
+        })
+        ret.put("origin", args.origin)
+        ret.put("foreground", foreground)
+        ret.put("focused", focused)
+        ret.put("secretsRedacted", true)
+        return ret
+    }
+
+    internal fun isTrustedMicOrigin(origin: String, configuredHttpsOrigins: Array<String>): Boolean {
+        val normalized = normalizeOrigin(origin) ?: return false
+        if (normalized == "https://tauri.localhost") return true
+        return configuredHttpsOrigins.any { configured ->
+            configured.isNotBlank() && normalizeOrigin(configured) == normalized
+        }
+    }
+
+    private fun normalizeOrigin(origin: String): String? {
+        if (origin.contains("*")) return null
+        val uri = try { Uri.parse(origin) } catch (_: Exception) { return null }
+        val scheme = uri.scheme ?: return null
+        val host = uri.host ?: return null
+        if (scheme != "https") return null
+        if (!uri.userInfo.isNullOrBlank()) return null
+        if (!uri.encodedPath.isNullOrBlank() && uri.encodedPath != "/") return null
+        if (!uri.encodedQuery.isNullOrBlank()) return null
+        if (!uri.encodedFragment.isNullOrBlank()) return null
+        val port = if (uri.port >= 0) ":${uri.port}" else ""
+        return "$scheme://$host$port"
+    }
+
+
+    internal fun handleWebViewPermissionRequest(request: PermissionRequest) {
+        synchronized(pendingMicRequests) { pendingMicRequests.add(request) }
+        activity.runOnUiThread {
+            synchronized(pendingMicRequests) { pendingMicRequests.remove(request) }
+            try {
+                val args = WebviewMicrophonePermissionArgs().apply {
+                    origin = request.origin?.toString().orEmpty()
+                    resources = request.resources ?: emptyArray()
+                    configuredHttpsOrigins = configuredMicOrigins
+                    foreground = this@AuroraNativePlugin.foreground
+                    focused = this@AuroraNativePlugin.focused
+                }
+                val decision = evaluateWebviewMicrophonePermission(args)
+                if (decision.getBoolean("grant")) {
+                    request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                } else {
+                    request.deny()
+                }
+            } catch (error: Exception) {
+                try {
+                    request.deny()
+                } catch (denyError: Exception) {
+                    recordMicDenyFailure("mic_exception_deny_failed", denyError)
+                }
+                recordMicDenyFailure("mic_permission_exception_denied", error)
+            }
+        }
+    }
+
+    internal fun handleWebViewPermissionRequestCanceled(request: PermissionRequest) {
+        synchronized(pendingMicRequests) { pendingMicRequests.remove(request) }
+    }
+
+    private fun currentUnixMs(): Long = System.currentTimeMillis()
+    private fun sha256(input: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(input)
+    private fun sha256Hex(input: ByteArray): String = hex(sha256(input))
+    private fun hex(input: ByteArray): String = input.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
     private fun permissionState(granted: Boolean): String =
         if (granted) "available" else "needs_native_permission"
 
@@ -890,19 +1421,286 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 }
 
+
+
+@InvokeArg
+class AuroraNativePluginConfig {
+    var microphoneOrigins: Array<String> = emptyArray()
+}
+
+class AuroraMicWebChromeClient(
+    private val plugin: AuroraNativePlugin,
+    private val delegate: WebChromeClient?,
+) : WebChromeClient() {
+    override fun getDefaultVideoPoster(): Bitmap? =
+        if (delegate != null) delegate.getDefaultVideoPoster() else super.getDefaultVideoPoster()
+
+    override fun getVideoLoadingProgressView(): View? =
+        if (delegate != null) delegate.getVideoLoadingProgressView() else super.getVideoLoadingProgressView()
+
+    override fun getVisitedHistory(callback: ValueCallback<Array<String>>?) {
+        if (delegate != null) {
+            delegate.getVisitedHistory(callback)
+        } else {
+            super.getVisitedHistory(callback)
+        }
+    }
+
+    override fun onCloseWindow(window: WebView?) {
+        if (delegate != null) {
+            delegate.onCloseWindow(window)
+        } else {
+            super.onCloseWindow(window)
+        }
+    }
+
+    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean =
+        delegate?.onConsoleMessage(consoleMessage) ?: super.onConsoleMessage(consoleMessage)
+
+    @Deprecated("Deprecated in Java")
+    override fun onConsoleMessage(message: String?, lineNumber: Int, sourceID: String?) {
+        if (delegate != null) {
+            delegate.onConsoleMessage(message, lineNumber, sourceID)
+        } else {
+            super.onConsoleMessage(message, lineNumber, sourceID)
+        }
+    }
+
+    override fun onCreateWindow(
+        view: WebView?,
+        isDialog: Boolean,
+        isUserGesture: Boolean,
+        resultMsg: Message?,
+    ): Boolean = delegate?.onCreateWindow(view, isDialog, isUserGesture, resultMsg)
+        ?: super.onCreateWindow(view, isDialog, isUserGesture, resultMsg)
+
+    @Deprecated("Deprecated in Java")
+    override fun onExceededDatabaseQuota(
+        url: String?,
+        databaseIdentifier: String?,
+        quota: Long,
+        estimatedDatabaseSize: Long,
+        totalQuota: Long,
+        quotaUpdater: WebStorage.QuotaUpdater?,
+    ) {
+        if (delegate != null) {
+            delegate.onExceededDatabaseQuota(url, databaseIdentifier, quota, estimatedDatabaseSize, totalQuota, quotaUpdater)
+        } else {
+            super.onExceededDatabaseQuota(url, databaseIdentifier, quota, estimatedDatabaseSize, totalQuota, quotaUpdater)
+        }
+    }
+
+    override fun onGeolocationPermissionsHidePrompt() {
+        if (delegate != null) {
+            delegate.onGeolocationPermissionsHidePrompt()
+        } else {
+            super.onGeolocationPermissionsHidePrompt()
+        }
+    }
+
+    override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
+        if (delegate != null) {
+            delegate.onGeolocationPermissionsShowPrompt(origin, callback)
+        } else {
+            super.onGeolocationPermissionsShowPrompt(origin, callback)
+        }
+    }
+
+    override fun onHideCustomView() {
+        if (delegate != null) {
+            delegate.onHideCustomView()
+        } else {
+            super.onHideCustomView()
+        }
+    }
+
+    override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean =
+        delegate?.onJsAlert(view, url, message, result) ?: super.onJsAlert(view, url, message, result)
+
+    override fun onJsBeforeUnload(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean =
+        delegate?.onJsBeforeUnload(view, url, message, result) ?: super.onJsBeforeUnload(view, url, message, result)
+
+    override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult?): Boolean =
+        delegate?.onJsConfirm(view, url, message, result) ?: super.onJsConfirm(view, url, message, result)
+
+    override fun onJsPrompt(
+        view: WebView?,
+        url: String?,
+        message: String?,
+        defaultValue: String?,
+        result: JsPromptResult?,
+    ): Boolean = delegate?.onJsPrompt(view, url, message, defaultValue, result)
+        ?: super.onJsPrompt(view, url, message, defaultValue, result)
+
+    @Deprecated("Deprecated in Java")
+    override fun onJsTimeout(): Boolean = delegate?.onJsTimeout() ?: super.onJsTimeout()
+
+    override fun onPermissionRequest(request: PermissionRequest) {
+        val resources = request.resources ?: emptyArray()
+        if (resources.any { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }) {
+            plugin.handleWebViewPermissionRequest(request)
+        } else if (delegate != null) {
+            delegate.onPermissionRequest(request)
+        } else {
+            super.onPermissionRequest(request)
+        }
+    }
+
+    override fun onPermissionRequestCanceled(request: PermissionRequest?) {
+        if (request != null) plugin.handleWebViewPermissionRequestCanceled(request)
+        if (delegate != null) {
+            delegate.onPermissionRequestCanceled(request)
+        } else {
+            super.onPermissionRequestCanceled(request)
+        }
+    }
+
+    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+        if (delegate != null) {
+            delegate.onProgressChanged(view, newProgress)
+        } else {
+            super.onProgressChanged(view, newProgress)
+        }
+    }
+
+    override fun onReceivedIcon(view: WebView?, icon: Bitmap?) {
+        if (delegate != null) {
+            delegate.onReceivedIcon(view, icon)
+        } else {
+            super.onReceivedIcon(view, icon)
+        }
+    }
+
+    override fun onReceivedTitle(view: WebView?, title: String?) {
+        if (delegate != null) {
+            delegate.onReceivedTitle(view, title)
+        } else {
+            super.onReceivedTitle(view, title)
+        }
+    }
+
+    override fun onReceivedTouchIconUrl(view: WebView?, url: String?, precomposed: Boolean) {
+        if (delegate != null) {
+            delegate.onReceivedTouchIconUrl(view, url, precomposed)
+        } else {
+            super.onReceivedTouchIconUrl(view, url, precomposed)
+        }
+    }
+
+    override fun onRequestFocus(view: WebView?) {
+        if (delegate != null) {
+            delegate.onRequestFocus(view)
+        } else {
+            super.onRequestFocus(view)
+        }
+    }
+
+    override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+        if (delegate != null) {
+            delegate.onShowCustomView(view, callback)
+        } else {
+            super.onShowCustomView(view, callback)
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onShowCustomView(view: View?, requestedOrientation: Int, callback: CustomViewCallback?) {
+        if (delegate != null) {
+            delegate.onShowCustomView(view, requestedOrientation, callback)
+        } else {
+            super.onShowCustomView(view, requestedOrientation, callback)
+        }
+    }
+
+    override fun onShowFileChooser(
+        webView: WebView?,
+        filePathCallback: ValueCallback<Array<Uri>>?,
+        fileChooserParams: FileChooserParams?,
+    ): Boolean = delegate?.onShowFileChooser(webView, filePathCallback, fileChooserParams)
+        ?: super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
+}
+
+@InvokeArg
 class AssistantRoleResultArgs {
     var resultCode: Int = Activity.RESULT_CANCELED
 }
 
+@InvokeArg
 class AndroidPermissionRequestArgs {
     var permission: String = ""
 }
 
+@InvokeArg
 class SecureStorageArgs {
     var key: String = ""
     var value: String = ""
 }
 
+@InvokeArg
+class ThinPeerCredentialSetArgs {
+    var peerId: String = ""
+    var tokenId: String = ""
+    var claimantPeerId: String = ""
+    var verifierPeerId: String = ""
+    var claimantSignalingPeerId: String = ""
+    var verifierSignalingPeerId: String = ""
+    var roomName: String = ""
+    var rawBearerToken: String = ""
+    var createdAtMs: Long = 0
+    var expiresAtMs: Long = 0
+}
+
+@InvokeArg
+class ThinPeerCredentialLookupArgs {
+    var peerId: String = ""
+}
+
+@InvokeArg
+class ThinPeerReconnectProveArgs {
+    var peerId: String = ""
+    var challenge: MeshReconnectChallengeFrameArgs = MeshReconnectChallengeFrameArgs()
+}
+
+@InvokeArg
+class MeshReconnectChallengeFrameArgs {
+    var type: String = ""
+    var challenge: String = ""
+    var channelBinding: String = ""
+    var channel_binding: String = ""
+    var claimantPeerId: String = ""
+    var claimant_peer_id: String = ""
+    var verifierPeerId: String = ""
+    var verifier_peer_id: String = ""
+    var claimantSignalingPeerId: String = ""
+    var claimant_signaling_peer_id: String = ""
+    var verifierSignalingPeerId: String = ""
+    var verifier_signaling_peer_id: String = ""
+    var roomName: String = ""
+    var room_name: String = ""
+
+    fun channelBindingValue(): String = channel_binding.ifEmpty { channelBinding }
+    fun claimantPeerIdValue(): String = claimant_peer_id.ifEmpty { claimantPeerId }
+    fun verifierPeerIdValue(): String = verifier_peer_id.ifEmpty { verifierPeerId }
+    fun claimantSignalingPeerIdValue(): String = claimant_signaling_peer_id.ifEmpty { claimantSignalingPeerId }
+    fun verifierSignalingPeerIdValue(): String = verifier_signaling_peer_id.ifEmpty { verifierSignalingPeerId }
+    fun roomNameValue(): String = room_name.ifEmpty { roomName }
+}
+
+@InvokeArg
+class ThinProfileSetArgs {
+    var value: String = ""
+}
+
+@InvokeArg
+class WebviewMicrophonePermissionArgs {
+    var origin: String = ""
+    var resources: Array<String> = emptyArray()
+    var configuredHttpsOrigins: Array<String> = emptyArray()
+    var foreground: Boolean = false
+    var focused: Boolean = false
+}
+
+@InvokeArg
 class AdminUnlockResultArgs {
     var resultCode: Int = Activity.RESULT_CANCELED
 }

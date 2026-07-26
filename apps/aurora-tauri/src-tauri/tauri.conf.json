@@ -21,13 +21,24 @@
       }
     ],
     "security": {
-      "capabilities": ["aurora-main", "aurora-overlay"],
+      "capabilities": [
+        "aurora-main",
+        "aurora-overlay",
+        "aurora-mobile-mesh"
+      ],
       "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage", "deb", "rpm", "dmg", "msi", "nsis"],
+    "targets": [
+      "appimage",
+      "deb",
+      "rpm",
+      "dmg",
+      "msi",
+      "nsis"
+    ],
     "publisher": "Aurora contributors",
     "category": "Productivity",
     "shortDescription": "Privacy-first modular voice assistant desktop shell.",
@@ -48,6 +59,14 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "aurora"
+        ]
+      },
+      "mobile": []
+    },
     "updater": {
       "pubkey": "AURORA_RELEASE_PUBLIC_KEY_REPLACE_BEFORE_RELEASE",
       "endpoints": [

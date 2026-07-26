@@ -1,6 +1,8 @@
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use hmac::{Hmac, Mac};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::io::{BufRead, BufReader, Read};
@@ -9,7 +11,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(desktop)]
 use tauri::{
     image::Image,
@@ -29,7 +31,9 @@ const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
 const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
+const DESKTOP_THIN_PROFILES_KEY: &str = "aurora.session.desktop-thin-connection-profiles.v1";
 const BUNDLED_SIDECAR_NAME: &str = "aurora-sidecar";
+#[cfg(test)]
 const UPDATER_ENDPOINT: &str =
     "https://releases.aurora.local/latest/{{target}}/{{arch}}/{{current_version}}.json";
 const OVERLAY_WINDOW_LABEL: &str = "aurora-overlay";
@@ -171,6 +175,145 @@ struct SidecarSession {
     token: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidWebviewMicrophonePermissionDecisionRequest {
+    origin: String,
+    resources: Vec<String>,
+    configured_https_origins: Option<Vec<String>>,
+    foreground: bool,
+    focused: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerCredentialSetRequest {
+    peer_id: String,
+    token_id: String,
+    claimant_peer_id: String,
+    verifier_peer_id: String,
+    claimant_signaling_peer_id: String,
+    verifier_signaling_peer_id: String,
+    room_name: String,
+    raw_bearer_token: String,
+    created_at_ms: Option<u64>,
+    expires_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerCredentialStatusRequest {
+    peer_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerCredentialDeleteRequest {
+    peer_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerReconnectProveRequest {
+    peer_id: String,
+    challenge: MeshReconnectChallengeFrame,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerCredentialRecord {
+    token_id: String,
+    claimant_peer_id: String,
+    verifier_peer_id: String,
+    claimant_signaling_peer_id: String,
+    verifier_signaling_peer_id: String,
+    room_name: String,
+    raw_bearer_token: String,
+    created_at_ms: Option<u64>,
+    expires_at_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct MeshReconnectChallengeFrame {
+    r#type: String,
+    challenge: String,
+    channel_binding: String,
+    claimant_peer_id: String,
+    verifier_peer_id: String,
+    claimant_signaling_peer_id: String,
+    verifier_signaling_peer_id: String,
+    room_name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct MeshReconnectProofFrame {
+    r#type: String,
+    token_id: String,
+    challenge: String,
+    proof: String,
+    channel_binding: String,
+    claimant_peer_id: String,
+    verifier_peer_id: String,
+    claimant_signaling_peer_id: String,
+    verifier_signaling_peer_id: String,
+    room_name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerCredentialMetadata {
+    peer_id: String,
+    token_id: String,
+    claimant_peer_id: String,
+    verifier_peer_id: String,
+    claimant_signaling_peer_id: String,
+    verifier_signaling_peer_id: String,
+    room_name: String,
+    created_at_ms: Option<u64>,
+    expires_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerCredentialStatusResponse {
+    peer_id: String,
+    found: bool,
+    has_bearer_token: bool,
+    credential: Option<ThinPeerCredentialMetadata>,
+    backend: String,
+    persisted: bool,
+    secrets_redacted: bool,
+    redacted_fields: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinPeerReconnectProofResponse {
+    peer_id: String,
+    found: bool,
+    matched: bool,
+    proof: Option<MeshReconnectProofFrame>,
+    credential: Option<ThinPeerCredentialMetadata>,
+    backend: String,
+    secrets_redacted: bool,
+    redacted_fields: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteOriginPolicy {
+    local_loopback_allowed: bool,
+    remote_gateway_allowed: bool,
+    remote_gateway_url: Option<String>,
+    remote_gateway_origin: Option<String>,
+    remote_gateway_origin_allowed: bool,
+    allowed_remote_origins: Vec<String>,
+    csp_connect_src: Vec<String>,
+    requires_https_or_wss: bool,
+    wildcard_allowed: bool,
+    secrets_redacted: bool,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NativeCapabilityManifest {
@@ -308,7 +451,9 @@ struct NativePermissionStatus {
 }
 
 struct AuroraMobileNativePlugin<R: tauri::Runtime> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     handle: Option<tauri::plugin::PluginHandle<R>>,
+    _runtime: std::marker::PhantomData<fn() -> R>,
 }
 
 #[derive(Debug, Serialize)]
@@ -625,6 +770,7 @@ enum AuroraCommandError {
     InvalidGatewayResponse,
     #[error("{0} is not available because the required native permission is disabled")]
     NativePermissionMissing(String),
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     #[error("Aurora mobile native plugin call failed: {0}")]
     AuroraMobileNativePlugin(String),
     #[error("{0}")]
@@ -641,6 +787,8 @@ enum AuroraCommandError {
     SidecarState,
     #[error("Secure storage key is invalid or outside the Aurora credential namespace: {0}")]
     SecureStorageKeyInvalid(String),
+    #[error("Peer reconnect credential is expired")]
+    PeerCredentialExpired,
     #[error("Secure storage operation failed: {0}")]
     SecureStorage(String),
 }
@@ -1039,14 +1187,14 @@ async fn aurora_tray_status() -> Result<NativeFeatureStatus, AuroraCommandError>
         let mut details = BTreeMap::new();
         details.insert("menuItems".to_string(), json!(["show", "quit"]));
         details.insert("backendTruthRequired".to_string(), json!(false));
-        return Ok(NativeFeatureStatus {
+        Ok(NativeFeatureStatus {
             available: true,
             permission: "aurora.trayStatus".to_string(),
             capability: "desktop.tray".to_string(),
             source: "tauri-core-tray-icon".to_string(),
             reason: None,
             details,
-        });
+        })
     }
 
     #[cfg(not(desktop))]
@@ -1206,6 +1354,68 @@ async fn aurora_android_baseline_status() -> Result<AndroidBaselineStatus, Auror
     let status = android_baseline_status();
     log_android_baseline_status(&status);
     Ok(status)
+}
+
+#[tauri::command]
+async fn aurora_android_lifecycle_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "androidLifecycleStatus", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android lifecycle status is only available in the Android Tauri shell".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_webview_microphone_permission_decision(
+    request: AndroidWebviewMicrophonePermissionDecisionRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "webviewMicrophonePermissionDecision",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android WebView microphone permission mediation is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_foreground_service_status(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(native, "voiceForegroundServiceStatus", json!({}))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android voice foreground service status is only available in the Android Tauri shell"
+                .to_string(),
+        ))
+    }
 }
 
 #[tauri::command]
@@ -1378,6 +1588,7 @@ fn log_android_baseline_status(status: &AndroidBaselineStatus) {
     );
 }
 
+#[cfg(target_os = "android")]
 fn log_android_native_plugin_payload(payload: &Value) {
     const CHUNK_BYTES: usize = 900;
 
@@ -1402,6 +1613,7 @@ fn log_android_native_plugin_payload(payload: &Value) {
     );
 }
 
+#[cfg(target_os = "ios")]
 fn log_ios_native_plugin_payload(command: &str, payload: &Value) {
     println!(
         "aurora_ios_native_plugin_command command={} payload={}",
@@ -1592,6 +1804,7 @@ fn sensitive_log_redacted_fields() -> Vec<String> {
     ]
 }
 
+#[cfg(target_os = "android")]
 fn chunk_string_for_logcat(value: &str, max_bytes: usize) -> Vec<&str> {
     if value.is_empty() {
         return vec![""];
@@ -1685,6 +1898,310 @@ async fn aurora_ios_admin_unlock(
 }
 
 #[tauri::command]
+async fn aurora_thin_peer_credential_set(
+    request: ThinPeerCredentialSetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_peer_storage_id(&request.peer_id)?;
+    validate_credential_record_fields(
+        &request.token_id,
+        &request.claimant_peer_id,
+        &request.verifier_peer_id,
+        &request.claimant_signaling_peer_id,
+        &request.verifier_signaling_peer_id,
+        &request.room_name,
+        &request.raw_bearer_token,
+    )?;
+    if request
+        .expires_at_ms
+        .is_some_and(|expires_at_ms| expires_at_ms <= current_unix_ms())
+    {
+        return Err(AuroraCommandError::PeerCredentialExpired);
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "thinPeerCredentialSet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "thinPeerCredentialSet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let record = ThinPeerCredentialRecord {
+            token_id: request.token_id,
+            claimant_peer_id: request.claimant_peer_id,
+            verifier_peer_id: request.verifier_peer_id,
+            claimant_signaling_peer_id: request.claimant_signaling_peer_id,
+            verifier_signaling_peer_id: request.verifier_signaling_peer_id,
+            room_name: request.room_name,
+            raw_bearer_token: request.raw_bearer_token,
+            created_at_ms: request.created_at_ms.or_else(|| Some(current_unix_ms())),
+            expires_at_ms: request.expires_at_ms,
+        };
+        let metadata = thin_peer_credential_metadata(&request.peer_id, &record);
+        let storage_key = thin_peer_credential_key(&request.peer_id)?;
+        let stored = serde_json::to_string(&record)
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+        peer_credential_storage_entry(&storage_key)?
+            .set_password(&stored)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+        serde_json::to_value(thin_peer_credential_status_response(
+            request.peer_id,
+            Some(metadata),
+            true,
+        ))
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "thin peer credential storage is only available on desktop keychain, Android Keystore, and iOS Keychain targets"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_thin_peer_credential_status(
+    request: ThinPeerCredentialStatusRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_peer_storage_id(&request.peer_id)?;
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "thinPeerCredentialStatus",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "thinPeerCredentialStatus",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let record = load_unexpired_thin_peer_credential_record(&request.peer_id)?;
+        let metadata = record
+            .as_ref()
+            .map(|record| thin_peer_credential_metadata(&request.peer_id, record));
+        let has_token = record
+            .as_ref()
+            .is_some_and(|record| !record.raw_bearer_token.is_empty());
+        serde_json::to_value(thin_peer_credential_status_response(
+            request.peer_id,
+            metadata,
+            has_token,
+        ))
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "thin peer credential storage is only available on desktop keychain, Android Keystore, and iOS Keychain targets"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_thin_peer_credential_delete(
+    request: ThinPeerCredentialDeleteRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_peer_storage_id(&request.peer_id)?;
+    let storage_key = thin_peer_credential_key(&request.peer_id)?;
+
+    #[cfg(target_os = "android")]
+    {
+        let _ = storage_key;
+        return run_android_plugin_command(
+            native,
+            "thinPeerCredentialDelete",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        let _ = storage_key;
+        return run_ios_plugin_command(
+            native,
+            "thinPeerCredentialDelete",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        match peer_credential_storage_entry(&storage_key)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+        }
+        serde_json::to_value(thin_peer_credential_status_response(
+            request.peer_id,
+            None,
+            false,
+        ))
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (request, native, storage_key);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "thin peer credential storage is only available on desktop keychain, Android Keystore, and iOS Keychain targets"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_thin_peer_reconnect_prove(
+    request: ThinPeerReconnectProveRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_peer_storage_id(&request.peer_id)?;
+    validate_reconnect_challenge(&request.challenge)?;
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "thinPeerReconnectProve",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "thinPeerReconnectProve",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let Some(record) = load_unexpired_thin_peer_credential_record(&request.peer_id)? else {
+            return serde_json::to_value(thin_peer_reconnect_proof_response(
+                request.peer_id,
+                None,
+                false,
+                None,
+            ))
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse);
+        };
+        let metadata = thin_peer_credential_metadata(&request.peer_id, &record);
+        if !reconnect_challenge_matches(&record, &request.challenge) {
+            return serde_json::to_value(thin_peer_reconnect_proof_response(
+                request.peer_id,
+                Some(metadata),
+                false,
+                None,
+            ))
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse);
+        }
+        let proof = MeshReconnectProofFrame {
+            r#type: "mesh_auth_proof_v1".to_string(),
+            token_id: record.token_id.clone(),
+            challenge: request.challenge.challenge.clone(),
+            proof: compute_reconnect_proof_hex(
+                &record.raw_bearer_token,
+                &record,
+                &request.challenge,
+            )?,
+            channel_binding: request.challenge.channel_binding.clone(),
+            claimant_peer_id: record.claimant_peer_id.clone(),
+            verifier_peer_id: record.verifier_peer_id.clone(),
+            claimant_signaling_peer_id: request.challenge.claimant_signaling_peer_id.clone(),
+            verifier_signaling_peer_id: request.challenge.verifier_signaling_peer_id.clone(),
+            room_name: record.room_name.clone(),
+        };
+        serde_json::to_value(thin_peer_reconnect_proof_response(
+            request.peer_id,
+            Some(metadata),
+            true,
+            Some(proof),
+        ))
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "thin peer reconnect proof is only available on desktop keychain, Android Keystore, and iOS Keychain targets"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_remote_origin_policy() -> Result<RemoteOriginPolicy, AuroraCommandError> {
+    let remote_gateway = env::var("AURORA_TAURI_REMOTE_GATEWAY_URL").ok();
+    let remote_gateway_url = remote_gateway
+        .as_deref()
+        .and_then(|raw| Url::parse(raw).ok());
+    let remote_gateway_origin = remote_gateway_url.as_ref().map(origin_for_url);
+    let allowed_remote_origins = allowed_remote_origins();
+    let remote_gateway_origin_allowed = remote_gateway_origin.as_ref().is_some_and(|origin| {
+        allowed_remote_origins
+            .iter()
+            .any(|allowed| allowed == origin)
+    });
+    let mut csp_connect_src = vec![
+        "'self'".to_string(),
+        "http://127.0.0.1:*".to_string(),
+        "http://localhost:*".to_string(),
+        "ws://127.0.0.1:*".to_string(),
+        "ws://localhost:*".to_string(),
+    ];
+    csp_connect_src.extend(allowed_remote_origins.iter().cloned());
+
+    Ok(RemoteOriginPolicy {
+        local_loopback_allowed: true,
+        remote_gateway_allowed: remote_gateway_allowed(),
+        remote_gateway_url: remote_gateway,
+        remote_gateway_origin,
+        remote_gateway_origin_allowed,
+        allowed_remote_origins,
+        csp_connect_src,
+        requires_https_or_wss: true,
+        wildcard_allowed: false,
+        secrets_redacted: true,
+    })
+}
+
+#[tauri::command]
 async fn aurora_log_tail(
     request: Option<LogTailRequest>,
 ) -> Result<LogTailResult, AuroraCommandError> {
@@ -1705,6 +2222,85 @@ async fn aurora_log_tail(
         secrets_redacted: true,
         redacted_fields: sensitive_log_redacted_fields(),
     })
+}
+
+#[tauri::command]
+async fn aurora_thin_profile_get(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "thinProfileGet", json!({}));
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "thinProfileGet", json!({}));
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = native;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "thin profile storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
+                .to_string(),
+        ));
+    }
+
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let entry = thin_profile_storage_entry()?;
+        let value = match entry.get_password() {
+            Ok(value) => Some(value),
+            Err(keyring::Error::NoEntry) => None,
+            Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+        };
+        Ok(json!({
+            "key": DESKTOP_THIN_PROFILES_KEY,
+            "value": value,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_thin_profile_set(
+    value: String,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "thinProfileSet", json!({ "value": value }));
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "thinProfileSet", json!({ "value": value }));
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (value, native);
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "thin profile storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
+                .to_string(),
+        ));
+    }
+
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let entry = thin_profile_storage_entry()?;
+        entry
+            .set_password(&value)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+        Ok(json!({
+            "key": DESKTOP_THIN_PROFILES_KEY,
+            "ok": true,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "secretsRedacted": true
+        }))
+    }
 }
 
 #[tauri::command]
@@ -1735,6 +2331,7 @@ async fn aurora_secure_storage_get(
 
     #[cfg(desktop)]
     {
+        let _ = native;
         let entry = secure_storage_entry(&key)?;
         let value = match entry.get_password() {
             Ok(value) => Some(value),
@@ -1781,6 +2378,7 @@ async fn aurora_secure_storage_set(
 
     #[cfg(desktop)]
     {
+        let _ = native;
         let entry = secure_storage_entry(&key)?;
         entry
             .set_password(&value)
@@ -1823,6 +2421,7 @@ async fn aurora_secure_storage_delete(
 
     #[cfg(desktop)]
     {
+        let _ = native;
         let entry = secure_storage_entry(&key)?;
         match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(json!({
@@ -1908,14 +2507,14 @@ async fn aurora_biometric_admin_unlock(
             "evidenceSource": "tauri-capability-manifest",
             "secretsRedacted": true
         });
-        Ok(serde_json::to_value(BiometricAdminUnlockRequest {
+        serde_json::to_value(BiometricAdminUnlockRequest {
             started: false,
             request_code: None,
             status,
             reason: "unsupported_platform".to_string(),
             secrets_redacted: true,
         })
-        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?)
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
     }
 }
 
@@ -2159,7 +2758,7 @@ async fn aurora_overlay_unregister_hotkey(
             .map_err(|_| AuroraCommandError::SidecarState)?;
         overlay.hotkey_registered = false;
         overlay.last_registration_error = None;
-        return Ok(overlay.status());
+        Ok(overlay.status())
     }
 
     #[cfg(not(desktop))]
@@ -2256,7 +2855,7 @@ async fn aurora_overlay_register_hotkey(
             overlay.hotkey_registered = true;
             overlay.last_registration_error = None;
         }
-        return Ok(overlay.status());
+        Ok(overlay.status())
     }
 
     #[cfg(not(desktop))]
@@ -2288,6 +2887,7 @@ impl AuroraCommandError {
             Self::Gateway(_) => "transport_loss",
             Self::InvalidGatewayResponse => "validation_error",
             Self::NativePermissionMissing(_) => "native_permission_missing",
+            #[cfg(any(target_os = "android", target_os = "ios"))]
             Self::AuroraMobileNativePlugin(_) => "native_plugin_error",
             Self::UnsupportedFeature(_) => "unsupported_feature",
             Self::ThinModeSidecarDisabled => "unsupported_feature",
@@ -2296,6 +2896,7 @@ impl AuroraCommandError {
             Self::SidecarProcess(_) => "unavailable_service",
             Self::SidecarState => "transport_loss",
             Self::SecureStorageKeyInvalid(_) => "validation_error",
+            Self::PeerCredentialExpired => "credential_expired",
             Self::SecureStorage(_) => "secure_storage_error",
         }
     }
@@ -2833,27 +3434,31 @@ tauri::ios_plugin_binding!(init_plugin_aurora_native);
 
 fn aurora_mobile_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     tauri::plugin::Builder::new("aurora-native")
-        .setup(|app, api| {
+        .setup(|app, _api| {
             #[cfg(target_os = "android")]
             {
-                let handle = api.register_android_plugin(
+                let handle = _api.register_android_plugin(
                     "dev.aurora.tauri.nativeplugin",
                     "AuroraNativePlugin",
                 )?;
                 app.manage(AuroraMobileNativePlugin::<R> {
                     handle: Some(handle),
+                    _runtime: std::marker::PhantomData,
                 });
             }
             #[cfg(target_os = "ios")]
             {
-                let handle = api.register_ios_plugin(init_plugin_aurora_native)?;
+                let handle = _api.register_ios_plugin(init_plugin_aurora_native)?;
                 app.manage(AuroraMobileNativePlugin::<R> {
                     handle: Some(handle),
+                    _runtime: std::marker::PhantomData,
                 });
             }
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
-                app.manage(AuroraMobileNativePlugin::<R> { handle: None });
+                app.manage(AuroraMobileNativePlugin::<R> {
+                    _runtime: std::marker::PhantomData,
+                });
             }
             Ok(())
         })
@@ -2965,11 +3570,34 @@ fn denied_native_feature_status(
 #[cfg(desktop)]
 fn secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
     validate_secure_storage_key(key)?;
+    raw_secure_storage_entry(key)
+}
+
+#[cfg(desktop)]
+fn thin_profile_storage_entry() -> Result<keyring::Entry, AuroraCommandError> {
+    raw_secure_storage_entry(DESKTOP_THIN_PROFILES_KEY)
+}
+
+#[cfg(desktop)]
+fn peer_credential_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
+    if !is_peer_proof_storage_key(key) {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()));
+    }
+    raw_secure_storage_entry(key)
+}
+
+#[cfg(desktop)]
+fn raw_secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
     keyring::Entry::new(SECURE_STORAGE_SERVICE, key)
         .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
 }
 
 fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
+    if is_peer_proof_storage_key(key) {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "peer reconnect credential namespace is opaque-only".to_string(),
+        ));
+    }
     if key.is_empty() || key.len() > 128 {
         return Err(AuroraCommandError::SecureStorageKeyInvalid(
             "key length must be 1..128 bytes".to_string(),
@@ -3000,13 +3628,317 @@ fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
     }
 }
 
+fn validate_peer_storage_id(peer_id: &str) -> Result<(), AuroraCommandError> {
+    validate_non_empty_field("peerId", peer_id, 256)
+}
+
+fn thin_peer_credential_key(peer_id: &str) -> Result<String, AuroraCommandError> {
+    validate_peer_storage_id(peer_id)?;
+    Ok(format!(
+        "aurora.mesh.peer-proof.{}",
+        sha256_hex(peer_id.as_bytes())
+    ))
+}
+
+fn validate_credential_record_fields(
+    token_id: &str,
+    claimant_peer_id: &str,
+    verifier_peer_id: &str,
+    claimant_signaling_peer_id: &str,
+    verifier_signaling_peer_id: &str,
+    room_name: &str,
+    raw_bearer_token: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_non_empty_field("tokenId", token_id, 128)?;
+    validate_non_empty_field("claimantPeerId", claimant_peer_id, 256)?;
+    validate_non_empty_field("verifierPeerId", verifier_peer_id, 256)?;
+    validate_non_empty_field("claimantSignalingPeerId", claimant_signaling_peer_id, 256)?;
+    validate_non_empty_field("verifierSignalingPeerId", verifier_signaling_peer_id, 256)?;
+    validate_non_empty_field("roomName", room_name, 512)?;
+    validate_non_empty_field("rawBearerToken", raw_bearer_token, 4096)
+}
+
+fn validate_non_empty_field(
+    field: &str,
+    value: &str,
+    max_len: usize,
+) -> Result<(), AuroraCommandError> {
+    if value.is_empty() || value.len() > max_len {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
+            "{field} length must be 1..{max_len} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_reconnect_challenge(
+    challenge: &MeshReconnectChallengeFrame,
+) -> Result<(), AuroraCommandError> {
+    if challenge.r#type != "mesh_auth_challenge_v1" {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "reconnect challenge type must be mesh_auth_challenge_v1".to_string(),
+        ));
+    }
+    validate_hex64("challenge", &challenge.challenge)?;
+    validate_hex64("channelBinding", &challenge.channel_binding)?;
+    validate_non_empty_field("claimantPeerId", &challenge.claimant_peer_id, 256)?;
+    validate_non_empty_field("verifierPeerId", &challenge.verifier_peer_id, 256)?;
+    validate_non_empty_field(
+        "claimantSignalingPeerId",
+        &challenge.claimant_signaling_peer_id,
+        256,
+    )?;
+    validate_non_empty_field(
+        "verifierSignalingPeerId",
+        &challenge.verifier_signaling_peer_id,
+        256,
+    )?;
+    validate_non_empty_field("roomName", &challenge.room_name, 512)
+}
+
+fn validate_hex64(field: &str, value: &str) -> Result<(), AuroraCommandError> {
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
+            "{field} must be 64 hex characters"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn load_thin_peer_credential_record(
+    peer_id: &str,
+) -> Result<Option<ThinPeerCredentialRecord>, AuroraCommandError> {
+    let storage_key = thin_peer_credential_key(peer_id)?;
+    let stored = match peer_credential_storage_entry(&storage_key)?.get_password() {
+        Ok(value) => Some(value),
+        Err(keyring::Error::NoEntry) => None,
+        Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+    };
+    stored
+        .map(|stored| {
+            serde_json::from_str(&stored).map_err(|_| {
+                AuroraCommandError::SecureStorage("stored peer credential is invalid".to_string())
+            })
+        })
+        .transpose()
+}
+
+#[cfg(not(desktop))]
+fn load_thin_peer_credential_record(
+    _peer_id: &str,
+) -> Result<Option<ThinPeerCredentialRecord>, AuroraCommandError> {
+    Err(AuroraCommandError::UnsupportedFeature(
+        "desktop-thin peer credential keychain storage is only available on desktop Tauri targets"
+            .to_string(),
+    ))
+}
+
+fn load_unexpired_thin_peer_credential_record(
+    peer_id: &str,
+) -> Result<Option<ThinPeerCredentialRecord>, AuroraCommandError> {
+    let Some(record) = load_thin_peer_credential_record(peer_id)? else {
+        return Ok(None);
+    };
+    if record
+        .expires_at_ms
+        .is_some_and(|expires_at_ms| expires_at_ms <= current_unix_ms())
+    {
+        delete_thin_peer_credential_record(peer_id)?;
+        return Ok(None);
+    }
+    Ok(Some(record))
+}
+
+fn delete_thin_peer_credential_record(peer_id: &str) -> Result<(), AuroraCommandError> {
+    let storage_key = thin_peer_credential_key(peer_id)?;
+    #[cfg(desktop)]
+    match peer_credential_storage_entry(&storage_key)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = storage_key;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "desktop-thin peer credential keychain storage is only available on desktop Tauri targets"
+                .to_string(),
+        ))
+    }
+}
+
+fn is_peer_proof_storage_key(key: &str) -> bool {
+    key.starts_with("aurora.mesh.peer-proof.")
+}
+
+fn thin_peer_credential_metadata(
+    peer_id: &str,
+    record: &ThinPeerCredentialRecord,
+) -> ThinPeerCredentialMetadata {
+    ThinPeerCredentialMetadata {
+        peer_id: peer_id.to_string(),
+        token_id: record.token_id.clone(),
+        claimant_peer_id: record.claimant_peer_id.clone(),
+        verifier_peer_id: record.verifier_peer_id.clone(),
+        claimant_signaling_peer_id: record.claimant_signaling_peer_id.clone(),
+        verifier_signaling_peer_id: record.verifier_signaling_peer_id.clone(),
+        room_name: record.room_name.clone(),
+        created_at_ms: record.created_at_ms,
+        expires_at_ms: record.expires_at_ms,
+    }
+}
+
+fn thin_peer_credential_status_response(
+    peer_id: String,
+    metadata: Option<ThinPeerCredentialMetadata>,
+    has_token: bool,
+) -> ThinPeerCredentialStatusResponse {
+    ThinPeerCredentialStatusResponse {
+        peer_id,
+        found: metadata.is_some(),
+        has_bearer_token: has_token,
+        credential: metadata,
+        backend: "platform-keychain".to_string(),
+        persisted: true,
+        secrets_redacted: true,
+        redacted_fields: vec!["rawBearerToken".to_string()],
+    }
+}
+
+fn thin_peer_reconnect_proof_response(
+    peer_id: String,
+    metadata: Option<ThinPeerCredentialMetadata>,
+    matched: bool,
+    proof: Option<MeshReconnectProofFrame>,
+) -> ThinPeerReconnectProofResponse {
+    ThinPeerReconnectProofResponse {
+        peer_id,
+        found: metadata.is_some(),
+        matched,
+        proof,
+        credential: metadata,
+        backend: "platform-keychain".to_string(),
+        secrets_redacted: true,
+        redacted_fields: vec!["rawBearerToken".to_string()],
+    }
+}
+
+fn reconnect_challenge_matches(
+    record: &ThinPeerCredentialRecord,
+    challenge: &MeshReconnectChallengeFrame,
+) -> bool {
+    challenge.claimant_peer_id == record.claimant_peer_id
+        && challenge.verifier_peer_id == record.verifier_peer_id
+        && challenge.room_name == record.room_name
+}
+
+fn compute_reconnect_proof_hex(
+    raw_bearer_token: &str,
+    record: &ThinPeerCredentialRecord,
+    challenge: &MeshReconnectChallengeFrame,
+) -> Result<String, AuroraCommandError> {
+    type HmacSha256 = Hmac<Sha256>;
+    let key = Sha256::digest(raw_bearer_token.as_bytes());
+    let mut mac = HmacSha256::new_from_slice(&key)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+    mac.update(&build_mesh_reconnect_proof_message(record, challenge)?);
+    Ok(hex_encode(&mac.finalize().into_bytes()))
+}
+
+fn build_mesh_reconnect_proof_message(
+    record: &ThinPeerCredentialRecord,
+    challenge: &MeshReconnectChallengeFrame,
+) -> Result<Vec<u8>, AuroraCommandError> {
+    let transcript = format!(
+        concat!(
+            "{{",
+            "\"challenge\":{},",
+            "\"channel_binding\":{},",
+            "\"claimant_peer_id\":{},",
+            "\"room_name\":{},",
+            "\"token_id\":{},",
+            "\"verifier_peer_id\":{},",
+            "\"version\":1",
+            "}}"
+        ),
+        canonical_json_quote(&challenge.challenge),
+        canonical_json_quote(&challenge.channel_binding),
+        canonical_json_quote(&challenge.claimant_peer_id),
+        canonical_json_quote(&challenge.room_name),
+        canonical_json_quote(&record.token_id),
+        canonical_json_quote(&challenge.verifier_peer_id),
+    );
+    let mut message = b"aurora.mesh.reconnect-proof.v1\0".to_vec();
+    message.extend_from_slice(transcript.as_bytes());
+    Ok(message)
+}
+
+fn canonical_json_quote(value: &str) -> String {
+    let mut output = String::with_capacity(value.len() + 2);
+    output.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\u{0008}' => output.push_str("\\b"),
+            '\u{0009}' => output.push_str("\\t"),
+            '\u{000a}' => output.push_str("\\n"),
+            '\u{000c}' => output.push_str("\\f"),
+            '\u{000d}' => output.push_str("\\r"),
+            '\u{0000}'..='\u{001f}' | '\u{007f}'.. => {
+                let codepoint = character as u32;
+                if codepoint <= 0xffff {
+                    push_json_utf16_escape(&mut output, codepoint as u16);
+                } else {
+                    let supplementary = codepoint - 0x1_0000;
+                    push_json_utf16_escape(&mut output, 0xd800 + ((supplementary >> 10) as u16));
+                    push_json_utf16_escape(&mut output, 0xdc00 + ((supplementary & 0x03ff) as u16));
+                }
+            }
+            _ => output.push(character),
+        }
+    }
+    output.push('"');
+    output
+}
+
+fn push_json_utf16_escape(output: &mut String, code_unit: u16) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    output.push('\\');
+    output.push('u');
+    for shift in [12, 8, 4, 0] {
+        output.push(HEX[((code_unit >> shift) & 0x0f) as usize] as char);
+    }
+}
+
+fn sha256_hex(input: &[u8]) -> String {
+    hex_encode(&Sha256::digest(input))
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
+}
+
+fn current_unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
 fn gateway_url() -> Result<Url, AuroraCommandError> {
     let raw = env::var("AURORA_TAURI_REMOTE_GATEWAY_URL")
         .or_else(|_| env::var("AURORA_GATEWAY_URL"))
         .unwrap_or_else(|_| DEFAULT_GATEWAY_URL.to_string());
     let url =
         Url::parse(&raw).map_err(|_| AuroraCommandError::InvalidGatewayOrigin(raw.clone()))?;
-    if is_loopback_http_origin(&url) || remote_gateway_allowed() {
+    if is_loopback_http_origin(&url) || remote_gateway_allowed_for(&url) {
         Ok(url)
     } else {
         Err(AuroraCommandError::InvalidGatewayOrigin(raw))
@@ -3015,6 +3947,61 @@ fn gateway_url() -> Result<Url, AuroraCommandError> {
 
 fn remote_gateway_allowed() -> bool {
     env::var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY").as_deref() == Ok("1")
+}
+
+fn remote_gateway_allowed_for(url: &Url) -> bool {
+    if !remote_gateway_allowed() || !is_secure_remote_http_origin(url) {
+        return false;
+    }
+    let origin = origin_for_url(url);
+    allowed_remote_origins()
+        .iter()
+        .any(|allowed| allowed == &origin)
+}
+
+fn allowed_remote_origins() -> Vec<String> {
+    env::var("AURORA_TAURI_ALLOWED_REMOTE_ORIGINS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|raw| canonical_remote_origin(raw).ok())
+        .collect()
+}
+
+fn canonical_remote_origin(raw: &str) -> Result<String, AuroraCommandError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.contains('*') {
+        return Err(AuroraCommandError::InvalidGatewayOrigin(
+            trimmed.to_string(),
+        ));
+    }
+    let url = Url::parse(trimmed)
+        .map_err(|_| AuroraCommandError::InvalidGatewayOrigin(trimmed.to_string()))?;
+    if !is_secure_remote_http_or_ws_origin(&url) {
+        return Err(AuroraCommandError::InvalidGatewayOrigin(
+            trimmed.to_string(),
+        ));
+    }
+    Ok(origin_for_url(&url))
+}
+
+fn origin_for_url(url: &Url) -> String {
+    match url.port() {
+        Some(port) => format!(
+            "{}://{}:{}",
+            url.scheme(),
+            url.host_str().unwrap_or_default(),
+            port
+        ),
+        None => format!("{}://{}", url.scheme(), url.host_str().unwrap_or_default()),
+    }
+}
+
+fn is_secure_remote_http_origin(url: &Url) -> bool {
+    url.scheme() == "https" && !is_loopback_host(url)
+}
+
+fn is_secure_remote_http_or_ws_origin(url: &Url) -> bool {
+    matches!(url.scheme(), "https" | "wss") && !is_loopback_host(url)
 }
 
 fn is_thin_mode() -> bool {
@@ -3039,14 +4026,6 @@ fn gateway_request_url(
 fn filtered_headers(headers: Option<BTreeMap<String, String>>) -> HeaderMap {
     let mut output = HeaderMap::new();
     output.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-
-    if let Ok(token) =
-        env::var("AURORA_TAURI_GATEWAY_TOKEN").or_else(|_| env::var("AURORA_GATEWAY_TOKEN"))
-    {
-        if let Ok(value) = HeaderValue::from_str(&format!("Bearer {token}")) {
-            output.insert(AUTHORIZATION, value);
-        }
-    }
 
     for (key, value) in headers.unwrap_or_default() {
         let lower = key.to_ascii_lowercase();
@@ -3401,7 +4380,7 @@ fn sidecar_launch(app: &AppHandle) -> Result<SidecarLaunch, AuroraCommandError> 
         let working_dir = program
             .parent()
             .map(Path::to_path_buf)
-            .unwrap_or_else(|| sidecar_working_dir());
+            .unwrap_or_else(sidecar_working_dir);
         return Ok(SidecarLaunch {
             program: program.display().to_string(),
             args: Vec::new(),
@@ -3482,6 +4461,10 @@ fn generate_sidecar_token() -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>()
+}
+
+fn is_loopback_host(url: &Url) -> bool {
+    matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "::1"))
 }
 
 fn is_loopback_http_origin(url: &Url) -> bool {
@@ -3847,7 +4830,21 @@ pub fn run() {
     let subscription_state: SharedSubscriptionState =
         Arc::new(Mutex::new(SubscriptionState::new()));
     let overlay_state: SharedOverlayState = Arc::new(Mutex::new(OverlayState::new()));
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Single-instance must be the first registered plugin so a second launch (e.g. an
+    // aurora:// deep link on Windows/Linux) forwards its URL here instead of opening a
+    // second window; the deep-link feature re-emits those argv URLs as deep-link events.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
+    let builder = builder.plugin(tauri_plugin_deep_link::init());
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    builder
         .plugin(aurora_mobile_native_plugin())
         .manage(sidecar_state.clone())
         .manage(subscription_state.clone())
@@ -3900,6 +4897,15 @@ pub fn run() {
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
+            // Dev/AppImage builds are not installed through a package manager, so register
+            // the aurora:// scheme with the OS at startup where the platform allows it.
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(error) = app.deep_link().register_all() {
+                    eprintln!("aurora deep-link scheme registration failed: {error}");
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -3924,12 +4930,22 @@ pub fn run() {
             aurora_audio_bridge_status,
             aurora_android_baseline_status,
             aurora_android_native_plugin_payload,
+            aurora_android_lifecycle_status,
+            aurora_android_webview_microphone_permission_decision,
+            aurora_android_voice_foreground_service_status,
             aurora_ios_native_plugin_manifest,
             aurora_ios_invocation_status,
             aurora_ios_local_light_inference_status,
             aurora_ios_entrypoint_payload,
             aurora_ios_invoke_action,
             aurora_log_tail,
+            aurora_thin_peer_credential_set,
+            aurora_thin_peer_credential_status,
+            aurora_thin_peer_credential_delete,
+            aurora_thin_peer_reconnect_prove,
+            aurora_remote_origin_policy,
+            aurora_thin_profile_get,
+            aurora_thin_profile_set,
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
@@ -3982,7 +4998,8 @@ pub fn run() {
                                     .as_ref()
                                     .map(overlay_scale_factor)
                                     .unwrap_or_else(|| window.scale_factor().unwrap_or(1.0));
-                                let logical: LogicalPosition<f64> = position.to_logical(scale_factor);
+                                let logical: LogicalPosition<f64> =
+                                    position.to_logical(scale_factor);
                                 overlay.save_position(
                                     mode,
                                     OverlayPoint {
@@ -4060,26 +5077,61 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
 mod tests {
     use super::*;
 
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn clear_remote_env() {
+        env::remove_var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY");
+        env::remove_var("AURORA_TAURI_ALLOWED_REMOTE_ORIGINS");
+        env::remove_var("AURORA_TAURI_REMOTE_GATEWAY_URL");
+        env::remove_var("AURORA_GATEWAY_URL");
+        env::remove_var("AURORA_TAURI_GATEWAY_TOKEN");
+        env::remove_var("AURORA_GATEWAY_TOKEN");
+    }
+
+    #[test]
+    fn filtered_headers_do_not_inject_gateway_tokens_from_environment() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        env::set_var("AURORA_TAURI_GATEWAY_TOKEN", "tauri-env-token");
+        env::set_var("AURORA_GATEWAY_TOKEN", "gateway-env-token");
+
+        let filtered = filtered_headers(None);
+
+        assert!(filtered.get("authorization").is_none());
+        clear_remote_env();
+    }
+
     #[test]
     fn filtered_headers_forwards_admin_action_confirmation_headers() {
         let mut headers = BTreeMap::new();
         headers.insert("X-Aurora-AdminAction-Id".to_string(), "aa_1".to_string());
-        headers.insert("X-Aurora-AdminAction-Token".to_string(), "tok_1".to_string());
-        headers.insert("X-Aurora-AdminAction-Digest".to_string(), "dig_1".to_string());
+        headers.insert(
+            "X-Aurora-AdminAction-Token".to_string(),
+            "tok_1".to_string(),
+        );
+        headers.insert(
+            "X-Aurora-AdminAction-Digest".to_string(),
+            "dig_1".to_string(),
+        );
         headers.insert("X-Some-Unrelated-Header".to_string(), "drop-me".to_string());
 
         let filtered = filtered_headers(Some(headers));
 
         assert_eq!(
-            filtered.get("x-aurora-adminaction-id").map(|v| v.to_str().unwrap()),
+            filtered
+                .get("x-aurora-adminaction-id")
+                .map(|v| v.to_str().unwrap()),
             Some("aa_1")
         );
         assert_eq!(
-            filtered.get("x-aurora-adminaction-token").map(|v| v.to_str().unwrap()),
+            filtered
+                .get("x-aurora-adminaction-token")
+                .map(|v| v.to_str().unwrap()),
             Some("tok_1")
         );
         assert_eq!(
-            filtered.get("x-aurora-adminaction-digest").map(|v| v.to_str().unwrap()),
+            filtered
+                .get("x-aurora-adminaction-digest")
+                .map(|v| v.to_str().unwrap()),
             Some("dig_1")
         );
         assert!(filtered.get("x-some-unrelated-header").is_none());
@@ -4255,7 +5307,7 @@ mod tests {
             manifest.capabilities.get("ios.siriReplacement"),
             Some(&false)
         );
-        assert_eq!(manifest.ios_invocation.siri_replacement, false);
+        assert!(!manifest.ios_invocation.siri_replacement);
         assert!(manifest.ios_invocation.backend_handoff_required);
         assert!(manifest
             .entrypoints
@@ -4290,12 +5342,12 @@ mod tests {
     #[test]
     fn android_baseline_status_never_claims_assistant_role_without_probe() {
         let status = android_baseline_status();
-        assert_eq!(status.assistant_role.probe_implemented, false);
+        assert!(!status.assistant_role.probe_implemented);
         assert_eq!(status.assistant_role.role_available, None);
         assert_eq!(status.assistant_role.package_qualified, None);
         assert_eq!(status.assistant_role.role_held, None);
         assert_eq!(status.assistant_role.requestable, None);
-        assert_eq!(status.secrets_redacted, true);
+        assert!(status.secrets_redacted);
         assert_eq!(
             status.fallback_entrypoints.get("shareIntentPlanned"),
             Some(&false)
@@ -4520,6 +5572,335 @@ mod tests {
     }
 
     #[test]
+    fn thin_peer_credential_keys_are_hashed_under_secure_namespace() {
+        let key = thin_peer_credential_key("peer/with:flexible id").unwrap();
+        assert!(key.starts_with("aurora.mesh.peer-proof."));
+        assert_eq!(key.len(), "aurora.mesh.peer-proof.".len() + 64);
+        assert!(validate_secure_storage_key(&key).is_err());
+        #[cfg(desktop)]
+        assert!(peer_credential_storage_entry(&key).is_ok());
+        assert!(thin_peer_credential_key("").is_err());
+    }
+
+    #[test]
+    fn thin_peer_credential_status_response_redacts_raw_bearer_token() {
+        let record = ThinPeerCredentialRecord {
+            token_id: "token-fixture-001".to_string(),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+            raw_bearer_token: "synthetic-reconnect-token".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: Some(2),
+        };
+        let response = thin_peer_credential_status_response(
+            "stable-answer".to_string(),
+            Some(thin_peer_credential_metadata("stable-answer", &record)),
+            true,
+        );
+        let serialized = serde_json::to_string(&response).unwrap();
+        assert!(!serialized.contains("synthetic-reconnect-token"));
+        assert!(serialized.contains("secretsRedacted"));
+        assert!(serialized.contains("rawBearerToken"));
+    }
+
+    #[test]
+    fn reconnect_proof_matches_shared_protocol_fixture_without_revealing_token() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/webrtc_web_thin_protocol_vectors.json"
+        ))
+        .unwrap();
+        let reconnect = &fixture["reconnect"];
+        let inputs = &reconnect["inputs"];
+        let record = ThinPeerCredentialRecord {
+            token_id: inputs["token_id"].as_str().unwrap().to_string(),
+            claimant_peer_id: inputs["claimant_peer_id"].as_str().unwrap().to_string(),
+            verifier_peer_id: inputs["verifier_peer_id"].as_str().unwrap().to_string(),
+            claimant_signaling_peer_id: inputs["claimant_signaling_peer_id"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            verifier_signaling_peer_id: inputs["verifier_signaling_peer_id"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            room_name: inputs["room_name"].as_str().unwrap().to_string(),
+            raw_bearer_token: "synthetic-reconnect-token".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: Some(2),
+        };
+        let challenge = MeshReconnectChallengeFrame {
+            r#type: "mesh_auth_challenge_v1".to_string(),
+            challenge: inputs["challenge"].as_str().unwrap().to_string(),
+            channel_binding: inputs["channel_binding"].as_str().unwrap().to_string(),
+            claimant_peer_id: inputs["claimant_peer_id"].as_str().unwrap().to_string(),
+            verifier_peer_id: inputs["verifier_peer_id"].as_str().unwrap().to_string(),
+            claimant_signaling_peer_id: inputs["claimant_signaling_peer_id"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            verifier_signaling_peer_id: inputs["verifier_signaling_peer_id"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            room_name: inputs["room_name"].as_str().unwrap().to_string(),
+        };
+
+        let message = build_mesh_reconnect_proof_message(&record, &challenge).unwrap();
+        let message_text = String::from_utf8_lossy(&message);
+        assert!(message.starts_with(b"aurora.mesh.reconnect-proof.v1\0"));
+        assert!(!message_text.contains("claimant_signaling_peer_id"));
+        assert!(!message_text.contains("verifier_signaling_peer_id"));
+        assert_eq!(
+            hex_encode(&message),
+            reconnect["message_hex"].as_str().unwrap()
+        );
+        let proof =
+            compute_reconnect_proof_hex(&record.raw_bearer_token, &record, &challenge).unwrap();
+        assert_eq!(proof, reconnect["hmac_sha256_hex"].as_str().unwrap());
+        let proof_frame = MeshReconnectProofFrame {
+            r#type: "mesh_auth_proof_v1".to_string(),
+            token_id: record.token_id.clone(),
+            challenge: challenge.challenge.clone(),
+            proof,
+            channel_binding: challenge.channel_binding.clone(),
+            claimant_peer_id: challenge.claimant_peer_id.clone(),
+            verifier_peer_id: challenge.verifier_peer_id.clone(),
+            claimant_signaling_peer_id: challenge.claimant_signaling_peer_id.clone(),
+            verifier_signaling_peer_id: challenge.verifier_signaling_peer_id.clone(),
+            room_name: challenge.room_name.clone(),
+        };
+        let serialized = serde_json::to_value(&proof_frame).unwrap();
+        assert_eq!(
+            serialized["claimant_signaling_peer_id"],
+            reconnect["challenge"]["frame"]["claimant_signaling_peer_id"]
+        );
+        assert_eq!(
+            serialized["verifier_signaling_peer_id"],
+            reconnect["challenge"]["frame"]["verifier_signaling_peer_id"]
+        );
+        assert!(!serde_json::to_string(&proof_frame)
+            .unwrap()
+            .contains("synthetic-reconnect-token"));
+    }
+
+    #[test]
+    fn reconnect_proof_canonicalization_matches_python_for_unicode_context() {
+        let record = ThinPeerCredentialRecord {
+            token_id: "token-é".to_string(),
+            claimant_peer_id: "peer-😀".to_string(),
+            verifier_peer_id: "peer-β".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "café/</room".to_string(),
+            raw_bearer_token: "tökén😀".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: None,
+        };
+        let challenge = MeshReconnectChallengeFrame {
+            r#type: "mesh_auth_challenge_v1".to_string(),
+            challenge: "a".repeat(64),
+            channel_binding: "b".repeat(64),
+            claimant_peer_id: record.claimant_peer_id.clone(),
+            verifier_peer_id: record.verifier_peer_id.clone(),
+            claimant_signaling_peer_id: "fresh-sig-answer".to_string(),
+            verifier_signaling_peer_id: "fresh-sig-offer".to_string(),
+            room_name: record.room_name.clone(),
+        };
+
+        let message = build_mesh_reconnect_proof_message(&record, &challenge).unwrap();
+        assert_eq!(
+            String::from_utf8(message).unwrap(),
+            concat!(
+                "aurora.mesh.reconnect-proof.v1\0",
+                "{\"challenge\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",",
+                "\"channel_binding\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",",
+                "\"claimant_peer_id\":\"peer-\\ud83d\\ude00\",",
+                "\"room_name\":\"caf\\u00e9/</room\",",
+                "\"token_id\":\"token-\\u00e9\",",
+                "\"verifier_peer_id\":\"peer-\\u03b2\",",
+                "\"version\":1}"
+            )
+        );
+        assert_eq!(
+            compute_reconnect_proof_hex(&record.raw_bearer_token, &record, &challenge).unwrap(),
+            "23192dbc7bc20cbecad7683032bc064b9cb6c4bca37a6ef2572a2f737c014f22"
+        );
+    }
+
+    #[test]
+    fn reconnect_proof_allows_rotated_signaling_ids_and_rejects_wrong_stable_context() {
+        let record = ThinPeerCredentialRecord {
+            token_id: "token-fixture-001".to_string(),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "old-sig-answer".to_string(),
+            verifier_signaling_peer_id: "old-sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+            raw_bearer_token: "synthetic-reconnect-token".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: None,
+        };
+        let rotated = MeshReconnectChallengeFrame {
+            r#type: "mesh_auth_challenge_v1".to_string(),
+            challenge: "a".repeat(64),
+            channel_binding: "b".repeat(64),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "new-sig-answer".to_string(),
+            verifier_signaling_peer_id: "new-sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+        };
+        assert!(reconnect_challenge_matches(&record, &rotated));
+        let rotated_proof =
+            compute_reconnect_proof_hex(&record.raw_bearer_token, &record, &rotated).unwrap();
+        let rotated_message = String::from_utf8_lossy(
+            &build_mesh_reconnect_proof_message(&record, &rotated).unwrap(),
+        )
+        .to_string();
+        assert!(!rotated_message.contains("new-sig-answer"));
+        assert!(!rotated_message.contains("new-sig-offer"));
+        assert!(!rotated_message.contains("old-sig-answer"));
+        assert!(!rotated_message.contains("old-sig-offer"));
+
+        let proof_frame = MeshReconnectProofFrame {
+            r#type: "mesh_auth_proof_v1".to_string(),
+            token_id: record.token_id.clone(),
+            challenge: rotated.challenge.clone(),
+            proof: rotated_proof.clone(),
+            channel_binding: rotated.channel_binding.clone(),
+            claimant_peer_id: rotated.claimant_peer_id.clone(),
+            verifier_peer_id: rotated.verifier_peer_id.clone(),
+            claimant_signaling_peer_id: rotated.claimant_signaling_peer_id.clone(),
+            verifier_signaling_peer_id: rotated.verifier_signaling_peer_id.clone(),
+            room_name: rotated.room_name.clone(),
+        };
+        let proof_value = serde_json::to_value(&proof_frame).unwrap();
+        assert_eq!(proof_value["claimant_signaling_peer_id"], "new-sig-answer");
+        assert_eq!(proof_value["verifier_signaling_peer_id"], "new-sig-offer");
+
+        let original_session = MeshReconnectChallengeFrame {
+            claimant_signaling_peer_id: "old-sig-answer".to_string(),
+            verifier_signaling_peer_id: "old-sig-offer".to_string(),
+            ..rotated.clone()
+        };
+        assert_eq!(
+            rotated_proof,
+            compute_reconnect_proof_hex(&record.raw_bearer_token, &record, &original_session)
+                .unwrap()
+        );
+        for tampered in [
+            MeshReconnectChallengeFrame {
+                claimant_peer_id: "wrong-stable-answer".to_string(),
+                ..rotated.clone()
+            },
+            MeshReconnectChallengeFrame {
+                verifier_peer_id: "wrong-stable-offer".to_string(),
+                ..rotated.clone()
+            },
+            MeshReconnectChallengeFrame {
+                room_name: "wrong-room".to_string(),
+                ..rotated.clone()
+            },
+        ] {
+            assert!(!reconnect_challenge_matches(&record, &tampered));
+            assert_ne!(
+                rotated_proof,
+                compute_reconnect_proof_hex(&record.raw_bearer_token, &record, &tampered).unwrap()
+            );
+        }
+        for tampered in [
+            MeshReconnectChallengeFrame {
+                challenge: "c".repeat(64),
+                ..rotated.clone()
+            },
+            MeshReconnectChallengeFrame {
+                channel_binding: "d".repeat(64),
+                ..rotated.clone()
+            },
+        ] {
+            assert!(reconnect_challenge_matches(&record, &tampered));
+            assert_ne!(
+                rotated_proof,
+                compute_reconnect_proof_hex(&record.raw_bearer_token, &record, &tampered).unwrap()
+            );
+        }
+        let revoked =
+            thin_peer_reconnect_proof_response("stable-answer".to_string(), None, false, None);
+        assert!(!revoked.found);
+        assert!(!revoked.matched);
+        assert!(revoked.proof.is_none());
+    }
+
+    #[test]
+    fn remote_gateway_requires_explicit_https_origin_allowlist() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_remote_env();
+        env::set_var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY", "1");
+        env::set_var(
+            "AURORA_TAURI_ALLOWED_REMOTE_ORIGINS",
+            "https://hosted.example,wss://signal.example",
+        );
+
+        assert!(remote_gateway_allowed_for(
+            &Url::parse("https://hosted.example/api").unwrap()
+        ));
+        assert!(!remote_gateway_allowed_for(
+            &Url::parse("http://hosted.example/api").unwrap()
+        ));
+        assert!(!remote_gateway_allowed_for(
+            &Url::parse("https://evil.example/api").unwrap()
+        ));
+        assert_eq!(
+            canonical_remote_origin("https://hosted.example/path").unwrap(),
+            "https://hosted.example"
+        );
+        assert!(canonical_remote_origin("https://*.example").is_err());
+        clear_remote_env();
+    }
+
+    #[test]
+    fn tauri_csp_has_loopback_only_defaults_and_no_remote_wildcards_or_samples() {
+        let config: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let csp = config["app"]["security"]["csp"].as_str().unwrap();
+        assert!(csp.contains("connect-src"));
+        assert!(csp.contains("http://127.0.0.1:*"));
+        assert!(csp.contains("ws://localhost:*"));
+        assert!(!csp.contains("https://aurora.local"));
+        assert!(!csp.contains("https://*"));
+        assert!(!csp.contains("wss://*"));
+        assert!(!csp.contains("connect-src *"));
+    }
+
+    #[test]
+    fn thin_peer_credential_commands_are_permissioned_in_main_capability_and_build_manifest() {
+        let capability = include_str!("../capabilities/aurora-main.json");
+        let permission = include_str!("../permissions/aurora-thin-peer-credentials.toml");
+        let build_manifest = include_str!("../build.rs");
+        assert!(capability.contains("aurora-thin-peer-credentials"));
+        for command in [
+            "aurora_thin_peer_credential_set",
+            "aurora_thin_peer_credential_status",
+            "aurora_thin_peer_credential_delete",
+            "aurora_thin_peer_reconnect_prove",
+            "aurora_remote_origin_policy",
+        ] {
+            assert!(permission.contains(command), "{command}");
+            assert!(build_manifest.contains(command), "{command}");
+        }
+        assert!(!permission.contains("aurora_thin_peer_credential_get"));
+        let profile_permission = include_str!("../permissions/aurora-thin-profile.toml");
+        for command in ["aurora_thin_profile_get", "aurora_thin_profile_set"] {
+            assert!(profile_permission.contains(command), "{command}");
+            assert!(build_manifest.contains(command), "{command}");
+        }
+        assert!(!profile_permission.contains("aurora_secure_storage_get"));
+        assert!(!profile_permission.contains("aurora_secure_storage_set"));
+    }
+
+    #[test]
     fn secure_storage_keys_are_limited_to_credential_namespaces() {
         for key in [
             "aurora.session",
@@ -4537,9 +5918,488 @@ mod tests {
             "aurora.config.secret",
             "aurora.session/../../token",
             "aurora.session.token value",
+            "aurora.mesh.peer-proof.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         ] {
             assert!(validate_secure_storage_key(key).is_err(), "{key}");
         }
+    }
+
+    #[test]
+    fn generic_secure_storage_cannot_access_peer_proof_namespace() {
+        let key = thin_peer_credential_key("stable-answer").unwrap();
+        assert!(is_peer_proof_storage_key(&key));
+        assert!(validate_secure_storage_key(&key).is_err());
+        let error = serde_json::to_string(&validate_secure_storage_key(&key).unwrap_err()).unwrap();
+        assert!(!error.contains("synthetic-reconnect-token"));
+        assert!(error.contains("secrets_redacted"));
+    }
+
+    #[test]
+    fn thin_capability_does_not_grant_generic_secure_storage() {
+        let capability = include_str!("../capabilities/aurora-thin.json");
+        let android_capability = include_str!("../capabilities/aurora-android-thin.json");
+        assert!(capability.contains("aurora-thin-profile"));
+        assert!(capability.contains("aurora-thin-peer-credentials"));
+        assert!(!capability.contains("aurora-secure-storage"));
+        assert!(!capability.contains("aurora_secure_storage_get"));
+        assert!(!capability.contains("aurora_secure_storage_set"));
+        assert!(!capability.contains("aurora.auth"));
+        assert!(!capability.contains("aurora.admin"));
+        assert!(!capability.contains("aurora.gateway"));
+        assert!(android_capability.contains("aurora-thin-profile"));
+        assert!(android_capability.contains("aurora-thin-peer-credentials"));
+        assert!(android_capability.contains("aurora-android-native-plugin"));
+        assert!(!android_capability.contains("aurora-secure-storage"));
+        assert!(!android_capability.contains("aurora-sidecar-start"));
+        assert!(!android_capability.contains("aurora-audio-bridge"));
+        assert!(!android_capability.contains("shell:"));
+    }
+
+    #[test]
+    fn expired_peer_credentials_fail_closed_and_are_not_used_for_proof() {
+        let record = ThinPeerCredentialRecord {
+            token_id: "token-fixture-001".to_string(),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+            raw_bearer_token: "synthetic-reconnect-token".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: Some(1),
+        };
+        assert!(record
+            .expires_at_ms
+            .is_some_and(|expires_at_ms| expires_at_ms <= current_unix_ms()));
+        let challenge = MeshReconnectChallengeFrame {
+            r#type: "mesh_auth_challenge_v1".to_string(),
+            challenge: "a".repeat(64),
+            channel_binding: "b".repeat(64),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+        };
+        assert!(reconnect_challenge_matches(&record, &challenge));
+        let response =
+            thin_peer_reconnect_proof_response("stable-answer".to_string(), None, false, None);
+        assert!(!response.found);
+        assert!(!response.matched);
+        assert!(response.proof.is_none());
+    }
+
+    #[test]
+    fn saving_already_expired_peer_credential_is_rejected() {
+        let request = ThinPeerCredentialSetRequest {
+            peer_id: "stable-answer".to_string(),
+            token_id: "token-fixture-001".to_string(),
+            claimant_peer_id: "stable-answer".to_string(),
+            verifier_peer_id: "stable-offer".to_string(),
+            claimant_signaling_peer_id: "sig-answer".to_string(),
+            verifier_signaling_peer_id: "sig-offer".to_string(),
+            room_name: "lab-room".to_string(),
+            raw_bearer_token: "synthetic-reconnect-token".to_string(),
+            created_at_ms: Some(1),
+            expires_at_ms: Some(1),
+        };
+        assert!(request
+            .expires_at_ms
+            .is_some_and(|expires_at_ms| expires_at_ms <= current_unix_ms()));
+    }
+
+    #[test]
+    fn android_native_plugin_implements_opaque_peer_credentials_profile_mic_and_lifecycle() {
+        let plugin = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"
+        );
+        for command in [
+            "fun thinPeerCredentialSet",
+            "fun thinPeerCredentialStatus",
+            "fun thinPeerCredentialDelete",
+            "fun thinPeerReconnectProve",
+            "fun thinProfileGet",
+            "fun thinProfileSet",
+            "fun webviewMicrophonePermissionDecision",
+            "fun androidLifecycleStatus",
+            "override fun load(webView: WebView)",
+            "class AuroraMicWebChromeClient",
+            "override fun onPermissionRequest",
+            "request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))",
+            "request.deny()",
+            "trigger(\"aurora://android-lifecycle\"",
+        ] {
+            assert!(plugin.contains(command), "{command}");
+        }
+        assert!(plugin.contains("PEER_PROOF_PREFIX"));
+        assert!(plugin.contains("peer reconnect credential namespace is opaque-only"));
+        assert!(plugin.contains("HmacSHA256"));
+        assert!(plugin.contains("canonicalJsonQuote"));
+        assert!(plugin.contains("character.code.toString(16).padStart(4, '0')"));
+        assert!(
+            plugin.contains("aurora.mesh.reconnect-proof.v1\\u0000")
+                || plugin.contains("aurora.mesh.reconnect-proof.v1\u{0}")
+        );
+        assert!(plugin.contains("RESOURCE_AUDIO_CAPTURE"));
+        assert!(plugin.contains("delegateWebChromeClientCaptured"));
+        assert!(plugin.contains("micDenyFailureCount"));
+        assert!(plugin.contains("lastMicDenyFailureReason"));
+        assert!(plugin.contains("Log.w(LOG_TAG"));
+        for callback in [
+            "override fun onShowFileChooser",
+            "delegate?.onShowFileChooser",
+            "override fun onJsAlert",
+            "delegate?.onJsAlert",
+            "override fun onJsConfirm",
+            "delegate?.onJsConfirm",
+            "override fun onJsPrompt",
+            "delegate?.onJsPrompt",
+            "override fun onJsBeforeUnload",
+            "delegate?.onJsBeforeUnload",
+            "override fun onCreateWindow",
+            "delegate?.onCreateWindow",
+            "override fun onCloseWindow",
+            "delegate.onCloseWindow",
+            "override fun onShowCustomView",
+            "delegate.onShowCustomView",
+            "override fun onHideCustomView",
+            "delegate.onHideCustomView",
+            "override fun getDefaultVideoPoster",
+            "delegate.getDefaultVideoPoster",
+            "override fun getVideoLoadingProgressView",
+            "delegate.getVideoLoadingProgressView",
+            "override fun onGeolocationPermissionsShowPrompt",
+            "delegate.onGeolocationPermissionsShowPrompt",
+            "override fun onReceivedIcon",
+            "delegate.onReceivedIcon",
+            "override fun onReceivedTouchIconUrl",
+            "delegate.onReceivedTouchIconUrl",
+            "override fun onRequestFocus",
+            "delegate.onRequestFocus",
+        ] {
+            assert!(plugin.contains(callback), "{callback}");
+        }
+        assert!(plugin.contains("delegate?.onConsoleMessage"));
+        assert!(plugin.contains("uri.userInfo"));
+        assert!(plugin.contains("encodedQuery"));
+        assert!(plugin.contains("encodedFragment"));
+        assert!(plugin.contains("if (scheme != \"https\") return null"));
+        assert!(plugin.contains("origin.contains(\"*\")"));
+        assert!(plugin.contains("backgroundWakeword",));
+        assert!(!plugin.contains(r#"rawBearerToken", record.getString"#));
+    }
+
+    #[test]
+    fn ios_native_plugin_implements_opaque_keychain_peer_credentials_and_profile_storage() {
+        let plugin = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift"
+        );
+        let storage = include_str!(
+            "../ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift"
+        );
+        for command in [
+            "@objc public func thinPeerCredentialSet",
+            "@objc public func thinPeerCredentialStatus",
+            "@objc public func thinPeerCredentialDelete",
+            "@objc public func thinPeerReconnectProve",
+            "@objc public func thinProfileGet",
+            "@objc public func thinProfileSet",
+        ] {
+            assert!(plugin.contains(command), "{command}");
+        }
+        for invariant in [
+            "import CryptoKit",
+            "kSecClassGenericPassword",
+            "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
+            "kSecAttrSynchronizable as String: kCFBooleanFalse",
+            "HMAC<SHA256>.authenticationCode",
+            "aurora.mesh.reconnect-proof.v1\\u{0}",
+            "options: [.sortedKeys, .withoutEscapingSlashes]",
+            "Data(ensureAscii(serialized).utf8)",
+            "for codeUnit in value.utf16",
+            "\"token_id\": record.tokenId",
+            "\"channel_binding\": challenge.channelBinding",
+            "\"claimant_peer_id\": challenge.claimantPeerId",
+            "\"verifier_peer_id\": challenge.verifierPeerId",
+            "\"claimant_signaling_peer_id\": challenge.claimantSignalingPeerId",
+            "\"verifier_signaling_peer_id\": challenge.verifierSignalingPeerId",
+            "\"room_name\": record.roomName",
+            "\"rawGetter\": false",
+            "\"allowedGenericSecureStorage\": false",
+            "\"redactedFields\": [\"rawBearerToken\"]",
+            "UserDefaults.standard",
+            "value.utf8.count <= 65_536",
+        ] {
+            assert!(storage.contains(invariant), "{invariant}");
+        }
+        assert!(!storage.contains("func thinPeerCredentialGet"));
+        assert!(!storage.contains("\"rawBearerToken\": record.rawBearerToken"));
+    }
+
+    #[test]
+    fn ios_thin_capability_and_overlay_are_python_free_and_least_privilege() {
+        let capability = include_str!("../capabilities/aurora-ios-thin.json");
+        for required in [
+            "aurora-thin-profile",
+            "aurora-thin-peer-credentials",
+            "aurora-ios-native-plugin",
+            "aurora-native-capability-manifest",
+            "deep-link:default",
+        ] {
+            assert!(capability.contains(required), "{required}");
+        }
+        for forbidden in [
+            "aurora-main",
+            "aurora-overlay",
+            "aurora-secure-storage",
+            "aurora_secure_storage_get",
+            "aurora-sidecar-start",
+            "aurora-sidecar-session",
+            "aurora-local-file",
+            "aurora-audio-bridge",
+            "shell:",
+            "process:",
+            "aurora_thin_peer_credential_get",
+        ] {
+            assert!(!capability.contains(forbidden), "{forbidden}");
+        }
+
+        let overlay: Value =
+            serde_json::from_str(include_str!("../tauri.ios-thin.conf.json")).unwrap();
+        assert_eq!(
+            overlay["app"]["security"]["capabilities"],
+            json!(["aurora-ios-thin", "aurora-mobile-mesh"])
+        );
+        assert_eq!(overlay["bundle"]["externalBin"], json!([]));
+        assert_eq!(overlay["bundle"]["resources"], json!({}));
+        let raw = overlay.to_string();
+        assert!(!raw.contains("aurora-sidecar"));
+        assert!(!raw.contains("config_defaults.json"));
+        assert!(!raw.contains("site-packages"));
+        let csp = overlay["app"]["security"]["csp"].as_str().unwrap();
+        assert!(csp.contains("media-src 'self' blob: mediastream:"));
+        assert!(!csp.contains("https://*"));
+        assert!(!csp.contains("wss://*"));
+        assert!(!csp.contains("connect-src *"));
+    }
+
+    #[test]
+    fn ios_thin_rust_commands_route_to_the_swift_plugin() {
+        let source = include_str!("lib.rs");
+        for command in [
+            "\"thinPeerCredentialSet\"",
+            "\"thinPeerCredentialStatus\"",
+            "\"thinPeerCredentialDelete\"",
+            "\"thinPeerReconnectProve\"",
+            "\"thinProfileGet\"",
+            "\"thinProfileSet\"",
+        ] {
+            let occurrences = source.matches(command).count();
+            assert!(
+                occurrences >= 2,
+                "{command} should exist in both mobile routes and static verification"
+            );
+        }
+        assert!(source.contains("#[cfg(target_os = \"ios\")]"));
+        assert!(source.contains("run_ios_plugin_command("));
+        assert!(source.contains("desktop keychain, Android Keystore, and iOS Keychain targets"));
+    }
+
+    #[test]
+    fn android_thin_capability_is_least_privilege_for_native_security_surface() {
+        let capability = include_str!("../capabilities/aurora-android-thin.json");
+        for required in [
+            "aurora-thin-profile",
+            "aurora-thin-peer-credentials",
+            "aurora-android-native-plugin",
+            "aurora-native-capability-manifest",
+            "deep-link:default",
+        ] {
+            assert!(capability.contains(required), "{required}");
+        }
+        for forbidden in [
+            "aurora-main",
+            "aurora-overlay",
+            "aurora-secure-storage",
+            "aurora_secure_storage_get",
+            "aurora-sidecar-start",
+            "aurora-sidecar-session",
+            "aurora-local-file",
+            "aurora-audio-bridge",
+            "shell:",
+            "process:",
+            "aurora_thin_peer_credential_get",
+        ] {
+            assert!(!capability.contains(forbidden), "{forbidden}");
+        }
+    }
+
+    #[test]
+    fn android_thin_overlay_does_not_inherit_desktop_main_capabilities() {
+        let base: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let overlay = android_thin_overlay_fixture();
+        let base_caps = base["app"]["security"]["capabilities"].as_array().unwrap();
+        assert!(!base_caps.iter().any(|cap| cap == "aurora-android-thin"));
+
+        let overlay_caps = overlay["app"]["security"]["capabilities"]
+            .as_array()
+            .unwrap();
+        assert_eq!(overlay_caps, &[json!("aurora-android-thin")]);
+        assert!(!overlay_caps.iter().any(|cap| cap == "aurora-main"));
+        assert!(!overlay_caps.iter().any(|cap| cap == "aurora-overlay"));
+
+        let csp = overlay["app"]["security"]["csp"].as_str().unwrap();
+        assert!(csp.contains("connect-src 'self' https://gateway.example wss://signal.example"));
+        assert!(!csp.contains("http://127.0.0.1"));
+        assert!(!csp.contains("ws://localhost"));
+        assert!(!csp.contains("https://*"));
+        assert!(!csp.contains("wss://*"));
+        assert!(!csp.contains("connect-src *"));
+
+        assert_eq!(overlay["bundle"]["externalBin"], json!([]));
+        assert_eq!(overlay["bundle"]["resources"], json!({}));
+        let overlay_raw = overlay.to_string();
+        assert!(!overlay_raw.contains("aurora-sidecar"));
+        assert!(!overlay_raw.contains("config_defaults.json"));
+        assert!(!overlay_raw.contains("app/services/config"));
+    }
+
+    fn android_thin_overlay_fixture() -> Value {
+        json!({
+            "build": {
+                "beforeBuildCommand": "pnpm build:frontend:android-thin"
+            },
+            "app": {
+                "security": {
+                    "capabilities": ["aurora-android-thin"],
+                    "csp": "default-src 'self'; connect-src 'self' https://gateway.example wss://signal.example; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
+                }
+            },
+            "bundle": {
+                "externalBin": [],
+                "resources": {},
+                "longDescription": "Aurora Android thin packages the shared WebView HTTP/WebRTC app without Python, sidecar resources, or external binaries. It connects only to exact operator-managed HTTPS/WSS origins compiled into this validation overlay."
+            }
+        })
+    }
+
+    #[test]
+    fn android_reconnect_adapter_preserves_snake_case_protocol_shape() {
+        let fixture = serde_json::from_str::<Value>(include_str!(
+            "../../../../tests/fixtures/webrtc_web_thin_protocol_vectors.json"
+        ))
+        .unwrap();
+        let reconnect = &fixture["reconnect"];
+        let inputs = &reconnect["inputs"];
+        let request = ThinPeerReconnectProveRequest {
+            peer_id: inputs["claimant_peer_id"].as_str().unwrap().to_string(),
+            challenge: MeshReconnectChallengeFrame {
+                r#type: "mesh_auth_challenge_v1".to_string(),
+                challenge: inputs["challenge"].as_str().unwrap().to_string(),
+                channel_binding: inputs["channel_binding"].as_str().unwrap().to_string(),
+                claimant_peer_id: inputs["claimant_peer_id"].as_str().unwrap().to_string(),
+                verifier_peer_id: inputs["verifier_peer_id"].as_str().unwrap().to_string(),
+                claimant_signaling_peer_id: "sig-answer".to_string(),
+                verifier_signaling_peer_id: "sig-offer".to_string(),
+                room_name: inputs["room_name"].as_str().unwrap().to_string(),
+            },
+        };
+        let android_payload = serde_json::to_value(&request).unwrap();
+        assert!(android_payload["challenge"]
+            .get("channel_binding")
+            .is_some());
+        assert!(android_payload["challenge"]
+            .get("claimant_peer_id")
+            .is_some());
+        assert!(android_payload["challenge"].get("channelBinding").is_none());
+
+        let plugin = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"
+        );
+        for key in [
+            "proof.put(\"token_id\"",
+            "proof.put(\"channel_binding\"",
+            "proof.put(\"claimant_peer_id\"",
+            "proof.put(\"claimant_signaling_peer_id\", challenge.claimantSignalingPeerIdValue())",
+            "proof.put(\"verifier_signaling_peer_id\", challenge.verifierSignalingPeerIdValue())",
+            "proof.put(\"room_name\"",
+            "channelBindingValue()",
+        ] {
+            assert!(plugin.contains(key), "{key}");
+        }
+        assert!(plugin
+            .contains(r#"challenge.claimantPeerIdValue() == record.getString("claimantPeerId")"#));
+        assert!(!plugin.contains(r#"challenge.claimantSignalingPeerIdValue() == record.getString("claimantSignalingPeerId")"#));
+        assert!(!plugin.contains(r#"challenge.verifierSignalingPeerIdValue() == record.getString("verifierSignalingPeerId")"#));
+        assert!(!plugin.contains(r#"\"claimant_signaling_peer_id\":${JSONObject.quote(challenge.claimantSignalingPeerIdValue())}"#));
+        assert!(!plugin.contains(r#"\"verifier_signaling_peer_id\":${JSONObject.quote(challenge.verifierSignalingPeerIdValue())}"#));
+        let android_proof = compute_reconnect_proof_hex(
+            "synthetic-reconnect-token",
+            &ThinPeerCredentialRecord {
+                token_id: inputs["token_id"].as_str().unwrap().to_string(),
+                claimant_peer_id: inputs["claimant_peer_id"].as_str().unwrap().to_string(),
+                verifier_peer_id: inputs["verifier_peer_id"].as_str().unwrap().to_string(),
+                claimant_signaling_peer_id: "stored-sig-answer".to_string(),
+                verifier_signaling_peer_id: "stored-sig-offer".to_string(),
+                room_name: inputs["room_name"].as_str().unwrap().to_string(),
+                raw_bearer_token: "synthetic-reconnect-token".to_string(),
+                created_at_ms: Some(1),
+                expires_at_ms: None,
+            },
+            &request.challenge,
+        )
+        .unwrap();
+        assert_eq!(
+            android_proof,
+            reconnect["hmac_sha256_hex"].as_str().unwrap()
+        );
+        assert_eq!(
+            hex_encode(
+                &build_mesh_reconnect_proof_message(
+                    &ThinPeerCredentialRecord {
+                        token_id: inputs["token_id"].as_str().unwrap().to_string(),
+                        claimant_peer_id: inputs["claimant_peer_id"].as_str().unwrap().to_string(),
+                        verifier_peer_id: inputs["verifier_peer_id"].as_str().unwrap().to_string(),
+                        claimant_signaling_peer_id: "stored-sig-answer".to_string(),
+                        verifier_signaling_peer_id: "stored-sig-offer".to_string(),
+                        room_name: inputs["room_name"].as_str().unwrap().to_string(),
+                        raw_bearer_token: "synthetic-reconnect-token".to_string(),
+                        created_at_ms: Some(1),
+                        expires_at_ms: None,
+                    },
+                    &request.challenge,
+                )
+                .unwrap()
+            ),
+            reconnect["message_hex"].as_str().unwrap()
+        );
+        let rotated_request = ThinPeerReconnectProveRequest {
+            peer_id: request.peer_id.clone(),
+            challenge: MeshReconnectChallengeFrame {
+                claimant_signaling_peer_id: "rotated-claimant-sig".to_string(),
+                verifier_signaling_peer_id: "rotated-verifier-sig".to_string(),
+                ..request.challenge.clone()
+            },
+        };
+        assert_eq!(
+            android_proof,
+            compute_reconnect_proof_hex(
+                "synthetic-reconnect-token",
+                &ThinPeerCredentialRecord {
+                    token_id: inputs["token_id"].as_str().unwrap().to_string(),
+                    claimant_peer_id: inputs["claimant_peer_id"].as_str().unwrap().to_string(),
+                    verifier_peer_id: inputs["verifier_peer_id"].as_str().unwrap().to_string(),
+                    claimant_signaling_peer_id: "stored-sig-answer".to_string(),
+                    verifier_signaling_peer_id: "stored-sig-offer".to_string(),
+                    room_name: inputs["room_name"].as_str().unwrap().to_string(),
+                    raw_bearer_token: "synthetic-reconnect-token".to_string(),
+                    created_at_ms: Some(1),
+                    expires_at_ms: None,
+                },
+                &rotated_request.challenge,
+            )
+            .unwrap()
+        );
     }
 
     #[test]

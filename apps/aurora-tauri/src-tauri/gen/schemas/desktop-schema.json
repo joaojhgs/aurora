@@ -189,10 +189,28 @@
           "markdownDescription": "Enables the aurora_android_baseline_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_android_lifecycle_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-lifecycle-status",
+          "markdownDescription": "Enables the aurora_android_lifecycle_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_android_native_plugin_payload command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-android-native-plugin-payload",
           "markdownDescription": "Enables the aurora_android_native_plugin_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_foreground_service_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-foreground-service-status",
+          "markdownDescription": "Enables the aurora_android_voice_foreground_service_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_webview_microphone_permission_decision command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-webview-microphone-permission-decision",
+          "markdownDescription": "Enables the aurora_android_webview_microphone_permission_decision command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_command command without any pre-configured scope.",
@@ -247,6 +265,12 @@
           "type": "string",
           "const": "allow-aurora-native-capability-manifest",
           "markdownDescription": "Enables the aurora_native_capability_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_remote_origin_policy command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-remote-origin-policy",
+          "markdownDescription": "Enables the aurora_remote_origin_policy command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_request command without any pre-configured scope.",
@@ -315,6 +339,42 @@
           "markdownDescription": "Enables the aurora_subscribe command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_thin_peer_credential_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-peer-credential-delete",
+          "markdownDescription": "Enables the aurora_thin_peer_credential_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_peer_credential_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-peer-credential-set",
+          "markdownDescription": "Enables the aurora_thin_peer_credential_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_peer_credential_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-peer-credential-status",
+          "markdownDescription": "Enables the aurora_thin_peer_credential_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_peer_reconnect_prove command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-peer-reconnect-prove",
+          "markdownDescription": "Enables the aurora_thin_peer_reconnect_prove command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_profile_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-profile-get",
+          "markdownDescription": "Enables the aurora_thin_profile_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_profile_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-profile-set",
+          "markdownDescription": "Enables the aurora_thin_profile_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_unsubscribe command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-unsubscribe",
@@ -327,10 +387,10 @@
           "markdownDescription": "Enables the native_capabilities command without any pre-configured scope."
         },
         {
-          "description": "Allow the Android smoke harness and frontend SDK adapter to read the native Android Kotlin plugin capability payload.",
+          "description": "Allow Android thin/mobile runtime to read native Android status and policy wrappers. Wrappers call the native plugin without exposing raw Kotlin commands or secret getters.",
           "type": "string",
           "const": "aurora-android-native-plugin",
-          "markdownDescription": "Allow the Android smoke harness and frontend SDK adapter to read the native Android Kotlin plugin capability payload."
+          "markdownDescription": "Allow Android thin/mobile runtime to read native Android status and policy wrappers. Wrappers call the native plugin without exposing raw Kotlin commands or secret getters."
         },
         {
           "description": "Allow audio bridge status checks for raw-audio permission UX without granting microphone capture, live streaming, or playback control.",
@@ -453,6 +513,18 @@
           "markdownDescription": "Allow the frontend SDK adapter to open, activate, and close the Aurora EventStream subscription bridge through the configured Gateway SSE route."
         },
         {
+          "description": "Allow desktop-thin WebView runtime to store/delete/status peer reconnect credentials and request challenge-bound reconnect proofs through the platform keychain. Raw bearer tokens are never returned to the WebView.",
+          "type": "string",
+          "const": "aurora-thin-peer-credentials",
+          "markdownDescription": "Allow desktop-thin WebView runtime to store/delete/status peer reconnect credentials and request challenge-bound reconnect proofs through the platform keychain. Raw bearer tokens are never returned to the WebView."
+        },
+        {
+          "description": "Allow the desktop-thin shell to load and save only the nonsecret connection-profile document. This does not expose generic secure-storage get/set/delete or auth/admin/gateway secret keys.",
+          "type": "string",
+          "const": "aurora-thin-profile",
+          "markdownDescription": "Allow the desktop-thin shell to load and save only the nonsecret connection-profile document. This does not expose generic secure-storage get/set/delete or auth/admin/gateway secret keys."
+        },
+        {
           "description": "Allow the frontend SDK adapter to read system tray availability. Tray menu actions are handled in Rust and do not expose shell/process access.",
           "type": "string",
           "const": "aurora-tray",
@@ -471,10 +543,28 @@
           "markdownDescription": "Denies the aurora_android_baseline_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the aurora_android_lifecycle_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-lifecycle-status",
+          "markdownDescription": "Denies the aurora_android_lifecycle_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the aurora_android_native_plugin_payload command without any pre-configured scope.",
           "type": "string",
           "const": "deny-aurora-android-native-plugin-payload",
           "markdownDescription": "Denies the aurora_android_native_plugin_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_foreground_service_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-foreground-service-status",
+          "markdownDescription": "Denies the aurora_android_voice_foreground_service_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_webview_microphone_permission_decision command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-webview-microphone-permission-decision",
+          "markdownDescription": "Denies the aurora_android_webview_microphone_permission_decision command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_command command without any pre-configured scope.",
@@ -529,6 +619,12 @@
           "type": "string",
           "const": "deny-aurora-native-capability-manifest",
           "markdownDescription": "Denies the aurora_native_capability_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_remote_origin_policy command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-remote-origin-policy",
+          "markdownDescription": "Denies the aurora_remote_origin_policy command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_request command without any pre-configured scope.",
@@ -595,6 +691,42 @@
           "type": "string",
           "const": "deny-aurora-subscribe",
           "markdownDescription": "Denies the aurora_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_peer_credential_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-peer-credential-delete",
+          "markdownDescription": "Denies the aurora_thin_peer_credential_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_peer_credential_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-peer-credential-set",
+          "markdownDescription": "Denies the aurora_thin_peer_credential_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_peer_credential_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-peer-credential-status",
+          "markdownDescription": "Denies the aurora_thin_peer_credential_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_peer_reconnect_prove command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-peer-reconnect-prove",
+          "markdownDescription": "Denies the aurora_thin_peer_reconnect_prove command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_profile_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-profile-get",
+          "markdownDescription": "Denies the aurora_thin_profile_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_profile_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-profile-set",
+          "markdownDescription": "Denies the aurora_thin_profile_set command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_unsubscribe command without any pre-configured scope.",
@@ -2623,6 +2755,60 @@
           "type": "string",
           "const": "core:window:deny-unminimize",
           "markdownDescription": "Denies the unminimize command without any pre-configured scope."
+        },
+        {
+          "description": "Allows reading the opened deep link via the get_current command\n#### This default permission set includes:\n\n- `allow-get-current`",
+          "type": "string",
+          "const": "deep-link:default",
+          "markdownDescription": "Allows reading the opened deep link via the get_current command\n#### This default permission set includes:\n\n- `allow-get-current`"
+        },
+        {
+          "description": "Enables the get_current command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-get-current",
+          "markdownDescription": "Enables the get_current command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the is_registered command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-is-registered",
+          "markdownDescription": "Enables the is_registered command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the register command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-register",
+          "markdownDescription": "Enables the register command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unregister command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:allow-unregister",
+          "markdownDescription": "Enables the unregister command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_current command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-get-current",
+          "markdownDescription": "Denies the get_current command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the is_registered command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-is-registered",
+          "markdownDescription": "Denies the is_registered command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-register",
+          "markdownDescription": "Denies the register command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unregister command without any pre-configured scope.",
+          "type": "string",
+          "const": "deep-link:deny-unregister",
+          "markdownDescription": "Denies the unregister command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe shortcuts can be inherently dangerous and it is\napplication specific if specific shortcuts should be\nregistered or unregistered.\n",

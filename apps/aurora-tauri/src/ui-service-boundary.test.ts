@@ -32,6 +32,7 @@ const approvedClientFactoryFiles = new Set([
   'apps/aurora-web/app/aurora-client.ts',
   'packages/aurora-sdk/src/http.ts',
   'packages/aurora-sdk/src/mock.ts',
+  'packages/aurora-sdk/src/webrtc/runtime.ts',
   'packages/aurora-sdk/src/tauri.ts',
   'packages/aurora-sdk/src/test-utils.ts'
 ])
@@ -148,7 +149,7 @@ describe('UI and Tauri service boundary contract', () => {
     const httpTransport = readRepo('packages/aurora-sdk/src/http.ts')
     const tauriTransport = readRepo('packages/aurora-sdk/src/tauri.ts')
 
-    expect(runtimeBridge).toContain("from '@aurora/client'")
+    expect(runtimeBridge).toMatch(/from ['\"]@aurora\/client['\"]/)
     expect(runtimeBridge).toContain('new TauriLocalTransport({ invoke, listen })')
     expect(runtimeBridge).toContain('new HttpGatewayTransport({')
     expect(runtimeBridge).toContain('new MockAuroraTransport()')

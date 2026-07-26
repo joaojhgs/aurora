@@ -19,10 +19,13 @@ tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
 getrandom = "0.2"
+hmac = "0.12"
 reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha2 = "0.10"
 tauri = { version = "2.9.5", features = ["tray-icon", "image-png"] }
+tauri-plugin-deep-link = "2.4.6"
 tauri-plugin-updater = "2.9.0"
 thiserror = "2.0"
 tokio = { version = "1", features = ["sync"] }
@@ -31,3 +34,7 @@ url = "2.5"
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
 tauri-plugin-global-shortcut = "2.3.2"
+tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2.4.0"

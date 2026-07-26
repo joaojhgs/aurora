@@ -19,6 +19,7 @@ const gate = readJson(gatePath)
 
 validateGateShape(gate)
 validatePolicyCopy()
+validateThinWebRtcContract()
 
 if (!policyOnly) {
   validateHost()
@@ -66,6 +67,94 @@ function validatePolicyCopy() {
     }
   }
   assert(offenders.length === 0, `iOS UI copy must say "${gate.policyCopy}" and avoid replacement claims:\n${offenders.join('\n')}`)
+}
+
+function validateThinWebRtcContract() {
+  const swiftPlugin = readFileSync(
+    join(appDir, 'src-tauri', 'ios', 'AuroraNativePlugin', 'Sources', 'AuroraNativePlugin', 'AuroraNativePlugin.swift'),
+    'utf8'
+  )
+  const swiftStorage = readFileSync(
+    join(appDir, 'src-tauri', 'ios', 'AuroraNativePlugin', 'Sources', 'AuroraNativePlugin', 'AuroraThinPeerStorage.swift'),
+    'utf8'
+  )
+  const rustBridge = readFileSync(join(appDir, 'src-tauri', 'src', 'lib.rs'), 'utf8')
+  const runtime = readFileSync(join(appDir, 'src', 'aurora-client.ts'), 'utf8')
+  const packageJson = readJson(join(appDir, 'package.json'))
+  const prepareThinBundle = readFileSync(
+    join(appDir, 'scripts', 'prepare-ios-thin-bundle.mjs'),
+    'utf8'
+  )
+  const buildThinBundle = readFileSync(
+    join(appDir, 'scripts', 'build-ios-thin-bundle.mjs'),
+    'utf8'
+  )
+  const capability = readJson(join(appDir, 'src-tauri', 'capabilities', 'aurora-ios-thin.json'))
+  const overlay = readJson(join(appDir, 'src-tauri', 'tauri.ios-thin.conf.json'))
+
+  for (const command of [
+    'thinPeerCredentialSet',
+    'thinPeerCredentialStatus',
+    'thinPeerCredentialDelete',
+    'thinPeerReconnectProve',
+    'thinProfileGet',
+    'thinProfileSet'
+  ]) {
+    assert(swiftPlugin.includes(`@objc public func ${command}`), `iOS native plugin is missing ${command}`)
+    assert(rustBridge.includes(`"${command}"`), `Rust iOS bridge is missing ${command}`)
+  }
+  for (const invariant of [
+    'kSecClassGenericPassword',
+    'kSecAttrAccessibleWhenUnlockedThisDeviceOnly',
+    'kSecAttrSynchronizable as String: kCFBooleanFalse',
+    'HMAC<SHA256>.authenticationCode',
+    'aurora.mesh.reconnect-proof.v1\\u{0}',
+    '.sortedKeys',
+    '.withoutEscapingSlashes',
+    'Data(ensureAscii(serialized).utf8)',
+    'for codeUnit in value.utf16',
+    '"rawGetter": false',
+    '"allowedGenericSecureStorage": false',
+    '"redactedFields": ["rawBearerToken"]'
+  ]) {
+    assert(swiftStorage.includes(invariant), `iOS thin storage is missing invariant ${invariant}`)
+  }
+  assert(!swiftStorage.includes('func thinPeerCredentialGet'), 'iOS thin storage must not expose a raw credential getter')
+  assert(runtime.includes('isAndroidTauriRuntime() || isIosTauriRuntime()'), 'iOS must use the shared mobile WebView thin runtime')
+  assert(runtime.includes('isIosTauriRuntime()'), 'iOS must use the native opaque peer credential store')
+
+  for (const permission of ['aurora-thin-profile', 'aurora-thin-peer-credentials', 'aurora-ios-native-plugin']) {
+    assert(capability.permissions.includes(permission), `iOS thin capability is missing ${permission}`)
+  }
+  for (const forbidden of ['aurora-main', 'aurora-secure-storage', 'aurora-local-file', 'aurora-audio-bridge']) {
+    assert(!capability.permissions.includes(forbidden), `iOS thin capability must not include ${forbidden}`)
+  }
+  assert(overlay.app.security.capabilities.includes('aurora-ios-thin'), 'iOS thin overlay must select aurora-ios-thin')
+  assert(Array.isArray(overlay.bundle.externalBin) && overlay.bundle.externalBin.length === 0, 'iOS thin overlay must not bundle external binaries')
+  assert(Object.keys(overlay.bundle.resources).length === 0, 'iOS thin overlay must not bundle sidecar resources')
+  assert(packageJson.scripts['ios:prepare:thin'] === 'node ./scripts/prepare-ios-thin-bundle.mjs', 'iOS thin prepare command must generate an exact-origin overlay')
+  assert(packageJson.scripts['ios:build:thin:simulator'] === 'node ./scripts/build-ios-thin-bundle.mjs', 'iOS thin simulator build must use the generated overlay wrapper')
+  for (const invariant of [
+    'AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS',
+    "capabilities: ['aurora-ios-thin', 'aurora-mobile-mesh']",
+    'externalBin: []',
+    'resources: {}',
+    "if (!['https:', 'wss:'].includes(url.protocol))",
+    "url.pathname !== '/'",
+    'url.username || url.password',
+    'url.search',
+    'url.hash'
+  ]) {
+    assert(prepareThinBundle.includes(invariant), `iOS thin overlay generator is missing ${invariant}`)
+  }
+  for (const invariant of [
+    'AURORA_TAURI_IOS_THIN_CONFIG_PATH',
+    "'--config',",
+    "'aarch64-sim'",
+    'pythonSidecarStaged: false'
+  ]) {
+    assert(buildThinBundle.includes(invariant), `iOS thin build wrapper is missing ${invariant}`)
+  }
 }
 
 function validateHost() {

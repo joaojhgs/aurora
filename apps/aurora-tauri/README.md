@@ -5,8 +5,40 @@ This package is the official Tauri 2 desktop shell for Aurora. It hosts the prod
 ## Modes
 
 - Desktop local: uses the Tauri IPC bridge to start, monitor, and stop a Rust-supervised Python thread-mode sidecar while UI data still flows through `AuroraClient`.
-- Desktop thin: set `VITE_AURORA_GATEWAY_URL` (and optionally `VITE_AURORA_GATEWAY_TOKEN`) so the Tauri shell uses the HTTP Gateway SDK transport without starting or probing a local sidecar. Native shell probes remain local capability evidence only.
+- Desktop thin: use the packaged connection-profile editor to select HTTP-only, WebRTC-only, or WebRTC-preferred. HTTP-only packages require an exact HTTPS Gateway origin; WebRTC-only packages require an exact WSS signaling origin and compile no Gateway origin; WebRTC-preferred packages require both. The persisted profile contains only nonsecret endpoint and stable peer metadata; authentication stays in the live SDK session and mesh invites stay in the URL fragment/in memory. Native shell probes remain local capability evidence only, and `build:bundle:desktop-thin` packages this mode without Python sidecar files.
+- Android/iOS thin: use the same TypeScript WebView HTTP/WebRTC runtime. Android stores peer reconnect material behind Keystore-backed proof commands; iOS uses a device-only, non-synchronizing Keychain item and computes the same canonical reconnect proof without returning the bearer to JavaScript. Both persist only sanitized nonsecret profile documents outside the credential store.
 - Browser development fallback: `VITE_AURORA_GATEWAY_URL` also selects HTTP transport in browser previews; in a plain browser preview without Tauri or a reachable loopback Gateway, the SDK mock transport is a **degraded development fixture only**, not live Aurora state.
+
+## Thin endpoint policy
+
+Thin package wrappers accept only exact secure, root origins. Wildcards, credentials, `http:`/`ws:`, paths, query strings, and fragments fail closed. Set `AURORA_TAURI_THIN_CONNECTION_MODE` and the platform origin variable as follows:
+
+| Mode | Required packaged origins | Aurora HTTP application server |
+| --- | --- | --- |
+| `http-only` | One exact `https://` Gateway origin | Required |
+| `webrtc-only` | One exact `wss://` signaling origin | Not required; no Gateway origin is compiled into the frontend or CSP |
+| `webrtc-preferred` | Exact `https://` Gateway and `wss://` signaling origins | Required only as the explicit fallback path |
+
+Python-free WSS-only build examples:
+
+```bash
+# Desktop AppImage/deb
+AURORA_TAURI_ALLOWED_REMOTE_ORIGINS="wss://signaling.example" \
+AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only \
+pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
+
+# Android debug APK (use android:build:thin:aab for the universal AAB)
+AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS="wss://signaling.example" \
+AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only \
+pnpm --filter @aurora/tauri-ui android:build:thin:apk
+
+# iOS simulator, on macOS/Xcode
+AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS="wss://signaling.example" \
+AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only \
+pnpm --filter @aurora/tauri-ui ios:build:thin:simulator
+```
+
+These packages still need STUN and usually TURN URLs in the imported peer invite/profile. WSS signaling is rendezvous only; Aurora RPC, streams, cancellation, and events use the WebRTC DataChannel after negotiation.
 
 ## One-command desktop development
 
@@ -87,29 +119,32 @@ pnpm --filter @aurora/tauri-ui dev:smoke
 
 The Tauri shell and SDK transport do not use `localStorage`, `sessionStorage`, or plaintext files for these values. The secure-storage commands return redacted metadata (`backend=platform-keychain`, `persisted=true`, `secretsRedacted=true`) and only return a secret value to the explicit `secureStorageGet` caller.
 
-iOS builds expose the same storage posture through the Aurora native plugin skeleton in `src-tauri/ios/`: Keychain status, Face ID/Touch ID status, and admin unlock confirmation are surfaced as app-owned native capability evidence. Admin unlock is confirmation-only and still expects backend AdminAction confirmation/audit for admin-critical mutations. The iOS app must include `NSFaceIDUsageDescription`, and `tauri ios build`/Xcode simulator or device validation must run on macOS before release.
+iOS builds expose the same storage posture through the Aurora native plugin in `src-tauri/ios/`: thin peer credentials are stored as device-only, non-synchronizing generic-password Keychain items under hashed peer accounts; reconnect proof is computed natively with the canonical `mesh_auth_proof_v1` HMAC transcript; only metadata/proof is returned. Nonsecret connection profiles use `UserDefaults`. Keychain status, Face ID/Touch ID status, and admin unlock confirmation remain app-owned native capability evidence. Admin unlock is confirmation-only and still expects backend AdminAction confirmation/audit for admin-critical mutations. The iOS app must include `NSFaceIDUsageDescription`, and `tauri ios build`/Xcode simulator or device validation must run on macOS before release.
 
 ## Packaging And Updates
 
-Tauri bundling is enabled for Linux AppImage/deb by default, macOS dmg, and Windows MSI/NSIS targets. RPM is explicit via `build:bundle:linux-rpm:thin` on RPM-capable runners. Default local/CI bundle scripts pass `--no-sign`; secret-backed release builds create updater artifacts and signatures through Tauri's updater configuration.
+Tauri bundling is enabled for Linux AppImage/deb by default, macOS dmg, and Windows MSI/NSIS targets. RPM is explicit via `build:bundle:linux-rpm:desktop-local-minimal` or the Python-free `build:bundle:linux-rpm:thin` on RPM-capable runners. Default local/CI bundle scripts pass `--no-sign`; secret-backed release builds create updater artifacts and signatures through Tauri's updater configuration.
 
 Release inputs:
 
-- `AURORA_TAURI_SIDECAR_PROFILE`: optional sidecar profile override; defaults to `thin`. Supported profiles are `thin`, `local-cpu`, `local-cuda`, `local-rocm`, `local-metal`, `local-vulkan`, `local-sycl`, `local-rpc`, and `full`.
+- `AURORA_TAURI_SIDECAR_PROFILE`: optional local-sidecar profile override; defaults to `desktop-local-minimal`. Supported user-facing profiles are `desktop-local-minimal`, `local-cpu`, `local-cuda`, `local-rocm`, `local-metal`, `local-vulkan`, `local-sycl`, `local-rpc`, and `full`.
 - `AURORA_TAURI_SIDECAR_SOURCE`: optional trusted prebuilt Aurora sidecar override for CI cache/artifact reuse. If unset, `prepare:sidecar` builds the selected profile automatically from `dist/sidecars/<profile>/aurora-sidecar` or by invoking the Python builder in an isolated `uv --no-dev` environment.
 - `AURORA_TAURI_TARGET_TRIPLE`: optional override for cross-build sidecar naming; defaults to the host Rust target triple.
+- `AURORA_TAURI_THIN_CONNECTION_MODE`: `http-only`, `webrtc-only`, or `webrtc-preferred` for thin package wrappers.
+- `AURORA_TAURI_ALLOWED_REMOTE_ORIGINS`, `AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS`, and `AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS`: space-separated exact secure origins required by the selected thin mode. The platform-specific variables take precedence on Android/iOS.
 - `TAURI_SIGNING_PRIVATE_KEY`: required by Tauri when producing signed updater artifacts. Use a secure CI secret or a local secret path/content.
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: optional signing key password.
 
 The updater public key and endpoint in `src-tauri/tauri.conf.json` are release placeholders. A production release must replace `AURORA_RELEASE_PUBLIC_KEY_REPLACE_BEFORE_RELEASE` with the generated public key content and point the HTTPS endpoint at the signed release metadata service before publishing.
 
 ```bash
-pnpm --filter @aurora/tauri-ui prepare:sidecar:thin
+pnpm --filter @aurora/tauri-ui prepare:sidecar:desktop-local-minimal
 pnpm --filter @aurora/tauri-ui build
-pnpm --filter @aurora/tauri-ui build:bundle:thin
+pnpm --filter @aurora/tauri-ui build:bundle:desktop-local
+pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
 ```
 
-`build:bundle` aliases `build:bundle:thin`. Heavier local assistant packages are explicit (`build:bundle:local-cpu`, `build:bundle:local-cuda`, `build:bundle:local-metal`, etc.) so default desktop packaging does not bundle every STT/TTS/local-model dependency. `prepare:sidecar` builds `aurora-sidecar` automatically with `uv run --isolated --no-dev python scripts/build.py --target exe --clean --sidecar --sidecar-profile <profile>` unless `AURORA_TAURI_SIDECAR_SOURCE` points to a trusted prebuilt executable. Profile outputs live under `dist/sidecars/<profile>/aurora-sidecar`, are size-guarded before staging, and are then copied into `src-tauri/binaries/aurora-sidecar-$TARGET_TRIPLE` because Tauri expects target-triple suffixed external binaries at bundle time. The script also writes the ignored `src-tauri/tauri.release.conf.json` overlay that adds `bundle.externalBin` and the config-defaults resource for `build:bundle`. The default `tauri.conf.json` intentionally omits `externalBin` so `cargo check` and smoke CI can run without release-only sidecar artifacts. See `docs/TAURI_DESKTOP_BUILD.md` for the full build flow.
+Use `build:bundle:desktop-thin` (or its Python-free compatibility alias `build:bundle:thin`) for the remote desktop shell. It writes `src-tauri/tauri.thin.conf.json`, runs Tauri with that flavor overlay, requires only the exact `https://` and/or `wss://` CSP origins needed by the selected mode, injects only nonsecret default endpoints into the initial profile, replaces desktop-local capabilities with `aurora-thin`, omits `bundle.externalBin` and `bundle.resources`, and runs `verify:bundle:desktop-thin`. A `webrtc-only` package accepts WSS signaling alone and leaves the Gateway URL empty. Profile changes are loaded/saved asynchronously and close/recreate the shared WebView HTTP/WebRTC runtime. Authentication remains in the live SDK session; no build-time bearer fallback exists. `build:bundle` aliases `build:bundle:desktop-local`, whose minimal sidecar profile is `desktop-local-minimal`. See `docs/TAURI_DESKTOP_BUILD.md` for the full build flow.
 
 ## Android preflight
 
@@ -156,8 +191,12 @@ The actual iOS build and signing gate requires macOS with Xcode and the generate
 ```bash
 pnpm --filter @aurora/tauri-ui tauri ios init
 pnpm --filter @aurora/tauri-ui ios:preflight
+export AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS="https://gateway.example wss://signaling.example"
+pnpm --filter @aurora/tauri-ui ios:build:thin:simulator
 pnpm --filter @aurora/tauri-ui ios:open-xcode
 ```
+
+`ios:build:thin:simulator` is the supported thin-shell build entrypoint. It rejects wildcard, insecure, credential-bearing, and non-root remote origins; generates a temporary Tauri overlay with only the exact origins required by the selected mode; removes external binaries and sidecar resources; and writes `reports/ios-thin-simulator-build-provenance.json` only after a successful Xcode simulator build. For direct-peer-only packaging, use `AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS="wss://signaling.example"` with `AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only`; no Gateway origin is required. The checked-in `tauri.ios-thin.conf.json` is a policy template, not an operator endpoint configuration.
 
 The App Store/TestFlight dry run also requires App Store Connect credentials in CI or an external macOS runner:
 
@@ -180,12 +219,13 @@ Required QA evidence for IOS-008:
 
 | Platform | Local command / CI lane | Capability evidence | Release limits |
 | --- | --- | --- | --- |
-| Web thin | Web app checks in `frontend-sdk.yml` | HTTP/Gateway SDK transport and browser-supported permissions. | No Tauri sidecar, keychain, Android role, or iOS App Intent claims. |
+| Web thin | Web app checks in `frontend-sdk.yml`; `pnpm test:webrtc:interop`; `pnpm test:webrtc:turn`; `pnpm test:webrtc:browsers` | HTTP/Gateway SDK transport plus direct, configured-STUN, and forced-TURN WebRTC DataChannel RPC/events live-proven in Chromium, Firefox, and Playwright WebKit. | Packaged WebView, page suspension, physical-device, and production-scale browser/network certification remain separate evidence. |
 | Desktop local | `pnpm --filter @aurora/tauri-ui tauri dev`; `dev:smoke` in `tauri-desktop.yml` | Rust-supervised Python sidecar, loopback Gateway, secure storage/native command status, unified logs. | Dev path does not use packaged sidecar staging. |
-| Desktop packaged | `build:bundle:thin` or explicit `build:bundle:<profile>` | Profile-specific sidecar staged into Tauri external binaries. | Local/CI scripts pass `--no-sign`; signing/notarization are release-only. |
-| Android | `android:init`, `android:preflight:ci`, `android:build:apk:x86_64:debug`, `android:smoke` | Native manifest payloads for assistant role, fallback entrypoints, Keystore, biometric/admin unlock, and device matrix. | Release AAB/signing needs keystore inputs and Play/App Distribution workflow. |
-| iOS policy | `ios:policy` | Manifest and copy policy checks, including no default system-assistant claim. | Linux-safe only; not build evidence. |
-| iOS build/preflight | `tauri ios init`, `tauri ios build`, `ios:preflight` | macOS/Xcode generated project, simulator/build, App Intent/share/deep-link/file evidence when targets exist. | Requires macOS/Xcode; App Store/TestFlight dry run requires Apple credentials. |
+| Desktop packaged local | `build:bundle:desktop-local`, `build:bundle:desktop-local-minimal`, or another explicit local `build:bundle:<profile>` | Profile-specific sidecar staged into Tauri external binaries. | Local/CI scripts pass `--no-sign`; signing/notarization are release-only. |
+| Desktop packaged thin | `build:bundle:desktop-thin`; `verify:bundle:desktop-thin` | Python-free Tauri shell with mode-specific exact HTTPS Gateway and/or WSS signaling configuration and AppImage/deb artifact proof report. WSS-only packaging is supported for `webrtc-only`. | Requires the operator-managed endpoint(s) selected by mode; no local wakeword/background Python service ownership. |
+| Android | `android:init`, `android:preflight:ci`, `android:build:thin:apk`, `android:verify:thin:apk`, `android:build:thin:aab`, `android:verify:thin:aab`, `android:smoke` | Android thin APK/AAB artifact proof; native manifest payloads for assistant role, fallback entrypoints, Keystore peer credentials/proofs, biometric/admin unlock, foreground WebView mic policy, lifecycle, and device matrix. | Local emulator/physical runtime smoke is not proven without KVM/device; release AAB/signing needs keystore inputs and Play/App Distribution workflow. |
+| iOS thin policy/source | `ios:policy` | Shared WebView HTTP/WebRTC routing, least-privilege thin capability/overlay, device-only Keychain peer credential/proof adapter, nonsecret profile storage, and no default system-assistant claim. | Linux-safe source/policy evidence only; not a simulator/device WebRTC result. |
+| iOS build/preflight | `tauri ios init`, `ios:build:thin:simulator`, `tauri ios build`, `ios:preflight` | macOS/Xcode generated project and simulator build lanes for baseline plus Python-free thin overlay; App Intent/share/deep-link/file evidence when targets exist. | Requires macOS/Xcode; WKWebView/direct-STUN-TURN device smoke remains required; App Store/TestFlight dry run requires Apple credentials. |
 
 ## Commands
 
@@ -193,6 +233,12 @@ Required QA evidence for IOS-008:
 pnpm --filter @aurora/tauri-ui build
 pnpm --filter @aurora/tauri-ui tauri dev
 pnpm --filter @aurora/tauri-ui ios:policy
+pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
+pnpm --filter @aurora/tauri-ui android:verify:thin:apk
+pnpm --filter @aurora/tauri-ui android:verify:thin:aab
+pnpm test:webrtc:interop
+pnpm test:webrtc:turn
+pnpm test:webrtc:browsers
 cd apps/aurora-tauri/src-tauri && cargo check
 cd apps/aurora-tauri/src-tauri && cargo test
 ```
@@ -227,25 +273,29 @@ The iOS Tauri overlay declares `bundle.fileAssociations` in `src-tauri/tauri.ios
 
 After IOS-002/IOS-003/IOS-004 add the Swift plugin and Xcode-managed App Intent/share/widget targets, the macOS check must also smoke-test simulator/device invocation of one App Intent or Shortcut and one share/deep-link/file-open flow. Do not duplicate Aurora orchestration logic in Swift; native entrypoints bridge to the SDK/backend.
 
-## Android Baseline
+## Android thin baseline
 
-AND-001 keeps Android support at the official Tauri mobile build baseline. It does not implement the Aurora Android Kotlin feature plugin, assistant-role qualification, foreground audio service, share/deep-link intake, or secure mobile storage. The shell exposes `aurora_android_baseline_status` so emulator smoke tests can capture a redacted native payload. That payload keeps assistant-role fields unknown until a later RoleManager/VoiceInteractionService probe provides backend/native evidence.
+Android support now includes an official Tauri mobile generated project, synced Kotlin native plugin, and Python-free Android thin APK/AAB build lane. Android thin reuses the shared WebView HTTP/WebRTC runtime; the native layer supplies capability evidence, Keystore-backed peer credential/proof storage, foreground WebView microphone policy, lifecycle release policy, and platform entrypoints.
 
 ```bash
 pnpm --filter @aurora/tauri-ui android:init
-pnpm --filter @aurora/tauri-ui android:build:apk:x86_64
-pnpm --filter @aurora/tauri-ui android:build:apk:x86_64:debug
-pnpm --filter @aurora/tauri-ui android:build:aab
+pnpm --filter @aurora/tauri-ui android:preflight:ci
+pnpm --filter @aurora/tauri-ui android:build:thin:apk
+pnpm --filter @aurora/tauri-ui android:verify:thin:apk
+pnpm --filter @aurora/tauri-ui android:build:thin:aab
+pnpm --filter @aurora/tauri-ui android:verify:thin:aab
 pnpm --filter @aurora/tauri-ui android:smoke
 ```
 
-The shared Tauri capability intentionally does not grant `updater:default`; updater artifact generation remains desktop packaging configuration, not a webview permission. Local Android builds require Java plus Android SDK/NDK/emulator components. The GitHub `Tauri Android Verification` workflow installs those prerequisites, initializes the generated `src-tauri/gen/android` project, builds an installable debug APK for emulator smoke, uploads the APK artifact, installs it on an emulator, launches Aurora, and records the `aurora_android_baseline_status` payload from logcat when available.
+Current artifact proof passes for the generated debug APK and AAB and reports no Python/sidecar content. The shared Tauri capability intentionally does not grant `updater:default`; updater artifact generation remains desktop packaging configuration, not a WebView permission. Local Android runtime smoke still requires Java, Android SDK/NDK, an emulator or physical device, and KVM/device access where applicable. If those are absent, mark runtime smoke as pending rather than claiming device proof.
 
-## Android Native Skeleton
+## Android native capability plugin
 
-`src-tauri/android/aurora-native-plugin/` contains the Android Kotlin plugin used by the native capability manifest. The plugin exposes Android-native evidence commands for `nativeCapabilityManifest`, `assistantRoleStatus`, assistant-role request probing, fallback entrypoints, Android Keystore-backed secure storage, biometric/device-credential admin unlock status/request, and a redacted `entrypointPayload`. `Native.GetCapabilityManifest` routes through this plugin on Android, so the SDK receives explicit Android states for assistant role, mic, notifications, biometric, secure storage, admin unlock, local network, foreground service, file, share/deep-link, widget, shortcut, quick tile, and fallback entrypoints. Share sheet and deep-link entrypoints are native-declared open/intake paths, but backend context ingestion must still prove any user content was processed.
+`src-tauri/android/aurora-native-plugin/` contains the Android Kotlin plugin used by the native capability manifest. The plugin exposes Android-native evidence commands for `nativeCapabilityManifest`, `assistantRoleStatus`, assistant-role request probing, fallback entrypoints, Android Keystore-backed secure storage, thin peer credential set/status/delete/reconnect proof, biometric/device-credential admin unlock status/request, WebView microphone permission decisions, lifecycle status, foreground-service readiness, and redacted entrypoint payloads. `Native.GetCapabilityManifest` routes through this plugin on Android, so the SDK receives explicit Android states for assistant role, mic, notifications, biometric, secure storage, admin unlock, local network, foreground service, file, share/deep-link, widget, shortcut, quick tile, and fallback entrypoints. Share sheet and deep-link entrypoints are native-declared open/intake paths, but backend context ingestion must still prove any user content was processed.
 
-Android secure storage uses an app-private `SharedPreferences` payload encrypted by an AES-GCM key generated in Android Keystore. The Tauri Rust command bridge keeps the existing `aurora_secure_storage_get`, `aurora_secure_storage_set`, and `aurora_secure_storage_delete` command names and routes them to the Android plugin on Android builds. Accepted keys are limited to `aurora.session*`, `aurora.auth*`, `aurora.gateway*`, `aurora.mesh*`, and `aurora.admin*`; command results include redacted metadata (`backend=android-keystore`, `persisted=true`, `secretsRedacted=true`).
+Android secure storage uses an app-private `SharedPreferences` payload encrypted by an AES-GCM key generated in Android Keystore. Accepted keys are limited to Aurora credential namespaces. Thin peer credential commands store scoped reconnect material and return proof/status metadata without exposing raw long-lived secrets through generic getters. Reconnect proof uses the canonical `mesh_auth_proof_v1` HMAC message shared with Python/TypeScript fixtures and must not emit legacy `proof_hmac_sha256`.
+
+Android foreground WebView microphone policy requires a trusted HTTPS or `tauri.localhost` origin, `RECORD_AUDIO`, foreground, and focus. Lifecycle status sets `backgroundWakeword=false` and reports when the WebView must release the microphone. This is not a durable background wakeword/audio pipeline claim.
 
 Android admin unlock is exposed as capability evidence and a request command through `aurora_biometric_admin_unlock_status` and `aurora_biometric_admin_unlock`. It uses Android keyguard/biometric capability evidence and starts the platform credential confirmation intent when requestable. UI must treat it as `admin-critical` and permission-gated until the native payload reports an available/requestable state.
 

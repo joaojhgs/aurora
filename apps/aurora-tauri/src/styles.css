@@ -1,6 +1,10 @@
 .ata-page-stack {
   display: grid;
+  /* minmax(0, 1fr) lets wide children (tables with nowrap cells) shrink and
+     scroll instead of blowing the page width past the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+  padding: 20px 24px 32px;
 }
 
 .ata-panel {

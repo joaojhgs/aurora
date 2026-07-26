@@ -67,7 +67,7 @@ jobs:
           uv run ruff check app tests scripts
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
-          pnpm --filter @aurora/tauri-ui prepare:sidecar:thin
+          pnpm --filter @aurora/tauri-ui prepare:sidecar:desktop-local-minimal
           pnpm --filter @aurora/tauri-ui build
 
       - name: Check next semantic version
