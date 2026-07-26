@@ -43,6 +43,11 @@ STALE_RE = re.compile(
 )
 TASK_DOC_RE = re.compile(r"(?:^|[/_-])(?:PER-\d+|QA-\d{2,})(?:[/_.-]|$)", re.IGNORECASE)
 
+ALLOWED_DOCS_JSON_ARTIFACTS = {
+    Path("docs/security/mesh-security-surface-inventory.json"),
+    Path("docs/security/mesh-security-surface-inventory.schema.json"),
+}
+
 
 def is_skipped(path: Path) -> bool:
     return any(part in SKIP_PARTS for part in path.parts)
@@ -125,6 +130,8 @@ def check_generated_docs() -> list[str]:
         if is_archive_or_provenance(rel):
             continue
         if path.is_file() and path.suffix.lower() in {".json", ".txt"}:
+            if rel in ALLOWED_DOCS_JSON_ARTIFACTS:
+                continue
             errors.append(f"{rel}: generated/report artifact should not live in current docs")
     return errors
 

@@ -15,8 +15,8 @@ This index separates current documentation from historical/provenance material. 
 | Understand CI and tests | [`CI_CD.md`](CI_CD.md), [`../tests/README.md`](../tests/README.md), [`TESTING_PROCESS_MODE.md`](TESTING_PROCESS_MODE.md) |
 | Work on configuration | [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md) |
 | Work on messaging/contracts/API | [`MESSAGING_ARCHITECTURE.md`](MESSAGING_ARCHITECTURE.md), [`API_AND_CONTRACTS.md`](API_AND_CONTRACTS.md), [`SERVICE_METHODS_REFERENCE.md`](SERVICE_METHODS_REFERENCE.md) |
-| Work on Gateway, auth, permissions, or mesh | [`GATEWAY.md`](GATEWAY.md), [`AUTH_AND_PERMISSIONS.md`](AUTH_AND_PERMISSIONS.md), [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md), [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md) |
-| Work on frontend, SDK, web, Tauri, or PyQt fallback | [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md), [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md) |
+| Work on Gateway, auth, permissions, or mesh | [`GATEWAY.md`](GATEWAY.md), [`AUTH_AND_PERMISSIONS.md`](AUTH_AND_PERMISSIONS.md), [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md), [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md), [`MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md`](MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md), [`security/README.md`](security/README.md) |
+| Work on frontend, SDK, web, Tauri, mobile, or PyQt fallback | [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md), [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md), [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md), [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md) |
 | Work on backup/restore | [`BACKUP_SERVICE.md`](BACKUP_SERVICE.md) |
 | Work on MCP/tools | [`MCP_INTEGRATION.md`](MCP_INTEGRATION.md) |
 | Work on dependencies and optional install profiles | [`DEPENDENCIES.md`](DEPENDENCIES.md) |
@@ -48,12 +48,19 @@ This index separates current documentation from historical/provenance material. 
 | [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md) | Current | Mesh data-sharing modes and ownership policy. |
 | [`BACKUP_SERVICE.md`](BACKUP_SERVICE.md) | Current | Backup/restore contract, dry-run limits, and storage. |
 | [`SERVICE_METHODS_REFERENCE.md`](SERVICE_METHODS_REFERENCE.md) | Current but manually maintained | Human-readable service method overview. Keep it aligned with `app/shared/contracts/models/` and `@method_contract` decorators. |
+| [`security/README.md`](security/README.md) | Current | Ownership and validation guide for checked security reference artifacts. |
+| [`security/mesh-security-surface-inventory.json`](security/mesh-security-surface-inventory.json) | Current machine-readable reference | Exhaustive mesh-callable security surface inventory validated by `tests/unit/gateway/test_mesh_security_surface_inventory.py`. |
+| [`security/mesh-security-surface-inventory.schema.json`](security/mesh-security-surface-inventory.schema.json) | Current machine-readable reference | JSON Schema for the checked security surface inventory. |
 
 ## Frontend and platform docs
 
 | Document | Status | Purpose |
 | --- | --- | --- |
 | [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md) | Current | SDK-first UI architecture across React, web, Tauri, and PyQt fallback. |
+| [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md) | Current | Target client catalog, cross-surface feature contract, and delivery sequence for desktop, web, Android, iOS, and fallback clients. |
+| [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md) | Current bounded check | Evidence-based implementation snapshot that separates implemented, build-proven, live-proven, planned, and limited client paths. |
+| [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md) | Current | Implemented TypeScript WebView/Python WebRTC protocol contract, security posture, dependencies, and conformance commands. |
+| [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md) | Current bounded check | Chromium/Firefox/Playwright-WebKit direct, configured-STUN, and forced-TURN browser ↔ Python Gateway harness and report schema. |
 | [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) | Current | Desktop sidecar profiles and unsigned bundle build flow. |
 | [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md) | Current | UI source-boundary rules and regression gates. |
 | [`UI_INTEGRATION.md`](UI_INTEGRATION.md) | Legacy/current bridge reference | PyQt UIBridge reference and migration notes. Prefer `FRONTEND_AND_UI_ARCHITECTURE.md` for new UI work. |
@@ -66,6 +73,7 @@ This index separates current documentation from historical/provenance material. 
 | --- | --- | --- |
 | [`AMBIENT_TRANSCRIPTION.md`](AMBIENT_TRANSCRIPTION.md) | Partial | Config and coordinator behavior exist; durable ambient logging service is not implemented. |
 | [`MESH_GAP_E2E_HARNESS.md`](MESH_GAP_E2E_HARNESS.md) | Current bounded harness | Transport E2E harness, not a full physical-device proof. |
+| [`MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md`](MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md) | Current | Mesh v2 migration, RBAC review, fail-closed reverse migration, rollback, and rollout diagnostics. |
 | [`SDK_BACKEND_CONFORMANCE_CI.md`](SDK_BACKEND_CONFORMANCE_CI.md) | Current bounded check | Prevents SDK/backend fixture drift, not a live production certification. |
 
 ## Archive and provenance

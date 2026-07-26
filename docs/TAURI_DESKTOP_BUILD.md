@@ -1,11 +1,14 @@
 # Tauri Desktop Build
 
-Aurora desktop has two runtime modes:
+Aurora's frontend has three supported runtime modes:
 
-- **Desktop thin** connects to an already-running/operator-managed Gateway via `VITE_AURORA_GATEWAY_URL`/HTTP transport and does not start or require a local Python sidecar.
+- **Web thin** runs in a browser and uses the shared HTTP/WebRTC runtime without native credential commands.
+- **Desktop thin** loads a nonsecret connection profile asynchronously, supports HTTP-only, WebRTC-only, and WebRTC-preferred through the shared WebView runtime, and does not start or require a local Python sidecar.
 - **Desktop local** launches a Rust-supervised Aurora Python sidecar for development or packaged local mode. The UI still talks through `AuroraClient` and the loopback Gateway.
 
 The packaged sidecar is now **profiled**. The default profile is intentionally small and does not install or bundle every local AI dependency.
+
+> **Runtime/package distinction:** `build:bundle:desktop-thin` and its compatibility alias `build:bundle:thin` are genuinely Python-free remote bundle lanes. They write `src-tauri/tauri.thin.conf.json`, never call `prepare-sidecar`, and verify the produced bundle for forbidden Python/sidecar content. The minimal local sidecar lane is named `desktop-local-minimal`.
 
 ## Development bootstrap
 
@@ -27,7 +30,7 @@ Closing the Tauri window hides Aurora to the tray; explicit tray Quit or Ctrl-C 
 
 | Profile | Purpose | Dependency shape | CI behavior |
 | --- | --- | --- | --- |
-| `thin` | Default desktop package and smoke build. Gateway/config/auth/db/tooling/orchestrator only. | `aurora[build,sidecar-thin]`; no STT/TTS/local model deps; PyInstaller excludes local AI modules. | Real Linux Tauri bundle. |
+| `desktop-local-minimal` | Default local desktop package and smoke build. Gateway/config/auth/db/tooling/orchestrator only. | Maps to the Python builder's internal `thin` dependency profile; no STT/TTS/local model deps. | Real Linux Tauri bundle. |
 | `local-cpu` | Offline/local assistant with STT/TTS/audio and CPU ML wheels. | `aurora[build,sidecar-local-audio,torch-cpu]`; wheel installer uses `--hardware cpu`. | Profile staging smoke; release runner may build the full artifact. |
 | `local-cuda` | NVIDIA CUDA local assistant. | `aurora[build,sidecar-local-audio,cuda]`; wheel installer uses `--hardware cuda`. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
 | `local-rocm` | AMD ROCm local assistant. | `aurora[build,sidecar-local-audio,rocm]`; wheel installer uses `--hardware rocm`. | Profile staging smoke; GPU runner/release runner builds actual artifact. |
@@ -48,11 +51,23 @@ pnpm --filter @aurora/ui build
 pnpm --filter @aurora/tauri-ui build:bundle
 ```
 
-`build:bundle` is an alias for the lean default and is non-signing for local/CI smoke builds:
+`build:bundle` is an alias for the lean desktop-local sidecar default and is non-signing for local/CI smoke builds:
 
 ```bash
-pnpm --filter @aurora/tauri-ui build:bundle:thin
+pnpm --filter @aurora/tauri-ui build:bundle:desktop-local
+pnpm --filter @aurora/tauri-ui build:bundle:desktop-local-minimal
 ```
+
+For a remote/no-sidecar shell, use either Python-free thin command:
+
+```bash
+AURORA_TAURI_ALLOWED_REMOTE_ORIGINS="wss://signaling.example.invalid" \
+AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only \
+pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
+pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
+```
+
+The desktop-thin command (and its `build:bundle:thin` alias) uses Tauri's `--config src-tauri/tauri.thin.conf.json` flavor overlay. `prepare:bundle:desktop-thin` requires only the exact origins used by `AURORA_TAURI_THIN_CONNECTION_MODE`: HTTPS Gateway for `http-only`, WSS signaling for `webrtc-only`, or both for `webrtc-preferred`. A WebRTC-only package compiles no Gateway URL or HTTPS Gateway CSP source. The wrapper builds the frontend with the packaged-thin runtime marker, replaces the base capability list with `aurora-thin`, and omits `bundle.externalBin` plus `bundle.resources`. At runtime, the profile editor persists only mode, exact endpoints, label/node name, and stable peer ID. SDK session/pairing state owns bearer authentication; invite secrets are accepted only from the URL fragment and held in memory.
 
 Local assistant variants are explicit:
 
@@ -72,7 +87,7 @@ List supported profiles:
 uv run python scripts/build.py --list-sidecar-profiles
 ```
 
-Build only the default thin sidecar in the same isolated mode used by `prepare:sidecar`:
+Build the internal minimal Python sidecar profile directly:
 
 ```bash
 uv run --isolated --no-dev python scripts/build.py --target exe --clean --sidecar --sidecar-profile thin
@@ -98,7 +113,7 @@ dist/sidecars/local-cuda/aurora-sidecar
 
 `prepare:sidecar` stages a profile-specific sidecar for Tauri:
 
-1. Uses `--profile <name>` or `AURORA_TAURI_SIDECAR_PROFILE`; default is `thin`.
+1. Uses `--profile <name>` or `AURORA_TAURI_SIDECAR_PROFILE`; default is `desktop-local-minimal` (mapped internally to the Python builder's `thin` profile).
 2. Uses `AURORA_TAURI_SIDECAR_SOURCE` only when explicitly provided as a trusted prebuilt override.
 3. Otherwise looks for the matching profile output under `dist/sidecars/<profile>/aurora-sidecar`.
 4. If missing, builds it with an isolated environment:
@@ -124,7 +139,7 @@ dist/sidecars/local-cuda/aurora-sidecar
 Useful overrides:
 
 ```bash
-AURORA_TAURI_SIDECAR_BUILD_OUTPUT=/cache/aurora-sidecar pnpm --filter @aurora/tauri-ui prepare:sidecar:thin
+AURORA_TAURI_SIDECAR_BUILD_OUTPUT=/cache/aurora-sidecar pnpm --filter @aurora/tauri-ui prepare:sidecar:desktop-local-minimal
 AURORA_TAURI_SIDECAR_SOURCE=/secure/artifacts/aurora-sidecar pnpm --filter @aurora/tauri-ui build:bundle:local-cpu
 AURORA_TAURI_SIDECAR_MAX_MB=2200 pnpm --filter @aurora/tauri-ui prepare:sidecar:local-cpu
 ```
@@ -145,8 +160,8 @@ Packaged desktop-local builds should use path 2. Desktop thin mode never starts 
 
 Relevant workflows:
 
-- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, builds the lean Linux AppImage+deb Tauri bundle with `thin`, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb so `tauri dev` fails on missing Gateway readiness, early process exit, or missing `[tauri]`/`[aurora][...]` logs, and runs a sidecar profile staging matrix across `thin`, local CPU, accelerator, and legacy full profiles.
-- `.github/workflows/tauri-android.yml` builds Android APK/native plugin evidence.
+- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, runs a desktop bundle matrix for `desktop-local` and Python-free `desktop-thin`, runs `cargo check` for both lanes, verifies desktop-thin artifact contents, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb for the local lane so `tauri dev` fails on missing Gateway readiness, early process exit, or missing `[tauri]`/`[aurora][...]` logs, and runs a sidecar profile staging matrix across `desktop-local-minimal`, local CPU, accelerator, and legacy full profiles.
+- `.github/workflows/tauri-android.yml` builds Android thin debug APK/AAB artifacts, verifies Python-free artifact contents, runs Android preflight/native plugin parity, and attempts emulator native payload smoke where runner virtualization allows it.
 - `.github/workflows/tauri-ios.yml` builds the iOS simulator baseline on macOS.
 - `.github/workflows/frontend-sdk.yml` runs shared UI and SDK package checks.
 - `.github/workflows/release.yml` runs manual semantic-release readiness checks and publication.
@@ -158,5 +173,6 @@ Default `build:bundle:*` scripts pass `--no-sign` so local and CI package-smoke 
 The platform Linux config builds AppImage and deb by default. RPM packaging is intentionally not part of the default local/CI bundle because it requires RPM tooling and can hang on generic Linux runners without that toolchain. Use this explicit command on an RPM-capable runner:
 
 ```bash
+pnpm --filter @aurora/tauri-ui build:bundle:linux-rpm:desktop-local-minimal
 pnpm --filter @aurora/tauri-ui build:bundle:linux-rpm:thin
 ```

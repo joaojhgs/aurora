@@ -43,6 +43,23 @@ Use these homes instead:
 | Human-readable historical provenance | `docs/archive/` |
 | Regeneratable reports | local `.artifacts/`, package `reports/`, or CI artifacts |
 
+## Machine-readable reference exceptions
+
+Machine-readable JSON/TXT artifacts may live under `docs/` only when all of these are true:
+
+- the artifact is a current reference contract, not a temporary run report;
+- a human-readable doc links to it and explains ownership;
+- `docs/DOCS_INDEX.md` lists the exact path;
+- `scripts/check_docs.py` allowlists the exact path, not a directory or pattern; and
+- tests or a documented command validate the artifact.
+
+Current exceptions:
+
+- `docs/security/mesh-security-surface-inventory.json`
+- `docs/security/mesh-security-surface-inventory.schema.json`
+
+These files are regenerated and checked with `uv run python scripts/generate_mesh_security_surface_inventory.py` and `uv run python scripts/generate_mesh_security_surface_inventory.py --check`. They are validated by `tests/unit/gateway/test_mesh_security_surface_inventory.py`; `tests/unit/gateway/test_backend_inventory_output_guard.py` protects the inventory from the generic backend inventory generator.
+
 ## Link and freshness rules
 
 - Relative links in current docs must resolve.

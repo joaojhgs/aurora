@@ -35,9 +35,15 @@ See [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md).
 | HTTP/Gateway | Web and remote clients use Gateway routes and event streams. |
 | Tauri local/native | Desktop local mode can call narrow Rust commands that supervise the Python sidecar or proxy Gateway-compatible requests. |
 | Mock/test | Package tests and visual/resilience suites. |
-| Mesh bridge | Interface over peer RPC/capability routing; bridge owns WebRTC/native details. |
+| Mesh/WebRTC bridge | Interface over peer RPC/capability routing. `MeshP2PTransport`, `WebRtcMeshPeerBridge`, and browser/WebView WebRTC runtime exist under `@aurora/client/webrtc`; direct, configured-STUN, and forced-TURN browser-to-Python live interop is proven in Chromium, Firefox, and Playwright WebKit. |
 
 The SDK preserves method IDs, bus topics, selector/audit metadata, redaction information, and backend evidence. Tauri IPC and mock transports are not independent sources of truth for service state.
+
+## Client-surface roadmap and present boundary
+
+The complete target client catalog and cross-surface feature checklist live in [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md). The evidence-based current implementation boundary lives in [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md).
+
+The selected direct-peer direction is implemented as one TypeScript WebRTC runtime in the SDK/browser layer, reused by hosted web and desktop/mobile WebViews. Rust, Kotlin, and Swift remain narrow adapters for secure storage, permissions, lifecycle/background behavior, OS integrations, and optional native model runtimes. Current live proof covers Chromium, Firefox, and Playwright-WebKit direct, configured-STUN, and forced-TURN browser-to-Python Gateway sessions over MQTT signaling and the `aurora-rpc` DataChannel with the Python HTTP API disabled. Packaged-WebView and physical mobile runtime proof remain unclaimed.
 
 ## Assistant streaming and voice playback
 
@@ -55,10 +61,11 @@ Platform playback rules:
 | Mode | Behavior |
 | --- | --- |
 | Desktop local | Rust supervises a Python thread-mode sidecar and exposes a narrow command/session bridge to the SDK. |
-| Desktop thin | Tauri shell talks to a remote Gateway; no local sidecar required. |
-| Profiled local bundles | Sidecar profile selects thin/local CPU/GPU/full dependency sets. |
+| Desktop thin HTTP | Async nonsecret profile selects an exact HTTPS Gateway; live SDK session/pairing state supplies authentication and no local sidecar starts. |
+| Desktop thin WebRTC | Shared WebView runtime supports WebRTC-only with exact WSS signaling and no Gateway origin, or WebRTC-preferred with exact HTTPS Gateway plus WSS signaling; invites stay in the fragment/in memory and native peer credentials are available only in real desktop Tauri. |
+| Profiled local bundles | Sidecar profile selects desktop-local-minimal/local CPU/GPU/full dependency sets. |
 
-Default bundles are unsigned and thin unless an explicit profile/signing configuration is provided. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) and `apps/aurora-tauri/README.md`.
+Default bundles are unsigned and use the lean `desktop-local-minimal` sidecar profile. Every `*:thin` bundle command is the Python-free desktop-thin lane. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), and `apps/aurora-tauri/README.md`.
 
 ## Platform capability truth matrix
 
@@ -66,12 +73,12 @@ UI copy and controls must report capabilities from SDK/native evidence, not from
 
 | Platform mode | Supported evidence path | Native/local claims allowed | Required limit copy |
 | --- | --- | --- | --- |
-| Web thin | HTTP/Gateway SDK transport selected with `VITE_AURORA_GATEWAY_URL`. | Gateway-backed assistant/admin/runtime state, browser-supported permissions only. | No Tauri sidecar, keychain, Android role, or iOS App Intent claims. |
+| Web thin | `createBrowserWebThinRuntime()` selected from `NEXT_PUBLIC_AURORA_CONNECTION_MODE=http-only|webrtc-only|webrtc-preferred`. | Gateway-backed state in HTTP mode; direct/configured-STUN/forced-TURN WebRTC DataChannel RPC/events live-proven in Chromium, Firefox, and Playwright WebKit; browser-supported permissions only. | No Tauri sidecar, keychain, Android role, or iOS App Intent claims; packaged-WebView and production-scale certification remain open. |
 | Desktop local | `pnpm --filter @aurora/tauri-ui tauri dev` or packaged local build starts/probes the Rust-supervised Python sidecar and loopback Gateway. | Local sidecar status, secure storage, Gateway health, and native desktop command evidence. | Dev uses direct Python sidecar defaults; packaged builds stage profiled sidecar executables separately. |
-| Desktop thin | Tauri shell uses Gateway HTTP transport against an operator-managed endpoint. | Tauri shell capability evidence plus remote Gateway data. | No local Python sidecar readiness claim unless local mode is explicitly enabled. |
+| Desktop thin | Tauri shell asynchronously loads/saves a nonsecret HTTP/WebRTC connection profile and rebuilds the shared WebView runtime on profile selection. | Tauri shell capability evidence, remote Gateway/peer data, OS-keychain peer credential status/proofs without raw token reads, and Python-free AppImage/deb artifact proof, including WSS-only packaging with no Gateway origin. | No local Python sidecar readiness claim; invite secrets remain fragment/in-memory only, bearer auth remains in the SDK session, and live desktop WebView network proof is separate from browser-engine interop. |
 | Linux CI | Vitest/Playwright route gates, `tauri:smoke:linux`, `cargo check`, `dev:smoke` under Xvfb. | Linux desktop smoke and policy baseline evidence. | Linux cannot satisfy iOS build/preflight evidence and does not replace Android emulator/device evidence. |
-| Android | Tauri generated Android project, Android native plugin payloads, emulator/device smoke, Android preflight reports. | Assistant role, fallback entrypoints, Android Keystore, biometric/admin-unlock states only from native manifest payloads. | PR preflight can be unsigned; release readiness requires signing inputs and signed AAB/Play evidence. |
-| iOS | iOS manifest policy on any platform; Tauri iOS init/build, simulator/device, and `ios:preflight` on macOS/Xcode. | Siri/Shortcuts/App Intents, share/deep-link/widget/file-association evidence after native targets exist. | Aurora must not claim default iOS system-assistant ownership. Full build/preflight requires macOS/Xcode. |
+| Android | Tauri generated Android project, WSS-only-capable thin wrappers, Android native plugin payloads, Android preflight reports, and Android thin APK/AAB artifact proof. | Assistant role, fallback entrypoints, Android Keystore peer credentials/proofs, biometric/admin-unlock, foreground WebView microphone policy, and lifecycle states only from native manifest payloads. | PR preflight can be unsigned; local emulator/physical-device runtime smoke is not proven here; release readiness requires signing inputs and signed AAB/Play evidence. |
+| iOS | Shared iOS WebView thin routing, WSS-only-capable exact-origin overlay generation, device-only Keychain reconnect proof, and nonsecret profile source checks on any platform; Tauri iOS init/build and simulator/device proof on macOS/Xcode. | Foreground thin-shell source capability plus Keychain/profile/proof evidence; Siri/Shortcuts/App Intents, share/deep-link/widget/file-association evidence only after native targets exist and pass runtime smoke. | No local Xcode artifact or WKWebView runtime proof exists in this Linux environment. Aurora must not claim default iOS system-assistant ownership. |
 
 ## Tauri security posture
 
@@ -93,6 +100,7 @@ When changing frontend behavior, update the narrowest relevant set:
 - Shared UI behavior: `packages/aurora-ui/README.md`, [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md), and UI tests.
 - Tauri command/security/sidecar behavior: `apps/aurora-tauri/README.md`, `apps/aurora-tauri/SECURITY.md`, [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), and Tauri tests.
 - User-facing architecture changes: this document and [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md).
+- Client profile, target capability, or readiness changes: [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md) and [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md).
 
 ## Validation commands
 
@@ -105,9 +113,12 @@ pnpm --filter @aurora/tauri-ui test
 pnpm --filter @aurora/tauri-ui typecheck
 pnpm --filter @aurora/tauri-ui tauri:smoke:linux
 pnpm --filter @aurora/tauri-ui ios:policy
+pnpm test:webrtc:interop
+pnpm test:webrtc:turn
+pnpm test:webrtc:browsers
 ```
 
-Run `pnpm --filter @aurora/tauri-ui dev:smoke` in a GUI-capable environment when validating the desktop-local sidecar/WebView path. Run iOS build/preflight commands only on macOS with Xcode.
+Run `pnpm --filter @aurora/tauri-ui dev:smoke` in a GUI-capable environment when validating the desktop-local sidecar/WebView path. Run `pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin`, `android:verify:thin:apk`, and `android:verify:thin:aab` when validating Python-free thin artifacts. Run iOS build/preflight commands only on macOS with Xcode.
 
 - Assistant streaming requests pass `clientTtsPlayback` through the SDK to keep desktop-local server playback distinct from web/thin/mobile client playback.
 

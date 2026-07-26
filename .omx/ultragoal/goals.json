@@ -1,23 +1,119 @@
 {
   "version": 1,
-  "createdAt": "2026-07-08T19:59:14.984Z",
-  "updatedAt": "2026-07-08T23:43:33.006Z",
+  "createdAt": "2026-07-25T20:04:19.853Z",
+  "updatedAt": "2026-07-26T09:04:25.303Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
   "codexGoalMode": "aggregate",
   "goals": [
     {
-      "id": "G001-fix-two-aurora-issues-in-parallel-wh",
-      "title": "Fix two Aurora issues in parallel while preserving concurrent fronten...",
-      "objective": "Fix two Aurora issues in parallel while preserving concurrent frontend changes: (1) tooling/orchestrator/mesh regression where the LLM sees no tools, including core tools such as web search. Investigate tooling policy, tool sharing via mesh peers, catalog negotiation, and orchestrator exposure. Restore rule: only policy-blocked tools are hidden; insecure or not-yet-trusted tools remain visible and require permission before execution. Ensure core tools remain visible and add/update focused regressions. (2) desktop Tauri voice overlay polish: reduce transparent visible corner/background from the effect without reducing animation, allow dragging from any non-interactive overlay area, and show drag cursor only during active drag except the three-dot handle. Acceptance: targeted Python tooling/orchestrator tests pass; targeted Tauri/UI overlay tests and typechecks pass; no unrelated files reverted; small focused changes.",
+      "id": "G001-protocol-contract-and-dependency-bas",
+      "title": "Protocol contract and dependency baseline",
+      "objective": "Freeze the existing Python MQTT/WebRTC, crypto, pairing, reconnect, RPC, stream, event, and invite wire behavior into deterministic cross-language fixtures; add capability/version contracts, dependency decisions, and regression locks without changing shipped behavior. Exit with reproducible fixture generation and conformance checks.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-25T20:25:53.719Z",
+      "startedAt": "2026-07-25T20:04:26.577Z",
+      "completedAt": "2026-07-25T20:25:53.719Z",
+      "evidence": "Python-reference fixture generator/check; protocol/capability descriptors with G002 features false; runtime-derived Python RPC/crypto/MQTT/pairing/reconnect conformance; direct Aurora UI invite codec parity; mqtt/noble/WebCrypto dependency decision. Fresh evidence: fixture check PASS; 7 vector pytest PASS; selected Python protocol suite 39 PASS; SDK focused 3 PASS plus 191 SDK suite PASS, typecheck/build PASS; UI fixture parity 1 PASS and typecheck PASS; ruff PASS; independent verifier PASS."
+    },
+    {
+      "id": "G002-python-peer-protocol-extensions",
+      "title": "Python peer protocol extensions",
+      "objective": "Implement capability-negotiated fragmentation, bounded backpressure/reassembly, exact-topic scoped event subscriptions, consumer-only peer handling, safe cleanup, and backward-compatible protocol negotiation in the Python Gateway/WebRTC/mesh stack. Exit with targeted Python tests for authorization, limits, disconnect, and mixed-version peers.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-25T21:04:51.948Z",
+      "startedAt": "2026-07-25T20:25:57.706Z",
+      "completedAt": "2026-07-25T21:04:51.948Z",
+      "evidence": "Capability-negotiated post-auth protocol hello; mixed-version legacy fallback; per-fragment E2EE; bounded 8 MiB fragmentation, 16 MiB aggregate reassembly/backpressure and cleanup; exact-topic authenticated scoped subscriptions with correlation isolation and sensitive-event fail-closed behavior; consumer-only inbound/outbound rejection; runtime-derived fixture parity. Fresh leader evidence: 298 Python tests PASS, 15 files ruff-format clean, ruff PASS, fixture --check PASS, SDK vector 4 PASS, SDK typecheck/build PASS; independent verifier PASS after repairing ack/error vector mismatches."
+    },
+    {
+      "id": "G003-browser-webrtc-core",
+      "title": "Browser WebRTC core",
+      "objective": "Implement SSR-safe TypeScript/WebView crypto, Scrypt worker, MQTT-over-WSS signaling, RTCPeerConnection/ICE/STUN/TURN lifecycle, aurora-rpc DataChannel, pairing v2, reconnect proof, credential adapters, diagnostics, and strict protocol parsing in packages/aurora-sdk. Exit with fixture, unit, browser, build, and typecheck proof.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-25T22:00:37.509Z",
+      "startedAt": "2026-07-25T21:04:52.159Z",
+      "completedAt": "2026-07-25T22:00:37.509Z",
+      "evidence": "SSR-safe WebRTC SDK core implemented with Worker-backed Scrypt/WebCrypto, strict Python-parity crypto/auth/pairing/reconnect parsing, MQTT-over-WSS failover signaling, RTCPeerConnection/ICE/aurora-rpc lifecycle, per-channel auth/hello epochs, memory credential adapter, diagnostics, and clean package boundary. Fresh leader evidence: Python fixture/ruff/vector 8 PASS; WebRTC Node 59 PASS; jsdom 31 PASS; full SDK 247 PASS; typecheck/build and worker artifacts PASS. Independent architect APPROVE; independent verifier PASS."
+    },
+    {
+      "id": "G004-sdk-mesh-bridge-and-assistant-stream",
+      "title": "SDK mesh bridge and assistant streaming",
+      "objective": "Implement WebRtcMeshPeerBridge over MeshP2PTransport with RPC/result/error, streams, cancellation, manifests, fragmentation/backpressure, scoped event subscription, transport selection, and safe failure semantics. Exit with SDK conformance and large-message/cancel/event isolation tests.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-25T22:42:40.990Z",
+      "startedAt": "2026-07-25T22:00:37.728Z",
+      "completedAt": "2026-07-25T22:42:40.990Z",
+      "evidence": "WebRtcMeshPeerBridge implemented over existing MeshP2PTransport with exact Python call/result/error/cancel/event/manifest wires, stable identity binding, reconnect-clean epochs, manifest ACK, scoped subscriptions, assistant event kind/correlation isolation, AbortSignal cancellation, negotiated <=8MiB fragmentation/reassembly and real DataChannel bufferedAmount backpressure. Fresh evidence: Python fixture check + 8 vectors PASS; WebRTC/G004 Node 86 PASS; jsdom 47 PASS; full SDK 274 PASS; typecheck/build PASS. Independent architect APPROVE and verifier PASS including 512KiB round-trip, 1KiB negotiated fragments, reconnect, stable-ID and close-abort probes."
+    },
+    {
+      "id": "G005-peer-scoped-assistant-and-tts-delive",
+      "title": "Peer-scoped assistant and TTS delivery",
+      "objective": "Connect subscription authority to MeshBus/PeerBridge and make Orchestrator.Response plus TTS.AudioChunk delivery peer/correlation scoped without broadcast leakage; preserve local desktop voice ownership. Exit with two-peer isolation and assistant text/audio/cancel integration tests.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-25T23:36:58.595Z",
+      "startedAt": "2026-07-25T22:42:41.214Z",
+      "completedAt": "2026-07-25T23:36:58.595Z",
+      "evidence": "Exact peer/principal/correlation subscription authority now gates Orchestrator.Response and TTS.AudioChunk before serialization; stable peer targeting, scoped typed TTS stop/cancel, local desktop voice ownership, in-flight epoch safety, unsubscribe/disconnect/expiry cleanup, and legacy local stop compatibility are regression-locked. Fresh leader evidence: 303 joined Python tests PASS; 12 SDK bridge tests PASS; ruff/format PASS; security inventory anchors validated 80/80; full gateway 1066 PASS/20 skipped; independent architect APPROVE and verifier PASS."
+    },
+    {
+      "id": "G006-hosted-web-thin-peer-runtime",
+      "title": "Hosted web thin peer runtime",
+      "objective": "Add runtime-selectable http-only, webrtc-only, and webrtc-preferred browser modes, invite/pairing/SAS/reconnect UX, memory-only browser secrets, secure-context/visibility behavior, route diagnostics, and focused push-to-talk over typed SDK calls. Exit with browser route/assistant/admin/accessibility tests and production build.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-26T04:29:07.205Z",
+      "startedAt": "2026-07-25T23:36:58.830Z",
+      "completedAt": "2026-07-26T04:29:07.205Z",
+      "evidence": "Hosted web thin runtime implements explicit http-only/webrtc-only/webrtc-preferred; Python-compatible encrypted pairing/SAS/reconnect/protocol hello; strict post-authorized safe-read fallback only; memory-only fragment invite handling with no query/env/storage leakage; centralized surface/voice ownership; visibility peer disconnect and focused mic release; redacted diagnostics; SDK/UI/web/Python/Tauri service-boundary gates green. Evidence: SDK 292 tests, UI 260 tests + 4 accessibility, web 13 tests + 24-route production build, Python focused 85 tests, Tauri boundary 5 tests; independent SDK/UI/code reviews APPROVE, architect APPROVE, verifier PASS."
+    },
+    {
+      "id": "G007-desktop-tauri-thin-peer-packaging-an",
+      "title": "Desktop Tauri thin peer packaging and pipeline",
+      "objective": "Reuse the WebView runtime in desktop Tauri, add live connection profiles/auth, keychain-backed peer proof operations, remote HTTPS/WSS CSP/allowlist policy, and a genuinely Python-free no-sidecar desktop bundle lane wired into CI alongside desktop-local. Exit with tests, artifact-content proof, cargo/type/build checks, and pipeline validation.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-26T06:57:32.886Z",
+      "startedAt": "2026-07-26T04:29:07.413Z",
+      "completedAt": "2026-07-26T06:57:32.886Z",
+      "evidence": "Final verifier PASS. SDK 298 tests; UI 271 incl 12 accessibility; Tauri UI 93 plus CI regression/service-boundary; Rust 35 tests with fmt/check/clippy normal; real AppImage+deb proof inspected 247 files/2 archives with zero forbidden matches; security, architecture, and code review APPROVE. Desktop-thin uses shared WebView WebRTC, dynamic session auth, opaque native proofs, exact CSP, narrow capabilities, no Python/sidecar; desktop-local preserved."
+    },
+    {
+      "id": "G008-android-thin-http-webrtc-packaging-a",
+      "title": "Android thin HTTP/WebRTC packaging and pipeline",
+      "objective": "Reuse the shared WebView runtime in Android, add Keystore credential proof, QR/deep-link invite flow, trusted-origin microphone permission and foreground lifecycle handling, and buildable thin HTTP/WebRTC APK/AAB pipeline lanes with no Python sidecar. Exit with policy/unit/emulator-preflight/build configuration and artifact checks.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-26T09:04:25.092Z",
+      "startedAt": "2026-07-26T06:57:33.097Z",
+      "completedAt": "2026-07-26T09:04:25.092Z",
+      "evidence": "Final verifier PASS. Android shared WebView HTTP/WebRTC runtime, centralized mobile surface/voice contract, QR/deep-link invite lifecycle, Keystore opaque set/status/delete/prove with canonical proof, trusted-origin WebChromeClient mic enforcement, plugin lifecycle disconnect/reconnect, least-privilege android-thin capability and exact CSP. SDK 298, UI 271+12 accessibility, Tauri 103, Rust 39. Real current-source APK 361401331 bytes/997 entries and AAB 193081789 bytes/1013 entries built; zero forbidden Python/sidecar matches; CI/preflight gates green except nonrequired signing/KVM constraints."
+    },
+    {
+      "id": "G009-cross-language-interoperability-roll",
+      "title": "Cross-language interoperability, rollout, and final quality gates",
+      "objective": "Add real browser-to-Python interop with the Python HTTP API disabled, direct/STUN/forced-TURN coverage, reconnect/revocation/mutation-no-replay/security tests, docs/status updates, full affected regression suites, changed-files cleanup, independent code review, and architect invariant proof. Exit only when all supported claims are evidence-backed and final Ultragoal quality gate is clean.",
       "status": "in_progress",
       "attempt": 1,
-      "createdAt": "2026-07-08T19:59:14.984Z",
-      "updatedAt": "2026-07-08T23:43:33.006Z",
-      "startedAt": "2026-07-08T20:18:12.778Z"
+      "createdAt": "2026-07-25T20:04:19.853Z",
+      "updatedAt": "2026-07-26T09:04:25.303Z",
+      "startedAt": "2026-07-26T09:04:25.303Z"
     }
   ],
   "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
-  "activeGoalId": "G001-fix-two-aurora-issues-in-parallel-wh"
+  "activeGoalId": "G009-cross-language-interoperability-roll"
 }
