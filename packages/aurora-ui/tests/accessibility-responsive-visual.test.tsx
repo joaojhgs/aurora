@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import axe from 'axe-core'
 import { JSDOM } from 'jsdom'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AuroraClient as Aurora,
   MockAuroraTransport,
@@ -36,7 +36,21 @@ interface SurfaceRender {
   html: string
 }
 
+interface AccessibilityReportSurface {
+  surface: SurfaceId
+  viewport: ViewportId
+  violations: Array<{
+    id: string
+    impact: string | null | undefined
+    nodes: axe.NodeResult['target'][]
+  }>
+}
+
 const reportsDir = join(process.cwd(), 'reports', 'accessibility')
+const surfaceIds: SurfaceId[] = ['assistant', 'admin', 'mobile-settings']
+const accessibilityResults: AccessibilityReportSurface[] = []
+let qaRenders: SurfaceRender[] = []
+
 const viewports: Viewport[] = [
   { id: 'desktop', width: 1440, height: 1024 },
   { id: 'tablet', width: 900, height: 1180 },
@@ -44,38 +58,52 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Baselines regenerated after collapsing the topbar's split label+value
-  // pills (Mode/Health/Identity + separate EvidenceBadge) into single combined
-  // ModeBadge/HealthBadge/IdentityBadge pills, matching the prototype's
-  // Aurora.ModeBadge/Aurora.HealthBadge/Aurora.IdentityBadge (one pill per
-  // fact, not two). AssistantView's own source is unchanged; its rendered
-  // chrome shifts because it shares the AppShell topbar with every other
-  // screen. mobile-settings shifts because it renders SettingsPermissionsView.
+  // Baselines regenerated after the responsive mobile navigation sheet became
+  // explicitly aria-hidden and inert while closed. The always-visible desktop
+  // primary navigation remains exposed to assistive technology.
   assistant: {
-    desktop: 'ab9b91ff5ae1',
-    tablet: 'f01cd494c778',
-    mobile: '2a892b19fc17'
+    desktop: '794b01c9d163',
+    tablet: '6ccf67acd98e',
+    mobile: '8d0a05fabce5'
   },
   admin: {
-    desktop: 'd26ed6ffdf0a',
-    tablet: '96030e6a38b9',
-    mobile: '61db8eac1071'
+    desktop: '49bed4a0ba69',
+    tablet: '0d2e7323469b',
+    mobile: 'f50f4e0a4ad5'
   },
   'mobile-settings': {
-    desktop: '21ba2564e15a',
-    tablet: 'ac25fb16cbba',
-    mobile: 'e4e58ccc003a'
+    desktop: 'ede9ebb11055',
+    tablet: 'dce0da861634',
+    mobile: 'e3544c03cab4'
   }
 }
 
 describe('Accessibility, responsive, and visual regression suite', () => {
-  it('passes axe accessibility checks for assistant, admin, and mobile settings surfaces', async () => {
-    const renders = await renderQaSurfaces()
-    const results = []
+  beforeAll(async () => {
+    accessibilityResults.length = 0
+    qaRenders = await renderQaSurfaces()
+  })
 
-    for (const surface of renders) {
+  afterAll(() => {
+    writeJsonReport('accessibility.json', {
+      command: 'pnpm --filter @aurora/ui test:accessibility',
+      checker: 'axe-core',
+      surfaces: sortedAccessibilityResults(),
+      acceptedSkips: [
+        {
+          rule: 'color-contrast',
+          rationale: 'axe-core cannot evaluate CSS color contrast reliably in jsdom; static CSS token checks cover focus, layout, and state selectors in this gate.'
+        }
+      ]
+    })
+  })
+
+  it.each(surfaceIds.flatMap((surfaceId) => viewports.map((viewport) => ({ surfaceId, viewport }))))(
+    'passes axe accessibility checks for $surfaceId/$viewport.id',
+    async ({ surfaceId, viewport }) => {
+      const surface = qaSurface(surfaceId, viewport.id)
       const axeResult = await runAxe(surface)
-      results.push({
+      accessibilityResults.push({
         surface: surface.id,
         viewport: surface.viewport.id,
         violations: axeResult.violations.map((violation) => ({
@@ -85,23 +113,16 @@ describe('Accessibility, responsive, and visual regression suite', () => {
         }))
       })
       expect(axeResult.violations, `${surface.id}/${surface.viewport.id}`).toEqual([])
-    }
-
-    writeJsonReport('accessibility.json', {
-      command: 'pnpm --filter @aurora/ui test:accessibility',
-      checker: 'axe-core',
-      surfaces: results,
-      acceptedSkips: [
-        {
-          rule: 'color-contrast',
-          rationale: 'axe-core cannot evaluate CSS color contrast reliably in jsdom; static CSS token checks cover focus, layout, and state selectors in this gate.'
-        }
-      ]
-    })
-  }, 30_000)
+    },
+    // A single axe-core pass over the full AppShell static markup is CPU-bound
+    // and has timed out at 10s on loaded CI workers even though standalone
+    // runs complete in roughly 8s for all nine surfaces. Keep the allowance
+    // scoped to one surface/viewport instead of one 9-surface mega-test.
+    20_000
+  )
 
   it('keeps responsive landmarks, focus controls, and state language present at desktop, tablet, and mobile widths', async () => {
-    const renders = await renderQaSurfaces()
+    const renders = qaRenders
     const css = readFileSync(join(process.cwd(), 'src', 'styles.css'), 'utf8')
     const responsiveReport = renders.map((surface) => {
       const text = textContent(surface.html)
@@ -155,7 +176,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
   })
 
   it('matches deterministic visual baselines for loading, denied, degraded, not-ready, and mobile states', async () => {
-    const renders = await renderQaSurfaces()
+    const renders = qaRenders
     const fingerprints = renders.map((surface) => {
       const actual = fingerprint(surface.html)
       writeHtmlArtifact(`${surface.id}-${surface.viewport.id}.html`, surface.html)
@@ -272,11 +293,31 @@ async function runAxe(surface: SurfaceRender): Promise<axe.AxeResults> {
     runScripts: 'outside-only',
     pretendToBeVisual: true
   })
-  dom.window.eval(axe.source)
-  return (dom.window as unknown as { axe: typeof axe }).axe.run(dom.window.document, {
-    rules: {
-      'color-contrast': { enabled: false }
-    }
+  try {
+    dom.window.eval(axe.source)
+    return await (dom.window as unknown as { axe: typeof axe }).axe.run(dom.window.document, {
+      rules: {
+        'color-contrast': { enabled: false }
+      },
+      resultTypes: ['violations']
+    })
+  } finally {
+    dom.window.close()
+  }
+}
+
+function qaSurface(surfaceId: SurfaceId, viewportId: ViewportId): SurfaceRender {
+  const found = qaRenders.find((surface) => surface.id === surfaceId && surface.viewport.id === viewportId)
+  if (!found) throw new Error(`Missing QA render ${surfaceId}/${viewportId}`)
+  return found
+}
+
+function sortedAccessibilityResults(): AccessibilityReportSurface[] {
+  return [...accessibilityResults].sort((left, right) => {
+    const surfaceDelta = surfaceIds.indexOf(left.surface) - surfaceIds.indexOf(right.surface)
+    if (surfaceDelta !== 0) return surfaceDelta
+    const viewportDelta = viewports.findIndex((viewport) => viewport.id === left.viewport) - viewports.findIndex((viewport) => viewport.id === right.viewport)
+    return viewportDelta
   })
 }
 

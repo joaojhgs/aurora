@@ -2,6 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
 import {
   AuroraClient as Aurora,
@@ -54,8 +56,11 @@ import {
   buildPairingQueueModel,
   buildMeshDiagnosticsSnapshot,
   buildMeshPeerAdminAction,
+  buildMeshScopesAdminAction,
   buildMeshInvitePayload,
+  meshInviteReadiness,
   buildMeshPeersSnapshot,
+  MeshPeersView,
   buildRoutePolicySnapshot,
   buildRouteSheetViewModel,
   applyAssistantAudioChunkUpdate,
@@ -178,6 +183,32 @@ describe('Aurora production shell', () => {
     expect(accessRoute.providerLabel).toContain('Auth.ListPrincipals')
     expect(snapshot.routes.every((route) => route.repairActions.length > 0)).toBe(true)
     expect(snapshot.routes.every((route) => Array.isArray(route.candidateProviders))).toBe(true)
+  })
+
+  it('keeps missing non-private capability evidence unsupported while preserving explicit privacy-blocked fallback routes', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Gateway.GetCapabilityCatalog', () => {
+      const catalog = cloneFixture(capabilityGraphCatalogFixture)
+      catalog.actions = catalog.actions.filter((action) => !['Config.Get', 'Gateway.GetRegistry', 'DB.RAGSearch'].includes(action.topic ?? ''))
+      return catalog
+    })
+
+    const snapshot = await buildShellSnapshot(new Aurora({ transport }))
+    const missingConfig = route(snapshot, 'config')
+    const missingContracts = route(snapshot, 'contracts')
+    const privacyFallback = route(snapshot, 'data')
+
+    for (const missingRoute of [missingConfig, missingContracts]) {
+      expect(missingRoute.state).toBe('unsupported')
+      expect(missingRoute.disabled).toBe(true)
+      expect(missingRoute.routeable).toBe(false)
+      expect(missingRoute.blockers).toContain('capability_not_advertised')
+    }
+
+    expect(privacyFallback.state).toBe('privacy-blocked')
+    expect(privacyFallback.disabled).toBe(true)
+    expect(privacyFallback.routeable).toBe(false)
+    expect(privacyFallback.blockers).toContain('capability_not_advertised')
   })
 
   it('keeps read-only sensitive admin routes routeable without route-level AdminAction while mutations stay gated', async () => {
@@ -1963,6 +1994,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.localPeerId).toBe(meshStatusFixture.local.peer_id)
     expect(snapshot.secretsRedacted).toBe(true)
     expect(snapshot.pendingCount).toBe(1)
+    expect(snapshot.pendingRequests).toHaveLength(1)
     expect(snapshot.approvedCount).toBe(1)
     expect(snapshot.deniedCount).toBe(1)
     expect(snapshot.removedCount).toBe(1)
@@ -1992,12 +2024,22 @@ describe('Aurora production shell', () => {
           code: 'mesh-pairing-secret'
         }),
         approveAction: expect.objectContaining({
-          methodId: 'Auth.MeshApprovePeer',
-          path: '/api/Auth/MeshApprovePeer'
+          methodId: 'Auth.PairingApprove',
+          path: '/api/Auth/PairingApprove',
+          payload: expect.objectContaining({ code: 'mesh-pairing-secret' })
         }),
         lastEvidenceSource: expect.stringContaining('Auth.MeshListPeers')
       })
     )
+    expect(snapshot.pendingRequests[0]).toEqual(expect.objectContaining({
+      peerId: 'peer-kitchen',
+      pendingPairing: expect.objectContaining({ request_id: 'mesh-pairing-peer-kitchen', code: 'mesh-pairing-secret' }),
+      denyAction: expect.objectContaining({
+        methodId: 'Auth.PairingDeny',
+        path: '/api/Auth/PairingDeny',
+        payload: expect.objectContaining({ code: 'mesh-pairing-secret' })
+      })
+    }))
     expect(snapshot.liveSessions.find((session) => session.stablePeerId === 'stable-peer')?.evidenceSource).toBe('Gateway.GetWebRTCDiagnostics')
     expect(snapshot.devices.find((device) => device.name === 'Studio Mac')).toEqual(
       expect.objectContaining({
@@ -2008,19 +2050,299 @@ describe('Aurora production shell', () => {
     expect(snapshot.peers.find((peer) => peer.peerId === 'peer-den')?.compatibility).toContain('incompatible')
   })
 
-  it('renders mesh peer lifecycle UI without local-only trust or secret leakage', async () => {
+  it('shows outgoing pairing progress on Mesh & Peers when the incoming queue is empty', async () => {
+    const transport = new MockAuroraTransport()
+    transport
+      .register('Auth.ListPendingPairings', () => emptyPairingQueue())
+      .register('Gateway.GetWebRTCDiagnostics', () => ({
+        ...webrtcDiagnosticsFixture,
+        peers: [{
+          ...webrtcDiagnosticsFixture.peers[0]!,
+          signaling_peer_id: 'session-outgoing-pairing',
+          stable_peer_id: 'stable-peer-outgoing',
+          node_name: 'Aurora 2',
+          connection_state: 'connected',
+          data_channel_state: 'open',
+          auth_state: 'anonymous',
+          pairing_active: true,
+          auth_timeout_pending: true,
+          pending_pairing_task: true,
+          pairing_session_id: 'a'.repeat(64),
+          verification_code: '48271935'
+        }]
+      }))
+
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport }), meshRoute())
+    expect(snapshot.pendingRequests).toEqual([])
+    expect(snapshot.liveSessions).toEqual([
+      expect.objectContaining({
+        nodeName: 'Aurora 2',
+        connectionState: 'connected',
+        pairingState: expect.stringContaining('pairing active')
+      })
+    ])
+
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(<MeshPeersView snapshot={snapshot} route={meshRoute()} />))
+
+      expect(container.textContent).not.toContain('Pending pairing requests')
+      expect(container.textContent).toContain('Outgoing pairing is active')
+      expect(container.textContent).toContain('Pairing request sent to Aurora 2')
+      expect(container.textContent).toContain('Compare the verification code shown on both devices')
+      expect(container.textContent).toContain('4827 1935')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('keeps duplicate mesh pairing requests request-scoped and targets each displayed code', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Auth.ListPendingPairings', () => ({
+      pairings: [
+        pairingEntry({
+          request_id: 'pairing-first',
+          code: 'opaque-handle-first',
+          pairing_session_id: 'a'.repeat(64),
+          verification_code: '11111111'
+        }),
+        pairingEntry({
+          request_id: 'pairing-second',
+          code: 'opaque-handle-second',
+          pairing_session_id: 'b'.repeat(64),
+          verification_code: '22222222'
+        })
+      ],
+      total: 2,
+      expired_count: 0,
+      secrets_redacted: true
+    }))
+
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport }), meshRoute())
+
+    expect(snapshot.pendingCount).toBe(2)
+    expect(snapshot.pendingRequests.map((peer) => peer.pendingPairing.request_id)).toEqual(['pairing-first', 'pairing-second'])
+    expect(snapshot.pendingRequests.map((peer) => peer.approveAction)).toEqual([
+      expect.objectContaining({
+        methodId: 'Auth.PairingApprove',
+        path: '/api/Auth/PairingApprove',
+        payload: expect.objectContaining({ code: 'opaque-handle-first' })
+      }),
+      expect.objectContaining({
+        methodId: 'Auth.PairingApprove',
+        path: '/api/Auth/PairingApprove',
+        payload: expect.objectContaining({ code: 'opaque-handle-second' })
+      })
+    ])
+    expect(snapshot.pendingRequests.map((peer) => peer.denyAction?.payload)).toEqual([
+      expect.objectContaining({ code: 'opaque-handle-first' }),
+      expect.objectContaining({ code: 'opaque-handle-second' })
+    ])
+
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(<MeshPeersView snapshot={snapshot} route={meshRoute()} />))
+      const reviewButtons = Array.from(container.querySelectorAll('button')).filter((button) => button.textContent?.includes('Review & approve'))
+      expect(reviewButtons).toHaveLength(2)
+      expect(container.textContent).toContain('1111 1111')
+      expect(container.textContent).toContain('2222 2222')
+      expect(container.textContent).not.toContain('opaque-handle-first')
+      expect(container.textContent).not.toContain('opaque-handle-second')
+
+      await act(async () => {
+        reviewButtons[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      })
+      const dialog = document.body.querySelector('[role="dialog"]')
+      expect(dialog?.textContent).toContain('2222 2222')
+      expect(dialog?.textContent).not.toContain('1111 1111')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('keeps pending pairing requests out of the scopes approval path', async () => {
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
+    const pendingPeer = snapshot.peers.find((peer) => peer.pendingPairing)
+    const approvedPeer = snapshot.peers.find((peer) => !peer.pendingPairing && peer.outboundStatus === 'approved')
+    expect(pendingPeer).toBeDefined()
+    expect(approvedPeer).toBeDefined()
+
+    expect(buildMeshScopesAdminAction(pendingPeer!, ['Gateway.use'])).toBeNull()
+    expect(buildMeshScopesAdminAction({ ...pendingPeer!, pendingPairing: null }, ['Gateway.use'])).toBeNull()
+    expect(buildMeshScopesAdminAction(approvedPeer!, ['Gateway.use'])).toEqual(expect.objectContaining({
+      methodId: 'Auth.MeshUpdatePeerPermissions',
+      path: '/api/Auth/MeshUpdatePeerPermissions',
+      payload: { peer_id: approvedPeer!.peerId, permissions: ['Gateway.use'] }
+    }))
+
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={{ ...snapshot, peers: [pendingPeer!] }}
+          route={meshRoute()}
+        />
+      ))
+      const buttonLabels = Array.from(container.querySelectorAll('button')).map((button) => button.textContent?.trim())
+      expect(buttonLabels).not.toContain('Scopes')
+      expect(container.textContent).toContain('Review required')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('shows mesh latency as a measured band without raw-float or fake-percent noise', async () => {
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
+    const peer = snapshot.peers.find((candidate) => candidate.outboundStatus === 'approved') ?? snapshot.peers[0]!
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={{ ...snapshot, peers: [{ ...peer, latencyMs: null, connectionStatus: 'connected' }] }}
+          route={meshRoute()}
+        />
+      ))
+      expect(container.textContent).toContain('measuring')
+      expect(container.textContent).not.toContain('Route qualitygood')
+
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={{ ...snapshot, peers: [{ ...peer, latencyMs: 479.43071997724473, connectionStatus: 'connected' }] }}
+          route={meshRoute()}
+        />
+      ))
+      expect(container.textContent).toContain('479.4 ms')
+      expect(container.textContent).toContain('poor')
+      expect(container.textContent).not.toContain('479.43071997724473')
+      expect(container.textContent).not.toContain('0%')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('does not send Auth pairing reads before Auth or the mesh runtime is ready', async () => {
+    const transport = new MockAuroraTransport()
+    const disabledMesh = cloneFixture(meshStatusFixture)
+    disabledMesh.local.mesh_enabled = false
+    disabledMesh.local.mesh_started = false
+    disabledMesh.local.webrtc_started = false
+    disabledMesh.peers = []
+    disabledMesh.routes = []
+    const authReads: string[] = []
+
+    transport
+      .register('Gateway.GetMeshStatus', () => disabledMesh)
+      .register('Config.Get', () => ({
+        config: {
+          services: {
+            auth: { enabled: false },
+            gateway: {
+              mesh_network: { enabled: false },
+              webrtc: { enabled: false, app_id: 'aurora', room: 'default', password: '' }
+            }
+          }
+        }
+      }))
+      .register('Auth.MeshListPeers', () => {
+        authReads.push('Auth.MeshListPeers')
+        return { peers: [] }
+      })
+      .register('Auth.ListPendingPairings', () => {
+        authReads.push('Auth.ListPendingPairings')
+        return { pairings: [] }
+      })
+      .register('Auth.ListDevices', () => {
+        authReads.push('Auth.ListDevices')
+        return { devices: [] }
+      })
+
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport }), meshRoute())
+
+    expect(authReads).toEqual([])
+    expect(snapshot.meshEnabled).toBe(false)
+    expect(snapshot.warnings.join(' ')).not.toMatch(/mesh peers|pairing queue|Auth devices/)
+  })
+
+  it('builds mesh invites with mandatory signaling credentials and without pre-created pairing codes', async () => {
     const route = meshRoute()
     const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), route)
+    const secureSnapshot = {
+      ...snapshot,
+      secretsRedacted: false,
+      config: {
+        ...snapshot.config,
+        secretsRedacted: false,
+        fields: snapshot.config.fields.map((field) =>
+          field.key_path === 'services.gateway.webrtc.password'
+            ? { ...field, current_value: 'secret-room-key' }
+            : field
+        )
+      }
+    }
 
     expect(snapshot.fixtureOnly).toBe(true)
     expect(snapshot.evidenceSource).toContain('not live runtime state')
     expect(snapshot.config.fields.some((field) => field.key_path === 'services.gateway.webrtc.room')).toBe(true)
-    const invite = buildMeshInvitePayload(snapshot, false)
-    expect(JSON.stringify(invite)).toContain('aurora.mesh.invite')
-    expect(JSON.stringify(invite)).toContain('aurora-studio-room')
+    const buildMandatoryInvite = buildMeshInvitePayload as unknown as (input: typeof secureSnapshot) => ReturnType<typeof buildMeshInvitePayload>
+    const invite = buildMandatoryInvite(secureSnapshot)
+    expect(invite.kind).toBe('aurora.mesh.invite')
+    expect(invite.signaling).toEqual(expect.objectContaining({
+      app_id: 'aurora-dev',
+      room: 'aurora-studio-room',
+      room_password: 'secret-room-key'
+    }))
     expect(JSON.stringify(invite)).toContain('Gateway.use')
-    expect(JSON.stringify(invite)).not.toContain('room_password')
+    expect(invite).not.toHaveProperty('pairing')
     expect(JSON.stringify(invite)).not.toContain('mesh-pairing-secret')
+  })
+
+  it('does not expose manual code creation or optional-password controls in the Mesh Connect UI', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const route = meshRoute()
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), route)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root.render(<MeshPeersView snapshot={snapshot} route={route} />)
+      })
+      const connectButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Connect peer'))
+      expect(connectButton).toBeDefined()
+
+      await act(async () => {
+        connectButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      })
+
+      const dialog = document.body.querySelector('[role="dialog"]')
+      expect(dialog).not.toBeNull()
+      expect(dialog?.textContent).toContain('Invite a device')
+      expect(dialog?.textContent).not.toContain('Create pairing code')
+      expect(dialog?.textContent).not.toContain('Include room password')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
   })
 
   it('keeps mesh configuration read-only when schema metadata is unavailable', async () => {
@@ -2033,6 +2355,22 @@ describe('Aurora production shell', () => {
     expect(snapshot.config.state).toBe('degraded')
     expect(snapshot.config.reason).toContain('editable metadata')
     expect(snapshot.config.warnings.join(' ')).toContain('metadata down')
+  })
+
+  it('reports security settings as unknown when Config and diagnostics evidence are absent', async () => {
+    const transport = new MockAuroraTransport()
+      .lose('Config.GetSchemaMetadata', 'metadata down')
+      .lose('Gateway.GetWebRTCDiagnostics', 'diagnostics down')
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport }), meshRoute())
+    const value = (keyPath: string) => snapshot.config.fields.find((field) => field.key_path === keyPath)?.current_value
+
+    expect(value('services.gateway.webrtc.encrypt_signaling')).toBeNull()
+    expect(value('services.gateway.webrtc.enable_app_layer_e2ee')).toBeNull()
+    expect(snapshot.config.editable).toBe(false)
+    expect(snapshot.config.state).toBe('degraded')
+    expect(meshInviteReadiness(snapshot)).toEqual(
+      expect.objectContaining({ ready: false, reason: expect.stringContaining('encryption') }),
+    )
   })
 
   it('does not surface non-pending pairing history as approval requests', async () => {
@@ -2069,6 +2407,17 @@ describe('Aurora production shell', () => {
   })
 
   it('builds mesh peer AdminAction payloads without raw confirmation shortcuts', () => {
+    const pairing = pairingEntry({ request_id: 'pairing-exact', code: '654321' })
+    const approvePairing = buildMeshPeerAdminAction(
+      { peerId: pairing.remote_peer_id, nodeName: pairing.remote_node_name, pendingPairing: pairing },
+      'approve',
+      { reason: 'Matching code verified', permissions: 'Gateway.use', reauthConfirmed: true }
+    )
+    const denyPairing = buildMeshPeerAdminAction(
+      { peerId: pairing.remote_peer_id, nodeName: pairing.remote_node_name, pendingPairing: pairing },
+      'deny',
+      { reason: 'Code mismatch', reauthConfirmed: true }
+    )
     const approve = buildMeshPeerAdminAction(
       { peerId: 'peer-kitchen', nodeName: 'Kitchen node' },
       'approve',
@@ -2085,6 +2434,17 @@ describe('Aurora production shell', () => {
       { reason: 'Retire test peer', revokeToken: false, reauthConfirmed: true }
     )
 
+    expect(approvePairing).toEqual(expect.objectContaining({
+      methodId: 'Auth.PairingApprove',
+      payload: { code: '654321', permissions: ['Gateway.use'], is_admin: false },
+      affectedResources: ['pairing:pairing-exact', 'peer:peer-kitchen', 'device:Kitchen tablet'],
+      path: '/api/Auth/PairingApprove'
+    }))
+    expect(denyPairing).toEqual(expect.objectContaining({
+      methodId: 'Auth.PairingDeny',
+      payload: { code: '654321', reason: 'Code mismatch' },
+      path: '/api/Auth/PairingDeny'
+    }))
     expect(approve).toEqual(expect.objectContaining({
       methodId: 'Auth.MeshApprovePeer',
       payload: { peer_id: 'peer-kitchen', permissions: ['Gateway.use', 'TTS.use'] },
@@ -2103,7 +2463,7 @@ describe('Aurora production shell', () => {
       payload: { peer_id: 'peer-lab', revoke_token: false },
       path: '/api/Auth/MeshRemovePeer'
     }))
-    expect(JSON.stringify([approve, deny, remove])).not.toContain('"confirmed":true')
+    expect(JSON.stringify([approvePairing, denyPairing, approve, deny, remove])).not.toContain('"confirmed":true')
     expect(parseMeshPermissionList('Gateway.use, TTS.use\nScheduler.use')).toEqual(['Gateway.use', 'TTS.use', 'Scheduler.use'])
   })
 
@@ -2327,21 +2687,23 @@ describe('Aurora production shell', () => {
     expect(snapshot.canEditPolicy).toBe(false)
   })
 
-  it('serializes route policy draft to schema-backed mesh sharing config', () => {
+  it('serializes route policy draft to schema-backed outbound mesh routing config', () => {
     const change = routePolicyDraftChange({
       ...routePolicyDraft(),
       module: 'TTS',
-      allowedPeers: 'peer-a, peer-b',
+      allowedProviderPeerIds: 'peer-a, peer-b',
       deniedPeers: 'peer-c',
-      requiredCapabilities: 'synthesize, low-latency',
+      requiredProviderFeatureIds: 'speech-output, streaming-output',
+      requiredProviderCapabilityTags: 'synthesize, low-latency',
       minimumVersion: '0.3.0'
     })
 
-    expect(change.key_path).toBe('services.tts.mesh_sharing')
+    expect(change.key_path).toBe('services.tts.mesh_routing')
     expect(change.value).toEqual({
       require_explicit_selector: true,
-      allowed_peers: ['peer-a', 'peer-b'],
-      required_capabilities: ['synthesize', 'low-latency'],
+      allowed_provider_peer_ids: ['peer-a', 'peer-b'],
+      required_provider_feature_ids: ['speech-output', 'streaming-output'],
+      required_provider_capability_tags: ['synthesize', 'low-latency'],
       min_version: '0.3.0',
       fallback: 'local'
     })
@@ -2427,6 +2789,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         id: 'call-1',
         name: 'Calendar.CreateEvent',
+        sessionId: 'session-1',
         status: 'running',
         riskClass: 'requires-approval',
         target: 'local calendar',
@@ -2562,6 +2925,48 @@ describe('Aurora production shell', () => {
         status: 'completed',
         payloadPreview: { query: { text: 'latest news in Egypt' } },
         resultPreview: { count: 3 }
+      })
+    ])
+  })
+
+  it('keeps substantive assistant text when a terminal update has no text', () => {
+    const completedTool = applyAssistantToolUpdate({
+      id: 'assistant-pending',
+      role: 'assistant' as const,
+      text: 'No active scheduled tasks found on aurora-2.',
+      createdAt: '2026-06-21T00:00:00Z',
+      status: 'streaming' as const
+    }, {
+      ...streamUpdate(''),
+      kind: 'tool' as const,
+      eventId: 'tool-event-completed',
+      tool: {
+        id: 'tool-call-list-schedules',
+        name: 'aurora-2.list_scheduled_tasks_tool',
+        status: 'completed',
+        riskClass: 'backend-evaluated',
+        target: 'aurora-2',
+        dataLeavesDevice: false,
+        summary: 'Tool execution completed.',
+        payloadPreview: null,
+        resultPreview: { taskCount: 0 },
+        error: null
+      }
+    })
+    const terminal = applyAssistantTerminalUpdate(completedTool, {
+      ...streamUpdate(''),
+      kind: 'completed' as const,
+      text: '',
+      textDelta: ''
+    })
+
+    expect(terminal.text).toBe('No active scheduled tasks found on aurora-2.')
+    expect(terminal.status).toBe('sent')
+    expect(terminal.toolCalls).toEqual([
+      expect.objectContaining({
+        id: 'tool-call-list-schedules',
+        status: 'completed',
+        resultPreview: { taskCount: 0 }
       })
     ])
   })
@@ -3216,9 +3621,10 @@ function routePolicyDraft() {
   return {
     module: 'TTS',
     requireExplicitSelector: true,
-    allowedPeers: '',
+    allowedProviderPeerIds: '',
     deniedPeers: '',
-    requiredCapabilities: 'synthesize',
+    requiredProviderFeatureIds: '',
+    requiredProviderCapabilityTags: 'synthesize',
     minimumVersion: '',
     trustTier: 'paired',
     fallbackPolicy: 'local' as const,

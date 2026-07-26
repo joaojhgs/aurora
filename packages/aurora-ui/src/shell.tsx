@@ -28,7 +28,6 @@ import { Avatar, AvatarFallback } from "#components/ui/avatar";
 import { Badge } from "#components/ui/badge";
 import { Button } from "#components/ui/button";
 import { Card } from "#components/ui/card";
-import { Sheet, SheetContent, SheetTitle } from "#components/ui/sheet";
 import { cn } from "#lib/utils";
 
 export interface AppShellProps {
@@ -45,67 +44,120 @@ export function AppShell({
   onNavigate,
 }: AppShellProps) {
   const activePath = normalizePath(currentPath);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activityRailCollapsed, setActivityRailCollapsed] = useState(false);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [activityRailCollapsed, setActivityRailCollapsed] = useState(true);
   const handleMobileMenuToggle = useCallback(
-    () => setMobileMenuOpen((open) => !open),
+    () => {
+      setNavigationOpen((open) => {
+        if (!open) setActivityRailCollapsed(true);
+        return !open;
+      });
+    },
     [],
   );
   const handleActivityRailToggle = useCallback(
-    () => setActivityRailCollapsed((collapsed) => !collapsed),
+    () => {
+      setActivityRailCollapsed((collapsed) => {
+        if (collapsed) setNavigationOpen(false);
+        return !collapsed;
+      });
+    },
     [],
   );
   const handleMobileNavigate = useCallback(
     (href: string) => {
-      setMobileMenuOpen(false);
       onNavigate?.(href);
     },
     [onNavigate],
   );
   return (
     <div
-      className="flex h-dvh w-full overflow-hidden bg-background text-foreground"
+      className="aui-shell flex h-dvh w-full overflow-hidden bg-background text-foreground"
       data-activity-collapsed={activityRailCollapsed ? "true" : "false"}
+      data-navigation-open={navigationOpen ? "true" : "false"}
     >
       <aside
-        className="hidden w-[248px] shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar md:flex"
+        id="primary-navigation"
+        className={cn(
+          "aui-sidebar relative hidden min-w-0 shrink-0 flex-col overflow-hidden border-r bg-sidebar md:flex",
+          navigationOpen ? "border-border" : "border-transparent",
+        )}
+        style={{
+          width: 248,
+          transition: "border-color 300ms ease",
+        }}
         aria-label="Primary navigation"
       >
-        <BrandHeader snapshot={snapshot} />
-        <ShellNavigation
-          activePath={activePath}
-          routes={snapshot.routes}
-          {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
-        />
-        <div className="flex items-center gap-2 border-t border-border p-2.5">
-          <Avatar className="size-[26px]">
-            <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">AD</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium">{shellIdentityLabel(snapshot)}</p>
-            <p className="truncate text-[10.5px] text-muted-foreground">{shellAccessLabel(snapshot)}</p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close navigation menu"
+          onClick={() => setNavigationOpen(false)}
+          className="absolute top-2.5 right-2.5 z-10 md:hidden"
+        >
+          <Menu size={18} aria-hidden />
+        </Button>
+        <div className="flex h-full w-[248px] shrink-0 flex-col">
+          <BrandHeader snapshot={snapshot} />
+          <ShellNavigation
+            activePath={activePath}
+            routes={snapshot.routes}
+            {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
+          />
+          <div className="flex items-center gap-2 border-t border-border p-2.5">
+            <Avatar className="size-[26px]">
+              <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">AD</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium">{shellIdentityLabel(snapshot)}</p>
+              <p className="truncate text-[10.5px] text-muted-foreground">{shellAccessLabel(snapshot)}</p>
+            </div>
           </div>
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4">
-          <div className="md:hidden">
-            <Button type="button" variant="ghost" size="icon" aria-label="Open menu" aria-expanded={mobileMenuOpen} onClick={handleMobileMenuToggle}>
-              <Menu size={20} />
+      <div className="aui-main-column flex min-w-0 flex-1 flex-col">
+        <header className="aui-topbar flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={navigationOpen ? "Hide navigation menu" : "Show navigation menu"}
+            aria-expanded={navigationOpen}
+            aria-controls="primary-navigation"
+            onClick={handleMobileMenuToggle}
+            className="hidden"
+            tabIndex={-1}
+          >
+            <Menu size={20} aria-hidden />
+          </Button>
+          <div className="aui-mobile-menu md:hidden" data-open={navigationOpen ? "true" : "false"}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Open menu"
+              aria-expanded={navigationOpen}
+              aria-controls="primary-navigation"
+              onClick={handleMobileMenuToggle}
+              className="shrink-0"
+            >
+              <Menu size={20} aria-hidden />
             </Button>
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetContent side="left" className="w-[280px] p-0">
-                <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <MobileNavigationSheet
-                  snapshot={snapshot}
-                  activePath={activePath}
-                  routes={snapshot.routes}
-                  {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
-                />
-              </SheetContent>
-            </Sheet>
+            <div
+              className="aui-mobile-sheet fixed left-0 z-40 w-[min(20rem,86vw)] overflow-hidden border border-border bg-background shadow-xl"
+              aria-hidden={!navigationOpen}
+              inert={!navigationOpen}
+            >
+              <MobileNavigationSheet
+                snapshot={snapshot}
+                activePath={activePath}
+                routes={snapshot.routes}
+                {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
+              />
+            </div>
           </div>
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
+          <div className="aui-status-row flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
             <ModeBadge mode={shellSurfaceLabel(snapshot)} />
             <HealthBadge health={shellHealthLabel(snapshot)} />
             <IdentityBadge identity={shellIdentityBadgeLabel(snapshot)} />
@@ -125,29 +177,34 @@ export function AppShell({
             size="icon"
             aria-label={activityRailCollapsed ? "Show activity rail" : "Hide activity rail"}
             aria-pressed={activityRailCollapsed}
+            title="Toggle activity rail"
             onClick={handleActivityRailToggle}
             className="shrink-0"
           >
             <PanelRight size={18} aria-hidden />
           </Button>
-          <details className="md:hidden">
-            <summary aria-label="Toggle activity rail" className="cursor-pointer list-none">
-              <PanelRight size={18} />
-            </summary>
-            <div className="absolute top-[54px] right-0 z-20 max-h-[70vh] w-[280px] overflow-y-auto border-l border-b border-border bg-popover shadow-lg">
-              <ActivityRail snapshot={snapshot} />
-            </div>
-          </details>
         </header>
         <div className="flex min-h-0 flex-1">
-          <main className="min-w-0 flex-1 overflow-y-auto" id="content">
+          <main className="aui-content min-w-0 flex-1 overflow-y-auto" id="content">
             {children}
           </main>
-          {activityRailCollapsed ? null : (
-            <div className="hidden w-[280px] shrink-0 overflow-y-auto border-l border-border lg:block">
+          <aside
+            className={cn(
+              "aui-activity min-w-0 shrink-0 overflow-hidden border-l bg-background",
+              activityRailCollapsed ? "border-transparent" : "border-border",
+            )}
+            style={{
+              width: activityRailCollapsed ? 0 : 280,
+              transition: "width 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease",
+            }}
+            aria-label="Aurora activity"
+            aria-hidden={activityRailCollapsed}
+            inert={activityRailCollapsed}
+          >
+            <div className="h-full w-[280px] overflow-y-auto">
               <ActivityRail snapshot={snapshot} />
             </div>
-          )}
+          </aside>
         </div>
       </div>
       <MobileBottomTabs

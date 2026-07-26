@@ -342,6 +342,11 @@ function ToolsTab({
         <div className="flex flex-col gap-0.5">
           <span className="font-mono text-xs">{tool.name}</span>
           <span className="text-xs text-muted-foreground">{tool.description}</span>
+          {tool.disabledReason ? (
+            <span className="text-xs text-destructive" role="status">
+              {tool.disabledReason} Not callable from this peer.
+            </span>
+          ) : null}
         </div>
       )
     },
@@ -654,13 +659,14 @@ function PluginConfigDialog({
 function sourceDescription(source: ToolingSourceModel): string {
   if (source.type === 'core') return 'Built-in tools shipped with Aurora services, always present, no install step.'
   if (source.type === 'mcp') return `MCP server (${source.transport ?? 'transport not reported'}) exposing ${source.toolCount} tool(s).`
-  if (source.type === 'mesh') return `Tools announced by mesh peer ${source.peerId ?? source.name}'s Tooling catalog (cached, negotiated).`
+  if (source.type === 'mesh') return `Tools announced by mesh peer ${source.name}'s Tooling catalog (cached, negotiated).`
   if (source.type === 'unknown') return 'Announced tools from an unverified provider. Quarantined until reviewed.'
   if (source.type === 'plugin') return `Plugin source exposing ${source.toolCount} tool(s).`
   return source.catalogEvidence
 }
 
 function toolStateLabel(tool: ToolApprovalCardModel): string {
+  if (tool.blockReasonCode === 'permission_denied') return 'missing permission'
   if (tool.state === 'approved' || tool.state === 'executed') return 'approved'
   if (tool.state === 'denied' || tool.state === 'replay-rejected' || tool.state === 'unavailable' || tool.state === 'failed' || tool.state === 'expired') return 'denied'
   if (tool.approvalRequired) return 'pending'

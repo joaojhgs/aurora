@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAuroraBrowserClient, createAuroraWebClient, resetAuroraBrowserClientForTests } from './aurora-client'
+import { createAuroraBrowserClient, createAuroraBrowserRuntime, createAuroraWebClient, resetAuroraBrowserClientForTests } from './aurora-client'
+import { consumeFragmentInviteFromUrl } from './mesh/mesh-client'
 
 describe('createAuroraWebClient', () => {
   afterEach(() => {
@@ -119,6 +123,35 @@ describe('createAuroraBrowserClient', () => {
     expect(client.auth.snapshot()).toEqual(expect.objectContaining({ state: 'user', principalId: 'user-2' }))
     expect(calls[1]?.headers.Authorization).toBe('Bearer manual-token')
     expect(storage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('does not bootstrap WebRTC invites from public env or persistent URL state', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_CONNECTION_MODE', 'webrtc-only')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_GATEWAY_URL', 'https://aurora.example')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_INVITE', 'room_password=do-not-read')
+    const runtime = createAuroraBrowserRuntime()
+
+    expect(runtime.peer.snapshot().status).toBe('failed')
+    expect(runtime.peer.snapshot().diagnostic).not.toContain('do-not-read')
+  })
+
+  it('ignores query invites and only consumes scrubbed fragment invites without reload', () => {
+    const testDir = dirname(fileURLToPath(import.meta.url))
+    const clientSource = readFileSync(join(testDir, 'aurora-client.ts'), 'utf8')
+    const meshSource = readFileSync(join(testDir, 'mesh/mesh-client.tsx'), 'utf8')
+    const replacements: string[] = []
+
+    expect(consumeFragmentInviteFromUrl('https://app.example/mesh?invite=query-secret', (url) => replacements.push(url))).toBeNull()
+    expect(replacements).toEqual([])
+    expect(consumeFragmentInviteFromUrl('https://app.example/mesh?view=peers#invite=fragment-secret&tab=rtc', (url) => replacements.push(url))).toBe('fragment-secret')
+    expect(replacements).toEqual(['/mesh?view=peers#tab=rtc'])
+
+    expect(clientSource).not.toContain('NEXT_PUBLIC_AURORA_WEBRTC_INVITE')
+    expect(meshSource).not.toContain("searchParams.get('invite')")
+    expect(meshSource).toContain('window.history.replaceState')
+    expect(meshSource).not.toContain("url.searchParams.set('invite'")
+    expect(meshSource).not.toContain('window.location.reload')
   })
 
   it('uses a pairing exchange token for later Gateway calls without persisting the secret', async () => {

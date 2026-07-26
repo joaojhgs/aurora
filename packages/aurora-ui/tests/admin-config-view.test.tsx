@@ -170,7 +170,8 @@ function configTransport(calls: string[] = []): MockAuroraTransport {
           affected_services: ['gateway']
         })),
         errors: [],
-        secrets_redacted: true
+        secrets_redacted: true,
+        changed_paths: (payload.changes ?? []).map((change) => change.key_path)
       } satisfies ConfigDiffPreviewResponse
     })
     .register('Config.PreviewReloadImpact', (request) => {

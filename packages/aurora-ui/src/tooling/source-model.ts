@@ -1,4 +1,4 @@
-import type { NormalizedSchedulerJob, ToolApprovalCardModel, ToolSourceDetailModel, ToolSourceSummaryModel, ToolingPageViewModel } from '@aurora/client'
+import { mergeToolManagementInventory, type ConfigFieldMetadata, type NormalizedSchedulerJob, type ToolApprovalCardModel, type ToolSourceDetailModel, type ToolSourceSummaryModel, type ToolingPageViewModel } from '@aurora/client'
 
 export type ToolingSourceType = 'core' | 'mcp' | 'plugin' | 'mesh' | 'unknown' | 'blocked'
 export type ToolingTrustState = 'trusted' | 'approval-required' | 'blocked' | 'quarantined' | 'mixed'
@@ -6,6 +6,9 @@ export type ToolingPolicyMode = 'enforce' | 'deny_all' | 'dry_run_only' | 'unres
 
 export interface ToolingSourceModel {
   id: string
+  shareGroupId?: string | null
+  shareGroupLabel?: string | null
+  exportable?: boolean
   type: Exclude<ToolingSourceType, 'blocked'>
   name: string
   providerLabel: string
@@ -14,6 +17,7 @@ export interface ToolingSourceModel {
   peerId: string | null
   serviceInstanceId: string | null
   trustTier: string | null
+  configuredTrustTier: string | null
   effectiveTrust: ToolingTrustState
   toolCount: number
   blockedToolCount: number
@@ -66,6 +70,68 @@ export interface ToolingAuditRow {
   policyDecisionId: string
 }
 
+export interface BuiltinPluginModel {
+  id: string
+  label: string
+  active: boolean
+  configured: boolean
+  activateKeyPath: string
+  /** Credential/config fields for this plugin (everything except the activate flag). */
+  fields: ConfigFieldMetadata[]
+  evidence: string
+}
+
+const BUILTIN_PLUGIN_PREFIX = 'services.tooling.plugins.'
+
+const BUILTIN_PLUGIN_LABELS: Record<string, string> = {
+  brave_search: 'Brave Search',
+  gcalendar: 'Google Calendar',
+  gmail: 'Gmail',
+  github: 'GitHub',
+  jira: 'Jira',
+  openrecall: 'OpenRecall',
+  slack: 'Slack',
+}
+
+/** Built-in plugins derived from config schema metadata (`services.tooling.plugins.*`). */
+export function buildBuiltinPlugins(fields: ConfigFieldMetadata[]): BuiltinPluginModel[] {
+  const byPlugin = new Map<string, ConfigFieldMetadata[]>()
+  for (const field of fields) {
+    if (!field.key_path.startsWith(BUILTIN_PLUGIN_PREFIX)) continue
+    const rest = field.key_path.slice(BUILTIN_PLUGIN_PREFIX.length)
+    const [pluginId, ...leaf] = rest.split('.')
+    if (!pluginId || leaf.length === 0) continue
+    byPlugin.set(pluginId, [...(byPlugin.get(pluginId) ?? []), field])
+  }
+  const plugins: BuiltinPluginModel[] = []
+  for (const [pluginId, pluginFields] of byPlugin) {
+    const activateField = pluginFields.find((field) => field.key_path === `${BUILTIN_PLUGIN_PREFIX}${pluginId}.activate`)
+    if (!activateField) continue
+    const credentialFields = pluginFields.filter((field) => field !== activateField)
+    plugins.push({
+      id: pluginId,
+      label: BUILTIN_PLUGIN_LABELS[pluginId] ?? humanizePluginId(pluginId),
+      active: activateField.current_value === true,
+      configured: credentialFields.length === 0 || credentialFields.every((field) => hasConfiguredValue(field)),
+      activateKeyPath: activateField.key_path,
+      fields: credentialFields,
+      evidence: 'Config.GetSchemaMetadata',
+    })
+  }
+  return plugins.sort((left, right) => left.label.localeCompare(right.label))
+}
+
+function hasConfiguredValue(field: ConfigFieldMetadata): boolean {
+  const value = field.current_value
+  if (value === null || value === undefined || value === '') return false
+  if (Array.isArray(value)) return value.length > 0
+  return true
+}
+
+function humanizePluginId(pluginId: string): string {
+  return pluginId.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
 export function buildToolingSourcesFromBackend(
   summaries: ToolSourceSummaryModel[],
   details: Record<string, ToolSourceDetailModel | null>,
@@ -74,8 +140,13 @@ export function buildToolingSourcesFromBackend(
   if (summaries.length === 0) return []
   return summaries.map((summary) => {
     const detail = details[summary.id] ?? null
-    const sourceTools = detail?.tools.length ? detail.tools : fallbackTools.filter((tool) => sourceMatchesSummary(tool, summary))
-    return sourceFromSummary(summary, sourceTools, detail?.blockedTools.length ?? summary.blockedToolCount)
+    const sourceTools = detail
+      ? mergeToolManagementInventory(detail.tools, detail.blockedTools, detail.retainedTools)
+      : fallbackTools.filter((tool) => sourceMatchesSummary(tool, summary))
+    const blockedCount = detail
+      ? Math.max(detail.blockedTools.length, summary.blockedToolCount)
+      : summary.blockedToolCount
+    return sourceFromSummary(summary, sourceTools, blockedCount)
   }).sort((left, right) => sourceSortWeight(left.type) - sourceSortWeight(right.type) || left.name.localeCompare(right.name))
 }
 
@@ -110,6 +181,9 @@ function sourceFromSummary(summary: ToolSourceSummaryModel, tools: ToolApprovalC
   const pendingApprovalCount = summary.approvalRequiredCount || tools.filter(isPendingApprovalTool).length
   return {
     id: summary.id,
+    shareGroupId: tools[0]?.shareGroupId ?? null,
+    shareGroupLabel: tools[0]?.shareGroupLabel ?? null,
+    exportable: tools.length > 0 && tools.every((tool) => tool.exportable === true),
     type,
     name: summary.label,
     providerLabel: summary.label,
@@ -118,8 +192,9 @@ function sourceFromSummary(summary: ToolSourceSummaryModel, tools: ToolApprovalC
     peerId: summary.providerPeerId,
     serviceInstanceId: summary.providerServiceInstanceId,
     trustTier: summary.trustTier,
+    configuredTrustTier: summary.configuredTrustTier ?? null,
     effectiveTrust: effectiveTrustFromSummary(summary),
-    toolCount: summary.toolCount || tools.length,
+    toolCount: Math.max(summary.toolCount, tools.length),
     blockedToolCount: blockedCount,
     pendingApprovalCount,
     safeToolCount: tools.filter((tool) => !tool.approvalRequired && !tool.mutating && !tool.dataEgress).length,
@@ -298,6 +373,9 @@ function sourceFromTools(id: string, tools: ToolApprovalCardModel[]): ToolingSou
   const name = sourceName(first, type)
   return {
     id,
+    shareGroupId: first?.shareGroupId ?? null,
+    shareGroupLabel: first?.shareGroupLabel ?? null,
+    exportable: tools.length > 0 && tools.every((tool) => tool.exportable === true),
     type,
     name,
     providerLabel: first?.providerLabel ?? name,
@@ -306,6 +384,7 @@ function sourceFromTools(id: string, tools: ToolApprovalCardModel[]): ToolingSou
     peerId: first?.providerPeerId ?? null,
     serviceInstanceId: first?.serviceInstanceId ?? null,
     trustTier: first?.trustTier ?? null,
+    configuredTrustTier: null,
     effectiveTrust: effectiveTrust(tools, blockedToolCount, pendingApprovalCount),
     toolCount: tools.length,
     blockedToolCount,
@@ -323,12 +402,23 @@ function sourceFromTools(id: string, tools: ToolApprovalCardModel[]): ToolingSou
 }
 
 function sourceIdForTool(tool: ToolApprovalCardModel): string {
+  if (tool.shareGroupId) {
+    return isRemoteTool(tool)
+      ? `mesh:${tool.providerPeerId ?? 'remote'}:${tool.shareGroupId}`
+      : tool.shareGroupId
+  }
   if (tool.sourceId) return tool.sourceId
   const sourceType = sourceTypeForTool(tool)
   if (sourceType === 'mesh') {
     return `mesh:${tool.providerPeerId ?? 'remote'}:${safeSourceSegment(tool.serviceInstanceId ?? tool.providerLabel ?? 'Tooling')}`
   }
   return `local:${sourceType}`
+}
+
+function isRemoteTool(tool: ToolApprovalCardModel): boolean {
+  const kind = tool.providerKind.toLowerCase()
+  return tool.sourceType === 'mesh' || tool.sourceType === 'mesh_peer'
+    || kind === 'mesh' || kind === 'mesh_peer' || kind === 'remote'
 }
 
 function safeSourceSegment(value: string): string {
@@ -348,7 +438,8 @@ function sourceTypeForTool(tool: ToolApprovalCardModel): Exclude<ToolingSourceTy
 
 function sourceName(tool: ToolApprovalCardModel | undefined, type: Exclude<ToolingSourceType, 'blocked'>): string {
   if (!tool) return sourceSectionLabel(type)
-  if (type === 'mesh') return tool.providerPeerId ?? tool.providerLabel
+  if (tool.shareGroupLabel) return tool.shareGroupLabel
+  if (type === 'mesh') return tool.providerLabel || tool.providerPeerId || sourceSectionLabel(type)
   if (type === 'mcp') return tool.serviceInstanceId ?? tool.providerLabel
   if (type === 'core') return tool.providerLabel.includes('Tooling') ? 'Aurora core Tooling' : tool.providerLabel
   return tool.providerLabel

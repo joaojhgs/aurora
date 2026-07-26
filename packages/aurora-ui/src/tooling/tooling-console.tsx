@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Boxes,
@@ -26,15 +26,17 @@ import {
   Wrench,
   X
 } from 'lucide-react'
-import type { AuroraClient, AvailabilityState, McpSourceWizardDraft, NormalizedSchedulerJob, PluginSourceWizardDraft, ToolApprovalCardModel, ToolApprovalGrantModel, ToolApprovalScope, ToolOnboardingValidationResult, ToolPolicyAuditEventModel, ToolPendingApprovalModel, ToolSourceDetailModel, ToolSourceSummaryModel, ToolingPageViewModel } from '@aurora/client'
+import type { AuroraClient, AvailabilityState, JsonValue, McpSourceWizardDraft, NormalizedSchedulerJob, PluginSourceWizardDraft, ToolApprovalCardModel, ToolApprovalGrantModel, ToolApprovalScope, ToolExportDecisionModel, ToolExportPolicyModel, ToolExportScopeModel, ToolOnboardingValidationResult, ToolPolicyAuditEventModel, ToolPendingApprovalModel, ToolSourceDetailModel, ToolSourceSummaryModel, ToolingPageViewModel } from '@aurora/client'
 import type { RouteAvailability } from '../shell-data'
 import { getAuroraSurfaceProfile } from '../platform-surface'
 import { presentableSignal, ToneBadge, riskTone, trustTone, stateTone, type BadgeTone } from '../status-badges'
 import { PageHeader } from '../state-surface'
-import { Button, Card, DataTable, MetaGrid, StatStrip, type DataColumn } from '../primitives'
+import { Button, Card, DataTable, MetaGrid, StatStrip, Switch, type DataColumn } from '../primitives'
 import { PageTabs } from '../shared-components'
 import { Alert, AlertDescription } from '#components/ui/alert'
 import { Badge } from '#components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
+import { ToggleGroup, ToggleGroupItem } from '#components/ui/toggle-group'
 import { cn } from '#lib/utils'
 import {
   buildAuditRows,
@@ -47,10 +49,18 @@ import {
   isPendingApprovalTool,
   sourceSectionLabel,
   toolsForSourceSearch,
+  type BuiltinPluginModel,
   type ToolingSourceModel,
   type ToolingSourceType,
   type ToolingTrustState
 } from './source-model'
+import { ToolSharingGroupControl, ToolSharingRowControl, type ToolSharingMutation } from './tool-sharing-controls'
+
+const SELECTED_SEGMENT_STYLE: CSSProperties = {
+  backgroundColor: 'color-mix(in oklab, var(--primary) 22%, var(--muted))',
+  color: 'var(--primary)',
+  boxShadow: 'inset 0 0 0 1px color-mix(in oklab, var(--primary) 38%, transparent)'
+}
 
 export interface ToolingConsoleProps {
   client: AuroraClient
@@ -70,8 +80,19 @@ export interface ToolingConsoleProps {
   grants?: ToolApprovalGrantModel[] | undefined
   pendingApprovals?: ToolPendingApprovalModel[] | undefined
   auditEvents?: ToolPolicyAuditEventModel[] | undefined
+  builtinPlugins?: BuiltinPluginModel[] | undefined
   managementLoading?: boolean | undefined
   managementError?: string | null | undefined
+  sharingPolicy?: ToolExportPolicyModel | null | undefined
+  sharingPeers?: ToolExportScopeModel[] | undefined
+  sharingDecisions?: Record<string, ToolExportDecisionModel | null> | undefined
+  sharingLoading?: boolean | undefined
+  sharingError?: string | null | undefined
+  sharingMessage?: string | null | undefined
+  sharingPendingKey?: string | null | undefined
+  onMutateSharing?: ((mutation: ToolSharingMutation) => void) | undefined
+  onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => void) | undefined
+  onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => void) | undefined
   onSetPolicyMode?: (policyMode: string) => void
   onUpsertSourcePolicy?: ((source: ToolingSourceModel, trustTier: string, includeFutureTools?: boolean) => void) | undefined
   onUpsertToolOverride?: ((tool: ToolApprovalCardModel, approvalMode: string) => void) | undefined
@@ -106,8 +127,19 @@ export function ToolingConsole({
   grants: backendGrants = [],
   pendingApprovals: backendPendingApprovals = [],
   auditEvents: backendAuditEvents = [],
+  builtinPlugins = [],
   managementLoading = false,
   managementError = null,
+  sharingPolicy = null,
+  sharingPeers = [],
+  sharingDecisions = {},
+  sharingLoading = false,
+  sharingError = null,
+  sharingMessage = null,
+  sharingPendingKey = null,
+  onMutateSharing,
+  onTogglePlugin,
+  onSavePluginConfig,
   onSetPolicyMode,
   onUpsertSourcePolicy,
   onUpsertToolOverride,
@@ -145,7 +177,15 @@ export function ToolingConsole({
     includeFutureTools: false,
     reason: 'Configured from /tools onboarding wizard'
   }))
-  const sources = useMemo(() => sourceSummaries.length > 0 ? buildToolingSourcesFromBackend(sourceSummaries, sourceDetails, tools) : buildToolingSources(tools), [sourceSummaries, sourceDetails, tools])
+  const inventoryLoading = loading || managementLoading
+  const sources = useMemo(
+    () => managementLoading
+      ? []
+      : sourceSummaries.length > 0
+        ? buildToolingSourcesFromBackend(sourceSummaries, sourceDetails, tools)
+        : buildToolingSources(tools),
+    [managementLoading, sourceSummaries, sourceDetails, tools]
+  )
   const toolSources = useMemo(() => sources.filter((source) => source.type !== 'plugin'), [sources])
   const pluginSources = useMemo(() => sources.filter((source) => source.type === 'plugin'), [sources])
   const selectedSource = toolSources.find((source) => source.id === selectedSourceId) ?? toolSources[0] ?? null
@@ -178,9 +218,15 @@ export function ToolingConsole({
         description="Core tools, MCP servers, plugins and mesh peer tools, grouped by source with policy and approvals."
         actions={
           <div className="flex flex-wrap items-center gap-2" aria-label="Tools policy summary">
-            <Badge variant="outline">Policy: <strong className="ml-1 font-semibold">{policy.mode}</strong></Badge>
-            <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">{selectedSource?.pendingApprovalCount ?? policy.pendingApprovalCount} pending</Badge>
-            <Button variant="primary" icon={<Plug size={15} aria-hidden />} onClick={() => showWizard('mcp')}>Add MCP source</Button>
+            {managementLoading ? (
+              <>
+                <Badge variant="outline">Policy loading…</Badge>
+                <Badge variant="outline">Sources loading…</Badge>
+              </>
+            ) : (
+              <Badge variant="outline">Policy: <strong className="ml-1 font-semibold">{policy.mode}</strong></Badge>
+            )}
+            <Button variant="primary" icon={<Plug size={15} aria-hidden />} onClick={() => showWizard('mcp')} disabled={managementLoading}>Add MCP source</Button>
           </div>
         }
       />
@@ -223,7 +269,7 @@ export function ToolingConsole({
                 <SourceRail
                   sources={toolSources}
                   selectedSourceId={selectedSource?.id ?? null}
-                  loading={loading}
+                  loading={inventoryLoading}
                   query={query}
                   onQuery={setQuery}
                   drawerOpen={sourceDrawerOpen}
@@ -232,13 +278,44 @@ export function ToolingConsole({
                   onAddMcp={() => showWizard('mcp')}
                 />
 
-                <main className="flex flex-1 flex-col gap-4" aria-label="Source detail">
-                  {loading ? <LoadingState /> : null}
-                  {!loading && toolSources.length === 0 ? <EmptyCatalog onAddMcp={() => showWizard('mcp')} /> : null}
-                  {!loading && selectedSource ? (
+                <main className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-auto" aria-label="Source detail">
+                  {inventoryLoading ? <LoadingState /> : null}
+                  {!inventoryLoading && toolSources.length === 0 ? <EmptyCatalog onAddMcp={() => showWizard('mcp')} /> : null}
+                  {!inventoryLoading && selectedSource ? (
                     <>
-                      <SourceOverview source={selectedSource} policyBypass={policy.bypassEnabled} />
-                      <ToolDetailTable source={selectedSource} tools={filteredSourceTools} />
+                      <SourceOverview
+                        source={selectedSource}
+                        policyBypass={policy.bypassEnabled}
+                        policyMessage={decisionMessages.__policy__ ?? null}
+                        onUpsertSourcePolicy={onUpsertSourcePolicy}
+                        sharingControl={selectedSource.type !== 'mesh' && selectedSource.shareGroupId ? (
+                          <ToolSharingGroupControl
+                            groupId={selectedSource.shareGroupId}
+                            groupLabel={selectedSource.shareGroupLabel ?? selectedSource.name}
+                            policy={sharingPolicy}
+                            peers={sharingPeers}
+                            loading={sharingLoading}
+                            error={sharingError}
+                            message={sharingMessage}
+                            pending={sharingPendingKey === `group:${selectedSource.shareGroupId}`}
+                            {...(onMutateSharing ? { onMutate: onMutateSharing } : {})}
+                          />
+                        ) : null}
+                      />
+                      <ToolDetailTable
+                        source={selectedSource}
+                        tools={filteredSourceTools}
+                        decisionMessages={decisionMessages}
+                        onUpsertToolOverride={onUpsertToolOverride}
+                        sharingPolicy={sharingPolicy}
+                        sharingPeers={sharingPeers}
+                        sharingDecisions={sharingDecisions}
+                        sharingLoading={sharingLoading}
+                        sharingError={sharingError}
+                        sharingMessage={sharingMessage}
+                        sharingPendingKey={sharingPendingKey}
+                        onMutateSharing={onMutateSharing}
+                      />
                     </>
                   ) : null}
                 </main>
@@ -250,13 +327,17 @@ export function ToolingConsole({
             label: 'Plugins',
             content: (
               <PluginsWorkspace
+                loading={managementLoading}
                 pluginSources={pluginSources}
+                builtinPlugins={builtinPlugins}
                 tools={tools}
                 surfaceLabel={surfaceProfile.label}
                 wizard={wizard === 'plugin' ? wizard : null}
                 wizardStep={wizardStep}
                 pluginDraft={pluginDraft}
-                resultMessage={wizardResult ?? decisionMessages.__policy__ ?? null}
+                resultMessage={decisionMessages.__plugins__ ?? wizardResult ?? decisionMessages.__policy__ ?? null}
+                onTogglePlugin={onTogglePlugin}
+                onSavePluginConfig={onSavePluginConfig}
                 onStep={setWizardStep}
                 onPluginDraft={setPluginDraft}
                 onClose={() => setWizard(null)}
@@ -527,11 +608,12 @@ function SourceRail({
           onChange={(event) => onQuery(event.currentTarget.value)}
           type="search"
           placeholder="Search sources or tools"
+          disabled={loading}
         />
       </label>
       {loading ? <p className="text-sm text-muted-foreground">Loading tools…</p> : null}
       <div className="flex flex-col gap-1" aria-label="Tool sources">
-        {visibleSources.length === 0 ? <p className="text-sm text-muted-foreground">No sources match this search.</p> : null}
+        {!loading && visibleSources.length === 0 ? <p className="text-sm text-muted-foreground">No sources match this search.</p> : null}
         {visibleSources.map((source) => (
           <button
             key={source.id}
@@ -551,19 +633,76 @@ function SourceRail({
           </button>
         ))}
       </div>
-      <Button variant="outline" icon={<Plug size={15} aria-hidden />} onClick={onAddMcp}>Add MCP source</Button>
+      <Button variant="outline" icon={<Plug size={15} aria-hidden />} onClick={onAddMcp} disabled={loading}>Add MCP source</Button>
     </aside>
   )
 }
 
-function SourceOverview({ source, policyBypass }: { source: ToolingSourceModel; policyBypass: boolean }) {
+const SOURCE_TRUST_ACTIONS: { tier: 'inherit' | 'trusted' | 'untrusted' | 'blocked'; label: string }[] = [
+  { tier: 'inherit', label: 'Inherit' },
+  { tier: 'trusted', label: 'Trust all' },
+  { tier: 'untrusted', label: 'Require approval' },
+  { tier: 'blocked', label: 'Block all' },
+]
+
+function SourceOverview({
+  source,
+  policyBypass,
+  policyMessage,
+  sharingControl,
+  onUpsertSourcePolicy
+}: {
+  source: ToolingSourceModel
+  policyBypass: boolean
+  policyMessage: string | null
+  sharingControl?: ReactNode
+  onUpsertSourcePolicy?: ((source: ToolingSourceModel, trustTier: string, includeFutureTools?: boolean) => void) | undefined
+}) {
+  const configuredTier = source.configuredTrustTier ?? 'inherit'
   return (
     <Card
       ariaLabel="Selected source overview"
-      title={source.name}
-      description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`}
+      title="Execution approval"
+      description={`Controls the approval or grant required after sharing, service policy, and peer permissions have already allowed a request. ${source.name} · ${sourceSectionLabel(source.type)} · ${source.toolCount} tools.`}
       actions={<><TrustPill trust={source.effectiveTrust} />{policyBypass ? <ToneBadge tone="danger">Bypassed</ToneBadge> : null}</>}
-    />
+    >
+      <div className="flex flex-col gap-1 bg-muted/10 px-3">
+        <div className="flex flex-col gap-2.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-0.5">
+            <strong className="text-sm">Default approval</strong>
+            <span className="text-xs text-muted-foreground">Applies to this source and newly discovered tools.</span>
+          </div>
+          <ToggleGroup
+            value={[configuredTier]}
+            onValueChange={(values) => {
+              const trustTier = values[0]
+              if (trustTier) onUpsertSourcePolicy?.(source, trustTier, true)
+            }}
+            variant="default"
+            spacing={1}
+            disabled={!onUpsertSourcePolicy}
+            aria-label={`Trust policy for ${source.name}`}
+            className="bg-background/60 p-1 shadow-inner"
+          >
+            {SOURCE_TRUST_ACTIONS.map((action) => (
+              <ToggleGroupItem
+                key={action.tier}
+                value={action.tier}
+                className={cn(
+                  'bg-muted/60 text-foreground/75 shadow-sm transition-colors hover:bg-muted hover:text-foreground',
+                  configuredTier === action.tier && 'font-medium shadow-none'
+                )}
+                style={configuredTier === action.tier ? SELECTED_SEGMENT_STYLE : undefined}
+              >
+                {action.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+        {sharingControl}
+      </div>
+      {policyMessage ? <p className="mt-2 text-xs" aria-live="polite">{policyMessage}</p> : null}
+    </Card>
   )
 }
 
@@ -581,7 +720,9 @@ function WorkspaceTabs({ activeTab, onTab, pendingCount }: { activeTab: ToolingW
 }
 
 function PluginsWorkspace({
+  loading,
   pluginSources,
+  builtinPlugins,
   tools,
   wizard,
   wizardStep,
@@ -591,10 +732,14 @@ function PluginsWorkspace({
   onPluginDraft,
   onConfigure,
   onClose,
+  onTogglePlugin,
+  onSavePluginConfig,
   onTestSource,
   onCreateSource
 }: {
+  loading: boolean
   pluginSources: ToolingSourceModel[]
+  builtinPlugins: BuiltinPluginModel[]
   tools: ToolApprovalCardModel[]
   surfaceLabel: string
   wizard: 'plugin' | null
@@ -605,29 +750,79 @@ function PluginsWorkspace({
   onPluginDraft: (draft: PluginSourceWizardDraft) => void
   onConfigure: (source: ToolingSourceModel) => void
   onClose: () => void
+  onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => void) | undefined
+  onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => void) | undefined
   onTestSource?: ((draft: PluginSourceWizardDraft) => Promise<void> | void) | undefined
   onCreateSource?: ((draft: PluginSourceWizardDraft) => Promise<void> | void) | undefined
 }) {
   void tools
+  const [configPluginId, setConfigPluginId] = useState<string | null>(null)
+  const configPlugin = builtinPlugins.find((plugin) => plugin.id === configPluginId) ?? null
   const plugins = pluginSources.map((source) => ({ source, status: pluginStatus(source) }))
   return (
     <main className="flex flex-col gap-4 py-4" aria-label="Plugins">
-      {plugins.length === 0 ? (
-        <Card title="Plugins" icon={<Package size={18} aria-hidden />} description="Add a plugin source to configure it here." actions={<Button variant="primary" icon={<Package size={15} aria-hidden />} onClick={() => onConfigure(newPluginSourceDraft())}>Configure</Button>} />
-      ) : (
+      {loading ? <LoadingState title="Loading plugins" detail="Loading plugin configuration and Tooling source metadata." /> : null}
+      {resultMessage ? <Alert><AlertDescription>{resultMessage}</AlertDescription></Alert> : null}
+      {!loading && builtinPlugins.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
-          {plugins.map(({ source, status }) => (
-            <Card key={source.id} title={source.name} icon={<Package size={18} aria-hidden />} description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`} actions={<ToneBadge tone={pluginStatusTone(status)}>{status}</ToneBadge>}>
-              <p className="text-sm text-muted-foreground">{source.providerLabel}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button variant="primary" onClick={() => onConfigure(source)}>Configure</Button>
-                <Button variant="outline" onClick={() => onConfigure(source)}>Enable</Button>
-                <Button variant="outline" onClick={() => onConfigure(source)}>Disable</Button>
-              </div>
-            </Card>
-          ))}
+          {builtinPlugins.map((plugin) => {
+            const status = plugin.active ? 'active' : plugin.configured ? 'ready to activate' : 'not configured'
+            return (
+              <Card
+                key={plugin.id}
+                title={plugin.label}
+                icon={<Package size={18} aria-hidden />}
+                description={builtinPluginDescription(plugin)}
+                actions={<ToneBadge tone={plugin.active ? 'success' : plugin.configured ? 'neutral' : 'warning'}>{status}</ToneBadge>}
+              >
+                <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                  <Switch
+                    checked={plugin.active}
+                    label={plugin.active ? 'Active' : 'Inactive'}
+                    disabled={!onTogglePlugin || (!plugin.active && !plugin.configured && plugin.fields.length > 0)}
+                    disabledReason={!onTogglePlugin ? 'Plugin activation is unavailable in this surface.' : 'Configure credentials before activating.'}
+                    onChange={(checked) => onTogglePlugin?.(plugin, checked)}
+                    id={`plugin-active-${plugin.id}`}
+                  />
+                  {plugin.fields.length > 0 ? (
+                    <Button variant={plugin.configured ? 'outline' : 'primary'} onClick={() => setConfigPluginId(plugin.id)}>
+                      Configure
+                    </Button>
+                  ) : null}
+                </div>
+              </Card>
+            )
+          })}
         </div>
-      )}
+      ) : null}
+      {!loading && plugins.length > 0 ? (
+        <>
+          <h3 className="mt-2 text-sm font-semibold">Plugin tool sources</h3>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
+            {plugins.map(({ source, status }) => (
+              <Card key={source.id} title={source.name} icon={<Package size={18} aria-hidden />} description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`} actions={<ToneBadge tone={pluginStatusTone(status)}>{status}</ToneBadge>}>
+                <p className="text-sm text-muted-foreground">{source.providerLabel}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button variant="outline" onClick={() => onConfigure(source)}>Configure source</Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {!loading && builtinPlugins.length === 0 && plugins.length === 0 ? (
+        <Card title="Plugins" icon={<Package size={18} aria-hidden />} description="Plugin definitions come from Config (services.tooling.plugins). None were reported by this node." actions={<Button variant="primary" icon={<Package size={15} aria-hidden />} onClick={() => onConfigure(newPluginSourceDraft())}>Add plugin source</Button>} />
+      ) : null}
+      {configPlugin ? (
+        <BuiltinPluginConfigModal
+          plugin={configPlugin}
+          onClose={() => setConfigPluginId(null)}
+          onSave={(values) => {
+            onSavePluginConfig?.(configPlugin, values)
+            setConfigPluginId(null)
+          }}
+        />
+      ) : null}
       {wizard ? (
         <PluginConfigModal
           pluginName={pluginDraft.packageName || pluginDraft.pluginId || 'plugin'}
@@ -642,6 +837,60 @@ function PluginsWorkspace({
         />
       ) : null}
     </main>
+  )
+}
+
+function builtinPluginDescription(plugin: BuiltinPluginModel): string {
+  if (plugin.fields.length === 0) return 'Built-in plugin; no extra credentials required.'
+  const fieldNames = plugin.fields.map((field) => field.key_path.split('.').at(-1)?.replace(/_/g, ' ')).filter(Boolean)
+  return `Built-in plugin; needs ${fieldNames.join(', ')}.`
+}
+
+function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: BuiltinPluginModel; onClose: () => void; onSave: (values: Record<string, JsonValue>) => void }) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const changes: Record<string, JsonValue> = {}
+  for (const [keyPath, value] of Object.entries(drafts)) {
+    if (value !== '') changes[keyPath] = value
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
+      <Card
+        className="w-full max-w-md"
+        title={`Configure ${plugin.label}`}
+        icon={<KeyRound size={18} aria-hidden />}
+        description="Credentials are stored through the Config service (preview and apply with AdminAction confirmation); secrets are never shown again."
+        actions={<Button variant="ghost" onClick={onClose} ariaLabel={`Close configure ${plugin.label}`}>Close</Button>}
+      >
+        <div className="flex flex-col gap-3">
+          {plugin.fields.map((field) => {
+            const leaf = field.key_path.split('.').at(-1) ?? field.key_path
+            const isSet = field.current_value !== null && field.current_value !== undefined && field.current_value !== ''
+            return (
+              <label key={field.key_path} className="flex flex-col gap-1 text-sm">
+                <span className="text-muted-foreground">
+                  {leaf.replace(/_/g, ' ')}
+                  {field.secret ? ' (secret)' : ''}
+                  {isSet ? ' · currently set' : ' · not set'}
+                </span>
+                <input
+                  type={field.secret ? 'password' : 'text'}
+                  className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  placeholder={isSet ? 'Leave blank to keep the current value' : field.description || leaf}
+                  value={drafts[field.key_path] ?? ''}
+                  onChange={(event) => setDrafts((current) => ({ ...current, [field.key_path]: event.currentTarget.value }))}
+                />
+              </label>
+            )
+          })}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={() => onSave(changes)} ariaLabel={`Save ${plugin.label} configuration`}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
   )
 }
 
@@ -723,6 +972,7 @@ function newPluginSourceDraft(): ToolingSourceModel {
     peerId: 'local',
     serviceInstanceId: null,
     trustTier: 'untrusted',
+    configuredTrustTier: null,
     effectiveTrust: 'approval-required',
     toolCount: 0,
     blockedToolCount: 0,
@@ -751,41 +1001,242 @@ function pluginStatusTone(status: 'active' | 'inactive' | 'unconfigured'): Badge
   return 'neutral'
 }
 
-function ToolDetailTable({ source, tools }: { source: ToolingSourceModel; tools: ToolApprovalCardModel[] }) {
-  const columns: Array<DataColumn<ToolApprovalCardModel>> = [
-    {
-      key: 'tool',
-      header: 'Tool',
-      render: (tool) => (
-        <div className="flex flex-col">
-          <strong className="font-medium">{tool.name}</strong>
-          <small className="text-xs text-muted-foreground">{tool.description}</small>
-        </div>
-      )
-    },
-    { key: 'risk', header: 'Risk', render: (tool) => <ToneBadge tone={riskTone(tool.riskClass)}>{tool.riskClass}</ToneBadge> },
-    {
-      key: 'calls',
-      header: 'Calls',
-      render: (tool) => `${tool.routePath.at(-1) ?? 'catalog'}${tool.mutating ? ' · mutating' : ''}${tool.dataEgress ? ' · egress' : ''}`
-    },
-    { key: 'state', header: 'State', render: (tool) => <ToneBadge tone={stateTone(tool.state)}>{prototypeStateLabel(tool.state)}</ToneBadge> }
-  ]
+const TOOL_POLICY_ACTIONS: { mode: string; label: string; trustTier: string | null }[] = [
+  { mode: 'inherit', label: 'Inherit', trustTier: null },
+  { mode: 'approve_all_for_peer', label: 'Trust', trustTier: 'trusted' },
+  { mode: 'ask_each_time', label: 'Require approval', trustTier: 'untrusted' },
+  { mode: 'deny_all', label: 'Block', trustTier: 'blocked' },
+]
+
+interface ToolPolicyTag {
+  label: string
+  tone: BadgeTone
+}
+
+/** Effective per-tool policy derived from the catalog card (trust tier, approval and dry-run flags). */
+function toolPolicyTag(tool: ToolApprovalCardModel): ToolPolicyTag {
+  if (tool.blockReasonCode === 'permission_denied' || tool.blockReasonCode === 'recipient_missing_tool_permissions') {
+    return { label: 'missing permission', tone: 'danger' }
+  }
+  if (tool.trustTier === 'blocked' || isBlockedTool(tool)) return { label: 'blocked', tone: 'danger' }
+  if (tool.dryRunRequired || tool.state === 'dry-run-only') return { label: 'dry-run only', tone: 'warning' }
+  if (tool.requiresAdminAction) return { label: 'admin action', tone: 'warning' }
+  if (tool.approvalRequired) return { label: 'approval required', tone: 'warning' }
+  if (tool.trustTier === 'trusted') return { label: 'trusted', tone: 'success' }
+  return { label: 'approval required', tone: 'warning' }
+}
+
+function ToolDetailTable({
+  source,
+  tools,
+  decisionMessages,
+  onUpsertToolOverride,
+  sharingPolicy,
+  sharingPeers,
+  sharingDecisions,
+  sharingLoading,
+  sharingError,
+  sharingMessage,
+  sharingPendingKey,
+  onMutateSharing
+}: {
+  source: ToolingSourceModel
+  tools: ToolApprovalCardModel[]
+  decisionMessages: Record<string, string>
+  onUpsertToolOverride?: ((tool: ToolApprovalCardModel, approvalMode: string) => void) | undefined
+  sharingPolicy: ToolExportPolicyModel | null
+  sharingPeers: ToolExportScopeModel[]
+  sharingDecisions: Record<string, ToolExportDecisionModel | null>
+  sharingLoading: boolean
+  sharingError: string | null
+  sharingMessage: string | null
+  sharingPendingKey: string | null
+  onMutateSharing?: ((mutation: ToolSharingMutation) => void) | undefined
+}) {
+  const [expandedToolId, setExpandedToolId] = useState<string | null>(null)
   return (
-    <Card title="Tools" icon={<Wrench size={18} aria-hidden />} description="Selected source tool inventory.">
-      <DataTable
-        columns={columns}
-        rows={tools}
-        getRowKey={(tool) => `${source.id}:detail:${tool.id}`}
-        empty="No tools match the current source/search filter."
-      />
+    <Card title="Tools" icon={<Wrench size={18} aria-hidden />} description="Selected source tool inventory. Expand a tool for the full description and its policy override.">
+      {tools.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No tools match the current source/search filter.</p>
+      ) : (
+        <Table className="border-separate border-spacing-y-1">
+          <TableHeader className="[&_tr]:border-0 [&_th]:border-b [&_th]:border-border/30">
+            <TableRow>
+              <TableHead>Tool</TableHead>
+              <TableHead>Risk</TableHead>
+              <TableHead>Policy</TableHead>
+              <TableHead className="text-right">State</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {tools.map((tool) => {
+              const expanded = expandedToolId === tool.id
+              const policy = toolPolicyTag(tool)
+              const message = decisionMessages[tool.id] ?? null
+              return (
+                <ToolDetailRow
+                  key={`${source.id}:detail:${tool.id}`}
+                  tool={tool}
+                  policy={policy}
+                  expanded={expanded}
+                  message={message}
+                  onToggle={() => setExpandedToolId(expanded ? null : tool.id)}
+                  onUpsertToolOverride={onUpsertToolOverride}
+                  sharingPolicy={sharingPolicy}
+                  sharingPeers={sharingPeers}
+                  sharingDecision={sharingDecisions[tool.id] ?? null}
+                  sharingLoading={sharingLoading}
+                  sharingError={sharingError}
+                  sharingMessage={sharingMessage}
+                  sharingPending={sharingPendingKey === `tool:${tool.id}`}
+                  onMutateSharing={onMutateSharing}
+                />
+              )
+            })}
+          </TableBody>
+        </Table>
+      )}
     </Card>
   )
 }
 
-function prototypeStateLabel(state: string): string {
-  if (/unavailable|unsupported/i.test(state)) return 'needs repair'
-  return state
+function ToolDetailRow({
+  tool,
+  policy,
+  expanded,
+  message,
+  onToggle,
+  onUpsertToolOverride,
+  sharingPolicy,
+  sharingPeers,
+  sharingDecision,
+  sharingLoading,
+  sharingError,
+  sharingMessage,
+  sharingPending,
+  onMutateSharing
+}: {
+  tool: ToolApprovalCardModel
+  policy: ToolPolicyTag
+  expanded: boolean
+  message: string | null
+  onToggle: () => void
+  onUpsertToolOverride?: ((tool: ToolApprovalCardModel, approvalMode: string) => void) | undefined
+  sharingPolicy: ToolExportPolicyModel | null
+  sharingPeers: ToolExportScopeModel[]
+  sharingDecision: ToolExportDecisionModel | null
+  sharingLoading: boolean
+  sharingError: string | null
+  sharingMessage: string | null
+  sharingPending: boolean
+  onMutateSharing?: ((mutation: ToolSharingMutation) => void) | undefined
+}) {
+  return (
+    <>
+      <TableRow
+        onClick={onToggle}
+        className={cn(
+          'cursor-pointer border-0 bg-muted/[0.08] transition-colors hover:bg-muted/30 [&>td:first-child]:rounded-l-md [&>td:last-child]:rounded-r-md',
+          expanded && 'bg-muted/25'
+        )}
+      >
+        <TableCell>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-label={`Toggle details for ${tool.name}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggle()
+            }}
+            className="flex w-full items-center gap-1.5 rounded-sm text-left outline-none focus-visible:ring-1 focus-visible:ring-ring/60"
+          >
+            <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', expanded ? '' : '-rotate-90')} aria-hidden />
+            <span className="flex min-w-0 flex-col" style={{ maxWidth: 360 }}>
+              <strong className="truncate font-mono text-[12.5px] font-medium">{tool.name}</strong>
+              {!expanded ? <small className={cn('truncate text-xs', tool.disabledReason ? 'text-destructive' : 'text-muted-foreground')}>{tool.disabledReason ?? tool.description}</small> : null}
+            </span>
+          </button>
+        </TableCell>
+        <TableCell><ToneBadge tone={riskTone(tool.riskClass)}>{tool.riskClass}</ToneBadge></TableCell>
+        <TableCell><ToneBadge tone={policy.tone}>{policy.label}</ToneBadge></TableCell>
+        <TableCell className="text-right"><ToneBadge tone={stateTone(tool.state)}>{prototypeStateLabel(tool)}</ToneBadge></TableCell>
+      </TableRow>
+      {expanded ? (
+        <TableRow className="border-0 hover:bg-transparent">
+          <TableCell colSpan={4} className="rounded-md bg-muted/20" style={{ whiteSpace: 'normal' }}>
+            <div className="flex flex-col gap-3 py-1.5">
+              <p className="text-sm text-muted-foreground">{tool.description || 'No description provided by the catalog.'}</p>
+              {tool.disabledReason ? (
+                <p className="text-sm text-destructive" role="status">
+                  {tool.disabledReason} This management record is visible for review but is not callable.
+                </p>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                {tool.routePath.at(-1) ?? 'catalog'}
+                {tool.mutating ? ' · mutating' : ''}
+                {tool.dataEgress ? ' · data egress' : ''}
+                {tool.providerLabel ? ` · ${tool.providerLabel}` : ''}
+              </p>
+              <div className="flex flex-col gap-1 bg-background/25 px-3">
+                <ToolSharingRowControl
+                  tool={tool}
+                  policy={sharingPolicy}
+                  peers={sharingPeers}
+                  decision={sharingDecision}
+                  loading={sharingLoading}
+                  error={sharingError}
+                  message={sharingMessage}
+                  pending={sharingPending}
+                  {...(onMutateSharing ? { onMutate: onMutateSharing } : {})}
+                />
+                <div className="flex flex-col gap-2.5 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <strong className="text-xs">Execution approval</strong>
+                    <span className="text-xs text-muted-foreground">Override approval for this tool.</span>
+                  </div>
+                  <ToggleGroup
+                    value={[TOOL_POLICY_ACTIONS.find((action) => action.trustTier === (tool.configuredTrustTier ?? null))?.mode ?? 'inherit']}
+                    onValueChange={(values) => {
+                      const approvalMode = values[0]
+                      if (approvalMode) onUpsertToolOverride?.(tool, approvalMode)
+                    }}
+                    variant="default"
+                    size="sm"
+                    spacing={1}
+                    disabled={!onUpsertToolOverride}
+                    aria-label={`Policy override for ${tool.name}`}
+                    className="bg-background/60 p-1 shadow-inner"
+                  >
+                    {TOOL_POLICY_ACTIONS.map((action) => (
+                      <ToggleGroupItem
+                        key={action.mode}
+                        value={action.mode}
+                        className={cn(
+                          'bg-muted/60 text-foreground/75 shadow-sm transition-colors hover:bg-muted hover:text-foreground',
+                          action.trustTier === (tool.configuredTrustTier ?? null) && 'font-medium shadow-none'
+                        )}
+                        style={action.trustTier === (tool.configuredTrustTier ?? null) ? SELECTED_SEGMENT_STYLE : undefined}
+                      >
+                        {action.label}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </div>
+              </div>
+              {message ? <p className="text-xs" aria-live="polite">{message}</p> : null}
+            </div>
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  )
+}
+
+function prototypeStateLabel(tool: ToolApprovalCardModel): string {
+  if (tool.blockReasonCode === 'permission_denied' || tool.blockReasonCode === 'recipient_missing_tool_permissions') return 'not callable'
+  if (/unavailable|unsupported/i.test(tool.state)) return 'needs repair'
+  return tool.state
 }
 
 function ToolInventory(props: {
@@ -1260,8 +1711,14 @@ function sourceActionContractName(kind: 'mcp' | 'plugin', action: 'test' | 'crea
   return action === 'test' ? 'Tooling.TestPluginSource' : 'Tooling.CreatePluginSource'
 }
 
-function LoadingState() {
-  return <Card title="Loading source catalog" icon={<RefreshCw size={18} aria-hidden />}><p className="text-sm text-muted-foreground">Loading Tooling.GetToolCatalog through the Aurora SDK.</p></Card>
+function LoadingState({
+  title = 'Loading source catalog',
+  detail = 'Loading catalog, source details, policy, grants, approvals, sharing state, and peer metadata.'
+}: {
+  title?: string
+  detail?: string
+} = {}) {
+  return <Card title={title} icon={<RefreshCw size={18} aria-hidden />}><p className="text-sm text-muted-foreground" role="status">{detail}</p></Card>
 }
 
 function EmptyCatalog({ onAddMcp }: { onAddMcp: () => void }) {

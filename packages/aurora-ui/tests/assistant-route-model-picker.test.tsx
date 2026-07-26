@@ -1,0 +1,291 @@
+import { describe, expect, it } from 'vitest'
+import type { ModelRuntimeCatalogResponse, ModelRuntimeProviderInfo } from '@aurora/client'
+import {
+  assistantExecutionOptions,
+  assistantInferencePolicy,
+  assistantMessageRuntimeLabel,
+  assistantModelChoiceGroups,
+  assistantModelChoices,
+  assistantModelSourceGroups,
+  assistantSessionFromPersisted,
+  mergeAssistantModelCatalogs
+} from '../src/assistant-view'
+import type { RouteAvailability } from '../src/shell-data'
+
+describe('assistant execution and model pickers', () => {
+  it('offers local execution and preserves the selected peer dispatch identity', () => {
+    const options = assistantExecutionOptions(route())
+
+    expect(options.map((option) => [option.mode, option.label])).toEqual([
+      ['local', 'Locally'],
+      ['dispatch', 'studio']
+    ])
+    expect(options[1]?.routePolicy).toEqual(expect.objectContaining({
+      providerId: 'remote:peer-studio:Orchestrator',
+      peerId: 'peer-studio',
+      serviceInstanceId: 'remote:peer-studio:Orchestrator'
+    }))
+  })
+
+  it('shows local and peer-shared models for local execution but scopes dispatch to its peer', () => {
+    const execution = assistantExecutionOptions(route())
+    const localChoices = assistantModelChoices(catalog(), execution[0]!)
+    const dispatchChoices = assistantModelChoices(catalog(), execution[1]!)
+
+    expect(localChoices.map((choice) => choice.model.name)).toEqual([
+      'GPT 5 · configured',
+      'GPT 5',
+      'DialoGPT Medium',
+      'Qwen 32B'
+    ])
+    expect(dispatchChoices.map((choice) => choice.model.name)).toEqual([
+      'Peer default',
+      'Qwen 32B'
+    ])
+
+    const localGroups = assistantModelChoiceGroups(localChoices, execution[0]!)
+    const dispatchGroups = assistantModelChoiceGroups(dispatchChoices, execution[1]!)
+    expect(localGroups.map((group) => ({
+      heading: group.heading,
+      models: group.choices.map((choice) => choice.model.name)
+    }))).toEqual([
+      { heading: 'Configured default', models: ['GPT 5 · configured'] },
+      { heading: 'OpenAI · 1 model', models: ['GPT 5'] },
+      { heading: 'HuggingFace Pipeline · 1 model', models: ['DialoGPT Medium'] },
+      { heading: 'Studio OpenAI · 1 model', models: ['Qwen 32B'] }
+    ])
+    expect(dispatchGroups.map((group) => group.heading)).toEqual([
+      'studio default',
+      'Studio OpenAI · 1 model'
+    ])
+    expect(assistantModelSourceGroups(localGroups, execution[0]!, execution).map((source) => ({
+      heading: source.heading,
+      providers: source.providerGroups.map((group) => group.heading),
+      modelCount: source.modelCount
+    }))).toEqual([
+      {
+        heading: 'This device',
+        providers: ['OpenAI · 1 model', 'HuggingFace Pipeline · 1 model'],
+        modelCount: 2
+      },
+      {
+        heading: 'Shared by studio',
+        providers: ['Studio OpenAI · 1 model'],
+        modelCount: 1
+      }
+    ])
+  })
+
+  it('aggregates peer-scoped catalogs into local execution without adding unrelated providers', () => {
+    const execution = assistantExecutionOptions(route())
+    const completeCatalog = catalog()
+    const localCatalog = {
+      ...completeCatalog,
+      providers: completeCatalog.providers.filter((provider) => !provider.provider_peer_id)
+    }
+    const peerCatalog = {
+      ...completeCatalog,
+      providers: completeCatalog.providers.filter((provider) =>
+        !provider.provider_peer_id || provider.provider_peer_id === 'peer-studio'
+      )
+    }
+
+    const merged = mergeAssistantModelCatalogs(localCatalog, [{
+      catalog: peerCatalog,
+      execution: execution[1]!
+    }])
+
+    expect(assistantModelChoices(merged, execution[0]!).map((choice) => choice.model.name)).toEqual([
+      'GPT 5 · configured',
+      'GPT 5',
+      'DialoGPT Medium',
+      'Qwen 32B'
+    ])
+    expect(merged.providers.filter((provider) => provider.provider_peer_id).map((provider) =>
+      provider.provider_peer_id
+    )).toEqual(['peer-studio'])
+  })
+
+  it('keeps dispatch and explicit inference selectors independent', () => {
+    const execution = assistantExecutionOptions(route())[0]!
+    const remoteChoice = assistantModelChoices(catalog(), execution)
+      .find((choice) => choice.runtimeModel?.model_id === 'qwen-32b')!
+
+    expect(assistantInferencePolicy(remoteChoice, route())).toEqual(expect.objectContaining({
+      providerId: 'remote:peer-studio:Orchestrator:openai',
+      peerId: 'peer-studio',
+      serviceInstanceId: 'remote:peer-studio:Orchestrator',
+      runtimeProviderId: null,
+      modelId: 'qwen-32b',
+      dataLeavesDevice: true
+    }))
+  })
+
+  it('labels each assistant turn by execution device and model, including persisted dispatches', () => {
+    expect(assistantMessageRuntimeLabel({
+      id: 'local-answer',
+      role: 'assistant',
+      text: 'Local answer',
+      createdAt: '2026-07-23T00:00:00Z',
+      status: 'sent',
+      routeLabel: 'Local',
+      providerLabel: 'OpenAI',
+      modelLabel: 'gpt-4o'
+    })).toBe('Local · gpt-4o')
+
+    const persisted = assistantSessionFromPersisted({
+      session: {
+        id: 'dispatch-session',
+        principal_id: 'system',
+        type: 'chat',
+        title: 'Dispatch',
+        created_at: '2026-07-23T00:00:00Z',
+        updated_at: '2026-07-23T00:00:01Z',
+        last_active_at: '2026-07-23T00:00:01Z',
+        message_count: 1
+      },
+      messages: [{
+        id: 'remote-answer',
+        role: 'assistant',
+        content: 'Remote answer',
+        timestamp: '2026-07-23T00:00:01Z',
+        metadata: {
+          execution: 'remote_dispatch',
+          execution_peer_id: 'peer-studio',
+          execution_peer_name: 'studio',
+          provider_label: 'OpenAI',
+          model: 'gpt-4o'
+        }
+      }]
+    })
+
+    expect(assistantMessageRuntimeLabel(
+      persisted.messages[0]!,
+      new Map([['peer-studio', 'studio']])
+    )).toBe('studio · gpt-4o')
+  })
+})
+
+function route(): RouteAvailability {
+  return {
+    item: { privacyClass: 'personal' },
+    state: 'available-local',
+    explanation: 'available',
+    providerLabel: 'local / Orchestrator.ExternalUserInput',
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [
+      {
+        id: 'local:Orchestrator',
+        providerId: 'local:Orchestrator',
+        providerKind: 'local',
+        peerId: null,
+        serviceInstanceId: 'local:Orchestrator',
+        label: 'local / Orchestrator.ExternalUserInput',
+        state: 'available-local',
+        selectable: true,
+        reason: 'available',
+        requiredAction: null
+      },
+      {
+        id: 'remote:peer-studio:Orchestrator',
+        providerId: 'remote:peer-studio:Orchestrator',
+        providerKind: 'remote',
+        peerId: 'peer-studio',
+        serviceInstanceId: 'remote:peer-studio:Orchestrator',
+        label: 'remote:studio / Orchestrator.ExternalUserInput',
+        state: 'available-remote',
+        selectable: true,
+        reason: 'available',
+        requiredAction: null
+      }
+    ],
+    evidenceSources: ['test'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: false
+  } as unknown as RouteAvailability
+}
+
+function catalog(): ModelRuntimeCatalogResponse {
+  return {
+    generated_at: '2026-07-23T00:00:00Z',
+    selected_provider_id: 'openai',
+    providers: [
+      provider({
+        provider_id: 'openai',
+        display_name: 'OpenAI',
+        provider_kind: 'cloud',
+        provider_type: 'cloud',
+        model_id: 'gpt-5',
+        models: [model('openai', 'gpt-5', 'GPT 5')]
+      }),
+      provider({
+        provider_id: 'huggingface_pipeline',
+        display_name: 'HuggingFace Pipeline',
+        provider_kind: 'local',
+        provider_type: 'local',
+        model_id: 'microsoft/DialoGPT-medium',
+        models: [model('huggingface_pipeline', 'microsoft/DialoGPT-medium', 'DialoGPT Medium')]
+      }),
+      provider({
+        provider_id: 'remote:peer-studio:Orchestrator:openai',
+        display_name: 'Studio OpenAI',
+        provider_kind: 'mesh_peer',
+        provider_type: 'remote',
+        provider_peer_id: 'peer-studio',
+        provider_service_instance_id: 'remote:peer-studio:Orchestrator',
+        model_id: 'qwen-32b',
+        models: [model('remote:peer-studio:Orchestrator:openai', 'qwen-32b', 'Qwen 32B')]
+      }),
+      provider({
+        provider_id: 'llama-cpp',
+        display_name: 'Broken llama.cpp',
+        health: 'misconfigured',
+        model_id: 'missing'
+      })
+    ],
+    provider_index: {},
+    unavailable: [],
+    internal_only: [],
+    secrets_redacted: true
+  }
+}
+
+function provider(overrides: Partial<ModelRuntimeProviderInfo>): ModelRuntimeProviderInfo {
+  return {
+    provider_id: 'provider',
+    display_name: 'Provider',
+    backend_kind: 'test',
+    provider_type: 'local',
+    enabled: true,
+    selected: false,
+    health: 'available',
+    health_reason: null,
+    model_id: null,
+    source: null,
+    license: null,
+    context_window: null,
+    generation_limit: null,
+    hardware: {},
+    model_files: [],
+    capabilities: [],
+    benchmark: { status: 'unknown', tokens_per_second: null, latency_ms: null, measured_at: null, reason: null },
+    import_progress: { operation_id: null, operation_type: 'import', status: 'idle', progress_percent: 0, message: '', updated_at: null },
+    download_progress: { operation_id: null, operation_type: 'download', status: 'idle', progress_percent: 0, message: '', updated_at: null },
+    secrets_redacted: true,
+    ...overrides
+  }
+}
+
+function model(providerId: string, modelId: string, displayName: string) {
+  return {
+    model_id: modelId,
+    display_name: displayName,
+    provider_id: providerId,
+    available: true,
+    secrets_redacted: true
+  }
+}

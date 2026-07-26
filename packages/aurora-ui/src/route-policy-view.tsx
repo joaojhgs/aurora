@@ -27,9 +27,10 @@ export type RoutePolicyScenarioId =
 export interface RoutePolicyDraft {
   module: string
   requireExplicitSelector: boolean
-  allowedPeers: string
+  allowedProviderPeerIds: string
   deniedPeers: string
-  requiredCapabilities: string
+  requiredProviderFeatureIds: string
+  requiredProviderCapabilityTags: string
   minimumVersion: string
   trustTier: string
   fallbackPolicy: 'local' | 'network' | 'error' | 'none'
@@ -400,17 +401,18 @@ export function routePolicyScenarios(): RoutePolicyScenario[] {
     scenario('audio_session', 'Remote STT session', 'Audio sessions require consent and privacy indicator status before raw audio leaves the node.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
     scenario('model_runtime', 'Model runtime', 'Model selection can choose local, peer, or cloud fallback only when privacy class permits it.', 'Orchestrator.GetModelRuntime', 'Orchestrator', 'GetModelRuntime', { requested_runtime: 'balanced' }, { resource_id: 'model:balanced' }, 'personal', ['personal']),
     scenario('scheduler_job', 'Scheduler delegation', 'Delegated jobs need namespace, owner, target selector, and correlation policy.', 'Scheduler.ScheduleJob', 'Scheduler', 'ScheduleJob', { namespace: 'household', owner_peer_id: 'local', target_selector: { peer_id: 'studio-peer' } }, { peer_id: 'studio-peer', resource_id: 'scheduler:household' }, 'admin-critical', ['admin-critical']),
-    scenario('admin_action', 'Sensitive config change', 'Admin-critical mutations must preserve confirmation and audit receipt requirements.', 'Config.Set', 'Config', 'Set', { key_path: 'services.tts.mesh_sharing', value: { require_explicit_selector: true } }, null, 'admin-critical', ['admin-critical'])
+    scenario('admin_action', 'Sensitive config change', 'Admin-critical mutations must preserve confirmation and audit receipt requirements.', 'Config.Set', 'Config', 'Set', { key_path: 'services.tts.mesh_routing', value: { require_explicit_selector: true } }, null, 'admin-critical', ['admin-critical'])
   ]
 }
 
 export function routePolicyDraftChange(draft: RoutePolicyDraft): { key_path: string; value: JsonValue } {
   return {
-    key_path: `services.${configModuleKey(draft.module)}.mesh_sharing`,
+    key_path: `services.${configModuleKey(draft.module)}.mesh_routing`,
     value: {
       require_explicit_selector: draft.requireExplicitSelector,
-      allowed_peers: csvList(draft.allowedPeers),
-      required_capabilities: csvList(draft.requiredCapabilities) ?? [],
+      allowed_provider_peer_ids: csvList(draft.allowedProviderPeerIds),
+      required_provider_feature_ids: csvList(draft.requiredProviderFeatureIds) ?? [],
+      required_provider_capability_tags: csvList(draft.requiredProviderCapabilityTags) ?? [],
       min_version: draft.minimumVersion.trim() || null,
       fallback: draft.fallbackPolicy
     }

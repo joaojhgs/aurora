@@ -60,7 +60,7 @@ describe('Assistant inline tool approval', () => {
           client={client}
           route={assistantRoute()}
           initialSession={{
-            sessionId: 'assistant-inline-approval',
+            sessionId: 'different-active-ui-session',
             messages: [
               {
                 id: 'assistant-inline-approval-message',
@@ -72,6 +72,7 @@ describe('Assistant inline tool approval', () => {
                   {
                     id: 'tool-call-approval',
                     name: 'mesh_peer.delete_file',
+                    sessionId: 'assistant-inline-approval',
                     status: 'requires_action',
                     riskClass: 'backend-evaluated',
                     target: 'raspi-lab',
@@ -117,6 +118,118 @@ describe('Assistant inline tool approval', () => {
     expect(container.textContent).toContain('The approved tool completed successfully.')
     expect(container.textContent).toContain('Approved inline and executed by Aurora.')
   })
+
+  it('binds a fresh streamed turn and its approval resume to the same session', async () => {
+    const calls: Array<{ method: string; payload: Record<string, unknown> }> = []
+    let releaseTurn: (() => void) | null = null
+    const approvalResolved = new Promise<void>((resolve) => {
+      releaseTurn = resolve
+    })
+    const transport = MockAuroraTransport.empty()
+      .stream('assistant', async function* (request) {
+        const payload = request.payload as { session_id?: unknown; request_id?: unknown }
+        const sessionId = typeof payload.session_id === 'string' ? payload.session_id : null
+        const requestId = typeof payload.request_id === 'string' ? payload.request_id : null
+        yield {
+          id: 'tool-approval-fresh-session',
+          kind: 'tool.requires_action',
+          payload: {
+            session_id: sessionId,
+            request_id: requestId,
+            tool: {
+              tool_call_id: 'tool-call-fresh-session',
+              tool_name: 'list_scheduled_tasks_tool',
+              status: 'requires_action',
+              summary: 'Tool requires operator approval before execution.',
+              pending_id: `${sessionId}:tool-call-fresh-session`,
+              approval_request_id: 'approval-fresh-session'
+            }
+          },
+          correlation_id: request.correlationId
+        }
+        await approvalResolved
+        yield {
+          id: 'assistant-completed-fresh-session',
+          kind: 'assistant.completed',
+          payload: {
+            text: 'There are no scheduled tasks.',
+            session_id: sessionId,
+            request_id: requestId
+          },
+          correlation_id: request.correlationId
+        }
+      })
+      .register(ORCHESTRATOR_METHODS.externalUserInput, async (request: AuroraTransportRequest) => {
+        const payload = request.payload as Record<string, unknown>
+        calls.push({ method: request.method, payload })
+        await approvalResolved
+        return {
+          text: 'There are no scheduled tasks.',
+          session_id: payload.session_id,
+          request_id: payload.request_id,
+          correlation_id: payload.correlation_id
+        }
+      })
+      .register(ORCHESTRATOR_METHODS.resumeToolApproval, (request: AuroraTransportRequest) => {
+        const payload = request.payload as Record<string, unknown>
+        calls.push({ method: request.method, payload })
+        releaseTurn?.()
+        return {
+          ok: true,
+          status: 'executed',
+          tool_result: { ok: true, status: 'success', output: [] },
+          assistant_text: 'There are no scheduled tasks.',
+          correlation_id: payload.correlation_id ?? null
+        }
+      })
+    const client = new Aurora({ transport })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          initialSession={{ sessionId: null, messages: [] }}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    const composer = container.querySelector('textarea')
+    expect(composer).not.toBeNull()
+    await act(async () => {
+      setNativeValue(composer!, 'list all schedules')
+      composer!.dispatchEvent(new Event('input', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const sendButton = findButtonByText(container, 'Send')
+    expect(sendButton).not.toBeNull()
+    expect(sendButton!.disabled).toBe(false)
+    await act(async () => {
+      sendButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => container.textContent?.includes('Needs approval') === true)
+
+    expect(countText(container.textContent ?? '', 'Aurora paused for a tool approval decision.')).toBe(1)
+    const approveButton = findButtonByText(container, 'Approve once')
+    expect(approveButton).not.toBeNull()
+    await act(async () => {
+      approveButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => calls.some((call) => call.method === ORCHESTRATOR_METHODS.resumeToolApproval))
+
+    const initialCall = calls.find((call) => call.method === ORCHESTRATOR_METHODS.externalUserInput)
+    const resumeCall = calls.find((call) => call.method === ORCHESTRATOR_METHODS.resumeToolApproval)
+    expect(initialCall?.payload.session_id).toEqual(expect.any(String))
+    expect(initialCall?.payload.session_id).toBe(initialCall?.payload.request_id)
+    expect(resumeCall?.payload.session_id).toBe(initialCall?.payload.session_id)
+  })
 })
 
 function assistantRoute(): RouteAvailability {
@@ -141,4 +254,24 @@ function assistantRoute(): RouteAvailability {
 
 function findButtonByText(container: HTMLElement, text: string): HTMLButtonElement | null {
   return Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === text) ?? null
+}
+
+function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const prototype = Object.getPrototypeOf(element) as HTMLElement
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value')
+  descriptor?.set?.call(element, value)
+}
+
+async function waitUntil(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error('Timed out waiting for assistant approval UI state.')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    })
+  }
+}
+
+function countText(value: string, needle: string): number {
+  return value.split(needle).length - 1
 }

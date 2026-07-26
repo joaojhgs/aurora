@@ -36,7 +36,7 @@ export function PageTabs({
     <Tabs value={value} onValueChange={(next) => onValueChange(String(next))} className={className}>
       <TabsList variant="line" className="w-full justify-start border-b border-border px-0" aria-label={ariaLabel}>
         {items.map((item) => (
-          <TabsTrigger key={item.value} value={item.value} className="rounded-none border-b-2 border-transparent px-3.5 py-2 data-active:border-primary data-active:bg-transparent data-active:shadow-none">
+          <TabsTrigger key={item.value} value={item.value} style={{ flex: 'none' }} className="rounded-none border-b-2 border-transparent px-3.5 py-2 data-active:border-primary data-active:bg-transparent data-active:shadow-none">
             {item.label}
           </TabsTrigger>
         ))}

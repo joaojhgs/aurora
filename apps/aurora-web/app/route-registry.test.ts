@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
+import { auroraEmbeddedNavItems, auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
 import { describe, expect, it } from 'vitest'
 import {
   auroraWebHiddenRouteIds,
@@ -12,7 +12,7 @@ import {
 
 const appDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(appDir, '../../..')
-const navItems = auroraNavSections.flatMap((section) => section.items)
+const navItems = [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems]
 
 const PLACEHOLDER_COPY_MARKERS = [
   'A full product page still needs to be mounted',
@@ -57,8 +57,16 @@ function pageFileForHref(href: string): string {
 
 function tauriRouteIdsFromSource(): string[] {
   const source = readFileSync(join(repoRoot, 'apps/aurora-tauri/src/tauri-app.tsx'), 'utf8')
+  const tupleIds = (name: string): string[] => {
+    const match = source.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\] as const`))
+    if (!match) return []
+    return [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((candidate) => candidate[1])
+  }
+  const routeIds = [...tupleIds('primaryTauriRouteIds'), ...tupleIds('embeddedTauriRouteIds')]
+  if (routeIds.length > 0) return routeIds
+
   const match = source.match(/const tauriRouteIds = \[([\s\S]*?)\] as const/)
-  if (!match) throw new Error('Unable to locate tauriRouteIds tuple in apps/aurora-tauri/src/tauri-app.tsx')
+  if (!match) throw new Error('Unable to locate tauri route id tuples in apps/aurora-tauri/src/tauri-app.tsx')
   return [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((candidate) => candidate[1])
 }
 

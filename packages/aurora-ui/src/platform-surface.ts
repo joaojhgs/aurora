@@ -15,6 +15,7 @@ export type AuroraSurfaceFeature =
   | 'android'
   | 'mobileNative'
   | 'webThin'
+  | 'webrtcThin'
   | 'localOnly'
 
 export interface AuroraSurfaceProfileInput {
@@ -38,6 +39,8 @@ export interface AuroraSurfaceProfile {
   supportsIosOnly: boolean
   supportsAndroidOnly: boolean
   isWebThin: boolean
+  supportsWebRtcThin: boolean
+  prefersWebRtcTransport: boolean
   voiceCapture: AuroraVoiceCapturePolicy
 }
 
@@ -64,12 +67,24 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const nativePlatform = normalize(input.nativePlatform)
   const userAgent = normalize(input.userAgent)
 
-  const isAndroid = nativePlatform.includes('android') || userAgent.includes('android')
-  const isIos = /\b(ios|iphone|ipad|ipod)\b/.test(nativePlatform) || /(iphone|ipad|ipod)/.test(userAgent)
+  const runtimeSaysAndroid = runtimeMode.startsWith('android')
+  const runtimeSaysIos = runtimeMode.startsWith('ios')
+  const nativeSaysAndroid = nativePlatform.includes('android')
+  const nativeSaysIos = /\b(ios|iphone|ipad|ipod)\b/.test(nativePlatform)
+  const userAgentSaysAndroid = userAgent.includes('android')
+  const userAgentSaysIos = /(iphone|ipad|ipod)/.test(userAgent)
+  const isAndroid = runtimeSaysAndroid || (
+    !runtimeSaysIos && (nativeSaysAndroid || (!nativeSaysIos && userAgentSaysAndroid))
+  )
+  const isIos = runtimeSaysIos || (
+    !runtimeSaysAndroid && (nativeSaysIos || (!nativeSaysAndroid && userAgentSaysIos))
+  )
   const runtimeSaysMobile = runtimeMode.includes('mobile') || transportKind === 'native-mobile'
   const isMobile = isAndroid || isIos || runtimeSaysMobile
   const usesLocalSidecar = runtimeMode === 'desktop-local' || transportKind === 'tauri-local'
   const isDesktopThin = runtimeMode === 'desktop-thin' || transportKind === 'tauri-thin'
+  const explicitWebThin = runtimeMode === 'web' || runtimeMode === 'web-thin' || runtimeMode === 'thin-shell'
+  const usesWebRtcTransport = transportKind === 'mesh' || transportKind === 'webrtc' || transportKind === 'webrtc-preferred' || transportKind === 'webrtc-only'
   const usesNativeShell = usesLocalSidecar || isDesktopThin || transportKind.startsWith('tauri') || isMobile
 
   const kind: AuroraSurfaceKind = isAndroid
@@ -82,14 +97,16 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
           ? 'desktop-thin'
           : runtimeMode === 'mock' || transportKind === 'mock'
             ? 'mock'
-            : transportKind === 'http'
+            : transportKind === 'http' || (usesWebRtcTransport && explicitWebThin)
               ? 'web'
               : isMobile
                 ? 'mobile'
                 : 'unknown'
 
   const isDesktop = kind === 'desktop-local' || kind === 'desktop-thin'
-  const isWebThin = kind === 'web' || kind === 'desktop-thin'
+  const isWebThin = kind === 'web' || kind === 'desktop-thin' || (isMobile && (transportKind === 'http' || usesWebRtcTransport))
+  const supportsWebRtcThin = isWebThin || isMobile
+  const prefersWebRtcTransport = usesWebRtcTransport
   const voiceCapture = getAuroraVoiceCapturePolicy(kind)
   return {
     kind,
@@ -105,6 +122,8 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     supportsIosOnly: isIos,
     supportsAndroidOnly: isAndroid,
     isWebThin,
+    supportsWebRtcThin,
+    prefersWebRtcTransport,
     voiceCapture,
   }
 }
@@ -123,7 +142,9 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
     case 'mobileNative':
       return profile.supportsMobileNative
     case 'webThin':
-      return profile.kind === 'web' || profile.kind === 'desktop-thin'
+      return profile.kind === 'web' || profile.kind === 'desktop-thin' || profile.isMobile
+    case 'webrtcThin':
+      return profile.supportsWebRtcThin
   }
 }
 
@@ -149,6 +170,14 @@ export function getAuroraVoiceCapturePolicy(kind: AuroraSurfaceKind): AuroraVoic
         detail: 'Thin web capture uses browser getUserMedia only while the page is focused; audio is sent through SDK/Gateway contracts.'
       }
     case 'android':
+      return {
+        focusedPushToTalkOwner: 'webview-focused',
+        wakewordOwner: 'webview-focused',
+        wakewordRequiresFocus: true,
+        canUseWebViewVisualizer: true,
+        avoidCoordinatorPushToTalk: true,
+        detail: 'Android thin uses focused foreground WebView microphone capture only; no durable background wakeword is claimed.'
+      }
     case 'ios':
     case 'mobile':
       return {

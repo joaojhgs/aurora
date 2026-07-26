@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { defaultMockAuroraFixtures, type PendingPairingEntry } from '@aurora/client'
+import { defaultMockAuroraFixtures, webrtcDiagnosticsFixture, type PendingPairingEntry } from '@aurora/client'
 import {
   PairingQueueSurface,
   buildPairingAdminActionRequest,
@@ -16,7 +16,11 @@ import type { RouteAvailability } from '../src/shell-data'
 
 describe('PairingQueueView admin pairing surface', () => {
   it('renders pending queue, expiry, audit, create, exchange, revoke, and honest QR/revoke contract states', () => {
-    const model = buildPairingQueueModel({ route: pairingRoute(), response: pairingResponse() })
+    const model = buildPairingQueueModel({
+      route: pairingRoute(),
+      response: pairingResponse(),
+      diagnostics: { ...webrtcDiagnosticsFixture, mesh_enabled: false }
+    })
     const createdCredential = buildPairingCredentialModel({ code: 'PAIR-123456', expires_in_seconds: 300 }, 'audit-create-001')
     const markup = renderToStaticMarkup(
       <PairingQueueSurface
@@ -32,6 +36,7 @@ describe('PairingQueueView admin pairing surface', () => {
     )
 
     expect(model.total).toBe(3)
+    expect(model.meshPairingManaged).toBe(false)
     expect(model.expiredCount).toBe(1)
     expect(markup).toContain('Pending device and peer pairing requests')
     expect(markup).toContain('Kitchen tablet')
@@ -135,6 +140,121 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(model.disabledReason).toContain('permission denied')
     expect(markup).toContain('Capability unavailable')
     expect(markup).toContain('disabled=""')
+  })
+
+  it('shows bilateral negotiation progress without one-sided or manual instructions', () => {
+    const diagnostics = {
+      ...webrtcDiagnosticsFixture,
+      peers: [{
+        ...webrtcDiagnosticsFixture.peers[0]!,
+        node_name: 'Aurora 2',
+        auth_state: 'anonymous',
+        pairing_active: true,
+        pending_pairing_task: true
+      }]
+    }
+    const waitingModel = buildPairingQueueModel({
+      route: pairingRoute(),
+      response: { pairings: [], total: 0, expired_count: 0, secrets_redacted: true },
+      diagnostics
+    })
+    const waitingMarkup = renderToStaticMarkup(<PairingQueueSurface model={waitingModel} route={pairingRoute()} />)
+
+    expect(waitingModel.state).toBe('pending')
+    expect(waitingModel.meshPairingManaged).toBe(true)
+    expect(waitingModel.outgoingPeers).toEqual([{ peerId: 'stable-peer', nodeName: 'Aurora 2' }])
+    expect(waitingMarkup).toContain('Pairing request sent to')
+    expect(waitingMarkup).toContain('Aurora 2')
+    expect(waitingMarkup).toContain('Both Auroras create an incoming request automatically')
+    expect(waitingMarkup).not.toContain('Only the receiving Aurora shows an incoming pending request')
+    expect(waitingMarkup).not.toContain('the reverse request will appear here for approval')
+    expect(waitingMarkup).toContain('Outgoing pairing is active')
+    expect(waitingMarkup).toContain('Mesh pairing creates requests automatically')
+    expect(waitingMarkup).toContain('Manual Create pairing code and Exchange controls are disabled while mesh mode is active')
+    expect(waitingMarkup).not.toContain('Create pairing code via AdminAction')
+    expect(waitingMarkup).not.toContain('Exchange via AdminAction')
+
+    const receivingRequest = { ...pendingPairing(), expires_at: '2099-01-01T00:00:00Z' }
+    const receivingModel = buildPairingQueueModel({
+      route: pairingRoute(),
+      response: { pairings: [receivingRequest], total: 1, expired_count: 0, secrets_redacted: true },
+      diagnostics
+    })
+    expect(receivingModel.outgoingPeers).toEqual([])
+  })
+
+  it('keeps manual bearer-code controls hidden while mesh diagnostics are unavailable', () => {
+    const model = buildPairingQueueModel({
+      route: pairingRoute(),
+      response: { pairings: [], total: 0, expired_count: 0, secrets_redacted: true },
+      diagnostics: null
+    })
+    const markup = renderToStaticMarkup(
+      <PairingQueueSurface model={model} route={pairingRoute()} />
+    )
+
+    expect(model.meshPairingManaged).toBe(true)
+    expect(markup).toContain('Mesh pairing creates requests automatically')
+    expect(markup).not.toContain('Create pairing code via AdminAction')
+    expect(markup).not.toContain('Exchange via AdminAction')
+  })
+
+  it('shows the same verification code on both Auroras without exposing opaque handles', () => {
+    const diagnostics = {
+      ...webrtcDiagnosticsFixture,
+      mesh_enabled: true
+    }
+    const pairingSessionId = 'a'.repeat(64)
+    const verificationCode = '48271935'
+    const requestOnAurora1 = {
+      ...pendingPairing(),
+      request_id: 'incoming-on-aurora-1',
+      code: 'opaque-request-handle-on-aurora-1',
+      device_name: 'Aurora 2',
+      remote_peer_id: 'stable-peer-2',
+      remote_node_name: 'Aurora 2',
+      pairing_session_id: pairingSessionId,
+      verification_code: verificationCode,
+      expires_at: '2099-01-01T00:00:00Z'
+    } as PendingPairingEntry & { pairing_session_id: string; verification_code: string }
+    const requestOnAurora2 = {
+      ...pendingPairing(),
+      request_id: 'incoming-on-aurora-2',
+      code: 'opaque-request-handle-on-aurora-2',
+      device_name: 'Aurora 1',
+      remote_peer_id: 'stable-peer-1',
+      remote_node_name: 'Aurora 1',
+      pairing_session_id: pairingSessionId,
+      verification_code: verificationCode,
+      expires_at: '2099-01-01T00:00:00Z'
+    } as PendingPairingEntry & { pairing_session_id: string; verification_code: string }
+
+    const surfaces = [requestOnAurora1, requestOnAurora2].map((request) => {
+      const model = buildPairingQueueModel({
+        route: pairingRoute(),
+        response: { pairings: [request], total: 1, expired_count: 0, secrets_redacted: true },
+        diagnostics
+      })
+      return {
+        model,
+        markup: renderToStaticMarkup(<PairingQueueSurface model={model} route={pairingRoute()} />)
+      }
+    })
+
+    for (const { model, markup } of surfaces) {
+      expect(model.meshPairingManaged).toBe(true)
+      expect(model.entries).toHaveLength(1)
+      expect(markup).toContain('Verification code')
+      expect(markup).toContain(verificationCode)
+      expect(markup).toContain('matches on both Auroras')
+      expect(markup).toContain('approve independently on each Aurora')
+      expect(markup).toContain('AdminAction approve')
+      expect(markup).not.toContain('opaque-request-handle')
+      expect(markup).not.toContain('Copy code')
+      expect(markup).not.toContain('Pairing code to exchange')
+      expect(markup).not.toContain('Create pairing code via AdminAction')
+      expect(markup).not.toContain('Exchange via AdminAction')
+    }
   })
 
   it('creates deep links without exposing QR as fake backend state', () => {

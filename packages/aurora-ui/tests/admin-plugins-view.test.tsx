@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
+import { AuroraClient as Aurora, MockAuroraTransport, type ToolCatalogResponse } from '@aurora/client'
 import { AdminPluginsView, buildAdminPluginsSnapshot, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
 import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
@@ -43,6 +43,63 @@ describe('AdminPluginsView', () => {
     expect(markup).toContain('notion-plugin')
     expect(markup).toContain('home-assistant-plugin')
     expect(markup).toContain('Configure')
+  })
+
+  it('shows permission-blocked peer tools as stable, disabled management rows without adding them to bindable fallback tools', async () => {
+    const stablePeerId = 'aurora-da2c3842004492c887b3ce878c8eb0cb'
+    const stableToolId = `${stablePeerId}:remote_${stablePeerId}_Tooling:tool:list_scheduled_tasks_tool`
+    const stableSourceId = `mesh:${stablePeerId}:remote_${stablePeerId}_Tooling`
+    const catalog: ToolCatalogResponse = {
+      tools: [],
+      blocked_tools: [{
+        reason_code: 'permission_denied',
+        reason: 'caller principal lacks required tool permissions',
+        missing_permissions: ['Scheduler.use'],
+        tool: {
+          global_tool_id: stableToolId,
+          local_name: 'list_scheduled_tasks_tool',
+          display_name: 'aurora-2.list_scheduled_tasks_tool',
+          description: 'List scheduled tasks on aurora-2.',
+          provider_label: 'aurora-2',
+          provider_peer_id: stablePeerId,
+          provider_service_instance_id: `remote:${stablePeerId}:Tooling`,
+          provider_kind: 'mesh_peer',
+          source: 'mesh_peer',
+          source_type: 'mesh_peer',
+          source_id: stableSourceId,
+          required_permissions: ['Scheduler.use']
+        }
+      }],
+      providers: [{
+        provider_peer_id: stablePeerId,
+        provider_service_instance_id: `remote:${stablePeerId}:Tooling`,
+        provider_label: 'aurora-2',
+        provider_kind: 'mesh_peer',
+        eligible: true
+      }],
+      secrets_redacted: true
+    }
+    const transport = MockAuroraTransport.empty().register('Tooling.GetToolCatalog', () => catalog)
+    const client = new Aurora({ transport })
+
+    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())
+    const markup = renderToStaticMarkup(
+      <AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={snapshot} />
+    )
+
+    expect(snapshot.fallbackTools).toEqual([])
+    expect(snapshot.sourceDetails[stableSourceId]?.blockedTools[0]).toMatchObject({
+      id: stableToolId,
+      providerPeerId: stablePeerId,
+      state: 'unavailable',
+      blockReasonCode: 'permission_denied'
+    })
+    expect(markup).toContain('aurora-2')
+    expect(markup).toContain('aurora-2.list_scheduled_tasks_tool')
+    expect(markup).toContain('Missing required permission: Scheduler.use.')
+    expect(markup).toContain('Not callable from this peer.')
+    expect(markup).toContain('missing permission')
+    expect(markup).not.toContain(stablePeerId)
   })
 
   it('renders loading, empty, denied, service-unavailable, and route-disabled states', async () => {

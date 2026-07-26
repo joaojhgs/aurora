@@ -505,7 +505,7 @@ export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): Se
         id: 'denied-routes',
         label: 'Denied or privacy-blocked routes',
         value: String(denied.length + privacyBlocked.length),
-        state: denied.length > 0 ? 'denied' : privacyBlocked.length > 0 ? 'privacy-blocked' : 'available-local',
+        state: privacyBlocked.length > 0 ? 'privacy-blocked' : denied.length > 0 ? 'denied' : 'available-local',
         detail: denied.length + privacyBlocked.length > 0 ? 'Repair requires backend permission, selector, consent, or policy changes.' : 'No denied route is reported.'
       }
     ],

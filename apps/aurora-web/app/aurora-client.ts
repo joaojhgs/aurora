@@ -7,13 +7,19 @@ import {
   type AuroraTransportRequest,
   type AuroraTransportResponse,
 } from '@aurora/client'
+import {
+  createBrowserWebThinRuntime,
+  explainBrowserThinRuntime,
+  type AuroraThinConnectionMode,
+  type BrowserWebThinRuntime,
+} from '@aurora/ui'
 
-type BrowserClientCache = {
+type BrowserRuntimeCache = {
   key: string
-  client: AuroraClient
+  runtime: BrowserWebThinRuntime
 }
 
-let browserClientCache: BrowserClientCache | null = null
+let browserRuntimeCache: BrowserRuntimeCache | null = null
 
 class MissingGatewayTransport implements AuroraTransport {
   readonly kind = 'http'
@@ -23,13 +29,13 @@ class MissingGatewayTransport implements AuroraTransport {
   ): Promise<AuroraTransportResponse<TData>> {
     throw new AuroraError({
       code: 'transport_loss',
-      message: 'Aurora Gateway URL is not configured. Set AURORA_GATEWAY_URL/NEXT_PUBLIC_AURORA_GATEWAY_URL or explicitly enable AURORA_WEB_DEMO_MODE=1 for labeled offline demo data.',
+      message: 'Aurora Gateway URL is not configured. Set AURORA_GATEWAY_URL/NEXT_PUBLIC_AURORA_GATEWAY_URL, paste a WebRTC invite with NEXT_PUBLIC_AURORA_CONNECTION_MODE=webrtc-only|webrtc-preferred, or explicitly enable AURORA_WEB_DEMO_MODE=1 for labeled offline demo data.',
       method: request.method,
       busTopic: request.busTopic,
       detail: {
         demo_mode: false,
         secrets_redacted: true,
-        repair_action: 'Configure a real Gateway URL or opt into demo mode explicitly.'
+        repair_action: 'Configure a real Gateway URL, connect through a WebRTC invite, or opt into demo mode explicitly.'
       }
     })
   }
@@ -51,42 +57,72 @@ export function createAuroraWebClient(): AuroraClient {
   return new AuroraClient({ transport: new MissingGatewayTransport() })
 }
 
-export function createAuroraBrowserClient(): AuroraClient {
+export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
   const key = browserClientCacheKey()
-  if (browserClientCache?.key === key) return browserClientCache.client
-
+  const cached = browserRuntimeCache
+  if (cached?.key === key) return cached.runtime
+  void browserRuntimeCache?.runtime.close().catch(() => undefined)
+  const mode = browserConnectionMode()
   const gatewayUrl = process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL
-  let client: AuroraClient
-  if (gatewayUrl) {
-    client = new AuroraClient({
-      transport: new HttpGatewayTransport({
-        baseUrl: gatewayUrl,
-        bearerToken: () => client.auth.bearerToken()
-      })
-    })
-  } else if (isBrowserDemoMode()) {
-    client = new AuroraClient({ transport: new MockAuroraTransport() })
-  } else {
-    client = new AuroraClient({ transport: new MissingGatewayTransport() })
-  }
-  browserClientCache = { key, client }
-  return client
+  const runtime = createBrowserWebThinRuntime({
+    mode,
+    gatewayUrl,
+    bearerToken: () => runtime.client.auth.bearerToken(),
+    runtimeMode: browserRuntimeMode(),
+    demoMode: isBrowserDemoMode(),
+    allowInsecureLoopback: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
+    allowInsecureLoopbackSignaling: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
+    nodeName: process.env.NEXT_PUBLIC_AURORA_NODE_NAME ?? 'Aurora Web thin client',
+    visibilityDocument: typeof document === 'undefined' ? undefined : document,
+    windowLocation: typeof window === 'undefined' ? undefined : window.location,
+    createClient: (transport) => new AuroraClient({ transport }),
+    createDemoClient: () => new AuroraClient({ transport: new MockAuroraTransport() }),
+  })
+  browserRuntimeCache = { key, runtime }
+  return runtime
+}
+
+export function createAuroraBrowserClient(): AuroraClient {
+  return createAuroraBrowserRuntime().client
 }
 
 export function resetAuroraBrowserClientForTests(): void {
-  browserClientCache = null
+  void browserRuntimeCache?.runtime.close().catch(() => undefined)
+  browserRuntimeCache = null
 }
 
 export function isAuroraWebDemoMode(): boolean {
   return isServerDemoMode() || isBrowserDemoMode()
 }
 
+export function auroraBrowserRuntimeDiagnostics(): string[] {
+  return explainBrowserThinRuntime({
+    mode: browserConnectionMode(),
+    gatewayUrl: process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL,
+  })
+}
+
 function browserClientCacheKey(): string {
   return JSON.stringify({
     gatewayUrl: process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL ?? '',
-    demoMode: isBrowserDemoMode()
+    mode: browserConnectionMode(),
+    demoMode: isBrowserDemoMode(),
+    nodeName: process.env.NEXT_PUBLIC_AURORA_NODE_NAME ?? '',
   })
 }
+
+function browserConnectionMode(): AuroraThinConnectionMode {
+  const value = process.env.NEXT_PUBLIC_AURORA_CONNECTION_MODE
+  if (value === 'http-only' || value === 'webrtc-only' || value === 'webrtc-preferred') return value
+  return 'http-only'
+}
+
+function browserRuntimeMode(): string {
+  const mode = browserConnectionMode()
+  if (mode === 'http-only') return 'web'
+  return 'web-thin'
+}
+
 
 function isServerDemoMode(): boolean {
   return process.env.NODE_ENV === 'test' || truthy(process.env.AURORA_WEB_DEMO_MODE)

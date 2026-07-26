@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { CheckCircle2, ChevronDown, Copy, FileText, Image as ImageIcon, LoaderCircle, MessageSquarePlus, Mic, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -9,13 +9,18 @@ import type {
   AttachmentContextPrivacyClass,
   AttachmentContextSourceChannel,
   AttachmentContextStatus,
+  AssistantInferencePolicy,
   AssistantMessage as SdkAssistantMessage,
   AssistantRoutePolicy,
   AssistantStreamUpdate,
   AuroraClient,
   AuroraError,
   AuroraResponse,
+  DBGetSessionResponse,
+  DBSessionRecord,
   VoiceRuntimeEvent,
+  ModelRuntimeCatalogResponse,
+  ModelRuntimeModelInfo,
   ModelRuntimeProviderInfo
 } from '@aurora/client'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
@@ -33,7 +38,7 @@ import {
 } from '#components/ui/attachment'
 import { Bubble, BubbleContent } from '#components/ui/bubble'
 import { Button } from '#components/ui/button'
-import { CollapsibleTrigger } from '#components/ui/collapsible'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#components/ui/collapsible'
 import { Marker, MarkerContent } from '#components/ui/marker'
 import { Message, MessageContent, MessageFooter, MessageHeader } from '#components/ui/message'
 import {
@@ -44,6 +49,7 @@ import {
   MessageScrollerViewport
 } from '#components/ui/message-scroller'
 import { ToolFallbackArgs, ToolFallbackContent, ToolFallbackResult, ToolFallbackRoot } from '#components/assistant-ui/tool-fallback'
+import { ModelSelector, type ModelOption } from '#components/assistant-ui/model-selector'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 import { getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
@@ -71,11 +77,44 @@ export interface AssistantRuntimeHealth {
   gatewayHealth: string
 }
 
+export interface AssistantExecutionOption {
+  id: string
+  mode: 'local' | 'dispatch'
+  label: string
+  description: string
+  routePolicy: AssistantRoutePolicy
+}
+
+export interface AssistantModelChoice {
+  id: string
+  model: ModelOption
+  provider: ModelRuntimeProviderInfo | null
+  runtimeModel: ModelRuntimeModelInfo | null
+  automatic: boolean
+}
+
+export interface AssistantModelChoiceGroup {
+  id: string
+  heading: string
+  choices: AssistantModelChoice[]
+  scope: 'default' | 'local-provider' | 'peer-provider'
+}
+
+export interface AssistantModelSourceGroup {
+  id: string
+  heading: string
+  description: string
+  providerGroups: AssistantModelChoiceGroup[]
+  modelCount: number
+  scope: 'local' | 'peer'
+}
+
 export type AssistantUiMessageStatus = 'sent' | 'sending' | 'streaming' | 'failed' | 'cancelled'
 
 export interface AssistantToolCallCard {
   id: string
   name: string
+  sessionId?: string | null | undefined
   status: 'requested' | 'running' | 'completed' | 'failed' | 'requires_action'
   riskClass: string
   target: string
@@ -105,6 +144,7 @@ export interface AssistantUiMessage {
   modelLabel?: string | null | undefined
   providerLabel?: string | null | undefined
   routeLabel?: string | null | undefined
+  executionPeerId?: string | null | undefined
 }
 
 type AssistantApprovalGrantScope = 'once' | 'session' | 'until_expiry' | 'always' | 'deny_once' | 'deny_always'
@@ -241,6 +281,14 @@ export function AssistantView({
   runtimeHealth
 }: AssistantViewProps) {
   const [session, setSession] = useState<AssistantSessionSnapshot>(() => initialSession ?? defaultAssistantSessionForTransport(client.transport.kind))
+  const [sessionIndex, setSessionIndex] = useState<DBSessionRecord[]>([])
+  const [sessionIndexLoading, setSessionIndexLoading] = useState(false)
+  const [sessionIndexError, setSessionIndexError] = useState<string | null>(null)
+  const [sessionAuthScope, setSessionAuthScope] = useState(() => {
+    const auth = client.auth.snapshot()
+    return `${auth.state}:${auth.principalId ?? ''}`
+  })
+  const sessionAuthScopeRef = useRef(sessionAuthScope)
   const [text, setText] = useState('')
   const [privacyClass] = useState<AttachmentContextPrivacyClass>('personal')
   const [attachments, setAttachments] = useState<AssistantAttachmentDraft[]>([])
@@ -248,6 +296,13 @@ export function AssistantView({
   const [lastResult, setLastResult] = useState<SdkAssistantMessage | null>(null)
   const [modelLabel, setModelLabel] = useState<string | null>(null)
   const [runtimeProviderLabel, setRuntimeProviderLabel] = useState<string | null>(null)
+  const [localModelCatalog, setLocalModelCatalog] = useState<ModelRuntimeCatalogResponse | null>(null)
+  const [dispatchModelCatalog, setDispatchModelCatalog] = useState<ModelRuntimeCatalogResponse | null>(null)
+  const [modelCatalogLoading, setModelCatalogLoading] = useState(true)
+  const [modelCatalogError, setModelCatalogError] = useState<string | null>(null)
+  const [executionOptionId, setExecutionOptionId] = useState('local')
+  const [selectedModelChoiceId, setSelectedModelChoiceId] = useState('automatic')
+  const [modelSearchQuery, setModelSearchQuery] = useState('')
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastPrompt, setLastPrompt] = useState<string | null>(null)
   const [streamState, setStreamState] = useState<AssistantStreamState>(() => idleAssistantStreamState())
@@ -282,6 +337,7 @@ export function AssistantView({
   const voiceCaptureStatusRef = useRef<VoiceCaptureStatus>('idle')
   const voicePendingAssistantIdRef = useRef<string | null>(null)
   const voiceTranscriptPreviewRef = useRef('')
+  const sessionLoadGenerationRef = useRef(0)
   function setVoiceCaptureStatus(next: VoiceCaptureStatus) {
     voiceCaptureStatusRef.current = next
     setVoiceCaptureStatusState(next)
@@ -301,13 +357,49 @@ export function AssistantView({
   }
   const activePendingIdRef = useRef<string | null>(null)
   const cancelledPendingIdsRef = useRef<Set<string>>(new Set())
-  const routePolicy = useMemo(() => routePolicyFromRoute(route), [route])
+  const executionOptions = useMemo(() => assistantExecutionOptions(route), [route])
+  const executionPeerLabels = useMemo(
+    () => {
+      const labels = new Map<string, string>()
+      for (const candidate of route.candidateProviders) {
+        if (!isRemoteRouteCandidate(candidate)) continue
+        const peerId = candidate.peerId ?? peerIdFromProviderIdentity(candidate.providerId ?? candidate.id)
+        if (!peerId) continue
+        labels.set(peerId, executionPeerLabel(candidate.nodeName ?? candidate.label, peerId))
+      }
+      for (const option of executionOptions) {
+        if (option.mode === 'dispatch' && option.routePolicy.peerId) {
+          labels.set(option.routePolicy.peerId, option.label)
+        }
+      }
+      return labels
+    },
+    [executionOptions, route.candidateProviders]
+  )
+  const selectedExecution = executionOptions.find((option) => option.id === executionOptionId) ?? executionOptions[0]!
+  const routePolicy = selectedExecution.routePolicy
+  const activeModelCatalog = selectedExecution.mode === 'local' ? localModelCatalog : dispatchModelCatalog
+  const modelChoices = useMemo(
+    () => assistantModelChoices(activeModelCatalog, selectedExecution),
+    [activeModelCatalog, selectedExecution]
+  )
+  const modelChoiceGroups = useMemo(
+    () => assistantModelChoiceGroups(modelChoices, selectedExecution),
+    [modelChoices, selectedExecution]
+  )
+  const modelSourceGroups = useMemo(
+    () => assistantModelSourceGroups(modelChoiceGroups, selectedExecution, executionOptions),
+    [executionOptions, modelChoiceGroups, selectedExecution]
+  )
+  const selectedModelChoice = modelChoices.find((choice) => choice.id === selectedModelChoiceId) ?? modelChoices[0]!
+  const inferencePolicy = assistantInferencePolicy(selectedModelChoice, route)
+  const supportsPersistedSessions = client.transport.kind !== 'mock' && client.transport.kind !== 'mesh'
   const sessionMessages = session.messages
   const isSending = sessionMessages.some((message) => message.status === 'sending')
   const isStreaming = sessionMessages.some((message) => message.status === 'streaming')
   const hasContextUpload = attachments.some((attachment) => attachment.status === 'uploading')
   const controls = assistantControlsForRoute(route, cancellationRoute, isSending || isStreaming || hasContextUpload)
-  const canSend = controls.canSend
+  const canSend = controls.canSend && (!supportsPersistedSessions || Boolean(session.sessionId)) && !sessionIndexLoading
   const canAttach = !route.disabled && !isSending && !isStreaming && !hasContextUpload
   const attachmentsAwaitingValidation = attachments.filter((attachment) =>
     attachment.status === 'staged' || attachment.status === 'error'
@@ -427,15 +519,88 @@ export function AssistantView({
     setSpeakingMessageId(null)
   }
 
-  useEffect(() => {
-    const stored = loadAssistantSession(storageKey)
-    const nextSession = initialSession ?? (stored.sessionId || stored.messages.length > 0 ? stored : defaultAssistantSessionForTransport(client.transport.kind))
-    setSession(nextSession)
-  }, [client.transport.kind, initialSession, storageKey])
+  async function initializePersistedSessions(generation: number) {
+    setSessionIndexLoading(true)
+    setSessionIndexError(null)
+    try {
+      const listed = await client.memory.listSessions({ type: 'chat', limit: 100 })
+      if (!listed.ok) throw listed.error
+
+      let sessions = listed.data.sessions
+      let activeSessionId = listed.data.active_session_id ?? sessions[0]?.id ?? null
+      if (!activeSessionId) {
+        const created = await client.memory.createSession({ type: 'chat' })
+        if (!created.ok) throw created.error
+        sessions = [created.data.session]
+        activeSessionId = created.data.session.id
+      }
+
+      const loaded = await client.memory.getSession({
+        session_id: activeSessionId,
+        activate: true
+      })
+      if (!loaded.ok) throw loaded.error
+      if (sessionLoadGenerationRef.current !== generation) return
+
+      setSessionIndex(upsertSessionByModification(sessions, loaded.data.session))
+      setSession(assistantSessionFromPersisted(loaded.data))
+    } catch (error) {
+      if (sessionLoadGenerationRef.current !== generation) return
+      setSessionIndex([])
+      setSession(emptyAssistantSession())
+      setSessionIndexError(assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+    } finally {
+      if (sessionLoadGenerationRef.current === generation) {
+        setSessionIndexLoading(false)
+      }
+    }
+  }
 
   useEffect(() => {
+    return client.auth.subscribe((auth) => {
+      const nextScope = `${auth.state}:${auth.principalId ?? ''}`
+      if (sessionAuthScopeRef.current === nextScope) return
+      sessionAuthScopeRef.current = nextScope
+      if (supportsPersistedSessions) {
+        sessionLoadGenerationRef.current += 1
+        resetConversationUi(emptyAssistantSession())
+        setSessionIndex([])
+        setSessionIndexError(null)
+        setSessionIndexLoading(true)
+      }
+      setSessionAuthScope(nextScope)
+    })
+  }, [client, supportsPersistedSessions])
+
+  useEffect(() => {
+    if (client.transport.kind === 'mock') {
+      const stored = loadAssistantSession(storageKey)
+      const nextSession = initialSession ?? (stored.sessionId || stored.messages.length > 0 ? stored : defaultAssistantSessionForTransport(client.transport.kind))
+      setSession(nextSession)
+      setSessionIndex([])
+      setSessionIndexLoading(false)
+      setSessionIndexError(null)
+      return
+    }
+    if (!supportsPersistedSessions) {
+      setSession(emptyAssistantSession())
+      setSessionIndex([])
+      setSessionIndexLoading(false)
+      setSessionIndexError('Persisted chat sessions are not available over mesh transports.')
+      return
+    }
+
+    const generation = sessionLoadGenerationRef.current + 1
+    sessionLoadGenerationRef.current = generation
+    setSession(emptyAssistantSession())
+    setSessionIndex([])
+    void initializePersistedSessions(generation)
+  }, [client, client.transport.kind, initialSession, sessionAuthScope, storageKey, supportsPersistedSessions])
+
+  useEffect(() => {
+    if (client.transport.kind !== 'mock') return
     persistAssistantSession(storageKey, { ...session, messages: sessionMessages })
-  }, [session, sessionMessages, storageKey])
+  }, [client.transport.kind, session, sessionMessages, storageKey])
 
   useEffect(() => {
     attachmentsRef.current = attachments
@@ -455,20 +620,106 @@ export function AssistantView({
 
   useEffect(() => {
     let active = true
-    void client.models.getRuntime({ include_unavailable: true })
-      .then((runtime) => {
+    setModelCatalogLoading(true)
+    setModelCatalogError(null)
+    void (async () => {
+      const catalog = await client.models.listCatalog({
+        include_unavailable: true,
+        include_operations: false,
+        includeRemote: true,
+        includeCloudModels: true
+      })
+      const remoteCatalogs = await Promise.all(
+        executionOptions
+          .filter((option) => option.mode === 'dispatch')
+          .map(async (execution) => {
+            try {
+              const remoteCatalog = await client.models.listCatalog({
+                include_unavailable: true,
+                include_operations: false,
+                includeRemote: true,
+                includeCloudModels: true,
+                meshSelector: {
+                  peerId: execution.routePolicy.peerId ?? null,
+                  providerId: execution.routePolicy.providerId ?? null,
+                  serviceInstanceId: execution.routePolicy.serviceInstanceId ?? null,
+                  dataScope: route.item.privacyClass
+                }
+              })
+              return { catalog: remoteCatalog, execution }
+            } catch {
+              return null
+            }
+          })
+      )
+      return mergeAssistantModelCatalogs(
+        catalog,
+        remoteCatalogs.filter((entry) => entry !== null)
+      )
+    })()
+      .then((catalog) => {
         if (!active) return
-        const provider = selectedRuntimeProvider(runtime.provider, runtime.providers)
+        setLocalModelCatalog(catalog)
+        const provider = selectedRuntimeProvider(
+          catalog.providers.find((candidate) => candidate.provider_id === catalog.selected_provider_id) ?? null,
+          catalog.providers
+        )
         if (provider?.model_id) setModelLabel(provider.model_id)
         if (provider?.display_name) setRuntimeProviderLabel(provider.display_name)
+        setModelCatalogLoading(false)
       })
-      .catch(() => {
-        if (active) setRuntimeProviderLabel((current) => current)
+      .catch((error) => {
+        if (!active) return
+        setModelCatalogError(error instanceof Error ? error.message : String(error))
+        setModelCatalogLoading(false)
       })
     return () => {
       active = false
     }
-  }, [client])
+  }, [client, executionOptions, route.item.privacyClass])
+
+  useEffect(() => {
+    if (selectedExecution.mode !== 'dispatch') {
+      setDispatchModelCatalog(null)
+      setModelCatalogLoading(localModelCatalog === null)
+      setModelCatalogError(null)
+      return
+    }
+    let active = true
+    setModelCatalogLoading(true)
+    setModelCatalogError(null)
+    void client.models.listCatalog({
+      include_unavailable: true,
+      include_operations: false,
+      includeRemote: true,
+      includeCloudModels: true,
+      meshSelector: {
+        peerId: selectedExecution.routePolicy.peerId ?? null,
+        providerId: selectedExecution.routePolicy.providerId ?? null,
+        serviceInstanceId: selectedExecution.routePolicy.serviceInstanceId ?? null,
+        dataScope: route.item.privacyClass
+      }
+    })
+      .then((catalog) => {
+        if (!active) return
+        setDispatchModelCatalog(catalog)
+        setModelCatalogLoading(false)
+      })
+      .catch((error) => {
+        if (!active) return
+        setDispatchModelCatalog(null)
+        setModelCatalogError(error instanceof Error ? error.message : String(error))
+        setModelCatalogLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [client, localModelCatalog, route.item.privacyClass, selectedExecution])
+
+  useEffect(() => {
+    if (modelChoices.some((choice) => choice.id === selectedModelChoiceId)) return
+    setSelectedModelChoiceId(defaultAssistantModelChoiceId(modelChoices, activeModelCatalog, selectedExecution))
+  }, [activeModelCatalog, modelChoices, selectedExecution, selectedModelChoiceId])
 
   useEffect(() => {
     if (recentVoiceEvents.length === 0) return
@@ -478,6 +729,36 @@ export function AssistantView({
   useEffect(() => {
     voiceCaptureStatusRef.current = voiceCaptureStatus
   }, [voiceCaptureStatus])
+
+  useEffect(() => {
+    if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) return
+    if (typeof document === 'undefined' || typeof window === 'undefined') return
+    const releaseFocusedCapture = () => {
+      const hidden = document.visibilityState === 'hidden'
+      const blurred = typeof document.hasFocus === 'function' && !document.hasFocus()
+      if (!hidden && !blurred) return
+      if (!voiceStreamRef.current) return
+      stopLocalCapture({ finalizeTranscription: false })
+      if (voiceCaptureStatusRef.current === 'listening') {
+        setVoiceCaptureStatus('idle')
+        activeVoiceSessionRef.current = null
+        ownedVoiceSessionIdsRef.current.clear()
+        voicePendingAssistantIdRef.current = null
+        setVoiceResponsePendingId(null)
+        setStreamState((current) => ({
+          ...current,
+          status: 'lost',
+          message: 'Focused WebView microphone capture stopped because the thin shell lost visibility or focus.'
+        }))
+      }
+    }
+    document.addEventListener('visibilitychange', releaseFocusedCapture)
+    window.addEventListener('blur', releaseFocusedCapture)
+    return () => {
+      document.removeEventListener('visibilitychange', releaseFocusedCapture)
+      window.removeEventListener('blur', releaseFocusedCapture)
+    }
+  }, [surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk])
 
   useEffect(() => {
     const active = voiceCaptureStatus === 'listening' || voiceCaptureStatus === 'processing' || voiceCaptureStatus === 'speaking'
@@ -552,6 +833,69 @@ export function AssistantView({
     }
   }, [client])
 
+  function resetConversationUi(nextSession: AssistantSessionSnapshot) {
+    abortRef.current?.abort()
+    stopLocalCapture()
+    ownedVoiceSessionIdsRef.current.clear()
+    coordinatorVoiceSessionIdsRef.current.clear()
+    cancelledPendingIdsRef.current.clear()
+    activePendingIdRef.current = null
+    for (const attachment of attachmentsRef.current) revokeAttachmentPreview(attachment)
+    setAttachments([])
+    setSession(nextSession)
+    setLastResult(null)
+    setLastError(null)
+    setLastPrompt(null)
+    setStreamState(idleAssistantStreamState())
+    voiceTranscriptPreviewRef.current = ''
+    setText('')
+  }
+
+  async function openPersistedSession(sessionId: string, activate = true) {
+    if (!supportsPersistedSessions) return
+    setSessionIndexLoading(true)
+    setSessionIndexError(null)
+    try {
+      const loaded = await client.memory.getSession({
+        session_id: sessionId,
+        activate
+      })
+      if (!loaded.ok) throw loaded.error
+      setSessionIndex((current) => upsertSessionByModification(current, loaded.data.session))
+      resetConversationUi(assistantSessionFromPersisted(loaded.data))
+      window.setTimeout(() => textAreaRef.current?.focus(), 0)
+    } catch (error) {
+      setSessionIndexError(assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+    } finally {
+      setSessionIndexLoading(false)
+    }
+  }
+
+  async function refreshPersistedSessionIndex() {
+    if (!supportsPersistedSessions) return
+    const listed = await client.memory.listSessions({ type: 'chat', limit: 100 })
+    if (!listed.ok) {
+      setSessionIndexError(assistantErrorMessage(listed.error))
+      return
+    }
+    setSessionIndex(sortSessionsByModification(listed.data.sessions))
+    setSessionIndexError(null)
+  }
+
+  async function createPersistedChatSession(): Promise<DBSessionRecord | null> {
+    if (!supportsPersistedSessions) return null
+    const created = await client.memory.createSession({ type: 'chat' })
+    if (!created.ok) {
+      const error = assistantErrorMessage(created.error)
+      setSessionIndexError(error)
+      setLastError(error)
+      return null
+    }
+    setSessionIndex((current) => upsertSessionByModification(current, created.data.session))
+    setSessionIndexError(null)
+    return created.data.session
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     await submitCurrentPrompt()
@@ -597,6 +941,13 @@ export function AssistantView({
   async function startAssistantTurn(prompt: string, replayFrom: string | null = null) {
     const now = new Date().toISOString()
     const requestId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    let turnSessionId = session.sessionId
+    if (!turnSessionId && supportsPersistedSessions) {
+      const created = await createPersistedChatSession()
+      if (!created) return
+      turnSessionId = created.id
+    }
+    turnSessionId ??= requestId
     const userMessage: AssistantUiMessage = {
       id: `user-${requestId}`,
       role: 'user',
@@ -610,9 +961,14 @@ export function AssistantView({
       text: replayFrom ? 'Replaying stream from last backend event...' : 'Waiting for Aurora stream...',
       createdAt: now,
       status: 'streaming',
-      modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
-      providerLabel: runtimeProviderLabel ?? route.providerLabel,
-      routeLabel: route.providerLabel
+      modelLabel: selectedModelChoice.runtimeModel?.display_name
+        ?? selectedModelChoice.runtimeModel?.model_id
+        ?? modelLabel
+        ?? runtimeHealth?.selectedModel
+        ?? null,
+      providerLabel: selectedModelChoice.provider?.display_name ?? runtimeProviderLabel ?? route.providerLabel,
+      routeLabel: selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label,
+      executionPeerId: selectedExecution.routePolicy.peerId
     }
 
     setText('')
@@ -621,6 +977,7 @@ export function AssistantView({
     setStreamState({ status: 'streaming', lastEventId: replayFrom, message: replayFrom ? 'Replaying from last known event.' : null })
     setSession((current) => ({
       ...current,
+      sessionId: current.sessionId ?? turnSessionId,
       messages: [...current.messages, userMessage, pendingMessage]
     }))
 
@@ -633,9 +990,10 @@ export function AssistantView({
     try {
       for await (const update of client.assistant.streamMessage({
         text: prompt,
-        sessionId: session.sessionId,
+        sessionId: turnSessionId,
         requestId,
         routePolicy,
+        inferencePolicy,
         signal: abort.signal,
         replayFrom,
         clientTtsPlayback: !surfaceProfile.usesLocalSidecar
@@ -661,6 +1019,7 @@ export function AssistantView({
       if (abortRef.current === abort) abortRef.current = null
       if (activePendingIdRef.current === pendingMessage.id) activePendingIdRef.current = null
       setActiveAssistantPendingId((current) => current === pendingMessage.id ? null : current)
+      void refreshPersistedSessionIndex()
     }
   }
 
@@ -775,7 +1134,8 @@ export function AssistantView({
                 status: 'sent',
                 modelLabel: result.data.modelLabel,
                 providerLabel,
-                routeLabel: route.providerLabel
+                routeLabel: selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label,
+                executionPeerId: selectedExecution.routePolicy.peerId
               }
             : message
         )
@@ -834,6 +1194,7 @@ export function AssistantView({
     if (update.kind === 'tool') {
       setSession((current) => ({
         ...current,
+        sessionId: update.sessionId ?? current.sessionId,
         messages: current.messages.map((message) =>
           message.id === pendingId ? applyAssistantToolUpdate(message, update) : message
         )
@@ -904,13 +1265,15 @@ export function AssistantView({
           status: 'streaming',
           modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
           providerLabel: runtimeProviderLabel ?? route.providerLabel,
-          routeLabel: route.providerLabel
+          routeLabel: selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label,
+          executionPeerId: selectedExecution.routePolicy.peerId
         }
         const terminalMessage = applyAssistantTerminalUpdate({
           ...baseMessage,
           modelLabel: update.modelLabel ?? baseMessage.modelLabel,
           providerLabel: metadataStringValue(update.metadata, 'provider_label') ?? metadataStringValue(update.metadata, 'provider') ?? baseMessage.providerLabel,
-          routeLabel: baseMessage.routeLabel ?? route.providerLabel
+          routeLabel: baseMessage.routeLabel ?? (selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label),
+          executionPeerId: baseMessage.executionPeerId ?? selectedExecution.routePolicy.peerId
         }, update)
         lastAssistantMessageIdRef.current = terminalMessage.id
         const replaced = current.messages.some((message) => message.id === terminalMessage.id)
@@ -965,6 +1328,9 @@ export function AssistantView({
         if (shouldIgnoreForeignVoiceSessionEvent(event, activeSessionId, voiceCaptureStatusRef.current)) return
         if (!ownedVoiceSessionIdsRef.current.has(event.sessionId) && !isLocalVoiceEventSource(event)) return
         ownedVoiceSessionIdsRef.current.add(event.sessionId)
+        if (isAuthoritativeCoordinatorSessionStart(event)) {
+          coordinatorVoiceSessionIdsRef.current.add(event.sessionId)
+        }
         activeVoiceSessionRef.current = event.sessionId
       }
       voiceTranscriptPreviewRef.current = ''
@@ -980,6 +1346,8 @@ export function AssistantView({
     }
     if (event.kind === 'transcription_partial') {
       if (!isAuthoritativeVoiceTranscriptEvent(event)) return
+      const transcriptSessionId = event.sessionId ?? activeVoiceSessionRef.current
+      if (!transcriptSessionId || !coordinatorVoiceSessionIdsRef.current.has(transcriptSessionId)) return
       if (!shouldApplyVoiceRuntimeEvent(event, activeVoiceSessionRef.current, voiceCaptureStatusRef.current)) return
       if (event.sessionId) {
         ownedVoiceSessionIdsRef.current.add(event.sessionId)
@@ -995,6 +1363,8 @@ export function AssistantView({
     }
     if (event.kind === 'transcription_final') {
       if (!isAuthoritativeVoiceTranscriptEvent(event)) return
+      const transcriptSessionId = event.sessionId ?? activeVoiceSessionRef.current
+      if (!transcriptSessionId || !coordinatorVoiceSessionIdsRef.current.has(transcriptSessionId)) return
       if (!shouldApplyVoiceRuntimeEvent(event, activeVoiceSessionRef.current, voiceCaptureStatusRef.current)) return
       if (event.sessionId) {
         ownedVoiceSessionIdsRef.current.add(event.sessionId)
@@ -1038,7 +1408,7 @@ export function AssistantView({
               status: 'streaming' as const,
               modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
               providerLabel: runtimeProviderLabel ?? route.providerLabel,
-              routeLabel: route.providerLabel
+              routeLabel: 'Local'
             }])
           ]
         }
@@ -1092,6 +1462,17 @@ export function AssistantView({
     if (update.modelLabel) setModelLabel(update.modelLabel)
     const providerLabel = metadataStringValue(update.metadata, 'provider_label') ?? metadataStringValue(update.metadata, 'provider') ?? runtimeProviderLabel ?? route.providerLabel
     if (providerLabel) setRuntimeProviderLabel(providerLabel)
+    if (!pendingId && supportsPersistedSessions && update.sessionId && (update.kind === 'completed' || update.kind === 'fallback')) {
+      setVoiceCaptureStatus('idle')
+      setVoiceResponsePendingId(null)
+      clearVoiceResponseTimeout()
+      activeVoiceSessionRef.current = null
+      ownedVoiceSessionIdsRef.current.clear()
+      coordinatorVoiceSessionIdsRef.current.clear()
+      setStreamState((current) => ({ ...current, status: 'idle', message: 'Wakeword response persisted to the active chat.' }))
+      void openPersistedSession(update.sessionId, false)
+      return
+    }
     if (update.kind === 'failed' || update.kind === 'transport_lost') {
       const error = assistantErrorMessage(update.error ?? new Error(update.text || 'Voice assistant response failed.'))
       setLastError(error)
@@ -1168,7 +1549,7 @@ export function AssistantView({
         status: 'streaming',
         modelLabel: update.modelLabel ?? modelLabel,
         providerLabel,
-        routeLabel: route.providerLabel,
+        routeLabel: 'Local',
         ...(existing || {})
       }, update)
       setLastResult({
@@ -1349,7 +1730,7 @@ export function AssistantView({
       const request: Parameters<typeof client.assistant.resumeToolApproval>[0] = {
         approve,
         grant_scope: grantScope,
-        session_id: session.sessionId,
+        session_id: tool.sessionId ?? session.sessionId,
         approver_principal_id: 'aurora-ui',
         reason: approve ? `Approved ${tool.name} from assistant inline card.` : `Denied ${tool.name} from assistant inline card.`
       }
@@ -1889,24 +2270,16 @@ export function AssistantView({
     }
   }
 
-  function startNewConversation() {
-    abortRef.current?.abort()
-    stopLocalCapture()
-    ownedVoiceSessionIdsRef.current.clear()
-    coordinatorVoiceSessionIdsRef.current.clear()
-    cancelledPendingIdsRef.current.clear()
-    activePendingIdRef.current = null
-    for (const attachment of attachmentsRef.current) revokeAttachmentPreview(attachment)
-    setAttachments([])
-    setSession(emptyAssistantSession())
-    setLastResult(null)
-    setModelLabel(null)
-    setRuntimeProviderLabel(null)
-    setLastError(null)
-    setLastPrompt(null)
-    setStreamState(idleAssistantStreamState())
-    voiceTranscriptPreviewRef.current = ''
-    setText('')
+  async function startNewConversation() {
+    if (supportsPersistedSessions) {
+      setSessionIndexLoading(true)
+      const created = await createPersistedChatSession()
+      setSessionIndexLoading(false)
+      if (!created) return
+      resetConversationUi({ sessionId: created.id, messages: [] })
+    } else {
+      resetConversationUi(emptyAssistantSession())
+    }
     textAreaRef.current?.focus()
   }
 
@@ -1929,9 +2302,14 @@ export function AssistantView({
       <div className="aui-assistant-grid">
         <ConversationRail
           session={{ ...session, messages: sessionMessages }}
+          sessions={sessionIndex}
           route={route}
           transportKind={client.transport.kind}
-          onNewConversation={startNewConversation}
+          loading={sessionIndexLoading}
+          error={sessionIndexError}
+          disabled={assistantBusy || voiceBusy}
+          onSelectConversation={(sessionId) => void openPersistedSession(sessionId)}
+          onNewConversation={() => void startNewConversation()}
         />
 
         <div className="aui-chat-workspace" data-first-viewport-work="assistant-chat-composer" aria-label="Primary chat workspace">
@@ -1956,6 +2334,7 @@ export function AssistantView({
                           onReadAloud={readAssistantMessageAloud}
                           onResolveToolApproval={resolveAssistantToolApproval}
                           speakingMessageId={speakingMessageIdState}
+                          executionPeerLabels={executionPeerLabels}
                         />
                       </MessageScrollerItem>
                     ))
@@ -1967,20 +2346,109 @@ export function AssistantView({
 
           <form className="aui-assistant-form" onSubmit={onSubmit} aria-label="Prompt composer" data-voice-active={voiceCaptureStatus === 'listening' ? 'true' : undefined}>
             <div className="aui-composer-toolbar" aria-label="Route/model selector">
-              <button
-                type="button"
-                className="aui-route-trigger"
-                onClick={() => setRouteDetailsOpen(true)}
-                aria-expanded={routeDetailsOpen}
-                aria-controls="assistant-route-panel"
-              >
-                <RouteIcon size={14} aria-hidden />
-                <span>Routing via</span>
-                <span className="aui-route-pill">{assistantRouteModeLabel(route)}</span>
-              </button>
-              <span className="aui-composer-model-status aui-model-pill">{modelLabel ? modelLabel : 'model pending'}</span>
-              <PrivacyBadge privacy={route.item.privacyClass} />
-              {attachments.length > 0 ? <span className="aui-composer-attachment-count">{attachments.length} attached</span> : null}
+              <div className="aui-composer-selectors">
+                <ModelSelector.Root
+                  models={executionOptions.map((option) => ({
+                    id: option.id,
+                    name: option.mode === 'local' ? 'Locally' : `Dispatch to ${option.label}`,
+                    description: option.description,
+                    icon: option.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
+                  }))}
+                  value={selectedExecution.id}
+                  onValueChange={(value) => {
+                    setExecutionOptionId(value)
+                    setSelectedModelChoiceId('automatic')
+                    setModelSearchQuery('')
+                  }}
+                >
+                  <ModelSelector.Trigger
+                    variant="ghost"
+                    size="sm"
+                    className="aui-execution-selector-trigger"
+                    aria-label={`Executing ${selectedExecution.mode === 'local' ? 'locally' : `by dispatch to ${selectedExecution.label}`}`}
+                  >
+                    {selectedExecution.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />}
+                    <span className="aui-selector-prefix">Executing</span>
+                    <strong>{selectedExecution.mode === 'local' ? 'locally' : `dispatch to ${selectedExecution.label}`}</strong>
+                  </ModelSelector.Trigger>
+                  <ModelSelector.Content searchable={false} className="aui-execution-selector-content">
+                    <ModelSelector.List>
+                      <ModelSelector.Group heading="Execution">
+                        {executionOptions.map((option) => {
+                          const model = {
+                            id: option.id,
+                            name: option.mode === 'local' ? 'Locally' : `Dispatch to ${option.label}`,
+                            description: option.description,
+                            icon: option.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
+                          }
+                          return <ModelSelector.Item key={option.id} model={model} />
+                        })}
+                      </ModelSelector.Group>
+                    </ModelSelector.List>
+                  </ModelSelector.Content>
+                </ModelSelector.Root>
+
+                <ModelSelector.Root
+                  models={modelChoices.map((choice) => choice.model)}
+                  value={selectedModelChoice.id}
+                  onValueChange={(value) => {
+                    setSelectedModelChoiceId(value)
+                    setModelSearchQuery('')
+                  }}
+                >
+                  <ModelSelector.Trigger
+                    variant="ghost"
+                    size="sm"
+                    className="aui-assistant-model-selector-trigger"
+                    aria-label={`Model: ${selectedModelChoice.model.name}`}
+                    title={modelCatalogError ?? undefined}
+                  >
+                    <Cpu aria-hidden />
+                    <span className="aui-selector-prefix">Model</span>
+                    <ModelSelector.Value showEffort={false} />
+                    {modelCatalogLoading ? <LoaderCircle className="aui-spin" aria-label="Loading models" /> : null}
+                  </ModelSelector.Trigger>
+                  <ModelSelector.Content searchable className="aui-assistant-model-selector-content">
+                    <ModelSelector.Search
+                      placeholder="Search available models..."
+                      value={modelSearchQuery}
+                      onValueChange={setModelSearchQuery}
+                    />
+                    <ModelSelector.List>
+                      <ModelSelector.Empty>{modelCatalogLoading ? 'Loading available models…' : 'No available models.'}</ModelSelector.Empty>
+                      {modelChoiceGroups.filter((group) => group.scope === 'default').map((group) => (
+                        <ModelSelector.Group key={group.id} heading={group.heading}>
+                          {group.choices.map((choice) => <ModelSelector.Item key={choice.id} model={choice.model} />)}
+                        </ModelSelector.Group>
+                      ))}
+                      {modelSourceGroups.map((source) => (
+                        <AssistantModelSourceSection
+                          key={source.id}
+                          source={source}
+                          query={modelSearchQuery}
+                        />
+                      ))}
+                    </ModelSelector.List>
+                  </ModelSelector.Content>
+                </ModelSelector.Root>
+              </div>
+              <div className="aui-composer-route-context">
+                <PrivacyBadge privacy={route.item.privacyClass} />
+                {attachments.length > 0 ? <span className="aui-composer-attachment-count">{attachments.length} attached</span> : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="aui-route-details-trigger"
+                  onClick={() => setRouteDetailsOpen(true)}
+                  aria-expanded={routeDetailsOpen}
+                  aria-controls="assistant-route-panel"
+                  aria-label="Open route details"
+                  title="Route details"
+                >
+                  <RouteIcon aria-hidden />
+                </Button>
+              </div>
             </div>
             <label htmlFor="assistant-prompt" className="aui-sr-only">Prompt</label>
             {voiceCaptureStatus === 'listening' ? (
@@ -2018,53 +2486,55 @@ export function AssistantView({
             {attachments.length > 0 ? (
               <ComposerAttachmentPreview attachments={attachments} onRemove={removeAttachment} />
             ) : null}
-            <button
-              type="button"
-              className="aui-secondary-button aui-composer-icon"
-              disabled={!canAttach}
-              aria-label="Attach context"
-              onClick={() => void openAttachmentPicker()}
-            >
-              <Paperclip size={18} aria-hidden />
-            </button>
-            <div className="aui-composer-input-shell" data-voice-active={voiceCaptureStatus === 'listening' ? 'true' : undefined}>
-              <textarea
-                id="assistant-prompt"
-                ref={textAreaRef}
-                value={text}
-                onChange={(event) => setText(event.currentTarget.value)}
-                onKeyDown={onComposerKeyDown}
-                disabled={!canSend && voiceCaptureStatus !== 'listening'}
-                readOnly={voiceCaptureStatus === 'listening'}
-                placeholder={route.disabled ? 'Assistant capability is unavailable' : voiceCaptureStatus === 'listening' ? 'Realtime transcription appears here…' : 'Ask Aurora...'}
-                rows={voiceCaptureStatus === 'listening' ? 2 : 1}
-              />
+            <div className="aui-composer-control-row">
+              <button
+                type="button"
+                className="aui-secondary-button aui-composer-icon"
+                disabled={!canAttach}
+                aria-label="Attach context"
+                onClick={() => void openAttachmentPicker()}
+              >
+                <Paperclip size={18} aria-hidden />
+              </button>
+              <div className="aui-composer-input-shell" data-voice-active={voiceCaptureStatus === 'listening' ? 'true' : undefined}>
+                <textarea
+                  id="assistant-prompt"
+                  ref={textAreaRef}
+                  value={text}
+                  onChange={(event) => setText(event.currentTarget.value)}
+                  onKeyDown={onComposerKeyDown}
+                  disabled={!canSend && voiceCaptureStatus !== 'listening'}
+                  readOnly={voiceCaptureStatus === 'listening'}
+                  placeholder={route.disabled ? 'Assistant capability is unavailable' : voiceCaptureStatus === 'listening' ? 'Realtime transcription appears here…' : 'Ask Aurora...'}
+                  rows={voiceCaptureStatus === 'listening' ? 2 : 1}
+                />
+              </div>
+              <button
+                type="button"
+                className="aui-secondary-button aui-composer-icon"
+                data-voice-state={voiceCaptureStatus === 'listening' ? 'listening' : 'idle'}
+                disabled={voiceCaptureStatus === 'processing'}
+                onClick={(event) => { event.preventDefault(); requestVoiceToggle() }}
+                aria-label={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
+                title={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
+              >
+                {voiceCaptureStatus === 'listening' ? <StopCircle size={18} aria-hidden /> : <Mic size={18} aria-hidden />}
+                <span className="aui-sr-only">{voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}</span>
+              </button>
+              <button
+                type={primaryComposerAction === 'send' ? 'submit' : 'button'}
+                className="aui-composer-send"
+                data-composer-action={primaryComposerAction}
+                disabled={primaryComposerDisabled}
+                aria-label={primaryComposerAriaLabel}
+                onClick={primaryComposerAction === 'send' ? undefined : () => void onPrimaryComposerAction()}
+              >
+                {primaryComposerAction === 'retry' ? <RotateCcw size={17} aria-hidden /> : primaryComposerAction === 'stop' ? <StopCircle size={17} aria-hidden /> : <ArrowUp size={17} aria-hidden />}
+                <span className="aui-button-label">{primaryComposerLabel}</span>
+              </button>
             </div>
-            <button
-              type="button"
-              className="aui-secondary-button aui-composer-icon"
-              data-voice-state={voiceCaptureStatus === 'listening' ? 'listening' : 'idle'}
-              disabled={voiceCaptureStatus === 'processing'}
-              onClick={(event) => { event.preventDefault(); requestVoiceToggle() }}
-              aria-label={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
-              title={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
-            >
-              {voiceCaptureStatus === 'listening' ? <StopCircle size={18} aria-hidden /> : <Mic size={18} aria-hidden />}
-              <span className="aui-sr-only">{voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}</span>
-            </button>
-            <button
-              type={primaryComposerAction === 'send' ? 'submit' : 'button'}
-              className="aui-composer-send"
-              data-composer-action={primaryComposerAction}
-              disabled={primaryComposerDisabled}
-              aria-label={primaryComposerAriaLabel}
-              onClick={primaryComposerAction === 'send' ? undefined : () => void onPrimaryComposerAction()}
-            >
-              {primaryComposerAction === 'retry' ? <RotateCcw size={17} aria-hidden /> : primaryComposerAction === 'stop' ? <StopCircle size={17} aria-hidden /> : <ArrowUp size={17} aria-hidden />}
-              <span className="aui-button-label">{primaryComposerLabel}</span>
-            </button>
             <p className="aui-mobile-composer-note">
-              Aurora routes locally by default. Remote and mesh routes are shown before any data leaves this device.
+              Aurora executes locally by default. Dispatch routes appear before any data leaves this device.
             </p>
           </form>
         </div>
@@ -2202,6 +2672,7 @@ function isAssistantToolCallCard(value: unknown): value is AssistantToolCallCard
   return (
     typeof tool.id === 'string' &&
     typeof tool.name === 'string' &&
+    (tool.sessionId === undefined || tool.sessionId === null || typeof tool.sessionId === 'string') &&
     (tool.status === 'requested' || tool.status === 'running' || tool.status === 'completed' || tool.status === 'failed' || tool.status === 'requires_action') &&
     typeof tool.riskClass === 'string' &&
     typeof tool.target === 'string' &&
@@ -2485,6 +2956,99 @@ export function emptyAssistantSession(): AssistantSessionSnapshot {
   return { sessionId: null, messages: [] }
 }
 
+export function assistantSessionFromPersisted(
+  response: DBGetSessionResponse
+): AssistantSessionSnapshot {
+  return {
+    sessionId: response.session.id,
+    messages: response.messages.map(assistantUiMessageFromPersisted)
+  }
+}
+
+function assistantUiMessageFromPersisted(
+  message: Record<string, unknown>,
+  index: number
+): AssistantUiMessage {
+  const role = message.role === 'assistant' || message.role === 'system' || message.role === 'tool'
+    ? message.role
+    : 'user'
+  const createdAt = typeof message.timestamp === 'string'
+    ? message.timestamp
+    : typeof message.created_at === 'string'
+      ? message.created_at
+      : new Date(0).toISOString()
+  const metadata = message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
+    ? message.metadata as Record<string, unknown>
+    : {}
+  const executionPeerId = metadataStringValue(metadata, 'execution_peer_id')
+    ?? (
+      metadata.dispatch_selector
+      && typeof metadata.dispatch_selector === 'object'
+      && !Array.isArray(metadata.dispatch_selector)
+        ? metadataStringValue(metadata.dispatch_selector as Record<string, unknown>, 'peer_id')
+        : null
+    )
+  const execution = metadataStringValue(metadata, 'execution')
+  const executionPeerName = metadataStringValue(metadata, 'execution_peer_name')
+  return {
+    id: typeof message.id === 'string' ? message.id : `persisted-message-${index}`,
+    role,
+    text: typeof message.content === 'string'
+      ? message.content
+      : typeof message.text === 'string'
+        ? message.text
+        : '',
+    createdAt,
+    status: 'sent',
+    modelLabel: metadataStringValue(metadata, 'model'),
+    providerLabel: metadataStringValue(metadata, 'provider_label') ?? metadataStringValue(metadata, 'provider'),
+    routeLabel: execution === 'local' ? 'Local' : executionPeerName,
+    executionPeerId
+  }
+}
+
+function upsertSessionByModification(
+  sessions: DBSessionRecord[],
+  updated: DBSessionRecord
+): DBSessionRecord[] {
+  return sortSessionsByModification([
+    updated,
+    ...sessions.filter((session) => session.id !== updated.id)
+  ])
+}
+
+function sortSessionsByModification(sessions: DBSessionRecord[]): DBSessionRecord[] {
+  return [...sessions].sort((left, right) => {
+    const activityDelta = sessionModificationTimestamp(right) - sessionModificationTimestamp(left)
+    return activityDelta !== 0 ? activityDelta : left.id.localeCompare(right.id)
+  })
+}
+
+function sessionModificationTimestamp(session: DBSessionRecord): number {
+  const updatedAt = Date.parse(session.updated_at)
+  if (Number.isFinite(updatedAt)) return updatedAt
+  const createdAt = Date.parse(session.created_at)
+  return Number.isFinite(createdAt) ? createdAt : 0
+}
+
+function sessionTypeLabel(type: string): string {
+  const normalized = type.trim()
+  return normalized ? `${normalized[0]?.toUpperCase() ?? ''}${normalized.slice(1)}` : 'Session'
+}
+
+function formatSessionActivity(value: string): string {
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) return 'recently'
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+  if (elapsedSeconds < 60) return 'now'
+  const minutes = Math.floor(elapsedSeconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? 'yesterday' : `${days}d ago`
+}
+
 function defaultAssistantSessionForTransport(transportKind: string): AssistantSessionSnapshot {
   if (transportKind !== 'mock') return emptyAssistantSession()
   const createdAt = '2026-06-19T00:00:00Z'
@@ -2561,10 +3125,13 @@ export function persistAssistantSession(storageKey: string, session: AssistantSe
   window.localStorage.setItem(storageKey, JSON.stringify(session))
 }
 
-export function routePolicyFromRoute(route: RouteAvailability): AssistantRoutePolicy {
-  const provider = route.candidateProviders.find((candidate) => candidate.selectable) ?? route.candidateProviders[0]
+export function routePolicyFromRoute(
+  route: RouteAvailability,
+  provider = route.candidateProviders.find((candidate) => candidate.selectable && !isRemoteRouteCandidate(candidate))
+    ?? route.candidateProviders.find((candidate) => !isRemoteRouteCandidate(candidate))
+): AssistantRoutePolicy {
   return {
-    providerId: provider?.id ?? null,
+    providerId: provider?.providerId ?? provider?.id ?? null,
     peerId: null,
     serviceInstanceId: null,
     routeState: route.state,
@@ -2573,6 +3140,452 @@ export function routePolicyFromRoute(route: RouteAvailability): AssistantRoutePo
     selectorRequired: route.selectorRequired,
     approvalRequired: route.approvalRequired
   }
+}
+
+export function assistantExecutionOptions(route: RouteAvailability): AssistantExecutionOption[] {
+  const options: AssistantExecutionOption[] = [{
+    id: 'local',
+    mode: 'local',
+    label: 'Locally',
+    description: 'Run the assistant here. The model may be local, cloud-backed, or shared by a peer.',
+    routePolicy: routePolicyFromRoute(route)
+  }]
+  const seen = new Set<string>()
+  for (const candidate of route.candidateProviders) {
+    if (!candidate.selectable || !isRemoteRouteCandidate(candidate)) continue
+    const peerId = candidate.peerId ?? peerIdFromProviderIdentity(candidate.providerId ?? candidate.id)
+    const serviceInstanceId = candidate.serviceInstanceId ?? serviceInstanceFromProviderIdentity(candidate.providerId ?? candidate.id)
+    const providerId = candidate.providerId ?? candidate.id
+    const identity = peerId ?? serviceInstanceId ?? providerId
+    if (!identity || seen.has(identity)) continue
+    seen.add(identity)
+    const peerLabel = executionPeerLabel(candidate.nodeName ?? candidate.label, peerId)
+    options.push({
+      id: `dispatch:${identity}`,
+      mode: 'dispatch',
+      label: peerLabel,
+      description: `Dispatch the assistant turn to ${peerLabel}; that peer executes the request.`,
+      routePolicy: {
+        providerId,
+        peerId,
+        serviceInstanceId,
+        routeState: candidate.state,
+        fallbackBehavior: candidate.state === 'degraded' ? candidate.reason : null,
+        privacyClass: route.item.privacyClass,
+        selectorRequired: route.selectorRequired,
+        approvalRequired: route.approvalRequired
+      }
+    })
+  }
+  return options
+}
+
+export function mergeAssistantModelCatalogs(
+  localCatalog: ModelRuntimeCatalogResponse,
+  remoteCatalogs: Array<{
+    catalog: ModelRuntimeCatalogResponse
+    execution: AssistantExecutionOption
+  }>
+): ModelRuntimeCatalogResponse {
+  const providers = new Map(
+    localCatalog.providers.map((provider) => [provider.provider_id, provider])
+  )
+  const unavailable = new Set(localCatalog.unavailable)
+  const internalOnly = new Set(localCatalog.internal_only)
+
+  for (const { catalog, execution } of remoteCatalogs) {
+    for (const provider of catalog.providers) {
+      if (!providerIsRemote(provider) || !providerMatchesExecution(provider, execution)) continue
+      providers.set(provider.provider_id, provider)
+    }
+    for (const providerId of catalog.unavailable) {
+      if (providers.has(providerId)) unavailable.add(providerId)
+    }
+    for (const providerId of catalog.internal_only) {
+      if (providers.has(providerId)) internalOnly.add(providerId)
+    }
+  }
+
+  const mergedProviders = [...providers.values()]
+  return {
+    ...localCatalog,
+    providers: mergedProviders,
+    provider_index: Object.fromEntries(
+      mergedProviders.map((provider) => [
+        provider.provider_id,
+        provider.models?.map((model) => model.model_id) ?? []
+      ])
+    ),
+    unavailable: [...unavailable],
+    internal_only: [...internalOnly]
+  }
+}
+
+export function assistantModelChoices(
+  catalog: ModelRuntimeCatalogResponse | null,
+  execution: AssistantExecutionOption
+): AssistantModelChoice[] {
+  const configuredProvider = catalog
+    ? selectedRuntimeProvider(
+        catalog.providers.find((provider) => provider.provider_id === catalog.selected_provider_id) ?? null,
+        catalog.providers
+      )
+    : null
+  const configuredModel = configuredProvider?.models?.find((model) => model.model_id === configuredProvider.model_id)
+    ?? configuredProvider?.models?.find((model) => model.default)
+  const automatic: AssistantModelChoice = {
+    id: 'automatic',
+    model: {
+      id: 'automatic',
+      name: execution.mode === 'local'
+        ? `${configuredModel?.display_name ?? configuredProvider?.model_id ?? 'Configured default'}${configuredProvider ? ' · configured' : ''}`
+        : 'Peer default',
+      description: execution.mode === 'local'
+        ? configuredProvider
+          ? `Configured default · ${configuredProvider.display_name}`
+          : 'Let Aurora choose from the configured, available model routes.'
+        : `${execution.label} chooses from the models it shares and permits.`,
+      icon: execution.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
+    },
+    provider: null,
+    runtimeModel: null,
+    automatic: true
+  }
+  if (!catalog) return [automatic]
+
+  const choices = catalog.providers
+    .filter((provider) => providerUsableForAssistant(provider))
+    .filter((provider) => execution.mode === 'local' || providerMatchesExecution(provider, execution))
+    .flatMap((provider) => {
+      const models = provider.models?.filter((model) => model.available !== false) ?? []
+      const availableModels = models.length > 0
+        ? models
+        : provider.model_id
+          ? [{
+              model_id: provider.model_id,
+              display_name: provider.model_id,
+              provider_id: provider.provider_id,
+              secrets_redacted: true
+            } satisfies ModelRuntimeModelInfo]
+          : []
+      return availableModels.map((runtimeModel): AssistantModelChoice => {
+        const providerDisplayName = modelProviderDisplayName(provider, execution)
+        const location = providerIsRemote(provider)
+          ? `Shared by ${provider.provider_peer_id ?? provider.display_name}`
+          : provider.provider_type === 'cloud' || /cloud|openai|anthropic|google/i.test(`${provider.provider_kind} ${provider.backend_kind} ${provider.provider_type}`)
+            ? 'Cloud model'
+            : 'Available on this device'
+        const id = assistantModelChoiceId(provider.provider_id, runtimeModel.model_id)
+        return {
+          id,
+          model: {
+            id,
+            name: runtimeModel.display_name || runtimeModel.model_id,
+            description: `${providerDisplayName} · ${location}`,
+            icon: providerIsRemote(provider) ? <Network aria-hidden /> : <Cpu aria-hidden />,
+            keywords: [providerDisplayName, provider.display_name, provider.provider_id, runtimeModel.model_id, location]
+          },
+          provider,
+          runtimeModel,
+          automatic: false
+        }
+      })
+    })
+  return [automatic, ...choices]
+}
+
+export function assistantModelChoiceGroups(
+  choices: AssistantModelChoice[],
+  execution: AssistantExecutionOption
+): AssistantModelChoiceGroup[] {
+  const automatic = choices.filter((choice) => choice.automatic)
+  const localProviders = new Map<string, AssistantModelChoiceGroup>()
+  const peerProviders = new Map<string, AssistantModelChoiceGroup>()
+
+  for (const choice of choices) {
+    if (choice.automatic || !choice.provider) continue
+    const provider = choice.provider
+    const remote = providerIsRemote(provider)
+    const id = remote
+      ? `peer:${provider.provider_peer_id ?? 'remote'}:${provider.provider_id}`
+      : `local:${provider.provider_id}`
+    const target = remote ? peerProviders : localProviders
+    const existing = target.get(id)
+    if (existing) {
+      existing.choices.push(choice)
+      continue
+    }
+    target.set(id, {
+      id,
+      heading: `${modelProviderDisplayName(provider, execution)} · ${modelCountLabel(1)}`,
+      choices: [choice],
+      scope: remote ? 'peer-provider' : 'local-provider'
+    })
+  }
+
+  const groups: AssistantModelChoiceGroup[] = automatic.length > 0
+    ? [{
+        id: 'configured-default',
+        heading: execution.mode === 'local' ? 'Configured default' : `${execution.label} default`,
+        choices: automatic,
+        scope: 'default'
+      }]
+    : []
+  groups.push(...localProviders.values(), ...peerProviders.values())
+  for (const group of groups) {
+    if (group.scope === 'default') continue
+    group.heading = group.heading.replace(/1 model$/, modelCountLabel(group.choices.length))
+  }
+  return groups
+}
+
+export function assistantModelSourceGroups(
+  providerGroups: AssistantModelChoiceGroup[],
+  execution: AssistantExecutionOption,
+  executionOptions: AssistantExecutionOption[] = [execution]
+): AssistantModelSourceGroup[] {
+  const sources = new Map<string, AssistantModelSourceGroup>()
+  for (const group of providerGroups) {
+    if (group.scope === 'default' || group.choices.length === 0) continue
+    const provider = group.choices[0]?.provider
+    if (!provider) continue
+    const remote = providerIsRemote(provider)
+    const peerId = remote
+      ? provider.provider_peer_id ?? peerIdFromProviderIdentity(provider.provider_id) ?? 'remote'
+      : null
+    const peerLabel = remote ? modelProviderPeerLabel(provider, execution, executionOptions) : null
+    const sourceId = remote ? `source:peer:${peerId}` : 'source:local'
+    const existing = sources.get(sourceId)
+    if (existing) {
+      existing.providerGroups.push(group)
+      existing.modelCount += group.choices.length
+      continue
+    }
+    sources.set(sourceId, {
+      id: sourceId,
+      heading: remote
+        ? execution.mode === 'dispatch' ? `Dispatch · ${peerLabel}` : `Shared by ${peerLabel}`
+        : 'This device',
+      description: remote
+        ? execution.mode === 'dispatch'
+          ? `Models ${peerLabel} allows for dispatched assistant execution.`
+          : `Models advertised and permitted by ${peerLabel}.`
+        : 'Models configured on this Aurora device, grouped by provider.',
+      providerGroups: [group],
+      modelCount: group.choices.length,
+      scope: remote ? 'peer' : 'local'
+    })
+  }
+  return [...sources.values()]
+}
+
+function AssistantModelSourceSection({
+  source,
+  query
+}: {
+  source: AssistantModelSourceGroup
+  query: string
+}) {
+  const [open, setOpen] = useState(source.scope === 'local')
+  const searching = query.trim().length > 0
+  const visibleProviders = source.providerGroups.filter((group) =>
+    !searching || group.choices.some((choice) => assistantModelChoiceMatches(choice, query))
+  )
+  if (visibleProviders.length === 0) return null
+  const visibleModelCount = visibleProviders.reduce((total, group) =>
+    total + group.choices.filter((choice) => !searching || assistantModelChoiceMatches(choice, query)).length, 0
+  )
+  return (
+    <div className="aui-model-source-section" data-source-scope={source.scope}>
+      <ModelSelector.Separator className="mx-0" />
+      <Collapsible open={searching || open} onOpenChange={(next) => {
+        if (!searching) setOpen(next)
+      }}>
+        <CollapsibleTrigger type="button" className="aui-model-source-trigger">
+          {source.scope === 'peer' ? <Network aria-hidden /> : <Laptop aria-hidden />}
+          <span className="aui-model-group-copy">
+            <strong>{source.heading}</strong>
+            <small>{source.description}</small>
+          </span>
+          <span className="aui-model-group-count">{modelCountLabel(searching ? visibleModelCount : source.modelCount)}</span>
+          <ChevronDown className="aui-model-group-chevron" aria-hidden />
+        </CollapsibleTrigger>
+        <CollapsibleContent keepMounted className="aui-model-source-content">
+          {visibleProviders.map((group) => (
+            <AssistantModelProviderSection key={group.id} group={group} query={query} />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  )
+}
+
+function AssistantModelProviderSection({
+  group,
+  query
+}: {
+  group: AssistantModelChoiceGroup
+  query: string
+}) {
+  const [open, setOpen] = useState(false)
+  const searching = query.trim().length > 0
+  const visibleChoices = group.choices.filter((choice) =>
+    !searching || assistantModelChoiceMatches(choice, query)
+  )
+  if (visibleChoices.length === 0) return null
+  const provider = visibleChoices[0]?.provider
+  return (
+    <Collapsible
+      open={searching || open}
+      onOpenChange={(next) => {
+        if (!searching) setOpen(next)
+      }}
+      className="aui-model-provider-section"
+    >
+      <CollapsibleTrigger type="button" className="aui-model-provider-trigger">
+        {providerIsRemote(provider!) ? <Network aria-hidden /> : <Cpu aria-hidden />}
+        <span>{group.heading.replace(/\s+·\s+\d+\s+models?$/, '')}</span>
+        <span className="aui-model-group-count">{modelCountLabel(visibleChoices.length)}</span>
+        <ChevronDown className="aui-model-group-chevron" aria-hidden />
+      </CollapsibleTrigger>
+      <CollapsibleContent keepMounted className="aui-model-provider-content">
+        <ModelSelector.Group>
+          {visibleChoices.map((choice) => <ModelSelector.Item key={choice.id} model={choice.model} />)}
+        </ModelSelector.Group>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function assistantModelChoiceMatches(choice: AssistantModelChoice, query: string): boolean {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return [
+    choice.model.id,
+    choice.model.name,
+    choice.model.description ?? '',
+    ...(choice.model.keywords ?? [])
+  ].some((value) => value.toLowerCase().includes(normalized))
+}
+
+export function defaultAssistantModelChoiceId(
+  choices: AssistantModelChoice[],
+  catalog: ModelRuntimeCatalogResponse | null,
+  execution: AssistantExecutionOption
+): string {
+  if (execution.mode === 'dispatch' || !catalog) return 'automatic'
+  const selectedProvider = selectedRuntimeProvider(
+    catalog.providers.find((provider) => provider.provider_id === catalog.selected_provider_id) ?? null,
+    catalog.providers
+  )
+  if (!selectedProvider) return 'automatic'
+  const selectedModelId = selectedProvider.default_model_id
+    ?? selectedProvider.models?.find((model) => model.default)?.model_id
+    ?? selectedProvider.model_id
+  if (!selectedModelId) return 'automatic'
+  const id = assistantModelChoiceId(selectedProvider.provider_id, selectedModelId)
+  return choices.some((choice) => choice.id === id) ? id : 'automatic'
+}
+
+export function assistantInferencePolicy(
+  choice: AssistantModelChoice,
+  route: RouteAvailability
+): AssistantInferencePolicy | null {
+  if (choice.automatic || !choice.provider || !choice.runtimeModel) return null
+  const provider = choice.provider
+  const remote = providerIsRemote(provider)
+  return {
+    providerId: provider.provider_id,
+    peerId: remote ? provider.provider_peer_id ?? peerIdFromProviderIdentity(provider.provider_id) : null,
+    serviceInstanceId: remote
+      ? provider.provider_service_instance_id ?? serviceInstanceFromProviderIdentity(provider.provider_id)
+      : null,
+    runtimeProviderId: remote ? null : provider.provider_id,
+    modelId: choice.runtimeModel.model_id,
+    privacyClass: route.item.privacyClass,
+    selectorRequired: route.selectorRequired,
+    approvalRequired: route.approvalRequired,
+    dataLeavesDevice: remote || provider.provider_type === 'cloud'
+  }
+}
+
+function assistantModelChoiceId(providerId: string, modelId: string): string {
+  return `model:${encodeURIComponent(providerId)}:${encodeURIComponent(modelId)}`
+}
+
+function providerUsableForAssistant(provider: ModelRuntimeProviderInfo): boolean {
+  if (!provider.enabled) return false
+  return !/unavailable|misconfigured|offline|error|disabled/i.test(provider.health)
+}
+
+function providerIsRemote(provider: ModelRuntimeProviderInfo): boolean {
+  return /mesh|remote|peer/i.test(`${provider.provider_kind ?? ''}`)
+    || /^(?:mesh|remote):/i.test(provider.provider_id)
+}
+
+function modelProviderDisplayName(
+  provider: ModelRuntimeProviderInfo,
+  execution: AssistantExecutionOption
+): string {
+  if (execution.mode !== 'dispatch') return provider.display_name
+  const peerId = execution.routePolicy.peerId
+  return peerId
+    ? provider.display_name.replace(new RegExp(`\\s*\\(${escapeRegExp(peerId)}\\)\\s*$`), '')
+    : provider.display_name
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function providerMatchesExecution(
+  provider: ModelRuntimeProviderInfo,
+  execution: AssistantExecutionOption
+): boolean {
+  const peerId = execution.routePolicy.peerId
+  const serviceInstanceId = execution.routePolicy.serviceInstanceId
+  if (!providerIsRemote(provider)) return false
+  if (peerId && provider.provider_peer_id === peerId) return true
+  if (serviceInstanceId && provider.provider_service_instance_id === serviceInstanceId) return true
+  const evidence = `${provider.provider_id} ${provider.provider_peer_id ?? ''} ${provider.provider_service_instance_id ?? ''}`
+  return Boolean(peerId && evidence.includes(peerId))
+}
+
+function modelProviderPeerLabel(
+  provider: ModelRuntimeProviderInfo,
+  execution: AssistantExecutionOption,
+  executionOptions: AssistantExecutionOption[]
+): string {
+  if (execution.mode === 'dispatch') return execution.label
+  const peerId = provider.provider_peer_id ?? peerIdFromProviderIdentity(provider.provider_id)
+  const option = executionOptions.find((candidate) =>
+    candidate.mode === 'dispatch' && candidate.routePolicy.peerId === peerId
+  )
+  return option?.label ?? peerId ?? 'Peer'
+}
+
+function modelCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'model' : 'models'}`
+}
+
+function isRemoteRouteCandidate(candidate: RouteAvailability['candidateProviders'][number]): boolean {
+  return /mesh|remote/i.test(`${candidate.providerKind ?? ''} ${candidate.providerId ?? ''} ${candidate.id} ${candidate.serviceInstanceId ?? ''} ${candidate.label}`)
+}
+
+function peerIdFromProviderIdentity(providerId: string): string | null {
+  const match = /^(?:remote|mesh):([^:]+):/i.exec(providerId)
+  return match?.[1] ?? null
+}
+
+function serviceInstanceFromProviderIdentity(providerId: string): string | null {
+  const match = /^(?:remote|mesh):([^:]+):([^:]+)/i.exec(providerId)
+  return match ? `${match[0].startsWith('mesh:') ? 'mesh' : 'remote'}:${match[1]}:${match[2]}` : null
+}
+
+function executionPeerLabel(label: string, peerId: string | null): string {
+  const providerLabel = label.split(' / ')[0]?.trim() ?? ''
+  const readable = providerLabel.replace(/^(?:remote|mesh):/i, '').replace(/[:/_-]+Orchestrator.*$/i, '')
+  return readable || peerId || 'Peer'
 }
 
 export function assistantRemotePrivacyWarning(route: RouteAvailability): string | null {
@@ -2694,11 +3707,14 @@ function base64ToUint8Array(value: string): Uint8Array {
 
 export function applyAssistantTerminalUpdate(message: AssistantUiMessage, update: AssistantStreamUpdate): AssistantUiMessage {
   if (message.status === 'cancelled') return message
+  const terminalText = update.text.trim() || !hasSubstantiveAssistantText(message)
+    ? update.text
+    : message.text
   return {
     ...message,
     id: update.messageId ?? message.id,
     role: 'assistant',
-    text: update.text,
+    text: terminalText,
     createdAt: message.createdAt,
     status: 'sent',
     modelLabel: update.modelLabel ?? message.modelLabel,
@@ -2763,6 +3779,14 @@ export function isAuthoritativeVoiceTranscriptEvent(event: Pick<VoiceRuntimeEven
   // gating. Treating both as chat finals creates duplicate voice turns.
   if (topic === 'Transcription.Result') return false
   return true
+}
+
+export function isAuthoritativeCoordinatorSessionStart(
+  event: Pick<VoiceRuntimeEvent, 'kind' | 'topic' | 'sourcePeerId' | 'targetPeerId' | 'targetDeviceId'>
+): boolean {
+  return event.kind === 'session_started'
+    && event.topic === 'STTCoordinator.SessionStarted'
+    && isLocalVoiceEventSource(event)
 }
 
 function transcriptWords(text: string): string[] {
@@ -3295,7 +4319,9 @@ function shouldApplyVoiceSessionEndEvent(
   return isLocalVoiceEventSource(event)
 }
 
-function isLocalVoiceEventSource(event: VoiceRuntimeEvent): boolean {
+function isLocalVoiceEventSource(
+  event: Pick<VoiceRuntimeEvent, 'sourcePeerId' | 'targetPeerId' | 'targetDeviceId'>
+): boolean {
   const provenance = [event.sourcePeerId, event.targetPeerId, event.targetDeviceId].filter(Boolean)
   if (provenance.length === 0) return true
   return provenance.every((value) => /^(local|localhost|internal|self|system|gateway|aurora)$/i.test(value ?? ''))
@@ -3469,34 +4495,48 @@ function formatBytes(bytes: number): string {
 
 function ConversationRail({
   session,
+  sessions,
   route,
   transportKind,
+  loading,
+  error,
+  disabled,
+  onSelectConversation,
   onNewConversation
 }: {
   session: AssistantSessionSnapshot
+  sessions: DBSessionRecord[]
   route: RouteAvailability
   transportKind: string
+  loading: boolean
+  error: string | null
+  disabled: boolean
+  onSelectConversation: (sessionId: string) => void
   onNewConversation: () => void
 }) {
   const [search, setSearch] = useState('')
   const normalizedSearch = search.trim().toLowerCase()
-  const rows = assistantConversationRows(session, route, transportKind)
+  const rows = assistantConversationRows(session, sessions, transportKind)
     .filter((row) => normalizedSearch.length === 0 || `${row.title} ${row.route}`.toLowerCase().includes(normalizedSearch))
   return (
     <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
       <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2><span className="aui-sr-only">Conversation rail</span><div className="aui-sr-only" aria-label="Assistant local remote mesh route chips"><span>Search recent conversations</span><span>Local {route.providerLabel}</span><span>Remote route pending</span><span>Mesh route pending</span></div>
       <header>
-        <Button type="button" variant="ghost" size="sm" onClick={onNewConversation} aria-label="New conversation" className="aui-thread-new-button">
+        <Button type="button" variant="ghost" size="sm" onClick={onNewConversation} disabled={disabled || loading || transportKind === 'mesh'} aria-label="New conversation" className="aui-thread-new-button">
           <MessageSquarePlus aria-hidden />
           <span>New conversation</span>
         </Button>
       </header>
       <ul aria-label="Assistant conversation list">
-        {rows.length === 0 ? (
+        {error ? (
+          <li className="empty" role="status">{error}</li>
+        ) : loading && rows.length === 0 ? (
+          <li className="empty">Loading conversations…</li>
+        ) : rows.length === 0 ? (
           <li className="empty">No matching conversations.</li>
         ) : rows.map((row) => (
           <li key={row.id} className={row.active ? 'active' : undefined}>
-            <Button type="button" variant="ghost" aria-current={row.active ? 'true' : undefined} className="aui-thread-row-button">
+            <Button type="button" variant="ghost" aria-current={row.active ? 'true' : undefined} disabled={disabled || loading} onClick={() => onSelectConversation(row.id)} className="aui-thread-row-button">
               <strong>{row.title}</strong>
               <span><EvidenceBadge label={row.route} /> <time>{row.updated}</time></span>
             </Button>
@@ -3508,7 +4548,7 @@ function ConversationRail({
 }
 
 
-function assistantConversationRows(session: AssistantSessionSnapshot, route: RouteAvailability, transportKind: string): Array<{ id: string; title: string; route: string; updated: string; active: boolean }> {
+function assistantConversationRows(session: AssistantSessionSnapshot, sessions: DBSessionRecord[], transportKind: string): Array<{ id: string; title: string; route: string; updated: string; active: boolean }> {
   if (transportKind === 'mock') {
     return [
       { id: 'draft-launch', title: 'Draft launch announcement', route: 'Local', updated: '2m ago', active: true },
@@ -3517,13 +4557,13 @@ function assistantConversationRows(session: AssistantSessionSnapshot, route: Rou
       { id: 'journal', title: 'Personal journal reflection', route: 'Local', updated: 'yesterday', active: false }
     ]
   }
-  return [{
-    id: session.sessionId ?? 'current-thread',
-    title: session.sessionId ?? 'Current thread',
-    route: routeStateShortLabel(route.state),
-    updated: `${session.messages.length} turns`,
-    active: true
-  }]
+  return sessions.map((record) => ({
+    id: record.id,
+    title: record.title?.trim() || 'New chat',
+    route: sessionTypeLabel(record.type),
+    updated: `${formatSessionActivity(record.updated_at)} · ${record.message_count} ${record.message_count === 1 ? 'message' : 'messages'}`,
+    active: record.id === session.sessionId
+  }))
 }
 
 function ComposerAttachmentPreview({ attachments, onRemove }: { attachments: AssistantAttachmentDraft[]; onRemove: (id: string) => void }) {
@@ -3568,16 +4608,18 @@ function ChatBubble({
   message,
   onReadAloud,
   onResolveToolApproval,
-  speakingMessageId
+  speakingMessageId,
+  executionPeerLabels
 }: {
   message: AssistantUiMessage
   onReadAloud?: (message: AssistantUiMessage) => void
   onResolveToolApproval?: ((tool: AssistantToolCallCard, approve: boolean, grantScope: AssistantApprovalGrantScope) => void) | undefined
   speakingMessageId?: string | null
+  executionPeerLabels?: ReadonlyMap<string, string>
 }) {
   const [copied, setCopied] = useState(false)
   const assistant = message.role === 'assistant'
-  const runtimeLabel = assistantMessageRuntimeLabel(message)
+  const runtimeLabel = assistantMessageRuntimeLabel(message, executionPeerLabels)
   const align = message.role === 'user' ? 'end' : 'start'
   const variant = message.role === 'user' ? 'tinted' : assistant ? 'outline' : 'muted'
   const isSpeaking = speakingMessageId === message.id
@@ -3641,11 +4683,15 @@ function ChatBubble({
   )
 }
 
-function assistantMessageRuntimeLabel(message: AssistantUiMessage): string {
-  const provider = message.providerLabel || message.routeLabel || null
+export function assistantMessageRuntimeLabel(
+  message: AssistantUiMessage,
+  executionPeerLabels: ReadonlyMap<string, string> = new Map()
+): string {
+  const execution = message.routeLabel
+    || (message.executionPeerId ? executionPeerLabels.get(message.executionPeerId) ?? message.executionPeerId : null)
+    || 'Local'
   const model = message.modelLabel || null
-  if (provider && model && provider !== model) return `${provider} · ${model}`
-  return model || provider || message.status
+  return model && execution !== model ? `${execution} · ${model}` : execution
 }
 
 function assistantRouteModeLabel(route: RouteAvailability): string {
@@ -3798,6 +4844,7 @@ function assistantToolCallFromUpdate(update: AssistantStreamUpdate): AssistantTo
   return {
     id: tool?.id ?? update.eventId ?? `${name}-${Date.now()}`,
     name,
+    sessionId: update.sessionId,
     status,
     riskClass: tool?.riskClass ?? metadataStringValue(metadata, 'risk_class') ?? metadataStringValue(metadata, 'riskClass') ?? 'backend-evaluated',
     target: tool?.target ?? metadataStringValue(metadata, 'target') ?? metadataStringValue(metadata, 'provider') ?? 'Aurora tool provider',
@@ -3839,6 +4886,7 @@ function mergeAssistantToolCall(current: AssistantToolCallCard, next: AssistantT
   return {
     ...current,
     ...next,
+    sessionId: next.sessionId ?? current.sessionId ?? null,
     riskClass: next.riskClass || current.riskClass,
     target: next.target || current.target,
     summary: next.summary || current.summary,

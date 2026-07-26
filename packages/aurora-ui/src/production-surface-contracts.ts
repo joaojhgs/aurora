@@ -380,7 +380,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
       routeOracle('pairing', ['Pairing queue'], ['Pairing queue controls'])
     ],
     mockReferenceFiles: ['components/aurora/mesh/mesh-view.tsx'],
-    mockUxAnchors: ['Mesh &amp; Peers', 'Connected peers', 'Pending requests', 'Pair new device'],
+    mockUxAnchors: ['Mesh &amp; Peers', 'Connected peers', 'Pending requests', 'Connect peer'],
     componentFiles: ['mesh-peers-view.tsx', 'pairing-queue-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [

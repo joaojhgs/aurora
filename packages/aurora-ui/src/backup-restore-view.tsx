@@ -193,7 +193,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
     <div className="flex h-full flex-col" aria-labelledby="admin-backups-title">
       <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
-          <h1 id="admin-backups-title" className="text-xl font-semibold tracking-tight">Backups</h1>
+          <h1 id="admin-backups-title" className="text-xl font-semibold tracking-tight">Backups & Restore</h1>
           <p className="mt-1 text-sm text-muted-foreground">Snapshots, verification and restore. Restore and rollback require admin confirmation.</p>
         </div>
         <Button

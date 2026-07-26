@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AUTH_METHODS,
   AuroraError,
+  GATEWAY_METHODS,
   routePath,
   type AuroraClient,
   type AuthPairingExchangeResponse,
@@ -12,9 +13,10 @@ import {
   type JsonObject,
   type ListPendingPairingsResponse,
   type PendingPairingEntry,
-  type TokenRevokeResponse
+  type TokenRevokeResponse,
+  type WebRTCDiagnosticsResponse
 } from '@aurora/client'
-import { Alert, AlertDescription } from '#components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Input } from '#components/ui/input'
 import { Label } from '#components/ui/label'
 import { Textarea } from '#components/ui/textarea'
@@ -36,6 +38,9 @@ export type PairingQueueLoadState = 'loading' | 'ready' | 'error'
 export type PairingOperationStatus = 'idle' | 'pending' | 'success' | 'error'
 export type PairingAdminActionKind = 'create' | 'approve' | 'deny' | 'exchange' | 'revoke-token'
 
+const PAIRING_QUEUE_REFRESH_INTERVAL_MS = 3_000
+const PAIRING_DIAGNOSTICS_TIMEOUT_MS = 2_500
+
 const PAIRING_ADMIN_ACTION_METHODS = new Set<string>([
   AUTH_METHODS.pairingStart,
   AUTH_METHODS.pairingApprove,
@@ -54,6 +59,15 @@ export interface PairingQueueModel {
   secretsRedacted: boolean
   disabledReason: string | null
   error: string | null
+  outgoingPeers: PairingOutgoingPeer[]
+  meshPairingManaged: boolean
+}
+
+export interface PairingOutgoingPeer {
+  peerId: string
+  nodeName: string
+  pairingSessionId?: string
+  verificationCode?: string
 }
 
 export interface PairingCredentialModel {
@@ -82,6 +96,7 @@ export interface PairingOperationModel {
 export interface PairingQueueModelInput {
   route: RouteAvailability
   response?: ListPendingPairingsResponse | null
+  diagnostics?: WebRTCDiagnosticsResponse | null
   loadState?: PairingQueueLoadState
   error?: unknown
 }
@@ -124,6 +139,7 @@ export interface PairingRevokeInput {
 export function PairingQueueView({ client, route }: PairingQueueViewProps) {
   const [includeNonPending, setIncludeNonPending] = useState(false)
   const [response, setResponse] = useState<ListPendingPairingsResponse | null>(null)
+  const [diagnostics, setDiagnostics] = useState<WebRTCDiagnosticsResponse | null>(null)
   const [loadState, setLoadState] = useState<PairingQueueLoadState>(route.disabled ? 'ready' : 'loading')
   const [loadError, setLoadError] = useState<unknown>(null)
   const [adminReason, setAdminReason] = useState('Review pending device or peer pairing request')
@@ -142,16 +158,30 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
   const [copiedRequestId, setCopiedRequestId] = useState<string | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
 
-  const loadQueue = useCallback(async () => {
+  const loadQueue = useCallback(async (background = false) => {
     if (route.disabled) {
       setLoadState('ready')
       return
     }
-    setLoadState('loading')
-    setLoadError(null)
-    const result = await client.authApi.listPendingPairings({ include_non_pending: includeNonPending })
+    if (!background) {
+      setLoadState('loading')
+      setLoadError(null)
+    }
+    const [result, diagnosticsResult] = await Promise.all([
+      client.authApi.listPendingPairings({ include_non_pending: includeNonPending }),
+      client.requestResult<WebRTCDiagnosticsResponse, JsonObject>(
+        GATEWAY_METHODS.getWebRTCDiagnostics,
+        {},
+        {
+          path: routePath('Gateway', 'GetWebRTCDiagnostics'),
+          timeoutMs: PAIRING_DIAGNOSTICS_TIMEOUT_MS
+        }
+      )
+    ])
+    setDiagnostics(diagnosticsResult.ok ? diagnosticsResult.data : null)
     if (result.ok) {
       setResponse(result.data)
+      setLoadError(null)
       setLoadState('ready')
       return
     }
@@ -163,9 +193,22 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     void loadQueue()
   }, [loadQueue])
 
+  useEffect(() => {
+    if (route.disabled) return
+    let refreshPending = false
+    const interval = window.setInterval(() => {
+      if (refreshPending) return
+      refreshPending = true
+      void loadQueue(true).finally(() => {
+        refreshPending = false
+      })
+    }, PAIRING_QUEUE_REFRESH_INTERVAL_MS)
+    return () => window.clearInterval(interval)
+  }, [loadQueue, route.disabled])
+
   const model = useMemo(
-    () => buildPairingQueueModel({ route, response, loadState, error: loadError }),
-    [loadError, loadState, response, route]
+    () => buildPairingQueueModel({ route, response, diagnostics, loadState, error: loadError }),
+    [diagnostics, loadError, loadState, response, route]
   )
 
   const submitPairingAction = useCallback(
@@ -276,7 +319,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     }
   }, [adminReason, client.admin, exchangeResult?.tokenId, reauthConfirmed])
 
-  const copySecret = useCallback(async (value: string, requestId: string) => {
+  const copyPairingValue = useCallback(async (value: string, requestId: string) => {
     setCopyError(null)
     setCopiedRequestId(null)
     if (!value) {
@@ -325,7 +368,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       copiedRequestId={copiedRequestId}
       copyError={copyError}
       onRefresh={loadQueue}
-      onCopyValue={copySecret}
+      onCopyValue={copyPairingValue}
       onCreate={createPairingCredential}
       onExchange={exchangePairingCode}
       onRevokeExchangedToken={revokeExchangedToken}
@@ -365,7 +408,6 @@ export interface PairingQueueSurfaceProps {
   copyError?: string | null
   onRefresh?: () => void
   onCopyValue?: (value: string, id: string) => void
-  onCopyCode?: (entry: PendingPairingEntry) => void
   onCreate?: () => void
   onExchange?: () => void
   onRevokeExchangedToken?: () => void
@@ -403,7 +445,6 @@ export function PairingQueueSurface({
   copyError = null,
   onRefresh,
   onCopyValue,
-  onCopyCode,
   onCreate,
   onExchange,
   onRevokeExchangedToken,
@@ -434,10 +475,10 @@ export function PairingQueueSurface({
     { key: 'expiry', header: 'Expiry state', render: (entry) => (isExpired(entry.expires_at) ? 'expired' : 'active') },
     { key: 'expires', header: 'Expires', hideAt: 'lg', render: (entry) => formatDate(entry.expires_at) },
     {
-      key: 'code',
-      header: 'Pairing code',
+      key: 'verification',
+      header: 'Verification code',
       hideAt: 'lg',
-      render: (entry) => <span className="font-mono text-xs">{redactedCodeLabel(entry.code)}</span>
+      render: (entry) => <VerificationCode value={entry.verification_code} />
     },
     {
       key: 'actions',
@@ -446,16 +487,11 @@ export function PairingQueueSurface({
       render: (entry) => (
         <div className="flex flex-wrap justify-end gap-1.5">
           <Button
-            variant="ghost"
-            disabled={actionDisabled || entry.status !== 'pending' || !entry.code || (!onCopyValue && !onCopyCode)}
-            onClick={() => (onCopyCode ? onCopyCode(entry) : onCopyValue?.(entry.code, entry.request_id))}
-          >
-            Copy code
-          </Button>
-          <Button
             variant="primary"
-            disabled={actionDisabled || entry.status !== 'pending'}
-            disabledReason={reauthReason}
+            disabled={actionDisabled || entry.status !== 'pending' || (model.meshPairingManaged && !entry.verification_code)}
+            disabledReason={model.meshPairingManaged && !entry.verification_code
+              ? 'A matching verification code is required before approval.'
+              : reauthReason}
             onClick={() => onApprove?.(entry)}
           >
             {pendingAction === `${entry.request_id}:approve` ? 'Submitting AdminAction' : 'AdminAction approve'}
@@ -478,7 +514,9 @@ export function PairingQueueSurface({
       <PageHeader
         eyebrow="Admin"
         title="Pairing queue"
-        description="Review pending device and peer pairing requests, and mint or exchange pairing codes through audited AdminAction."
+        description={model.meshPairingManaged
+          ? 'Review bilateral mesh pairing requests. Both Auroras create an incoming request automatically after signaling connects.'
+          : 'Review pending device and peer pairing requests, and mint or exchange pairing codes through audited AdminAction.'}
         badges={<StatusBadge state={route.state} />}
         badgesLabel="Pairing route status"
         actions={
@@ -503,7 +541,11 @@ export function PairingQueueSurface({
       />
 
       <Card title="AdminAction options" ariaLabel="Pairing AdminAction options">
-        <p className="text-sm text-muted-foreground">Approve, deny, create, and exchange all route through Aurora AdminAction; provide a reason and confirm the in-session unlock before submitting.</p>
+        <p className="text-sm text-muted-foreground">
+          {model.meshPairingManaged
+            ? 'Mesh pairing creates requests automatically. Compare the verification code on both Auroras, then approve or deny independently on this Aurora after confirming the in-session unlock.'
+            : 'Approve, deny, create, and exchange all route through Aurora AdminAction; provide a reason and confirm the in-session unlock before submitting.'}
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="pairing-reason">AdminAction reason</Label>
@@ -549,8 +591,15 @@ export function PairingQueueSurface({
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card title="Create pairing code" icon={<KeyRound size={18} aria-hidden />} ariaLabel="Create pairing code">
+      {model.meshPairingManaged ? (
+        <Alert role="note">
+          <AlertDescription>
+            <strong>Mesh pairing creates requests automatically.</strong> Once both Auroras connect to the same signaling room, both Auroras create an incoming request automatically. Confirm that the verification code matches on both Auroras, then approve independently on each Aurora. Manual Create pairing code and Exchange controls are disabled while mesh mode is active.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card title="Create pairing code" icon={<KeyRound size={18} aria-hidden />} ariaLabel="Create pairing code">
           <p className="text-sm text-muted-foreground">
             Uses <code className="font-mono text-xs">{AUTH_METHODS.pairingStart}</code>. QR image is unavailable until a renderer or backend QR contract exists; the deep-link payload is provided for native handoff.
           </p>
@@ -596,9 +645,9 @@ export function PairingQueueSurface({
               </div>
             </section>
           ) : null}
-        </Card>
+          </Card>
 
-        <Card title="Exchange and revoke" icon={<RotateCcw size={18} aria-hidden />} ariaLabel="Pairing exchange and revoke">
+          <Card title="Exchange and revoke" icon={<RotateCcw size={18} aria-hidden />} ariaLabel="Pairing exchange and revoke">
           <p className="text-sm text-muted-foreground">
             Exchange uses <code className="font-mono text-xs">{AUTH_METHODS.pairingExchange}</code>. Exchanged tokens revoke through <code className="font-mono text-xs">{AUTH_METHODS.revokeToken}</code> when the backend returns a token id.
           </p>
@@ -640,8 +689,9 @@ export function PairingQueueSurface({
               />
             </section>
           ) : null}
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
 
       {operation.message ? (
         <Alert variant={operation.status === 'error' ? 'destructive' : 'default'} role={operation.status === 'error' ? 'alert' : 'status'}>
@@ -661,7 +711,7 @@ export function PairingQueueSurface({
       ) : null}
       {copiedRequestId ? (
         <p className="text-sm text-muted-foreground" role="status">
-          Pairing code copied from controlled Admin pairing surface; secrets stay scoped to clipboard and are not logged.
+          Pairing value copied from the controlled Admin pairing surface; it is not logged.
         </p>
       ) : null}
       {model.disabledReason ? (
@@ -672,6 +722,24 @@ export function PairingQueueSurface({
       {model.error ? (
         <Alert variant="destructive" role="alert">
           <AlertDescription>{model.error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {model.outgoingPeers.length > 0 ? (
+        <Alert role="status">
+          <AlertTitle>Outgoing pairing is active</AlertTitle>
+          <AlertDescription>
+            Pairing request sent to <strong>{outgoingPeerLabels(model.outgoingPeers)}</strong>. Both Auroras create an incoming request automatically. Compare the verification code shown on both devices, then approve independently on each Aurora.
+            {model.outgoingPeers.some((peer) => peer.verificationCode) ? (
+              <span className="mt-2 flex flex-col gap-1">
+                {model.outgoingPeers.map((peer) => (
+                  <span key={peer.pairingSessionId || peer.peerId}>
+                    {peer.nodeName}: <VerificationCode value={peer.verificationCode} />
+                  </span>
+                ))}
+              </span>
+            ) : null}
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -688,6 +756,8 @@ export function PairingQueueSurface({
                   ? <p>{model.disabledReason}</p>
                   : model.error
                     ? <p>{model.error}</p>
+                    : model.outgoingPeers.length > 0
+                      ? <p>Outgoing pairing is active; Aurora is negotiating the matching incoming request.</p>
                     : <p>No pending device or peer pairing requests were reported by Auth.</p>}
             </div>
           }
@@ -700,9 +770,15 @@ export function PairingQueueSurface({
 export function buildPairingQueueModel({
   route,
   response = null,
+  diagnostics = null,
   loadState = 'ready',
   error = null
 }: PairingQueueModelInput): PairingQueueModel {
+  // Diagnostics are transient during startup and outages.  Failing open here
+  // made the legacy manual bearer-code controls reappear exactly when the mesh
+  // security state was unknown.  Only an explicit non-mesh diagnostic may
+  // expose that separate device-pairing workflow.
+  const meshPairingManaged = diagnostics?.mesh_enabled !== false
   if (route.disabled) {
     return {
       state: route.state,
@@ -713,7 +789,9 @@ export function buildPairingQueueModel({
       expiredCount: 0,
       secretsRedacted: true,
       disabledReason: `Capability unavailable: ${presentableSignal(route.explanation)}`,
-      error: null
+      error: null,
+      outgoingPeers: [],
+      meshPairingManaged
     }
   }
   if (loadState === 'loading') {
@@ -726,7 +804,9 @@ export function buildPairingQueueModel({
       expiredCount: 0,
       secretsRedacted: true,
       disabledReason: null,
-      error: null
+      error: null,
+      outgoingPeers: [],
+      meshPairingManaged
     }
   }
   if (loadState === 'error') {
@@ -742,25 +822,53 @@ export function buildPairingQueueModel({
       expiredCount: 0,
       secretsRedacted: true,
       disabledReason: null,
-      error: pairingErrorMessage(error)
+      error: pairingErrorMessage(error),
+      outgoingPeers: [],
+      meshPairingManaged
     }
   }
 
   const entries = response?.pairings ?? []
   const expiredCount = response?.expired_count ?? entries.filter((entry) => pairingState(entry) === 'stale').length
+  const outgoingPeers = buildOutgoingPairingPeers(entries, diagnostics)
   return {
-    state: entries.length > 0 ? 'pending' : route.state,
+    state: entries.length > 0 || outgoingPeers.length > 0 ? 'pending' : route.state,
     description: entries.length > 0
       ? 'Auth reports pending device or peer pairing requests that require explicit review.'
-      : 'Auth reports no pending device or peer pairing requests.',
-    evidence: `${routeEvidence(route)}; total=${response?.total ?? entries.length}; expired=${expiredCount}; secrets_redacted=${response?.secrets_redacted ?? true}`,
+      : outgoingPeers.length > 0
+        ? 'Gateway reports an active bilateral pairing session.'
+        : 'Auth reports no pending device or peer pairing requests.',
+    evidence: `${routeEvidence(route)}; total=${response?.total ?? entries.length}; expired=${expiredCount}; outgoing=${outgoingPeers.length}; secrets_redacted=${response?.secrets_redacted ?? true}`,
     entries,
     total: response?.total ?? entries.length,
     expiredCount,
     secretsRedacted: response?.secrets_redacted ?? true,
     disabledReason: null,
-    error: null
+    error: null,
+    outgoingPeers,
+    meshPairingManaged
   }
+}
+
+export function buildOutgoingPairingPeers(
+  entries: PendingPairingEntry[],
+  diagnostics: WebRTCDiagnosticsResponse | null
+): PairingOutgoingPeer[] {
+  const hasIncomingRequest = entries.some((entry) => entry.status === 'pending' && !isExpired(entry.expires_at))
+  if (hasIncomingRequest) return []
+
+  const peers = new Map<string, PairingOutgoingPeer>()
+  for (const peer of diagnostics?.peers ?? []) {
+    if (!peer.pairing_active || peer.connection_state.toLowerCase() !== 'connected') continue
+    const peerId = peer.stable_peer_id || peer.signaling_peer_id
+    peers.set(peerId, {
+      peerId,
+      nodeName: peer.node_name.trim() || peerId,
+      ...(peer.pairing_session_id ? { pairingSessionId: peer.pairing_session_id } : {}),
+      ...(peer.verification_code ? { verificationCode: peer.verification_code } : {})
+    })
+  }
+  return [...peers.values()]
 }
 
 export function parsePermissionList(value: string): string[] | null {
@@ -922,8 +1030,27 @@ function peerLabel(entry: PendingPairingEntry): string {
   return 'Local device pairing'
 }
 
-function redactedCodeLabel(value: string): string {
-  return value ? 'redacted by UI' : 'not reported'
+function outgoingPeerLabels(peers: PairingOutgoingPeer[]): string {
+  return peers.map((peer) => peer.nodeName).join(', ')
+}
+
+function VerificationCode({ value }: { value: string | null | undefined }) {
+  const normalized = normalizeVerificationCode(value)
+  if (!normalized) return <span className="text-muted-foreground">not reported</span>
+  return (
+    <code className="font-mono text-xs tracking-[0.12em]" aria-label={`Verification code ${normalized}`}>
+      {formatVerificationCode(normalized)}
+    </code>
+  )
+}
+
+function normalizeVerificationCode(value?: string | null): string {
+  return value?.trim().replace(/[\s-]+/g, '').toUpperCase() ?? ''
+}
+
+function formatVerificationCode(value: string): string {
+  if (value.length <= 4) return value
+  return value.match(/.{1,4}/g)?.join(' ') ?? value
 }
 
 function affectedResourcesFor(entry: PendingPairingEntry): string[] {

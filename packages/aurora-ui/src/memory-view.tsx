@@ -248,6 +248,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
       <Card flush ariaLabel="Memory list">
         <form className="flex items-center gap-2 border-b border-border px-4 py-3" onSubmit={onSubmit}>
           <Search size={15} aria-hidden className="shrink-0 text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground">Search conversations</span>
           <Input
             id="memory-query"
             value={query}

@@ -58,6 +58,12 @@ function renderToolsPanel() {
       route={toolsRoute()}
       initialTools={tools}
       initialSchedulerJobs={schedulerJobs}
+      initialManagementState={{
+        sourceSummaries: [],
+        sourceDetails: {},
+        managementLoading: false,
+        sharingLoading: false,
+      }}
     />,
   )
 }
@@ -75,7 +81,7 @@ describe('ToolApprovalPanel tools and automations stories', () => {
     expect(markup).toContain('Source detail')
     expect(markup).toContain('Aurora core Tooling')
     expect(markup).toContain('Add MCP source')
-    expect(markup).toContain('2 pending')
+    expect(markup).not.toContain('2 pending')
     expect(markup).toContain('dry_run_only')
   })
 
@@ -93,9 +99,11 @@ describe('ToolApprovalPanel tools and automations stories', () => {
 
     expect(markup).toContain('Search sources and tools')
     expect(markup).toContain('Aurora core Tooling')
-    expect(markup).toContain('diagnostics.serviceHealth')
+    // Stable backend share groups keep Diagnostics separate from the default
+    // core group even when both sources are local/core.
+    expect(markup).toContain('Diagnostics')
     expect(markup).toContain('provider-selector-required')
-    expect(markup).toContain('Tool metadata is available from the backend catalog.')
+    expect(markup).toContain('Selected source tool inventory')
   })
 
   it('does not expose any inline execution or approval controls in the read-only catalog view', () => {

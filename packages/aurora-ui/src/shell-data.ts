@@ -19,6 +19,7 @@ import type {
 import {
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
+  auroraEmbeddedNavItems,
   auroraNavSections,
   navItemSnapshot,
   type AuroraNavItem,
@@ -53,6 +54,11 @@ export interface RepairAction {
 
 export interface RouteProviderCandidate {
   id: string
+  providerId?: string
+  providerKind?: string
+  peerId?: string | null
+  nodeName?: string | null
+  serviceInstanceId?: string | null
   label: string
   state: AvailabilityState
   selectable: boolean
@@ -147,9 +153,7 @@ export function snapshotFromGraph(
   graph: CapabilityGraph,
   native: NativeCapabilityManifest | null
 ): AuroraShellSnapshot {
-  const routes = auroraNavSections.flatMap((section) =>
-    section.items.map((item) => routeAvailability(item, graph.explain(featureIdForNavItem(item)), native))
-  )
+  const routes = allShellRouteItems().map((item) => routeAvailability(item, graph.explain(featureIdForNavItem(item)), native))
   const assistantCancellationRoute = routeAvailability(
     auroraAssistantCancellationItem,
     graph.explain(featureIdForNavItem(auroraAssistantCancellationItem)),
@@ -188,24 +192,27 @@ export function snapshotFromGraph(
   }
 }
 
+
+function allShellRouteItems(): AuroraNavItem[] {
+  return [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems]
+}
+
 export function errorShellSnapshot(transportKind: string, error: unknown): AuroraShellSnapshot {
-  const routes = auroraNavSections.flatMap((section) =>
-    section.items.map((item) => ({
-      item: navItemSnapshot(item),
-      state: 'unsupported' as const,
-      explanation: 'Capability state could not be loaded from Aurora.',
-      providerLabel: 'Select runtime',
-        blockers: ['sdk_error'],
-        repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
-        candidateProviders: [],
-        evidenceSources: ['Aurora service error'],
-        selectorRequired: false,
-        approvalRequired: false,
-        routeable: false,
-        disabled: true,
-        requiresAdminAction: item.methodType === 'manage'
-      }))
-  )
+  const routes = allShellRouteItems().map((item) => ({
+    item: navItemSnapshot(item),
+    state: 'unsupported' as const,
+    explanation: 'Capability state could not be loaded from Aurora.',
+    providerLabel: 'Select runtime',
+    blockers: ['sdk_error'],
+    repairActions: [repairAction('retry', 'Retry connection', '/', true, 'The shell needs a fresh Aurora response.')],
+    candidateProviders: [],
+    evidenceSources: ['Aurora service error'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: item.methodType === 'manage'
+  }))
   const assistantCancellationRoute: RouteAvailability = {
     item: navItemSnapshot(auroraAssistantCancellationItem),
     state: 'unsupported',
@@ -312,7 +319,7 @@ function routeAvailability(
   native: NativeCapabilityManifest | null
 ): RouteAvailability {
   if (item.capabilityModule === 'Native') return nativeRouteAvailability(item, native)
-  const state = graphStateForExplanation(explanation)
+  const state = graphStateForExplanation(explanation, item.fallbackState)
   const blockers = sortedUnique([
     explanation.disabledReason,
     ...explanation.providerCandidates.flatMap((provider) => provider.disabledReasons),
@@ -357,13 +364,21 @@ function providerLabel(explanation: CapabilityExplanation, item: AuroraNavItem):
   return `${provider.providerIdentity} / ${provider.module}.${provider.method}`
 }
 
-function graphStateForExplanation(explanation: CapabilityExplanation): AvailabilityState {
-  if (explanation.providerCandidates.length === 0) return nonAvailableStateForMissingEvidence(explanation.state)
-  return explanation.state
+function graphStateForExplanation(
+  explanation: CapabilityExplanation,
+  fallbackState: AvailabilityState
+): AvailabilityState {
+  if (explanation.providerCandidates.length > 0) return explanation.state
+  return nonAvailableStateForMissingEvidence(explanation.state, fallbackState)
 }
 
-function nonAvailableStateForMissingEvidence(state: AvailabilityState): AvailabilityState {
-  return isAvailableRouteState(state) ? 'unsupported' : state
+function nonAvailableStateForMissingEvidence(
+  state: AvailabilityState,
+  fallbackState: AvailabilityState
+): AvailabilityState {
+  if (isAvailableRouteState(state)) return 'unsupported'
+  if (state === 'unsupported' && fallbackState === 'privacy-blocked') return 'privacy-blocked'
+  return state
 }
 
 function isAvailableRouteState(state: AvailabilityState): boolean {
@@ -443,6 +458,11 @@ function nativeRouteAvailability(
 function candidateForRoute(candidate: CapabilityProviderCandidate): RouteProviderCandidate {
   return {
     id: candidate.id,
+    providerId: candidate.providerId,
+    providerKind: candidate.providerKind,
+    peerId: candidate.peerId,
+    nodeName: candidate.nodeName ?? null,
+    serviceInstanceId: candidate.serviceInstanceId,
     label: `${candidate.providerIdentity} / ${candidate.module}.${candidate.method}`,
     state: candidate.availability,
     selectable: candidate.selectable,
