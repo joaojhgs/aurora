@@ -227,7 +227,11 @@ export function WebThinConnectionPanel({
         <div className="grid gap-2 text-sm md:grid-cols-3" aria-label="Thin transport diagnostics">
           <Diagnostic icon={<ShieldCheck size={15} aria-hidden />} label="Secure context" value={snapshot.secureContext ? 'ready' : 'required'} />
           <Diagnostic icon={<Link2 size={15} aria-hidden />} label="Fallback" value={mode === 'webrtc-only' ? 'disabled' : snapshot.hasHttpFallback ? 'HTTP available' : 'none'} />
-          <Diagnostic icon={<LockKeyhole size={15} aria-hidden />} label="Secrets" value="memory-only" />
+          <Diagnostic
+            icon={<LockKeyhole size={15} aria-hidden />}
+            label="Secrets"
+            value={snapshot.secretsPersisted ? `${snapshot.persistenceBackend ?? 'persistent vault'} (encrypted)` : 'memory-only fallback'}
+          />
         </div>
         {!snapshot.secureContext ? (
           <Alert variant="destructive">
@@ -262,15 +266,22 @@ export function WebThinConnectionPanel({
             rows={4}
             spellCheck={false}
           />
-          <FieldDescription>Invite secrets stay in the URL fragment and this runtime's memory only.</FieldDescription>
+          <FieldDescription>
+            Invite secrets are removed from the URL, encrypted before browser persistence when IndexedDB/WebCrypto are available, and otherwise remain memory-only.
+          </FieldDescription>
         </Field>
         {summary ? (
           <dl className="grid gap-1 rounded-lg border bg-muted/30 p-3 text-sm md:grid-cols-2" aria-label="Invite preview">
             <div><dt className="text-muted-foreground">Node</dt><dd>{summary.nodeName}</dd></div>
             <div><dt className="text-muted-foreground">Room</dt><dd>{summary.room}</dd></div>
             <div><dt className="text-muted-foreground">Signaling</dt><dd>{summary.signalingProvider} · {summary.brokerCount} broker(s)</dd></div>
-            <div><dt className="text-muted-foreground">Secret handling</dt><dd>{summary.includesPassword ? 'memory-only until refresh' : 'missing secret'}</dd></div>
+            <div><dt className="text-muted-foreground">Secret handling</dt><dd>{summary.includesPassword ? (snapshot.secretsPersisted ? 'encrypted browser vault' : 'memory-only fallback') : 'missing secret'}</dd></div>
           </dl>
+        ) : null}
+        {snapshot.persistenceFallbackReason ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Persistent browser vault unavailable; continuing memory-only. {snapshot.persistenceFallbackReason}
+          </p>
         ) : null}
         {error ?? snapshot.diagnostic ? <p role="alert" className="text-sm text-destructive">{error ?? snapshot.diagnostic}</p> : null}
       </CardContent>

@@ -132,8 +132,8 @@ describe('createAuroraBrowserClient', () => {
     vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_INVITE', 'room_password=do-not-read')
     const runtime = createAuroraBrowserRuntime()
 
-    expect(runtime.peer.snapshot().status).toBe('failed')
-    expect(runtime.peer.snapshot().diagnostic).not.toContain('do-not-read')
+    expect(runtime.peer.snapshot().status).toBe('needs-invite')
+    expect(runtime.peer.snapshot().diagnostic ?? '').not.toContain('do-not-read')
   })
 
   it('ignores query invites and only consumes scrubbed fragment invites without reload', () => {

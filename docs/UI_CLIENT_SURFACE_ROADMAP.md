@@ -153,7 +153,8 @@ Every supported client profile must preserve these rules:
 
 - Keep `NEXT_PUBLIC_AURORA_CONNECTION_MODE=http-only|webrtc-only|webrtc-preferred` as the hosted web selection surface.
 - Keep browser imports SSR-safe and lazy; require secure contexts for microphone/WebRTC.
-- Maintain invite import, SAS confirmation, reconnect UX, TURN diagnostics, route badges, and safe memory-only secret handling.
+- Maintain invite import, SAS confirmation, reconnect UX, TURN diagnostics, route badges, encrypted IndexedDB secret storage, validated nonsecret profile/stable-ID metadata, automatic refresh re-dial, and explicit memory-only fallback when persistence is unavailable.
+- Add user-verified WebAuthn PRF/passkey vault unlock and a public-key reconnect challenge so the browser no longer needs a reusable persisted bearer.
 - Preserve Chromium, Firefox, and Playwright-WebKit direct/STUN/TURN behavior; validate page visibility/suspension limits before broader cross-browser release claims.
 
 **Current exit:** achieved for direct Chromium/Firefox/WebKit foreground operation against a Python peer without the Aurora HTTP application server; broader certification remains pending.

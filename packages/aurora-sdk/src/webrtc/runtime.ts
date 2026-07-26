@@ -135,8 +135,9 @@ export function createBrowserWebRtcAuroraRuntime<TClient = AuroraClient>(
       }
     }
   }
-  if (!options.profile) throw new AuroraError({ code: 'validation', message: `${options.mode} mode requires a WebRTC peer profile` })
-  assertSecureRuntime(options.profile, options as BrowserWebRtcRuntimeOptions<unknown>)
+  // A hosted thin shell may be created before an invite is pasted. The
+  // controller accepts the validated profile later through connect(profile).
+  if (options.profile) assertSecureRuntime(options.profile, options as BrowserWebRtcRuntimeOptions<unknown>)
 
   const credentialStore = options.credentialStore ?? new MemoryPeerCredentialStore()
   const peer = new WebRtcPeerConnectionController(options.mode, options.profile, credentialStore, options.visibilityDocument, options as BrowserWebRtcRuntimeOptions<unknown>)

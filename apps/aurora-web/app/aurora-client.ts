@@ -8,6 +8,7 @@ import {
   type AuroraTransportResponse,
 } from '@aurora/client'
 import {
+  BrowserPersistentPeerCredentialStore,
   createBrowserWebThinRuntime,
   explainBrowserThinRuntime,
   type AuroraThinConnectionMode,
@@ -64,6 +65,11 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
   const mode = browserConnectionMode()
   const gatewayUrl = process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL
+  const credentialStore = mode === 'http-only'
+    ? undefined
+    : new BrowserPersistentPeerCredentialStore()
+  const persistedProfile = credentialStore?.loadConnectionProfile() ?? undefined
+  const localStablePeerId = credentialStore?.getOrCreateLocalStablePeerId()
   const runtime = createBrowserWebThinRuntime({
     mode,
     gatewayUrl,
@@ -73,11 +79,19 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
     allowInsecureLoopback: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
     allowInsecureLoopbackSignaling: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
     nodeName: process.env.NEXT_PUBLIC_AURORA_NODE_NAME ?? 'Aurora Web thin client',
+    ...(credentialStore ? { credentialStore } : {}),
+    ...(persistedProfile ? { profile: persistedProfile } : {}),
+    ...(localStablePeerId ? { localStablePeerId } : {}),
     visibilityDocument: typeof document === 'undefined' ? undefined : document,
     windowLocation: typeof window === 'undefined' ? undefined : window.location,
     createClient: (transport) => new AuroraClient({ transport }),
     createDemoClient: () => new AuroraClient({ transport: new MockAuroraTransport() }),
   })
+  if (persistedProfile) {
+    queueMicrotask(() => {
+      void runtime.peer.connect(persistedProfile).catch(() => undefined)
+    })
+  }
   browserRuntimeCache = { key, runtime }
   return runtime
 }

@@ -18,6 +18,7 @@ import {
 } from '@aurora/client/webrtc'
 import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
+import type { BrowserPeerPersistenceStatus, BrowserWebRtcCredentialStore } from './browser-peer-persistence'
 
 export type AuroraThinConnectionMode = 'http-only' | 'webrtc-only' | 'webrtc-preferred'
 export type BrowserWebRtcStatus =
@@ -58,7 +59,7 @@ export interface BrowserThinRuntimeConfig {
   scryptDeriver?: BrowserWebRtcRuntimeOptions['scryptDeriver']
   scryptWorkerFactory?: BrowserWebRtcRuntimeOptions['scryptWorkerFactory']
   initialCredentials?: MeshPeerCredentialRecord[] | undefined
-  credentialStore?: (WebRtcPeerCredentialStore & { setRoomSecret?: (ref: string, value: string) => void; getRoomSecret?: (ref: string) => Promise<Uint8Array | string | null> }) | undefined
+  credentialStore?: WebRtcPeerCredentialStore & Partial<BrowserWebRtcCredentialStore>
   visibilityDocument?: BrowserWebRtcRuntimeOptions['visibilityDocument']
   windowLocation?: BrowserWebRtcRuntimeOptions['windowLocation']
   createClient?: (transport: AuroraTransport) => AuroraClient
@@ -83,7 +84,9 @@ export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
   visible: boolean
   focused: boolean
   hasHttpFallback: boolean
-  secretsPersisted: false
+  secretsPersisted: boolean
+  persistenceBackend?: BrowserPeerPersistenceStatus['backend'] | 'platform-keychain' | 'memory'
+  persistenceFallbackReason?: string | undefined
 }
 
 type BrowserSnapshotListener = (snapshot: BrowserWebRtcSnapshot) => void
@@ -100,13 +103,16 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     userAgent: config.userAgent ?? browserUserAgent(),
   })
   const http = httpOptionsFromConfig(config)
-  const credentialStore = config.credentialStore ?? new MemoryOnlyWebRtcCredentialStore()
+  const credentialStore: NonNullable<BrowserThinRuntimeConfig['credentialStore']> =
+    config.credentialStore ?? new MemoryOnlyWebRtcCredentialStore()
   const parsedInvite = config.profile ? null : parseWebRtcInvite(config.inviteText, config)
-  const activeProfile = config.profile ?? parsedInvite?.profile ?? null
+  const activeProfile = config.profile ?? parsedInvite?.profile ?? credentialStore.loadConnectionProfile?.() ?? null
   if (parsedInvite) {
     if (credentialStore.setRoomSecret) credentialStore.setRoomSecret(parsedInvite.profile.roomSecretRef, parsedInvite.roomSecret)
     else if (!credentialStore.getRoomSecret) throw new AuroraError({ code: 'validation', message: 'WebRTC invite requires a room-secret capable credential store.' })
+    credentialStore.saveConnectionProfile?.(parsedInvite.profile)
   }
+  const localStablePeerId = config.localStablePeerId ?? credentialStore.getOrCreateLocalStablePeerId?.()
 
   let sdkRuntime: BrowserWebRtcRuntime<AuroraClient>
   try {
@@ -116,7 +122,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ...(activeProfile ? { profile: activeProfile } : {}),
       credentialStore,
       ...(config.initialCredentials ? { initialCredentials: config.initialCredentials } : {}),
-      ...(config.localStablePeerId ? { localStablePeerId: config.localStablePeerId } : {}),
+      ...(localStablePeerId ? { localStablePeerId } : {}),
       localNodeName: config.nodeName ?? activeProfile?.nodeName ?? 'Aurora Web thin client',
       allowInsecureLoopback: config.allowInsecureLoopback ?? config.allowInsecureLoopbackSignaling,
       ...(config.peerConnectionFactory ?? config.createPeerConnection ? { createPeerConnection: config.peerConnectionFactory ?? config.createPeerConnection } : {}),
@@ -186,11 +192,12 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private readonly mode: AuroraThinConnectionMode
   private readonly httpFallback: boolean
   private readonly creationError: unknown
-  private readonly credentialStore: (WebRtcPeerCredentialStore & { setRoomSecret?: (ref: string, value: string) => void; getRoomSecret?: (ref: string) => Promise<Uint8Array | string | null> }) | undefined
+  private readonly credentialStore: BrowserThinRuntimeConfig['credentialStore']
   private readonly config: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl'>
   private sdkSnapshot: PeerConnectionSnapshot | null = null
   private fallbackReason: string | undefined
   private visibilityDiagnostic: string | undefined
+  private connectionDiagnostic: string | undefined
   private attemptedConnect = false
   private authorizedRouteSeen = false
   private disconnected = false
@@ -214,8 +221,9 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
 
   snapshot(): BrowserWebRtcSnapshot {
     const sdk = this.sdkSnapshot ?? this.peer?.snapshot() ?? null
-    const diagnostic = this.visibilityDiagnostic ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
+    const diagnostic = this.visibilityDiagnostic ?? this.connectionDiagnostic ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
     const pendingPairing = pendingPairingFromSnapshot(sdk)
+    const persistence = this.credentialStore?.persistenceStatus?.()
     const out: BrowserWebRtcSnapshot = {
       state: sdk?.state ?? (this.disconnected ? 'closed' : this.creationError ? 'failed' : 'idle'),
       connectionMode: this.mode,
@@ -228,12 +236,13 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       pendingFragmentCount: sdk?.pendingFragmentCount ?? 0,
       bufferPressureHighWaterBytes: sdk?.bufferPressureHighWaterBytes ?? 0,
       updatedAt: sdk?.updatedAt ?? new Date().toISOString(),
-      status: statusFromSnapshot(sdk, this.mode, this.creationError, this.fallbackReason, this.disconnected),
+      status: statusFromSnapshot(sdk, this.mode, this.creationError, this.fallbackReason, this.disconnected, this.attemptedConnect),
       secureContext: isSecureBrowserContext(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
       focused: typeof document === 'undefined' || document.hasFocus(),
       hasHttpFallback: this.httpFallback,
-      secretsPersisted: false,
+      secretsPersisted: persistence?.secretsPersisted ?? false,
+      persistenceBackend: persistence?.backend ?? 'memory',
     }
     if (sdk?.expectedStablePeerId !== undefined) out.expectedStablePeerId = sdk.expectedStablePeerId
     if (sdk?.connectedStablePeerId !== undefined) out.connectedStablePeerId = sdk.connectedStablePeerId
@@ -245,6 +254,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     if (diagnostic !== undefined) out.diagnostic = diagnostic
     if (pendingPairing?.sessionId !== undefined) out.pairingSessionId = pendingPairing.sessionId
     if (pendingPairing?.verificationCode !== undefined) out.pairingVerificationCode = pendingPairing.verificationCode
+    if (persistence?.fallbackReason !== undefined) out.persistenceFallbackReason = persistence.fallbackReason
     return out
   }
 
@@ -258,15 +268,24 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     const parsed = parseWebRtcInvite(inviteText, this.config)
     if (!parsed) throw new AuroraError({ code: 'validation', message: 'Paste a valid Aurora mesh invite before connecting WebRTC thin mode.' })
     if (this.credentialStore?.setRoomSecret) this.credentialStore.setRoomSecret(parsed.profile.roomSecretRef, parsed.roomSecret)
+    this.credentialStore?.saveConnectionProfile?.(parsed.profile)
     return parsed.profile
   }
 
   async connect(profile?: WebRtcPeerConnectionProfile): Promise<void> {
     if (!this.peer) throw new AuroraError({ code: 'unavailable_service', message: diagnosticFromError(this.creationError) ?? 'WebRTC runtime is unavailable.' })
     this.fallbackReason = undefined
+    this.connectionDiagnostic = undefined
     this.attemptedConnect = true
     this.disconnected = false
-    await this.peer.connect(profile as WebRtcPeerConnectionProfile)
+    if (profile !== undefined) this.credentialStore?.saveConnectionProfile?.(profile)
+    try {
+      await this.peer.connect(profile as WebRtcPeerConnectionProfile)
+    } catch (error) {
+      this.connectionDiagnostic = diagnosticFromError(error) ?? 'WebRTC connection failed.'
+      this.emit()
+      throw error
+    }
   }
 
   isFallbackEligibleAfterWebRtcRoute(error: unknown): boolean {
@@ -449,11 +468,13 @@ function statusFromSnapshot(
   creationError: unknown,
   fallbackReason: string | undefined,
   disconnected: boolean,
+  attemptedConnect: boolean,
 ): BrowserWebRtcStatus {
   if (fallbackReason) return 'fallback-http'
   if (creationError) return /secure/i.test(diagnosticFromError(creationError) ?? '') ? 'needs-secure-context' : 'failed'
   if (mode === 'http-only') return 'idle'
   if (disconnected) return 'closed'
+  if (!attemptedConnect && !snapshot?.expectedStablePeerId) return 'needs-invite'
   if (!snapshot) return 'needs-invite'
   if (snapshot.state === 'authorized') return 'authorized'
   if (snapshot.state === 'awaiting-sas-confirmation' || snapshot.state === 'pairing-required') return 'pairing'

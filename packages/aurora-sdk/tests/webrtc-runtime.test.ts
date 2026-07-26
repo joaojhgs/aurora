@@ -61,6 +61,20 @@ describe('browser WebRTC Aurora runtime facade', () => {
     }
   })
 
+  it('constructs a WebRTC thin runtime before an invite supplies its profile', async () => {
+    const runtime = createBrowserWebRtcAuroraRuntime({
+      mode: 'webrtc-only',
+      windowLocation: secureLocation
+    })
+
+    expect(runtime.peer.snapshot()).toMatchObject({
+      connectionMode: 'webrtc-only',
+      state: 'closed'
+    })
+    await expect(runtime.client.registry.getRegistry()).rejects.toMatchObject({ code: 'unavailable_service' })
+    await runtime.close()
+  })
+
   it('fails closed for webrtc-only when no authorized peer is connected and never falls back to HTTP', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as unknown as typeof fetch
     const runtime = createBrowserWebRtcAuroraRuntime({

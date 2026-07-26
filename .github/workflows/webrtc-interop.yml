@@ -5,14 +5,33 @@ on:
     paths:
       - "app/services/gateway/webrtc/**"
       - "packages/aurora-sdk/src/webrtc/**"
+      - "packages/aurora-ui/src/browser-peer-persistence.ts"
+      - "packages/aurora-ui/src/web-thin-runtime.ts"
+      - "apps/aurora-web/app/aurora-client.ts"
       - "tests/e2e/webrtc_interop/**"
+      - "tests/e2e/browser_persistence/**"
       - "scripts/webrtc_interop*"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - "docker-compose.webrtc-interop.yml"
       - "tests/fixtures/webrtc_interop/**"
       - ".github/workflows/webrtc-interop.yml"
   workflow_dispatch:
 
 jobs:
+  browser-persistent-reconnect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test:web-persistence
+
   chromium-direct:
     runs-on: ubuntu-latest
     steps:
