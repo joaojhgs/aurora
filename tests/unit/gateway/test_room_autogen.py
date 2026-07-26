@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services.gateway.config import Settings
+
 pytest.importorskip("aiortc", reason="Gateway WebRTC tests require aiortc")
 
 # Patched where ``ConfigAPI`` is defined (imported inside ``_start_webrtc``).
@@ -26,14 +28,15 @@ def mock_gateway_service():
     return service
 
 
-def _mock_config_api(saved_values: dict):
+def _mock_config_api(saved_values: dict, *, succeeds: bool = True):
     mock_api = MagicMock()
 
     async def capture_update(key, value, *, timeout=15.0):
         saved_values[key] = value
-        return True
+        return succeeds
 
     mock_api.aupdate_config = AsyncMock(side_effect=capture_update)
+    mock_api.aget = AsyncMock(return_value="persisted-token-secret")
     return mock_api
 
 
@@ -156,3 +159,122 @@ async def test_existing_password_not_overwritten(mock_gateway_service):
 
     assert "services.gateway.webrtc.room" in saved_values
     assert "services.gateway.webrtc.password" not in saved_values
+
+
+@pytest.mark.asyncio
+async def test_fresh_mesh_webrtc_identity_gets_non_placeholder_credentials(
+    mock_gateway_service,
+):
+    """A fresh mesh node must not join a shared, guessable signaling namespace."""
+    service = mock_gateway_service
+
+    settings = Settings()
+    settings.mesh = settings.mesh.model_copy(update={"enabled": True})
+    settings.webrtc.enabled = True
+    settings.webrtc.app_id = "aurora"
+    settings.webrtc.room = "default"
+    settings.webrtc.password = ""
+    settings.permissions.enabled = True
+
+    saved_values: dict[str, object] = {}
+    mock_api = _mock_config_api(saved_values)
+
+    with (
+        patch.object(service, "_get_gateway_config", return_value=settings),
+        patch(_PATCH_CONFIG_API, return_value=mock_api),
+        patch(_PATCH_RTC) as mock_rtc_cls,
+        patch(_PATCH_SET_RTC),
+        patch.object(
+            service,
+            "_wait_for_auth_pairing_service",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
+        mock_rtc_cls.return_value = AsyncMock()
+
+        await service._start_webrtc()
+
+    generated_app_id = saved_values["services.gateway.webrtc.app_id"]
+    generated_room = saved_values["services.gateway.webrtc.room"]
+    generated_password = saved_values["services.gateway.webrtc.password"]
+
+    assert isinstance(generated_app_id, str)
+    assert generated_app_id not in {"", "aurora"}
+    assert len(generated_app_id) >= 16
+    assert isinstance(generated_room, str)
+    assert generated_room not in {"", "default"}
+    assert len(generated_room) >= 16
+    assert isinstance(generated_password, str)
+    assert len(generated_password) >= 32
+
+
+@pytest.mark.asyncio
+async def test_webrtc_does_not_start_when_generated_credentials_cannot_be_persisted(
+    mock_gateway_service,
+):
+    """Ephemeral credentials would make invites unrecoverable, so startup must abort."""
+    service = mock_gateway_service
+
+    settings = Settings()
+    settings.mesh = settings.mesh.model_copy(update={"enabled": True})
+    settings.webrtc.enabled = True
+    settings.webrtc.app_id = "aurora"
+    settings.webrtc.room = "default"
+    settings.webrtc.password = ""
+    settings.permissions.enabled = True
+
+    saved_values: dict[str, object] = {}
+    mock_api = _mock_config_api(saved_values, succeeds=False)
+
+    with (
+        patch.object(service, "_get_gateway_config", return_value=settings),
+        patch(_PATCH_CONFIG_API, return_value=mock_api),
+        patch(_PATCH_RTC) as mock_rtc_cls,
+        patch(_PATCH_SET_RTC) as mock_set_rtc,
+        patch.object(
+            service,
+            "_wait_for_auth_pairing_service",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
+        await service._start_webrtc()
+
+    assert saved_values
+    mock_rtc_cls.assert_not_called()
+    mock_set_rtc.assert_not_called()
+    assert service._rtc_client is None
+
+
+@pytest.mark.asyncio
+async def test_mesh_webrtc_requires_peer_auth_when_local_http_auth_is_disabled(
+    mock_gateway_service,
+):
+    """Tauri's loopback HTTP bypass must not disable peer pairing authentication."""
+    service = mock_gateway_service
+
+    settings = Settings()
+    settings.api.auth_enabled = False
+    settings.mesh = settings.mesh.model_copy(update={"enabled": True})
+    settings.webrtc.enabled = True
+    settings.webrtc.app_id = "private-app-id"
+    settings.webrtc.room = "private-room"
+    settings.webrtc.password = "private-room-password"
+
+    with (
+        patch.object(service, "_get_gateway_config", return_value=settings),
+        patch.object(
+            service,
+            "_ensure_mesh_prerequisites",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(_PATCH_RTC) as mock_rtc_cls,
+        patch(_PATCH_SET_RTC),
+    ):
+        mock_rtc_cls.return_value = AsyncMock()
+
+        await service._start_webrtc()
+
+    assert mock_rtc_cls.call_args.kwargs["require_auth"] is True

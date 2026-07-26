@@ -20,8 +20,9 @@ from app.shared.contracts.models.tts import TTSMethods
 from .models import RouteDecision
 
 if TYPE_CHECKING:
-    from app.services.gateway.config import MeshConfig, MeshServiceConfig
+    from app.services.gateway.config import MeshConfig, MeshServicePolicy
     from app.services.gateway.mesh.peer_registry import PeerRegistry
+    from app.services.gateway.mesh.policy_store import MeshPolicyProvider, MeshPolicySnapshot
 
 
 class RoutingTable:
@@ -32,16 +33,30 @@ class RoutingTable:
     stale route entries and simplifies cache invalidation.
     """
 
-    def __init__(self, mesh_config: MeshConfig, peer_registry: PeerRegistry) -> None:
+    def __init__(
+        self,
+        mesh_config: MeshConfig,
+        peer_registry: PeerRegistry,
+        *,
+        policy_provider: MeshPolicyProvider | None = None,
+    ) -> None:
         self._config = mesh_config
         self._registry = peer_registry
+        self._policy_provider = policy_provider
+
+    def _snapshot_config(self) -> MeshConfig:
+        if self._policy_provider is not None:
+            return self._policy_provider().mesh_config
+        return self._config
 
     def resolve(
         self,
         topic: str,
-        routing_config: MeshServiceConfig | None = None,
+        routing_config: MeshServicePolicy | None = None,
+        mesh_config: MeshConfig | None = None,
         exclude: list[str] | None = None,
         selector: MeshAddressSelector | None = None,
+        policy_snapshot: MeshPolicySnapshot | None = None,
     ) -> RouteDecision:
         """Determine where to route a message.
 
@@ -62,23 +77,41 @@ class RoutingTable:
             RouteDecision indicating where to deliver the message
         """
         module = _extract_module(topic)
+        if policy_snapshot is None and self._policy_provider is not None:
+            policy_snapshot = self._policy_provider()
+        mesh_config = mesh_config or (
+            policy_snapshot.mesh_config if policy_snapshot is not None else self._snapshot_config()
+        )
+
+        if not mesh_config.enabled:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="mesh_disabled",
+                message=f"Mesh routing is disabled for {module}",
+            )
 
         # Get routing config for this module
         if routing_config is None:
-            routing_config = self._config.services.get(module)
+            routing_config = mesh_config.services.get(module)
 
         if selector and selector.has_routing_target():
             return self._resolve_explicit_selector(
+                topic=topic,
                 module=module,
                 routing_config=routing_config,
+                mesh_config=mesh_config,
                 selector=selector,
+                policy_snapshot=policy_snapshot,
             )
 
         # No routing config or mesh disabled → always local
         if not routing_config:
             return RouteDecision(target="local", module=module)
 
-        if _requires_explicit_audio_selector(topic) and routing_config.prefer in {
+        routing_policy = routing_config.routing
+
+        if _requires_explicit_audio_selector(topic) and routing_policy.prefer in {
             "network",
             "network_only",
         }:
@@ -89,7 +122,7 @@ class RoutingTable:
                 message=f"{topic} requires an explicit mesh selector",
             )
 
-        if routing_config.require_explicit_selector:
+        if routing_policy.require_explicit_selector:
             return _route_error(
                 module=module,
                 selector=selector,
@@ -97,7 +130,7 @@ class RoutingTable:
                 message=f"{module} requires an explicit mesh selector",
             )
 
-        prefer = routing_config.prefer
+        prefer = routing_policy.prefer
 
         if prefer == "local_only":
             return RouteDecision(target="local", module=module)
@@ -110,9 +143,12 @@ class RoutingTable:
             # Try to find a remote peer
             best = self._registry.get_best_provider(
                 module=module,
+                topic=topic,
                 routing_config=routing_config,
-                version_policy=self._config.version_policy,
+                version_policy=mesh_config.version_policy,
                 exclude=exclude or [],
+                peer_selection=mesh_config.peer_selection,
+                policy_snapshot=policy_snapshot,
             )
             if best:
                 # Get the service version from the peer's manifest
@@ -137,7 +173,7 @@ class RoutingTable:
                 return RouteDecision(target="none", module=module)
 
             # prefer == "network" — fall back based on config
-            fallback = routing_config.fallback
+            fallback = routing_policy.fallback
             if fallback == "local":
                 log_debug(f"RoutingTable: No remote peer for {module}, falling back to local")
                 return RouteDecision(target="local", module=module)
@@ -161,9 +197,12 @@ class RoutingTable:
 
     def _resolve_explicit_selector(
         self,
+        topic: str,
         module: str,
-        routing_config: MeshServiceConfig | None,
+        routing_config: MeshServicePolicy | None,
+        mesh_config: MeshConfig,
         selector: MeshAddressSelector,
+        policy_snapshot: MeshPolicySnapshot | None = None,
     ) -> RouteDecision:
         peer_id, conflict_error, provider_kind = _selector_target(selector, module)
         if conflict_error:
@@ -204,8 +243,8 @@ class RoutingTable:
 
         if (
             routing_config
-            and routing_config.allowed_peers is not None
-            and peer_id not in routing_config.allowed_peers
+            and routing_config.routing.allowed_provider_peer_ids is not None
+            and peer_id not in routing_config.routing.allowed_provider_peer_ids
         ):
             return _route_error(
                 module=module,
@@ -223,49 +262,21 @@ class RoutingTable:
                 message=f"{module} is not shared by selector peer/provider '{peer_id}'",
             )
 
-        if routing_config and routing_config.min_version:
-            from .version_compat import is_compatible
-
-            if not is_compatible(
-                routing_config.min_version,
-                svc.version,
-                self._config.version_policy,
-                routing_config.min_version,
-            ):
-                return _route_error(
-                    module=module,
-                    selector=selector,
-                    code="selector_incompatible_version",
-                    message=(
-                        f"{module} selector peer/provider '{peer_id}' version {svc.version} "
-                        f"does not satisfy {routing_config.min_version}"
-                    ),
-                )
-
-        if (
-            routing_config
-            and routing_config.required_capabilities
-            and not all(cap in svc.capabilities for cap in routing_config.required_capabilities)
-        ):
-            missing = [
-                cap for cap in routing_config.required_capabilities if cap not in svc.capabilities
-            ]
+        decision = self._registry.evaluate_provider_for_topic(
+            peer=peer,
+            module=module,
+            topic=topic,
+            routing_config=routing_config,
+            policy_snapshot=policy_snapshot,
+            version_policy=mesh_config.version_policy,
+            explicit_peer_id=peer_id,
+        )
+        if not decision.eligible:
             return _route_error(
                 module=module,
                 selector=selector,
-                code="selector_incompatible_capabilities",
-                message=(
-                    f"{module} selector peer/provider '{peer_id}' lacks required "
-                    f"capabilities: {', '.join(missing)}"
-                ),
-            )
-
-        if svc.max_concurrent > 0 and peer.active_calls >= svc.max_concurrent:
-            return _route_error(
-                module=module,
-                selector=selector,
-                code="selector_provider_at_capacity",
-                message=f"{module} selector peer/provider '{peer_id}' is at capacity",
+                code=f"selector_{decision.reason_code}",
+                message=f"{module} selector peer/provider '{peer_id}': {decision.reason}",
             )
 
         return RouteDecision(
@@ -280,9 +291,11 @@ class RoutingTable:
     def resolve_fallback(
         self,
         topic: str,
-        routing_config: MeshServiceConfig | None = None,
+        routing_config: MeshServicePolicy | None = None,
+        mesh_config: MeshConfig | None = None,
         failed_peer_id: str | None = None,
         selector: MeshAddressSelector | None = None,
+        policy_snapshot: MeshPolicySnapshot | None = None,
     ) -> RouteDecision:
         """Resolve a fallback route after a primary route failure.
 
@@ -297,6 +310,19 @@ class RoutingTable:
             RouteDecision for the fallback target
         """
         module = _extract_module(topic)
+        if policy_snapshot is None and self._policy_provider is not None:
+            policy_snapshot = self._policy_provider()
+        mesh_config = mesh_config or (
+            policy_snapshot.mesh_config if policy_snapshot is not None else self._snapshot_config()
+        )
+
+        if not mesh_config.enabled:
+            return _route_error(
+                module=module,
+                selector=selector,
+                code="mesh_disabled",
+                message=f"Mesh routing is disabled for {module}",
+            )
 
         if selector and selector.has_routing_target():
             return _route_error(
@@ -307,12 +333,12 @@ class RoutingTable:
             )
 
         if routing_config is None:
-            routing_config = self._config.services.get(module)
+            routing_config = mesh_config.services.get(module)
 
         if not routing_config:
             return RouteDecision(target="local", module=module)
 
-        fallback = routing_config.fallback
+        fallback = routing_config.routing.fallback
         exclude = [failed_peer_id] if failed_peer_id else []
 
         if fallback == "local":
@@ -321,9 +347,12 @@ class RoutingTable:
             # Try another remote peer
             best = self._registry.get_best_provider(
                 module=module,
+                topic=topic,
                 routing_config=routing_config,
-                version_policy=self._config.version_policy,
+                version_policy=mesh_config.version_policy,
                 exclude=exclude,
+                peer_selection=mesh_config.peer_selection,
+                policy_snapshot=policy_snapshot,
             )
             if best:
                 version = ""

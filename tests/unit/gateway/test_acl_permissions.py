@@ -9,6 +9,15 @@ from app.services.gateway.acl.permissions import (
     resolve_effective_permissions,
     wildcard_intersection,
 )
+from app.shared.auth.permissions import validate_permission
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
+
+
+def test_remote_inference_permission_is_grantable() -> None:
+    assert validate_permission(OrchestratorMethods.REMOTE_INFERENCE) == (
+        "Orchestrator.RemoteInference"
+    )
+
 
 # ── has_permission ───────────────────────────────────────────────────────
 

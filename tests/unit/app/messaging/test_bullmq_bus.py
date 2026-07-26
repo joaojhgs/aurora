@@ -10,6 +10,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.messaging.bullmq_bus import BullMQBus
+from app.messaging.bus import QueryResult
 
 
 class SampleMessage(BaseModel):
@@ -311,6 +312,32 @@ class TestBullMQBusInterface:
         assert reply_workers == []
         mock_bullmq["worker_instance"].close.assert_called()
 
+    async def test_request_preserves_projected_method_set_authority(self, mock_bullmq):
+        """Tooling projection evidence must survive request-to-publish forwarding."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        result = await bus.request(
+            "Tooling.GetExportCatalog",
+            SampleMessage(content="projection"),
+            timeout=0.01,
+            projected_method_topics=[
+                "Tooling.ExecuteTool",
+                "Tooling.GetExportCatalog",
+            ],
+            projected_method_set_digest="projection-digest",
+        )
+
+        assert result.ok is False
+        job_data = mock_bullmq["queue_instance"].add.await_args.args[1]
+        assert job_data["projected_method_topics"] == [
+            "Tooling.ExecuteTool",
+            "Tooling.GetExportCatalog",
+        ]
+        assert job_data["projected_method_set_digest"] == "projection-digest"
+
     async def test_request_teardown_skips_when_handlers_remain(self, mock_bullmq):
         """Do not close worker if another handler is still subscribed to the reply topic."""
         bus = BullMQBus(validate_topics=False)
@@ -350,6 +377,24 @@ class TestBullMQBusInterface:
 
         assert topic not in bus._queues
         mock_bullmq["queue_instance"].close.assert_called()
+
+    async def test_event_flag_on_reply_topic_uses_direct_queue(self, mock_bullmq):
+        """Service-style event=True replies must reach request()'s direct Worker."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        await bus.publish(
+            "reply.SampleMessage.service-style",
+            QueryResult(ok=True, data={"ok": True}),
+            event=True,
+            correlation_id="service-style",
+        )
+
+        mock_bullmq["queue_instance"].add.assert_awaited_once()
+        job_data = mock_bullmq["queue_instance"].add.await_args.args[1]
+        assert job_data["correlation_id"] == "service-style"
 
     async def test_multiple_requests_do_not_accumulate_reply_workers(self, mock_bullmq):
         """Each timed-out request must drop its reply.* worker."""

@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -55,16 +55,22 @@ class TestPingPong:
     """Tests for ping/pong RTT measurement."""
 
     def test_send_ping(self, monitor, mock_rtc_client):
-        monitor._send_ping("peer-1")
+        assert monitor.ping_peer("peer-1") is True
         mock_rtc_client.send_to_peer.assert_called_once()
         call_args = mock_rtc_client.send_to_peer.call_args
         assert call_args[0][0] == "peer-1"  # peer_id
         assert monitor.get_pending_ping_count() == 1
 
+    def test_failed_send_does_not_leave_pending_ping(self, monitor, mock_rtc_client):
+        mock_rtc_client.send_to_peer.return_value = False
+
+        assert monitor.ping_peer("peer-1") is False
+        assert monitor.get_pending_ping_count() == 0
+
     @pytest.mark.asyncio
     async def test_on_pong_calculates_rtt(self, monitor, mock_peer_registry):
         # Send a ping first
-        monitor._send_ping("peer-1")
+        monitor.ping_peer("peer-1")
         assert monitor.get_pending_ping_count() == 1
 
         # Get the ping_id from pending pings
@@ -73,10 +79,31 @@ class TestPingPong:
         # Simulate pong response
         monitor.on_pong("peer-1", {"id": ping_id, "ts": time.monotonic()})
         assert monitor.get_pending_ping_count() == 0
+        await asyncio.sleep(0)
+        mock_peer_registry.update_latency.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_rtt_outlier_is_filtered_by_rolling_median(
+        self,
+        monitor,
+        mock_peer_registry,
+    ):
+        for index, rtt_ms in enumerate((2.0, 480.0, 3.0)):
+            ping_id = f"ping-{index}"
+            monitor._pending_pings[ping_id] = ("peer-1", 100.0)
+            with patch(
+                "app.services.gateway.mesh.latency.time.monotonic",
+                return_value=100.0 + (rtt_ms / 1000.0),
+            ):
+                monitor.on_pong("peer-1", {"id": ping_id, "ts": 100.0})
+
+        await asyncio.sleep(0)
+        published = [call.args[1] for call in mock_peer_registry.update_latency.await_args_list]
+        assert published[-1] == pytest.approx(3.0)
 
     def test_on_pong_wrong_peer(self, monitor):
         """Pong from wrong peer pops the entry (consumed) and logs a warning."""
-        monitor._send_ping("peer-1")
+        monitor.ping_peer("peer-1")
         ping_id = next(iter(monitor._pending_pings.keys()))
 
         # Pong from a different peer — entry is popped during lookup

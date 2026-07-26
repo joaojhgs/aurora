@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.db.models import Token, User
 from app.services.gateway.acl.identity import ANONYMOUS, Identity
+from app.services.gateway.config import MeshConfig
+from app.services.gateway.mesh.policy_store import MeshPolicyStore
+from app.services.gateway.utils.crypto import aead_open
+from app.services.gateway.webrtc.rpc import RPCHandler
 from app.services.gateway.webrtc.rtc_client import RTCClient
 
 
@@ -109,6 +114,111 @@ def test_get_connected_peers_anonymous(client):
     assert len(peers) == 1
     assert peers[0]["principal_name"] == "anonymous"
     assert peers[0]["effective_perms"] == []
+
+
+def test_outbound_ice_filter_is_default_off(mock_deps):
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service)
+    sdp = (
+        "v=0\r\n"
+        "a=candidate:1 1 udp 1 192.0.2.10 5000 typ host\r\n"
+        "a=candidate:2 1 udp 1 198.51.100.10 6000 typ srflx\r\n"
+    )
+
+    assert client._filter_outbound_session_description(sdp) == sdp
+
+
+def test_outbound_ice_filter_removes_only_disallowed_candidate_lines(mock_deps):
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(
+        settings,
+        bus,
+        registry,
+        auth_service,
+        outbound_ice_candidate_allowed=lambda candidate: " typ host" not in candidate,
+    )
+    sdp = (
+        "v=0\r\n"
+        "a=mid:0\r\n"
+        "a=candidate:1 1 udp 1 192.0.2.10 5000 typ host\r\n"
+        "a=candidate:2 1 udp 1 198.51.100.10 6000 typ srflx\r\n"
+        "a=end-of-candidates\r\n"
+    )
+
+    assert client._filter_outbound_session_description(sdp) == (
+        "v=0\r\n"
+        "a=mid:0\r\n"
+        "a=candidate:2 1 udp 1 198.51.100.10 6000 typ srflx\r\n"
+        "a=end-of-candidates\r\n"
+    )
+
+
+@pytest.mark.asyncio
+async def test_outbound_ice_filter_applies_to_sdp_and_trickle_candidates(mock_deps):
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(
+        settings,
+        bus,
+        registry,
+        auth_service,
+        outbound_ice_candidate_allowed=lambda candidate: " typ host" not in candidate,
+    )
+    client._adapter = MagicMock()
+    client._adapter.send = AsyncMock()
+    client._start_negotiation_watchdog = MagicMock()
+    peer = "remote-peer"
+    pc = MagicMock()
+    pc.connectionState = "new"
+    pc.createDataChannel.return_value = MagicMock(label="aurora-rpc", readyState="connecting")
+    pc.createOffer = AsyncMock(return_value=MagicMock(type="offer", sdp="unfiltered-offer"))
+    pc.setLocalDescription = AsyncMock()
+    pc.close = AsyncMock()
+    pc.localDescription = MagicMock(
+        sdp=(
+            "v=0\r\n"
+            "a=candidate:1 1 udp 1 192.0.2.10 5000 typ host\r\n"
+            "a=candidate:2 1 udp 1 198.51.100.10 6000 typ srflx\r\n"
+        )
+    )
+    handlers: dict[str, Any] = {}
+
+    def on(event_name):
+        def decorator(callback):
+            handlers[event_name] = callback
+            return callback
+
+        return decorator
+
+    pc.on = on
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
+        return_value=pc,
+    ):
+        await client.connect_to(peer)
+
+    client._adapter.send.assert_awaited_once()
+    channel, sealed = client._adapter.send.await_args.args
+    offer = aead_open(client._keys.k_sig, sealed)
+    assert channel == "offer"
+    assert " typ host" not in offer["sdp"]
+    assert " typ srflx" in offer["sdp"]
+    assert client._pairing_transports[peer]["offer_sdp"] == offer["sdp"]
+
+    client._adapter.send.reset_mock()
+    host_candidate = MagicMock()
+    host_candidate.to_sdp.return_value = "candidate:1 1 udp 1 192.0.2.10 5000 typ host"
+    await handlers["icecandidate"](MagicMock(candidate=host_candidate))
+    client._adapter.send.assert_not_awaited()
+
+    reflexive_candidate = MagicMock()
+    reflexive_candidate.to_sdp.return_value = "candidate:2 1 udp 1 198.51.100.10 6000 typ srflx"
+    await handlers["icecandidate"](MagicMock(candidate=reflexive_candidate))
+    client._adapter.send.assert_awaited_once()
+    candidate_channel, candidate_sealed = client._adapter.send.await_args.args
+    candidate = aead_open(client._keys.k_sig, candidate_sealed)
+    assert candidate_channel == "candidate"
+    assert candidate["candidate"].endswith("typ srflx")
 
 
 # ── disconnect_peer ──────────────────────────────────────────────────────
@@ -263,6 +373,35 @@ async def test_update_peer_permissions_no_stored_token_fallback(client, mock_dep
     assert "TTS.*" in new_identity.effective_perms
 
 
+@pytest.mark.asyncio
+async def test_update_peer_permissions_restores_bus_validated_mesh_scopes(client, mock_deps):
+    """Proxy tokens without a row id use the freshly synchronized mesh principal."""
+
+    _, _, _, auth_service = mock_deps
+    old_identity = _make_identity("user-1", ["Orchestrator.use"])
+    token = _make_token("user-1", ["Orchestrator.use"])
+    token.id = "bus-validated"
+    client._peer_acl = {"peer-a": old_identity}
+    client._peer_tokens = {"peer-a": token}
+    auth_service.get_principal.return_value = User(
+        id="user-1",
+        username="mesh-peer-a",
+        password_hash="hashed",
+        role="user",
+        permissions=["Orchestrator.use", "Tooling.use"],
+        is_admin=False,
+    )
+
+    result = await client.update_peer_permissions("peer-a")
+
+    assert result is True
+    assert client._peer_acl["peer-a"].effective_perms == frozenset(
+        {"Orchestrator.use", "Tooling.use"}
+    )
+    assert token.scopes == ["Orchestrator.use", "Tooling.use"]
+    auth_service.get_token_scopes.assert_not_awaited()
+
+
 # ── close() cleanup ────────────────────────────────────────────────────
 
 
@@ -344,7 +483,7 @@ async def test_set_rpc_bus_rewires_existing_rpc_handler_to_mesh_stream_path(clie
         source="webrtc_peer",
     )
     send = MagicMock()
-    handler = RPCHandler(process_bus, _Registry(), send, lambda: identity, peer_id="remote-peer")
+    handler = RPCHandler(process_bus, _Registry(), send, lambda: identity)
     client._rpc_handlers = {"remote-peer": handler}
 
     mesh_bus = _MeshBus()
@@ -366,3 +505,56 @@ async def test_set_rpc_bus_rewires_existing_rpc_handler_to_mesh_stream_path(clie
     process_bus.request.assert_not_called()
     responses = [json.loads(call.args[0]) for call in send.call_args_list]
     assert [response["type"] for response in responses] == ["chunk", "eof"]
+
+
+@pytest.mark.asyncio
+async def test_disable_mesh_clears_runtime_fields_and_preserves_handler_fail_closed_policy(client):
+    import json
+
+    store = MeshPolicyStore()
+    store.replace(MeshConfig(enabled=False), source_revision=1)
+    bus = AsyncMock()
+    send = MagicMock()
+    identity = Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset({"TTS.use"}),
+        source="webrtc_peer",
+    )
+    handler = RPCHandler(
+        bus,
+        AsyncMock(),
+        send,
+        lambda: identity,
+        mesh_config=MeshConfig(enabled=True),
+        peer_id="session-peer",
+        stable_peer_id_provider=lambda: "stable-peer",
+    )
+    client._rpc_handlers = {"session-peer": handler}
+    client._mesh_enabled = True
+    client._mesh_config = MeshConfig(enabled=True)
+    client._peer_registry = MagicMock()
+    client._peer_bridge = MagicMock()
+    client._mesh_peer_id = "local-peer"
+    client._mesh_node_name = "local-node"
+
+    client.disable_mesh(policy_provider=store.provider())
+
+    assert client._mesh_enabled is False
+    assert client._mesh_config is None
+    assert client._peer_registry is None
+    assert client._peer_bridge is None
+    assert client._mesh_peer_id is None
+    assert client._mesh_node_name == ""
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": "TTS.Started",
+                "params": {"utterance_id": "u1"},
+            }
+        )
+    )
+    bus.publish.assert_not_called()

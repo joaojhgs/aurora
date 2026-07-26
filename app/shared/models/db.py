@@ -113,6 +113,34 @@ class Message:
 
 
 @dataclass
+class Session:
+    """Persisted conversation/session metadata owned by one principal."""
+
+    id: str
+    principal_id: str
+    type: str
+    title: str | None
+    created_at: datetime
+    updated_at: datetime
+    last_active_at: datetime
+    message_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a transport-safe representation of the session."""
+
+        return {
+            "id": self.id,
+            "principal_id": self.principal_id,
+            "type": self.type,
+            "title": self.title,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "last_active_at": self.last_active_at.isoformat(),
+            "message_count": self.message_count,
+        }
+
+
+@dataclass
 class User:
     id: str
     username: str

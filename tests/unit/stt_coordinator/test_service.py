@@ -180,7 +180,7 @@ async def test_on_wake_word_detected_starts_session(service, mock_bus):
         STTMethods.SESSION_STARTED,
         ANY,
         event=True,
-        mesh=True,
+        mesh=False,
         origin="internal",
     )
 
@@ -307,7 +307,7 @@ async def test_transcription_result_ends_session(service, mock_bus):
         STTCoordinatorTopics.USER_SPEECH_CAPTURED,
         ANY,
         event=True,
-        mesh=True,
+        mesh=False,
         origin="internal",
     )
 
@@ -316,7 +316,7 @@ async def test_transcription_result_ends_session(service, mock_bus):
         STTMethods.SESSION_ENDED,
         ANY,
         event=True,
-        mesh=True,
+        mesh=False,
         origin="internal",
     )
 
@@ -512,7 +512,7 @@ async def test_control_commands(service, mock_bus):
         STTMethods.SESSION_ENDED,
         ANY,
         event=True,
-        mesh=True,
+        mesh=False,
         origin="internal",
     )
 

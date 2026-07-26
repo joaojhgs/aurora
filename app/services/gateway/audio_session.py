@@ -303,7 +303,7 @@ class AudioSessionService(BaseService):
             AudioSessionMethods.EVENTS,
             event,
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
         )
 

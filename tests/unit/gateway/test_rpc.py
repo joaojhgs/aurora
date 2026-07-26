@@ -1,10 +1,16 @@
+import asyncio
+import contextlib
+import hashlib
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
+from app.services.gateway.config import MeshConfig
+from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.services.orchestrator.service import OrchestratorService
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
@@ -20,8 +26,24 @@ from app.shared.contracts.models.scheduler import (
     SchedulerScheduleActionRequest,
     SchedulerScheduleJobRequest,
 )
-from app.shared.contracts.models.tooling import ToolingExecuteToolRequest, ToolingMethods
+from app.shared.contracts.models.tooling import (
+    ToolingConfirmExecutionRequest,
+    ToolingCreateApprovalGrantRequest,
+    ToolingExecuteToolRequest,
+    ToolingGetToolByNameRequest,
+    ToolingGetToolsRequest,
+    ToolingMethods,
+    ToolingPrepareExecutionRequest,
+    ToolingRequestApprovalRequest,
+    ToolingRevokeApprovalGrantRequest,
+    ToolingSetPolicyModeRequest,
+    ToolingSetSharingPolicyRequest,
+    ToolingSharingPolicy,
+    ToolingUpsertSourcePolicyRequest,
+    ToolingUpsertToolPolicyOverrideRequest,
+)
 from app.shared.contracts.registry import all_contracts, clear_registry
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
 @pytest.fixture
@@ -55,6 +77,26 @@ def mock_acl_provider():
 @pytest.fixture
 def rpc_handler(mock_bus, mock_registry, mock_send_fn, mock_acl_provider):
     return RPCHandler(mock_bus, mock_registry, mock_send_fn, mock_acl_provider)
+
+
+def test_rpc_error_response_is_best_effort_after_transport_loss(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    handler = RPCHandler(mock_bus, mock_registry, mock_send_fn, mock_acl_provider)
+    mock_send_fn.side_effect = RuntimeError("canonical DataChannel is unavailable")
+
+    sent = handler._send_error(  # noqa: SLF001
+        "request-after-close",
+        500,
+        "Service request failed",
+        correlation_id="correlation-after-close",
+    )
+
+    assert sent is False
+    mock_send_fn.assert_called_once()
 
 
 def _make_acl_with_perms(*perms: str):
@@ -197,7 +239,6 @@ async def test_external_user_input_allowed_with_orchestrator_use_permission(
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -248,7 +289,6 @@ async def test_external_user_input_runtime_dispatch_requires_remote_dispatch_per
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -287,7 +327,6 @@ async def test_external_user_input_runtime_dispatch_allowed_with_remote_dispatch
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteDispatch"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -332,7 +371,6 @@ async def test_external_user_input_runtime_inference_requires_remote_inference_p
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteDispatch"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -371,7 +409,6 @@ async def test_external_user_input_runtime_inference_allowed_with_remote_inferen
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -409,7 +446,6 @@ async def test_stream_infer_chat_provider_model_override_requires_remote_inferen
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -449,7 +485,6 @@ async def test_stream_infer_chat_provider_model_override_allowed_with_remote_inf
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use", "Orchestrator.RemoteInference"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -545,6 +580,8 @@ async def test_handle_call_success(rpc_handler, mock_registry, mock_bus):
         identity_source="webrtc_rpc",
         method_type="use",
         caller_peer_id=None,
+        auth_grant_revision=None,
+        manifest_revision=None,
         correlation_id="req-123",
     )
 
@@ -559,7 +596,6 @@ async def test_handle_tooling_execute_injects_trusted_remote_provenance(
     mock_bus,
     mock_registry,
     mock_send_fn,
-    mock_acl_provider,
 ):
     method_info = MagicMock(spec=MethodInfo)
     method_info.name = "ExecuteTool"
@@ -576,8 +612,8 @@ async def test_handle_tooling_execute_injects_trusted_remote_provenance(
         mock_bus,
         mock_registry,
         mock_send_fn,
-        mock_acl_provider,
-        peer_id="remote-peer",
+        _make_acl_with_perms(ToolingMethods.EXECUTE_TOOL),
+        **_g007_mesh_projection_kwargs("Tooling", ToolingMethods.EXECUTE_TOOL),
     )
 
     await handler.on_message(
@@ -695,7 +731,6 @@ async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
     mock_bus,
     mock_registry,
     mock_send_fn,
-    mock_acl_provider,
     topic,
     method_name,
     input_model,
@@ -716,8 +751,8 @@ async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
         mock_bus,
         mock_registry,
         mock_send_fn,
-        mock_acl_provider,
-        peer_id="real-peer",
+        _make_acl_with_perms(topic),
+        **_g007_mesh_projection_kwargs("Scheduler", topic, peer_id="real-peer"),
     )
 
     await handler.on_message(
@@ -761,6 +796,28 @@ async def test_handle_call_bus_error(rpc_handler, mock_registry, mock_bus):
 
 
 @pytest.mark.asyncio
+async def test_handle_call_returns_typed_contract_denial_payload(
+    rpc_handler, mock_registry, mock_bus
+):
+    """A service-level `ok: false` response is data, not a transport failure."""
+
+    method_info = MethodInfo(name="Prepare", exposure="external")
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    denial = {
+        "ok": False,
+        "policy_decision": {"allowed": False, "reason": "schema_hash_mismatch"},
+    }
+    mock_bus.request.return_value = QueryResult(ok=False, data=denial)
+
+    await rpc_handler.on_message(json.dumps({"type": "call", "id": 2, "method": "Svc.Prepare"}))
+
+    response = json.loads(rpc_handler._send.call_args[0][0])
+    assert response == {"type": "result", "id": 2, "result": denial}
+
+
+@pytest.mark.asyncio
 async def test_handle_call_timeout(rpc_handler, mock_registry, mock_bus):
     method_info = MethodInfo(name="Slow", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
@@ -795,7 +852,7 @@ async def test_handle_call_forbidden_audits_redacted_correlation(
         mock_send_fn,
         mock_acl_provider,
         audit_fn=audit_fn,
-        peer_id="remote-peer",
+        **_g007_mesh_projection_kwargs("Svc", "Svc.Secret"),
     )
 
     await handler.on_message(
@@ -856,11 +913,11 @@ def _make_mesh_config(enabled: bool = True, sharing: dict | None = None):
 
 
 def _make_sharing_entry(share: bool = True, allowed_peers=None, max_concurrent: int = 0):
-    entry = MagicMock()
-    entry.share = share
-    entry.allowed_peers = allowed_peers
-    entry.max_concurrent = max_concurrent
-    return entry
+    return mesh_policy(
+        share=share,
+        allowed_peers=allowed_peers,
+        max_concurrent=max_concurrent,
+    )
 
 
 @pytest.mark.asyncio
@@ -870,7 +927,7 @@ async def test_mesh_gate_blocks_unshared_service(
     mock_send_fn,
     mock_acl_provider,
 ):
-    """When mesh is enabled but a service is not shared, calls are rejected 403."""
+    """Canonical method resolution happens before mesh sharing checks."""
     mesh_config = _make_mesh_config(enabled=True, sharing={})
     handler = RPCHandler(
         mock_bus,
@@ -878,13 +935,48 @@ async def test_mesh_gate_blocks_unshared_service(
         mock_send_fn,
         mock_acl_provider,
         mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request")]
+        ),
     )
-    # Doesn't need a real method — gate blocks before _find_method
     await handler.on_message(json.dumps({"type": "call", "id": "m1", "method": "TTS.Request"}))
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "error"
-    assert resp["error"]["code"] == 403
-    assert "not shared" in resp["error"]["message"]
+    assert resp["error"]["code"] == 404
+
+
+@pytest.mark.asyncio
+async def test_mesh_gate_disabled_snapshot_blocks_non_infrastructure_without_dispatch(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    """A live disabled policy snapshot fails closed for normal RPC calls."""
+
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=_make_mesh_config(
+            enabled=False,
+            sharing={"TTS": _make_sharing_entry(share=True)},
+        ),
+        peer_id="ephemeral-session",
+        stable_peer_id_provider=lambda: "stable-peer",
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "disabled", "method": "TTS.Request"})
+    )
+
+    response = json.loads(mock_send_fn.call_args[0][0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 404
+    mock_registry.get_service.assert_awaited_once()
+    mock_bus.request.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -903,8 +995,12 @@ async def test_mesh_gate_allows_shared_service(
         mock_bus,
         mock_registry,
         mock_send_fn,
-        mock_acl_provider,
+        _make_acl_with_perms("TTS.Request"),
         mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request")]
+        ),
     )
 
     method_info = MethodInfo(name="Request", exposure="external")
@@ -918,6 +1014,174 @@ async def test_mesh_gate_allows_shared_service(
     await handler.on_message(json.dumps({"type": "call", "id": "m2", "method": "TTS.Request"}))
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "result"
+
+
+@pytest.mark.parametrize(
+    ("allowed_peers", "peer_id", "expected_type"),
+    [
+        pytest.param(None, "peer-a", "result", id="null-allows-authenticated-peer"),
+        pytest.param([], "peer-a", "result", id="empty-no-longer-denies"),
+        pytest.param(["peer-a"], "peer-a", "result", id="populated-allows-member"),
+        pytest.param(["peer-b"], "peer-a", "result", id="populated-no-longer-denies"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_legacy_inbound_allowed_peers_semantics_are_locked(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+    allowed_peers,
+    peer_id,
+    expected_type,
+):
+    """Legacy inbound allowed-peer lists no longer gate direct RPC."""
+
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={
+                "TTS": _make_sharing_entry(
+                    share=True,
+                    allowed_peers=allowed_peers,
+                )
+            },
+        ),
+        peer_id=f"session-for-{peer_id}",
+        stable_peer_id_provider=lambda peer_id=peer_id: peer_id,
+        active_projection_provider=lambda peer_id=peer_id: _active_projection(
+            recipient=peer_id,
+            services=[_projected_service("TTS", "TTS.Request")],
+        ),
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[MethodInfo(name="Request", exposure="external")],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "legacy-allowlist", "method": "TTS.Request"})
+    )
+
+    response = json.loads(mock_send_fn.call_args[0][0])
+    assert response["type"] == expected_type
+    mock_bus.request.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_legacy_inbound_allowed_peers_denies_matching_ephemeral_only_id(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    """Session-id allowlist matches no longer deny direct RPC."""
+
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True, allowed_peers=["ephemeral-session"])},
+        ),
+        peer_id="ephemeral-session",
+        stable_peer_id_provider=lambda: None,
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[MethodInfo(name="Request", exposure="external")],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "legacy-ephemeral", "method": "TTS.Request"})
+    )
+
+    response = json.loads(mock_send_fn.call_args[0][0])
+    assert response["type"] == "error"
+    assert response["error"]["message"] == "Authority is not available"
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_live_policy_swap_unshared_denies_existing_handler_without_bus_dispatch(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    store = MeshPolicyStore()
+    store.replace(
+        MeshConfig(
+            enabled=True,
+            services={
+                "TTS": mesh_policy(
+                    share=True,
+                    unshared_feature_ids=["future-feature"],
+                    unshared_method_ids=[],
+                    max_concurrent=2,
+                )
+            },
+        ),
+        source_revision=1,
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=store.current().mesh_config,
+        policy_provider=store.provider(),
+        peer_id="peer-a",
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=(
+                [_projected_service("TTS", "TTS.Request")]
+                if store.current().mesh_config.services["TTS"].export.share
+                and "TTS.Request"
+                not in store.current().mesh_config.services["TTS"].export.unshared_method_ids
+                else []
+            )
+        ),
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[MethodInfo(name="Request", bus_topic="TTS.Request", exposure="external")],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+
+    await handler.on_message(json.dumps({"type": "call", "id": "before", "method": "TTS.Request"}))
+    first = json.loads(mock_send_fn.call_args[0][0])
+    assert first["type"] == "result"
+    assert store.current().mesh_config.services["TTS"].export.unshared_feature_ids == (
+        "future-feature",
+    )
+    mock_bus.request.assert_awaited_once()
+
+    mock_bus.request.reset_mock()
+    store.replace(
+        MeshConfig(enabled=True, services={"TTS": mesh_policy(share=False)}),
+        source_revision=2,
+    )
+
+    await handler.on_message(json.dumps({"type": "call", "id": "after", "method": "TTS.Request"}))
+
+    second = json.loads(mock_send_fn.call_args[0][0])
+    assert second["type"] == "error"
+    assert second["error"]["code"] == 403
+    assert second["error"]["message"] == "Service TTS is not shared"
+    assert store.current().source_revision == 2
+    mock_bus.request.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -944,6 +1208,14 @@ async def test_mesh_gate_skips_pairing_methods(
         mock_send_fn,
         acl_provider,
         mesh_config=mesh_config,
+        pairing_context_provider=lambda: {
+            "pairing_session_id": "a" * 64,
+            "verification_code": "48271935",
+            "device_name": "test",
+            "remote_peer_id": "stable-test-peer",
+            "remote_node_name": "test",
+            "room_name": "private-room",
+        },
     )
 
     method_info = MethodInfo(name="PairingStart")
@@ -960,7 +1232,14 @@ async def test_mesh_gate_skips_pairing_methods(
                 "type": "call",
                 "id": "p1",
                 "method": "Auth.PairingStart",
-                "params": {"device_name": "test"},
+                "params": {
+                    "device_name": "test",
+                    "remote_peer_id": "stable-test-peer",
+                    "remote_node_name": "test",
+                    "pairing_session_id": "a" * 64,
+                    "verification_code": "48271935",
+                    "room_name": "private-room",
+                },
             }
         )
     )
@@ -1038,6 +1317,8 @@ async def test_mesh_gate_does_not_skip_non_auth_login_short_name(
         mock_send_fn,
         MagicMock(return_value=identity),
         mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(services=[]),
     )
 
     method_info = MethodInfo(
@@ -1088,6 +1369,10 @@ async def test_internal_non_auth_login_not_exposure_bypassed_when_service_shared
         mock_send_fn,
         MagicMock(return_value=identity),
         mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("Svc", "Svc.Login")]
+        ),
     )
     method_info = MethodInfo(
         name="Login",
@@ -1113,6 +1398,83 @@ async def test_internal_non_auth_login_not_exposure_bypassed_when_service_shared
     mock_bus.request.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("effective_perms", "expected_type", "expected_message"),
+    [
+        pytest.param(
+            ["Svc.use"], "error", "Method is not exposed for WebRTC RPC", id="rbac-allows"
+        ),
+        pytest.param([], "error", "Method is not exposed for WebRTC RPC", id="rbac-denies"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_shared_internal_non_login_legacy_exposure_bypass_still_requires_rbac(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    effective_perms,
+    expected_type,
+    expected_message,
+):
+    """Shared internal methods are no longer exposure-bypassed."""
+
+    identity = Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset(effective_perms),
+        source="webrtc_peer",
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        MagicMock(return_value=identity),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"Svc": _make_sharing_entry(share=True)},
+        ),
+        peer_id="peer-a",
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("Svc", "Svc.InternalAction")]
+        ),
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="InternalAction",
+                bus_topic="Svc.InternalAction",
+                exposure="internal",
+                required_perms=["Svc.use"],
+                method_type="use",
+            )
+        ],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "legacy-internal",
+                "method": "Svc.InternalAction",
+                "params": {},
+            }
+        )
+    )
+
+    response = json.loads(mock_send_fn.call_args[0][0])
+    assert response["type"] == expected_type
+    if expected_message is not None:
+        assert response["error"]["message"] == expected_message
+        mock_bus.request.assert_not_called()
+    else:
+        mock_bus.request.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_mesh_gate_capacity_exceeded(
     mock_bus,
@@ -1130,16 +1492,127 @@ async def test_mesh_gate_capacity_exceeded(
         mock_bus,
         mock_registry,
         mock_send_fn,
-        mock_acl_provider,
+        _make_acl_with_perms("TTS.Request"),
         mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request", capacity=1)]
+        ),
     )
     # Simulate an active call already
     handler._active_remote_calls["TTS"] = 1
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[MethodInfo(name="Request", exposure="external")],
+    )
 
     await handler.on_message(json.dumps({"type": "call", "id": "c1", "method": "TTS.Request"}))
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "error"
     assert resp["error"]["code"] == 429
+
+
+@pytest.mark.asyncio
+async def test_mesh_capacity_notification_errors_do_not_leak_or_mask_success(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    notify_calls: list[tuple[str, int, int]] = []
+
+    def notify(module: str, available: int, max_concurrent: int) -> None:
+        notify_calls.append((module, available, max_concurrent))
+        raise RuntimeError("notify failed")
+
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True, max_concurrent=1)},
+        ),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request", capacity=1)]
+        ),
+        capacity_notify_fn=notify,
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[MethodInfo(name="Request", bus_topic="TTS.Request", exposure="external")],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "notify-ok", "method": "TTS.Request"})
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+    assert response["result"] == {"ok": True}
+    assert handler._active_remote_calls["TTS"] == 0
+    assert notify_calls == [("TTS", 0, 1), ("TTS", 1, 1)]
+
+
+@pytest.mark.asyncio
+async def test_mesh_capacity_releases_on_cancel_and_rejects_concurrent_n_plus_one(
+    mock_registry,
+    mock_send_fn,
+):
+    started = asyncio.Event()
+    release = asyncio.Event()
+    bus = AsyncMock()
+
+    async def request(*args, **kwargs):
+        started.set()
+        await release.wait()
+        return QueryResult(ok=True, data={"ok": True})
+
+    bus.request.side_effect = request
+    handler = RPCHandler(
+        bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=_make_mesh_config(
+            enabled=True,
+            sharing={"TTS": _make_sharing_entry(share=True, max_concurrent=1)},
+        ),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request", capacity=1)]
+        ),
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[MethodInfo(name="Request", bus_topic="TTS.Request", exposure="external")],
+    )
+
+    first = asyncio.create_task(
+        handler.on_message(
+            json.dumps({"type": "call", "id": "capacity-1", "method": "TTS.Request"})
+        )
+    )
+    await started.wait()
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "capacity-2", "method": "TTS.Request"})
+    )
+    second_response = json.loads(mock_send_fn.call_args.args[0])
+    assert second_response["type"] == "error"
+    assert second_response["error"]["code"] == 429
+    assert handler._active_remote_calls["TTS"] == 1
+
+    first.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await first
+    assert handler._active_remote_calls["TTS"] == 0
+    release.set()
 
 
 @pytest.mark.asyncio
@@ -1179,8 +1652,7 @@ async def test_mesh_gate_blocks_broad_auth_admin_when_not_shared(
 
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "error"
-    assert resp["error"]["code"] == 403
-    assert "not shared" in resp["error"]["message"]
+    assert resp["error"]["code"] == 404
     mock_bus.request.assert_not_called()
 
 
@@ -1221,8 +1693,7 @@ async def test_mesh_gate_blocks_config_mutation_when_not_shared(
 
     resp = json.loads(mock_send_fn.call_args[0][0])
     assert resp["type"] == "error"
-    assert resp["error"]["code"] == 403
-    assert "not shared" in resp["error"]["message"]
+    assert resp["error"]["code"] == 404
     mock_bus.request.assert_not_called()
 
 
@@ -1244,6 +1715,10 @@ async def test_explicit_auth_share_still_requires_method_permissions(
         mock_send_fn,
         mock_acl_provider,
         mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("Auth", "Auth.ListPrincipals")]
+        ),
     )
     method_info = MethodInfo(
         name="ListPrincipals",
@@ -1314,7 +1789,7 @@ async def test_handle_call_datetime_in_response(rpc_handler, mock_registry, mock
     ],
 )
 @pytest.mark.asyncio
-async def test_forwarded_tooling_catalog_event_is_bound_to_authenticated_peer(
+async def test_legacy_forwarded_tooling_catalog_event_is_rejected_without_fallback(
     mock_bus,
     mock_registry,
     mock_send_fn,
@@ -1323,13 +1798,14 @@ async def test_forwarded_tooling_catalog_event_is_bound_to_authenticated_peer(
     claimed_provider_id,
     claimed_service_instance_id,
 ):
-    """Mesh-forwarded catalog identity is always rewritten to the source peer."""
+    """G013 never accepts a legacy full-catalog event as a projection baseline."""
 
     handler = RPCHandler(
         mock_bus,
         mock_registry,
         mock_send_fn,
         mock_acl_provider,
+        mesh_config=MeshConfig(enabled=True, services={"Tooling": mesh_policy(share=True)}),
         peer_id="stable-remote-peer",
     )
 
@@ -1353,13 +1829,217 @@ async def test_forwarded_tooling_catalog_event_is_bound_to_authenticated_peer(
         )
     )
 
-    mock_bus.publish.assert_awaited_once()
-    _, payload = mock_bus.publish.await_args.args[:2]
-    assert payload["peer_id"] == "stable-remote-peer"
-    assert payload["provider_id"] == "stable-remote-peer"
-    assert payload["service_instance_id"] == "remote:stable-remote-peer:Tooling"
-    assert mock_bus.publish.await_args.kwargs["caller_peer_id"] == "stable-remote-peer"
-    assert mock_bus.publish.await_args.kwargs["origin"] == "mesh_forwarded"
+    mock_bus.publish.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "topic,event_payload",
+    [
+        (
+            ToolingMethods.REMOTE_CATALOG_ANNOUNCED,
+            {
+                "full_schema_hash": "hash",
+                "tools": [],
+                "shared_by_policy": True,
+            },
+        ),
+        (
+            ToolingMethods.REMOTE_CATALOG_DELTA_ANNOUNCED,
+            {
+                "upserted_tools": [],
+                "removed_global_tool_ids": [],
+            },
+        ),
+        (ToolingMethods.REMOTE_CATALOG_REMOVED, {"reason": "peer-request"}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_legacy_forwarded_tooling_catalog_events_are_all_rejected(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+    topic,
+    event_payload,
+):
+    """Legacy catalog/delta/removal frames cannot become a projection baseline."""
+
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        mesh_config=MeshConfig(enabled=True, services={"Tooling": mesh_policy(share=True)}),
+        peer_id="stable-remote-peer",
+    )
+    claimed_authority = {
+        "granted_permissions": ["*"],
+        "provider_granted_permissions": ["*"],
+        "provider_permissions": ["*"],
+        "provider_available": True,
+        "provider_authorized": True,
+    }
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": topic,
+                "params": {
+                    "peer_id": "forged-peer",
+                    "service_instance_id": "remote:forged-peer:Tooling",
+                    "provider_id": "forged-provider",
+                    "catalog_epoch": 1,
+                    "generated_at": "2026-07-05T00:00:00Z",
+                    **event_payload,
+                    **claimed_authority,
+                },
+            }
+        )
+    )
+
+    mock_bus.publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_forwarded_event_live_disabled_policy_blocks_publish_same_handler(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    store = MeshPolicyStore()
+    store.replace(
+        MeshConfig(enabled=True, services={"TTS": mesh_policy(share=True)}),
+        source_revision=1,
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        mesh_config=store.current().mesh_config,
+        policy_provider=store.provider(),
+        peer_id="session-peer",
+        stable_peer_id_provider=lambda: "stable-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": "TTS.Started",
+                "params": {"utterance_id": "u1"},
+            }
+        )
+    )
+
+    mock_bus.publish.assert_not_called()
+
+    mock_bus.publish.reset_mock()
+    store.replace(
+        MeshConfig(enabled=False, services={"TTS": mesh_policy(share=True)}),
+        source_revision=2,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": "TTS.Started",
+                "params": {"utterance_id": "u2"},
+            }
+        )
+    )
+
+    mock_bus.publish.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("allowed_peers", "stable_peer_id", "should_publish"),
+    [
+        pytest.param(None, "peer-a", False, id="null-rejects-unsafe"),
+        pytest.param([], "peer-a", False, id="empty-rejects-unsafe"),
+        pytest.param(["peer-a"], "peer-a", False, id="member-rejects-unsafe"),
+        pytest.param(["peer-b"], "peer-a", False, id="nonmember-rejects-unsafe"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_forwarded_events_enforce_stable_legacy_inbound_allowlist(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+    allowed_peers,
+    stable_peer_id,
+    should_publish,
+):
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        mesh_config=MeshConfig(
+            enabled=True,
+            services={"TTS": mesh_policy(share=True, allowed_peers=allowed_peers)},
+        ),
+        peer_id="ephemeral-session",
+        stable_peer_id_provider=lambda: stable_peer_id,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": "TTS.Started",
+                "params": {"utterance_id": "u1"},
+            }
+        )
+    )
+
+    if should_publish:
+        mock_bus.publish.assert_awaited_once()
+    else:
+        mock_bus.publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_forwarded_event_does_not_enforce_g006_granular_export_exclusions(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        mesh_config=MeshConfig(
+            enabled=True,
+            services={
+                "TTS": mesh_policy(
+                    share=True,
+                    unshared_feature_ids=["future-feature"],
+                    unshared_method_ids=["TTS.Started"],
+                )
+            },
+        ),
+        peer_id="stable-peer",
+        stable_peer_id_provider=lambda: "stable-peer",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": "TTS.Started",
+                "params": {"utterance_id": "u1"},
+            }
+        )
+    )
+
+    mock_bus.publish.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -1396,7 +2076,6 @@ async def test_stream_infer_chat_without_stream_request_degrades_to_single_chunk
         mock_registry,
         mock_send_fn,
         _make_acl_with_perms("Orchestrator.use"),
-        peer_id="remote-peer",
     )
 
     await handler.on_message(
@@ -1417,3 +2096,684 @@ async def test_stream_infer_chat_without_stream_request_degrades_to_single_chunk
     assert sent[0]["data"]["delta"] == "process fallback"
     assert sent[0]["data"]["is_final"] is True
     assert sent[1] == {"type": "eof", "id": "stream-no-path"}
+
+
+def _active_projection(
+    *,
+    recipient: str = "peer-a",
+    services: list | None = None,
+    readiness: str = "ready",
+    routable: bool = True,
+):
+    return SimpleNamespace(
+        cache_key=SimpleNamespace(recipient_peer_id=recipient, provider_peer_id="provider-a"),
+        readiness=readiness,
+        routable=routable,
+        services=services or [],
+    )
+
+
+def _projected_service(module: str, *topics: str, capacity: int = 0):
+    return SimpleNamespace(
+        service_id=module,
+        capacity={"max_concurrent": capacity},
+        methods=[
+            SimpleNamespace(
+                topic=topic,
+                required_permissions=(topic,),
+                method_type="use",
+            )
+            for topic in topics
+        ],
+    )
+
+
+def _g007_mesh_projection_kwargs(
+    module: str,
+    *topics: str,
+    peer_id: str = "remote-peer",
+) -> dict:
+    projected_topics = list(topics)
+    if module == "Tooling" and any(
+        topic
+        in {
+            ToolingMethods.GET_EXPORT_CATALOG,
+            ToolingMethods.GET_TOOLS,
+            ToolingMethods.GET_TOOL_BY_NAME,
+            ToolingMethods.PREPARE_EXECUTION,
+            ToolingMethods.EXECUTE_TOOL,
+            ToolingMethods.REQUEST_APPROVAL,
+        }
+        for topic in projected_topics
+    ):
+        projected_topics = list(
+            dict.fromkeys(
+                [
+                    *projected_topics,
+                    ToolingMethods.GET_TOOLS,
+                    ToolingMethods.GET_EXPORT_CATALOG,
+                    ToolingMethods.PREPARE_EXECUTION,
+                    ToolingMethods.EXECUTE_TOOL,
+                    ToolingMethods.REQUEST_APPROVAL,
+                ]
+            )
+        )
+    return {
+        "mesh_config": MeshConfig(enabled=True, services={module: mesh_policy(share=True)}),
+        "peer_id": peer_id,
+        "stable_peer_id_provider": lambda: peer_id,
+        "active_projection_provider": lambda: _active_projection(
+            recipient=peer_id,
+            services=[_projected_service(module, *projected_topics)],
+        ),
+        "tooling_authority_revision_provider": lambda: (7, 9),
+    }
+
+
+@pytest.mark.asyncio
+async def test_g007_ready_projection_accepts_exact_shared_method(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = MethodInfo(
+        name="Request",
+        bus_topic="TTS.Request",
+        exposure="external",
+        required_perms=["TTS.Request"],
+        method_type="use",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=MeshConfig(enabled=True, services={"TTS": mesh_policy(share=True)}),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request")]
+        ),
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "g007-ok", "method": "TTS.Request", "params": {}})
+    )
+
+    mock_bus.request.assert_awaited_once()
+    assert json.loads(mock_send_fn.call_args.args[0])["type"] == "result"
+
+
+@pytest.mark.asyncio
+async def test_tooling_export_dispatch_stamps_authenticated_exact_projection_evidence(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = MethodInfo(
+        name="GetExportCatalog",
+        bus_topic=ToolingMethods.GET_EXPORT_CATALOG,
+        exposure="external",
+        required_perms=[ToolingMethods.GET_TOOLS],
+        method_type="use",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Tooling", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"complete": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(ToolingMethods.GET_TOOLS, ToolingMethods.GET_EXPORT_CATALOG),
+        mesh_config=MeshConfig(enabled=True, services={"Tooling": mesh_policy(share=True)}),
+        peer_id="session-a",
+        stable_peer_id_provider=lambda: "peer-a",
+        authenticated_peer_validator=lambda: True,
+        active_projection_provider=lambda: _active_projection(
+            services=[
+                _projected_service(
+                    "Tooling",
+                    ToolingMethods.GET_TOOLS,
+                    ToolingMethods.GET_EXPORT_CATALOG,
+                    ToolingMethods.PREPARE_EXECUTION,
+                    ToolingMethods.EXECUTE_TOOL,
+                )
+            ]
+        ),
+        tooling_authority_revision_provider=lambda: (7, 9),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "projection-evidence",
+                "method": ToolingMethods.GET_EXPORT_CATALOG,
+                "params": {},
+            }
+        )
+    )
+
+    kwargs = mock_bus.request.await_args.kwargs
+    assert kwargs["auth_grant_revision"] == 7
+    assert kwargs["manifest_revision"] == 9
+    assert kwargs["projected_service_id"] == "Tooling"
+    assert kwargs["projected_method_id"] == ToolingMethods.GET_EXPORT_CATALOG
+    expected_topics = sorted(
+        [
+            ToolingMethods.GET_TOOLS,
+            ToolingMethods.GET_EXPORT_CATALOG,
+            ToolingMethods.PREPARE_EXECUTION,
+            ToolingMethods.EXECUTE_TOOL,
+        ]
+    )
+    assert kwargs["projected_method_topics"] == expected_topics
+    assert (
+        kwargs["projected_method_set_digest"]
+        == hashlib.sha256(json.dumps(expected_topics, separators=(",", ":")).encode()).hexdigest()
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("topic", "input_model"),
+    [
+        (ToolingMethods.PREPARE_EXECUTION, ToolingPrepareExecutionRequest),
+        (ToolingMethods.EXECUTE_TOOL, ToolingExecuteToolRequest),
+        (ToolingMethods.REQUEST_APPROVAL, ToolingRequestApprovalRequest),
+    ],
+)
+async def test_tooling_execution_dispatch_stamps_exact_projection_evidence(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    topic,
+    input_model,
+):
+    method_info = MethodInfo(
+        name=topic.rsplit(".", 1)[-1],
+        bus_topic=topic,
+        exposure="external",
+        required_perms=[topic],
+        method_type="use",
+    )
+    method_info.input_model = input_model
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Tooling", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+    projected_topics = sorted(
+        [
+            ToolingMethods.GET_TOOLS,
+            ToolingMethods.GET_EXPORT_CATALOG,
+            ToolingMethods.PREPARE_EXECUTION,
+            ToolingMethods.EXECUTE_TOOL,
+            ToolingMethods.REQUEST_APPROVAL,
+        ]
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(topic),
+        mesh_config=MeshConfig(enabled=True, services={"Tooling": mesh_policy(share=True)}),
+        peer_id="session-a",
+        stable_peer_id_provider=lambda: "peer-a",
+        authenticated_peer_validator=lambda: True,
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("Tooling", *projected_topics)]
+        ),
+        tooling_authority_revision_provider=lambda: (11, 13),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": f"projection-evidence-{topic}",
+                "method": topic,
+                "params": {"tool_name": "demo", "arguments": {}},
+            }
+        )
+    )
+
+    kwargs = mock_bus.request.await_args.kwargs
+    assert kwargs["auth_grant_revision"] == 11
+    assert kwargs["manifest_revision"] == 13
+    assert kwargs["projected_service_id"] == "Tooling"
+    assert kwargs["projected_method_id"] == topic
+    assert kwargs["projected_method_topics"] == projected_topics
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("topic", "input_model", "params"),
+    [
+        (ToolingMethods.GET_TOOLS, ToolingGetToolsRequest, {}),
+        (ToolingMethods.GET_TOOL_BY_NAME, ToolingGetToolByNameRequest, {"name": "demo"}),
+    ],
+)
+async def test_tooling_discovery_dispatch_stamps_exact_projection_evidence(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    topic,
+    input_model,
+    params,
+):
+    method_info = MethodInfo(
+        name=topic.rsplit(".", 1)[-1],
+        bus_topic=topic,
+        exposure="external",
+        required_perms=[ToolingMethods.GET_TOOLS],
+        method_type="use",
+    )
+    method_info.input_model = input_model
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Tooling", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"tools": [], "count": 0})
+    projected_topics = sorted([ToolingMethods.GET_TOOLS, ToolingMethods.GET_TOOL_BY_NAME])
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(ToolingMethods.GET_TOOLS, topic),
+        mesh_config=MeshConfig(enabled=True, services={"Tooling": mesh_policy(share=True)}),
+        peer_id="session-a",
+        stable_peer_id_provider=lambda: "peer-a",
+        authenticated_peer_validator=lambda: True,
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("Tooling", *projected_topics)]
+        ),
+        tooling_authority_revision_provider=lambda: (17, 19),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": f"discovery-evidence-{topic}",
+                "method": topic,
+                "params": params,
+            }
+        )
+    )
+
+    kwargs = mock_bus.request.await_args.kwargs
+    assert kwargs["auth_grant_revision"] == 17
+    assert kwargs["manifest_revision"] == 19
+    assert kwargs["projected_service_id"] == "Tooling"
+    assert kwargs["projected_method_id"] == topic
+    assert kwargs["projected_method_topics"] == projected_topics
+
+
+@pytest.mark.asyncio
+async def test_g007_projection_exclusion_denies_before_bus_dispatch(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    audit = AsyncMock()
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[MethodInfo(name="Request", bus_topic="TTS.Request", exposure="external")],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("*"),
+        audit_fn=audit,
+        mesh_config=MeshConfig(enabled=True, services={"TTS": mesh_policy(share=True)}),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(services=[_projected_service("TTS")]),
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "g007-deny", "method": "TTS.Request", "params": {}})
+    )
+
+    mock_bus.request.assert_not_called()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["error"]["code"] == 403
+    audit_details = audit.await_args.args[2]
+    assert audit_details["reason"] == "method_not_shared"
+
+
+@pytest.mark.asyncio
+async def test_g007_mesh_rpc_missing_policy_denies_before_bus_dispatch(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="Request",
+                bus_topic="TTS.Request",
+                exposure="external",
+                required_perms=["TTS.Request"],
+                method_type="use",
+            )
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        peer_id="peer-a",
+        policy_provider=lambda: SimpleNamespace(mesh_config=None),
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "g007-missing-policy", "method": "TTS.Request"})
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Authority is not available"
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_g007_mesh_rpc_missing_projection_provider_denies_before_bus_dispatch(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="Request",
+                bus_topic="TTS.Request",
+                exposure="external",
+                required_perms=["TTS.Request"],
+                method_type="use",
+            )
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=MeshConfig(enabled=True, services={"TTS": mesh_policy(share=True)}),
+        peer_id="peer-a",
+        stable_peer_id_provider=lambda: "peer-a",
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "g007-missing-provider", "method": "TTS.Request"})
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Authority is not available"
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_g007_forwarded_mesh_event_missing_policy_denies_publish(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        peer_id="peer-a",
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "event",
+                "topic": ToolingMethods.REMOTE_CATALOG_ANNOUNCED,
+                "params": {"catalog_epoch": 1, "generated_at": "now", "tools": []},
+            }
+        )
+    )
+
+    mock_bus.publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_g007_internal_method_still_denied_even_when_projected(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="InternalAction",
+                bus_topic="Svc.InternalAction",
+                exposure="internal",
+                required_perms=["Svc.use"],
+            )
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("*"),
+        mesh_config=MeshConfig(enabled=True, services={"Svc": mesh_policy(share=True)}),
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("Svc", "Svc.InternalAction")]
+        ),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {"type": "call", "id": "g007-internal", "method": "Svc.InternalAction", "params": {}}
+        )
+    )
+
+    mock_bus.request.assert_not_called()
+    assert json.loads(mock_send_fn.call_args.args[0])["error"]["message"] == (
+        "Method is not exposed for WebRTC RPC"
+    )
+
+
+@pytest.mark.asyncio
+async def test_g007_tooling_request_binds_authenticated_stable_peer(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Tooling",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="ExecuteTool",
+                bus_topic=ToolingMethods.EXECUTE_TOOL,
+                exposure="external",
+                required_perms=[ToolingMethods.EXECUTE_TOOL],
+            )
+        ],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(ToolingMethods.EXECUTE_TOOL),
+        mesh_config=MeshConfig(enabled=True, services={"Tooling": mesh_policy(share=True)}),
+        peer_id="session-a",
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[
+                _projected_service(
+                    "Tooling",
+                    ToolingMethods.GET_TOOLS,
+                    ToolingMethods.GET_EXPORT_CATALOG,
+                    ToolingMethods.PREPARE_EXECUTION,
+                    ToolingMethods.EXECUTE_TOOL,
+                )
+            ]
+        ),
+        tooling_authority_revision_provider=lambda: (7, 9),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "g007-tooling",
+                "method": ToolingMethods.EXECUTE_TOOL,
+                "params": {
+                    "tool_name": "demo",
+                    "peer_id": "forged",
+                    "provider_id": "forged",
+                    "caller_peer_id": "forged",
+                },
+            }
+        )
+    )
+
+    params = mock_bus.request.await_args.args[1]
+    assert params["caller_peer_id"] == "peer-a"
+    assert params["caller_principal_id"] == "peer-user"
+    assert "peer_id" not in params
+    assert "provider_id" not in params
+
+
+@pytest.mark.parametrize(
+    ("topic", "input_model", "params", "expected_field"),
+    [
+        pytest.param(
+            ToolingMethods.SET_SHARING_POLICY,
+            ToolingSetSharingPolicyRequest,
+            {
+                "policy": ToolingSharingPolicy().model_dump(),
+                "actor_principal_id": "forged",
+            },
+            "actor_principal_id",
+            id="set-sharing-policy",
+        ),
+        pytest.param(
+            ToolingMethods.SET_POLICY_MODE,
+            ToolingSetPolicyModeRequest,
+            {
+                "policy_mode": "enforce",
+                "actor_principal_id": "forged",
+                "reason": "test",
+            },
+            "actor_principal_id",
+            id="set-policy-mode",
+        ),
+        pytest.param(
+            ToolingMethods.CONFIRM_EXECUTION,
+            ToolingConfirmExecutionRequest,
+            {"approval_request_id": "approval-1", "approver_principal_id": "forged"},
+            "approver_principal_id",
+            id="confirm-execution",
+        ),
+        pytest.param(
+            ToolingMethods.CREATE_APPROVAL_GRANT,
+            ToolingCreateApprovalGrantRequest,
+            {"grant_scope": "always", "created_by": "forged"},
+            "created_by",
+            id="create-approval-grant",
+        ),
+        pytest.param(
+            ToolingMethods.REVOKE_APPROVAL_GRANT,
+            ToolingRevokeApprovalGrantRequest,
+            {"grant_id": "grant-1", "revoked_by": "forged"},
+            "revoked_by",
+            id="revoke-approval-grant",
+        ),
+        pytest.param(
+            ToolingMethods.UPSERT_SOURCE_POLICY,
+            ToolingUpsertSourcePolicyRequest,
+            {
+                "source_id": "source-1",
+                "trust_tier": "trusted",
+                "actor_principal_id": "forged",
+                "reason": "test",
+            },
+            "actor_principal_id",
+            id="upsert-source-policy",
+        ),
+        pytest.param(
+            ToolingMethods.UPSERT_TOOL_POLICY_OVERRIDE,
+            ToolingUpsertToolPolicyOverrideRequest,
+            {
+                "global_tool_id": "tool-1",
+                "trust_tier": "trusted",
+                "actor_principal_id": "forged",
+                "reason": "test",
+            },
+            "actor_principal_id",
+            id="upsert-tool-policy-override",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_g007_tooling_actor_identity_fields_are_bound_before_model_construction(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    topic,
+    input_model,
+    params,
+    expected_field,
+):
+    method_name = topic.split(".", 1)[1]
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = method_name
+    method_info.bus_topic = topic
+    method_info.exposure = "external"
+    method_info.input_model = input_model
+    method_info.required_perms = [topic]
+    method_info.method_type = "manage"
+    _registry_with_method(mock_registry, "Tooling", method_info)
+    mock_bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(topic),
+        **_g007_mesh_projection_kwargs("Tooling", topic, peer_id="peer-a"),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": f"g007-{method_name}",
+                "method": topic,
+                "params": {
+                    **params,
+                    "caller_principal_id": "forged-caller",
+                    "principal_id": "forged-principal",
+                },
+            }
+        )
+    )
+
+    typed_request = mock_bus.request.await_args.args[1]
+    assert isinstance(typed_request, input_model)
+    assert getattr(typed_request, expected_field) == "peer-user"
+    assert typed_request.correlation_id == f"g007-{method_name}"

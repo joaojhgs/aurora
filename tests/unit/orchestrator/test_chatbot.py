@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from app.messaging import MessageBus
-from app.services.orchestrator.agents.chatbot import chatbot
+from app.services.orchestrator.agents.chatbot import _protocol_safe_prompt_suffix, chatbot
 from app.services.orchestrator.state import State
 
 # Mock LLM
@@ -54,6 +54,52 @@ def mock_state():
             HumanMessage(content="What is the capital of France?"),
         ]
     )
+
+
+class TestProtocolSafePromptSuffix:
+    """Keep recent prompts within the chat-provider tool message protocol."""
+
+    def test_keeps_the_configured_recent_window_without_tool_results(self):
+        """Ordinary conversation history remains capped at the requested window."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        messages = [
+            HumanMessage(content="oldest"),
+            AIMessage(content="older"),
+            HumanMessage(content="recent"),
+            AIMessage(content="newer"),
+            HumanMessage(content="newest"),
+        ]
+
+        assert _protocol_safe_prompt_suffix(messages, recent_window=4) == messages[-4:]
+
+    def test_expands_to_include_the_ai_message_owning_leading_tool_results(self):
+        """A large tool transaction never starts the provider prompt with orphan results."""
+        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+        tool_calls = [
+            {
+                "name": "lookup_schedule",
+                "args": {"index": index},
+                "id": f"call-{index}",
+                "type": "tool_call",
+            }
+            for index in range(5)
+        ]
+        owner = AIMessage(content="", tool_calls=tool_calls)
+        results = [
+            ToolMessage(content=f"result-{index}", tool_call_id=f"call-{index}")
+            for index in range(5)
+        ]
+        messages = [HumanMessage(content="list every schedule"), owner, *results]
+
+        suffix = _protocol_safe_prompt_suffix(messages, recent_window=4)
+
+        assert suffix == [owner, *results]
+        assert isinstance(suffix[0], AIMessage)
+        assert [message.tool_call_id for message in suffix[1:]] == [
+            f"call-{index}" for index in range(5)
+        ]
 
 
 class TestChatbotMemorySearch:

@@ -1,47 +1,72 @@
 from __future__ import annotations
 
 import secrets
+from collections.abc import Iterator, Mapping
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.helpers.aurora_logger import log_warning
 
 
-class MeshServiceConfig(BaseModel):
-    """Per-service mesh configuration (sharing + routing combined).
+class _FrozenMapping(Mapping[str, "MeshServicePolicy"]):
+    def __init__(self, values: Mapping[str, MeshServicePolicy]) -> None:
+        self._items = tuple((str(key), value) for key, value in values.items())
 
-    Controls whether a local service is shared with remote peers,
-    how many concurrent remote calls are allowed, which peers may
-    use it, and how the MeshBus routes messages for this service.
+    def __getitem__(self, key: str) -> MeshServicePolicy:
+        for item_key, value in self._items:
+            if item_key == key:
+                return value
+        raise KeyError(key)
 
-    Event forwarding is controlled at the publish site via the
-    ``mesh=True`` parameter on ``bus.publish()``, not here.
+    def __iter__(self) -> Iterator[str]:
+        return (key for key, _ in self._items)
 
-    Attributes:
-        share: Whether to share this service with the network
-        max_concurrent: Maximum concurrent remote calls to this service
-        allowed_peers: Specific peer IDs allowed (None = all authenticated)
-        prefer: Routing preference ("local" | "network" | "network_only" | "local_only")
-        fallback: Fallback strategy ("local" | "network" | "error" | "none")
-        min_version: Minimum required version (semver) for remote service
-        required_capabilities: Capabilities the remote service must have
-        require_explicit_selector: Require callers to provide a peer/provider
-            selector before routing this module remotely
-    """
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _FrozenMapping):
+            return dict(self._items) == dict(other._items)
+        return dict(self._items) == other
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> _FrozenMapping:
+        return self
+
+
+class MeshServiceExportPolicy(BaseModel):
+    """Immutable per-service export policy loaded from ``mesh_sharing``."""
+
+    model_config = ConfigDict(frozen=True)
 
     share: bool = False
     max_concurrent: int = 10
-    allowed_peers: list[str] | None = None
+    unshared_feature_ids: tuple[str, ...] = ()
+    unshared_method_ids: tuple[str, ...] = ()
+
+
+class MeshServiceRoutingPolicy(BaseModel):
+    """Immutable per-service outbound routing policy loaded from ``mesh_routing``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    allowed_provider_peer_ids: tuple[str, ...] | None = None
     prefer: str = "local"
     fallback: str = "local"
     min_version: str | None = None
-    required_capabilities: list[str] = Field(default_factory=list)
+    required_provider_feature_ids: tuple[str, ...] = ()
+    required_provider_capability_tags: tuple[str, ...] = ()
     require_explicit_selector: bool = False
 
 
-# Backward-compatible aliases
-ServiceSharingConfig = MeshServiceConfig
-ServiceRoutingConfig = MeshServiceConfig
+class MeshServicePolicy(BaseModel):
+    """Immutable composite mesh policy for one service."""
+
+    model_config = ConfigDict(frozen=True)
+
+    export: MeshServiceExportPolicy = Field(default_factory=MeshServiceExportPolicy)
+    routing: MeshServiceRoutingPolicy = Field(default_factory=MeshServiceRoutingPolicy)
+    legacy_inbound_allowed_peer_ids: tuple[str, ...] | None = None
 
 
 class MeshConfig(BaseModel):
@@ -54,7 +79,7 @@ class MeshConfig(BaseModel):
     Attributes:
         enabled: Whether mesh networking is active
         node_name: Human-readable name for this node in the mesh
-        services: Per-module mesh configuration (sharing + routing)
+        services: Per-module mesh policy (export + routing)
         version_policy: How strictly to enforce version matching
         peer_selection: Strategy for choosing among multiple peers
         ping_interval_s: How often to measure peer latency (seconds)
@@ -62,15 +87,27 @@ class MeshConfig(BaseModel):
         stale_peer_timeout_s: Mark peer stale after this many seconds without pong
     """
 
+    model_config = ConfigDict(frozen=True)
+
     enabled: bool = False
     node_name: str = ""
-    services: dict[str, MeshServiceConfig] = Field(default_factory=dict)
+    services: Mapping[str, MeshServicePolicy] = Field(default_factory=dict)
     version_policy: str = "compatible"  # "exact" | "compatible" | "any"
     peer_selection: str = "lowest_latency"  # "lowest_latency" | "round_robin" | "random"
     ping_interval_s: float = 30.0
     registry_announce_interval_s: float = 60.0
     stale_peer_timeout_s: float = 120.0
     remote_timeout_s: float = 30.0
+
+    def model_post_init(self, __context: Any) -> None:
+        object.__setattr__(self, "services", _FrozenMapping(self.services))
+
+    @field_serializer("services")
+    def _serialize_services(
+        self,
+        services: Mapping[str, MeshServicePolicy],
+    ) -> dict[str, MeshServicePolicy]:
+        return dict(services.items())
 
 
 def _generate_token_secret() -> str:
@@ -152,6 +189,7 @@ class MQTTSettings(BaseModel):
 class PermissionSettings(BaseModel):
     """Default permission settings for new principals."""
 
+    enabled: bool = False
     default_pairing_permissions: list[str] = Field(default_factory=list)
     webrtc_auth_timeout_seconds: float = 10.0
     webrtc_pairing_timeout_seconds: float = 300.0

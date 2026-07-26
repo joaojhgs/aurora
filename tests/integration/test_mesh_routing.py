@@ -12,17 +12,42 @@ from pydantic import BaseModel
 
 from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_bridge import PeerBridge
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable
+from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import ToolingGetToolsRequest, ToolingMethods
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+from tests.unit.gateway.verified_manifest_helpers import verified_peer_manifest
 
 
 class TTSRequest(BaseModel):
     text: str = "Hello, world!"
+
+
+def _advertised_service(
+    module: str,
+    topic: str,
+    *,
+    max_concurrent: int = 10,
+) -> PeerServiceInfo:
+    return PeerServiceInfo(
+        module=module,
+        version="1.0.0",
+        max_concurrent=max_concurrent,
+        methods=[
+            MethodInfo(
+                name=topic.rsplit(".", 1)[-1],
+                bus_topic=topic,
+                exposure="external",
+                method_type="use",
+                required_perms=[topic],
+            )
+        ],
+    )
 
 
 @pytest.fixture
@@ -31,8 +56,8 @@ def mesh_config():
         enabled=True,
         node_name="local-node",
         services={
-            "TTS": MeshServiceConfig(share=True, max_concurrent=5, prefer="local"),
-            "Orchestrator": MeshServiceConfig(prefer="network", fallback="local"),
+            "TTS": mesh_policy(share=True, max_concurrent=5, prefer="local"),
+            "Orchestrator": mesh_policy(prefer="network", fallback="local"),
         },
         peer_selection="lowest_latency",
         stale_peer_timeout_s=120.0,
@@ -94,12 +119,10 @@ class TestMeshRoutingEndToEnd:
         """Orchestrator is prefer=network, with a registered peer it should route remotely."""
         # Register a peer providing Orchestrator
         await peer_registry.register_peer("remote-1", "remote-node")
-        manifest = PeerManifest(
-            peer_id="remote-1",
+        manifest = verified_peer_manifest(
+            "remote-1",
+            [_advertised_service("Orchestrator", "Orchestrator.Query")],
             node_name="remote-node",
-            shared_services=[
-                PeerServiceInfo(module="Orchestrator", version="1.0.0", max_concurrent=10),
-            ],
         )
         await peer_registry.update_manifest("remote-1", manifest)
         await peer_registry.update_latency("remote-1", 25.0)
@@ -107,10 +130,10 @@ class TestMeshRoutingEndToEnd:
         # Simulate the remote peer responding
         async def simulate_remote_response():
             await asyncio.sleep(0.05)
-            for req_id, fut in list(peer_bridge._pending_calls.items()):
+            for (pending_peer_id, req_id), fut in list(peer_bridge._pending_calls.items()):
                 if not fut.done():
                     peer_bridge.on_response(
-                        "remote-1",
+                        pending_peer_id,
                         {
                             "type": "result",
                             "id": req_id,
@@ -145,28 +168,41 @@ class TestMeshRoutingEndToEnd:
         self, mesh_bus, peer_registry, peer_bridge, mock_rtc_client, mesh_config
     ):
         """Explicit Tooling provider discovery routes over MeshBus/PeerBridge."""
-        mesh_config.services["Tooling"] = MeshServiceConfig(
-            share=True,
-            max_concurrent=5,
-            prefer="local",
-            fallback="error",
+        mesh_config = mesh_config.model_copy(
+            update={
+                "services": {
+                    **dict(mesh_config.services),
+                    "Tooling": mesh_policy(
+                        share=True,
+                        max_concurrent=5,
+                        prefer="local",
+                        fallback="error",
+                    ),
+                }
+            }
         )
+        mesh_bus._config = mesh_config
+        mesh_bus._routing_table._config = mesh_config
         await peer_registry.register_peer("remote-tools", "remote-node")
-        manifest = PeerManifest(
-            peer_id="remote-tools",
-            node_name="remote-node",
-            shared_services=[
-                PeerServiceInfo(module="Tooling", version="1.0.0", max_concurrent=5),
+        manifest = verified_peer_manifest(
+            "remote-tools",
+            [
+                _advertised_service(
+                    "Tooling",
+                    ToolingMethods.GET_TOOLS,
+                    max_concurrent=5,
+                )
             ],
+            node_name="remote-node",
         )
         await peer_registry.update_manifest("remote-tools", manifest)
 
         async def simulate_remote_response():
             await asyncio.sleep(0.05)
-            for req_id, fut in list(peer_bridge._pending_calls.items()):
+            for (pending_peer_id, req_id), fut in list(peer_bridge._pending_calls.items()):
                 if not fut.done():
                     peer_bridge.on_response(
-                        "remote-tools",
+                        pending_peer_id,
                         {
                             "type": "result",
                             "id": req_id,
@@ -201,11 +237,9 @@ class TestMeshRoutingEndToEnd:
     async def test_event_always_goes_local(self, mesh_bus, inner_bus, peer_registry):
         """Events should always go to the local bus regardless of routing config."""
         await peer_registry.register_peer("remote-1")
-        manifest = PeerManifest(
-            peer_id="remote-1",
-            shared_services=[
-                PeerServiceInfo(module="Orchestrator", version="1.0.0"),
-            ],
+        manifest = verified_peer_manifest(
+            "remote-1",
+            [_advertised_service("Orchestrator", "Orchestrator.Query")],
         )
         await peer_registry.update_manifest("remote-1", manifest)
 
@@ -221,11 +255,9 @@ class TestMeshRegistryToRouting:
     async def test_stale_peer_excluded_from_routing(self, routing_table, peer_registry):
         """A stale peer should not be selected as a route target."""
         await peer_registry.register_peer("stale-peer")
-        manifest = PeerManifest(
-            peer_id="stale-peer",
-            shared_services=[
-                PeerServiceInfo(module="Orchestrator", version="1.0.0"),
-            ],
+        manifest = verified_peer_manifest(
+            "stale-peer",
+            [_advertised_service("Orchestrator", "Orchestrator.Query")],
         )
         await peer_registry.update_manifest("stale-peer", manifest)
 
@@ -242,11 +274,9 @@ class TestMeshRegistryToRouting:
         """Lower latency peer should be preferred with lowest_latency policy."""
         for pid, lat in [("slow-peer", 200.0), ("fast-peer", 10.0)]:
             await peer_registry.register_peer(pid)
-            manifest = PeerManifest(
-                peer_id=pid,
-                shared_services=[
-                    PeerServiceInfo(module="Orchestrator", version="1.0.0"),
-                ],
+            manifest = verified_peer_manifest(
+                pid,
+                [_advertised_service("Orchestrator", "Orchestrator.Query")],
             )
             await peer_registry.update_manifest(pid, manifest)
             await peer_registry.update_latency(pid, lat)
@@ -259,10 +289,14 @@ class TestMeshRegistryToRouting:
     async def test_capacity_affects_routing(self, routing_table, peer_registry):
         """A peer at capacity should be excluded."""
         await peer_registry.register_peer("busy-peer")
-        manifest = PeerManifest(
-            peer_id="busy-peer",
-            shared_services=[
-                PeerServiceInfo(module="Orchestrator", version="1.0.0", max_concurrent=1),
+        manifest = verified_peer_manifest(
+            "busy-peer",
+            [
+                _advertised_service(
+                    "Orchestrator",
+                    "Orchestrator.Query",
+                    max_concurrent=1,
+                )
             ],
         )
         await peer_registry.update_manifest("busy-peer", manifest)

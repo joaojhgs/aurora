@@ -7,7 +7,9 @@ so the Auth service never directly imports from the DB service.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import hmac
 import json
 import secrets
 import uuid
@@ -23,8 +25,10 @@ from app.shared.auth.permissions import has_permission
 from app.shared.contracts.models.auth import (
     AuthMethods,
     PairingLifecycleEvent,
+    build_mesh_reconnect_proof_message,
 )
 from app.shared.contracts.models.db import (
+    DBApproveMeshPeerRequest,
     DBAuditLogRequest,
     DBCountAuditEventsRequest,
     DBCountUsersRequest,
@@ -34,21 +38,36 @@ from app.shared.contracts.models.db import (
     DBDeleteDeviceRequest,
     DBDeleteMeshCredentialRequest,
     DBDeleteUserRequest,
+    DBDenyMeshPeerRequest,
     DBExecuteSQLRequest,
     DBGetDeviceByIdRequest,
     DBGetMeshCredentialByRoomRequest,
+    DBGetMeshPeerAuthoritySnapshotRequest,
     DBGetTokenByHashRequest,
     DBGetTokenByIdRequest,
     DBGetUserByIdRequest,
     DBGetUserByUsernameRequest,
+    DBIssueMeshPeerCredentialRequest,
     DBListDevicesRequest,
     DBListTokensRequest,
     DBListUsersRequest,
+    DBMatchMeshOutboundCredentialRequest,
+    DBMeshAuthorityChange,
     DBMethods,
+    DBRemoveMeshPeerRequest,
     DBRevokeTokenRequest,
     DBSaveMeshCredentialRequest,
+    DBSaveMeshInboundCredentialRequest,
+    DBUpdateMeshPeerConnectionRequest,
+    DBUpdateMeshPeerPermissionsRequest,
     DBUpdateTokenScopesRequest,
     DBUpdateUserRequest,
+    DBUpsertMeshPeerRequest,
+)
+from app.shared.contracts.models.mesh import (
+    MeshEvents,
+    MeshPeerAuthorityChangedEvent,
+    MeshPeerAuthoritySnapshot,
 )
 from app.shared.crypto import derive_mesh_inbound_key, open_str, seal_str
 from app.shared.models.db import Device, MeshCredential, Token, User
@@ -59,6 +78,21 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 # Default timeout for DB bus requests (seconds)
 _DB_TIMEOUT = 10.0
 
+# Pairing requests without a transport-authenticated source share one bucket.
+# Do not derive this key from PairingStartRequest fields: they are controlled by
+# the unauthenticated caller during the pairing bootstrap.
+_UNATTRIBUTED_PAIRING_RATE_KEY = "pairing:unattributed"
+
+
+def _safe_exception_category(exc: Exception) -> str:
+    """Return a non-identifying exception category for diagnostics."""
+
+    return type(exc).__name__
+
+
+class MeshPairingDeniedError(RuntimeError):
+    """The exact stable mesh peer was durably denied for this room."""
+
 
 class AuthManager:
     """Core authentication logic — delegates all DB operations to the bus."""
@@ -67,6 +101,10 @@ class AuthManager:
         self.bus = bus
         self.pairing_requests: dict[str, dict[str, Any]] = {}
         self.pairing_attempts: dict[str, int] = {}
+        # One lock owns the complete in-memory pairing lifecycle. Separate
+        # start/exchange locks allowed reconnect supersession or expiry to pop a
+        # request while its credential graph was still being committed.
+        self._pairing_lifecycle_lock = asyncio.Lock()
         self._default_device_permissions: list[str] = []
         self.login_attempts: dict[str, int] = {}
         self._mesh_inbound_key: bytes | None = None
@@ -91,8 +129,15 @@ class AuthManager:
         secret = await config.aget(
             ConfigKeys.services.gateway.api.token_secret, default="", config_timeout=15.0
         )
-        self._mesh_inbound_key = derive_mesh_inbound_key(secret or "")
-        return self._mesh_inbound_key
+        if hasattr(secret, "get_secret_value"):
+            secret = secret.get_secret_value()
+        secret_value = str(secret or "")
+        if not secret_value.strip():
+            raise RuntimeError("Mesh inbound token secret is unavailable")
+
+        key = derive_mesh_inbound_key(secret_value)
+        self._mesh_inbound_key = key
+        return key
 
     # ── Bus helpers ──────────────────────────────────────────────────────
 
@@ -103,6 +148,57 @@ class AuthManager:
             return result.data
         log_error(f"DB request {topic} failed: {result.error}")
         return None
+
+    @staticmethod
+    def _authority_changes(data: Any) -> tuple[DBMeshAuthorityChange, ...]:
+        """Parse committed DB generations without trusting loose bus payloads."""
+
+        if data is None:
+            return ()
+        raw_changes = (
+            data.get("authority_changes", ())
+            if isinstance(data, dict)
+            else getattr(data, "authority_changes", ())
+        )
+        changes: list[DBMeshAuthorityChange] = []
+        for raw_change in raw_changes or ():
+            try:
+                changes.append(DBMeshAuthorityChange.model_validate(raw_change))
+            except Exception as exc:
+                log_error(f"Ignoring invalid committed mesh authority change: {exc}")
+        return tuple(changes)
+
+    async def _publish_authority_changes(self, data: Any) -> None:
+        """Publish only revisions returned by an already-committed DB mutation."""
+
+        for change in self._authority_changes(data):
+            try:
+                await self.bus.publish(
+                    MeshEvents.PEER_AUTHORITY_CHANGED,
+                    MeshPeerAuthorityChangedEvent.model_validate(change.model_dump()),
+                    event=True,
+                    origin="internal",
+                )
+            except Exception as exc:
+                log_warning(
+                    "Failed to publish committed peer authority revision "
+                    f"{change.peer_id}@{change.auth_grant_revision}: {exc}"
+                )
+
+    @staticmethod
+    def _mutation_succeeded(data: Any, *, operation: str) -> bool:
+        """Handle explicit mesh-authority guard failures at the Auth boundary."""
+
+        if isinstance(data, dict):
+            error_code = data.get("error_code")
+            success = data.get("success")
+        else:
+            error_code = getattr(data, "error_code", None)
+            success = getattr(data, "success", False)
+        if error_code == "mesh_managed_authority":
+            log_warning(f"Rejected {operation} through generic mesh-managed authority path")
+            return False
+        return bool(success)
 
     async def _get_user_by_username(self, username: str) -> User | None:
         data = await self._db_request(
@@ -158,14 +254,14 @@ class AuthManager:
             DBMethods.UPDATE_USER,
             DBUpdateUserRequest(user_id=user_id, fields=fields),
         )
-        return bool(data and data.get("success"))
+        return self._mutation_succeeded(data, operation="user update")
 
     async def _delete_user(self, user_id: str) -> bool:
         data = await self._db_request(
             DBMethods.DELETE_USER,
             DBDeleteUserRequest(user_id=user_id),
         )
-        return bool(data and data.get("success"))
+        return self._mutation_succeeded(data, operation="user deletion")
 
     async def _create_device(self, device: Device) -> bool:
         data = await self._db_request(
@@ -203,7 +299,7 @@ class AuthManager:
             DBMethods.DELETE_DEVICE,
             DBDeleteDeviceRequest(device_id=device_id),
         )
-        return bool(data and data.get("success"))
+        return self._mutation_succeeded(data, operation="device deletion")
 
     async def _create_token(self, token: Token) -> bool:
         data = await self._db_request(
@@ -218,7 +314,31 @@ class AuthManager:
                 expires_at=token.expires_at.isoformat() if token.expires_at else None,
             ),
         )
-        return bool(data and data.get("success"))
+        return self._mutation_succeeded(data, operation="token creation")
+
+    async def get_mesh_peer_authority_snapshot(
+        self,
+        peer_id: str | None = None,
+    ) -> tuple[MeshPeerAuthoritySnapshot, ...]:
+        data = await self._db_request(
+            DBMethods.GET_MESH_PEER_AUTHORITY_SNAPSHOT,
+            DBGetMeshPeerAuthoritySnapshotRequest(peer_id=peer_id),
+        )
+        if data is None:
+            raise RuntimeError("mesh authority snapshot unavailable")
+        if isinstance(data, dict):
+            if "authorities" not in data:
+                raise RuntimeError("mesh authority snapshot response missing authorities")
+            authorities = data["authorities"]
+        else:
+            if not hasattr(data, "authorities"):
+                raise RuntimeError("mesh authority snapshot response missing authorities")
+            authorities = data.authorities
+        if authorities is None or not isinstance(authorities, (list, tuple)):
+            raise RuntimeError("mesh authority snapshot response is malformed")
+        return tuple(
+            MeshPeerAuthoritySnapshot.model_validate(authority) for authority in authorities
+        )
 
     async def _get_token_by_hash(self, token_hash: str) -> Token | None:
         data = await self._db_request(
@@ -254,14 +374,20 @@ class AuthManager:
             DBMethods.UPDATE_TOKEN_SCOPES,
             DBUpdateTokenScopesRequest(token_id=token_id, scopes=scopes),
         )
-        return bool(data and data.get("success"))
+        return self._mutation_succeeded(data, operation="token scope update")
 
-    async def _revoke_token(self, token_id: str) -> bool:
+    async def _revoke_token(self, token_id: str, *, reject_mesh_linked: bool = False) -> bool:
         data = await self._db_request(
             DBMethods.REVOKE_TOKEN,
-            DBRevokeTokenRequest(token_id=token_id),
+            DBRevokeTokenRequest(
+                token_id=token_id,
+                reject_mesh_linked=reject_mesh_linked,
+            ),
         )
-        return bool(data and data.get("success"))
+        if not self._mutation_succeeded(data, operation="token revocation"):
+            return False
+        await self._publish_authority_changes(data)
+        return True
 
     async def _get_audit_log(
         self,
@@ -518,6 +644,161 @@ class AuthManager:
             return token
         return None
 
+    async def verify_mesh_reconnect_proof(
+        self,
+        *,
+        token_id: str,
+        challenge: str,
+        proof: str,
+        channel_binding: str,
+        claimant_peer_id: str,
+        verifier_peer_id: str,
+        room_name: str,
+    ) -> Identity | None:
+        """Verify a channel-bound proof without receiving the bearer token.
+
+        The stored token hash is exactly ``SHA256(raw_token)`` and therefore
+        serves as the HMAC key shared by issuer and bearer holder. The public
+        token ID is accepted only when it is linked to the claimed stable peer
+        in this exact mesh room.
+        """
+
+        local_identity = await self.load_mesh_identity()
+        local_peer_id = str(local_identity.get("peer_id") or "")
+        if not local_peer_id or not hmac.compare_digest(local_peer_id, verifier_peer_id):
+            return None
+
+        token = await self._get_token_by_id(token_id)
+        if token is None:
+            return None  # Deleted rows are revoked credentials.
+
+        if token.expires_at:
+            now = (
+                datetime.now(token.expires_at.tzinfo)
+                if token.expires_at.tzinfo is not None
+                else datetime.now()
+            )
+            if token.expires_at < now:
+                await self._revoke_token(token.id)
+                return None
+
+        linked = await self._mesh_outbound_credential_is_linked(
+            token=token,
+            claimant_peer_id=claimant_peer_id,
+            room_name=room_name,
+        )
+        if not linked:
+            return None
+
+        try:
+            key = bytes.fromhex(token.token_hash)
+            supplied_proof = bytes.fromhex(proof)
+        except ValueError:
+            return None
+        if (
+            len(key) != hashlib.sha256().digest_size
+            or len(supplied_proof) != hashlib.sha256().digest_size
+        ):
+            return None
+
+        message = build_mesh_reconnect_proof_message(
+            token_id=token_id,
+            challenge=challenge,
+            channel_binding=channel_binding,
+            claimant_peer_id=claimant_peer_id,
+            verifier_peer_id=verifier_peer_id,
+            room_name=room_name,
+        )
+        expected_proof = hmac.digest(key, message, "sha256")
+        if not hmac.compare_digest(expected_proof, supplied_proof):
+            return None
+
+        return await self.build_identity_from_token(token, source="webrtc_reconnect_proof")
+
+    async def validate_mesh_pairing_token(
+        self,
+        *,
+        token_str: str,
+        pairing_session_id: str,
+        claimant_peer_id: str,
+        room_name: str,
+    ) -> Identity | None:
+        """Resolve only the bearer minted by one exact bilateral SAS session."""
+
+        async with self._pairing_lifecycle_lock:
+            matches = [
+                request
+                for request in self.pairing_requests.values()
+                if request.get("status") == "exchanged"
+                and hmac.compare_digest(
+                    str(request.get("pairing_session_id") or ""), pairing_session_id
+                )
+                and hmac.compare_digest(str(request.get("remote_peer_id") or ""), claimant_peer_id)
+                and hmac.compare_digest(str(request.get("room_name") or ""), room_name)
+            ]
+            if len(matches) != 1:
+                return None
+            exchange_result = matches[0].get("exchange_result")
+            if not isinstance(exchange_result, dict):
+                return None
+            token_id = str(exchange_result.get("token_id") or "")
+        if not token_id:
+            return None
+
+        token = await self._get_token_by_id(token_id)
+        if token is None:
+            return None
+        if token.expires_at:
+            now = (
+                datetime.now(token.expires_at.tzinfo)
+                if token.expires_at.tzinfo is not None
+                else datetime.now()
+            )
+            if token.expires_at < now:
+                await self._revoke_token(token.id)
+                return None
+
+        presented_hash = hashlib.sha256(token_str.encode()).hexdigest()
+        if not hmac.compare_digest(token.token_hash, presented_hash):
+            return None
+        if not await self._mesh_outbound_credential_is_linked(
+            token=token,
+            claimant_peer_id=claimant_peer_id,
+            room_name=room_name,
+        ):
+            return None
+
+        return await self.build_identity_from_token(token, source="webrtc_pairing_session")
+
+    async def _mesh_outbound_credential_is_linked(
+        self,
+        *,
+        token: Token,
+        claimant_peer_id: str,
+        room_name: str,
+    ) -> bool:
+        """Require exact token/user/device ownership for one mesh peer row."""
+
+        if not token.user_id or not token.device_id:
+            return False
+        data = await self._db_request(
+            DBMethods.MATCH_MESH_OUTBOUND_CREDENTIAL,
+            DBMatchMeshOutboundCredentialRequest(
+                token_id=token.id,
+                device_id=token.device_id,
+                user_id=token.user_id,
+                claimant_peer_id=claimant_peer_id,
+                room_name=room_name,
+            ),
+        )
+        return bool(
+            data
+            and (
+                data.get("success") is True
+                or ("success" not in data and data.get("rowcount", 0) == 1)
+            )
+        )
+
     # ── Pairing ──────────────────────────────────────────────────────────
 
     async def start_pairing(
@@ -526,30 +807,157 @@ class AuthManager:
         client_ip: str,
         remote_peer_id: str = "",
         remote_node_name: str = "",
+        room_name: str = "",
+        pairing_session_id: str = "",
+        verification_code: str = "",
+        trusted_rate_limit_key: str | None = None,
+        raise_on_denied: bool = False,
     ) -> str | None:
-        if self.pairing_attempts.get(client_ip, 0) >= 5:
-            log_warning(f"Pairing rate limit exceeded for IP: {client_ip}")
+        """Create one idempotent request even under concurrent RPC retries."""
+        async with self._pairing_lifecycle_lock:
+            return await self._start_pairing_locked(
+                device_name,
+                client_ip,
+                remote_peer_id=remote_peer_id,
+                remote_node_name=remote_node_name,
+                room_name=room_name,
+                pairing_session_id=pairing_session_id,
+                verification_code=verification_code,
+                trusted_rate_limit_key=trusted_rate_limit_key,
+                raise_on_denied=raise_on_denied,
+            )
+
+    async def _start_pairing_locked(
+        self,
+        device_name: str,
+        client_ip: str,
+        remote_peer_id: str = "",
+        remote_node_name: str = "",
+        room_name: str = "",
+        pairing_session_id: str = "",
+        verification_code: str = "",
+        trusted_rate_limit_key: str | None = None,
+        raise_on_denied: bool = False,
+    ) -> str | None:
+        # Expired requests no longer consume an active-attempt slot. Prune
+        # before enforcing the limit so a peer can retry immediately after one
+        # of its prior requests expires.
+        await self._prune_expired_pairings()
+
+        now = datetime.now()
+        attempt_key = trusted_rate_limit_key or _UNATTRIBUTED_PAIRING_RATE_KEY
+
+        if pairing_session_id:
+            if len(pairing_session_id) != 64 or any(
+                character not in "0123456789abcdef" for character in pairing_session_id
+            ):
+                log_warning("Rejected pairing request with invalid session identifier")
+                return None
+            if len(verification_code) != 8 or not verification_code.isdecimal():
+                log_warning("Rejected pairing request with invalid verification code")
+                return None
+            if not remote_peer_id or not room_name:
+                log_warning("Rejected mesh pairing request without stable peer and room linkage")
+                return None
+
+            peer_data = await self._db_request(
+                DBMethods.EXECUTE_SQL,
+                _MeshSQL.get_peer(remote_peer_id, room_name),
+            )
+            if peer_data is None or not isinstance(peer_data.get("rows"), list):
+                log_warning("Could not verify durable mesh peer denial state")
+                return None
+            peer_rows = peer_data["rows"]
+            if peer_rows and peer_rows[0].get("outbound_status") == "denied":
+                log_info(f"Refused automatic pairing retry for denied mesh peer {remote_peer_id}")
+                if raise_on_denied:
+                    raise MeshPairingDeniedError
+                return None
+
+            # PairingStart can be retried when an RPC response is lost. Return
+            # the same opaque handle only when the entire transport-bound
+            # request is identical; conflicting reuse is a protocol error.
+            for existing_code, existing in self.pairing_requests.items():
+                if existing.get("pairing_session_id") != pairing_session_id:
+                    continue
+                identical = (
+                    existing.get("rate_limit_key") == attempt_key
+                    and existing.get("device_name") == device_name
+                    and existing.get("remote_peer_id", "") == remote_peer_id
+                    and existing.get("remote_node_name", "") == remote_node_name
+                    and existing.get("room_name", "") == room_name
+                    and existing.get("verification_code", "") == verification_code
+                )
+                if identical:
+                    return existing_code
+                log_warning("Rejected conflicting duplicate pairing session")
+                return None
+
+            # A reconnect creates a new channel transcript and supersedes an
+            # older pending request from the same authenticated transport peer.
+            # Never reuse or reveal the old opaque handle.
+            if trusted_rate_limit_key:
+                superseded = [
+                    (code, request)
+                    for code, request in self.pairing_requests.items()
+                    if request.get("pairing_session_id")
+                    and request.get("status") in {"pending", "approved"}
+                    and (
+                        request.get("rate_limit_key") == attempt_key
+                        or (remote_peer_id and request.get("remote_peer_id") == remote_peer_id)
+                    )
+                ]
+                for code, request in superseded:
+                    await self._expire_pairing(code, request)
+
+            if not await self.upsert_mesh_peer(
+                peer_id=remote_peer_id,
+                room_name=room_name,
+                node_name=remote_node_name,
+            ):
+                log_warning("Could not establish durable mesh peer row for pairing request")
+                return None
+
+        if self.pairing_attempts.get(attempt_key, 0) >= 5:
+            log_warning(f"Pairing rate limit exceeded for source: {attempt_key}")
             return None
 
-        pairing_code = "".join(secrets.choice("0123456789") for _ in range(6))
+        # The request handle authorizes status and exchange calls, so it must be
+        # high entropy and distinct from the short, display-only verification
+        # code. Also avoid overwriting an unrelated live request on collision.
+        pairing_code: str | None = None
+        for _ in range(10):
+            candidate = secrets.token_urlsafe(32)
+            if candidate not in self.pairing_requests:
+                pairing_code = candidate
+                break
+        if pairing_code is None:
+            log_warning("Could not allocate a unique active pairing code")
+            return None
+
         request_id = str(uuid.uuid4())
 
         self.pairing_requests[pairing_code] = {
             "id": request_id,
             "device_name": device_name,
             "client_ip": client_ip,
+            "rate_limit_key": attempt_key,
             "status": "pending",
-            "created_at": datetime.now(),
-            "expires_at": datetime.now() + timedelta(minutes=5),
+            "created_at": now,
+            "expires_at": now + timedelta(minutes=5),
             "approved_by": None,
             "remote_peer_id": remote_peer_id,
             "remote_node_name": remote_node_name,
+            "room_name": room_name,
+            "pairing_session_id": pairing_session_id,
+            "verification_code": verification_code
+            or "".join(secrets.choice("0123456789") for _ in range(8)),
         }
 
-        self.pairing_attempts[client_ip] = self.pairing_attempts.get(client_ip, 0) + 1
+        self.pairing_attempts[attempt_key] = self.pairing_attempts.get(attempt_key, 0) + 1
 
         log_info(
-            f"Pairing started for device '{device_name}' (IP: {client_ip}). Code: {pairing_code}"
+            f"Pairing request {request_id} started for device '{device_name}' (IP: {client_ip})"
         )
 
         # Publish PairingRequestedEvent so UI / mesh subsystem can react
@@ -565,7 +973,7 @@ class AuthManager:
                     remote_node_name=remote_node_name,
                     device_name=device_name,
                     client_ip=client_ip,
-                    expires_at=(datetime.now() + timedelta(minutes=5)).isoformat(),
+                    expires_at=(now + timedelta(minutes=5)).isoformat(),
                 ),
                 event=True,
                 origin="internal",
@@ -578,6 +986,12 @@ class AuthManager:
     async def list_pending_pairings(
         self, include_non_pending: bool = False
     ) -> tuple[list[dict[str, Any]], int]:
+        async with self._pairing_lifecycle_lock:
+            return await self._list_pending_pairings_locked(include_non_pending)
+
+    async def _list_pending_pairings_locked(
+        self, include_non_pending: bool
+    ) -> tuple[list[dict[str, Any]], int]:
         expired_count = await self._prune_expired_pairings()
         pairings: list[dict[str, Any]] = []
         for code, request in sorted(
@@ -589,13 +1003,38 @@ class AuthManager:
             pairings.append(self._pending_pairing_entry(code, request))
         return pairings, expired_count
 
-    async def connect_pairing(self, pairing_code: str) -> dict[str, Any] | None:
+    async def connect_pairing(
+        self,
+        pairing_code: str,
+        pairing_session_id: str = "",
+        trusted_rate_limit_key: str | None = None,
+    ) -> dict[str, Any] | None:
+        async with self._pairing_lifecycle_lock:
+            return await self._connect_pairing_locked(
+                pairing_code,
+                pairing_session_id=pairing_session_id,
+                trusted_rate_limit_key=trusted_rate_limit_key,
+            )
+
+    async def _connect_pairing_locked(
+        self,
+        pairing_code: str,
+        pairing_session_id: str,
+        trusted_rate_limit_key: str | None,
+    ) -> dict[str, Any] | None:
         request = self.pairing_requests.get(pairing_code)
         if not request:
             return None
 
         if request["expires_at"] < datetime.now():
             await self._expire_pairing(pairing_code, request)
+            return None
+
+        if not self._pairing_transport_matches(
+            request,
+            pairing_session_id=pairing_session_id,
+            trusted_rate_limit_key=trusted_rate_limit_key,
+        ):
             return None
 
         return request
@@ -607,6 +1046,21 @@ class AuthManager:
         permissions: list[str] | None = None,
         is_admin: bool = False,
     ) -> bool:
+        async with self._pairing_lifecycle_lock:
+            return await self._approve_pairing_locked(
+                pairing_code,
+                user_id,
+                permissions=permissions,
+                is_admin=is_admin,
+            )
+
+    async def _approve_pairing_locked(
+        self,
+        pairing_code: str,
+        user_id: str,
+        permissions: list[str] | None,
+        is_admin: bool,
+    ) -> bool:
         request = self.pairing_requests.get(pairing_code)
         if not request:
             return False
@@ -614,16 +1068,40 @@ class AuthManager:
         if request["expires_at"] < datetime.now():
             await self._expire_pairing(pairing_code, request)
             return False
+        if request.get("status") != "pending":
+            return False
 
         resolved_perms = (
             permissions if permissions is not None else self._default_device_permissions
         )
+        if is_admin:
+            resolved_perms = ["*"]
+
+        # A SAS-bound mesh approval is durable only when the exact room row and
+        # every authority graph already linked to it commit together.
+        remote_peer_id = str(request.get("remote_peer_id") or "")
+        if remote_peer_id:
+            room_name = str(request.get("room_name") or "")
+            data = await self._db_request(
+                DBMethods.APPROVE_MESH_PEER,
+                DBApproveMeshPeerRequest(
+                    peer_id=remote_peer_id,
+                    permissions=resolved_perms,
+                    approved_by=user_id,
+                    room_name=room_name,
+                ),
+            )
+            approved_rooms = set(data.get("approved_rooms", [])) if data else set()
+            if not data or data.get("success") is not True or room_name not in approved_rooms:
+                log_warning("Could not persist mesh pairing approval for exact peer row")
+                return False
+            await self._publish_authority_changes(data)
 
         request["status"] = "approved"
         request["approved_by"] = user_id
         request["granted_permissions"] = resolved_perms
         request["granted_is_admin"] = is_admin
-        log_info(f"Pairing code {pairing_code} approved by user {user_id}")
+        log_info(f"Pairing request {request['id']} approved by user {user_id}")
         await self._publish_pairing_lifecycle_event(
             AuthMethods.PAIRING_APPROVED,
             pairing_code,
@@ -637,24 +1115,6 @@ class AuthManager:
             actor_principal_id=user_id,
         )
 
-        # ── Sync to mesh_peers if this pairing is from a mesh peer ──
-        remote_peer_id = request.get("remote_peer_id", "")
-        if remote_peer_id:
-            import json as _json
-
-            try:
-                await self._db_request(
-                    DBMethods.EXECUTE_SQL,
-                    _MeshSQL.approve_peer(
-                        remote_peer_id,
-                        _json.dumps(resolved_perms),
-                        user_id,
-                    ),
-                )
-                log_info(f"Synced pairing approval to mesh_peers for peer {remote_peer_id}")
-            except Exception as e:
-                log_warning(f"Failed to sync pairing approval to mesh_peers: {e}")
-
         return True
 
     async def deny_pairing(
@@ -663,6 +1123,15 @@ class AuthManager:
         user_id: str,
         reason: str = "",
     ) -> bool:
+        async with self._pairing_lifecycle_lock:
+            return await self._deny_pairing_locked(pairing_code, user_id, reason=reason)
+
+    async def _deny_pairing_locked(
+        self,
+        pairing_code: str,
+        user_id: str,
+        reason: str,
+    ) -> bool:
         request = self.pairing_requests.get(pairing_code)
         if not request:
             return False
@@ -670,6 +1139,26 @@ class AuthManager:
         if request["expires_at"] < datetime.now():
             await self._expire_pairing(pairing_code, request)
             return False
+        if request.get("status") != "pending":
+            return False
+
+        if request.get("pairing_session_id"):
+            remote_peer_id = str(request.get("remote_peer_id") or "")
+            room_name = str(request.get("room_name") or "")
+            if not remote_peer_id or not room_name:
+                log_warning("Could not persist mesh pairing denial without exact peer linkage")
+                return False
+            data = await self._db_request(
+                DBMethods.DENY_MESH_PEER,
+                DBDenyMeshPeerRequest(
+                    peer_id=remote_peer_id,
+                    room_name=room_name,
+                ),
+            )
+            if not self._mutation_succeeded(data, operation="mesh pairing denial"):
+                log_warning("Could not persist mesh pairing denial for exact peer row")
+                return False
+            await self._publish_authority_changes(data)
 
         request["status"] = "denied"
         request["denied_by"] = user_id
@@ -688,78 +1177,203 @@ class AuthManager:
             actor_principal_id=user_id,
             reason=reason,
         )
-        log_info(f"Pairing code {pairing_code} denied by user {user_id}")
+        log_info(f"Pairing request {request['id']} denied by user {user_id}")
         return True
 
-    async def exchange_pairing(self, pairing_code: str) -> dict[str, Any] | None:
+    async def exchange_pairing(
+        self,
+        pairing_code: str,
+        pairing_session_id: str = "",
+        trusted_rate_limit_key: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Issue at most one credential for concurrent identical exchanges."""
+        if pairing_code not in self.pairing_requests:
+            return None
+        async with self._pairing_lifecycle_lock:
+            return await self._exchange_pairing_locked(
+                pairing_code,
+                pairing_session_id=pairing_session_id,
+                trusted_rate_limit_key=trusted_rate_limit_key,
+            )
+
+    async def _exchange_pairing_locked(
+        self,
+        pairing_code: str,
+        pairing_session_id: str = "",
+        trusted_rate_limit_key: str | None = None,
+    ) -> dict[str, Any] | None:
         request = self.pairing_requests.get(pairing_code)
-        if not request or request["status"] != "approved":
+        if not request:
             return None
 
         if request["expires_at"] < datetime.now():
             await self._expire_pairing(pairing_code, request)
             return None
 
+        if not self._pairing_transport_matches(
+            request,
+            pairing_session_id=pairing_session_id,
+            trusted_rate_limit_key=trusted_rate_limit_key,
+        ):
+            return None
+
+        # Retrying an identical exchange after a lost RPC response must return
+        # the originally issued credential rather than minting another user,
+        # device, and token.
+        cached_exchange = request.get("exchange_result")
+        if isinstance(cached_exchange, dict):
+            return dict(cached_exchange)
+
+        if request["status"] != "approved":
+            return None
+
         granted_perms: list[str] = request.get("granted_permissions", [])
         granted_is_admin: bool = request.get("granted_is_admin", False)
 
-        device_username = f"device_{request['device_name']}_{uuid.uuid4().hex[:6]}"
+        remote_peer_id = str(request.get("remote_peer_id") or "")
+        room_name = str(request.get("room_name") or "")
+        pending_exchange = request.get("pending_exchange")
+        if not isinstance(pending_exchange, dict):
+            token_str = secrets.token_urlsafe(32)
+            token_scopes = ["*"] if granted_is_admin else granted_perms
+            user_id = str(uuid.uuid4())
+            device_id = str(uuid.uuid4())
+            issued_at = datetime.now().isoformat()
+            pending_exchange = {
+                "token": token_str,
+                "token_hash": hashlib.sha256(token_str.encode()).hexdigest(),
+                "token_prefix": token_str[:8],
+                "token_id": str(uuid.uuid4()),
+                "device_id": device_id,
+                "user_id": user_id,
+                "username": f"device_{request['device_name']}_{uuid.uuid4().hex[:6]}",
+                "permissions": token_scopes,
+                "user_permissions": list(granted_perms),
+                "is_admin": granted_is_admin,
+                "created_at": issued_at,
+                "expires_at": (datetime.now() + timedelta(days=365)).isoformat(),
+            }
+            request["pending_exchange"] = dict(pending_exchange)
+
+        if "created_at" not in pending_exchange:
+            pending_exchange["created_at"] = datetime.now().isoformat()
+            request["pending_exchange"] = dict(pending_exchange)
+        issued_created_at = datetime.fromisoformat(str(pending_exchange["created_at"]))
         device_user = User(
-            id=str(uuid.uuid4()),
-            username=device_username,
+            id=str(pending_exchange["user_id"]),
+            username=str(pending_exchange["username"]),
             password_hash="DEVICE_NO_PASSWORD",
             role="admin" if granted_is_admin else "device",
-            permissions=granted_perms,
-            is_admin=granted_is_admin,
+            permissions=list(pending_exchange.get("user_permissions", granted_perms)),
+            is_admin=bool(pending_exchange.get("is_admin", granted_is_admin)),
+            created_at=issued_created_at,
         )
-        await self._create_user(device_user)
-
-        device_id = str(uuid.uuid4())
+        device_id = str(pending_exchange["device_id"])
         device = Device(
             id=device_id,
             user_id=device_user.id,
             name=request["device_name"],
             is_trusted=True,
+            created_at=issued_created_at,
         )
-        await self._create_device(device)
-
-        token_str = secrets.token_urlsafe(32)
-        token_hash = hashlib.sha256(token_str.encode()).hexdigest()
-        token_id = str(uuid.uuid4())
-
-        token_scopes = ["*"] if granted_is_admin else granted_perms
-
+        token_id = str(pending_exchange["token_id"])
         token = Token(
             id=token_id,
-            token_hash=token_hash,
-            prefix=token_str[:8],
+            token_hash=str(pending_exchange["token_hash"]),
+            prefix=str(pending_exchange["token_prefix"]),
             device_id=device_id,
             user_id=device_user.id,
-            scopes=token_scopes,
-            expires_at=datetime.now() + timedelta(days=365),
+            scopes=list(pending_exchange.get("permissions", [])),
+            expires_at=datetime.fromisoformat(str(pending_exchange["expires_at"])),
+            created_at=issued_created_at,
         )
-        await self._create_token(token)
 
-        # ── Link outbound FKs to mesh_peers if from a mesh peer ──
-        remote_peer_id = request.get("remote_peer_id", "")
         if remote_peer_id:
-            try:
-                await self._db_request(
-                    DBMethods.EXECUTE_SQL,
-                    _MeshSQL.link_outbound_fks(
-                        remote_peer_id,
-                        token_id,
-                        device_id,
-                        device_user.id,
+            if not room_name:
+                log_error("Approved mesh pairing has no exact room linkage")
+                return None
+            issue_data = await self._db_request(
+                DBMethods.ISSUE_MESH_PEER_CREDENTIAL,
+                DBIssueMeshPeerCredentialRequest(
+                    peer_id=remote_peer_id,
+                    room_name=room_name,
+                    user=DBCreateUserRequest(
+                        id=device_user.id,
+                        username=device_user.username,
+                        password_hash=device_user.password_hash,
+                        role=device_user.role,
+                        permissions=device_user.permissions,
+                        is_admin=device_user.is_admin,
+                        created_at=device_user.created_at.isoformat()
+                        if device_user.created_at
+                        else None,
                     ),
-                )
-                log_info(
-                    f"Linked outbound FKs to mesh_peers for peer {remote_peer_id}: "
-                    f"token={token_id}, device={device_id}, user={device_user.id}"
-                )
-            except Exception as e:
-                log_warning(f"Failed to link outbound FKs to mesh_peers: {e}")
+                    device=DBCreateDeviceRequest(
+                        id=device.id,
+                        user_id=device.user_id,
+                        name=device.name,
+                        public_key=device.public_key,
+                        is_trusted=device.is_trusted,
+                        created_at=device.created_at.isoformat() if device.created_at else None,
+                    ),
+                    token=DBCreateTokenRequest(
+                        id=token.id,
+                        token_hash=token.token_hash,
+                        prefix=token.prefix,
+                        device_id=token.device_id,
+                        user_id=token.user_id,
+                        scopes=token.scopes or [],
+                        expires_at=token.expires_at.isoformat() if token.expires_at else None,
+                        created_at=token.created_at.isoformat() if token.created_at else None,
+                    ),
+                ),
+            )
+            if not self._mutation_succeeded(issue_data, operation="mesh credential issue"):
+                log_error("Could not atomically issue mesh peer credential")
+                return None
+            await self._publish_authority_changes(issue_data)
+        else:
+            if not await self._create_user(device_user):
+                log_error("Could not persist the paired device user")
+                return None
+            if not await self._create_device(device):
+                log_error("Could not persist the paired device record")
+                await self._delete_user(device_user.id)
+                return None
+            if not await self._create_token(token):
+                log_error("Could not persist the paired device credential")
+                await self._delete_device(device_id)
+                await self._delete_user(device_user.id)
+                return None
 
+        # Include our stable mesh peer_id so the initiator can key
+        # the saved credential by stable ID (not the transient signaling ID).
+        local_peer_id = ""
+        local_node_name = ""
+        try:
+            identity = await self.load_mesh_identity()
+            local_peer_id = identity.get("peer_id", "") or ""
+            local_node_name = identity.get("node_name", "") or ""
+        except Exception as exc:
+            # Non-fatal — initiator falls back to signaling ID.  Keep evidence
+            # without logging peer identifiers, node names, tokens, or codes.
+            log_warning(
+                "PairingExchange mesh identity unavailable; "
+                "fallback=signaling_peer_id "
+                f"reason={_safe_exception_category(exc)}"
+            )
+
+        exchange_result = {
+            "token": str(pending_exchange["token"]),
+            "device_id": device_id,
+            "user_id": device_user.id,
+            "permissions": list(pending_exchange.get("permissions", [])),
+            "token_id": token_id,
+            "peer_id": local_peer_id,
+            "node_name": local_node_name,
+        }
+        request["status"] = "exchanged"
+        request["exchange_result"] = dict(exchange_result)
         await self._publish_pairing_lifecycle_event(
             AuthMethods.PAIRING_EXCHANGED,
             pairing_code,
@@ -772,31 +1386,10 @@ class AuthManager:
             request,
             actor_principal_id=request.get("approved_by"),
         )
-
-        del self.pairing_requests[pairing_code]
-        if request["client_ip"] in self.pairing_attempts:
-            del self.pairing_attempts[request["client_ip"]]
-
-        # Include our stable mesh peer_id so the initiator can key
-        # the saved credential by stable ID (not the transient signaling ID).
-        local_peer_id = ""
-        local_node_name = ""
-        try:
-            identity = await self.load_mesh_identity()
-            local_peer_id = identity.get("peer_id", "") or ""
-            local_node_name = identity.get("node_name", "") or ""
-        except Exception:
-            pass  # Non-fatal — initiator falls back to signaling ID
-
-        return {
-            "token": token_str,
-            "device_id": device_id,
-            "user_id": device_user.id,
-            "permissions": granted_perms,
-            "token_id": token_id,
-            "peer_id": local_peer_id,
-            "node_name": local_node_name,
-        }
+        if not request.get("rate_limit_released"):
+            self._release_pairing_attempt(request)
+            request["rate_limit_released"] = True
+        return exchange_result
 
     def _pending_pairing_entry(self, pairing_code: str, request: dict[str, Any]) -> dict[str, Any]:
         expires_at = request.get("expires_at")
@@ -816,6 +1409,8 @@ class AuthManager:
             "denied_reason": request.get("denied_reason", ""),
             "granted_permissions": request.get("granted_permissions", []),
             "granted_is_admin": request.get("granted_is_admin", False),
+            "pairing_session_id": request.get("pairing_session_id", ""),
+            "verification_code": request.get("verification_code", ""),
         }
 
     async def _prune_expired_pairings(self) -> int:
@@ -830,17 +1425,54 @@ class AuthManager:
         return len(expired)
 
     async def _expire_pairing(self, pairing_code: str, request: dict[str, Any]) -> None:
-        await self._publish_pairing_lifecycle_event(
-            AuthMethods.PAIRING_EXPIRED,
-            pairing_code,
-            request,
+        if request.get("status") != "exchanged":
+            await self._publish_pairing_lifecycle_event(
+                AuthMethods.PAIRING_EXPIRED,
+                pairing_code,
+                request,
+            )
+            await self._audit_pairing_lifecycle(
+                "auth.pairing.expired",
+                pairing_code,
+                request,
+            )
+        removed = self.pairing_requests.pop(pairing_code, None)
+        if removed is not None and not request.get("rate_limit_released"):
+            self._release_pairing_attempt(request)
+
+    @staticmethod
+    def _pairing_transport_matches(
+        request: dict[str, Any],
+        *,
+        pairing_session_id: str,
+        trusted_rate_limit_key: str | None,
+    ) -> bool:
+        """Bind mesh-v2 bearer handles to their exact WebRTC transcript.
+
+        Direct manager calls omit ``trusted_rate_limit_key`` and are used by
+        trusted in-process administration/tests. External service handlers
+        always provide a source key, so a v2 request then requires both the
+        matching session identifier and the original transport peer.
+        """
+        stored_session = str(request.get("pairing_session_id") or "")
+        if not stored_session or trusted_rate_limit_key is None:
+            return True
+        stored_source = str(request.get("rate_limit_key") or "")
+        return secrets.compare_digest(
+            stored_session, pairing_session_id
+        ) and secrets.compare_digest(
+            stored_source,
+            trusted_rate_limit_key,
         )
-        await self._audit_pairing_lifecycle(
-            "auth.pairing.expired",
-            pairing_code,
-            request,
-        )
-        self.pairing_requests.pop(pairing_code, None)
+
+    def _release_pairing_attempt(self, request: dict[str, Any]) -> None:
+        """Release one active rate-limit slot owned by ``request``."""
+        attempt_key = request.get("rate_limit_key", _UNATTRIBUTED_PAIRING_RATE_KEY)
+        attempts = self.pairing_attempts.get(attempt_key, 0)
+        if attempts <= 1:
+            self.pairing_attempts.pop(attempt_key, None)
+            return
+        self.pairing_attempts[attempt_key] = attempts - 1
 
     async def _publish_pairing_lifecycle_event(
         self,
@@ -1057,7 +1689,11 @@ class AuthManager:
         if not token:
             return None
 
-        await self._revoke_token(token.id)
+        # A mesh-linked bearer is part of a stable-peer authority graph. A
+        # generic refresh cannot atomically relink its replacement credential,
+        # so reject it instead of splitting the graph across transactions.
+        if not await self._revoke_token(token.id, reject_mesh_linked=True):
+            return None
 
         new_token_str = secrets.token_urlsafe(32)
         new_token_hash = hashlib.sha256(new_token_str.encode()).hexdigest()
@@ -1199,18 +1835,38 @@ class AuthManager:
             DBMethods.EXECUTE_SQL,
             _MeshSQL.load_identity(),
         )
-        if data and data.get("rows"):
+        if data is None or not isinstance(data.get("rows"), list):
+            raise RuntimeError("Could not load mesh identity from the database")
+        if data["rows"]:
             row = data["rows"][0]
             return {"peer_id": row.get("peer_id"), "node_name": row.get("node_name", "")}
         return {"peer_id": None, "node_name": ""}
 
-    async def save_mesh_identity(self, peer_id: str, node_name: str = "") -> None:
-        """Save (or update) this instance's stable mesh identity to DB."""
-        await self._db_request(
+    async def save_mesh_identity(self, peer_id: str, node_name: str = "") -> bool:
+        """Persist this instance's stable identity and verify the exact DB value."""
+        if not peer_id.strip():
+            log_error("Refusing to save an empty mesh peer identity")
+            return False
+
+        result = await self._db_request(
             DBMethods.EXECUTE_SQL,
             _MeshSQL.save_identity(peer_id, node_name),
         )
+        if not result or result.get("rowcount") != 1:
+            log_error(f"Failed to persist mesh identity: peer_id={peer_id}")
+            return False
+
+        try:
+            stored = await self.load_mesh_identity()
+        except RuntimeError as exc:
+            log_error(f"Failed to verify persisted mesh identity: {exc}")
+            return False
+        if stored.get("peer_id") != peer_id or stored.get("node_name", "") != node_name:
+            log_error(f"Mesh identity read-back did not match: peer_id={peer_id}")
+            return False
+
         log_info(f"Saved mesh identity: peer_id={peer_id}, node_name={node_name}")
+        return True
 
     # ── Mesh Peers CRUD ──────────────────────────────────────────────────
 
@@ -1221,16 +1877,27 @@ class AuthManager:
         node_name: str = "",
         ip: str | None = None,
         port: int | None = None,
-    ) -> str:
-        """Create or update a mesh_peers row on peer discovery. Returns row id."""
-        import json as _json
-
+    ) -> bool:
+        """Create or update a mesh peer row and report durable success."""
         row_id = str(uuid.uuid4())
-        await self._db_request(
-            DBMethods.EXECUTE_SQL,
-            _MeshSQL.upsert_peer(row_id, peer_id, room_name, node_name, ip, port),
+        data = await self._db_request(
+            DBMethods.UPSERT_MESH_PEER,
+            DBUpsertMeshPeerRequest(
+                id=row_id,
+                peer_id=peer_id,
+                room_name=room_name,
+                node_name=node_name,
+                ip=ip,
+                port=port,
+            ),
         )
-        return row_id
+        if data is None:
+            return False
+        if "success" in data:
+            return bool(data.get("success"))
+        if "rowcount" in data:
+            return data.get("rowcount") == 1
+        return True
 
     async def list_mesh_peers(
         self,
@@ -1262,30 +1929,58 @@ class AuthManager:
         permissions: list[str],
         approved_by: str | None = None,
     ) -> bool:
-        """Approve a mesh peer: update mesh_peers table AND approve any pending pairing code.
+        """Atomically approve stable-peer trust rows and linked authority graphs.
 
         This is the canonical admin action. It:
-        1. Sets mesh_peers.outbound_status = 'approved' with permissions
-        2. Finds any in-memory pairing code linked to this peer_id and approves it
-        3. If the peer already has an outbound principal, updates its permissions too
+        1. Approves every room row for the stable peer in one DB transaction.
+        2. Updates every complete User/Token authority graph already linked.
+        3. Advances a pending pairing only when its exact room row committed.
 
-        Returns True if the mesh_peers row was updated.
+        Returns True only when the complete durable approval committed.
         """
-        import json as _json
-
         data = await self._db_request(
-            DBMethods.EXECUTE_SQL,
-            _MeshSQL.approve_peer(peer_id, _json.dumps(permissions), approved_by),
+            DBMethods.APPROVE_MESH_PEER,
+            DBApproveMeshPeerRequest(
+                peer_id=peer_id,
+                permissions=permissions,
+                approved_by=approved_by,
+            ),
         )
-        updated = bool(data and data.get("rowcount", 0) > 0)
+        if not data or data.get("success") is not True:
+            return False
+        approved_rooms = {str(room_name) for room_name in data.get("approved_rooms", [])}
+        if not approved_rooms:
+            return False
+        await self._publish_authority_changes(data)
+        await self._approve_pending_pairing_for_peer(
+            peer_id,
+            permissions,
+            approved_by,
+            approved_rooms=approved_rooms,
+        )
+        return True
 
-        if updated:
-            # ── Also approve any pending pairing code for this peer ──
+    async def _approve_pending_pairing_for_peer(
+        self,
+        peer_id: str,
+        permissions: list[str],
+        approved_by: str | None,
+        *,
+        approved_rooms: set[str],
+    ) -> None:
+        """Apply a durable peer approval to at most one live pairing request."""
+
+        async with self._pairing_lifecycle_lock:
             for code, req in list(self.pairing_requests.items()):
+                request_room = str(req.get("room_name") or "")
+                exact_room_approved = (
+                    request_room in approved_rooms if request_room else len(approved_rooms) == 1
+                )
                 if (
                     req.get("remote_peer_id") == peer_id
                     and req.get("status") == "pending"
                     and req.get("expires_at", datetime.min) > datetime.now()
+                    and exact_room_approved
                 ):
                     req["status"] = "approved"
                     req["approved_by"] = approved_by
@@ -1296,100 +1991,114 @@ class AuthManager:
                     )
                     break  # At most one active code per peer
 
-            # ── Sync permissions to the existing auth principal if one exists ──
-            peer_row = await self.get_mesh_peer(peer_id)
-            if peer_row and peer_row.get("outbound_user_id"):
-                user_id = peer_row["outbound_user_id"]
-                await self._update_user(user_id, permissions=permissions)
-                token_id = peer_row.get("outbound_token_id")
-                if token_id:
-                    token_scopes = ["*"] if "*" in permissions else permissions
-                    await self._update_token_scopes(token_id, token_scopes)
-                log_info(f"Synced permissions to auth principal {user_id} for mesh peer {peer_id}")
-
-        return updated
-
     async def deny_mesh_peer(self, peer_id: str) -> bool:
-        """Set outbound_status=denied."""
+        """Atomically revoke the peer authority graph while retaining its row."""
         data = await self._db_request(
-            DBMethods.EXECUTE_SQL,
-            _MeshSQL.deny_peer(peer_id),
+            DBMethods.DENY_MESH_PEER,
+            DBDenyMeshPeerRequest(peer_id=peer_id),
         )
-        return bool(data and data.get("rowcount", 0) > 0)
+        if not self._mutation_succeeded(data, operation="mesh peer denial"):
+            return False
+        await self._publish_authority_changes(data)
+        return True
 
     async def update_mesh_peer_permissions(self, peer_id: str, permissions: list[str]) -> bool:
         """Update outbound permissions for an already-approved peer.
 
-        Consolidation: also syncs to User.permissions and Token.scopes
-        for the auth principal associated with this peer.
+        The DB service owns the transaction that updates ``mesh_peers``, the
+        dedicated ``User``, and its ``Token``.  Returning success from a series
+        of independent writes could publish authority that was only partially
+        persisted.
         """
-        import json as _json
-
         data = await self._db_request(
-            DBMethods.EXECUTE_SQL,
-            _MeshSQL.update_peer_permissions(peer_id, _json.dumps(permissions)),
+            DBMethods.UPDATE_MESH_PEER_PERMISSIONS,
+            DBUpdateMeshPeerPermissionsRequest(
+                peer_id=peer_id,
+                permissions=permissions,
+            ),
         )
-        updated = bool(data and data.get("rowcount", 0) > 0)
-
+        updated = bool(data and data.get("success") is True)
         if updated:
-            # ── Sync permissions to the auth principal ──
-            peer_row = await self.get_mesh_peer(peer_id)
-            if peer_row and peer_row.get("outbound_user_id"):
-                user_id = peer_row["outbound_user_id"]
-                await self._update_user(user_id, permissions=permissions)
-                token_id = peer_row.get("outbound_token_id")
-                if token_id:
-                    token_scopes = ["*"] if "*" in permissions else permissions
-                    await self._update_token_scopes(token_id, token_scopes)
-                log_info(f"Synced permissions to auth principal {user_id} for mesh peer {peer_id}")
-
+            await self._publish_authority_changes(data)
+            log_info(f"Atomically updated permissions for mesh peer {peer_id}")
         return updated
 
-    async def remove_mesh_peer(self, peer_id: str) -> bool:
-        """Delete a mesh peer record entirely."""
+    async def remove_mesh_peer(self, peer_id: str, *, revoke_token: bool = True) -> bool:
+        """Delete a mesh peer and clear its in-memory pairing decisions."""
         data = await self._db_request(
-            DBMethods.EXECUTE_SQL,
-            _MeshSQL.remove_peer(peer_id),
+            DBMethods.REMOVE_MESH_PEER,
+            DBRemoveMeshPeerRequest(
+                peer_id=peer_id,
+                revoke_token=revoke_token,
+            ),
         )
-        return bool(data and data.get("rowcount", 0) > 0)
+        if not self._mutation_succeeded(data, operation="mesh peer removal"):
+            return False
+        await self._publish_authority_changes(data)
+
+        async with self._pairing_lifecycle_lock:
+            stale_pairings = [
+                (code, request)
+                for code, request in self.pairing_requests.items()
+                if request.get("remote_peer_id") == peer_id
+            ]
+            for code, request in stale_pairings:
+                self.pairing_requests.pop(code, None)
+                if not request.get("rate_limit_released"):
+                    self._release_pairing_attempt(request)
+        return True
 
     async def save_inbound_credential(
         self,
         remote_peer_id: str,
         room_name: str,
         token: str,
+        token_id: str = "",
         permissions: list[str] | None = None,
         remote_device_id: str | None = None,
         remote_user_id: str | None = None,
         remote_node_name: str | None = None,
-    ) -> None:
+    ) -> bool:
         """Save the token a remote peer issued to us (inbound side).
 
         Tokens are encrypted at rest using the gateway token secret.
         """
-        import json as _json
+        if not await self.upsert_mesh_peer(
+            peer_id=remote_peer_id,
+            room_name=room_name,
+            node_name=remote_node_name or "",
+        ):
+            return False
 
         key = await self._aget_mesh_inbound_key()
         encrypted_token = seal_str(key, token)
-        perms_json = _json.dumps(permissions or [])
-        await self._db_request(
-            DBMethods.EXECUTE_SQL,
-            _MeshSQL.save_inbound_credential(
-                remote_peer_id,
-                room_name,
-                encrypted_token,
-                perms_json,
-                remote_device_id,
-                remote_user_id,
-                remote_node_name,
+        data = await self._db_request(
+            DBMethods.SAVE_MESH_INBOUND_CREDENTIAL,
+            DBSaveMeshInboundCredentialRequest(
+                peer_id=remote_peer_id,
+                room_name=room_name,
+                encrypted_token=encrypted_token,
+                token_id=token_id or None,
+                permissions=permissions or [],
+                remote_device_id=remote_device_id,
+                remote_user_id=remote_user_id,
+                remote_node_name=remote_node_name,
             ),
         )
-        log_info(f"Saved inbound credential from peer {remote_peer_id}")
+        saved = bool(
+            data
+            and (
+                data.get("success") is True or ("success" not in data and data.get("rowcount") == 1)
+            )
+        )
+        if saved:
+            log_info(f"Saved inbound credential from peer {remote_peer_id}")
+        return saved
 
     async def load_inbound_credentials(
         self, room_name: str, remote_peer_id: str | None = None
-    ) -> dict[str, str]:
-        """Load inbound tokens for reconnection. Returns {peer_id: token}.
+    ) -> dict[str, dict[str, str]]:
+        """Load peer-scoped bearer records for reconnect proof generation.
 
         Decrypts tokens stored with seal_str; passes through legacy plaintext.
         """
@@ -1397,20 +2106,37 @@ class AuthManager:
             DBMethods.EXECUTE_SQL,
             _MeshSQL.load_inbound_credentials(room_name, remote_peer_id),
         )
-        rows = data.get("rows", []) if data else []
+        if data is None or not isinstance(data.get("rows"), list):
+            raise RuntimeError("Could not load inbound mesh credentials from the database")
+        rows = data["rows"]
+        if not rows:
+            return {}
         key = await self._aget_mesh_inbound_key()
-        result: dict[str, str] = {}
+        result: dict[str, dict[str, str]] = {}
         for r in rows:
             raw = r.get("inbound_token")
             if raw:
-                result[r["peer_id"]] = open_str(key, raw)
+                try:
+                    token = open_str(key, raw)
+                except ValueError:
+                    log_warning(
+                        f"Skipping corrupt encrypted inbound credential for peer {r.get('peer_id')}"
+                    )
+                    continue
+                result[r["peer_id"]] = {
+                    "token": token,
+                    "token_id": str(r.get("inbound_token_id") or ""),
+                }
         return result
 
     async def update_peer_connection_status(self, peer_id: str, status: str) -> None:
         """Update connection_status and last_seen_at."""
         await self._db_request(
-            DBMethods.EXECUTE_SQL,
-            _MeshSQL.update_connection_status(peer_id, status),
+            DBMethods.UPDATE_MESH_PEER_CONNECTION,
+            DBUpdateMeshPeerConnectionRequest(
+                peer_id=peer_id,
+                connection_status=status,
+            ),
         )
 
 
@@ -1445,29 +2171,6 @@ class _MeshSQL:
         )
 
     @staticmethod
-    def upsert_peer(
-        row_id: str,
-        peer_id: str,
-        room_name: str,
-        node_name: str,
-        ip: str | None,
-        port: int | None,
-    ) -> DBExecuteSQLRequest:
-        return DBExecuteSQLRequest(
-            sql=(
-                "INSERT INTO mesh_peers (id, peer_id, room_name, node_name, ip, port) "
-                "VALUES (?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(peer_id, room_name) DO UPDATE SET "
-                "  node_name = COALESCE(NULLIF(excluded.node_name, ''), mesh_peers.node_name), "
-                "  ip = COALESCE(excluded.ip, mesh_peers.ip), "
-                "  port = COALESCE(excluded.port, mesh_peers.port), "
-                "  last_seen_at = CURRENT_TIMESTAMP, "
-                "  updated_at = CURRENT_TIMESTAMP"
-            ),
-            params=[row_id, peer_id, room_name, node_name, ip, port],
-        )
-
-    @staticmethod
     def list_peers(
         room_name: str | None,
         outbound_status: str | None,
@@ -1499,139 +2202,21 @@ class _MeshSQL:
         )
 
     @staticmethod
-    def approve_peer(
-        peer_id: str, permissions_json: str, approved_by: str | None
-    ) -> DBExecuteSQLRequest:
-        return DBExecuteSQLRequest(
-            sql=(
-                "UPDATE mesh_peers SET "
-                "  outbound_status = 'approved', "
-                "  outbound_permissions = ?, "
-                "  outbound_approved_at = CURRENT_TIMESTAMP, "
-                "  outbound_approved_by = ?, "
-                "  last_status_change_at = CURRENT_TIMESTAMP, "
-                "  updated_at = CURRENT_TIMESTAMP "
-                "WHERE peer_id = ?"
-            ),
-            params=[permissions_json, approved_by, peer_id],
-        )
-
-    @staticmethod
-    def deny_peer(peer_id: str) -> DBExecuteSQLRequest:
-        return DBExecuteSQLRequest(
-            sql=(
-                "UPDATE mesh_peers SET "
-                "  outbound_status = 'denied', "
-                "  last_status_change_at = CURRENT_TIMESTAMP, "
-                "  updated_at = CURRENT_TIMESTAMP "
-                "WHERE peer_id = ?"
-            ),
-            params=[peer_id],
-        )
-
-    @staticmethod
-    def update_peer_permissions(peer_id: str, permissions_json: str) -> DBExecuteSQLRequest:
-        return DBExecuteSQLRequest(
-            sql=(
-                "UPDATE mesh_peers SET "
-                "  outbound_permissions = ?, "
-                "  updated_at = CURRENT_TIMESTAMP "
-                "WHERE peer_id = ? AND outbound_status = 'approved'"
-            ),
-            params=[permissions_json, peer_id],
-        )
-
-    @staticmethod
-    def remove_peer(peer_id: str) -> DBExecuteSQLRequest:
-        return DBExecuteSQLRequest(
-            sql="DELETE FROM mesh_peers WHERE peer_id = ?",
-            params=[peer_id],
-        )
-
-    @staticmethod
-    def save_inbound_credential(
-        remote_peer_id: str,
-        room_name: str,
-        token: str,
-        perms_json: str,
-        remote_device_id: str | None,
-        remote_user_id: str | None,
-        remote_node_name: str | None,
-    ) -> DBExecuteSQLRequest:
-        return DBExecuteSQLRequest(
-            sql=(
-                "UPDATE mesh_peers SET "
-                "  inbound_status = 'approved', "
-                "  inbound_token = ?, "
-                "  inbound_permissions = ?, "
-                "  inbound_device_id = ?, "
-                "  inbound_user_id = ?, "
-                "  inbound_approved_at = CURRENT_TIMESTAMP, "
-                "  node_name = COALESCE(NULLIF(?, ''), node_name), "
-                "  last_status_change_at = CURRENT_TIMESTAMP, "
-                "  updated_at = CURRENT_TIMESTAMP "
-                "WHERE peer_id = ? AND room_name = ?"
-            ),
-            params=[
-                token,
-                perms_json,
-                remote_device_id,
-                remote_user_id,
-                remote_node_name,
-                remote_peer_id,
-                room_name,
-            ],
-        )
-
-    @staticmethod
     def load_inbound_credentials(room_name: str, remote_peer_id: str | None) -> DBExecuteSQLRequest:
         if remote_peer_id:
             return DBExecuteSQLRequest(
                 sql=(
-                    "SELECT peer_id, inbound_token FROM mesh_peers "
+                    "SELECT peer_id, inbound_token, inbound_token_id FROM mesh_peers "
                     "WHERE room_name = ? AND peer_id = ? AND inbound_token IS NOT NULL"
                 ),
                 params=[room_name, remote_peer_id],
             )
         return DBExecuteSQLRequest(
             sql=(
-                "SELECT peer_id, inbound_token FROM mesh_peers "
+                "SELECT peer_id, inbound_token, inbound_token_id FROM mesh_peers "
                 "WHERE room_name = ? AND inbound_token IS NOT NULL"
             ),
             params=[room_name],
-        )
-
-    @staticmethod
-    def update_connection_status(peer_id: str, status: str) -> DBExecuteSQLRequest:
-        return DBExecuteSQLRequest(
-            sql=(
-                "UPDATE mesh_peers SET "
-                "  connection_status = ?, "
-                "  last_seen_at = CURRENT_TIMESTAMP, "
-                "  updated_at = CURRENT_TIMESTAMP "
-                "WHERE peer_id = ?"
-            ),
-            params=[status, peer_id],
-        )
-
-    @staticmethod
-    def link_outbound_fks(
-        peer_id: str,
-        token_id: str,
-        device_id: str,
-        user_id: str,
-    ) -> DBExecuteSQLRequest:
-        """Write the outbound principal FKs so mesh_peers links back to auth tables."""
-        return DBExecuteSQLRequest(
-            sql=(
-                "UPDATE mesh_peers SET "
-                "  outbound_token_id = ?, "
-                "  outbound_device_id = ?, "
-                "  outbound_user_id = ?, "
-                "  updated_at = CURRENT_TIMESTAMP "
-                "WHERE peer_id = ?"
-            ),
-            params=[token_id, device_id, user_id, peer_id],
         )
 
 

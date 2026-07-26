@@ -13,7 +13,7 @@ from typing import Any
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import Envelope
-from app.services.auth.auth_manager import AuthManager
+from app.services.auth.auth_manager import AuthManager, MeshPairingDeniedError
 from app.shared.auth.audit import audit_event
 from app.shared.auth.permissions import validate_permission
 from app.shared.contracts.models.auth import (
@@ -37,6 +37,10 @@ from app.shared.contracts.models.auth import (
     MeshCredentialLoadResponse,
     MeshCredentialSaveRequest,
     MeshCredentialSaveResponse,
+    MeshPairingTokenValidationRequest,
+    MeshPairingTokenValidationResponse,
+    MeshReconnectProofRequest,
+    MeshReconnectProofResponse,
     PairingApproveRequest,
     PairingApproveResponse,
     PairingConnectRequest,
@@ -79,7 +83,7 @@ from app.shared.contracts.models.auth import (
     WhoAmIRequest,
     WhoAmIResponse,
 )
-from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.common import EmptyInput, EmptyOutput
 from app.shared.contracts.models.mesh import (
     MeshBoolResponse,
     MeshEvents,
@@ -88,6 +92,8 @@ from app.shared.contracts.models.mesh import (
     MeshIdentitySaveRequest,
     MeshPeerApprovedEvent,
     MeshPeerApproveRequest,
+    MeshPeerAuthoritySnapshotRequest,
+    MeshPeerAuthoritySnapshotResponse,
     MeshPeerDenyRequest,
     MeshPeerGetRequest,
     MeshPeerGetResponse,
@@ -235,6 +241,7 @@ class AuthService(BaseService):
         output_model=LoginResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_login(self, data: LoginRequest) -> LoginResponse | dict[str, str]:
         result = await self.manager.login(data.username, data.password)
@@ -282,6 +289,69 @@ class AuthService(BaseService):
 
         identity = await self.manager.build_identity_from_token(token)
         return ValidateTokenResponse(
+            valid=True,
+            principal_id=identity.principal_id,
+            principal_name=identity.principal_name,
+            is_admin=identity.is_admin,
+            permissions=list(identity.permissions),
+            effective_perms=list(identity.effective_perms),
+            device_id=identity.device_id,
+            source=identity.source,
+        )
+
+    @method_contract(
+        method_id=AuthMethods.VERIFY_MESH_RECONNECT_PROOF,
+        summary="Verify a channel-bound mesh reconnect proof",
+        input_model=MeshReconnectProofRequest,
+        output_model=MeshReconnectProofResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_verify_mesh_reconnect_proof(
+        self, data: MeshReconnectProofRequest
+    ) -> MeshReconnectProofResponse:
+        identity = await self.manager.verify_mesh_reconnect_proof(
+            token_id=data.token_id,
+            challenge=data.challenge,
+            proof=data.proof,
+            channel_binding=data.channel_binding,
+            claimant_peer_id=data.claimant_peer_id,
+            verifier_peer_id=data.verifier_peer_id,
+            room_name=data.room_name,
+        )
+        if identity is None:
+            return MeshReconnectProofResponse(valid=False)
+        return MeshReconnectProofResponse(
+            valid=True,
+            principal_id=identity.principal_id,
+            principal_name=identity.principal_name,
+            is_admin=identity.is_admin,
+            permissions=list(identity.permissions),
+            effective_perms=list(identity.effective_perms),
+            device_id=identity.device_id,
+            source=identity.source,
+        )
+
+    @method_contract(
+        method_id=AuthMethods.VALIDATE_MESH_PAIRING_TOKEN,
+        summary="Validate the exact bearer minted by a bilateral pairing session",
+        input_model=MeshPairingTokenValidationRequest,
+        output_model=MeshPairingTokenValidationResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_validate_mesh_pairing_token(
+        self, data: MeshPairingTokenValidationRequest
+    ) -> MeshPairingTokenValidationResponse:
+        identity = await self.manager.validate_mesh_pairing_token(
+            token_str=data.token,
+            pairing_session_id=data.pairing_session_id,
+            claimant_peer_id=data.claimant_peer_id,
+            room_name=data.room_name,
+        )
+        if identity is None:
+            return MeshPairingTokenValidationResponse(valid=False)
+        return MeshPairingTokenValidationResponse(
             valid=True,
             principal_id=identity.principal_id,
             principal_name=identity.principal_name,
@@ -350,25 +420,73 @@ class AuthService(BaseService):
     # ── Pairing ──────────────────────────────────────────────────────────
 
     @method_contract(
+        method_id=AuthMethods.PAIRING_READY,
+        summary="Report whether the in-process pairing contract surface is subscribed",
+        input_model=EmptyInput,
+        output_model=MeshBoolResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_pairing_ready(self, _data: EmptyInput) -> MeshBoolResponse:
+        """Provide a side-effect-free readiness probe for Gateway startup/reload."""
+        return MeshBoolResponse(success=True)
+
+    @method_contract(
         method_id=AuthMethods.PAIRING_START,
-        summary="Start a device pairing request (returns 6-digit code)",
+        summary="Start a pairing request and return an opaque request handle",
         input_model=PairingStartRequest,
         output_model=PairingStartResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_pairing_start(
-        self, data: PairingStartRequest
+        self, data: PairingStartRequest, envelope: Envelope | None = None
     ) -> PairingStartResponse | dict[str, str]:
-        code = await self.manager.start_pairing(
-            data.device_name,
-            data.client_ip,
-            remote_peer_id=data.remote_peer_id,
-            remote_node_name=data.remote_node_name,
+        # caller_peer_id is set by the WebRTC RPC transport, outside the
+        # PairingStart payload. Fall back to one shared bucket rather than letting
+        # unauthenticated request fields select their own rate-limit bucket.
+        trusted_rate_limit_key = (
+            f"webrtc:{envelope.caller_peer_id}"
+            if envelope is not None and envelope.caller_peer_id
+            else None
         )
+        trusted_mesh_context = bool(
+            envelope is not None
+            and envelope.caller_peer_id
+            and envelope.identity_source == "webrtc_rpc"
+        )
+        if trusted_mesh_context and (not data.pairing_session_id or not data.verification_code):
+            return {"error": "WebRTC pairing verification handshake is not ready"}
+        pairing_session_id = data.pairing_session_id if trusted_mesh_context else ""
+        verification_code = data.verification_code if trusted_mesh_context else ""
+        room_name = data.room_name if trusted_mesh_context else ""
+        pairing_kwargs: dict[str, Any] = {
+            "remote_peer_id": data.remote_peer_id,
+            "remote_node_name": data.remote_node_name,
+            "room_name": room_name,
+            "pairing_session_id": pairing_session_id,
+            "verification_code": verification_code,
+            "trusted_rate_limit_key": trusted_rate_limit_key,
+        }
+        if trusted_mesh_context:
+            pairing_kwargs["raise_on_denied"] = True
+        try:
+            code = await self.manager.start_pairing(
+                data.device_name,
+                data.client_ip,
+                **pairing_kwargs,
+            )
+        except MeshPairingDeniedError:
+            return {"error": "Pairing denied", "status": "denied"}
         if not code:
             return {"error": "Rate limit exceeded"}
-        return PairingStartResponse(code=code, expires_in_seconds=300)
+        return PairingStartResponse(
+            code=code,
+            expires_in_seconds=300,
+            pairing_session_id=pairing_session_id,
+            verification_code=verification_code,
+        )
 
     @method_contract(
         method_id=AuthMethods.LIST_PENDING_PAIRINGS,
@@ -401,17 +519,29 @@ class AuthService(BaseService):
         output_model=PairingConnectResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_pairing_connect(
-        self, data: PairingConnectRequest
+        self, data: PairingConnectRequest, envelope: Envelope | None = None
     ) -> PairingConnectResponse | dict[str, str]:
-        result = await self.manager.connect_pairing(data.code)
+        trusted_rate_limit_key = (
+            f"webrtc:{envelope.caller_peer_id}"
+            if envelope is not None and envelope.caller_peer_id
+            else "pairing:external"
+        )
+        result = await self.manager.connect_pairing(
+            data.code,
+            pairing_session_id=data.pairing_session_id,
+            trusted_rate_limit_key=trusted_rate_limit_key,
+        )
         if not result:
             return {"error": "Invalid or expired code"}
         return PairingConnectResponse(
             request_id=result["id"],
             device_name=result["device_name"],
             status=result["status"],
+            pairing_session_id=result.get("pairing_session_id", ""),
+            verification_code=result.get("verification_code", ""),
         )
 
     @method_contract(
@@ -462,11 +592,21 @@ class AuthService(BaseService):
         output_model=PairingExchangeResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_pairing_exchange(
-        self, data: PairingExchangeRequest
+        self, data: PairingExchangeRequest, envelope: Envelope | None = None
     ) -> PairingExchangeResponse | dict[str, str]:
-        result = await self.manager.exchange_pairing(data.code)
+        trusted_rate_limit_key = (
+            f"webrtc:{envelope.caller_peer_id}"
+            if envelope is not None and envelope.caller_peer_id
+            else "pairing:external"
+        )
+        result = await self.manager.exchange_pairing(
+            data.code,
+            pairing_session_id=data.pairing_session_id,
+            trusted_rate_limit_key=trusted_rate_limit_key,
+        )
         if not result:
             return {"error": "Pairing not approved or expired"}
         return PairingExchangeResponse(
@@ -475,6 +615,8 @@ class AuthService(BaseService):
             user_id=result["user_id"],
             permissions=result.get("permissions", []),
             token_id=result.get("token_id", ""),
+            peer_id=result.get("peer_id", ""),
+            node_name=result.get("node_name", ""),
         )
 
     async def _audit_admin_pairing_queue_list(
@@ -806,6 +948,10 @@ class AuthService(BaseService):
         output_model=MeshBoolResponse,
         exposure="internal",
         method_type="use",
+        # The gateway fails AdminAction confirmations closed when this sink is
+        # unreachable, so audit storage must stay subscribed even when the Auth
+        # feature surface (services.auth.enabled) is off.
+        always_available=True,
     )
     async def handle_store_audit_event(self, data: StoreAuditEventRequest) -> MeshBoolResponse:
         import uuid
@@ -928,16 +1074,19 @@ class AuthService(BaseService):
         method_id="Auth.SaveMeshIdentity",
         summary="Save this instance's stable mesh identity",
         input_model=MeshIdentitySaveRequest,
-        output_model=EmptyOutput,
+        output_model=MeshBoolResponse,
         exposure="internal",
         method_type="use",
     )
-    async def handle_save_mesh_identity(self, data: MeshIdentitySaveRequest) -> EmptyOutput:
-        await self.manager.save_mesh_identity(
+    async def handle_save_mesh_identity(self, data: MeshIdentitySaveRequest) -> MeshBoolResponse:
+        success = await self.manager.save_mesh_identity(
             peer_id=data.peer_id,
             node_name=data.node_name,
         )
-        return EmptyOutput()
+        return MeshBoolResponse(
+            success=success,
+            message="" if success else "Mesh identity was not durably persisted",
+        )
 
     # ── Mesh Peer Management ─────────────────────────────────────────────
 
@@ -951,14 +1100,17 @@ class AuthService(BaseService):
     )
     async def handle_upsert_peer(self, data: MeshPeerUpsertRequest) -> MeshBoolResponse:
         try:
-            await self.manager.upsert_mesh_peer(
+            success = await self.manager.upsert_mesh_peer(
                 peer_id=data.peer_id,
                 room_name=data.room_name,
                 node_name=data.node_name,
                 ip=data.ip,
                 port=data.port,
             )
-            return MeshBoolResponse(success=True)
+            return MeshBoolResponse(
+                success=success,
+                message="" if success else "Mesh peer row was not persisted",
+            )
         except Exception as e:
             log_error(f"Failed to upsert mesh peer: {e}", exc_info=True)
             return MeshBoolResponse(success=False, message=str(e))
@@ -1005,6 +1157,20 @@ class AuthService(BaseService):
         if row:
             return MeshPeerGetResponse(peer=MeshPeerInfo(**row))
         return MeshPeerGetResponse(peer=None)
+
+    @method_contract(
+        method_id=AuthMethods.MESH_GET_AUTHORITY_SNAPSHOT,
+        summary="Read durable mesh peer authority snapshot",
+        input_model=MeshPeerAuthoritySnapshotRequest,
+        output_model=MeshPeerAuthoritySnapshotResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_get_authority_snapshot(
+        self, data: MeshPeerAuthoritySnapshotRequest
+    ) -> MeshPeerAuthoritySnapshotResponse:
+        authorities = await self.manager.get_mesh_peer_authority_snapshot(data.peer_id)
+        return MeshPeerAuthoritySnapshotResponse(authorities=authorities)
 
     @method_contract(
         method_id="Auth.MeshApprovePeer",
@@ -1100,42 +1266,44 @@ class AuthService(BaseService):
         method_type="manage",
     )
     async def handle_remove_peer(self, data: MeshPeerRemoveRequest) -> MeshBoolResponse:
-        # Optionally revoke associated token
-        if data.revoke_token:
-            peer = await self.manager.get_mesh_peer(data.peer_id)
-            if peer and peer.get("outbound_token_id"):
-                try:
-                    await self.manager._revoke_token(peer["outbound_token_id"])
-                except Exception as e:
-                    log_warning(f"Failed to revoke peer token: {e}")
-
-        success = await self.manager.remove_mesh_peer(data.peer_id)
+        # Peer rows, linked tokens, and the durable removed revision commit in
+        # one DB transaction; pre-revoking here would create two generations.
+        success = await self.manager.remove_mesh_peer(
+            data.peer_id,
+            revoke_token=data.revoke_token,
+        )
         if success:
             return MeshBoolResponse(success=True)
         return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
-        method_id="Auth.MeshSaveInboundCredential",
+        method_id=AuthMethods.MESH_SAVE_INBOUND_CREDENTIAL,
         summary="Save the token a remote peer issued to us",
         input_model=MeshPeerSaveInboundRequest,
-        output_model=EmptyOutput,
+        output_model=MeshBoolResponse,
         exposure="internal",
         method_type="use",
     )
-    async def handle_save_inbound_credential(self, data: MeshPeerSaveInboundRequest) -> EmptyOutput:
-        await self.manager.save_inbound_credential(
+    async def handle_save_inbound_credential(
+        self, data: MeshPeerSaveInboundRequest
+    ) -> MeshBoolResponse:
+        success = await self.manager.save_inbound_credential(
             remote_peer_id=data.remote_peer_id,
             room_name=data.room_name,
             token=data.token,
+            token_id=data.token_id,
             permissions=data.permissions,
             remote_device_id=data.remote_device_id,
             remote_user_id=data.remote_user_id,
             remote_node_name=data.remote_node_name,
         )
-        return EmptyOutput()
+        return MeshBoolResponse(
+            success=success,
+            message="" if success else "Inbound credential was not persisted",
+        )
 
     @method_contract(
-        method_id="Auth.MeshLoadInboundCredentials",
+        method_id=AuthMethods.MESH_LOAD_INBOUND_CREDENTIALS,
         summary="Load inbound tokens for reconnection",
         input_model=MeshPeerLoadInboundRequest,
         output_model=MeshPeerLoadInboundResponse,

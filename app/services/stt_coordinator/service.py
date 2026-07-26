@@ -689,7 +689,7 @@ class STTCoordinatorService(BaseService):
                                         STTMethods.AUDIO_LEVEL,
                                         audio_level,
                                         event=True,
-                                        mesh=True,
+                                        mesh=False,
                                         origin="internal",
                                         priority=get_interactive_priority(),
                                     ),
@@ -878,7 +878,7 @@ class STTCoordinatorService(BaseService):
             STTMethods.SESSION_STARTED,
             STTSessionStarted(wake_word=wake_word, session_id=session_id),
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
         )
 
@@ -976,7 +976,7 @@ class STTCoordinatorService(BaseService):
                     is_final=False,
                 ),
                 event=True,
-                mesh=True,
+                mesh=False,
                 origin="internal",
                 priority=get_interactive_priority(),
             )
@@ -1019,7 +1019,7 @@ class STTCoordinatorService(BaseService):
             STTMethods.USER_SPEECH_CAPTURED,
             speech_event,
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
         )
 
@@ -1062,7 +1062,7 @@ class STTCoordinatorService(BaseService):
                 transcription=transcription if transcription else None,
             ),
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
         )
 
@@ -1108,6 +1108,7 @@ class STTCoordinatorService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=["STTCoordinator.use"],
+        callable_feature_ids=["listening_session_control"],
     )
     async def _on_listen(self, request: STTListenRequest) -> STTListenResponse:
         """Handle listen command idempotently for UI push-to-talk and wakeword races."""
@@ -1149,6 +1150,7 @@ class STTCoordinatorService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=["STTCoordinator.use"],
+        callable_feature_ids=["listening_session_control"],
     )
     async def _on_stop_listening(self, request: STTStopListeningRequest) -> EmptyOutput:
         """Handle stop listening command."""

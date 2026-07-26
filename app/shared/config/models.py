@@ -799,6 +799,45 @@ class MeshSharing(BaseConfigModel):
     """
     Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.
     """
+    unshared_feature_ids: list[str] | None = []
+    """
+    Subtractive stable feature IDs excluded from sharing; empty means no exclusions so all external-or-both features remain shared. Unknown or stale IDs are retained.
+    """
+    unshared_method_ids: list[str] | None = []
+    """
+    Subtractive canonical full bus topics excluded from sharing; empty means no exclusions so all external-or-both methods remain shared. Unknown or stale IDs are retained.
+    """
+
+
+class MeshRouting(BaseConfigModel):
+    prefer: Literal["local", "network", "network_only", "local_only"] | None = "local"
+    """
+    Routing preference for selecting local or network providers.
+    """
+    fallback: Literal["local", "network", "error", "none"] | None = "local"
+    """
+    Fallback strategy when the preferred provider path is unavailable.
+    """
+    allowed_provider_peer_ids: list[str] | None = None
+    """
+    Stable provider peer IDs eligible for outbound routing. Null means any otherwise-eligible provider, an empty array denies network providers, and populated arrays allow only listed stable IDs. Never grants inbound authority.
+    """
+    min_version: str | None = None
+    """
+    Minimum compatible provider service version required for outbound routing.
+    """
+    required_provider_feature_ids: list[str] | None = []
+    """
+    All-of stable feature IDs that a recipient-visible callable provider must expose before it is eligible for outbound routing.
+    """
+    required_provider_capability_tags: list[str] | None = []
+    """
+    All-of provider metadata capability tags required for outbound routing. These tags are separate from feature IDs and never grant authority.
+    """
+    require_explicit_selector: bool | None = False
+    """
+    Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.
+    """
 
 
 class ToolingApprovalPolicyRule(BaseConfigModel):
@@ -853,6 +892,7 @@ class Tts(BaseConfigModel):
     Enable TTS service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     hardware_acceleration: bool | None = False
     """
     Enable hardware acceleration for TTS
@@ -881,6 +921,7 @@ class Coordinator(BaseConfigModel):
     Enable STT coordinator
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     session_timeout_s: float | None = Field(30.0, ge=1.0, le=300.0)
     """
     Session timeout in seconds
@@ -909,6 +950,7 @@ class Wakeword(BaseConfigModel):
     Enable wake word detection
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     backend: Literal["oww", "pvp"] | None = "oww"
     """
     Wake word backend: 'oww' (OpenWakeWord) or 'pvp' (Porcupine)
@@ -933,6 +975,7 @@ class Transcription(BaseConfigModel):
     Enable transcription service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     vad_enabled: bool | None = True
     """
     Enable voice activity detection
@@ -988,6 +1031,7 @@ class Orchestrator(BaseConfigModel):
     Enable orchestrator service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     hardware_acceleration: bool | None = False
     """
     Enable hardware acceleration for LLM
@@ -1008,6 +1052,7 @@ class Db(BaseConfigModel):
     Enable database service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     embeddings: Embeddings | None = None
     """
     Embeddings configuration
@@ -1020,6 +1065,7 @@ class Scheduler(BaseConfigModel):
     Enable scheduler service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
 
 
 class ToolingApprovalPolicy(BaseConfigModel):
@@ -1065,6 +1111,7 @@ class Tooling(BaseConfigModel):
     Enable tooling service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     approval_policy: ToolingApprovalPolicy | None = None
     hardware_acceleration: HardwareAcceleration | None = None
     """

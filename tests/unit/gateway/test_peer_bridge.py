@@ -63,7 +63,7 @@ class TestPeerBridgeCall:
         assert result.ok is True
         assert result.data == {"text": "world"}
         mock_rtc_client.send_to_peer.assert_called_once()
-        mock_peer_registry.decrement_active_calls.assert_awaited()
+        mock_peer_registry.decrement_active_calls.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_call_timeout(self, bridge, mock_rtc_client):
@@ -311,6 +311,24 @@ class TestPeerBridgeOnResponse:
         bridge.on_response("peer-1", {"type": "result"})
 
     @pytest.mark.asyncio
+    async def test_response_rejects_composite_id_without_overriding_transport_peer(self, bridge):
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        bridge._pending_calls[("selected-peer", "req-selected")] = fut
+
+        bridge.on_response(
+            "wrong-peer",
+            {
+                "type": "result",
+                "id": ["selected-peer", "req-selected"],
+                "result": {"poison": True},
+            },
+        )
+
+        assert not fut.done()
+        assert ("selected-peer", "req-selected") in bridge._pending_calls
+
+    @pytest.mark.asyncio
     async def test_response_from_wrong_peer_does_not_resolve_pending_call(self, bridge):
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
@@ -358,6 +376,17 @@ class TestPeerBridgeOnPong:
     def test_pong_without_monitor(self, bridge):
         # Should not raise
         bridge.on_pong("peer-1", {"id": "ping-1", "ts": 1234})
+
+    def test_initial_latency_sample_uses_tracked_burst(self, bridge):
+        mock_monitor = MagicMock()
+        mock_monitor.ping_peer.return_value = True
+        bridge.set_latency_monitor(mock_monitor)
+
+        sent = bridge.request_latency_sample("peer-1", sample_count=3, reset=True)
+
+        assert sent == 3
+        mock_monitor.reset_peer.assert_called_once_with("peer-1")
+        assert mock_monitor.ping_peer.call_count == 3
 
 
 class TestPeerBridgeCancelAll:

@@ -247,7 +247,7 @@ Key settings classes:
 - `MQTTSettings` -- broker, port, topic_root, TLS, encrypt_signaling
 - `PermissionSettings` -- default permissions for new devices/users
 - `MeshConfig` -- enabled, node_name, services, ping interval
-- `MeshServiceConfig` -- per-service: share, max_concurrent, allowed_peers, prefer, fallback, min_version
+- `MeshServicePolicy` -- per-service export/routing policy loaded from mesh_sharing and mesh_routing
 
 ### token_secret Generation
 

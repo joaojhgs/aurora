@@ -275,7 +275,7 @@ class WakeWordService(BaseService):
                     WakeWordMethods.DETECTED,
                     event,
                     event=True,
-                    mesh=True,
+                    mesh=False,
                     priority=get_interactive_priority(),
                     origin="internal",
                 )
@@ -308,6 +308,8 @@ class WakeWordService(BaseService):
         output_model=EmptyOutput,
         exposure="both",
         method_type="use",
+        required_perms=[WakeWordMethods.PROCESS_AUDIO],
+        callable_feature_ids=["wake_word_detection"],
     )
     async def _on_external_audio(self, chunk: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunks from external API/WebRTC calls.
@@ -409,7 +411,7 @@ class WakeWordService(BaseService):
                 payload=payload,
             ),
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
         )
 
@@ -491,6 +493,8 @@ class WakeWordService(BaseService):
         output_model=WakeWordDetectResponse,
         exposure="both",
         method_type="use",
+        required_perms=[WakeWordMethods.DETECT],
+        callable_feature_ids=["wake_word_detection"],
     )
     async def detect_wake_word(self, request: WakeWordDetectRequest) -> WakeWordDetectResponse:
         """Check audio chunk for wake word and return detection result.

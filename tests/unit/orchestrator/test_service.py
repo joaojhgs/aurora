@@ -248,7 +248,88 @@ class TestOrchestratorServiceUserInputHandling:
             "inference_selection_is_default": True,
             "inference_selected_provider_id": "llama_cpp",
             "inference_selected_model_id": "local-model.gguf",
+            "inference_provider_label": "Llama.cpp",
         }
+
+    @pytest.mark.asyncio
+    async def test_graph_cloud_model_selection_uses_expanded_catalog_when_authorized(
+        self, orchestrator_service
+    ):
+        """A model shown by the live cloud catalog must remain valid at execution time."""
+        from app.shared.contracts.models.orchestrator import (
+            ModelRuntimeCatalogResponse,
+            ModelRuntimeModelInfo,
+            ModelRuntimeProviderInfo,
+        )
+
+        catalog = ModelRuntimeCatalogResponse(
+            generated_at="2026-07-23T00:00:00Z",
+            selected_provider_id="openai",
+            providers=[
+                ModelRuntimeProviderInfo(
+                    provider_id="openai",
+                    display_name="OpenAI",
+                    backend_kind="openai_chat",
+                    provider_type="cloud",
+                    provider_kind="cloud",
+                    upstream_provider_type="openai",
+                    model_id="gpt-5.4-mini",
+                    default_model_id="gpt-5.4-mini",
+                    selected=True,
+                    models=[
+                        ModelRuntimeModelInfo(
+                            model_id="gpt-5.4-mini",
+                            display_name="gpt-5.4-mini",
+                        ),
+                        ModelRuntimeModelInfo(
+                            model_id="gpt-3.5-turbo",
+                            display_name="gpt-3.5-turbo",
+                        ),
+                    ],
+                )
+            ],
+        )
+
+        with patch.object(
+            orchestrator_service,
+            "_build_model_runtime_catalog",
+            new_callable=AsyncMock,
+            return_value=catalog,
+        ) as build_catalog:
+            override = await orchestrator_service._resolve_inference_override(
+                inference_provider_id="openai",
+                inference_model_id="gpt-3.5-turbo",
+                include_cloud_models=True,
+            )
+
+        assert override["inference_model_id"] == "gpt-3.5-turbo"
+        assert override["inference_provider_is_cloud"] is True
+        build_catalog.assert_awaited_once_with(
+            include_unavailable=True,
+            include_operations=False,
+            include_remote=False,
+            include_cloud_models=True,
+        )
+
+    def test_graph_cloud_catalog_expansion_requires_remote_inference_permission(
+        self, orchestrator_service
+    ):
+        assert (
+            orchestrator_service._can_expand_graph_cloud_catalog(
+                caller_effective_perms=["Orchestrator.use"],
+                caller_identity_source="gateway_http",
+                source="external",
+            )
+            is False
+        )
+        assert (
+            orchestrator_service._can_expand_graph_cloud_catalog(
+                caller_effective_perms=["Orchestrator.RemoteInference"],
+                caller_identity_source="gateway_http",
+                source="external",
+            )
+            is True
+        )
 
     def test_remote_runtime_inference_selector_requires_explicit_permission(
         self, orchestrator_service
@@ -493,6 +574,39 @@ class TestOrchestratorServiceUserInputHandling:
             )
 
     @pytest.mark.asyncio
+    async def test_on_user_input_propagates_explicit_client_tts_playback(
+        self, orchestrator_service
+    ):
+        """Explicit thin-client playback preference is passed as response metadata."""
+        from app.shared.contracts.models.common import EmptyOutput
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
+
+        request = OrchestratorProcessRequest(
+            text="Test command",
+            session_id="ui-session",
+            client_tts_playback=True,
+        )
+
+        with patch.object(
+            orchestrator_service, "_process_input", new_callable=AsyncMock
+        ) as mock_process:
+            response = await orchestrator_service.process_user_input(request)
+
+            assert isinstance(response, EmptyOutput)
+            mock_process.assert_called_once_with(
+                "Test command",
+                source="ui",
+                session_id="ui-session",
+                request_id=None,
+                correlation_id=None,
+                stream=False,
+                inference_selector=None,
+                inference_provider_id=None,
+                inference_model_id=None,
+                response_metadata={"client_tts_playback": True},
+            )
+
+    @pytest.mark.asyncio
     async def test_on_user_input_with_invalid_payload(self, orchestrator_service):
         """Test handling user input with invalid payload."""
         from pydantic import ValidationError
@@ -547,6 +661,40 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_provider_id=None,
                 inference_model_id=None,
             )
+
+    @pytest.mark.asyncio
+    async def test_external_input_uses_request_id_as_approval_session(self, orchestrator_service):
+        """Streamed turns without a client session expose the graph thread for approval."""
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
+
+        request = OrchestratorProcessRequest(
+            text="List schedules",
+            request_id="assistant-request-1",
+            correlation_id="assistant-request-1",
+            stream=True,
+        )
+
+        with patch.object(
+            orchestrator_service, "_process_input", new_callable=AsyncMock
+        ) as mock_process:
+            mock_process.return_value = "Aurora paused for a tool approval decision."
+
+            response = await orchestrator_service.process_external_input(request)
+
+        assert response.session_id == "assistant-request-1"
+        mock_process.assert_called_once_with(
+            "List schedules",
+            source="external",
+            session_id="assistant-request-1",
+            request_id="assistant-request-1",
+            correlation_id="assistant-request-1",
+            return_response=True,
+            response_metadata={"source": "external", "stream": True},
+            stream=True,
+            inference_selector=None,
+            inference_provider_id=None,
+            inference_model_id=None,
+        )
 
     @pytest.mark.asyncio
     async def test_on_external_input_with_error(self, orchestrator_service):
@@ -815,24 +963,30 @@ class TestOrchestratorInterruptHandling:
     async def test_interrupt_tts_playback_publishes_stop_and_event(
         self, orchestrator_service, mock_bus
     ):
-        from app.shared.contracts.models.common import EmptyInput
         from app.shared.contracts.models.orchestrator import (
             OrchestratorEvents,
             OrchestratorInterruptedEvent,
             OrchestratorInterruptRequest,
             OrchestratorMethods,
         )
-        from app.shared.contracts.models.tts import TTSMethods
+        from app.shared.contracts.models.tts import TTSMethods, TTSStopRequest
 
         envelope = Envelope(
             type=OrchestratorMethods.INTERRUPT,
             payload={},
             correlation_id="corr-123",
             principal_id="principal-123",
+            caller_peer_id="peer-123",
+            identity_source="webrtc_rpc",
         )
 
         response = await orchestrator_service.interrupt_assistant(
-            OrchestratorInterruptRequest(scopes=["tts_playback"], session_id="session-1"),
+            OrchestratorInterruptRequest(
+                scopes=["tts_playback"],
+                session_id="session-1",
+                request_id="request-corr-123",
+                reason="user_interrupt",
+            ),
             envelope=envelope,
         )
 
@@ -844,10 +998,14 @@ class TestOrchestratorInterruptHandling:
 
         stop_call, event_call = mock_bus.publish.call_args_list
         assert stop_call.args[0] == TTSMethods.STOP
-        assert isinstance(stop_call.args[1], EmptyInput)
+        assert isinstance(stop_call.args[1], TTSStopRequest)
+        assert stop_call.args[1].correlation_id == "request-corr-123"
+        assert stop_call.args[1].reason == "user_interrupt"
         assert stop_call.kwargs["event"] is False
-        assert stop_call.kwargs["correlation_id"] == "corr-123"
+        assert stop_call.kwargs["correlation_id"] == "request-corr-123"
         assert stop_call.kwargs["principal_id"] == "principal-123"
+        assert stop_call.kwargs["caller_peer_id"] == "peer-123"
+        assert stop_call.kwargs["identity_source"] == "webrtc_rpc"
 
         assert event_call.args[0] == OrchestratorEvents.INTERRUPTED
         event = event_call.args[1]
@@ -856,7 +1014,7 @@ class TestOrchestratorInterruptHandling:
         assert event.secrets_redacted is True
         assert event.principal_id == "principal-123"
         assert event_call.kwargs["event"] is True
-        assert event_call.kwargs["mesh"] is True
+        assert event_call.kwargs["mesh"] is False
 
     @pytest.mark.asyncio
     async def test_interrupt_generation_is_idempotent_when_no_task_matches(
@@ -1113,6 +1271,127 @@ class TestOrchestratorServiceInputProcessing:
         assert isinstance(tts_call.args[1], TTSRequest)
         assert tts_call.args[1].text == "Correlated voice response"
         assert tts_call.kwargs["event"] is False
+
+    @pytest.mark.asyncio
+    async def test_remote_thin_stream_targets_response_and_client_tts(
+        self, orchestrator_service, mock_bus
+    ):
+        """Thin WebRTC callers receive correlated mesh responses and client audio stream."""
+        from app.shared.contracts.models.orchestrator import (
+            AssistantStreamEvent,
+            OrchestratorMethods,
+        )
+        from app.shared.contracts.models.tts import (
+            TTSMethods,
+            TTSStreamChunkRequest,
+            TTSStreamEndRequest,
+            TTSStreamStartRequest,
+        )
+
+        async def stream_events(*args, **kwargs):
+            yield AssistantStreamEvent(kind="assistant.delta", delta="Hello remote audio")
+
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_events = stream_events
+        orchestrator_service._ui_automatic_tts_readback = False
+
+        with patch("app.services.orchestrator.service.get_contract", return_value=object()):
+            await orchestrator_service._process_input(
+                "Input",
+                source="external",
+                session_id="session-remote",
+                request_id="request-remote",
+                correlation_id="corr-remote",
+                stream=True,
+                caller_principal_id="principal-a",
+                caller_peer_id="peer-a",
+                caller_identity_source="webrtc_rpc",
+                response_metadata={"client_tts_playback": True},
+            )
+
+        response_calls = [
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] == OrchestratorMethods.RESPONSE
+        ]
+        assert len(response_calls) == 2
+        assert all(call.kwargs["mesh"] is True for call in response_calls)
+        assert all(call.kwargs["caller_peer_id"] == "peer-a" for call in response_calls)
+        assert all(call.kwargs["principal_id"] == "principal-a" for call in response_calls)
+        assert all(call.kwargs["correlation_id"] == "corr-remote" for call in response_calls)
+
+        tts_start = next(
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] == TTSMethods.STREAM_START
+        )
+        assert isinstance(tts_start.args[1], TTSStreamStartRequest)
+        assert tts_start.args[1].play_on_server is False
+        assert tts_start.kwargs["caller_peer_id"] == "peer-a"
+        assert tts_start.kwargs["principal_id"] == "principal-a"
+        assert tts_start.kwargs["correlation_id"] == "corr-remote"
+
+        tts_chunk = next(
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] == TTSMethods.STREAM_CHUNK
+        )
+        assert isinstance(tts_chunk.args[1], TTSStreamChunkRequest)
+        assert tts_chunk.args[1].text == "Hello remote audio"
+        assert tts_chunk.args[1].is_final is True
+        assert tts_chunk.kwargs["caller_peer_id"] == "peer-a"
+        assert tts_chunk.kwargs["principal_id"] == "principal-a"
+        assert tts_chunk.kwargs["correlation_id"] == "corr-remote"
+
+        tts_end = next(
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] == TTSMethods.STREAM_END
+        )
+        assert isinstance(tts_end.args[1], TTSStreamEndRequest)
+        assert tts_end.kwargs["caller_peer_id"] == "peer-a"
+        assert tts_end.kwargs["principal_id"] == "principal-a"
+        assert tts_end.kwargs["correlation_id"] == "corr-remote"
+
+    @pytest.mark.asyncio
+    async def test_stt_stream_keeps_server_tts_and_untargeted_response(
+        self, orchestrator_service, mock_bus
+    ):
+        """Local voice streams keep daemon playback and do not target mesh peers."""
+        from app.shared.contracts.models.orchestrator import AssistantStreamEvent
+        from app.shared.contracts.models.tts import TTSMethods, TTSStreamStartRequest
+
+        async def stream_events(*args, **kwargs):
+            yield AssistantStreamEvent(kind="assistant.delta", delta="Local voice audio. ")
+
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_events = stream_events
+
+        with patch("app.services.orchestrator.service.get_contract", return_value=object()):
+            await orchestrator_service._process_input(
+                "Voice",
+                source="stt",
+                session_id="voice-session",
+                request_id="voice-request",
+                correlation_id="voice-corr",
+                stream=True,
+            )
+
+        tts_start = next(
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] == TTSMethods.STREAM_START
+        )
+        assert isinstance(tts_start.args[1], TTSStreamStartRequest)
+        assert tts_start.args[1].play_on_server is True
+        assert tts_start.kwargs["caller_peer_id"] is None
+
+        response_calls = [
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] != TTSMethods.STREAM_START
+        ]
+        assert all(call.kwargs.get("caller_peer_id") is None for call in response_calls)
 
 
 class TestOrchestratorServiceMessageTypes:

@@ -20,11 +20,17 @@ import os
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from app.messaging.bus import Envelope, QueryResult
 from app.messaging.local_bus import LocalBus
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.config import (
+    MeshConfig,
+    MeshServiceExportPolicy,
+    MeshServicePolicy,
+    MeshServiceRoutingPolicy,
+)
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.auth.identity import Identity
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement, ServiceInfo
@@ -339,6 +345,8 @@ class HarnessRegistry:
                 input_schema=_schema(),
             ),
         ]
+        for method in methods:
+            method.exposure = "external"
         self._services = {
             "Tooling": ServiceAnnouncement(module="Tooling", version="1.0.0", methods=methods[:3]),
             "DB": ServiceAnnouncement(module="DB", version="1.0.0", methods=methods[3:4]),
@@ -415,9 +423,10 @@ class HarnessRegistry:
 class TwoPeerHarness:
     """Executable deterministic two-peer harness state."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, start_http_gateway: bool = True) -> None:
         self.consumer_bus = LocalBus(validate_topics=False)
         self.provider_bus = LocalBus(validate_topics=False)
+        self._start_http_gateway_enabled = start_http_gateway
         self.process_consumer_bus: Any | None = None
         self.process_provider_bus: Any | None = None
         self._process_unavailable: dict[str, Any] | None = None
@@ -443,7 +452,8 @@ class TwoPeerHarness:
         await self.provider_bus.start()
         self._subscribe_provider_handlers()
         self._subscribe_consumer_handlers()
-        await self._start_http_gateway()
+        if self._start_http_gateway_enabled:
+            await self._start_http_gateway()
         await self._start_webrtc_datachannel()
 
     async def stop(self) -> None:
@@ -581,6 +591,10 @@ class TwoPeerHarness:
                 audit_fn=self._audit_rpc_event,
                 mesh_config=self._mesh_config(),
                 peer_id=CONSUMER_PEER_ID,
+                stable_peer_id_provider=lambda: CONSUMER_PEER_ID,
+                active_projection_provider=self._active_projection,
+                authenticated_peer_validator=lambda: True,
+                tooling_authority_revision_provider=lambda: (1, 1),
             )
 
             @channel.on("message")
@@ -626,7 +640,11 @@ class TwoPeerHarness:
         return MeshConfig(
             enabled=True,
             services={
-                module: MeshServiceConfig(share=True, allowed_peers=[CONSUMER_PEER_ID])
+                module: MeshServicePolicy(
+                    export=MeshServiceExportPolicy(share=True),
+                    routing=MeshServiceRoutingPolicy(allowed_provider_peer_ids=(CONSUMER_PEER_ID,)),
+                    legacy_inbound_allowed_peer_ids=(CONSUMER_PEER_ID,),
+                )
                 for module in (
                     "Tooling",
                     "DB",
@@ -637,6 +655,41 @@ class TwoPeerHarness:
                     "Gateway",
                 )
             },
+        )
+
+    def _active_projection(self) -> SimpleNamespace:
+        """Return the recipient-scoped export authority required by RPCHandler.
+
+        The production WebRTC RPC layer now fails closed unless an authenticated
+        peer has an active projection-v1 authority snapshot. The harness keeps
+        that boundary executable by projecting the same typed topics registered
+        in ``HarnessRegistry`` for the authenticated consumer peer.
+        """
+
+        services = []
+        for service_name, announcement in self.registry._services.items():
+            services.append(
+                SimpleNamespace(
+                    service_id=service_name,
+                    capacity={"max_concurrent": 10},
+                    methods=tuple(
+                        SimpleNamespace(
+                            topic=method.bus_topic or f"{service_name}.{method.name}",
+                            required_permissions=tuple(method.required_perms or ()),
+                            method_type=method.method_type or "use",
+                        )
+                        for method in announcement.methods
+                    ),
+                )
+            )
+        return SimpleNamespace(
+            cache_key=SimpleNamespace(
+                recipient_peer_id=CONSUMER_PEER_ID,
+                provider_peer_id=PROVIDER_PEER_ID,
+            ),
+            readiness="ready",
+            routable=True,
+            services=tuple(services),
         )
 
     def _replying_handler(self, bus: Any, handler: Any, *, reply_event: bool = True):
@@ -847,7 +900,7 @@ class TwoPeerHarness:
         correlation_id: str,
     ) -> dict[str, Any]:
         if mode.mode_id == "mesh_webrtc":
-            return await self._rpc_call(method, payload, correlation_id)
+            return await self._rpc_call(topic, payload, correlation_id)
         if mode.mode_id == "http_gateway_thin_client":
             return await self._http_call(method, payload)
         if mode.mode_id == "process_bullmq_redis":
@@ -1547,7 +1600,8 @@ async def _run_harness_async(
     if not selected_modes:
         raise ValueError(f"No harness modes matched: {sorted(mode_filter or [])}")
 
-    harness = TwoPeerHarness()
+    needs_http_gateway = any(mode.mode_id == "http_gateway_thin_client" for mode in selected_modes)
+    harness = TwoPeerHarness(start_http_gateway=needs_http_gateway)
     await harness.start()
     try:
         raw_results: list[ScenarioResult] = []

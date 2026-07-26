@@ -108,6 +108,7 @@ class TestMCPClientManager:
         mock_tool = Mock()
         mock_tool.name = "add"
         mock_tool.description = "Add two numbers"
+        mock_tool._aurora_provider_tool_id = "add"
         mock_client.get_tools.return_value = [mock_tool]
 
         mock_mcp_module = Mock()
@@ -122,6 +123,9 @@ class TestMCPClientManager:
         assert mcp_manager.is_initialized
         assert len(mcp_manager.get_tools()) == 1
         assert mcp_manager.get_tools()[0].name == "add"
+        identity = mcp_manager.get_tools()[0]._aurora_tool_identity
+        assert identity.stable_source_id == "math"
+        assert identity.share_group_id == "mcp:math"
 
     @pytest.mark.asyncio
     async def test_initialize_with_http_server(self, mcp_manager):
@@ -156,6 +160,51 @@ class TestMCPClientManager:
         assert mcp_manager.is_initialized
         assert len(mcp_manager.get_tools()) == 1
         assert mcp_manager.get_tools()[0].name == "get_weather"
+
+    @pytest.mark.asyncio
+    async def test_two_servers_with_same_tool_name_keep_distinct_stable_origins(self, mcp_manager):
+        """Flattening never merges same-named tools from separate MCP sources."""
+        import sys
+
+        servers = {
+            "mail": Servers(command="mail-mcp", transport="stdio", enabled=True),
+            "calendar": Servers(command="calendar-mcp", transport="stdio", enabled=True),
+        }
+        mock_api = _make_mock_config_api(mcp_enabled=True, servers=servers)
+        mail_tool = Mock()
+        mail_tool.name = "search"
+        mail_tool.description = "Search mail"
+        mail_tool._aurora_provider_tool_id = "search"
+        calendar_tool = Mock()
+        calendar_tool.name = "search"
+        calendar_tool.description = "Search calendar"
+        calendar_tool._aurora_provider_tool_id = "search"
+        mock_client = AsyncMock()
+
+        async def get_tools(*, server_name):
+            return [mail_tool] if server_name == "mail" else [calendar_tool]
+
+        mock_client.get_tools = AsyncMock(side_effect=get_tools)
+        mock_mcp_module = Mock()
+        mock_mcp_module.MultiServerMCPClient = Mock(return_value=mock_client)
+
+        with (
+            patch("app.services.tooling.mcp.mcp_client.config_api", mock_api),
+            patch.dict(sys.modules, {"langchain_mcp_adapters.client": mock_mcp_module}),
+        ):
+            await mcp_manager.initialize()
+
+        tools = mcp_manager.get_tools()
+        assert tools == [mail_tool, calendar_tool]
+        identities = [tool._aurora_tool_identity for tool in tools]
+        assert [identity.tool_contract_id for identity in identities] == [
+            "mcp:mail:search",
+            "mcp:calendar:search",
+        ]
+        assert [identity.share_group_id for identity in identities] == [
+            "mcp:mail",
+            "mcp:calendar",
+        ]
 
     @pytest.mark.asyncio
     async def test_initialize_with_disabled_server(self, mcp_manager):

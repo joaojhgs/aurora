@@ -17,6 +17,24 @@ from app.shared.contracts.models.scheduler import (
     SchedulerToolExecuteAction,
     SchedulerTtsSpeakAction,
 )
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
+
+_TTS_SCHEDULE_ACTIONS = frozenset(
+    {
+        "speak",
+        "say",
+        "reminder",
+        "greeting",
+        "daily_greeting",
+        "break_reminder",
+        "water_reminder",
+        "motivational",
+        "motivational_message",
+        "time_announcement",
+        "hourly_time_announcement",
+    }
+)
 
 
 @tool()
@@ -613,6 +631,32 @@ async def scheduler_hourly_time_announcement_tool(bus: MessageBus | None = None)
 
     result = await hourly_time_announcement(bus)
     return str(result.get("message") if isinstance(result, dict) else result)
+
+
+schedule_task_tool.metadata = {
+    **(schedule_task_tool.metadata or {}),
+    "required_permissions": [ToolingMethods.EXECUTE_TOOL],
+    "conditional_required_permissions": [
+        {
+            "argument": "action",
+            "values": sorted(_TTS_SCHEDULE_ACTIONS),
+            "permissions": [TTSMethods.REQUEST],
+            "casefold": True,
+        }
+    ],
+}
+
+for _tts_scheduler_tool in (
+    scheduler_daily_greeting_tool,
+    scheduler_break_reminder_tool,
+    scheduler_water_reminder_tool,
+    scheduler_motivational_message_tool,
+    scheduler_hourly_time_announcement_tool,
+):
+    _tts_scheduler_tool.metadata = {
+        **(_tts_scheduler_tool.metadata or {}),
+        "required_permissions": [ToolingMethods.EXECUTE_TOOL, TTSMethods.REQUEST],
+    }
 
 
 # Convenience function for sync usage (though the tools are async)

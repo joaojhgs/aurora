@@ -48,12 +48,16 @@ def build_capability_catalog(
     mesh_config: Any,
     local_services: dict[str, ServiceAnnouncement] | None = None,
     peers: list[Any] | None = None,
+    registry: Any = None,
+    policy_snapshot: Any = None,
     local_peer_id: str | None = None,
 ) -> CapabilityCatalogResponse:
     graph = build_capability_graph(
         mesh_config=mesh_config,
         local_services=local_services,
         peers=peers,
+        registry=registry,
+        policy_snapshot=policy_snapshot,
         local_peer_id=local_peer_id,
     )
     module_filter = set(request.modules or [])
@@ -62,13 +66,17 @@ def build_capability_catalog(
     resources: list[CapabilityCatalogResourceInfo] = []
     provider_index: dict[str, list[str]] = {}
     action_index: dict[str, list[str]] = {}
+    node_names = {peer.peer_id: peer.node_name for peer in graph.peers}
 
     for service in graph.services:
         if module_filter and service.module not in module_filter:
             continue
         if not request.include_unavailable and not service.routable:
             continue
-        provider = _provider_from_service(service)
+        provider = _provider_from_service(
+            service,
+            node_name=node_names.get(service.peer_id, ""),
+        )
         providers.append(provider)
         provider_index.setdefault(service.module, []).append(provider.provider_id)
         for method in service.methods:
@@ -107,6 +115,7 @@ def explain_route(
     local_services: dict[str, ServiceAnnouncement] | None = None,
     registry: Any = None,
     routing_table: Any = None,
+    policy_snapshot: Any = None,
     local_peer_id: str | None = None,
 ) -> RouteExplainResponse:
     topic = _topic_from_request(request)
@@ -116,12 +125,19 @@ def explain_route(
     graph = build_capability_graph(
         mesh_config=mesh_config,
         local_services=local_services or {},
-        peers=registry.get_all_peers() if registry else [],
+        registry=registry,
+        policy_snapshot=policy_snapshot,
         local_peer_id=local_peer_id,
     )
     graph_services = {service.service_instance_id: service for service in graph.services}
     route = (
-        routing_table.resolve(topic, routing_config=config, selector=request.selector)
+        routing_table.resolve(
+            topic,
+            routing_config=config,
+            mesh_config=mesh_config,
+            selector=request.selector,
+            policy_snapshot=policy_snapshot,
+        )
         if routing_table
         else None
     )
@@ -140,14 +156,17 @@ def explain_route(
     if registry and request.include_candidates:
         for candidate in registry.get_provider_candidates(
             module=module,
+            topic=topic if method_name else None,
             routing_config=config,
             version_policy=mesh_config.version_policy,
             selector=request.selector,
             include_ineligible=True,
+            policy_snapshot=policy_snapshot,
         ):
             candidates.append(
                 _remote_candidate_from_registry(
                     candidate,
+                    module=module,
                     method_name=method_name,
                     graph_services=graph_services,
                     selected_peer_id=route.peer_id if route else None,
@@ -199,11 +218,16 @@ def explain_route(
     )
 
 
-def _provider_from_service(service: CapabilityServiceInfo) -> CapabilityProviderInfo:
+def _provider_from_service(
+    service: CapabilityServiceInfo,
+    *,
+    node_name: str = "",
+) -> CapabilityProviderInfo:
     return CapabilityProviderInfo(
         provider_id=service.service_instance_id,
         peer_id=service.peer_id,
         provider_kind=service.provider_kind,
+        node_name=node_name,
         status="local" if service.provider_kind == "local" else _status_from_blockers(service),
         service_instance_id=service.service_instance_id,
         module=service.module,
@@ -237,6 +261,8 @@ def _action_from_method(
         module=method.module,
         method=method.name,
         topic=method.bus_topic,
+        callable_feature_ids=list(method.callable_feature_ids),
+        callable_features=list(method.callable_features),
         provider_id=service.service_instance_id,
         peer_id=service.peer_id,
         provider_kind=service.provider_kind,
@@ -288,6 +314,7 @@ def _policy_decision(
 ) -> CapabilityPolicyDecisionInfo:
     return CapabilityPolicyDecisionInfo(
         required_permissions=list(policy.required_perms),
+        required_callable_feature_ids=list(policy.required_callable_feature_ids),
         trust_tier=policy.trust_tier,
         safety_class=policy.safety_class,
         explicit_selector_required=policy.explicit_selector_required,
@@ -298,7 +325,9 @@ def _policy_decision(
         selector_required=policy.explicit_selector_required,
         mesh_visible=policy.mesh_visible,
         local_only=policy.local_only,
-        allowed_peers=list(policy.allowed_peers) if policy.allowed_peers is not None else None,
+        allowed_provider_peer_ids=list(policy.allowed_provider_peer_ids)
+        if policy.allowed_provider_peer_ids is not None
+        else None,
         operation_class=policy.operation_class,
         resource_scope=policy.resource_scope,
         denial_reasons=list(denial_reasons),
@@ -310,7 +339,10 @@ def _freshness(service: CapabilityServiceInfo) -> CapabilityFreshnessInfo:
         source=service.provenance.source,
         manifest_time=service.provenance.manifest_timestamp,
         registry_digest=service.provenance.registry_digest or service.digest,
-        stale=any(blocker.startswith("peer_status:stale") for blocker in service.route_blockers),
+        stale=any(
+            blocker.startswith("peer_status:stale") or blocker == "manifest_projection_stale"
+            for blocker in service.route_blockers
+        ),
     )
 
 
@@ -373,6 +405,7 @@ def _local_candidate(
 def _remote_candidate_from_registry(
     candidate: Any,
     *,
+    module: str,
     method_name: str | None,
     graph_services: dict[str, CapabilityServiceInfo],
     selected_peer_id: str | None,
@@ -380,9 +413,10 @@ def _remote_candidate_from_registry(
 ) -> RouteCandidateDecision:
     peer = candidate.peer
     service = candidate.service
-    service_instance_id = f"remote:{peer.peer_id}:{service.module}"
+    module = _candidate_module(candidate, service, module)
+    service_instance_id = f"remote:{peer.peer_id}:{module}"
     available_capacity = None
-    if service.max_concurrent > 0:
+    if service and service.max_concurrent > 0:
         available_capacity = max(service.max_concurrent - peer.active_calls, 0)
     blockers = []
     if not candidate.eligible:
@@ -396,6 +430,7 @@ def _remote_candidate_from_registry(
             )
         )
     graph_service = graph_services.get(service_instance_id)
+    decision = getattr(candidate, "decision", None)
     denial_reasons = [candidate.reason_code] if candidate.reason_code != "eligible" else []
     policy = _candidate_policy(
         service=graph_service,
@@ -407,15 +442,17 @@ def _remote_candidate_from_registry(
         peer_id=peer.peer_id,
         provider_kind="remote",
         service_instance_id=service_instance_id,
-        module=service.module,
-        version=service.version,
+        module=module,
+        version=service.version if service else "",
         included=candidate.eligible,
         selected=selected_target == "remote" and selected_peer_id == peer.peer_id,
         reason_code=candidate.reason_code,
         reason=candidate.reason,
+        projection_revision=str(getattr(decision, "projection_policy_revision", "") or ""),
+        projection_digest=str(getattr(decision, "projection_digest", "") or ""),
         latency_ms=_finite_float(peer.latency_ms),
         active_calls=peer.active_calls,
-        max_concurrent=service.max_concurrent,
+        max_concurrent=service.max_concurrent if service else 0,
         available_capacity=available_capacity,
         policy=policy,
         freshness=_freshness(graph_service)
@@ -423,7 +460,7 @@ def _remote_candidate_from_registry(
         else _freshness_from_parts(
             source="remote_manifest",
             manifest_time=peer.manifest.timestamp if peer.manifest else None,
-            registry_digest=service.digest,
+            registry_digest=service.digest if service else "",
             stale=peer.status == "stale",
         ),
         auth_rbac_state=_auth_rbac_state(
@@ -435,6 +472,15 @@ def _remote_candidate_from_registry(
         privacy_class=_privacy_class(policy),
         blockers=blockers,
     )
+
+
+def _candidate_module(candidate: Any, service: Any, requested_module: str) -> str:
+    if service is not None:
+        return service.module
+    decision = getattr(candidate, "decision", None)
+    if decision is not None and getattr(decision, "module", None):
+        return decision.module
+    return requested_module
 
 
 def _candidate_policy(
@@ -485,21 +531,22 @@ def _topic_from_request(request: RouteExplainRequest) -> str:
     if request.module and request.method:
         return f"{request.module}.{request.method}"
     if request.module:
-        return f"{request.module}.Diagnostic"
-    return "Gateway.Diagnostic"
+        return request.module
+    return "Gateway"
 
 
 def _fallback_behavior(config: Any | None, selected_target: str) -> str:
     if config is None:
         return "local_default"
+    fallback = config.routing.fallback
     if selected_target == "remote":
-        return f"remote_selected; fallback={config.fallback}"
+        return f"remote_selected; fallback={fallback}"
     if selected_target == "local":
-        return f"local_selected; fallback={config.fallback}"
+        return f"local_selected; fallback={fallback}"
     if selected_target == "none":
         return "no_route"
     if selected_target == "error":
-        return f"hard_error; fallback={config.fallback}"
+        return f"hard_error; fallback={fallback}"
     return selected_target
 
 

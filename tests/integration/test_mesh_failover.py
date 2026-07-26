@@ -12,11 +12,14 @@ from pydantic import BaseModel
 
 from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_bridge import PeerBridge
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable
+from app.shared.contracts.models.gateway import MethodInfo
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+from tests.unit.gateway.verified_manifest_helpers import verified_peer_manifest
 
 
 class DummyPayload(BaseModel):
@@ -29,9 +32,9 @@ def mesh_config():
         enabled=True,
         node_name="failover-test",
         services={
-            "Orchestrator": MeshServiceConfig(prefer="network", fallback="local"),
-            "STT": MeshServiceConfig(prefer="network", fallback="network"),
-            "GPU": MeshServiceConfig(prefer="network_only", fallback="error"),
+            "Orchestrator": mesh_policy(prefer="network", fallback="local"),
+            "STT": mesh_policy(prefer="network", fallback="network"),
+            "GPU": mesh_policy(prefer="network_only", fallback="error"),
         },
         peer_selection="lowest_latency",
     )
@@ -76,14 +79,37 @@ def mesh_bus(inner_bus, routing_table, peer_bridge, mesh_config):
 async def _register_peer(registry, peer_id, modules, latency=50.0):
     """Helper to register a negotiated peer."""
     await registry.register_peer(peer_id)
-    manifest = PeerManifest(
-        peer_id=peer_id,
-        shared_services=[
-            PeerServiceInfo(module=m, version="1.0.0", max_concurrent=10) for m in modules
-        ],
+    manifest = verified_peer_manifest(
+        peer_id,
+        [_service_for_module(m) for m in modules],
     )
     await registry.update_manifest(peer_id, manifest)
     await registry.update_latency(peer_id, latency)
+
+
+def _service_for_module(module: str) -> PeerServiceInfo:
+    topics = {
+        "Orchestrator": ["Orchestrator.Query"],
+        "STT": ["STT.Transcribe"],
+        "GPU": ["GPU.Compute"],
+    }.get(module, [f"{module}.Query"])
+    return PeerServiceInfo(
+        module=module,
+        version="1.0.0",
+        max_concurrent=10,
+        available_feature_ids=["test_feature"],
+        methods=[
+            MethodInfo(
+                name=topic.rsplit(".", 1)[-1],
+                bus_topic=topic,
+                exposure="external",
+                method_type="use",
+                required_perms=[topic],
+                callable_feature_ids=["test_feature"],
+            )
+            for topic in topics
+        ],
+    )
 
 
 @pytest.mark.integration
@@ -126,10 +152,10 @@ class TestRemoteFailureFallback:
 
         async def simulate_error():
             await asyncio.sleep(0.05)
-            for req_id, fut in list(peer_bridge._pending_calls.items()):
+            for (pending_peer_id, req_id), fut in list(peer_bridge._pending_calls.items()):
                 if not fut.done():
                     peer_bridge.on_response(
-                        "error-peer",
+                        pending_peer_id,
                         {
                             "type": "error",
                             "id": req_id,
@@ -164,10 +190,10 @@ class TestNetworkFallbackToAnotherPeer:
             await asyncio.sleep(0.15)
             # After peer-1 times out, MeshBus tries fallback
             # The second call to peer-2 should get a response
-            for req_id, fut in list(peer_bridge._pending_calls.items()):
+            for (pending_peer_id, req_id), fut in list(peer_bridge._pending_calls.items()):
                 if not fut.done():
                     peer_bridge.on_response(
-                        "peer-2",
+                        pending_peer_id,
                         {
                             "type": "result",
                             "id": req_id,

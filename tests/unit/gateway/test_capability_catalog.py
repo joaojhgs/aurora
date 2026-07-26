@@ -2,12 +2,17 @@
 
 import pytest
 
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.capability_catalog import build_capability_catalog, explain_route
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_registry import PeerRegistry
+from app.services.gateway.mesh.policy_store import MeshPolicySnapshot
 from app.services.gateway.mesh.routing_table import RoutingTable
 from app.services.gateway.service import GatewayService
+from app.shared.contracts.mesh_surface import (
+    feature_contracts_for_module,
+    feature_contracts_for_topic,
+)
 from app.shared.contracts.models.gateway import (
     CapabilityCatalogRequest,
     GatewayMethods,
@@ -17,7 +22,10 @@ from app.shared.contracts.models.gateway import (
 )
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.stt import AudioSessionMethods, WakeWordMethods
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.registry import clear_registry, list_modules
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+from tests.unit.gateway.verified_manifest_helpers import verified_peer_manifest
 
 
 def _method(
@@ -45,6 +53,7 @@ def _remote_service(module: str, version: str, max_concurrent: int = 4) -> PeerS
         module=module,
         version=version,
         capabilities=["tools", "basic"],
+        available_feature_ids=["basic_feature"],
         methods=[_method(module)],
         max_concurrent=max_concurrent,
         digest=f"digest-{module}-{version}",
@@ -56,16 +65,32 @@ def _method_from_topic(topic: str) -> MethodInfo:
     return _method(module, name)
 
 
+def _canonical_method(topic: str) -> MethodInfo:
+    module, name = topic.split(".", 1)
+    return MethodInfo(
+        name=name,
+        summary=f"{module} {name}",
+        bus_topic=topic,
+        exposure="external",
+        method_type="use",
+        required_perms=[topic],
+        callable_feature_ids=[feature.feature_id for feature in feature_contracts_for_topic(topic)],
+        callable_features=list(feature_contracts_for_topic(topic)),
+        input_model=f"{name}Request",
+        output_model=f"{name}Response",
+    )
+
+
 @pytest.mark.asyncio
 async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schemas():
     mesh_config = MeshConfig(
         enabled=True,
         node_name="local-node",
         services={
-            "Tooling": MeshServiceConfig(
+            "Tooling": mesh_policy(
                 share=True,
                 prefer="network",
-                allowed_peers=["peer-a", "peer-b"],
+                allowed_provider_peer_ids=["peer-a", "peer-b"],
                 required_capabilities=["tools"],
             ),
         },
@@ -75,11 +100,10 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
     await registry.register_peer("peer-a", "alpha")
     await registry.update_manifest(
         "peer-a",
-        PeerManifest(
-            peer_id="peer-a",
+        verified_peer_manifest(
+            "peer-a",
+            [_remote_service("Tooling", "1.0.0")],
             node_name="alpha",
-            timestamp="2026-06-18T19:00:00Z",
-            shared_services=[_remote_service("Tooling", "1.0.0")],
         ),
     )
     await registry.update_latency("peer-a", 10.0)
@@ -87,11 +111,10 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
     await registry.register_peer("peer-b", "beta")
     await registry.update_manifest(
         "peer-b",
-        PeerManifest(
-            peer_id="peer-b",
+        verified_peer_manifest(
+            "peer-b",
+            [_remote_service("Tooling", "2.0.0", max_concurrent=1)],
             node_name="beta",
-            timestamp="2026-06-18T19:01:00Z",
-            shared_services=[_remote_service("Tooling", "2.0.0", max_concurrent=1)],
         ),
     )
     await registry.increment_active_calls("peer-b")
@@ -99,11 +122,10 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
     await registry.register_peer("peer-c", "gamma")
     await registry.update_manifest(
         "peer-c",
-        PeerManifest(
-            peer_id="peer-c",
+        verified_peer_manifest(
+            "peer-c",
+            [_remote_service("Tooling", "3.0.0")],
             node_name="gamma",
-            timestamp="2026-06-18T19:02:00Z",
-            shared_services=[_remote_service("Tooling", "3.0.0")],
         ),
     )
 
@@ -131,11 +153,17 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
         request=CapabilityCatalogRequest(modules=["Tooling"]),
         mesh_config=mesh_config,
         local_services=local_services,
-        peers=registry.get_all_peers(),
+        registry=registry,
         local_peer_id="local-peer",
     )
 
     assert catalog.secrets_redacted is True
+    assert {provider.peer_id: provider.node_name for provider in catalog.providers} == {
+        "local-peer": "local-node",
+        "peer-a": "alpha",
+        "peer-b": "beta",
+        "peer-c": "gamma",
+    }
     assert catalog.provider_index["Tooling"] == [
         "local:local-peer:Tooling",
         "remote:peer-a:Tooling",
@@ -151,13 +179,15 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
     assert peer_a_action.bindability == "approval-required"
     assert peer_a_action.policy.safety_class == "delegated_action"
     assert peer_a_action.policy.required_permissions == ["Tooling.Execute"]
+    assert peer_a_action.policy.allowed_provider_peer_ids == ["peer-a", "peer-b"]
+    assert "allowed_peers" not in peer_a_action.policy.model_dump()
     assert peer_a_action.freshness.registry_digest == "digest-Tooling-1.0.0"
 
     peer_c_provider = next(
         provider for provider in catalog.providers if provider.peer_id == "peer-c"
     )
     assert peer_c_provider.eligible is False
-    assert peer_c_provider.reason_code == "peer_not_allowed"
+    assert peer_c_provider.reason_code == "provider_not_allowed"
 
     local_action = next(action for action in catalog.actions if action.peer_id == "local-peer")
     assert local_action.service_instance_id == "local:local-peer:Tooling"
@@ -172,17 +202,68 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
 
 
 @pytest.mark.asyncio
+async def test_catalog_preserves_callable_feature_objects_local_and_remote():
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"TTS": mesh_policy(share=True, prefer="network")},
+    )
+    registry = PeerRegistry(mesh_config)
+    await registry.register_peer("peer-a", "alpha")
+    await registry.update_manifest(
+        "peer-a",
+        verified_peer_manifest(
+            "peer-a",
+            [
+                PeerServiceInfo(
+                    module="TTS",
+                    version="1.0.0",
+                    callable_features=list(feature_contracts_for_module("TTS")),
+                    methods=[_canonical_method(TTSMethods.SYNTHESIZE)],
+                )
+            ],
+        ),
+    )
+    local_services = {
+        "TTS": ServiceAnnouncement(
+            module="TTS",
+            version="1.0.0",
+            callable_features=list(feature_contracts_for_module("TTS")),
+            methods=[_canonical_method(TTSMethods.SYNTHESIZE)],
+        )
+    }
+
+    catalog = build_capability_catalog(
+        request=CapabilityCatalogRequest(modules=["TTS"]),
+        mesh_config=mesh_config,
+        local_services=local_services,
+        registry=registry,
+        local_peer_id="local-peer",
+    )
+
+    local_action = next(action for action in catalog.actions if action.peer_id == "local-peer")
+    remote_action = next(action for action in catalog.actions if action.peer_id == "peer-a")
+    assert local_action.callable_feature_ids == ["speech_synthesis"]
+    assert local_action.callable_features == list(
+        feature_contracts_for_topic(TTSMethods.SYNTHESIZE)
+    )
+    assert remote_action.callable_features == list(
+        feature_contracts_for_topic(TTSMethods.SYNTHESIZE)
+    )
+
+
+@pytest.mark.asyncio
 async def test_route_explain_reports_selected_remote_stale_denied_and_local_candidates():
     mesh_config = MeshConfig(
         enabled=True,
         node_name="local-node",
         peer_selection="lowest_latency",
         services={
-            "Tooling": MeshServiceConfig(
+            "Tooling": mesh_policy(
                 share=True,
                 prefer="network",
                 fallback="local",
-                allowed_peers=["peer-a", "peer-stale"],
+                allowed_provider_peer_ids=["peer-a", "peer-stale"],
                 required_capabilities=["tools"],
             ),
         },
@@ -193,23 +274,20 @@ async def test_route_explain_reports_selected_remote_stale_denied_and_local_cand
     await registry.register_peer("peer-a", "alpha")
     await registry.update_manifest(
         "peer-a",
-        PeerManifest(peer_id="peer-a", shared_services=[_remote_service("Tooling", "1.0.0")]),
+        verified_peer_manifest("peer-a", [_remote_service("Tooling", "1.0.0")]),
     )
     await registry.update_latency("peer-a", 15.0)
 
     await registry.register_peer("peer-denied", "denied")
     await registry.update_manifest(
         "peer-denied",
-        PeerManifest(
-            peer_id="peer-denied",
-            shared_services=[_remote_service("Tooling", "1.0.0")],
-        ),
+        verified_peer_manifest("peer-denied", [_remote_service("Tooling", "1.0.0")]),
     )
 
     await registry.register_peer("peer-stale", "stale")
     await registry.update_manifest(
         "peer-stale",
-        PeerManifest(peer_id="peer-stale", shared_services=[_remote_service("Tooling", "1.0.0")]),
+        verified_peer_manifest("peer-stale", [_remote_service("Tooling", "1.0.0")]),
     )
     registry.get_peer("peer-stale").status = "stale"
 
@@ -243,12 +321,89 @@ async def test_route_explain_reports_selected_remote_stale_denied_and_local_cand
     assert by_peer["peer-a"].freshness.source == "remote_manifest"
     assert by_peer["peer-a"].privacy_class == "personal"
     assert by_peer["peer-a"].auth_rbac_state == "permission_required"
-    assert by_peer["peer-denied"].reason_code == "peer_not_allowed"
+    assert by_peer["peer-denied"].reason_code == "provider_not_allowed"
     assert by_peer["peer-denied"].blockers[0].security_privacy is True
-    assert by_peer["peer-denied"].policy.denial_reasons == ["peer_not_allowed"]
+    assert by_peer["peer-denied"].policy.denial_reasons == ["provider_not_allowed"]
     assert by_peer["peer-denied"].auth_rbac_state == "blocked"
-    assert by_peer["peer-stale"].reason_code == "peer_stale"
+    assert by_peer["peer-stale"].reason_code == "manifest_projection_stale"
     assert by_peer["peer-stale"].freshness.stale is True
+
+
+@pytest.mark.asyncio
+async def test_route_explain_reports_absent_service_candidate():
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"TTS": mesh_policy(share=True, prefer="network", fallback="error")},
+    )
+    registry = PeerRegistry(mesh_config)
+    routing_table = RoutingTable(mesh_config, registry)
+    await registry.register_peer("peer-db", "database")
+    await registry.update_manifest(
+        "peer-db",
+        verified_peer_manifest("peer-db", [_remote_service("DB", "1.0.0")]),
+    )
+
+    response = explain_route(
+        request=RouteExplainRequest(topic=TTSMethods.SYNTHESIZE),
+        mesh_config=mesh_config,
+        registry=registry,
+        routing_table=routing_table,
+        local_peer_id="local-peer",
+    )
+
+    by_peer = {candidate.peer_id: candidate for candidate in response.candidates}
+    assert response.selected_target == "error"
+    assert by_peer["peer-db"].module == "TTS"
+    assert by_peer["peer-db"].service_instance_id == "remote:peer-db:TTS"
+    assert by_peer["peer-db"].included is False
+    assert by_peer["peer-db"].reason_code == "service_not_advertised"
+    assert by_peer["peer-db"].max_concurrent == 0
+
+
+@pytest.mark.asyncio
+async def test_route_explain_threads_one_policy_snapshot_to_routing_and_candidates(monkeypatch):
+    mesh_config = MeshConfig(
+        enabled=True,
+        node_name="local-node",
+        services={"Tooling": mesh_policy(share=True, prefer="network")},
+    )
+    registry = PeerRegistry(mesh_config)
+    routing_table = RoutingTable(mesh_config, registry)
+    await registry.register_peer("peer-a", "alpha")
+    await registry.update_manifest(
+        "peer-a",
+        verified_peer_manifest("peer-a", [_remote_service("Tooling", "1.0.0")]),
+    )
+    snapshot = MeshPolicySnapshot(revision=99, source_revision="test", mesh_config=mesh_config)
+    observed: list[tuple[str, int]] = []
+
+    original_resolve = routing_table.resolve
+    original_candidates = registry.get_provider_candidates
+
+    def resolve_spy(*args, **kwargs):
+        observed.append(("resolve", kwargs["policy_snapshot"].revision))
+        return original_resolve(*args, **kwargs)
+
+    def candidates_spy(*args, **kwargs):
+        observed.append(("candidates", kwargs["policy_snapshot"].revision))
+        return original_candidates(*args, **kwargs)
+
+    monkeypatch.setattr(routing_table, "resolve", resolve_spy)
+    monkeypatch.setattr(registry, "get_provider_candidates", candidates_spy)
+
+    response = explain_route(
+        request=RouteExplainRequest(topic="Tooling.Execute"),
+        mesh_config=mesh_config,
+        registry=registry,
+        routing_table=routing_table,
+        policy_snapshot=snapshot,
+        local_peer_id="local-peer",
+    )
+
+    assert response.selected_peer_id == "peer-a"
+    assert observed[0] == ("resolve", 99)
+    assert observed.count(("candidates", 99)) == 2
 
 
 @pytest.mark.asyncio
@@ -258,11 +413,11 @@ async def test_catalog_selectors_round_trip_through_route_explain():
         node_name="local-node",
         peer_selection="lowest_latency",
         services={
-            "Tooling": MeshServiceConfig(
+            "Tooling": mesh_policy(
                 share=True,
                 prefer="network",
                 fallback="local",
-                allowed_peers=["peer-a", "peer-stale"],
+                allowed_provider_peer_ids=["peer-a", "peer-stale"],
                 required_capabilities=["tools"],
             ),
         },
@@ -273,26 +428,20 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     await registry.register_peer("peer-a", "alpha")
     await registry.update_manifest(
         "peer-a",
-        PeerManifest(peer_id="peer-a", shared_services=[_remote_service("Tooling", "1.0.0")]),
+        verified_peer_manifest("peer-a", [_remote_service("Tooling", "1.0.0")]),
     )
     await registry.update_latency("peer-a", 5.0)
 
     await registry.register_peer("peer-denied", "denied")
     await registry.update_manifest(
         "peer-denied",
-        PeerManifest(
-            peer_id="peer-denied",
-            shared_services=[_remote_service("Tooling", "1.0.0")],
-        ),
+        verified_peer_manifest("peer-denied", [_remote_service("Tooling", "1.0.0")]),
     )
 
     await registry.register_peer("peer-stale", "stale")
     await registry.update_manifest(
         "peer-stale",
-        PeerManifest(
-            peer_id="peer-stale",
-            shared_services=[_remote_service("Tooling", "1.0.0")],
-        ),
+        verified_peer_manifest("peer-stale", [_remote_service("Tooling", "1.0.0")]),
     )
     registry.get_peer("peer-stale").status = "stale"
 
@@ -307,7 +456,7 @@ async def test_catalog_selectors_round_trip_through_route_explain():
         request=CapabilityCatalogRequest(modules=["Tooling"]),
         mesh_config=mesh_config,
         local_services=local_services,
-        peers=registry.get_all_peers(),
+        registry=registry,
         local_peer_id="local-peer",
     )
     actions_by_peer = {action.peer_id: action for action in catalog.actions}
@@ -374,7 +523,7 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert denied_response.selected_target == "error"
     assert denied_response.selector_valid is False
     assert denied_response.selector_validation_code == "selector_peer_unauthorized"
-    assert any(blocker.code == "peer_not_allowed" for blocker in denied_response.blockers)
+    assert any(blocker.code == "provider_not_allowed" for blocker in denied_response.blockers)
     denied_route = routing_table.resolve(
         "Tooling.Execute",
         routing_config=mesh_config.services["Tooling"],
@@ -397,7 +546,7 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert stale_response.selected_target == "error"
     assert stale_response.selector_valid is False
     assert stale_response.selector_validation_code == "selector_peer_stale"
-    assert any(blocker.code == "peer_stale" for blocker in stale_response.blockers)
+    assert any(blocker.code == "manifest_projection_stale" for blocker in stale_response.blockers)
     stale_route = routing_table.resolve(
         "Tooling.Execute",
         routing_config=mesh_config.services["Tooling"],
@@ -407,11 +556,23 @@ async def test_catalog_selectors_round_trip_through_route_explain():
     assert stale_route.error_code == "selector_peer_stale"
 
 
+def test_route_explain_coerces_http_selector_objects_to_mesh_selectors():
+    request = RouteExplainRequest(
+        topic="Scheduler.ScheduleJob",
+        selector={"peer_id": "studio-peer", "resource_namespace": "household"},
+    )
+
+    assert isinstance(request.selector, MeshAddressSelector)
+    assert request.selector.peer_id == "studio-peer"
+    assert request.selector.resource_namespace == "household"
+    assert request.selector.has_routing_target() is True
+
+
 def test_catalog_exposes_audio_streaming_as_consent_required_and_batch_detect_invokable():
     mesh_config = MeshConfig(
         enabled=True,
         node_name="local-node",
-        services={"WakeWord": MeshServiceConfig(share=True, prefer="network")},
+        services={"WakeWord": mesh_policy(share=True, prefer="network")},
     )
     local_services = {
         "WakeWord": ServiceAnnouncement(
@@ -448,7 +609,7 @@ def test_route_explain_reports_audio_privacy_candidate_policy():
     mesh_config = MeshConfig(
         enabled=True,
         node_name="local-node",
-        services={"WakeWord": MeshServiceConfig(share=True, prefer="local")},
+        services={"WakeWord": mesh_policy(share=True, prefer="local")},
     )
     local_services = {
         "WakeWord": ServiceAnnouncement(
@@ -479,7 +640,7 @@ def test_route_explain_reports_audio_privacy_candidate_policy():
 async def test_route_explain_reports_selector_validation_failure():
     mesh_config = MeshConfig(
         enabled=True,
-        services={"Tooling": MeshServiceConfig(share=True, prefer="network")},
+        services={"Tooling": mesh_policy(share=True, prefer="network")},
     )
     registry = PeerRegistry(mesh_config)
     routing_table = RoutingTable(mesh_config, registry)
@@ -487,7 +648,7 @@ async def test_route_explain_reports_selector_validation_failure():
     await registry.register_peer("peer-a", "alpha")
     await registry.update_manifest(
         "peer-a",
-        PeerManifest(peer_id="peer-a", shared_services=[_remote_service("Tooling", "1.0.0")]),
+        verified_peer_manifest("peer-a", [_remote_service("Tooling", "1.0.0")]),
     )
 
     response = explain_route(

@@ -101,6 +101,7 @@ class BaseService(ABC):
                         log_debug(f"Registered contract: {method_id}")
             except Exception as e:
                 log_error(f"Error registering contract for {attr_name}: {e}")
+                raise
 
     @property
     def bus(self) -> Any:
@@ -149,6 +150,9 @@ class BaseService(ABC):
         if await self._is_runtime_enabled():
             await self.activate(reason="startup")
         else:
+            # Infrastructure sinks (always_available contracts) stay reachable so
+            # other services don't dead-letter into a lifecycle-disabled module.
+            await self._subscribe_registered_contracts(only_always_available=True)
             self._runtime_state = "inactive"
             log_info(f"{self.module} inactive because its enabled config is false")
 
@@ -189,6 +193,7 @@ class BaseService(ABC):
             await self.on_deactivate()
         except Exception as e:
             log_error(f"{self.module} deactivation hook failed: {e}", exc_info=True)
+        await self._subscribe_registered_contracts(only_always_available=True)
         self._set_started(True)
         self._runtime_state = "inactive"
         log_info(f"{self.module} inactive ({reason})")
@@ -399,9 +404,27 @@ class BaseService(ABC):
         exact key-path behavior while existing reload implementations continue
         to work.
         """
-        section = event.affected_sections[0] if event.affected_sections else None
-        if section is None and event.key_path:
-            section = event.key_path.split(".", 1)[0]
+        key_path = str(getattr(event, "key_path", "") or "")
+        parts = key_path.split(".") if key_path else []
+        if (
+            len(parts) >= 3
+            and parts[:2] == ["services", "tooling"]
+            and parts[2] in {"mcp", "plugins"}
+        ):
+            # Tooling owns separate runtime managers for MCP and plugin tools.
+            # Preserve those manager boundaries while keeping other Tooling
+            # leaves on the policy/catalog-only ``services.tooling`` path.
+            section = ".".join(parts[:3])
+        elif len(parts) >= 2 and parts[0] == "services":
+            # ConfigManager reports every prefix, beginning with the broad
+            # ``services`` root. Passing that root made every active service
+            # perform an expensive reload for a leaf owned by one service.
+            section = ".".join(parts[:2])
+        elif parts:
+            section = parts[0]
+        else:
+            affected = list(getattr(event, "affected_sections", []) or [])
+            section = affected[-1] if affected else None
         await self.reload(section)
 
     def _event_matches_enabled_path(self, key_path: str, enabled_path: str) -> bool:
@@ -463,8 +486,8 @@ class BaseService(ABC):
         """
         self._started = started
 
-    async def _subscribe_registered_contracts(self) -> None:
-        """Subscribe all registered method contracts to the message bus.
+    async def _subscribe_registered_contracts(self, only_always_available: bool = False) -> None:
+        """Subscribe registered method contracts to the message bus.
 
         This method scans for methods decorated with @method_contract that have
         a bus_topic defined, and subscribes them to that topic.
@@ -473,10 +496,17 @@ class BaseService(ABC):
         2. Input model validation
         3. Method execution (passing Envelope if method accepts it, else payload)
         4. Response publishing (if reply_to is set)
+
+        Args:
+            only_always_available: Subscribe only contracts flagged
+                ``always_available`` (infrastructure sinks kept alive while the
+                service is lifecycle-disabled). Already-subscribed topics are
+                skipped, so a later full activation adds the remaining ones.
         """
         import inspect
 
         from app.messaging import Envelope
+        from app.shared.contracts.registry import get_contract, method_contract_advertisable
 
         def _wants_envelope(method: Any) -> bool:
             """Check if method signature has an 'envelope' parameter."""
@@ -486,8 +516,7 @@ class BaseService(ABC):
             except (ValueError, TypeError):
                 return False
 
-        if self._contract_subscriptions:
-            return
+        subscribed_topics = {existing_topic for existing_topic, _ in self._contract_subscriptions}
 
         for attr_name in dir(self):
             try:
@@ -499,9 +528,43 @@ class BaseService(ABC):
                     metadata = attr._contract_metadata
                     # Use method_id as topic (e.g., "TTS.Request", "Config.Get")
                     topic = metadata.get("bus_topic") or metadata.get("method_id")
-                    input_model = metadata.get("input_model")
-                    required_perms = tuple(metadata.get("required_perms") or ())
-                    contract_method_type = metadata.get("method_type")
+                    contract = get_contract(topic) if topic else None
+                    if topic and contract is None:
+                        log_warning(
+                            f"{self.module}.{attr_name} has decorator metadata for {topic} "
+                            "but no registered contract; skipping subscription"
+                        )
+                        continue
+                    if contract is not None and not method_contract_advertisable(contract):
+                        log_warning(
+                            f"{self.module}.{attr_name} contract {topic} is not advertisable; "
+                            "skipping subscription"
+                        )
+                        continue
+                    input_model = (
+                        contract.input_model
+                        if contract is not None
+                        else metadata.get("input_model")
+                    )
+                    required_perms = tuple(
+                        contract.required_perms
+                        if contract is not None
+                        else metadata.get("required_perms") or ()
+                    )
+                    contract_method_type = (
+                        contract.method_type
+                        if contract is not None
+                        else metadata.get("method_type")
+                    )
+
+                    if only_always_available and not (
+                        contract.always_available
+                        if contract is not None
+                        else metadata.get("always_available")
+                    ):
+                        continue
+                    if topic in subscribed_topics:
+                        continue
 
                     if topic:
                         stream_handler: Any | None = None
@@ -723,6 +786,7 @@ class BaseService(ABC):
         origin = getattr(envelope, "origin", "internal")
         externalish = origin == "external" or identity_source in {
             "gateway_http",
+            "gateway_admin_action",
             "webrtc_rpc",
             "mesh_peer",
             "remote_peer",
@@ -847,6 +911,10 @@ class BaseService(ABC):
             # Build method info list with schemas
             methods = []
             for method in module_contract.methods:
+                from app.shared.contracts.registry import method_contract_advertisable
+
+                if not method_contract_advertisable(method):
+                    continue
                 # Extract JSON schemas from Pydantic models
                 input_schema = None
                 output_schema = None
@@ -868,6 +936,9 @@ class BaseService(ABC):
                         input_model=method.input_model.__name__ if method.input_model else None,
                         output_model=method.output_model.__name__ if method.output_model else None,
                         required_perms=method.required_perms,
+                        callable_feature_ids=method.callable_feature_ids,
+                        callable_features=method.callable_features,
+                        public_infrastructure=method.public_infrastructure,
                         method_type=method.method_type,
                         input_schema=input_schema,
                         output_schema=output_schema,
@@ -880,6 +951,7 @@ class BaseService(ABC):
                 version=module_contract.version,
                 summary=self._summary or module_contract.summary,
                 capabilities=self._capabilities or module_contract.capabilities,
+                callable_features=module_contract.callable_features,
                 methods=methods,
                 instance_id=self._instance_id,
             )

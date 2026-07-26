@@ -10,11 +10,13 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.messaging import Envelope, QueryResult
+from app.services.db.manager import DatabaseManager
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.db import DBMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
     ToolingApprovalGrant,
+    ToolingClearToolPolicyOverrideRequest,
     ToolingConfirmExecutionRequest,
     ToolingCreateApprovalGrantRequest,
     ToolingEvaluateApprovalGrantRequest,
@@ -32,6 +34,8 @@ from app.shared.contracts.models.tooling import (
     ToolingRevokeApprovalGrantRequest,
     ToolingToolInfo,
     ToolingToolProvenance,
+    ToolingUpsertSourcePolicyRequest,
+    ToolingUpsertToolPolicyOverrideRequest,
 )
 
 
@@ -62,7 +66,7 @@ def _remote_tool_info(name: str, schema_hash_suffix: str = "v1") -> ToolingToolI
         provider_service_instance_id="remote:raspi-lab:Tooling",
         namespace="raspi_lab",
         display_name=f"raspi_lab.{name}",
-        description=f"Remote {name} tool",
+        description=f"Remote {name} tool ({schema_hash_suffix})",
         args_schema={"type": "object", "properties": {}},
         schema={"type": "object", "properties": {}},
         source_type="mesh_peer",
@@ -162,6 +166,59 @@ def _remote_prepared(tool: ToolingToolInfo) -> ToolingPrepareExecutionResponse:
     )
 
 
+@pytest.mark.asyncio
+async def test_tool_policy_override_wins_over_source_policy_and_clear_restores_inheritance(
+    make_tooling_service,
+):
+    """Tool policy is authoritative until clearing it restores source inheritance."""
+
+    service = make_tooling_service()
+    request = _execute_request()
+    prepared = _local_prepared(
+        source="core",
+        global_tool_id="tool:local:restart-sensitive",
+        local_name="restart_sensitive_tool",
+    )
+    await service._on_upsert_source_policy(
+        ToolingUpsertSourcePolicyRequest(
+            source_id="local:core",
+            trust_tier="blocked",
+            actor_principal_id="admin",
+            reason="block source by default",
+            include_future_tools=True,
+            provider_peer_id="local",
+            provider_service_instance_id="local:Tooling",
+        )
+    )
+    tool_policy = await service._on_upsert_tool_policy_override(
+        ToolingUpsertToolPolicyOverrideRequest(
+            global_tool_id=prepared.global_tool_id,
+            local_tool_name=prepared.local_tool_name,
+            provider_peer_id="local",
+            provider_service_instance_id="local:Tooling",
+            trust_tier="trusted",
+            actor_principal_id="admin",
+            reason="allow this exact tool",
+        )
+    )
+    selected = await service._find_matching_policy_grant(request, prepared)
+    assert selected is not None
+    assert selected.grant_id == tool_policy.grant.grant_id
+    assert selected.trust_tier == "trusted"
+
+    await service._on_clear_tool_policy_override(
+        ToolingClearToolPolicyOverrideRequest(
+            global_tool_id=prepared.global_tool_id,
+            actor_principal_id="admin",
+            reason="restore source inheritance",
+        )
+    )
+    inherited = await service._find_matching_policy_grant(request, prepared)
+    assert inherited is not None
+    assert inherited.metadata["policy_scope"] == "source"
+    assert inherited.trust_tier == "blocked"
+
+
 class _SqliteToolingBus:
     """Small bus test double that persists DB.ExecuteSQL to one SQLite file."""
 
@@ -171,8 +228,27 @@ class _SqliteToolingBus:
         self.publish = AsyncMock()
         self.request = AsyncMock(side_effect=self._request)
         self.audit_events: list[object] = []
+        self.db_manager = DatabaseManager(str(db_path))
+        self._db_ready = False
 
     async def _request(self, topic: str, payload, **kwargs) -> QueryResult:
+        if topic in {
+            DBMethods.ALLOCATE_TOOL_IDENTITY,
+            DBMethods.RECONCILE_TOOL_IDENTITY,
+            DBMethods.RESOLVE_TOOL_IDENTITY_ALIASES,
+        }:
+            if not self._db_ready:
+                await self.db_manager.initialize()
+                self._db_ready = True
+            if topic == DBMethods.ALLOCATE_TOOL_IDENTITY:
+                response = await self.db_manager.allocate_tool_identity(payload)
+            elif topic == DBMethods.RECONCILE_TOOL_IDENTITY:
+                response = await self.db_manager.reconcile_tool_identity(payload)
+            else:
+                response = await self.db_manager.resolve_tool_identity_aliases(
+                    payload.global_tool_ids, stable_peer_id=payload.stable_peer_id
+                )
+            return QueryResult(ok=True, data=response)
         if topic == DBMethods.EXECUTE_SQL:
             with sqlite3.connect(self.db_path) as connection:
                 connection.row_factory = sqlite3.Row
@@ -830,6 +906,107 @@ async def test_remote_catalog_change_marks_dependent_grants_needing_review(
 
 
 @pytest.mark.asyncio
+async def test_remote_catalog_reused_announced_hash_cannot_hide_schema_change(
+    make_tooling_service,
+):
+    """Local canonical hashes preserve stable grants and expose peer-hidden drift."""
+
+    service = make_tooling_service()
+    peer_hash = "reused-peer-announced-hash"
+    remote_tool = _remote_tool_info("switch_light", "v1")
+    await service._persist_remote_catalog_snapshot(
+        ToolingRemoteCatalogAnnounced(
+            peer_id="raspi-lab",
+            service_instance_id="remote:raspi-lab:Tooling",
+            provider_id="raspi-lab",
+            catalog_epoch=1,
+            generated_at="2026-07-05T00:00:00Z",
+            full_schema_hash=peer_hash,
+            tools=[remote_tool],
+            granted_permissions=["Tooling.ExecuteTool"],
+        )
+    )
+    canonical_hash = service._remote_catalog_snapshots[("raspi-lab", "remote:raspi-lab:Tooling")][
+        0
+    ].full_schema_hash
+    assert canonical_hash != peer_hash
+
+    created = await service._on_create_approval_grant(
+        ToolingCreateApprovalGrantRequest(
+            grant_scope="always",
+            grant_type="trust",
+            principal_id="principal-a",
+            caller_peer_id="peer-a",
+            provider_peer_id="raspi-lab",
+            provider_service_instance_id="remote:raspi-lab:Tooling",
+            include_future_tools=True,
+            created_by="approver-a",
+        )
+    )
+    assert created.ok is True
+
+    # Epoch, recipient permissions, and the peer's announced hash can change
+    # without changing the durable tool contract.
+    await service._persist_remote_catalog_snapshot(
+        ToolingRemoteCatalogAnnounced(
+            peer_id="raspi-lab",
+            service_instance_id="remote:raspi-lab:Tooling",
+            provider_id="raspi-lab",
+            catalog_epoch=2,
+            generated_at="2026-07-05T00:01:00Z",
+            full_schema_hash=peer_hash,
+            tools=[remote_tool],
+            granted_permissions=[],
+        )
+    )
+    stable_snapshot = service._remote_catalog_snapshots[("raspi-lab", "remote:raspi-lab:Tooling")][
+        0
+    ]
+    stable_grants = await service._on_list_approval_grants(
+        ToolingListApprovalGrantsRequest(
+            principal_id="principal-a",
+            provider_peer_id="raspi-lab",
+        )
+    )
+    assert stable_snapshot.full_schema_hash == canonical_hash
+    assert stable_grants.grants[0].metadata.get("needs_review") is not True
+
+    changed_schema = {
+        "type": "object",
+        "properties": {"brightness": {"type": "integer", "minimum": 0, "maximum": 100}},
+        "required": ["brightness"],
+    }
+    changed_tool = remote_tool.model_copy(
+        update={"args_schema": changed_schema, "schema": changed_schema}
+    )
+    await service._persist_remote_catalog_snapshot(
+        ToolingRemoteCatalogAnnounced(
+            peer_id="raspi-lab",
+            service_instance_id="remote:raspi-lab:Tooling",
+            provider_id="raspi-lab",
+            catalog_epoch=3,
+            generated_at="2026-07-05T00:02:00Z",
+            full_schema_hash=peer_hash,
+            tools=[changed_tool],
+            granted_permissions=["Tooling.ExecuteTool"],
+        )
+    )
+    changed_snapshot = service._remote_catalog_snapshots[("raspi-lab", "remote:raspi-lab:Tooling")][
+        0
+    ]
+    changed_grants = await service._on_list_approval_grants(
+        ToolingListApprovalGrantsRequest(
+            principal_id="principal-a",
+            provider_peer_id="raspi-lab",
+        )
+    )
+
+    assert changed_snapshot.full_schema_hash != canonical_hash
+    assert changed_grants.grants[0].metadata["needs_review"] is True
+    assert changed_grants.grants[0].metadata["stale_reason"] == ("remote_catalog_schema_changed")
+
+
+@pytest.mark.asyncio
 async def test_remote_catalog_change_after_restart_marks_dependent_grants_stale(
     make_tooling_service,
 ):
@@ -1117,6 +1294,12 @@ async def test_negotiated_remote_catalog_cache_delta_removal_and_grant_staleness
             shared_by_policy=True,
         )
     )
+    service._update_remote_provider_state(
+        peer_id="raspi-lab",
+        service_instance_id="remote:raspi-lab:Tooling",
+        granted_permissions=["*"],
+        available=True,
+    )
     remote_switch = service._remote_catalog_snapshots[("raspi-lab", "remote:raspi-lab:Tooling")][
         0
     ].tools[0]
@@ -1145,11 +1328,9 @@ async def test_negotiated_remote_catalog_cache_delta_removal_and_grant_staleness
         topic in {DBMethods.EXECUTE_SQL, AuthMethods.STORE_AUDIT_EVENT}
         for topic in requested_topics
     )
-    assert [tool.name for tool in catalog.tools if tool.provider_peer_id == "raspi-lab"] == [
-        remote_switch.name
-    ]
+    assert [tool.name for tool in catalog.tools if tool.provider_peer_id == "raspi-lab"] == []
     assert catalog.providers[1].provider_peer_id == "raspi-lab"
-    assert catalog.providers[1].cache_status == "hit"
+    assert catalog.providers[1].reason_code == "legacy_unverifiable"
 
     remote_dimmer = _remote_tool_info("dim_light", "v1")
     await service._on_remote_catalog_delta_announced(
@@ -1172,8 +1353,10 @@ async def test_negotiated_remote_catalog_cache_delta_removal_and_grant_staleness
     ]
     changed_remote_tools = [tool.local_name for tool in changed_remote_tool_infos]
     assert remote_switch.local_name not in changed_remote_tools
-    assert remote_dimmer.local_name in changed_remote_tools
-    remote_dimmer = changed_remote_tool_infos[0]
+    assert remote_dimmer.local_name not in changed_remote_tools
+    remote_dimmer = service._remote_catalog_snapshots[("raspi-lab", "remote:raspi-lab:Tooling")][
+        0
+    ].tools[0]
     grants = await service._on_list_approval_grants(
         ToolingListApprovalGrantsRequest(principal_id="principal-a", provider_peer_id="raspi-lab")
     )

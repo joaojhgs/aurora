@@ -44,6 +44,20 @@ class TTSRequest(IOModel):
     mesh_selector: MeshAddressSelector | None = None
 
 
+class TTSStopRequest(IOModel):
+    """Request to stop TTS playback or cancel scoped TTS streams.
+
+    Empty payloads remain valid for legacy trusted internal stop callers. Scoped
+    remote callers should provide a correlation id and may optionally target one
+    stream id.
+    """
+
+    correlation_id: str | None = None
+    stream_id: str | None = None
+    reason: str = "stopped"
+    mesh_selector: MeshAddressSelector | None = None
+
+
 class TTSSynthesizeRequest(IOModel):
     """Request to synthesize speech and return audio data (for external API)."""
 

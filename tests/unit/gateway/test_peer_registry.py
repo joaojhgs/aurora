@@ -2,13 +2,28 @@
 
 import asyncio
 import time
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
-from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState
+from app.services.gateway.config import MeshConfig
+from app.services.gateway.mesh.models import (
+    ManifestAck,
+    ManifestServiceCompatibility,
+    PeerManifest,
+    PeerServiceInfo,
+    PeerState,
+)
+from app.services.gateway.mesh.negotiation import (
+    finalize_recipient_projection_evidence,
+    manifest_projection_digest,
+)
 from app.services.gateway.mesh.peer_registry import PeerRegistry
+from app.services.gateway.mesh.policy_store import MeshPolicySnapshot, MeshPolicyStore
+from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL, SUPPORTED_PROTOCOLS
+from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
 @pytest.fixture
@@ -17,9 +32,7 @@ def mesh_config():
         enabled=True,
         node_name="test",
         services={
-            "TTS": MeshServiceConfig(
-                share=True, max_concurrent=5, prefer="network", fallback="local"
-            ),
+            "TTS": mesh_policy(share=True, max_concurrent=5, prefer="network", fallback="local"),
         },
         stale_peer_timeout_s=10.0,
         peer_selection="lowest_latency",
@@ -32,19 +45,51 @@ def registry(mesh_config):
 
 
 def _make_manifest(peer_id, modules, version="1.0.0"):
-    services = [
-        PeerServiceInfo(
-            module=m,
-            version=version,
-            capabilities=["basic"],
-            max_concurrent=10,
-        )
-        for m in modules
-    ]
+    services = [_make_service(module=m, version=version) for m in modules]
+    return _verified_manifest(peer_id, services)
+
+
+def _verified_manifest(peer_id: str, services: list[PeerServiceInfo]) -> PeerManifest:
+    manifest = PeerManifest(
+        peer_id=peer_id,
+        node_name=f"node-{peer_id}",
+        shared_services=services,
+        active_protocol=ACTIVE_MANIFEST_PROTOCOL,
+        active_version="v1",
+        active_tier="projection",
+        supported_protocols=list(SUPPORTED_PROTOCOLS),
+        projection_supported=True,
+        projection_active=True,
+    )
+    evidence = finalize_recipient_projection_evidence(
+        {
+            "provider_peer_id": peer_id,
+            "recipient_peer_id": "local-peer",
+            "registry_revision": "registry-1",
+            "registry_digest": "registry-digest",
+            "policy_revision": "policy-1",
+            "policy_digest": "policy-digest",
+            "auth_grant_revision": 1,
+            "auth_grant_state": "active",
+            "auth_grant_digest": "",
+            "grants_digest": "",
+            "protocol_tier": ACTIVE_MANIFEST_PROTOCOL,
+            "projection_digest": manifest_projection_digest(manifest),
+            "evidence_digest": "",
+            "grants": [{"permission": "*", "source": "effective"}],
+        }
+    )
     return PeerManifest(
         peer_id=peer_id,
         node_name=f"node-{peer_id}",
         shared_services=services,
+        active_protocol=ACTIVE_MANIFEST_PROTOCOL,
+        active_version="v1",
+        active_tier="projection",
+        supported_protocols=list(SUPPORTED_PROTOCOLS),
+        projection_supported=True,
+        projection_active=True,
+        recipient_projection_evidence=evidence,
     )
 
 
@@ -53,13 +98,31 @@ def _make_service(
     version="1.0.0",
     capabilities=None,
     max_concurrent=10,
+    method_topic: str | None = None,
 ):
+    topic = method_topic or f"{module}.Execute"
+    method_name = topic.split(".", 1)[1] if "." in topic else "Execute"
     return PeerServiceInfo(
         module=module,
         version=version,
         capabilities=capabilities or ["basic"],
+        available_feature_ids=["basic_feature"],
+        methods=[
+            MethodInfo(
+                name=method_name,
+                bus_topic=topic,
+                exposure="external",
+                required_perms=[topic],
+            )
+        ],
         max_concurrent=max_concurrent,
     )
+
+
+def _with_service(mesh_config: MeshConfig, module: str, policy) -> MeshConfig:
+    services = dict(mesh_config.services)
+    services[module] = policy
+    return mesh_config.model_copy(update={"services": services})
 
 
 class TestPeerRegistration:
@@ -81,6 +144,23 @@ class TestPeerRegistration:
         state = registry.get_peer("peer-1")
         assert state.status == "authenticated"
         assert state.node_name == "node-1-updated"
+
+    @pytest.mark.asyncio
+    async def test_re_register_does_not_reset_negotiation_or_ping_liveness(self, registry):
+        await registry.register_peer("peer-1", "node-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        await registry.update_latency("peer-1", 4.0)
+        state = registry.get_peer("peer-1")
+        last_ping = state.last_ping
+
+        await registry.register_peer("peer-1", "node-1-updated")
+
+        state = registry.get_peer("peer-1")
+        assert state is not None
+        assert state.status == "negotiated"
+        assert state.node_name == "node-1-updated"
+        assert state.last_ping == last_ping
+        assert state.latency_ms == 4.0
 
     @pytest.mark.asyncio
     async def test_remove_peer(self, registry):
@@ -146,6 +226,22 @@ class TestLatencyAndCalls:
         assert registry.get_peer("peer-1").status == "negotiated"
 
     @pytest.mark.asyncio
+    async def test_latency_recovery_notifies_status_callback(self, registry):
+        """A recovered route remains blocked until Gateway refreshes its manifest."""
+
+        registry.on_peer_status_changed = AsyncMock()
+        await registry.register_peer("peer-1", "node-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        registry.on_peer_status_changed.reset_mock()
+        registry.get_peer("peer-1").status = "stale"
+
+        await registry.update_latency("peer-1", 50.0)
+
+        registry.on_peer_status_changed.assert_awaited_once_with(
+            "peer-1", "node-peer-1", "negotiated"
+        )
+
+    @pytest.mark.asyncio
     async def test_increment_active_calls(self, registry):
         await registry.register_peer("peer-1")
         result = await registry.increment_active_calls("peer-1")
@@ -177,6 +273,210 @@ class TestLatencyAndCalls:
         await registry.register_peer("peer-1")
         await registry.decrement_active_calls("peer-1")
         assert registry.get_peer("peer-1").active_calls == 0
+
+    @pytest.mark.asyncio
+    async def test_capacity_lease_is_idempotent_per_peer_module(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.update_manifest(
+            "peer-1",
+            _verified_manifest("peer-1", [_make_service("TTS", max_concurrent=1)]),
+        )
+
+        first = await registry.acquire_capacity_lease("peer-1", "TTS", lease_id="call-1")
+        same = await registry.acquire_capacity_lease("peer-1", "TTS", lease_id="call-1")
+        blocked = await registry.acquire_capacity_lease("peer-1", "TTS", lease_id="call-2")
+
+        assert first == same
+        assert blocked is None
+        assert registry.get_peer("peer-1").active_calls_by_module == {"TTS": 1}
+        assert registry.get_peer("peer-1").active_calls == 1
+
+        await registry.release_capacity_lease(first)
+        await registry.release_capacity_lease(first)
+
+        assert registry.get_peer("peer-1").active_calls_by_module == {}
+        assert registry.get_peer("peer-1").active_calls == 0
+
+    @pytest.mark.asyncio
+    async def test_release_capacity_lease_requires_exact_lease_id(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.update_manifest(
+            "peer-1",
+            _verified_manifest("peer-1", [_make_service("TTS", max_concurrent=2)]),
+        )
+
+        first = await registry.acquire_capacity_lease("peer-1", "TTS", lease_id="call-1")
+        second = await registry.acquire_capacity_lease("peer-1", "TTS", lease_id="call-2")
+        assert first is not None
+        assert second is not None
+
+        await registry.release_capacity_lease(peer_id="peer-1", module="TTS")
+        assert registry.get_peer("peer-1").active_calls_by_module == {"TTS": 2}
+        assert registry.get_peer("peer-1").active_calls == 2
+
+        await registry.release_capacity_lease(peer_id="peer-1", module="TTS", lease_id="call-1")
+        await registry.release_capacity_lease(peer_id="peer-1", module="TTS", lease_id="call-1")
+        assert registry.get_peer("peer-1").active_calls_by_module == {"TTS": 1}
+        assert registry.get_peer("peer-1").active_calls == 1
+
+        await registry.release_capacity_lease(second)
+        assert registry.get_peer("peer-1").active_calls_by_module == {}
+        assert registry.get_peer("peer-1").active_calls == 0
+
+
+class TestStaleTimeoutPolicy:
+    @pytest.mark.asyncio
+    async def test_check_stale_peers_timeout_zero_is_noop(self, mesh_config):
+        registry = PeerRegistry(mesh_config.model_copy(update={"stale_peer_timeout_s": 0}))
+        registry.on_peer_status_changed = AsyncMock()
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        registry.on_peer_status_changed.reset_mock()
+        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+
+        await registry._check_stale_peers()
+
+        assert registry.get_peer("peer-1").status == "negotiated"
+        registry.on_peer_status_changed.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_positive_to_zero_live_loop_idles_then_future_positive_reactivates(
+        self,
+        mesh_config,
+        monkeypatch,
+    ):
+        store = MeshPolicyStore()
+        store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
+        registry = PeerRegistry(store.current().mesh_config, store.provider())
+        registry.on_peer_status_changed = AsyncMock()
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        registry.on_peer_status_changed.reset_mock()
+        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+        observed_status_after_zero_check = []
+        sleep_calls = 0
+        real_sleep = asyncio.sleep
+
+        async def fake_sleep(_interval):
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls == 1:
+                store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 0}))
+            elif sleep_calls == 2:
+                observed_status_after_zero_check.append(registry.get_peer("peer-1").status)
+                store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
+            else:
+                raise asyncio.CancelledError
+            await real_sleep(0)
+
+        monkeypatch.setattr(
+            "app.services.gateway.mesh.peer_registry.asyncio.sleep",
+            fake_sleep,
+        )
+
+        await registry._stale_check_loop()
+
+        assert observed_status_after_zero_check == ["negotiated"]
+        assert registry.get_peer("peer-1").status == "stale"
+        registry.on_peer_status_changed.assert_awaited_once_with("peer-1", "node-peer-1", "stale")
+
+    @pytest.mark.asyncio
+    async def test_initial_zero_live_loop_activates_after_positive_reload(
+        self,
+        mesh_config,
+        monkeypatch,
+    ):
+        store = MeshPolicyStore()
+        store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 0}))
+        provider_reads = 0
+
+        def provider():
+            nonlocal provider_reads
+            provider_reads += 1
+            return store.current()
+
+        registry = PeerRegistry(store.current().mesh_config, provider)
+        registry.on_peer_status_changed = AsyncMock()
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        registry.on_peer_status_changed.reset_mock()
+        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+
+        idle_iteration_completed = asyncio.Event()
+        activate_positive_timeout = asyncio.Event()
+        stale_peer_detected = asyncio.Event()
+        sleep_calls = 0
+        real_sleep = asyncio.sleep
+
+        async def status_changed(_peer_id, _node_name, status):
+            if status == "stale":
+                stale_peer_detected.set()
+
+        registry.on_peer_status_changed.side_effect = status_changed
+
+        async def fake_sleep(_interval):
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls == 1:
+                await real_sleep(0)
+                return
+            if sleep_calls == 2:
+                idle_iteration_completed.set()
+                await activate_positive_timeout.wait()
+                return
+            await real_sleep(3600)
+
+        monkeypatch.setattr(
+            "app.services.gateway.mesh.peer_registry.asyncio.sleep",
+            fake_sleep,
+        )
+
+        await registry.start()
+        stale_check_task = registry._stale_check_task
+        try:
+            await asyncio.wait_for(idle_iteration_completed.wait(), timeout=1)
+            assert stale_check_task is not None
+            assert not stale_check_task.done()
+            assert registry.get_peer("peer-1").status == "negotiated"
+            assert provider_reads == 1
+            registry.on_peer_status_changed.assert_not_awaited()
+
+            await registry.start()
+            assert registry._stale_check_task is stale_check_task
+
+            store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
+            activate_positive_timeout.set()
+            await asyncio.wait_for(stale_peer_detected.wait(), timeout=1)
+
+            assert registry.get_peer("peer-1").status == "stale"
+            assert provider_reads == 2
+            registry.on_peer_status_changed.assert_awaited_once_with(
+                "peer-1", "node-peer-1", "stale"
+            )
+        finally:
+            await registry.stop()
+
+        assert registry._stale_check_task is None
+
+    @pytest.mark.asyncio
+    async def test_supplied_stale_snapshot_avoids_nested_provider_read(self, mesh_config):
+        reads = 0
+
+        def provider():
+            nonlocal reads
+            reads += 1
+            return store.current()
+
+        store = MeshPolicyStore()
+        store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 0}))
+        registry = PeerRegistry(store.current().mesh_config, provider)
+        await registry.register_peer("peer-1")
+        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+
+        await registry._check_stale_peers(store.current().mesh_config)
+
+        assert reads == 0
+        assert registry.get_peer("peer-1").status == "authenticated"
 
 
 class TestProviderQueries:
@@ -287,13 +587,166 @@ class TestProviderQueries:
         assert {candidate.reason_code for candidate in candidates} == {"eligible"}
 
     @pytest.mark.asyncio
+    async def test_local_preference_keeps_explicit_remote_provider_selectable(
+        self,
+        mesh_config,
+    ):
+        local_preferred = _with_service(
+            mesh_config,
+            "TTS",
+            mesh_policy(share=True, prefer="local", fallback="local"),
+        )
+        registry = PeerRegistry(local_preferred)
+        await registry.register_peer("peer-a")
+        await registry.update_manifest("peer-a", _make_manifest("peer-a", ["TTS"]))
+        peer = registry.get_peer("peer-a")
+        service = registry.get_peer_service("peer-a", "TTS")
+
+        assert peer is not None
+        assert service is not None
+        assert (
+            registry.get_service_route_blockers(
+                peer=peer,
+                service=service,
+                routing_config=local_preferred.services["TTS"],
+            )
+            == []
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_provider_candidates_reports_absent_service_without_selecting_it(
+        self,
+        registry,
+    ):
+        await registry.register_peer("peer-a")
+        await registry.update_manifest("peer-a", _make_manifest("peer-a", ["DB"]))
+
+        candidates = registry.get_provider_candidates("TTS")
+        eligible_candidates = registry.get_provider_candidates("TTS", include_ineligible=False)
+
+        assert [(candidate.peer.peer_id, candidate.service) for candidate in candidates] == [
+            ("peer-a", None)
+        ]
+        assert candidates[0].eligible is False
+        assert candidates[0].reason_code == "service_not_advertised"
+        assert eligible_candidates == []
+
+    @pytest.mark.asyncio
+    async def test_module_only_candidates_reuse_supplied_policy_snapshot_without_nested_read(
+        self,
+        mesh_config,
+        monkeypatch,
+    ):
+        provider_reads = 0
+
+        def provider():
+            nonlocal provider_reads
+            provider_reads += 1
+            raise AssertionError("policy provider must not be called")
+
+        registry = PeerRegistry(mesh_config, policy_provider=provider)
+        await registry.register_peer("peer-a")
+        await registry.update_manifest("peer-a", _make_manifest("peer-a", ["TTS"]))
+        snapshot = MeshPolicySnapshot(revision=123, source_revision="test", mesh_config=mesh_config)
+        observed_snapshots = []
+        original = registry.evaluate_provider_for_topic
+
+        def evaluate_spy(*args, **kwargs):
+            observed_snapshots.append(kwargs["policy_snapshot"])
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(registry, "evaluate_provider_for_topic", evaluate_spy)
+
+        candidates = registry.get_provider_candidates("TTS", policy_snapshot=snapshot)
+
+        assert provider_reads == 0
+        assert observed_snapshots == [snapshot]
+        assert candidates[0].decision.policy_revision == 123
+        assert candidates[0].eligible is True
+
+    @pytest.mark.parametrize(
+        ("allowed_peers", "expected_reasons"),
+        [
+            pytest.param(
+                None,
+                {"p1": "eligible", "p2": "eligible"},
+                id="null-allows-all-providers",
+            ),
+            pytest.param(
+                [],
+                {"p1": "provider_not_allowed", "p2": "provider_not_allowed"},
+                id="empty-denies-all-providers",
+            ),
+            pytest.param(
+                ["p1"],
+                {"p1": "eligible", "p2": "provider_not_allowed"},
+                id="populated-allows-only-members",
+            ),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_automatic_outbound_legacy_allowed_peers_semantics_are_locked(
+        self,
+        mesh_config,
+        allowed_peers,
+        expected_reasons,
+    ):
+        """Automatic provider eligibility preserves legacy allowlist distinctions."""
+
+        mesh_config = _with_service(
+            mesh_config,
+            "Tooling",
+            mesh_policy(
+                prefer="network",
+                allowed_peers=allowed_peers,
+            ),
+        )
+        registry = PeerRegistry(mesh_config)
+        for peer_id in ("p1", "p2"):
+            await registry.register_peer(peer_id)
+            await registry.update_manifest(peer_id, _make_manifest(peer_id, ["Tooling"]))
+
+        candidates = registry.get_provider_candidates("Tooling")
+
+        assert {
+            candidate.peer.peer_id: candidate.reason_code for candidate in candidates
+        } == expected_reasons
+
+    @pytest.mark.asyncio
+    async def test_required_provider_feature_ids_block_candidates(self, mesh_config):
+        mesh_config = _with_service(
+            mesh_config,
+            "Tooling",
+            mesh_policy(
+                prefer="network",
+                required_provider_feature_ids=["future-feature"],
+            ),
+        )
+        registry = PeerRegistry(mesh_config)
+        await registry.register_peer("p1")
+        await registry.update_manifest("p1", _make_manifest("p1", ["Tooling"]))
+
+        candidates = registry.get_provider_candidates("Tooling")
+        best = registry.get_best_provider("Tooling")
+
+        assert mesh_config.services["Tooling"].routing.required_provider_feature_ids == (
+            "future-feature",
+        )
+        assert candidates[0].reason_code == "missing_required_features"
+        assert best is None
+
+    @pytest.mark.asyncio
     async def test_get_provider_candidates_reports_exclusion_reason_codes(self, mesh_config):
-        mesh_config.services["Tooling"] = MeshServiceConfig(
-            prefer="network",
-            fallback="local",
-            allowed_peers=["allowed"],
-            min_version="1.0.0",
-            required_capabilities=["tools"],
+        mesh_config = _with_service(
+            mesh_config,
+            "Tooling",
+            mesh_policy(
+                prefer="network",
+                fallback="local",
+                allowed_peers=["allowed"],
+                min_version="1.0.0",
+                required_capabilities=["tools"],
+            ),
         )
         registry = PeerRegistry(mesh_config)
 
@@ -308,7 +761,7 @@ class TestProviderQueries:
             await registry.register_peer(peer_id)
             await registry.update_manifest(
                 peer_id,
-                PeerManifest(peer_id=peer_id, shared_services=[service]),
+                _verified_manifest(peer_id, [service]),
             )
 
         stale = registry.get_peer("full")
@@ -319,9 +772,9 @@ class TestProviderQueries:
 
         assert reason_codes == {
             "allowed": "eligible",
-            "old": "peer_not_allowed",
-            "missing-cap": "peer_not_allowed",
-            "full": "peer_stale",
+            "old": "provider_not_allowed",
+            "missing-cap": "provider_not_allowed",
+            "full": "provider_not_allowed",
             "excluded": "excluded_peer",
         }
 
@@ -329,11 +782,15 @@ class TestProviderQueries:
     async def test_get_provider_candidates_version_and_capability_filters_without_allowlist(
         self, mesh_config
     ):
-        mesh_config.services["Tooling"] = MeshServiceConfig(
-            prefer="network",
-            fallback="local",
-            min_version="1.0.0",
-            required_capabilities=["tools"],
+        mesh_config = _with_service(
+            mesh_config,
+            "Tooling",
+            mesh_policy(
+                prefer="network",
+                fallback="local",
+                min_version="1.0.0",
+                required_capabilities=["tools"],
+            ),
         )
         registry = PeerRegistry(mesh_config)
 
@@ -346,7 +803,7 @@ class TestProviderQueries:
             await registry.register_peer(peer_id)
             await registry.update_manifest(
                 peer_id,
-                PeerManifest(peer_id=peer_id, shared_services=[service]),
+                _verified_manifest(peer_id, [service]),
             )
 
         candidates = registry.get_provider_candidates("Tooling")
@@ -355,7 +812,7 @@ class TestProviderQueries:
         assert reason_codes == {
             "eligible": "eligible",
             "old": "incompatible_version",
-            "missing-cap": "missing_capabilities",
+            "missing-cap": "missing_required_capability_tags",
         }
 
     @pytest.mark.asyncio
@@ -363,10 +820,7 @@ class TestProviderQueries:
         await registry.register_peer("full")
         await registry.update_manifest(
             "full",
-            PeerManifest(
-                peer_id="full",
-                shared_services=[_make_service("TTS", max_concurrent=1)],
-            ),
+            _verified_manifest("full", [_make_service("TTS", max_concurrent=1)]),
         )
         registry.get_peer("full").active_calls = 1
 
@@ -394,11 +848,15 @@ class TestProviderQueries:
 
     @pytest.mark.asyncio
     async def test_get_best_provider_uses_eligible_candidates_only(self, mesh_config):
-        mesh_config.services["Tooling"] = MeshServiceConfig(
-            prefer="network",
-            fallback="local",
-            min_version="1.0.0",
-            required_capabilities=["tools"],
+        mesh_config = _with_service(
+            mesh_config,
+            "Tooling",
+            mesh_policy(
+                prefer="network",
+                fallback="local",
+                min_version="1.0.0",
+                required_capabilities=["tools"],
+            ),
         )
         registry = PeerRegistry(mesh_config)
 
@@ -423,7 +881,7 @@ class TestProviderQueries:
             await registry.register_peer(peer_id)
             await registry.update_manifest(
                 peer_id,
-                PeerManifest(peer_id=peer_id, shared_services=[service]),
+                _verified_manifest(peer_id, [service]),
             )
             await registry.update_latency(peer_id, latency)
 
@@ -438,7 +896,7 @@ class TestPeerSelection:
 
     @pytest.mark.asyncio
     async def test_round_robin(self, mesh_config):
-        mesh_config.peer_selection = "round_robin"
+        mesh_config = mesh_config.model_copy(update={"peer_selection": "round_robin"})
         registry = PeerRegistry(mesh_config)
 
         for pid in ["p1", "p2", "p3"]:
@@ -456,7 +914,7 @@ class TestPeerSelection:
 
     @pytest.mark.asyncio
     async def test_random_selection(self, mesh_config):
-        mesh_config.peer_selection = "random"
+        mesh_config = mesh_config.model_copy(update={"peer_selection": "random"})
         registry = PeerRegistry(mesh_config)
 
         for pid in ["p1", "p2"]:
@@ -484,6 +942,17 @@ class TestStaleDetection:
         assert registry.get_peer("peer-1").status == "stale"
 
     @pytest.mark.asyncio
+    async def test_stale_check_notifies_status_callback(self, registry):
+        registry.on_peer_status_changed = AsyncMock()
+        await registry.register_peer("peer-1", "node-1")
+        state = registry.get_peer("peer-1")
+        state.last_ping = time.monotonic() - registry._config.stale_peer_timeout_s - 1.0
+
+        await registry._check_stale_peers()
+
+        registry.on_peer_status_changed.assert_awaited_once_with("peer-1", "node-1", "stale")
+
+    @pytest.mark.asyncio
     async def test_recent_ping_not_stale(self, registry):
         await registry.register_peer("peer-1")
         await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
@@ -496,8 +965,69 @@ class TestStaleDetection:
         assert registry.get_peer("peer-1").status == "negotiated"
 
     @pytest.mark.asyncio
+    async def test_stale_check_uses_one_live_policy_snapshot(self, mesh_config):
+        store = MeshPolicyStore()
+        store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 1.0}))
+        calls = 0
+
+        def provider():
+            nonlocal calls
+            calls += 1
+            return store.current()
+
+        registry = PeerRegistry(mesh_config, policy_provider=provider)
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        state = registry.get_peer("peer-1")
+        state.last_ping = time.monotonic() - 2.0
+
+        await registry._check_stale_peers()
+
+        assert calls == 1
+        assert registry.get_peer("peer-1").status == "stale"
+
+    @pytest.mark.asyncio
     async def test_start_stop_lifecycle(self, registry):
         await registry.start()
         assert registry._stale_check_task is not None
         await registry.stop()
         assert registry._stale_check_task is None
+
+
+@pytest.mark.asyncio
+async def test_manifest_ack_persists_structured_metadata_and_rejects_stale_revision():
+    registry = PeerRegistry(MeshConfig())
+    await registry.register_peer("peer-a", "Peer A")
+    current = ManifestAck(
+        compatible_services=["TTS"],
+        protocol_revision="v2",
+        export_policy_revision="export-2",
+        services=[
+            ManifestServiceCompatibility(
+                service_id="TTS",
+                status="compatible",
+                reason_codes=[],
+            )
+        ],
+    )
+    await registry.update_manifest_ack("peer-a", current)
+
+    await registry.update_manifest_ack(
+        "peer-a",
+        ManifestAck(incompatible_services=["TTS"], protocol_revision="v1"),
+    )
+
+    peer = registry.get_peer("peer-a")
+    assert peer is not None
+    assert peer.remote_compatible == ["TTS"]
+    assert peer.remote_incompatible == []
+    assert peer.remote_manifest_ack == current
+
+    await registry.update_manifest_ack(
+        "peer-a",
+        ManifestAck(unused_services=["TTS"]),
+    )
+    peer = registry.get_peer("peer-a")
+    assert peer is not None
+    assert peer.remote_unused == ["TTS"]
+    assert peer.remote_manifest_ack == current

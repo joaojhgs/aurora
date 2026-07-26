@@ -56,6 +56,19 @@ HTTP/SSE/WebRTC request
   -> audit/result metadata returned to caller
 ```
 
+## WebRTC thin-client auth evidence
+
+WebView thin peers use the same public production Auth/Gateway permission boundary as Python peers. The current Chromium/Firefox/Playwright-WebKit direct, STUN, and forced-TURN reports prove the following with the Python HTTP API disabled and Aurora traffic on the DataChannel:
+
+- bilateral SAS pairing is required before authorized service calls;
+- canonical reconnect HMAC proof can re-authorize a returning peer without another SAS prompt;
+- credential revocation fails closed;
+- the uncertain-loss mutation window is at-most-once: `G009Interop.Mutate` starts, `G009Interop.MutationStarted` is observed, disconnect happens before the response settles, and Python records execution count 1;
+- event delivery is subscription/correlation scoped; and
+- lane reports pass redacted secret scans.
+
+Reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,stun,firefox-stun,webkit-stun,turn,firefox-turn,webkit-turn}/report.json`; each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane proof. Packaged WebViews and physical mobile runtime behavior are not claimed by those reports.
+
 ## Mesh and peer trust
 
 Mesh access is not equivalent to local trust. A peer must pass pairing/authentication and still satisfy capability, permission, routing, and data-sharing policy checks. For mesh-specific flow details, see [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md) and [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md).

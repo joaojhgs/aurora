@@ -10,7 +10,9 @@ from app.services.gateway.webrtc.rtc_client import RTCClient
 
 @pytest.fixture
 def mock_bus():
-    return AsyncMock()
+    bus = MagicMock()
+    bus.request = AsyncMock()
+    return bus
 
 
 @pytest.fixture
@@ -29,32 +31,29 @@ def mock_settings():
 
 @pytest.mark.asyncio
 async def test_gateway_service_starts_stops_webrtc(mock_bus, mock_settings):
-    with patch("app.shared.config.interface.ConfigAPI") as mock_config_api_cls:
-        mock_config_api = mock_config_api_cls.return_value
-        mock_config_api.aget_config = AsyncMock(return_value=mock_settings.model_dump())
+    mock_settings.webrtc.room = "test-room"
+    mock_settings.webrtc.password = "test-password"
+    service = GatewayService()
+    service._bus = mock_bus
+    service._get_gateway_config = AsyncMock(return_value=mock_settings)
 
-        service = GatewayService()
-        service._bus = mock_bus
+    with patch("app.services.gateway.webrtc.rtc_client.RTCClient") as mock_rtc_client_cls:
+        mock_rtc_client = mock_rtc_client_cls.return_value
+        mock_rtc_client.start = AsyncMock()
+        mock_rtc_client.close = AsyncMock()
 
-        with patch("app.services.gateway.webrtc.rtc_client.RTCClient") as mock_rtc_client_cls:
-            mock_rtc_client = mock_rtc_client_cls.return_value
-            mock_rtc_client.start = AsyncMock()
-            mock_rtc_client.close = AsyncMock()
+        with patch("app.services.gateway.registry_aggregator.RegistryAggregator") as mock_reg_cls:
+            mock_reg = mock_reg_cls.return_value
+            mock_reg.start = AsyncMock()
+            mock_reg.stop = AsyncMock()
 
-            with patch(
-                "app.services.gateway.registry_aggregator.RegistryAggregator"
-            ) as mock_reg_cls:
-                mock_reg = mock_reg_cls.return_value
-                mock_reg.start = AsyncMock()
-                mock_reg.stop = AsyncMock()
+            await service.on_start()
 
-                await service.on_start()
+            mock_rtc_client_cls.assert_called_once()
+            mock_rtc_client.start.assert_awaited_once_with(join_room=True)
 
-                mock_rtc_client_cls.assert_called_once()
-                mock_rtc_client.start.assert_called_once()
-
-                await service.on_stop()
-                mock_rtc_client.close.assert_called_once()
+            await service.on_stop()
+            mock_rtc_client.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -83,6 +82,9 @@ async def test_rtc_client_initialization_and_signaling_config(mock_bus, mock_set
             password=mock_settings.signaling_mqtt.password,
             encrypt_presence=mock_settings.webrtc.encrypt_signaling,
             sig_key=client._keys.k_sig,
+            app_id=mock_settings.webrtc.app_id,
+            room=mock_settings.webrtc.room,
+            peer_id=client._peer_id,
         )
 
         mock_mqtt_signaling.connect.assert_called_once()

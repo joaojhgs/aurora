@@ -16,6 +16,7 @@ LatencyMonitor for RTT tracking.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -25,8 +26,13 @@ from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import QueryResult
+from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 _STREAM_QUEUE_MAXSIZE = 128
+_SCOPED_ONLY_EVENT_TOPICS = frozenset({OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK})
+_SENSITIVE_EVENT_TOPICS = _SCOPED_ONLY_EVENT_TOPICS
 
 if TYPE_CHECKING:
     from app.services.gateway.mesh.latency import LatencyMonitor
@@ -68,6 +74,8 @@ def _rpc_call_message(
     identity_source: str | None,
     method_type: str | None,
     caller_peer_id: str | None,
+    auth_grant_revision: int | None,
+    manifest_revision: int | None,
 ) -> dict[str, Any]:
     """Build the wire payload for one peer RPC call."""
 
@@ -83,6 +91,8 @@ def _rpc_call_message(
             "source": identity_source,
             "method_type": method_type,
             "caller_peer_id": caller_peer_id,
+            "auth_grant_revision": auth_grant_revision,
+            "manifest_revision": manifest_revision,
         },
     }
 
@@ -114,6 +124,79 @@ class PeerBridge:
         """
         self._latency_monitor = monitor
 
+    def request_latency_sample(
+        self,
+        peer_id: str,
+        *,
+        sample_count: int = 1,
+        reset: bool = False,
+    ) -> int:
+        """Request tracked RTT samples through the configured monitor.
+
+        A short initial burst lets the rolling median reject a one-off startup
+        delay without waiting for the next periodic monitor interval.
+        """
+        if not self._latency_monitor:
+            log_debug(
+                f"PeerBridge: Cannot sample latency for {peer_id}; no LatencyMonitor configured"
+            )
+            return 0
+        if reset:
+            self._latency_monitor.reset_peer(peer_id)
+        sent = 0
+        for _ in range(max(1, sample_count)):
+            if self._latency_monitor.ping_peer(peer_id):
+                sent += 1
+        return sent
+
+    def _peer_role(self, peer_id: str) -> str:
+        provider = getattr(self._rtc_client, "peer_protocol_role", None)
+        if not callable(provider):
+            return "hybrid"
+        try:
+            role = provider(peer_id)
+        except Exception as error:
+            log_debug(f"PeerBridge: Failed to resolve role for {peer_id}: {error}")
+            return "hybrid"
+        return role if role in {"provider", "consumer", "hybrid"} else "hybrid"
+
+    def _peer_supports_capability(self, peer_id: str, capability: str) -> bool:
+        provider = getattr(self._rtc_client, "peer_supports_capability", None)
+        if not callable(provider):
+            return False
+        try:
+            return bool(provider(peer_id, capability))
+        except TypeError:
+            try:
+                return bool(provider(capability))
+            except Exception as error:
+                log_debug(f"PeerBridge: Failed to check {capability} for {peer_id}: {error}")
+                return False
+        except Exception as error:
+            log_debug(f"PeerBridge: Failed to check {capability} for {peer_id}: {error}")
+            return False
+
+    async def _send_to_peer(self, peer_id: str, text: str) -> bool:
+        async_send = getattr(self._rtc_client, "send_to_peer_async", None)
+        if callable(async_send) and inspect.iscoroutinefunction(async_send):
+            return bool(await async_send(peer_id, text))
+        return bool(self._rtc_client.send_to_peer(peer_id, text))
+
+    def _has_event_interest(
+        self, peer_id: str, topic: str, correlation_id: str | None, *, sensitive: bool
+    ) -> bool:
+        registry = getattr(self._rtc_client, "event_subscriptions", None)
+        if registry is None:
+            return False
+        is_interested = getattr(registry, "is_interested", None)
+        if not callable(is_interested):
+            return False
+        try:
+            return bool(is_interested(peer_id, topic, correlation_id, sensitive=sensitive))
+        except Exception as error:
+            log_debug(f"PeerBridge: Event interest check failed for {peer_id}: {error}")
+            return False
+
     async def call(
         self,
         peer_id: str,
@@ -126,6 +209,8 @@ class PeerBridge:
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
     ) -> QueryResult:
         """Send an RPC call to a remote peer and wait for the response.
 
@@ -138,6 +223,9 @@ class PeerBridge:
         Returns:
             QueryResult with the response data or error
         """
+        if self._peer_role(peer_id) == "consumer":
+            return QueryResult(ok=False, error=f"Peer {peer_id} is consumer-only")
+
         req_id = correlation_id or uuid.uuid4().hex[:12]
 
         # Serialize payload. Mesh routing selectors are consumed by the local
@@ -156,6 +244,8 @@ class PeerBridge:
             identity_source=identity_source,
             method_type=method_type,
             caller_peer_id=caller_peer_id,
+            auth_grant_revision=auth_grant_revision,
+            manifest_revision=manifest_revision,
         )
 
         # Create a future for the response
@@ -164,15 +254,11 @@ class PeerBridge:
         pending_key = (peer_id, req_id)
         self._pending_calls[pending_key] = fut
 
-        # Increment active calls counter
-        await self._registry.increment_active_calls(peer_id)
-
         try:
             # Send via DataChannel
-            sent = self._rtc_client.send_to_peer(peer_id, json.dumps(msg))
+            sent = await self._send_to_peer(peer_id, json.dumps(msg))
             if not sent:
                 self._pending_calls.pop(pending_key, None)
-                await self._registry.decrement_active_calls(peer_id)
                 return QueryResult(
                     ok=False,
                     error=f"Cannot send to peer {peer_id} (not connected)",
@@ -200,8 +286,6 @@ class PeerBridge:
             self._pending_calls.pop(pending_key, None)
             log_error(f"PeerBridge: Call {req_id} to {peer_id} failed: {e}")
             return QueryResult(ok=False, error=str(e))
-        finally:
-            await self._registry.decrement_active_calls(peer_id)
 
     async def stream_call(
         self,
@@ -215,8 +299,12 @@ class PeerBridge:
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
     ) -> AsyncIterator[Any]:
         """Send an RPC call to a remote peer and yield streamed chunks."""
+        if self._peer_role(peer_id) == "consumer":
+            raise PermissionError(f"Peer {peer_id} is consumer-only")
         req_id = correlation_id or uuid.uuid4().hex[:12]
         params = _rpc_params_without_mesh_selectors(payload)
 
@@ -229,15 +317,16 @@ class PeerBridge:
             identity_source=identity_source,
             method_type=method_type,
             caller_peer_id=caller_peer_id,
+            auth_grant_revision=auth_grant_revision,
+            manifest_revision=manifest_revision,
         )
         queue: asyncio.Queue = asyncio.Queue(maxsize=_STREAM_QUEUE_MAXSIZE)
         pending_key = (peer_id, req_id)
         self._pending_streams[pending_key] = queue
         sent = False
         completed = False
-        await self._registry.increment_active_calls(peer_id)
         try:
-            sent = self._rtc_client.send_to_peer(peer_id, json.dumps(msg))
+            sent = await self._send_to_peer(peer_id, json.dumps(msg))
             if not sent:
                 raise ConnectionError(f"Cannot send to peer {peer_id} (not connected)")
 
@@ -263,14 +352,13 @@ class PeerBridge:
         finally:
             if sent and not completed:
                 try:
-                    self._rtc_client.send_to_peer(
+                    await self._send_to_peer(
                         peer_id,
                         json.dumps({"type": "cancel", "id": req_id}),
                     )
                 except Exception as exc:
                     log_debug(f"PeerBridge: Failed to send stream cancel to {peer_id}: {exc}")
             self._pending_streams.pop(pending_key, None)
-            await self._registry.decrement_active_calls(peer_id)
 
     def on_response(self, peer_id: str, msg: dict) -> None:
         """Handle a response (result or error) from a remote peer.
@@ -283,13 +371,7 @@ class PeerBridge:
             msg: Parsed JSON message
         """
         req_id = msg.get("id")
-        if isinstance(req_id, (tuple, list)) and len(req_id) >= 2:
-            # Backward-compatible tolerance for older tests/helpers that
-            # iterated the internal (peer_id, req_id) pending key and fed the
-            # whole tuple back as the response id.
-            peer_id = str(req_id[0])
-            req_id = req_id[1]
-        if not req_id:
+        if not isinstance(req_id, str) or not req_id:
             log_debug(f"PeerBridge: Response from {peer_id} missing 'id' field")
             return
 
@@ -393,23 +475,39 @@ class PeerBridge:
         """
         return len(self._pending_calls)
 
-    def fire_event(
+    async def fire_event_async(
         self,
         peer_id: str,
         topic: str,
         payload: BaseModel | dict,
         correlation_id: str | None = None,
-    ) -> None:
-        """Forward an event to a remote peer (fire-and-forget).
+        *,
+        target_peer_id: str | None = None,
+    ) -> bool:
+        """Forward an event after negotiated subscription filtering."""
 
-        Unlike ``call()``, this does not wait for a response.
-        Events are best-effort; failures are silently logged.
+        if target_peer_id is not None and target_peer_id != peer_id:
+            log_debug(f"PeerBridge: Suppressed event {topic} to {peer_id}; target={target_peer_id}")
+            return False
 
-        Args:
-            peer_id: Target peer identifier
-            topic: Event topic (e.g., "TTS.Started")
-            payload: Event payload (Pydantic model or dict)
-        """
+        sensitive = topic in _SENSITIVE_EVENT_TOPICS
+        scoped_only = topic in _SCOPED_ONLY_EVENT_TOPICS
+        if scoped_only and target_peer_id is None:
+            log_debug(f"PeerBridge: Suppressed scoped-only event {topic}; target absent")
+            return False
+
+        scoped = self._peer_supports_capability(peer_id, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1)
+        if scoped:
+            if not self._has_event_interest(peer_id, topic, correlation_id, sensitive=sensitive):
+                log_debug(f"PeerBridge: Suppressed event {topic} to {peer_id}; no exact interest")
+                return False
+        elif sensitive or scoped_only:
+            log_debug(
+                f"PeerBridge: Suppressed sensitive/scoped event {topic} to {peer_id}; "
+                "scoped subscriptions absent"
+            )
+            return False
+
         if isinstance(payload, BaseModel):
             params = payload.model_dump(mode="json")
         elif isinstance(payload, dict):
@@ -424,11 +522,54 @@ class PeerBridge:
             "correlation_id": correlation_id,
         }
 
-        sent = self._rtc_client.send_to_peer(peer_id, json.dumps(msg))
+        sent = await self._send_to_peer(peer_id, json.dumps(msg))
         if sent:
             log_debug(f"PeerBridge: Forwarded event {topic} to {peer_id}")
         else:
             log_debug(f"PeerBridge: Could not forward event {topic} to {peer_id} (not connected)")
+        return bool(sent)
+
+    def fire_event(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: BaseModel | dict,
+        correlation_id: str | None = None,
+        *,
+        target_peer_id: str | None = None,
+    ) -> bool:
+        """Synchronous compatibility wrapper for legacy test doubles/callers."""
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(
+                self.fire_event_async(
+                    peer_id,
+                    topic,
+                    payload,
+                    correlation_id=correlation_id,
+                    target_peer_id=target_peer_id,
+                )
+            )
+        raise RuntimeError("fire_event_async must be awaited inside an event loop")
+
+    def cleanup_peer(self, peer_id: str) -> None:
+        """Remove pending transport state and subscriptions for a disconnected peer."""
+
+        for key, fut in list(self._pending_calls.items()):
+            if key[0] == peer_id:
+                if not fut.done():
+                    fut.set_result(QueryResult(ok=False, error=f"Peer {peer_id} disconnected"))
+                self._pending_calls.pop(key, None)
+        for key, queue in list(self._pending_streams.items()):
+            if key[0] == peer_id:
+                self._force_enqueue_stream_item(queue, ("error", f"Peer {peer_id} disconnected"))
+                self._pending_streams.pop(key, None)
+        registry = getattr(self._rtc_client, "event_subscriptions", None)
+        cleanup = getattr(registry, "cleanup_peer", None)
+        if callable(cleanup):
+            cleanup(peer_id)
 
     async def cancel_all(self) -> None:
         """Cancel all pending calls.

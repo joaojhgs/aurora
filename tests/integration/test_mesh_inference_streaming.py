@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from app.messaging.local_bus import LocalBus
 from app.messaging.mesh_bus import MeshBus
+from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.peer_bridge import PeerBridge
 from app.services.gateway.service import GatewayService
 from app.services.gateway.webrtc.rpc import RPCHandler
@@ -22,6 +24,7 @@ from app.shared.contracts.models.orchestrator import (
 )
 from app.shared.contracts.registry import clear_registry
 from app.shared.messaging.bus_init import set_bus
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
 @dataclass
@@ -33,8 +36,17 @@ class _Route:
 
 
 class _RoutingTable:
-    def resolve(self, topic: str, *, selector: MeshAddressSelector | None = None) -> _Route:
+    def resolve(
+        self,
+        topic: str,
+        *,
+        routing_config: Any | None = None,
+        mesh_config: Any | None = None,
+        selector: MeshAddressSelector | None = None,
+        policy_snapshot: Any | None = None,
+    ) -> _Route:
         assert topic == OrchestratorMethods.STREAM_INFER_CHAT
+        _ = routing_config, mesh_config, policy_snapshot
         assert selector is not None
         return _Route(target="remote", peer_id=selector.peer_id)
 
@@ -43,8 +55,12 @@ class _RoutingTable:
         topic: str,
         *,
         failed_peer_id: str,
+        routing_config: Any | None = None,
+        mesh_config: Any | None = None,
         selector: MeshAddressSelector | None = None,
+        policy_snapshot: Any | None = None,
     ) -> _Route:
+        _ = routing_config, mesh_config, selector, policy_snapshot
         return _Route(target="error", peer_id=failed_peer_id, error_message="no fallback")
 
     def get_negotiated_peers(self) -> list[Any]:
@@ -104,6 +120,34 @@ class _RTC:
         return True
 
 
+def _remote_orchestrator_authority(peer_id: str = "local-peer") -> dict[str, Any]:
+    return {
+        "mesh_config": MeshConfig(
+            enabled=True,
+            services={"Orchestrator": mesh_policy(share=True)},
+        ),
+        "stable_peer_id_provider": lambda: peer_id,
+        "active_projection_provider": lambda: SimpleNamespace(
+            cache_key=SimpleNamespace(recipient_peer_id=peer_id, provider_peer_id="remote-peer"),
+            readiness="ready",
+            routable=True,
+            services=[
+                SimpleNamespace(
+                    service_id="Orchestrator",
+                    capacity={"max_concurrent": 0},
+                    methods=[
+                        SimpleNamespace(
+                            topic=OrchestratorMethods.STREAM_INFER_CHAT,
+                            required_permissions=("Orchestrator.use",),
+                            method_type="use",
+                        )
+                    ],
+                )
+            ],
+        ),
+    }
+
+
 @pytest.mark.asyncio
 async def test_remote_mesh_chat_model_streams_over_peer_bridge_rpc_chunks():
     clear_registry()
@@ -147,6 +191,7 @@ async def test_remote_mesh_chat_model_streams_over_peer_bridge_rpc_chunks():
         remote_send,
         lambda: identity,
         peer_id="local-peer",
+        **_remote_orchestrator_authority(),
     )
     mesh_bus = MeshBus(
         inner_bus=remote_bus,  # unused for this routed call
@@ -218,6 +263,7 @@ async def test_gateway_mesh_inference_proxy_streams_over_peer_bridge_rpc_chunks(
         remote_send,
         lambda: identity,
         peer_id="local-peer",
+        **_remote_orchestrator_authority(),
     )
 
     gateway_bus = LocalBus(validate_topics=True)

@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.contracts.registry import all_contracts
 
-from .bus import Envelope, Handler, QueryResult
+from .bus import Envelope, Handler, QueryResult, query_result_from_reply_payload
 
 
 class LocalBus:
@@ -118,7 +118,9 @@ class LocalBus:
 
         # Wildcard patterns (e.g. TTS.*) match concrete topics; events are queued per
         # concrete topic only — do not start an idle worker for the pattern key.
-        if "*" in topic:
+        # Request reply topics are unique and one-shot, so publish() delivers them
+        # directly instead of creating a permanent worker for every request.
+        if "*" in topic or topic.startswith("reply."):
             return
 
         # Start event worker for this topic if not already started
@@ -136,6 +138,8 @@ class LocalBus:
             log_debug(f"Unsubscribed handler from topic: {topic}")
         except ValueError:
             pass
+        if not handlers:
+            self._subs.pop(topic, None)
 
     def register_stream_handler(
         self,
@@ -314,6 +318,12 @@ class LocalBus:
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -356,10 +366,24 @@ class LocalBus:
             identity_source=identity_source,
             method_type=method_type,
             caller_peer_id=caller_peer_id,
+            auth_grant_revision=auth_grant_revision,
+            manifest_revision=manifest_revision,
+            projected_service_id=projected_service_id,
+            projected_method_id=projected_method_id,
+            projected_method_topics=projected_method_topics,
+            projected_method_set_digest=projected_method_set_digest,
             correlation_id=correlation_id,
         )
 
         self._stats["published"] += 1
+
+        # Reply topics are unique to one request. Queue workers are intentionally
+        # long-lived for normal topics, but using that lifecycle here would retain
+        # two idle workers plus queue state for every completed request. Deliver the
+        # one-shot response inline; the requester removes its handler in finally.
+        if topic.startswith("reply."):
+            await self._deliver(topic, env)
+            return
 
         if event:
             # Event: broadcast to all subscribers
@@ -402,6 +426,12 @@ class LocalBus:
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -450,23 +480,7 @@ class LocalBus:
                     log_warning(f"Reply handler: unexpected payload type {type(env.payload)}")
                     result_data = {"data": str(env.payload)}
 
-                # If result_data has 'ok' field, it's already a QueryResult-like structure
-                if isinstance(result_data, dict) and "ok" in result_data:
-                    log_debug("Reply handler: Creating QueryResult from dict with ok field")
-                    fut.set_result(QueryResult(**result_data))
-                elif (
-                    isinstance(result_data, dict)
-                    and "error" in result_data
-                    and result_data["error"]
-                ):
-                    # ErrorOutput response - service returned an error
-                    error_msg = result_data.get("error", "Unknown service error")
-                    log_debug(f"Reply handler: ErrorOutput received: {error_msg}")
-                    fut.set_result(QueryResult(ok=False, error=error_msg, data=result_data))
-                else:
-                    # Wrap the data in a successful QueryResult
-                    log_debug("Reply handler: Wrapping data in QueryResult")
-                    fut.set_result(QueryResult(ok=True, data=result_data))
+                fut.set_result(query_result_from_reply_payload(result_data))
 
         # Reply topics are not validated on publish when topic starts with "reply."
         self.subscribe(reply_topic, _on_reply)
@@ -486,6 +500,12 @@ class LocalBus:
                 identity_source=identity_source,
                 method_type=method_type,
                 caller_peer_id=caller_peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
                 correlation_id=request_correlation_id,
             )
 
@@ -514,6 +534,12 @@ class LocalBus:
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
         correlation_id: str | None = None,
     ) -> AsyncIterator[Any]:
         """Stream a local service response without reply-topic serialization."""
@@ -533,6 +559,12 @@ class LocalBus:
                 identity_source=identity_source,
                 method_type=method_type,
                 caller_peer_id=caller_peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
                 correlation_id=correlation_id,
             )
             if not result.ok:
@@ -552,6 +584,12 @@ class LocalBus:
             identity_source=identity_source,
             method_type=method_type,
             caller_peer_id=caller_peer_id,
+            auth_grant_revision=auth_grant_revision,
+            manifest_revision=manifest_revision,
+            projected_service_id=projected_service_id,
+            projected_method_id=projected_method_id,
+            projected_method_topics=projected_method_topics,
+            projected_method_set_digest=projected_method_set_digest,
             correlation_id=correlation_id,
         )
         result = await handler(env)

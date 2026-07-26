@@ -285,6 +285,11 @@ def create_gateway_app(
                 correlation_id=correlation_id,
             ):
                 return
+            if auth_enabled and not _event_visible_to_principal(
+                payload,
+                getattr(_auth, "principal_id", None),
+            ):
+                return
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:
@@ -304,6 +309,11 @@ def create_gateway_app(
                         correlation_id=correlation_id,
                         last_event_id=last_event_id,
                         replay_from=replay_from,
+                        principal_id=(
+                            getattr(_auth, "principal_id", None)
+                            if auth_enabled
+                            else _UNSCOPED_PRINCIPAL
+                        ),
                     ):
                         yield _sse_payload(event)
                 while True:
@@ -494,6 +504,13 @@ _SAFE_ASSISTANT_KINDS = {
 }
 
 
+class _UnscopedPrincipal:
+    """Sentinel for helper callers that intentionally do not apply principal filtering."""
+
+
+_UNSCOPED_PRINCIPAL = _UnscopedPrincipal()
+
+
 def _event_stream_filters(kind: list[str]) -> tuple[set[str], set[str]]:
     categories: set[str] = set()
     kinds: set[str] = set()
@@ -520,10 +537,11 @@ def _authorize_event_stream_request(
         return
     topic_set = set(topics)
     assistant_scoped = (
-        correlation_id is not None
-        and (not topic_set or topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK})
+        bool(topic_set)
+        and topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK}
         and (not categories or categories <= {"assistant"})
         and (not kinds or kinds <= _SAFE_ASSISTANT_KINDS)
+        and (correlation_id is not None or topic_set <= {OrchestratorMethods.RESPONSE})
     )
     if assistant_scoped and identity.can("Orchestrator.use", method_type="use"):
         return
@@ -553,6 +571,17 @@ def _event_matches_stream_request(
     return not (correlation_id and event.correlation_id != correlation_id)
 
 
+def _event_visible_to_principal(
+    event: AuroraEventStreamEvent,
+    principal_id: str | None,
+) -> bool:
+    """Prevent principal-tagged assistant output from crossing user streams."""
+
+    if event.category != "assistant":
+        return True
+    return bool(principal_id) and bool(event.principal_id) and event.principal_id == principal_id
+
+
 async def _stream_backfill_events(
     bus: Any,
     *,
@@ -562,6 +591,7 @@ async def _stream_backfill_events(
     correlation_id: str | None,
     last_event_id: str | None,
     replay_from: str | None,
+    principal_id: str | None | _UnscopedPrincipal = _UNSCOPED_PRINCIPAL,
 ):
     request = GatewayListEventsRequest(
         topics=topics or None,
@@ -587,7 +617,11 @@ async def _stream_backfill_events(
         return
     events = list(getattr(result.data, "events", []) or [])
     for event in reversed(events):
-        yield event
+        if principal_id is _UNSCOPED_PRINCIPAL or _event_visible_to_principal(
+            event,
+            principal_id if isinstance(principal_id, str) else None,
+        ):
+            yield event
     if (last_event_id or replay_from) and not events:
         yield _degraded_event(
             "requested replay cursor is not present in the bounded Gateway event buffer"

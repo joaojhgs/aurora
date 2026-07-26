@@ -2,6 +2,8 @@ import inspect
 import os
 from datetime import datetime
 
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import MessageBus
@@ -39,6 +41,8 @@ from app.shared.messaging.bus_init import get_bus_singleton
 from app.shared.messaging.models.db_models import RAGSearchQuery
 
 config_api = ConfigAPI()
+
+_RECENT_PROMPT_MESSAGE_WINDOW = 4
 
 
 def _config_secret_plain(val):
@@ -403,6 +407,24 @@ def _deserialize_tools(tool_schemas: list[dict]):
     return tools
 
 
+def _protocol_safe_prompt_suffix(
+    messages: list[BaseMessage],
+    *,
+    recent_window: int = _RECENT_PROMPT_MESSAGE_WINDOW,
+) -> list[BaseMessage]:
+    """Return recent messages without orphaning a leading tool-result transaction."""
+
+    start = max(0, len(messages) - max(0, recent_window))
+    if start >= len(messages) or not isinstance(messages[start], ToolMessage):
+        return messages[start:]
+
+    while start > 0 and isinstance(messages[start - 1], ToolMessage):
+        start -= 1
+    if start > 0 and isinstance(messages[start - 1], AIMessage):
+        start -= 1
+    return messages[start:]
+
+
 async def _chat_llm_for_state(state: State, bus: MessageBus):
     override = state.get("inference_override") or {}
     messages = state.get("messages", [])
@@ -549,6 +571,10 @@ async def chatbot(state: State, bus: MessageBus):
 
     llm_with_tools = active_llm.bind_tools(tools, tool_choice="auto") if tools else active_llm
     log_debug(f"Processing {len(state['messages'])} messages in chatbot node")
+    recent_messages = _protocol_safe_prompt_suffix(
+        state["messages"],
+        recent_window=_RECENT_PROMPT_MESSAGE_WINDOW,
+    )
     prompt_messages = [
         {
             "role": "system",
@@ -566,7 +592,7 @@ async def chatbot(state: State, bus: MessageBus):
                 f"\nCurrent time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             ),
         },
-        *state["messages"][-4:],
+        *recent_messages,
     ]
     response_message = None
     try:

@@ -1,10 +1,22 @@
 """DB (Database) service contract models."""
 
 from typing import Any, Literal
+from urllib.parse import quote
 
-from pydantic import Field
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.tooling import (
+    ToolingExportPolicy,
+    ToolingExportRule,
+    ToolingExportScopeType,
+    ToolingExportState,
+    ToolingGetExportCatalogResponse,
+    ToolingMeshKillSwitches,
+    ToolingProjectionAuthorityRevision,
+    ToolingRemoteAvailability,
+    ToolingToolInfo,
+)
 from app.shared.contracts.registry import IOModel
 
 
@@ -24,6 +36,12 @@ class DBMethods:
     GET_MESSAGES_FOR_DATE = f"{DBModule.NAME}.GetMessagesForDate"
     DELETE_MESSAGE = f"{DBModule.NAME}.DeleteMessage"
     UPDATE_MESSAGE = f"{DBModule.NAME}.UpdateMessage"
+    CREATE_SESSION = f"{DBModule.NAME}.CreateSession"
+    LIST_SESSIONS = f"{DBModule.NAME}.ListSessions"
+    GET_SESSION = f"{DBModule.NAME}.GetSession"
+    SET_ACTIVE_SESSION = f"{DBModule.NAME}.SetActiveSession"
+    ENSURE_SESSION = f"{DBModule.NAME}.EnsureSession"
+    RESOLVE_DAEMON_SESSION = f"{DBModule.NAME}.ResolveDaemonSession"
     RAG_SEARCH = f"{DBModule.NAME}.RAGSearch"
     RAG_STORE = f"{DBModule.NAME}.RAGStore"
     RAG_DELETE = f"{DBModule.NAME}.RAGDelete"
@@ -60,6 +78,46 @@ class DBMethods:
     UPDATE_TOKEN_SCOPES = f"{DBModule.NAME}.UpdateTokenScopes"
     REVOKE_TOKEN = f"{DBModule.NAME}.RevokeToken"
 
+    # Keep the mesh trust row and its dedicated auth principal/token in one
+    # database transaction.  Auth must not compose this from independent CRUD
+    # calls because a mid-flight failure would persist contradictory authority.
+    APPROVE_MESH_PEER = f"{DBModule.NAME}.ApproveMeshPeer"
+    UPDATE_MESH_PEER_PERMISSIONS = f"{DBModule.NAME}.UpdateMeshPeerPermissions"
+    DENY_MESH_PEER = f"{DBModule.NAME}.DenyMeshPeer"
+    REMOVE_MESH_PEER = f"{DBModule.NAME}.RemoveMeshPeer"
+    LINK_MESH_PEER_CREDENTIAL = f"{DBModule.NAME}.LinkMeshPeerCredential"
+    ISSUE_MESH_PEER_CREDENTIAL = f"{DBModule.NAME}.IssueMeshPeerCredential"
+    GET_MESH_PEER_AUTHORITY_SNAPSHOT = f"{DBModule.NAME}.GetMeshPeerAuthoritySnapshot"
+    RECONCILE_TOOL_IDENTITY = f"{DBModule.NAME}.ReconcileToolIdentity"
+    ALLOCATE_TOOL_IDENTITY = f"{DBModule.NAME}.AllocateToolIdentity"
+    RESOLVE_TOOL_IDENTITY_ALIASES = f"{DBModule.NAME}.ResolveToolIdentityAliases"
+    GET_TOOLING_EXPORT_POLICY_SNAPSHOT = f"{DBModule.NAME}.GetToolingExportPolicySnapshot"
+    MUTATE_TOOLING_EXPORT_POLICY = f"{DBModule.NAME}.MutateToolingExportPolicy"
+    GET_TOOLING_MESH_SWITCHES = f"{DBModule.NAME}.GetToolingMeshSwitches"
+    SET_TOOLING_MESH_SWITCHES = f"{DBModule.NAME}.SetToolingMeshSwitches"
+    BEGIN_TOOLING_REMOTE_CATALOG_SYNC = f"{DBModule.NAME}.BeginToolingRemoteCatalogSync"
+    APPEND_TOOLING_REMOTE_CATALOG_PAGE = f"{DBModule.NAME}.AppendToolingRemoteCatalogPage"
+    COMMIT_TOOLING_REMOTE_CATALOG_SYNC = f"{DBModule.NAME}.CommitToolingRemoteCatalogSync"
+    FINALIZE_TOOLING_REMOTE_CATALOG_POLICY = f"{DBModule.NAME}.FinalizeToolingRemoteCatalogPolicy"
+    ABORT_TOOLING_REMOTE_CATALOG_SYNC = f"{DBModule.NAME}.AbortToolingRemoteCatalogSync"
+    GET_TOOLING_REMOTE_CATALOG = f"{DBModule.NAME}.GetToolingRemoteCatalog"
+    SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY = (
+        f"{DBModule.NAME}.SetToolingRemoteProviderAvailability"
+    )
+    ACCEPT_TOOLING_REMOTE_TOOL_SCHEMA = f"{DBModule.NAME}.AcceptToolingRemoteToolSchema"
+    IMPORT_LEGACY_TOOLING_REMOTE_CATALOGS = f"{DBModule.NAME}.ImportLegacyToolingRemoteCatalogs"
+    RECOVER_TOOLING_REMOTE_CATALOGS = f"{DBModule.NAME}.RecoverToolingRemoteCatalogs"
+    PRUNE_TOOLING_REMOTE_CATALOG_RETENTION = f"{DBModule.NAME}.PruneToolingRemoteCatalogRetention"
+    RESOLVE_TOOLING_REMOTE_TOOL_ALIASES = f"{DBModule.NAME}.ResolveToolingRemoteToolAliases"
+    GET_TOOLING_MESH_ACTIVATION_STATE = f"{DBModule.NAME}.GetToolingMeshActivationState"
+    ACTIVATE_TOOLING_MESH_ENFORCEMENT = f"{DBModule.NAME}.ActivateToolingMeshEnforcement"
+    GET_TOOLING_EXPOSURE_LEDGER = f"{DBModule.NAME}.GetToolingExposureLedger"
+    RECORD_TOOLING_EXPOSURES = f"{DBModule.NAME}.RecordToolingExposures"
+    UPSERT_MESH_PEER = f"{DBModule.NAME}.UpsertMeshPeer"
+    SAVE_MESH_INBOUND_CREDENTIAL = f"{DBModule.NAME}.SaveMeshInboundCredential"
+    UPDATE_MESH_PEER_CONNECTION = f"{DBModule.NAME}.UpdateMeshPeerConnection"
+    MATCH_MESH_OUTBOUND_CREDENTIAL = f"{DBModule.NAME}.MatchMeshOutboundCredential"
+
     GET_AUDIT_LOG = f"{DBModule.NAME}.GetAuditLog"
     COUNT_AUDIT_EVENTS = f"{DBModule.NAME}.CountAuditEvents"
 
@@ -78,6 +136,9 @@ class DBSaveMessageRequest(IOModel):
     role: str
     message_type: str = "TEXT"
     metadata: dict[str, Any] | None = None
+    session_id: str | None = None
+    principal_id: str | None = None
+    session_type: str = "chat"
 
 
 class DBSaveMessageResponse(IOModel):
@@ -103,6 +164,85 @@ class DBGetMessagesResponse(IOModel):
     messages: list[dict[str, Any]]
     total: int
     has_more: bool
+
+
+class DBSessionRecord(IOModel):
+    """Principal-owned persisted session metadata."""
+
+    id: str
+    principal_id: str
+    type: str
+    title: str | None = None
+    created_at: str
+    updated_at: str
+    last_active_at: str
+    message_count: int = 0
+
+
+class DBCreateSessionRequest(IOModel):
+    """Create a new local session for the authenticated principal."""
+
+    type: str = Field(min_length=1, max_length=64)
+    title: str | None = Field(default=None, max_length=200)
+
+
+class DBListSessionsRequest(IOModel):
+    """List local sessions owned by the authenticated principal."""
+
+    type: str | None = Field(default=None, min_length=1, max_length=64)
+    limit: int = Field(default=100, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
+
+
+class DBListSessionsResponse(IOModel):
+    """Principal-scoped session index and its last-opened session."""
+
+    sessions: list[DBSessionRecord] = Field(default_factory=list)
+    active_session_id: str | None = None
+    total: int = 0
+
+
+class DBGetSessionRequest(IOModel):
+    """Load one principal-owned session and its messages."""
+
+    session_id: str
+    activate: bool = False
+
+
+class DBGetSessionResponse(IOModel):
+    """Persisted session metadata plus chronological messages."""
+
+    session: DBSessionRecord
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DBSetActiveSessionRequest(IOModel):
+    """Mark a principal-owned session as the last-opened thread."""
+
+    session_id: str
+
+
+class DBSessionResponse(IOModel):
+    """Response containing one persisted session."""
+
+    session: DBSessionRecord
+
+
+class DBEnsureSessionRequest(IOModel):
+    """Internal request to validate or create a principal-owned session."""
+
+    principal_id: str
+    type: str = Field(min_length=1, max_length=64)
+    session_id: str | None = None
+    title: str | None = Field(default=None, max_length=200)
+    activate: bool = True
+
+
+class DBResolveDaemonSessionRequest(IOModel):
+    """Resolve the recent active local session for daemon-origin chat."""
+
+    type: str = Field(min_length=1, max_length=64)
+    stale_after_seconds: int = Field(default=86_400, gt=0, le=604_800)
 
 
 class DBGetMessagesForDateRequest(IOModel):
@@ -405,6 +545,57 @@ class DBBoolResponse(IOModel):
     success: bool = True
 
 
+class DBMeshAuthorityChange(IOModel):
+    """Committed stable-peer authority generation safe for bus publication."""
+
+    peer_id: str
+    auth_grant_revision: int = Field(ge=1)
+    disposition: Literal["present", "removed"] = "present"
+    state: Literal["active", "pending", "revoked"] = "revoked"
+    effective_permissions: tuple[str, ...] = Field(default_factory=tuple)
+    reason: Literal[
+        "approved",
+        "permissions_updated",
+        "denied",
+        "removed",
+        "credential_linked",
+        "token_revoked",
+    ]
+
+    model_config = ConfigDict(frozen=True)
+
+
+class DBMeshAuthoritySnapshot(IOModel):
+    """Current secret-free authority state for one stable peer."""
+
+    peer_id: str
+    auth_grant_revision: int = Field(ge=0)
+    disposition: Literal["present", "removed"] = "present"
+    state: Literal["active", "pending", "revoked"] = "revoked"
+    effective_permissions: tuple[str, ...] = Field(default_factory=tuple)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class DBGetMeshPeerAuthoritySnapshotRequest(IOModel):
+    """Read all stable peers/tombstones, or one exact stable peer."""
+
+    peer_id: str | None = None
+
+
+class DBGetMeshPeerAuthoritySnapshotResponse(IOModel):
+    """Consistent durable authority snapshot ordered by stable peer ID."""
+
+    authorities: tuple[DBMeshAuthoritySnapshot, ...] = Field(default_factory=tuple)
+
+
+class DBAuthorityMutationResponse(DBBoolResponse):
+    """Mutation result with committed peer generations and a stable error code."""
+
+    authority_changes: tuple[DBMeshAuthorityChange, ...] = Field(default_factory=tuple)
+    error_code: Literal["mesh_managed_authority"] | None = None
+
+
 class DBCountResponse(IOModel):
     """Generic count response."""
 
@@ -561,10 +752,170 @@ class DBUpdateTokenScopesRequest(IOModel):
     scopes: list[str]
 
 
+class DBApproveMeshPeerRequest(IOModel):
+    """Atomically approve stable-peer rows and every linked authority graph."""
+
+    peer_id: str
+    permissions: list[str]
+    approved_by: str | None = None
+    room_name: str | None = None
+
+
+class DBApproveMeshPeerResponse(IOModel):
+    """Result plus the exact room rows committed by a mesh approval."""
+
+    success: bool = False
+    approved_rooms: list[str] = Field(default_factory=list)
+    authority_changes: tuple[DBMeshAuthorityChange, ...] = Field(default_factory=tuple)
+
+
+class DBUpdateMeshPeerPermissionsRequest(IOModel):
+    """Atomically replace an approved peer's complete outbound authority graph."""
+
+    peer_id: str
+    permissions: list[str]
+
+
+class DBDenyMeshPeerRequest(IOModel):
+    """Atomically deny all rows, or one exact pairing room, for a stable peer."""
+
+    peer_id: str
+    room_name: str | None = None
+
+
+class DBRemoveMeshPeerRequest(IOModel):
+    """Atomically remove all rows for a stable peer and retain its tombstone."""
+
+    peer_id: str
+    revoke_token: bool = True
+
+
+class DBLinkMeshPeerCredentialRequest(IOModel):
+    """Atomically link one issued credential graph to an approved peer row."""
+
+    peer_id: str
+    token_id: str
+    device_id: str
+    user_id: str
+    room_name: str | None = None
+
+
+class DBIssueMeshPeerCredentialRequest(IOModel):
+    """Create, link, and rotate one mesh credential graph atomically."""
+
+    peer_id: str
+    room_name: str
+    user: DBCreateUserRequest
+    device: DBCreateDeviceRequest
+    token: DBCreateTokenRequest
+
+
+class DBUpsertMeshPeerRequest(IOModel):
+    """Create/update discovery metadata for one exact mesh peer room."""
+
+    id: str
+    peer_id: str
+    room_name: str
+    node_name: str = ""
+    ip: str | None = None
+    port: int | None = None
+
+    @property
+    def sql(self) -> str:
+        """Compatibility shape for older unit mocks that inspected raw SQL."""
+        return "INSERT INTO mesh_peers (id, peer_id, room_name, node_name, ip, port) VALUES (?, ?, ?, ?, ?, ?)"
+
+
+class DBSaveMeshInboundCredentialRequest(IOModel):
+    """Persist the encrypted credential a remote peer issued to this node."""
+
+    peer_id: str
+    room_name: str
+    encrypted_token: str
+    token_id: str | None = None
+    permissions: list[str] = Field(default_factory=list)
+    remote_device_id: str | None = None
+    remote_user_id: str | None = None
+    remote_node_name: str | None = None
+
+    @property
+    def sql(self) -> str:
+        """Compatibility shape for older unit assertions that inspected raw SQL."""
+        return (
+            "UPDATE mesh_peers SET "
+            "  inbound_status = 'approved', "
+            "  inbound_token = ?, "
+            "  inbound_token_id = ?, "
+            "  inbound_permissions = ?, "
+            "  inbound_device_id = ?, "
+            "  inbound_user_id = ?, "
+            "  inbound_approved_at = CURRENT_TIMESTAMP, "
+            "  node_name = COALESCE(NULLIF(?, ''), node_name), "
+            "  last_status_change_at = CURRENT_TIMESTAMP, "
+            "  updated_at = CURRENT_TIMESTAMP "
+            "WHERE peer_id = ? AND room_name = ?"
+        )
+
+    @property
+    def params(self) -> list[Any]:
+        """Compatibility parameter order for older raw-SQL assertions."""
+        return [
+            self.encrypted_token,
+            self.token_id,
+            self.permissions,
+            self.remote_device_id,
+            self.remote_user_id,
+            self.remote_node_name,
+            self.peer_id,
+            self.room_name,
+        ]
+
+
+class DBUpdateMeshPeerConnectionRequest(IOModel):
+    """Update non-authority connection metadata for a stable mesh peer."""
+
+    peer_id: str
+    connection_status: str
+
+
+class DBMatchMeshOutboundCredentialRequest(IOModel):
+    """Check exact stable-peer ownership of an issued outbound credential."""
+
+    token_id: str
+    device_id: str
+    user_id: str
+    claimant_peer_id: str
+    room_name: str
+
+    @property
+    def sql(self) -> str:
+        """Compatibility shape for older unit assertions that inspected raw SQL."""
+        return (
+            "SELECT id FROM mesh_peers "
+            "WHERE peer_id = ? AND room_name = ? "
+            "  AND outbound_status = 'approved' "
+            "  AND outbound_token_id = ? "
+            "  AND outbound_device_id = ? "
+            "  AND outbound_user_id = ?"
+        )
+
+    @property
+    def params(self) -> list[str]:
+        """Compatibility parameter order for older raw-SQL assertions."""
+        return [
+            self.claimant_peer_id,
+            self.room_name,
+            self.token_id,
+            self.device_id,
+            self.user_id,
+        ]
+
+
 class DBRevokeTokenRequest(IOModel):
     """Request to revoke (delete) a token."""
 
     token_id: str
+    reject_mesh_linked: bool = False
 
 
 class DBTokenResponse(IOModel):
@@ -638,6 +989,673 @@ class DBMeshCredentialResponse(IOModel):
     credential: dict[str, Any] | None = None
 
 
+# ── Durable Tooling identity ────────────────────────────────────────────
+
+
+class DBReconcileToolIdentityRequest(IOModel):
+    """Atomically persist one canonical tool identity and its legacy aliases."""
+
+    canonical_global_tool_id: str = Field(min_length=1, max_length=1024)
+    stable_peer_id: str = Field(min_length=1, max_length=160)
+    identity_version: Literal[1] = 1
+    tool_contract_id: str = Field(min_length=1, max_length=160)
+    source_kind: Literal["core", "plugin", "mcp", "toolkit", "mesh_peer", "unknown"]
+    stable_source_id: str = Field(min_length=1, max_length=160)
+    provider_tool_id: str = Field(min_length=1, max_length=160)
+    share_group_id: str = Field(min_length=1, max_length=160)
+    share_group_label: str = Field(min_length=1, max_length=120)
+    current_local_name: str = Field(min_length=1, max_length=512)
+    legacy_global_tool_ids: list[str] = Field(default_factory=list, max_length=16)
+    alias_kind: str = Field(default="legacy_name_derived", min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> "DBReconcileToolIdentityRequest":
+        authority_components = {
+            "stable_peer_id": self.stable_peer_id,
+            "tool_contract_id": self.tool_contract_id,
+            "stable_source_id": self.stable_source_id,
+            "provider_tool_id": self.provider_tool_id,
+            "share_group_id": self.share_group_id,
+        }
+        for label, value in authority_components.items():
+            if value != value.strip() or any(
+                ord(character) < 0x20 or ord(character) == 0x7F for character in value
+            ):
+                raise ValueError(f"{label} must be trimmed and contain no control characters")
+        expected = (
+            f"aurora-tool:v{self.identity_version}:"
+            f"{quote(self.stable_peer_id, safe='-._~')}:Tooling:"
+            f"{quote(self.tool_contract_id, safe='-._~')}"
+        )
+        if self.canonical_global_tool_id != expected:
+            raise ValueError("canonical_global_tool_id does not match the versioned identity")
+        if any(
+            not value
+            or value != value.strip()
+            or len(value) > 512
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+            for value in self.legacy_global_tool_ids
+        ):
+            raise ValueError(
+                "legacy_global_tool_ids must be trimmed, non-empty, and at most 512 chars"
+            )
+        if len(set(self.legacy_global_tool_ids)) != len(self.legacy_global_tool_ids):
+            raise ValueError("legacy_global_tool_ids must be unique")
+        if self.canonical_global_tool_id in self.legacy_global_tool_ids:
+            raise ValueError("canonical identity cannot also be a legacy alias")
+        return self
+
+
+class DBToolIdentityRekeyCounts(IOModel):
+    """Rows rewritten inside one identity reconciliation transaction."""
+
+    approval_grants: int = 0
+    approval_grant_metadata: int = 0
+    approval_requests: int = 0
+    approval_tokens: int = 0
+    remote_catalog_snapshots: int = 0
+    remote_catalog_tombstones: int = 0
+
+
+class DBReconcileToolIdentityResponse(IOModel):
+    """Result of fail-closed Tooling identity reconciliation."""
+
+    success: bool
+    canonical_global_tool_id: str
+    aliases: list[str] = Field(default_factory=list)
+    created: bool = False
+    idempotent: bool = False
+    rekeyed: DBToolIdentityRekeyCounts = Field(default_factory=DBToolIdentityRekeyCounts)
+    conflict_id: str | None = None
+    error_code: str | None = None
+    error: str | None = None
+
+
+class DBAllocateToolIdentityRequest(IOModel):
+    """Allocate one immutable ID for an unstamped/name-only tool identity."""
+
+    stable_peer_id: str = Field(min_length=1, max_length=160)
+    legacy_identity_locator: str = Field(min_length=1, max_length=512)
+    source_kind: Literal["core", "plugin", "mcp", "toolkit", "mesh_peer", "unknown"]
+    stable_source_id: str = Field(min_length=1, max_length=160)
+    provider_tool_id: str = Field(min_length=1, max_length=160)
+    share_group_id: str = Field(min_length=1, max_length=160)
+    share_group_label: str = Field(min_length=1, max_length=120)
+    current_local_name: str = Field(min_length=1, max_length=512)
+    legacy_global_tool_ids: list[str] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def validate_locator(self) -> "DBAllocateToolIdentityRequest":
+        values = (
+            self.stable_peer_id,
+            self.legacy_identity_locator,
+            self.stable_source_id,
+            self.provider_tool_id,
+            self.share_group_id,
+        )
+        if any(
+            value != value.strip()
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+            for value in values
+        ):
+            raise ValueError("identity allocation keys must be trimmed and contain no controls")
+        aliases = [self.legacy_identity_locator, *self.legacy_global_tool_ids]
+        if len(set(aliases)) != len(aliases):
+            raise ValueError("legacy identity aliases must be unique")
+        return self
+
+
+class DBAllocateToolIdentityResponse(DBReconcileToolIdentityResponse):
+    """Allocated identity plus the reconciliation outcome."""
+
+    allocated_tool_contract_id: str
+
+
+class DBResolveToolIdentityAliasesRequest(IOModel):
+    """Resolve durable canonical IDs and aliases after a process restart."""
+
+    global_tool_ids: list[str] = Field(min_length=1, max_length=256)
+    stable_peer_id: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class DBResolveToolIdentityAliasesResponse(IOModel):
+    """Input-ID to canonical-ID mappings; unknown/colliding IDs are omitted."""
+
+    resolved: dict[str, str] = Field(default_factory=dict)
+
+
+# ── Durable Tooling export policy ───────────────────────────────────────
+
+
+class DBGetToolingExportPolicySnapshotRequest(IOModel):
+    """Read export authority without exposing generic SQL."""
+
+    peer_id: str | None = Field(default=None, min_length=1, max_length=160)
+    include_rules: bool = True
+    include_stale: bool = True
+    known_global_tool_ids: list[str] = Field(default_factory=list, max_length=4096)
+    known_share_group_ids: list[str] = Field(default_factory=list, max_length=1024)
+
+
+class DBToolingExportRecipientScope(IOModel):
+    """One durable non-global recipient scope referenced by export rules."""
+
+    peer_id: str = Field(min_length=1, max_length=160)
+    rule_count: int = Field(ge=1)
+    last_rule_updated_at: float
+
+
+class DBGetToolingExportPolicySnapshotResponse(IOModel):
+    """Atomic policy/rules/switch snapshot for Tooling."""
+
+    policy: ToolingExportPolicy
+    rules: list[ToolingExportRule] = Field(default_factory=list)
+    stale_tool_ids: list[str] = Field(default_factory=list)
+    stale_group_ids: list[str] = Field(default_factory=list)
+    recipient_scopes: list[DBToolingExportRecipientScope] = Field(default_factory=list)
+    mesh_switches: ToolingMeshKillSwitches
+    secrets_redacted: bool = True
+
+
+class DBToolingExportRuleSeed(IOModel):
+    """Preflighted deterministic rule imported by one legacy initialization."""
+
+    rule_id: str = Field(min_length=1, max_length=160)
+    peer_id: str | None = Field(default=None, min_length=1, max_length=160)
+    scope_type: ToolingExportScopeType
+    scope_id: str = Field(min_length=1, max_length=1024)
+    state: ToolingExportState
+    actor_principal_id: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=2048)
+
+
+class DBMutateToolingExportPolicyRequest(IOModel):
+    """One optimistic export mutation and its atomic audit metadata."""
+
+    action: Literal["initialize_legacy", "set_default", "upsert_rule", "clear_rule"]
+    expected_revision: int = Field(ge=0)
+    state: ToolingExportState | None = None
+    peer_id: str | None = Field(default=None, min_length=1, max_length=160)
+    scope_type: ToolingExportScopeType | None = None
+    scope_id: str | None = Field(default=None, min_length=1, max_length=1024)
+    actor_principal_id: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=2048)
+    correlation_id: str | None = Field(default=None, max_length=256)
+    migrated_from_legacy: bool | None = None
+    initial_rules: list[DBToolingExportRuleSeed] = Field(default_factory=list, max_length=4096)
+
+    @model_validator(mode="after")
+    def validate_mutation_shape(self) -> "DBMutateToolingExportPolicyRequest":
+        if self.actor_principal_id != self.actor_principal_id.strip() or (
+            not self.reason.strip() or self.reason != self.reason.strip()
+        ):
+            raise ValueError("export mutation audit values must be trimmed and nonblank")
+        if self.peer_id is not None and self.peer_id != self.peer_id.strip():
+            raise ValueError("peer_id must be trimmed")
+        if self.action == "initialize_legacy":
+            if self.state is None or self.scope_type is not None or self.scope_id is not None:
+                raise ValueError(
+                    "initialize_legacy requires a default state and optional initial_rules"
+                )
+            if self.migrated_from_legacy is None:
+                raise ValueError("initialize_legacy requires migrated_from_legacy")
+        elif self.action == "set_default":
+            if self.state is None or self.scope_type is not None or self.scope_id is not None:
+                raise ValueError("set_default requires only state")
+        elif self.action == "upsert_rule":
+            if self.state is None or self.scope_type is None or self.scope_id is None:
+                raise ValueError("upsert_rule requires state, scope_type, and scope_id")
+        elif self.scope_type is None or self.scope_id is None or self.state is not None:
+            raise ValueError("clear_rule requires scope_type and scope_id without state")
+        if self.action != "initialize_legacy" and (
+            self.initial_rules or self.migrated_from_legacy is not None
+        ):
+            raise ValueError("legacy initialization fields are reserved for initialize_legacy")
+        return self
+
+
+class DBMutateToolingExportPolicyResponse(IOModel):
+    """Optimistic mutation result; conflicts never write or audit success."""
+
+    ok: bool
+    policy: ToolingExportPolicy
+    rule: ToolingExportRule | None = None
+    cleared: bool = False
+    changed: bool = False
+    audit_id: str | None = None
+    previous_revision: int = Field(ge=0)
+    revision: int = Field(ge=0)
+    error: str | None = None
+    correlation_id: str | None = None
+
+
+class DBGetToolingMeshSwitchesRequest(IOModel):
+    """Read persisted bilateral switches."""
+
+
+class DBGetToolingMeshSwitchesResponse(IOModel):
+    """Bilateral switches; enforcement remains explicitly inactive in G012."""
+
+    switches: ToolingMeshKillSwitches
+
+
+class DBSetToolingMeshSwitchesRequest(IOModel):
+    """Optimistically update both directional switches as one logical value."""
+
+    provider_mesh_tooling_enabled: bool
+    consumer_mesh_tooling_enabled: bool
+    expected_revision: int = Field(ge=0)
+    actor_principal_id: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=2048)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def validate_switch_audit(self) -> "DBSetToolingMeshSwitchesRequest":
+        if self.actor_principal_id != self.actor_principal_id.strip() or (
+            not self.reason.strip() or self.reason != self.reason.strip()
+        ):
+            raise ValueError("mesh switch audit values must be trimmed and nonblank")
+        return self
+
+
+class DBSetToolingMeshSwitchesResponse(IOModel):
+    """Optimistic bilateral-switch update result."""
+
+    ok: bool
+    switches: ToolingMeshKillSwitches
+    previous_revision: int = Field(ge=0)
+    revision: int = Field(ge=0)
+    changed: bool = False
+    error: str | None = None
+    correlation_id: str | None = None
+
+
+# ── Recipient-specific normalized Tooling projection retention ─────────
+
+
+class DBToolingRemoteCatalogHeader(IOModel):
+    """Durable provider header; only a committed active generation is bindable."""
+
+    peer_id: str
+    provider_id: str
+    service_instance_id: str
+    protocol_tier: Literal["legacy_unsupported", "projection_v1"]
+    projection_revision: str | None = None
+    projection_digest: str | None = None
+    authority_revision: ToolingProjectionAuthorityRevision
+    current_generation: int = Field(ge=0)
+    sync_state: Literal["idle", "syncing", "committed", "failed", "legacy_stale"]
+    availability: Literal[
+        "active",
+        "provider_unavailable",
+        "stale",
+        "protocol_unsupported",
+    ]
+    last_error_reason: str | None = None
+    committed_at: float | None = None
+    updated_at: float
+
+
+class DBToolingRemoteCatalogTool(IOModel):
+    """Retained remote tool metadata and its non-authoritative availability."""
+
+    peer_id: str
+    provider_id: str
+    tool: ToolingToolInfo
+    schema_hash: str
+    accepted_schema_hash: str
+    availability: ToolingRemoteAvailability
+    reason_code: str
+    missing_permissions: list[str] = Field(default_factory=list)
+    active_generation: int | None = Field(default=None, ge=0)
+    projection_revision: str | None = None
+    authority_revision: ToolingProjectionAuthorityRevision
+    review_required: bool = False
+    first_seen_at: float
+    last_seen_at: float
+    updated_at: float
+
+
+class DBToolingRemoteCatalogTombstone(IOModel):
+    """Non-bindable identity stub with optional bounded last-known management metadata."""
+
+    peer_id: str
+    provider_id: str
+    global_tool_id: str
+    management_metadata: dict[str, Any] = Field(default_factory=dict)
+    accepted_schema_hash: str
+    availability: Literal["unshared", "permission_blocked", "removed", "stale"]
+    reason_code: str
+    compacted_at: float
+
+
+class DBBeginToolingRemoteCatalogSyncRequest(IOModel):
+    """Open one non-bindable staging generation for an authenticated provider."""
+
+    sync_id: str = Field(min_length=16, max_length=256)
+    peer_id: str = Field(min_length=1, max_length=160)
+    provider_id: str = Field(min_length=1, max_length=256)
+    service_instance_id: str = Field(min_length=1, max_length=256)
+    protocol_tier: Literal["projection_v1"] = "projection_v1"
+    projection_revision: str = Field(min_length=1, max_length=256)
+    projection_digest: str = Field(min_length=64, max_length=64)
+    authority_revision: ToolingProjectionAuthorityRevision
+    page_size: int = Field(ge=1, le=256)
+    expected_base_generation: int = Field(ge=0)
+
+
+class DBBeginToolingRemoteCatalogSyncResponse(IOModel):
+    ok: bool
+    sync_id: str
+    base_generation: int = Field(ge=0)
+    error: str | None = None
+
+
+class DBAppendToolingRemoteCatalogPageRequest(IOModel):
+    """Stage one projection page; staged rows can never be returned as active."""
+
+    sync_id: str = Field(min_length=16, max_length=256)
+    page: ToolingGetExportCatalogResponse
+    used_cursor_hash: str | None = Field(default=None, min_length=64, max_length=64)
+
+    @field_validator("used_cursor_hash")
+    @classmethod
+    def _validate_used_cursor_hash(cls, value: str | None) -> str | None:
+        if value is not None and (
+            value != value.lower() or any(char not in "0123456789abcdef" for char in value)
+        ):
+            raise ValueError("used_cursor_hash must be lowercase hexadecimal")
+        return value
+
+
+class DBAppendToolingRemoteCatalogPageResponse(IOModel):
+    ok: bool
+    sync_id: str
+    accepted_page_index: int | None = Field(default=None, ge=0)
+    complete: bool = False
+    error: str | None = None
+
+
+class DBCommitToolingRemoteCatalogSyncRequest(IOModel):
+    """Promote a verified complete staged snapshot with optimistic generation CAS."""
+
+    sync_id: str = Field(min_length=16, max_length=256)
+    expected_base_generation: int = Field(ge=0)
+    defer_activation_for_policy_reconciliation: bool = False
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+
+class DBCommitToolingRemoteCatalogSyncResponse(IOModel):
+    ok: bool
+    header: DBToolingRemoteCatalogHeader | None = None
+    tools: list[DBToolingRemoteCatalogTool] = Field(default_factory=list)
+    previous_generation: int = Field(ge=0)
+    generation: int = Field(ge=0)
+    error: str | None = None
+    correlation_id: str | None = None
+
+
+class DBFinalizeToolingRemoteCatalogPolicyRequest(IOModel):
+    """Activate one pending committed generation after Config policy persistence."""
+
+    peer_id: str = Field(min_length=1, max_length=160)
+    provider_id: str = Field(min_length=1, max_length=256)
+    expected_generation: int = Field(ge=1)
+    expected_projection_revision: str = Field(min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+
+class DBFinalizeToolingRemoteCatalogPolicyResponse(IOModel):
+    ok: bool
+    changed: bool = False
+    header: DBToolingRemoteCatalogHeader | None = None
+    error: str | None = None
+    correlation_id: str | None = None
+
+
+class DBAbortToolingRemoteCatalogSyncRequest(IOModel):
+    sync_id: str = Field(min_length=16, max_length=256)
+    reason_code: str = Field(min_length=1, max_length=128)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+
+class DBAbortToolingRemoteCatalogSyncResponse(IOModel):
+    ok: bool
+    aborted: bool
+
+
+class DBGetToolingRemoteCatalogRequest(IOModel):
+    peer_id: str | None = Field(default=None, min_length=1, max_length=160)
+    provider_id: str | None = Field(default=None, min_length=1, max_length=256)
+    include_inactive: bool = True
+
+    @model_validator(mode="after")
+    def _provider_requires_peer(self) -> "DBGetToolingRemoteCatalogRequest":
+        if self.provider_id is not None and self.peer_id is None:
+            raise ValueError("provider_id requires peer_id")
+        return self
+
+
+class DBGetToolingRemoteCatalogResponse(IOModel):
+    headers: list[DBToolingRemoteCatalogHeader] = Field(default_factory=list)
+    tools: list[DBToolingRemoteCatalogTool] = Field(default_factory=list)
+    retained_tombstones: list[DBToolingRemoteCatalogTombstone] = Field(default_factory=list)
+    secrets_redacted: bool = True
+
+
+class DBSetToolingRemoteProviderAvailabilityRequest(IOModel):
+    peer_id: str = Field(min_length=1, max_length=160)
+    provider_id: str = Field(min_length=1, max_length=256)
+    availability: Literal["provider_unavailable", "stale", "protocol_unsupported"]
+    reason_code: str = Field(min_length=1, max_length=128)
+    expected_generation: int | None = Field(default=None, ge=0)
+    expected_projection_revision: str | None = Field(default=None, min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+
+class DBSetToolingRemoteProviderAvailabilityResponse(IOModel):
+    ok: bool
+    changed: bool = False
+    header: DBToolingRemoteCatalogHeader | None = None
+    error: str | None = None
+    correlation_id: str | None = None
+
+
+class DBAcceptToolingRemoteToolSchemaRequest(IOModel):
+    """Explicitly accept the current verified schema for one retained remote tool."""
+
+    peer_id: str = Field(min_length=1, max_length=160)
+    provider_id: str = Field(min_length=1, max_length=256)
+    global_tool_id: str = Field(min_length=1, max_length=1024)
+    expected_projection_revision: str = Field(min_length=1, max_length=256)
+    expected_schema_hash: str = Field(min_length=64, max_length=64)
+    actor_principal_id: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=2048)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def _validate_schema_acceptance(self) -> "DBAcceptToolingRemoteToolSchemaRequest":
+        if self.actor_principal_id != self.actor_principal_id.strip():
+            raise ValueError("actor_principal_id must be trimmed")
+        if self.reason != self.reason.strip() or not self.reason:
+            raise ValueError("reason must be trimmed and nonblank")
+        if self.expected_schema_hash != self.expected_schema_hash.lower() or any(
+            char not in "0123456789abcdef" for char in self.expected_schema_hash
+        ):
+            raise ValueError("expected_schema_hash must be lowercase hexadecimal")
+        return self
+
+
+class DBAcceptToolingRemoteToolSchemaResponse(IOModel):
+    ok: bool
+    changed: bool = False
+    tool: DBToolingRemoteCatalogTool | None = None
+    error: str | None = None
+    audit_id: str | None = None
+    correlation_id: str | None = None
+
+
+class DBImportLegacyToolingRemoteCatalogsRequest(IOModel):
+    """Import old JSON blobs as stale management history, never as a baseline."""
+
+    limit: int = Field(default=4096, ge=1, le=4096)
+
+
+class DBImportLegacyToolingRemoteCatalogsResponse(IOModel):
+    imported_headers: int = Field(ge=0)
+    imported_tools: int = Field(ge=0)
+    skipped_rows: int = Field(ge=0)
+
+
+class DBRecoverToolingRemoteCatalogsRequest(IOModel):
+    """Fail-closed startup recovery for crashed projection staging."""
+
+    now: float | None = Field(default=None, ge=0)
+    recover_all_staging: bool = True
+    orphan_staging_ttl_seconds: int = Field(default=900, ge=60, le=86400)
+    actor_principal_id: str = Field(default="system", min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+
+class DBRecoverToolingRemoteCatalogsResponse(IOModel):
+    ok: bool = True
+    recovered_sync_count: int = Field(ge=0)
+    imported_legacy_provider_count: int = Field(default=0, ge=0)
+    imported_legacy_tool_count: int = Field(default=0, ge=0)
+    providers_needing_sync: list[str] = Field(default_factory=list)
+    recovered_sync_ids: list[str] = Field(default_factory=list)
+
+
+class DBToolingRemoteRetentionProviderSummary(IOModel):
+    peer_id: str
+    provider_id: str
+    compacted_tool_count: int = Field(ge=0)
+    compacted_management_metadata_count: int = Field(default=0, ge=0)
+    pruned_audit_count: int = Field(ge=0)
+
+
+class DBPruneToolingRemoteCatalogRetentionRequest(IOModel):
+    """Bound full inactive rows, rich management tail, and audit independently."""
+
+    now: float | None = Field(default=None, ge=0)
+    removed_stale_ttl_seconds: int = Field(default=2592000, ge=3600, le=31536000)
+    max_retained_per_provider: int = Field(default=256, ge=16, le=4096)
+    management_tombstone_ttl_seconds: int = Field(default=2592000, ge=3600, le=31536000)
+    max_management_tombstones_per_provider: int = Field(default=256, ge=16, le=4096)
+    max_audit_rows_per_provider: int = Field(default=512, ge=32, le=8192)
+    actor_principal_id: str = Field(default="system", min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+
+class DBPruneToolingRemoteCatalogRetentionResponse(IOModel):
+    ok: bool = True
+    compacted_tool_count: int = Field(ge=0)
+    compacted_management_metadata_count: int = Field(default=0, ge=0)
+    pruned_audit_count: int = Field(ge=0)
+    providers: list[DBToolingRemoteRetentionProviderSummary] = Field(default_factory=list)
+
+
+class DBResolveToolingRemoteToolAliasesRequest(IOModel):
+    peer_id: str = Field(min_length=1, max_length=160)
+    provider_id: str = Field(min_length=1, max_length=256)
+    global_tool_ids: list[str] = Field(default_factory=list, max_length=256)
+
+
+class DBResolveToolingRemoteToolAliasesResponse(IOModel):
+    canonical_by_requested_id: dict[str, str] = Field(default_factory=dict)
+
+
+class DBToolingExposureLedgerEntry(IOModel):
+    global_tool_id: str = Field(min_length=1, max_length=1024)
+    last_schema_hash: str | None = Field(default=None, min_length=64, max_length=64)
+
+
+class DBGetToolingExposureLedgerRequest(IOModel):
+    recipient_peer_id: str = Field(min_length=1, max_length=160)
+    provider_id: str = Field(min_length=1, max_length=256)
+
+
+class DBGetToolingExposureLedgerResponse(IOModel):
+    entries: list[DBToolingExposureLedgerEntry] = Field(default_factory=list)
+
+
+class DBRecordToolingExposuresRequest(IOModel):
+    recipient_peer_id: str = Field(min_length=1, max_length=160)
+    provider_id: str = Field(min_length=1, max_length=256)
+    entries: list[DBToolingExposureLedgerEntry] = Field(min_length=1, max_length=256)
+
+
+class DBRecordToolingExposuresResponse(IOModel):
+    recorded_count: int = Field(ge=0)
+
+
+class DBToolingMeshActivationComponentVersions(IOModel):
+    """Schema versions for every component in the atomic G013 cutover."""
+
+    projection_transport: int = Field(ge=0)
+    targeted_invalidation: int = Field(ge=0)
+    normalized_catalog: int = Field(ge=0)
+    consumer_binding: int = Field(ge=0)
+    provider_discovery: int = Field(ge=0)
+    prepare_enforcement: int = Field(ge=0)
+    execute_enforcement: int = Field(ge=0)
+    typed_exposure_ledger: int = Field(default=0, ge=0)
+    inbound_sync_bridge: int = Field(default=0, ge=0)
+    execution_rpc_evidence: int = Field(default=0, ge=0)
+    exact_method_set: int = Field(default=0, ge=0)
+    mutation_invalidation: int = Field(default=0, ge=0)
+    conditional_legacy_retirement: int = Field(default=0, ge=0)
+    startup_downgrade_guard: int = Field(default=0, ge=0)
+
+
+class DBToolingMeshActivationState(IOModel):
+    """Durable singleton proving whether legacy enforcement may be retired."""
+
+    active: bool = False
+    legacy_guard_retired: bool = False
+    revision: int = Field(ge=0)
+    component_schema_versions: DBToolingMeshActivationComponentVersions
+    activated_at: float | None = None
+    audit_id: str | None = None
+    updated_at: float
+
+
+class DBGetToolingMeshActivationStateRequest(IOModel):
+    """Read the durable G013 cutover state."""
+
+
+class DBGetToolingMeshActivationStateResponse(IOModel):
+    state: DBToolingMeshActivationState
+
+
+class DBActivateToolingMeshEnforcementRequest(IOModel):
+    """CAS-activate G013 only when every frozen component reports schema v1."""
+
+    expected_revision: int = Field(ge=0)
+    component_schema_versions: DBToolingMeshActivationComponentVersions
+    actor_principal_id: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=2048)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def _trimmed_activation_audit(self) -> "DBActivateToolingMeshEnforcementRequest":
+        if self.actor_principal_id != self.actor_principal_id.strip():
+            raise ValueError("actor_principal_id must be trimmed")
+        if self.reason != self.reason.strip() or not self.reason:
+            raise ValueError("reason must be trimmed and nonblank")
+        return self
+
+
+class DBActivateToolingMeshEnforcementResponse(IOModel):
+    ok: bool
+    changed: bool = False
+    state: DBToolingMeshActivationState
+    previous_revision: int = Field(ge=0)
+    revision: int = Field(ge=0)
+    error: str | None = None
+    correlation_id: str | None = None
+
+
 # ── Generic SQL Execution ────────────────────────────────────────────────
 
 
@@ -662,3 +1680,8 @@ class DBExecuteSQLResponse(IOModel):
 
     rows: list[dict[str, Any]] = Field(default_factory=list)
     rowcount: int = 0
+    # Keep defaults for compatibility with older internal callers while
+    # allowing security-sensitive services to distinguish an empty result
+    # from a statement that failed before commit.
+    success: bool = True
+    error: str | None = None

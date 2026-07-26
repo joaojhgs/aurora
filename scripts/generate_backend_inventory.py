@@ -28,6 +28,7 @@ from app.shared.contracts.registry import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 UI_FIXTURE_PATH = REPO_ROOT / "modules/ui-mock-reference/lib/aurora/data.ts"
+SECURITY_SURFACE_INVENTORY_PATH = REPO_ROOT / "docs/security/mesh-security-surface-inventory.json"
 
 SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("Config", "app.services.config.service", "ConfigService"),
@@ -46,7 +47,7 @@ SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
 
 SERVICE_SOURCES: tuple[Path, ...] = tuple(
     REPO_ROOT / (module_path.replace(".", "/") + ".py") for _, module_path, _ in SERVICE_CLASSES
-)
+) + (REPO_ROOT / "app/services/gateway/audio_session.py",)
 
 STATIC_ONLY_SERVICES = {"Config"}
 SKIP_FIXTURE_COVERAGE = {"planned", "missing_contract", "internal_only", "mock_only"}
@@ -158,11 +159,13 @@ def _static_contracts_from_source(
                 "exposure": kwargs.get("exposure", "internal"),
                 "method_type": kwargs.get("method_type", "use"),
                 "required_perms": list(kwargs.get("required_perms", [])),
+                "callable_feature_ids": list(kwargs.get("callable_feature_ids", [])),
+                "public_infrastructure": bool(kwargs.get("public_infrastructure", False)),
                 "input_model": _model_name(input_model),
                 "output_model": _model_name(output_model),
                 "input_schema": _model_schema(input_model),
                 "output_schema": _model_schema(output_model),
-                "source_file": f"{_rel(path)}:{node.lineno}",
+                "source_file": f"{_rel(path)}:{call.lineno}",
                 "source": "static_contract",
             }
     return contracts
@@ -206,6 +209,11 @@ def _live_contract_to_inventory(contract: MethodContract) -> dict[str, Any]:
         "exposure": contract.exposure,
         "method_type": contract.method_type,
         "required_perms": list(contract.required_perms),
+        "callable_feature_ids": list(contract.callable_feature_ids),
+        "callable_features": [
+            feature.model_dump(mode="json") for feature in contract.callable_features
+        ],
+        "public_infrastructure": contract.public_infrastructure,
         "input_model": _model_name(contract.input_model),
         "output_model": _model_name(contract.output_model),
         "input_schema": _model_schema(contract.input_model),
@@ -400,6 +408,12 @@ def main() -> int:
         help="Exit non-zero when UI fixture references are missing or mismatched",
     )
     args = parser.parse_args()
+
+    if args.output and args.output.resolve() == SECURITY_SURFACE_INVENTORY_PATH.resolve():
+        parser.error(
+            "the mesh security surface inventory uses a different checked schema; "
+            "update it through its dedicated contract workflow"
+        )
 
     inventory = build_inventory()
     rendered = json.dumps(inventory, indent=2, sort_keys=True)

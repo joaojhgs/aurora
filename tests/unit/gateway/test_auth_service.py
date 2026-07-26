@@ -1,9 +1,10 @@
+import asyncio
 import hashlib
 import json
 import secrets
 import uuid
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -92,6 +93,7 @@ def auth_service():
     router.on(DBMethods.GET_MESH_CREDENTIAL_BY_ROOM, _ok({"credential": None}))
     router.on(DBMethods.GET_AUDIT_LOG, _ok({"events": [], "total": 0}))
     router.on(DBMethods.COUNT_AUDIT_EVENTS, _count_resp(0))
+    router.on(DBMethods.EXECUTE_SQL, _ok({"rows": [], "rowcount": 1}))
 
     mock_bus.request = AsyncMock(side_effect=router)
 
@@ -201,7 +203,8 @@ async def test_pairing_flow(auth_service):
     # 1. Start pairing
     pairing_code = await auth_service.start_pairing(device_name, client_ip)
     assert pairing_code is not None
-    assert len(pairing_code) == 6
+    assert len(pairing_code) >= 32
+    assert not pairing_code.isdecimal()
     assert pairing_code in auth_service.pairing_requests
 
     # 2. Connect pairing
@@ -229,17 +232,291 @@ async def test_pairing_flow(auth_service):
     assert DBMethods.CREATE_USER in topics
     assert DBMethods.CREATE_DEVICE in topics
     assert DBMethods.CREATE_TOKEN in topics
-    assert pairing_code not in auth_service.pairing_requests
+    cached_request = auth_service.pairing_requests[pairing_code]
+    assert cached_request["status"] == "exchanged"
+    assert cached_request["exchange_result"] == exchange_result
+
+    # Transport retries are idempotent and cannot mint a second credential.
+    repeated_result = await auth_service.exchange_pairing(pairing_code)
+    assert repeated_result == exchange_result
 
 
 @pytest.mark.asyncio
-async def test_pairing_rate_limiting(auth_service):
-    client_ip = "192.168.1.1"
+async def test_concurrent_pairing_exchange_mints_one_cached_credential(auth_service):
+    """Concurrent retries share one persisted user/device/token result."""
+    pairing_code = await auth_service.start_pairing("Concurrent Device", "127.0.0.1")
+    assert pairing_code is not None
+    assert await auth_service.approve_pairing(pairing_code, "admin-id") is True
+
+    router = auth_service._bus_router
+
+    async def yielding_router(topic, payload, **kwargs):
+        if topic == DBMethods.CREATE_USER:
+            # Force an interleaving at the first persistence boundary. Without
+            # the per-handle exchange lock, both calls can pass the cache check
+            # and independently mint the full credential graph.
+            await asyncio.sleep(0)
+        return router(topic, payload, **kwargs)
+
+    auth_service.bus.request = AsyncMock(side_effect=yielding_router)
+    auth_service.bus.request.call_args_list.clear()
+
+    first, second = await asyncio.gather(
+        auth_service.exchange_pairing(pairing_code),
+        auth_service.exchange_pairing(pairing_code),
+    )
+
+    assert first is not None
+    assert first == second == auth_service.pairing_requests[pairing_code]["exchange_result"]
+    assert first is not second
+    assert len(_bus_calls(auth_service.bus, DBMethods.CREATE_USER)) == 1
+    assert len(_bus_calls(auth_service.bus, DBMethods.CREATE_DEVICE)) == 1
+    assert len(_bus_calls(auth_service.bus, DBMethods.CREATE_TOKEN)) == 1
+
+
+@pytest.mark.asyncio
+async def test_pairing_exchange_includes_loaded_stable_identity(auth_service):
+    """Primary path preserves the durable local stable identity in the exchange."""
+    pairing_code = await auth_service.start_pairing("Stable Device", "127.0.0.1")
+    assert pairing_code is not None
+    assert await auth_service.approve_pairing(pairing_code, "admin-id") is True
+    auth_service._bus_router.on(
+        DBMethods.EXECUTE_SQL,
+        _ok({"rows": [{"peer_id": "stable-local-peer", "node_name": "Local Aurora"}]}),
+    )
+
+    result = await auth_service.exchange_pairing(pairing_code)
+
+    assert result is not None
+    assert result["peer_id"] == "stable-local-peer"
+    assert result["node_name"] == "Local Aurora"
+
+
+@pytest.mark.asyncio
+async def test_pairing_exchange_logs_redacted_identity_fallback(auth_service):
+    """Fallback to signaling identity is kept, but the lost stable lookup is visible."""
+    pairing_code = await auth_service.start_pairing("Fallback Device", "127.0.0.1")
+    assert pairing_code is not None
+    assert await auth_service.approve_pairing(pairing_code, "admin-id") is True
+    auth_service._bus_router.on(DBMethods.EXECUTE_SQL, _ok({"rows": None}))
+
+    with patch("app.services.auth.auth_manager.log_warning") as mock_warning:
+        result = await auth_service.exchange_pairing(pairing_code)
+
+    assert result is not None
+    assert result["peer_id"] == ""
+    assert result["node_name"] == ""
+    mock_warning.assert_called_once()
+    message = mock_warning.call_args.args[0]
+    assert "fallback=signaling_peer_id" in message
+    assert "reason=RuntimeError" in message
+    assert pairing_code not in message
+    assert result["token"] not in message
+
+
+@pytest.mark.asyncio
+async def test_pairing_reconnect_cannot_supersede_request_mid_exchange(auth_service):
+    """All pairing lifecycle transitions share the exchange commit lock."""
+    pairing_code = await auth_service.start_pairing("First device", "127.0.0.1")
+    assert pairing_code is not None
+    assert await auth_service.approve_pairing(pairing_code, "admin-id") is True
+
+    exchange_entered = asyncio.Event()
+    release_exchange = asyncio.Event()
+    original_create_user = auth_service._create_user
+
+    async def blocked_create_user(user):
+        exchange_entered.set()
+        await release_exchange.wait()
+        return await original_create_user(user)
+
+    auth_service._create_user = blocked_create_user
+    exchange_task = asyncio.create_task(auth_service.exchange_pairing(pairing_code))
+    await exchange_entered.wait()
+
+    reconnect_task = asyncio.create_task(auth_service.start_pairing("Reconnect", "127.0.0.2"))
+    await asyncio.sleep(0)
+    assert reconnect_task.done() is False
+
+    release_exchange.set()
+    exchange_result = await exchange_task
+    reconnect_code = await reconnect_task
+
+    assert exchange_result is not None
+    assert reconnect_code is not None
+    assert auth_service.pairing_requests[pairing_code]["status"] == "exchanged"
+
+
+@pytest.mark.asyncio
+async def test_pairing_lifecycle_logs_do_not_expose_codes(auth_service):
+    with patch("app.services.auth.auth_manager.log_info") as log_info:
+        approved_code = await auth_service.start_pairing("Approved Device", "127.0.0.1")
+        denied_code = await auth_service.start_pairing("Denied Device", "127.0.0.1")
+        assert approved_code is not None
+        assert denied_code is not None
+
+        assert await auth_service.approve_pairing(approved_code, "admin-id") is True
+        assert await auth_service.deny_pairing(denied_code, "admin-id") is True
+
+    messages = "\n".join(str(call.args[0]) for call in log_info.call_args_list)
+    assert approved_code not in messages
+    assert denied_code not in messages
+
+
+@pytest.mark.asyncio
+async def test_pairing_rate_limiting_uses_shared_unattributed_bucket(auth_service):
     for i in range(5):
-        code = await auth_service.start_pairing(f"Device {i}", client_ip)
+        code = await auth_service.start_pairing(
+            f"Device {i}",
+            f"caller-controlled-ip-{i}",
+            remote_peer_id=f"caller-controlled-peer-{i}",
+        )
         assert code is not None
-    code = await auth_service.start_pairing("Device 6", client_ip)
+    code = await auth_service.start_pairing(
+        "Device 6",
+        "another-caller-controlled-ip",
+        remote_peer_id="another-caller-controlled-peer",
+    )
     assert code is None
+    assert auth_service.pairing_attempts == {"pairing:unattributed": 5}
+
+
+@pytest.mark.asyncio
+async def test_expired_pairing_releases_trusted_source_rate_limit_slot(auth_service):
+    """A trusted WebRTC peer can retry after one of its five requests expires."""
+    trusted_source = "webrtc:trusted-transport-peer"
+    active_codes = []
+    for i in range(5):
+        code = await auth_service.start_pairing(
+            f"Trusted peer attempt {i}",
+            "unknown",
+            trusted_rate_limit_key=trusted_source,
+        )
+        assert code is not None
+        active_codes.append(code)
+
+    assert (
+        await auth_service.start_pairing(
+            "Blocked sixth attempt",
+            "unknown",
+            trusted_rate_limit_key=trusted_source,
+        )
+        is None
+    )
+
+    expired_code = active_codes[0]
+    auth_service.pairing_requests[expired_code]["expires_at"] = datetime.now() - timedelta(
+        seconds=1
+    )
+
+    replacement_code = await auth_service.start_pairing(
+        "Retry after expiration",
+        "unknown",
+        trusted_rate_limit_key=trusted_source,
+    )
+
+    assert replacement_code is not None
+    assert expired_code not in auth_service.pairing_requests
+    assert auth_service.pairing_attempts[trusted_source] == 5
+
+
+@pytest.mark.asyncio
+async def test_mesh_pairing_retry_allocates_a_new_request_and_code(auth_service):
+    first_code = await auth_service.start_pairing(
+        "Aurora mesh peer",
+        "unknown",
+        remote_peer_id="peer-stable-1",
+        remote_node_name="Aurora 1",
+    )
+    assert first_code is not None
+
+    second_code = await auth_service.start_pairing(
+        "Aurora mesh peer reconnected",
+        "unknown",
+        remote_peer_id="peer-stable-1",
+        remote_node_name="Aurora 1 reconnected",
+    )
+
+    assert second_code is not None
+    assert second_code != first_code
+    assert set(auth_service.pairing_requests) == {first_code, second_code}
+    assert auth_service.pairing_attempts["pairing:unattributed"] == 2
+    assert auth_service.pairing_requests[first_code]["device_name"] == "Aurora mesh peer"
+    assert auth_service.pairing_requests[second_code]["device_name"] == (
+        "Aurora mesh peer reconnected"
+    )
+
+
+@pytest.mark.asyncio
+async def test_bilateral_pairing_start_is_idempotent_and_preserves_session_sas(
+    auth_service,
+):
+    """Duplicate PairingStart delivery creates one request for one transcript."""
+    pairing_session_id = "b" * 64
+    verification_code = "48271935"
+    trusted_source = "webrtc:transport-peer-a"
+    request_kwargs = {
+        "device_name": "Aurora 1",
+        "client_ip": "unknown",
+        "remote_peer_id": "stable-peer-a",
+        "remote_node_name": "Aurora 1",
+        "room_name": "private-mesh-room",
+        "pairing_session_id": pairing_session_id,
+        "verification_code": verification_code,
+        "trusted_rate_limit_key": trusted_source,
+    }
+
+    first_code = await auth_service.start_pairing(**request_kwargs)
+    duplicate_code = await auth_service.start_pairing(**request_kwargs)
+
+    assert first_code is not None
+    assert duplicate_code == first_code
+    assert first_code != verification_code
+    assert len(auth_service.pairing_requests) == 1
+    assert auth_service.pairing_attempts[trusted_source] == 1
+
+    connected = await auth_service.connect_pairing(first_code)
+    entries, _ = await auth_service.list_pending_pairings()
+    assert connected is not None
+    assert connected["pairing_session_id"] == pairing_session_id
+    assert connected["verification_code"] == verification_code
+    assert entries[0]["pairing_session_id"] == pairing_session_id
+    assert entries[0]["verification_code"] == verification_code
+
+
+@pytest.mark.asyncio
+async def test_bilateral_reconnect_supersedes_stale_request_by_stable_peer(auth_service):
+    """A new signaling session cannot leave an old approval row for the same Aurora."""
+    stable_peer_id = "stable-peer-a"
+    first_code = await auth_service.start_pairing(
+        "Aurora 1",
+        "unknown",
+        remote_peer_id=stable_peer_id,
+        remote_node_name="Aurora 1",
+        room_name="private-mesh-room",
+        pairing_session_id="a" * 64,
+        verification_code="11112222",
+        trusted_rate_limit_key="webrtc:old-signaling-session",
+    )
+    assert first_code is not None
+
+    replacement_code = await auth_service.start_pairing(
+        "Aurora 1",
+        "unknown",
+        remote_peer_id=stable_peer_id,
+        remote_node_name="Aurora 1",
+        room_name="private-mesh-room",
+        pairing_session_id="b" * 64,
+        verification_code="33334444",
+        trusted_rate_limit_key="webrtc:new-signaling-session",
+    )
+
+    assert replacement_code is not None
+    assert replacement_code != first_code
+    assert first_code not in auth_service.pairing_requests
+    assert set(auth_service.pairing_requests) == {replacement_code}
+    assert "webrtc:old-signaling-session" not in auth_service.pairing_attempts
+    assert auth_service.pairing_attempts["webrtc:new-signaling-session"] == 1
 
 
 @pytest.mark.asyncio

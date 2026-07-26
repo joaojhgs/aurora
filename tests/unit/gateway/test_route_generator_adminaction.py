@@ -41,7 +41,8 @@ from app.shared.contracts.models.config import (
     ConfigSetRequest,
     ConfigSetResponse,
 )
-from app.shared.contracts.models.gateway import MethodInfo
+from app.shared.contracts.models.db import DBMethods
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
 from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatRequest,
     OrchestratorMethods,
@@ -306,6 +307,7 @@ async def test_generated_config_set_audits_admin_action_before_forwarding(
     assert details["affected_resources"] == ["key:services.gateway.enabled"]
     assert forward_call.args[0] == ConfigMethods.SET
     assert forward_call.args[1] == payload
+    assert forward_call.kwargs["identity_source"] == "gateway_admin_action"
 
 
 @pytest.mark.asyncio
@@ -462,6 +464,168 @@ async def test_generated_handler_uses_updated_bus_for_mesh_selector_route():
     mesh_bus.request.assert_awaited_once()
     assert mesh_bus.request.await_args.args[0] == OrchestratorMethods.EXTERNAL_USER_INPUT
     assert mesh_bus.request.await_args.args[1]["mesh_selector"] == {"peer_id": "assistant-peer"}
+
+
+@pytest.mark.asyncio
+async def test_dispatched_assistant_turn_is_persisted_only_on_origin_bus():
+    """A remote answer is committed to the caller's session after dispatch returns."""
+
+    bus = AsyncMock()
+
+    async def request(topic, payload, **_kwargs):
+        if topic == OrchestratorMethods.EXTERNAL_USER_INPUT:
+            return QueryResult(
+                ok=True,
+                data=OrchestratorResponse(
+                    text="Remote answer",
+                    session_id="origin-session",
+                    request_id="request-1",
+                    metadata={
+                        "provider": "openai",
+                        "provider_label": "OpenAI",
+                        "model": "gpt-4o",
+                    },
+                ),
+            )
+        if topic == GatewayMethods.GET_MESH_STATUS:
+            return QueryResult(
+                ok=True,
+                data={
+                    "peers": [
+                        {
+                            "peer_id": "assistant-peer",
+                            "node_name": "studio",
+                        }
+                    ]
+                },
+            )
+        if topic == DBMethods.ENSURE_SESSION:
+            return QueryResult(ok=True, data={"session": {"id": "origin-session"}})
+        if topic == DBMethods.SAVE_MESSAGE:
+            return QueryResult(ok=True, data={"message_id": 0, "success": True})
+        raise AssertionError(f"unexpected bus request: {topic}")
+
+    bus.request = AsyncMock(side_effect=request)
+    method_info = MethodInfo(
+        name="ExternalUserInput",
+        summary="Process user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    response = await handler(
+        {
+            "text": "Remote question",
+            "session_id": "origin-session",
+            "request_id": "request-1",
+            "dispatch_selector": {"peer_id": "assistant-peer"},
+        },
+        principal_id="principal-1",
+        effective_perms=["Orchestrator.use", "Orchestrator.RemoteDispatch"],
+        identity_source="gateway_http",
+    )
+
+    assert response["text"] == "Remote answer"
+    assert [call.args[0] for call in bus.request.await_args_list] == [
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        GatewayMethods.GET_MESH_STATUS,
+        DBMethods.ENSURE_SESSION,
+        DBMethods.SAVE_MESSAGE,
+        DBMethods.SAVE_MESSAGE,
+    ]
+    ensure_session = bus.request.await_args_list[2].args[1]
+    user_message = bus.request.await_args_list[3].args[1]
+    assistant_message = bus.request.await_args_list[4].args[1]
+    assert ensure_session.principal_id == "principal-1"
+    assert ensure_session.session_id == "origin-session"
+    assert (user_message.role, user_message.content) == ("user", "Remote question")
+    assert (assistant_message.role, assistant_message.content) == (
+        "assistant",
+        "Remote answer",
+    )
+    assert user_message.principal_id == assistant_message.principal_id == "principal-1"
+    assert (
+        user_message.metadata
+        == assistant_message.metadata
+        == {
+            "source_type": "Text",
+            "execution": "remote_dispatch",
+            "dispatch_selector": {"peer_id": "assistant-peer"},
+            "execution_peer_id": "assistant-peer",
+            "execution_peer_name": "studio",
+            "provider": "openai",
+            "provider_label": "OpenAI",
+            "model": "gpt-4o",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_persistence_failure_does_not_discard_remote_answer():
+    """A DB outage is logged but cannot turn a successful dispatch into HTTP failure."""
+
+    bus = AsyncMock()
+
+    async def request(topic, _payload, **_kwargs):
+        if topic == OrchestratorMethods.EXTERNAL_USER_INPUT:
+            return QueryResult(
+                ok=True,
+                data=OrchestratorResponse(
+                    text="Still return this",
+                    session_id="origin-session",
+                ),
+            )
+        if topic == DBMethods.ENSURE_SESSION:
+            return QueryResult(ok=False, error="db unavailable")
+        raise AssertionError(f"unexpected bus request: {topic}")
+
+    bus.request = AsyncMock(side_effect=request)
+    method_info = MethodInfo(
+        name="ExternalUserInput",
+        summary="Process user input",
+        bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+        exposure="external",
+        method_type="use",
+        required_perms=["Orchestrator.use"],
+        input_model="OrchestratorProcessRequest",
+        output_model="OrchestratorResponse",
+        input_schema=OrchestratorProcessRequest.model_json_schema(),
+        output_schema=OrchestratorResponse.model_json_schema(),
+    )
+    generator = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("Orchestrator", method_info),
+    )
+    handler = generator._create_handler("Orchestrator", method_info)
+
+    response = await handler(
+        {
+            "text": "Remote question",
+            "session_id": "origin-session",
+            "dispatch_selector": {"peer_id": "assistant-peer"},
+        },
+        principal_id="principal-1",
+        effective_perms=["Orchestrator.use", "Orchestrator.RemoteDispatch"],
+        identity_source="gateway_http",
+    )
+
+    assert response["text"] == "Still return this"
+    assert [call.args[0] for call in bus.request.await_args_list] == [
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        GatewayMethods.GET_MESH_STATUS,
+        DBMethods.ENSURE_SESSION,
+    ]
 
 
 @pytest.mark.asyncio

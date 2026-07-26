@@ -12,9 +12,16 @@ import asyncio
 import contextlib
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.services.gateway.mesh.provider_export import (
+    NormalizedMethodSnapshot,
+    NormalizedServiceSnapshot,
+    RegistrySnapshot,
+    canonical_digest,
+)
 from app.shared.contracts.models.gateway import (
     GatewayMethods,
     MethodInfo,
@@ -41,6 +48,9 @@ def _announcement_contract_fingerprint(announcement: ServiceAnnouncement) -> dic
         "module": announcement.module,
         "version": announcement.version,
         "capabilities": tuple(sorted(announcement.capabilities)),
+        "callable_features": tuple(
+            sorted(feature.model_dump_json() for feature in announcement.callable_features)
+        ),
         "methods": tuple(
             sorted(
                 (
@@ -50,7 +60,16 @@ def _announcement_contract_fingerprint(announcement: ServiceAnnouncement) -> dic
                     method.input_model,
                     method.output_model,
                     tuple(sorted(method.required_perms)),
+                    tuple(sorted(method.callable_feature_ids)),
+                    tuple(sorted(feature.feature_id for feature in method.callable_features)),
+                    method.public_infrastructure,
                     method.method_type,
+                    canonical_digest(method.input_schema)
+                    if method.input_schema is not None
+                    else None,
+                    canonical_digest(method.output_schema)
+                    if method.output_schema is not None
+                    else None,
                 )
                 for method in announcement.methods
             )
@@ -97,6 +116,9 @@ class RegistryAggregator:
 
         # Callback for registry changes (used by route generator)
         self._on_change_callbacks: list[Callable] = []
+        self._registry_revision = 0
+        self._registry_content_digest = canonical_digest(())
+        self._registry_snapshot = RegistrySnapshot(revision="0", services=())
 
     async def start(self) -> None:
         """Start the registry aggregator.
@@ -157,54 +179,66 @@ class RegistryAggregator:
     async def _load_from_local_registry(self) -> None:
         """Load services from the local in-process registry (thread mode only)."""
         try:
-            from app.shared.contracts.registry import list_modules
+            from app.shared.contracts.mesh_surface import callable_method_advertisable
+            from app.shared.contracts.registry import list_modules, validate_canonical_taxonomy
+
+            validate_canonical_taxonomy()
 
             modules = list_modules()
+            loaded_at = datetime.utcnow()
+            loaded_services: dict[str, ServiceAnnouncement] = {}
 
-            async with self._lock:
-                for module_name, module_contract in modules.items():
-                    # Convert to ServiceAnnouncement with schemas
-                    methods = []
-                    for m in module_contract.methods:
-                        # Extract JSON schemas from Pydantic models
-                        input_schema = None
-                        output_schema = None
+            for module_name, module_contract in modules.items():
+                methods = []
+                for m in module_contract.methods:
+                    if not callable_method_advertisable(m):
+                        continue
+                    input_schema = None
+                    output_schema = None
 
-                        if m.input_model is not None:
-                            with contextlib.suppress(Exception):
-                                input_schema = m.input_model.model_json_schema()
+                    if m.input_model is not None:
+                        with contextlib.suppress(Exception):
+                            input_schema = m.input_model.model_json_schema()
 
-                        if m.output_model is not None:
-                            with contextlib.suppress(Exception):
-                                output_schema = m.output_model.model_json_schema()
+                    if m.output_model is not None:
+                        with contextlib.suppress(Exception):
+                            output_schema = m.output_model.model_json_schema()
 
-                        methods.append(
-                            MethodInfo(
-                                name=m.name,
-                                summary=m.summary,
-                                bus_topic=m.bus_topic,
-                                exposure=m.exposure,
-                                input_model=m.input_model.__name__ if m.input_model else None,
-                                output_model=m.output_model.__name__ if m.output_model else None,
-                                required_perms=m.required_perms,
-                                method_type=m.method_type,
-                                input_schema=input_schema,
-                                output_schema=output_schema,
-                            )
+                    methods.append(
+                        MethodInfo(
+                            name=m.name,
+                            summary=m.summary,
+                            bus_topic=m.bus_topic,
+                            exposure=m.exposure,
+                            input_model=m.input_model.__name__ if m.input_model else None,
+                            output_model=m.output_model.__name__ if m.output_model else None,
+                            required_perms=m.required_perms,
+                            callable_feature_ids=m.callable_feature_ids,
+                            callable_features=m.callable_features,
+                            public_infrastructure=m.public_infrastructure,
+                            method_type=m.method_type,
+                            input_schema=input_schema,
+                            output_schema=output_schema,
                         )
-
-                    announcement = ServiceAnnouncement(
-                        module=module_name,
-                        version=module_contract.version,
-                        summary=module_contract.summary,
-                        capabilities=module_contract.capabilities,
-                        methods=methods,
                     )
 
-                    self._services[module_name] = announcement
-                    self._last_seen[module_name] = datetime.utcnow()
+                loaded_services[module_name] = ServiceAnnouncement(
+                    module=module_name,
+                    version=module_contract.version,
+                    summary=module_contract.summary,
+                    capabilities=module_contract.capabilities,
+                    callable_features=module_contract.callable_features,
+                    methods=methods,
+                )
+
+            async with self._lock:
+                self._services = loaded_services
+                self._last_seen = dict.fromkeys(loaded_services, loaded_at)
+                changed = self._refresh_registry_snapshot_locked()
 
             log_info(f"Loaded {len(self._services)} services from local registry")
+            if changed:
+                await self._notify_change()
 
         except Exception as e:
             log_error(f"Error loading from local registry: {e}")
@@ -222,14 +256,25 @@ class RegistryAggregator:
                 return
 
             module_name = announcement.module
+            announcement = self._validated_announcement(announcement)
 
             async with self._lock:
                 old_announcement = self._services.get(module_name)
-                self._services[module_name] = announcement
+                candidate_services = dict(self._services)
+                candidate_services[module_name] = announcement
+                (
+                    changed,
+                    next_revision,
+                    next_digest,
+                    next_snapshot,
+                ) = self._build_registry_snapshot_state(candidate_services)
+
+                self._services = candidate_services
+                self._last_seen = dict(self._last_seen)
                 self._last_seen[module_name] = datetime.utcnow()
-                changed = old_announcement is None or _announcement_contract_fingerprint(
-                    old_announcement
-                ) != _announcement_contract_fingerprint(announcement)
+                self._registry_revision = next_revision
+                self._registry_content_digest = next_digest
+                self._registry_snapshot = next_snapshot
 
             # Log and notify
             if old_announcement is None:
@@ -260,14 +305,17 @@ class RegistryAggregator:
 
             module_name = departure.module
 
+            changed = False
             async with self._lock:
                 if module_name in self._services:
                     del self._services[module_name]
+                    changed = self._refresh_registry_snapshot_locked()
                 if module_name in self._last_seen:
                     del self._last_seen[module_name]
 
-            log_info(f"Service departed: {module_name} (reason: {departure.reason})")
-            await self._notify_change()
+            if changed:
+                log_info(f"Service departed: {module_name} (reason: {departure.reason})")
+                await self._notify_change()
 
         except Exception as e:
             log_error(f"Error handling service departure: {e}")
@@ -317,6 +365,8 @@ class RegistryAggregator:
                     expired.append(module_name)
                     self._last_seen.pop(module_name, None)
                     self._services.pop(module_name, None)
+            if expired:
+                self._refresh_registry_snapshot_locked()
 
         if expired:
             log_warning(f"Expired stale service registrations: {', '.join(sorted(expired))}")
@@ -356,6 +406,7 @@ class RegistryAggregator:
                         version=announcement.version,
                         summary=announcement.summary,
                         capabilities=announcement.capabilities,
+                        callable_features=announcement.callable_features,
                         method_count=len(announcement.methods),
                         last_seen=last_seen.isoformat(),
                         status=status,
@@ -413,6 +464,7 @@ class RegistryAggregator:
                     version=announcement.version,
                     summary=announcement.summary,
                     capabilities=announcement.capabilities,
+                    callable_features=announcement.callable_features,
                     methods=announcement.methods,
                 )
                 modules_data.append(module_info)
@@ -439,7 +491,6 @@ class RegistryAggregator:
         """
         if self._mode == "threads":
             await self._load_from_local_registry()
-            await self._notify_change()
 
     def is_service_available(self, module_name: str) -> bool:
         """Check if a service is available (non-blocking).
@@ -467,10 +518,149 @@ class RegistryAggregator:
         return age < self._heartbeat_timeout * 2
 
     def snapshot_services(self) -> dict[str, ServiceAnnouncement]:
-        """Return a shallow copy of the internal services dict.
+        """Return a compatibility snapshot of service announcements.
 
         This is safe to call from synchronous code (e.g. manifest
         generation).  The returned dict is a snapshot — mutations to it
         won't affect the aggregator.
         """
-        return dict(self._services)
+        return {name: service.model_copy(deep=True) for name, service in self._services.items()}
+
+    def snapshot_registry(self) -> RegistrySnapshot:
+        """Return the immutable canonical provider-export registry snapshot."""
+
+        return self._registry_snapshot
+
+    @property
+    def registry_snapshot(self) -> RegistrySnapshot:
+        """Property alias for synchronous readers that prefer attribute syntax."""
+
+        return self.snapshot_registry()
+
+    def _refresh_registry_snapshot_locked(self) -> bool:
+        """Rebuild the immutable canonical snapshot after a real contract mutation."""
+
+        changed, revision, content_digest, snapshot = self._build_registry_snapshot_state(
+            self._services
+        )
+        if not changed:
+            return False
+        self._registry_revision = revision
+        self._registry_content_digest = content_digest
+        self._registry_snapshot = snapshot
+        return True
+
+    def _build_registry_snapshot_state(
+        self,
+        services_by_module: dict[str, ServiceAnnouncement],
+    ) -> tuple[bool, int, str, RegistrySnapshot]:
+        """Build canonical registry state without mutating live aggregator state."""
+
+        services = tuple(
+            _normalized_service_snapshot(module_name, announcement)
+            for module_name, announcement in sorted(services_by_module.items())
+        )
+        content_digest = canonical_digest(tuple(service.to_canonical() for service in services))
+        if content_digest == self._registry_content_digest:
+            return (
+                False,
+                self._registry_revision,
+                self._registry_content_digest,
+                self._registry_snapshot,
+            )
+        revision = self._registry_revision + 1
+        snapshot = RegistrySnapshot(
+            revision=str(revision),
+            services=services,
+        )
+        return True, revision, content_digest, snapshot
+
+    @staticmethod
+    def _validated_announcement(announcement: ServiceAnnouncement) -> ServiceAnnouncement:
+        """Return an announcement after fail-closed callable feature validation."""
+
+        from app.shared.contracts.mesh_surface import (
+            MESH_CAPABLE_MODULES,
+            feature_contracts_for_module,
+            validate_callable_method_surface,
+        )
+        from app.shared.contracts.registry import validate_canonical_taxonomy
+
+        validate_canonical_taxonomy()
+        violations: list[str] = []
+        if announcement.module in MESH_CAPABLE_MODULES:
+            expected_features = [
+                feature.model_dump(mode="json")
+                for feature in feature_contracts_for_module(announcement.module)
+            ]
+            actual_features = [
+                feature.model_dump(mode="json") for feature in announcement.callable_features
+            ]
+            if actual_features != expected_features:
+                violations.append(
+                    f"{announcement.module} callable features mismatch: "
+                    f"expected={expected_features} actual={actual_features}"
+                )
+        for method in announcement.methods:
+            violations.extend(validate_callable_method_surface(method, module=announcement.module))
+        if violations:
+            raise ValueError(
+                f"Invalid service announcement for {announcement.module}: " + "; ".join(violations)
+            )
+        return announcement
+
+
+def _normalized_service_snapshot(
+    module_name: str,
+    announcement: ServiceAnnouncement,
+) -> NormalizedServiceSnapshot:
+    methods = tuple(
+        _normalized_method_snapshot(module_name, method)
+        for method in sorted(
+            announcement.methods, key=lambda item: _method_topic(module_name, item)
+        )
+    )
+    return NormalizedServiceSnapshot(
+        service_id=module_name,
+        version=announcement.version,
+        methods=methods,
+        tags=tuple(announcement.capabilities),
+        capacity=None,
+        feature_members=_feature_members(announcement),
+    )
+
+
+def _normalized_method_snapshot(
+    module_name: str,
+    method: MethodInfo,
+) -> NormalizedMethodSnapshot:
+    return NormalizedMethodSnapshot(
+        topic=_method_topic(module_name, method),
+        exposure=method.exposure,
+        method_type=method.method_type,
+        required_permissions=None
+        if getattr(method, "required_perms", None) is None
+        else tuple(str(permission) for permission in method.required_perms),
+        input_model=method.input_model,
+        output_model=method.output_model,
+        input_schema=method.input_schema,
+        output_schema=method.output_schema,
+        feature_ids=tuple(str(feature_id) for feature_id in method.callable_feature_ids),
+        public_infrastructure=bool(method.public_infrastructure),
+    )
+
+
+def _method_topic(module_name: str, method: MethodInfo) -> str:
+    return str(method.bus_topic or f"{module_name}.{method.name}")
+
+
+def _feature_members(announcement: ServiceAnnouncement) -> MappingProxyType[str, tuple[str, ...]]:
+    members: dict[str, tuple[str, ...]] = {}
+    known_topics = {_method_topic(announcement.module, method) for method in announcement.methods}
+    for feature in announcement.callable_features:
+        topics = tuple(
+            sorted(str(topic) for topic in feature.method_ids if str(topic) in known_topics)
+        )
+        if topics:
+            members[str(feature.feature_id)] = topics
+    return MappingProxyType(members)

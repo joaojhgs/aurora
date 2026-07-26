@@ -168,6 +168,73 @@ async def test_share_false_core_search_tool_stays_discoverable_but_execution_is_
     tool.ainvoke.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    ("share", "approval_mode", "expected_allowed", "expected_error"),
+    [
+        pytest.param(
+            False,
+            "approve_all_for_session",
+            False,
+            "tool_not_shared",
+            id="share-deny-wins-over-approval",
+        ),
+        pytest.param(
+            True,
+            "deny_all",
+            False,
+            "policy_denied",
+            id="approval-deny-wins-over-share",
+        ),
+        pytest.param(
+            True,
+            "approve_all_for_session",
+            True,
+            None,
+            id="both-layers-allow",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_legacy_rule_couples_share_and_approval_in_one_execution_decision(
+    tooling_service,
+    share,
+    approval_mode,
+    expected_allowed,
+    expected_error,
+):
+    """Lock the current combined sharing/approval rule semantics before they split."""
+
+    tool = _tool()
+    _install_tool(tooling_service, tool)
+    await _set_policy(
+        tooling_service,
+        rule=ToolingSharingPolicyRule(
+            rule_id="combined-rule",
+            tool_name="safe_tool",
+            share=share,
+            approval_mode=approval_mode,
+        ),
+    )
+
+    prepared = await tooling_service._on_prepare_execution(
+        ToolingPrepareExecutionRequest(tool_name="safe_tool", arguments={})
+    )
+    executed = await tooling_service._on_execute_tool(
+        ToolingExecuteToolRequest(tool_name="safe_tool", arguments={})
+    )
+
+    assert prepared.policy_decision.policy_rule_id == "combined-rule"
+    assert prepared.policy_decision.share is share
+    assert prepared.policy_decision.approval_mode == approval_mode
+    assert prepared.policy_decision.allowed is expected_allowed
+    assert executed.ok is expected_allowed
+    assert executed.error_code == expected_error
+    if expected_allowed:
+        tool.ainvoke.assert_awaited_once()
+    else:
+        tool.ainvoke.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_explicitly_blocked_tool_is_hidden_from_discovery(tooling_service):
     """Only explicit trust_tier=blocked removes a tool from LLM discovery."""
@@ -244,7 +311,9 @@ async def test_trusted_core_duckduckgo_search_auto_approves_and_fails_normally(
     assert executed.error_code == "tool_execution_failed"
     assert "search backend unconfigured" in (executed.error or "")
     tool.ainvoke.assert_awaited_once()
-    assert all(call.args[0] != ToolingMethods.REQUEST_APPROVAL for call in mock_bus.request.await_args_list)
+    assert all(
+        call.args[0] != ToolingMethods.REQUEST_APPROVAL for call in mock_bus.request.await_args_list
+    )
 
 
 @pytest.mark.asyncio
@@ -275,8 +344,7 @@ async def test_tooling_audit_uses_short_bounded_store_audit_timeout(tooling_serv
     ]
     assert len(audit_calls) >= 2
     assert all(
-        call.kwargs["timeout"] == TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS
-        for call in audit_calls[-2:]
+        call.kwargs["timeout"] == TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS for call in audit_calls[-2:]
     )
     assert TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS <= 0.5
 

@@ -9,9 +9,13 @@ This service:
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import json
 from typing import Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.messaging import Envelope
 from app.services.config.config_manager import ConfigManager
 from app.services.config.messages import (
     ConfigChangedEvent,
@@ -26,8 +30,11 @@ from app.services.config.messages import (
     ValidateConfigQuery,
     ValidateConfigResponse,
 )
+from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.config import (
+    ConfigCommitChangeSetRequest,
+    ConfigCommitChangeSetResponse,
     ConfigDiffPreviewRequest,
     ConfigDiffPreviewResponse,
     ConfigMethods,
@@ -56,12 +63,18 @@ class ConfigService(BaseService):
             capabilities=["config_management", "plugin_management"],
         )
         self.config_manager = ConfigManager()
+        self._mesh_policy_rbac_task: asyncio.Task[dict[str, Any] | None] | None = None
         self._setup_config_observers()
 
     def _setup_config_observers(self) -> None:
         """Set up config observers to publish change events."""
 
-        def on_config_change(key_path: str, old_value: Any, new_value: Any) -> None:
+        def on_config_change(
+            key_path: str,
+            old_value: Any,
+            new_value: Any,
+            metadata: dict[str, Any] | None = None,
+        ) -> None:
             """Handle config change and publish event."""
             # Determine affected sections
             affected_sections = []
@@ -75,11 +88,17 @@ class ConfigService(BaseService):
 
             # Publish config change event
             try:
+                safe_old_value = self.config_manager._redact_path_value(key_path, old_value)
+                safe_new_value = self.config_manager._redact_path_value(key_path, new_value)
                 event = ConfigChangedEvent(
                     affected_sections=affected_sections,
                     key_path=key_path,
-                    old_value=old_value,
-                    new_value=new_value,
+                    old_value=safe_old_value,
+                    new_value=safe_new_value,
+                    transaction_id=(metadata or {}).get("transaction_id"),
+                    config_revision=(metadata or {}).get("config_revision"),
+                    changed_paths=(metadata or {}).get("changed_paths"),
+                    actor=(metadata or {}).get("actor"),
                 )
                 # Use asyncio to publish event
                 import asyncio
@@ -102,10 +121,29 @@ class ConfigService(BaseService):
     async def _publish_config_change(self, event: ConfigChangedEvent) -> None:
         """Publish config change event to bus."""
         try:
-            await self.bus.publish(ConfigMethods.UPDATED, event, event=True, mesh=True)
+            await self.bus.publish(ConfigMethods.UPDATED, event, event=True, mesh=False)
             log_debug(f"Published config change event: {event.key_path}")
         except Exception as e:
             log_error(f"Failed to publish config change event: {e}")
+
+    async def _audit_mesh_config_event(
+        self, event: str, *, actor: str | None, details: dict[str, Any]
+    ) -> None:
+        """Persist value-free mesh config audit metadata without affecting commits."""
+
+        try:
+            await self.bus.request(
+                AuthMethods.STORE_AUDIT_EVENT,
+                StoreAuditEventRequest(
+                    event=event,
+                    principal_id=actor,
+                    details=json.dumps({**details, "secrets_redacted": True}, sort_keys=True),
+                ),
+                timeout=5.0,
+                origin="internal",
+            )
+        except Exception as exc:
+            log_error(f"Failed to audit {event}: {type(exc).__name__}")
 
     @method_contract(
         method_id=ConfigMethods.GET,
@@ -115,7 +153,11 @@ class ConfigService(BaseService):
         exposure="both",
         method_type="use",
     )
-    async def _handle_get_config(self, query: GetConfigQuery) -> GetConfigResponse:
+    async def _handle_get_config(
+        self,
+        query: GetConfigQuery,
+        envelope: Envelope | None = None,
+    ) -> GetConfigResponse:
         """Handle GetConfig query.
 
         Args:
@@ -135,6 +177,22 @@ class ConfigService(BaseService):
             else:
                 config = self.config_manager.get_config_dict()
 
+            identity_source = getattr(envelope, "identity_source", None)
+            external_read = getattr(
+                envelope, "origin", "internal"
+            ) == "external" or identity_source in {
+                "gateway_http",
+                "webrtc_rpc",
+                "mesh_peer",
+                "remote_peer",
+                "token",
+            }
+            if external_read:
+                config = self.config_manager.redact_external_config(
+                    config,
+                    root_path=section or "",
+                )
+
             response = GetConfigResponse(config=config)
             return response
         except Exception as e:
@@ -150,10 +208,18 @@ class ConfigService(BaseService):
         exposure="both",
         method_type="manage",
     )
-    async def _handle_update_config(self, cmd: UpdateConfigCommand) -> UpdateConfigResponse:
+    async def _handle_update_config(
+        self,
+        cmd: UpdateConfigCommand,
+        envelope: Envelope | None = None,
+    ) -> UpdateConfigResponse:
         """Handle UpdateConfig command."""
         try:
-            metadata = self.config_manager.set(cmd.key_path, cmd.value)
+            metadata = self.config_manager.set(
+                cmd.key_path,
+                cmd.value,
+                actor=self._actor_from_envelope(envelope),
+            )
             log_info(f"Updated config: {cmd.key_path}")
             return UpdateConfigResponse(success=True, **metadata)
         except Exception as e:
@@ -203,11 +269,82 @@ class ConfigService(BaseService):
         required_perms=[ConfigMethods.PREVIEW_DIFF],
     )
     async def _handle_preview_diff(
-        self, query: ConfigDiffPreviewRequest
+        self, query: ConfigDiffPreviewRequest, envelope: Envelope | None = None
     ) -> ConfigDiffPreviewResponse:
         """Handle dry-run config diff preview."""
-        result = self.config_manager.preview_diff([change.model_dump() for change in query.changes])
+        try:
+            result = self.config_manager.preview_diff(
+                [change.model_dump() for change in query.changes],
+                actor=self._actor_from_envelope(envelope),
+            )
+        except ValueError as exc:
+            result = {
+                "valid": False,
+                "diffs": [],
+                "errors": [str(exc)],
+                "secrets_redacted": True,
+                "base_revision": self.config_manager.config_revision,
+                "preview_token": None,
+                "changed_paths": [],
+            }
         return ConfigDiffPreviewResponse(**result)
+
+    @method_contract(
+        method_id=ConfigMethods.COMMIT_CHANGE_SET,
+        summary="Commit a validated config change set atomically",
+        input_model=ConfigCommitChangeSetRequest,
+        output_model=ConfigCommitChangeSetResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=[ConfigMethods.COMMIT_CHANGE_SET],
+    )
+    async def _handle_commit_change_set(
+        self,
+        cmd: ConfigCommitChangeSetRequest,
+        envelope: Envelope | None = None,
+    ) -> ConfigCommitChangeSetResponse:
+        """Handle atomic config change-set commit."""
+        try:
+            result = self.config_manager.commit_change_set(
+                [change.model_dump() for change in cmd.changes],
+                base_revision=cmd.base_revision,
+                preview_token=cmd.preview_token,
+                actor=self._actor_from_envelope(envelope),
+            )
+            actor = self._actor_from_envelope(envelope)
+            changed_paths = sorted(result.get("changed_paths", []))
+            mesh_paths = [path for path in changed_paths if ".mesh_" in path]
+            if mesh_paths:
+                await self._audit_mesh_config_event(
+                    "mesh.config.policy_committed",
+                    actor=actor,
+                    details={
+                        "config_revision": result.get("revision"),
+                        "changed_paths": mesh_paths,
+                        "service_export_changed": any(".mesh_sharing" in p for p in mesh_paths),
+                        "routing_policy_changed": any(".mesh_routing" in p for p in mesh_paths),
+                    },
+                )
+            return ConfigCommitChangeSetResponse(**result)
+        except ValueError as e:
+            await self._audit_mesh_config_event(
+                "mesh.config.commit_rejected",
+                actor=self._actor_from_envelope(envelope),
+                details={
+                    "reason_code": "config_revision_conflict",
+                    "config_revision": self.config_manager.config_revision,
+                },
+            )
+            return ConfigCommitChangeSetResponse(
+                success=False,
+                error=str(e),
+                error_code="config_revision_conflict",
+                changed_paths=[],
+                revision=self.config_manager.config_revision,
+            )
+        except Exception as e:
+            log_error(f"Error committing config change set: {e}")
+            return ConfigCommitChangeSetResponse(success=False, error=str(e))
 
     @method_contract(
         method_id=ConfigMethods.GET_VERSION_HISTORY,
@@ -237,10 +374,17 @@ class ConfigService(BaseService):
         method_type="manage",
         required_perms=[ConfigMethods.ROLLBACK],
     )
-    async def _handle_rollback(self, cmd: ConfigRollbackRequest) -> ConfigRollbackResponse:
+    async def _handle_rollback(
+        self,
+        cmd: ConfigRollbackRequest,
+        envelope: Envelope | None = None,
+    ) -> ConfigRollbackResponse:
         """Handle config rollback command."""
         try:
-            result = self.config_manager.rollback(cmd.version_id)
+            result = self.config_manager.rollback(
+                cmd.version_id,
+                actor=self._actor_from_envelope(envelope),
+            )
             log_info(f"Rolled back config version: {cmd.version_id}")
             return ConfigRollbackResponse(**result)
         except Exception as e:
@@ -329,11 +473,152 @@ class ConfigService(BaseService):
         # Note: Subscriptions are now handled automatically by BaseService via @method_contract
 
         self._set_started(True)
+        if self.config_manager.mesh_policy_migration_audit:
+            await self._audit_mesh_config_event(
+                "mesh.config.migrated",
+                actor="startup",
+                details=self.config_manager.mesh_policy_migration_audit,
+            )
+        report = self.config_manager.mesh_policy_rbac_report
+        if isinstance(report, dict):
+            await self._audit_mesh_config_event(
+                "mesh.config.rbac_review",
+                actor="startup",
+                details={
+                    "release_blocking": bool(report.get("release_blocking")),
+                    "reason": report.get("reason"),
+                    "affected_service_count": sum(
+                        1
+                        for row in report.get("services", [])
+                        if row.get("severity") == "release_blocking"
+                    ),
+                },
+            )
+        self._mesh_policy_rbac_task = asyncio.create_task(self.refresh_mesh_policy_rbac_preflight())
         log_info("ConfigService started")
+
+    async def refresh_mesh_policy_rbac_preflight(
+        self,
+        *,
+        max_attempts: int = 5,
+        backoff_seconds: float = 0.2,
+    ) -> dict[str, Any] | None:
+        """Refresh the migration RBAC preflight report if Auth is reachable."""
+        last_report = self.config_manager.mesh_policy_rbac_report
+        for attempt in range(1, max_attempts + 1):
+            try:
+                report = await self._refresh_mesh_policy_rbac_preflight_once()
+                if report is not None:
+                    return report
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log_error(
+                    "Mesh policy RBAC preflight refresh attempt %s/%s failed: %s",
+                    attempt,
+                    max_attempts,
+                    e,
+                )
+            if attempt < max_attempts:
+                await asyncio.sleep(backoff_seconds)
+        affected_services = [
+            row["service"]
+            for row in (last_report or {}).get("services", [])
+            if row.get("severity") == "release_blocking"
+        ]
+        log_error(
+            "Mesh policy RBAC preflight refresh exhausted: affected_service_count=%s affected_services=%s report_path=%s release_blocking=%s reason=%s",
+            len(affected_services),
+            ",".join(sorted(affected_services)),
+            self.config_manager.mesh_policy_rbac_report_path,
+            (last_report or {}).get("release_blocking"),
+            (last_report or {}).get("reason"),
+        )
+        return last_report
+
+    async def _refresh_mesh_policy_rbac_preflight_once(self) -> dict[str, Any] | None:
+        """Attempt one Auth-backed RBAC preflight refresh."""
+        try:
+            from app.services.config.mesh_policy_migration import (
+                build_rbac_preflight_report,
+                persist_rbac_preflight_report,
+            )
+            from app.shared.contracts.models.auth import AuthMethods
+            from app.shared.contracts.models.mesh import MeshPeerListRequest
+
+            result = await self.bus.request(
+                AuthMethods.MESH_LIST_PEERS,
+                MeshPeerListRequest(include_disconnected=True),
+                timeout=5.0,
+            )
+            if not getattr(result, "ok", False):
+                log_error(
+                    "Mesh policy RBAC preflight Auth query failed: report_path=%s",
+                    self.config_manager.mesh_policy_rbac_report_path,
+                )
+                return None
+            data = getattr(result, "data", None)
+            peers = getattr(data, "peers", None)
+            if peers is None and isinstance(data, dict):
+                peers = data.get("peers")
+            report = build_rbac_preflight_report(
+                self.config_manager.get_config_dict(),
+                peers=peers or [],
+                inventory_complete=True,
+                legacy_allowlist_evidence=(
+                    self.config_manager.mesh_policy_legacy_allowlist_evidence
+                ),
+            )
+            self.config_manager.mesh_policy_rbac_report = report
+            self.config_manager.mesh_policy_rbac_report_path = str(
+                persist_rbac_preflight_report(self.config_manager.config_file, report)
+            )
+            evidence = report.get("legacy_allowlist_evidence")
+            if isinstance(evidence, dict):
+                self.config_manager.mesh_policy_legacy_allowlist_evidence = evidence
+            affected_services = [
+                row["service"]
+                for row in report.get("services", [])
+                if row.get("severity") == "release_blocking"
+            ]
+            if report.get("release_blocking"):
+                log_error(
+                    "Mesh policy RBAC preflight has release-blocking findings: affected_service_count=%s affected_services=%s report_path=%s reason=%s",
+                    len(affected_services),
+                    ",".join(sorted(affected_services)),
+                    self.config_manager.mesh_policy_rbac_report_path,
+                    report.get("reason"),
+                )
+            else:
+                log_info(
+                    "Mesh policy RBAC preflight refreshed: affected_service_count=%s affected_services=%s report_path=%s release_blocking=%s reason=%s",
+                    len(affected_services),
+                    ",".join(sorted(affected_services)),
+                    self.config_manager.mesh_policy_rbac_report_path,
+                    report.get("release_blocking"),
+                    report.get("reason"),
+                )
+            return report
+        except Exception as e:
+            log_error(f"Mesh policy RBAC preflight refresh failed: {e}")
+            raise
+
+    def _actor_from_envelope(self, envelope: Envelope | None) -> str:
+        if envelope is None:
+            return "internal"
+        for attr in ("principal_id", "caller_peer_id", "identity_source"):
+            value = getattr(envelope, attr, None)
+            if value:
+                return f"{attr}:{value}"
+        return "internal"
 
     async def on_stop(self) -> None:
         """Stop the config service."""
         log_info("Stopping ConfigService...")
+        if self._mesh_policy_rbac_task and not self._mesh_policy_rbac_task.done():
+            self._mesh_policy_rbac_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._mesh_policy_rbac_task
         self._set_started(False)
         log_info("ConfigService stopped")
 

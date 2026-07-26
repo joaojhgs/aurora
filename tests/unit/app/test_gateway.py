@@ -174,12 +174,25 @@ class TestRegistryAggregator:
 
         aggregator.on_registry_change(on_change)
         await aggregator.start()
+        # Earlier tests may leave an in-process contract registered. Startup
+        # hydration is outside this test's re-announcement assertion.
+        change_count = 0
 
         first = ServiceAnnouncement(
             module="StableService",
             version="1.0.0",
             summary="Stable service",
-            methods=[MethodInfo(name="Method1", exposure="external")],
+            methods=[
+                MethodInfo(
+                    name="Method1",
+                    exposure="external",
+                    input_schema={
+                        "type": "object",
+                        "properties": {"q": {"type": "string"}},
+                    },
+                    output_schema={"type": "object"},
+                )
+            ],
             timestamp="2026-07-04T00:00:00",
         )
         second = first.model_copy(
@@ -190,7 +203,10 @@ class TestRegistryAggregator:
                     MethodInfo(
                         name="Method1",
                         exposure="external",
-                        input_schema={"type": "object", "properties": {"q": {"type": "string"}}},
+                        input_schema={
+                            "properties": {"q": {"type": "string"}},
+                            "type": "object",
+                        },
                         output_schema={"type": "object"},
                     )
                 ],
@@ -299,6 +315,7 @@ class TestRegistryAggregator:
                     "module": "Auth",
                     "bus_topic": method_id,
                     "exposure": "both",
+                    "public_infrastructure": True,
                     "summary": f"{method_name} method",
                     "input_model": _Dummy,
                     "output_model": None,

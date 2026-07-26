@@ -770,6 +770,8 @@ class TranscriptionService(BaseService):
         output_model=EmptyOutput,
         exposure="both",
         method_type="use",
+        required_perms=[TranscriptionMethods.PROCESS_AUDIO],
+        callable_feature_ids=["audio_transcription"],
     )
     async def _on_external_audio(self, chunk: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunks from external API/WebRTC calls.
@@ -896,7 +898,7 @@ class TranscriptionService(BaseService):
                 payload=payload,
             ),
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
         )
 
@@ -1046,6 +1048,8 @@ class TranscriptionService(BaseService):
         output_model=TranscribeAudioResponse,
         exposure="both",
         method_type="use",
+        required_perms=[TranscriptionMethods.TRANSCRIBE],
+        callable_feature_ids=["audio_transcription"],
     )
     async def transcribe_audio(self, request: TranscribeAudioRequest) -> TranscribeAudioResponse:
         """Transcribe complete audio and return result immediately.

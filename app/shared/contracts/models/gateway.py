@@ -8,10 +8,14 @@ This module defines the contracts for:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
+from app.shared.contracts.mesh_compatibility import (
+    MeshCompatibilityReasonCode,
+    MeshServiceCompatibilityStatus,
+)
 from app.shared.contracts.models.aurora import (
     AuroraEventCategory,
     AuroraEventStreamEvent,
@@ -23,7 +27,11 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatRequest,
     OrchestratorInferChatResponse,
 )
-from app.shared.contracts.registry import IOModel
+from app.shared.contracts.models.tooling import (
+    ToolingGetExportCatalogRequest,
+    ToolingGetExportCatalogResponse,
+)
+from app.shared.contracts.registry import CallableFeatureContract, IOModel
 
 # =============================================================================
 # Module Identifiers
@@ -55,6 +63,7 @@ class GatewayMethods:
     GET_SERVICE_HEALTH = f"{GatewayModule.NAME}.GetServiceHealth"
     GET_DEPLOYMENT_TOPOLOGY = f"{GatewayModule.NAME}.GetDeploymentTopology"
     GET_MESH_STATUS = f"{GatewayModule.NAME}.GetMeshStatus"
+    GET_MESH_INVITE_CONFIG = f"{GatewayModule.NAME}.GetMeshInviteConfig"
     GET_CAPABILITY_GRAPH = f"{GatewayModule.NAME}.GetCapabilityGraph"
     GET_CAPABILITY_CATALOG = f"{GatewayModule.NAME}.GetCapabilityCatalog"
     EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
@@ -68,11 +77,27 @@ class GatewayMethods:
     STREAM_MESH_INFER_CHAT = f"{GatewayModule.NAME}.StreamMeshInferChat"
     CANCEL_MESH_INFER_CHAT_STREAM = f"{GatewayModule.NAME}.CancelMeshInferChatStream"
     MESH_INFER_CHAT_CHUNK = f"{GatewayModule.NAME}.MeshInferChatChunk"
+    FETCH_TOOLING_EXPORT_CATALOG_PAGE = f"{GatewayModule.NAME}.FetchToolingExportCatalogPage"
 
 
 # =============================================================================
 # Service Discovery Models
 # =============================================================================
+
+
+class GatewayFetchToolingExportCatalogPageRequest(IOModel):
+    """Trusted local proxy request; provider address never enters Tooling DTOs."""
+
+    provider_peer_id: str = Field(min_length=1, max_length=160)
+    request: ToolingGetExportCatalogRequest
+
+
+class GatewayFetchToolingExportCatalogPageResponse(IOModel):
+    """Typed proxy result retaining bounded transport failure semantics."""
+
+    ok: bool = True
+    reason_code: str | None = Field(default=None, max_length=128)
+    page: ToolingGetExportCatalogResponse | None = None
 
 
 class MethodInfo(IOModel):
@@ -85,6 +110,9 @@ class MethodInfo(IOModel):
     input_model: str | None = None
     output_model: str | None = None
     required_perms: list[str] = Field(default_factory=list)
+    callable_feature_ids: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
+    public_infrastructure: bool = False
     method_type: str = "use"
     # JSON Schema for input/output models (for OpenAPI generation)
     input_schema: dict[str, Any] | None = None
@@ -102,6 +130,7 @@ class ServiceAnnouncement(IOModel):
     version: str
     summary: str = ""
     capabilities: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     methods: list[MethodInfo] = Field(default_factory=list)
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     # Unique instance ID (for multiple instances of same service)
@@ -143,6 +172,7 @@ class ModuleRegistryInfo(IOModel):
     version: str = ""
     summary: str = ""
     capabilities: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     methods: list[MethodInfo] = Field(default_factory=list)
 
 
@@ -162,6 +192,7 @@ class ServiceInfo(IOModel):
     version: str
     summary: str = ""
     capabilities: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     method_count: int = 0
     last_seen: str = ""
     status: str = "unknown"  # "healthy", "degraded", "unhealthy", "unknown"
@@ -411,6 +442,29 @@ class MeshPeerServiceDiagnostic(IOModel):
     digest: str = ""
 
 
+class MeshRevisionDiagnostic(IOModel):
+    """Safe protocol and authority revisions for an assessed manifest."""
+
+    active_protocol: str = ""
+    active_version: str = ""
+    active_tier: str = ""
+    protocol_revision: str | None = None
+    registry_revision: str = ""
+    export_policy_revision: str = ""
+    auth_grant_revision: int | None = None
+    projection_digest: str = ""
+
+
+class MeshServiceCompatibilityDiagnostic(IOModel):
+    """Structured compatibility result keyed by a stable service identifier."""
+
+    service_id: str
+    service_label: str = ""
+    status: MeshServiceCompatibilityStatus = "unused"
+    reason_codes: list[MeshCompatibilityReasonCode] = Field(default_factory=list)
+    reason: str = ""
+
+
 class MeshPeerCompatibilityDiagnostic(IOModel):
     """Compatibility reports for a peer's manifest negotiation."""
 
@@ -420,6 +474,10 @@ class MeshPeerCompatibilityDiagnostic(IOModel):
     remote_compatible: list[str] = Field(default_factory=list)
     remote_incompatible: list[str] = Field(default_factory=list)
     remote_unused: list[str] = Field(default_factory=list)
+    local_revision: MeshRevisionDiagnostic = Field(default_factory=MeshRevisionDiagnostic)
+    remote_revision: MeshRevisionDiagnostic = Field(default_factory=MeshRevisionDiagnostic)
+    local_services: list[MeshServiceCompatibilityDiagnostic] = Field(default_factory=list)
+    remote_services: list[MeshServiceCompatibilityDiagnostic] = Field(default_factory=list)
 
 
 class MeshPeerDiagnostic(IOModel):
@@ -477,7 +535,34 @@ class MeshCompatibilityFailure(IOModel):
     peer_id: str
     module: str
     direction: str
+    reason_code: MeshCompatibilityReasonCode | Literal[""] = ""
     reason: str = ""
+
+
+class MeshServiceExportSummary(IOModel):
+    """Local provider-export state for one stable service identifier."""
+
+    service_id: str
+    service_label: str = ""
+    shared: bool = False
+    policy_revision: int = 0
+    reason_codes: list[MeshCompatibilityReasonCode] = Field(default_factory=list)
+    excluded_method_count: int = 0
+    excluded_feature_count: int = 0
+
+
+class MeshServiceRoutingSummary(IOModel):
+    """Outbound routing state for one stable service identifier."""
+
+    service_id: str
+    service_label: str = ""
+    configured: bool = False
+    prefer: str = ""
+    fallback: str = ""
+    policy_revision: int = 0
+    eligible_provider_ids: list[str] = Field(default_factory=list)
+    ineligible_provider_ids: list[str] = Field(default_factory=list)
+    reason_codes: list[MeshCompatibilityReasonCode] = Field(default_factory=list)
 
 
 class GetMeshStatusResponse(IOModel):
@@ -486,8 +571,18 @@ class GetMeshStatusResponse(IOModel):
     local: MeshLocalStatus = Field(default_factory=MeshLocalStatus)
     peers: list[MeshPeerDiagnostic] = Field(default_factory=list)
     routes: list[MeshRouteDiagnostic] = Field(default_factory=list)
+    export_summaries: list[MeshServiceExportSummary] = Field(default_factory=list)
+    routing_summaries: list[MeshServiceRoutingSummary] = Field(default_factory=list)
     compatibility_failures: list[MeshCompatibilityFailure] = Field(default_factory=list)
     secrets_redacted: bool = True
+
+
+class GetMeshInviteConfigResponse(IOModel):
+    """Admin-only signaling material required to create a mesh invite."""
+
+    app_id: str = ""
+    room: str = ""
+    room_password: str = Field(default="", repr=False)
 
 
 class WebRTCSignalingDiagnostic(IOModel):
@@ -523,6 +618,8 @@ class WebRTCPeerDiagnostic(IOModel):
     pairing_active: bool = False
     auth_timeout_pending: bool = False
     pending_pairing_task: bool = False
+    pairing_session_id: str = ""
+    verification_code: str = ""
 
 
 class WebRTCDiagnosticError(IOModel):
@@ -606,6 +703,35 @@ class SupportBundleDiagnosticItem(IOModel):
     redacted: bool = True
 
 
+class MeshRolloutPeerMetrics(IOModel):
+    """Payload-free rollout state for one stable authenticated peer."""
+
+    peer_id: str
+    manifest_revision: int = 0
+    catalog_revision: int = 0
+    export_policy_revision: int = 0
+    auth_grant_revision: int = 0
+    switch_revision: int = 0
+    projection_size: int = 0
+    last_sync_duration_ms: float | None = None
+    protocol_status: str = "unknown"
+    last_reason_code: str | None = None
+    counters: dict[str, int] = Field(default_factory=dict)
+
+
+class MeshRolloutMetricsSnapshot(IOModel):
+    """Bounded support-bundle metrics with no payload or schema content."""
+
+    counters: dict[str, int] = Field(default_factory=dict)
+    denied_by_reason: dict[str, int] = Field(default_factory=dict)
+    peers: list[MeshRolloutPeerMetrics] = Field(default_factory=list)
+    provider_mesh_tooling_enabled: bool | None = None
+    consumer_mesh_tooling_enabled: bool | None = None
+    rbac_preflight_release_blocking: bool | None = None
+    downgrade_status: str = "not_applicable"
+    secrets_redacted: bool = True
+
+
 class GatewaySupportBundleRequest(IOModel):
     """Request a redacted support bundle for diagnostics."""
 
@@ -643,6 +769,7 @@ class GatewaySupportBundleResponse(IOModel):
     recent_audit_events: list[dict[str, Any]] = Field(default_factory=list)
     native_capabilities: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
     sidecar_logs: list[SupportBundleDiagnosticItem] = Field(default_factory=list)
+    mesh_rollout: MeshRolloutMetricsSnapshot = Field(default_factory=MeshRolloutMetricsSnapshot)
     config_shape: dict[str, Any] = Field(default_factory=dict)
     correlation_ids: list[str] = Field(default_factory=list)
     audit_receipt: str | None = None
@@ -661,7 +788,8 @@ class CapabilityPolicyInfo(IOModel):
     trust_tier: str = "unknown"
     safety_class: str = "standard"
     required_perms: list[str] = Field(default_factory=list)
-    allowed_peers: list[str] | None = None
+    required_callable_feature_ids: list[str] = Field(default_factory=list)
+    allowed_provider_peer_ids: list[str] | None = None
     explicit_selector_required: bool = False
     confirmation_required: bool = False
     consent_required: bool = False
@@ -704,6 +832,8 @@ class CapabilityMethodInfo(IOModel):
     bus_topic: str | None = None
     exposure: str = "internal"
     method_type: str = "use"
+    callable_feature_ids: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     summary: str = ""
     input_model: str | None = None
     output_model: str | None = None
@@ -739,6 +869,7 @@ class CapabilityServiceInfo(IOModel):
     version: str = ""
     summary: str = ""
     capabilities: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     method_count: int = 0
     methods: list[CapabilityMethodInfo] = Field(default_factory=list)
     max_concurrent: int = 0
@@ -807,6 +938,7 @@ class CapabilityPolicyDecisionInfo(IOModel):
     """Policy facts needed by SDK/UI bindability decisions."""
 
     required_permissions: list[str] = Field(default_factory=list)
+    required_callable_feature_ids: list[str] = Field(default_factory=list)
     trust_tier: str = "unknown"
     safety_class: str = "standard"
     explicit_selector_required: bool = False
@@ -817,7 +949,7 @@ class CapabilityPolicyDecisionInfo(IOModel):
     selector_required: bool = False
     mesh_visible: bool = False
     local_only: bool = False
-    allowed_peers: list[str] | None = None
+    allowed_provider_peer_ids: list[str] | None = None
     operation_class: str | None = None
     resource_scope: str | None = None
     denial_reasons: list[str] = Field(default_factory=list)
@@ -852,6 +984,8 @@ class CapabilityActionInfo(IOModel):
     module: str
     method: str
     topic: str | None = None
+    callable_feature_ids: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     tool_id: str | None = None
     resource_id: str | None = None
     provider_id: str
@@ -934,6 +1068,8 @@ class RouteCandidateDecision(IOModel):
     selected: bool = False
     reason_code: str = ""
     reason: str = ""
+    projection_revision: str = ""
+    projection_digest: str = ""
     latency_ms: float | None = None
     active_calls: int = 0
     max_concurrent: int = 0
@@ -952,8 +1088,7 @@ class RouteExplainRequest(IOModel):
     topic: str | None = None
     module: str | None = None
     method: str | None = None
-    # Runtime value is app.shared.contracts.models.mesh.MeshAddressSelector.
-    selector: Any | None = None
+    selector: MeshAddressSelector | None = None
     include_candidates: bool = True
 
 

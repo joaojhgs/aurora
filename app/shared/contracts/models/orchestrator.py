@@ -39,6 +39,7 @@ class OrchestratorMethods:
     BENCHMARK_MODEL = f"{OrchestratorModule.NAME}.BenchmarkModel"
     INFER_CHAT = f"{OrchestratorModule.NAME}.InferChat"
     STREAM_INFER_CHAT = f"{OrchestratorModule.NAME}.StreamInferChat"
+    REMOTE_INFERENCE = f"{OrchestratorModule.NAME}.RemoteInference"
     HEALTH_CHECK = f"{OrchestratorModule.NAME}.HealthCheck"
 
 

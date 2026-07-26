@@ -566,6 +566,7 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=["Scheduler.manage"],
+        callable_feature_ids=["job_scheduling"],
     )
     async def schedule_action(
         self, request: SchedulerScheduleActionRequest, envelope: Envelope | None = None
@@ -657,6 +658,7 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.SCHEDULE],
+        callable_feature_ids=["job_scheduling"],
     )
     async def schedule_job(
         self, cmd: SchedulerScheduleJobRequest, envelope: Envelope | None = None
@@ -741,6 +743,7 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.CANCEL],
+        callable_feature_ids=["job_lifecycle"],
     )
     async def cancel_job(
         self, cmd: SchedulerCancelJobRequest, envelope: Envelope | None = None
@@ -812,6 +815,7 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.PAUSE],
+        callable_feature_ids=["job_lifecycle"],
     )
     async def pause_job(
         self, cmd: SchedulerPauseJobRequest, envelope: Envelope | None = None
@@ -877,6 +881,7 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.RESUME],
+        callable_feature_ids=["job_lifecycle"],
     )
     async def resume_job(
         self, cmd: SchedulerResumeJobRequest, envelope: Envelope | None = None
@@ -942,6 +947,7 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=[SchedulerMethods.LIST_JOBS],
+        callable_feature_ids=["job_discovery"],
     )
     async def list_jobs(
         self, query: SchedulerListJobsRequest, envelope: Envelope | None = None

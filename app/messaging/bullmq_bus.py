@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.contracts.registry import all_contracts
 
-from .bus import Envelope, Handler, QueryResult
+from .bus import Envelope, Handler, QueryResult, query_result_from_reply_payload
 
 
 class BullMQBus:
@@ -113,21 +113,31 @@ class BullMQBus:
         """Stop the message bus and cleanup resources."""
         log_info("Stopping BullMQBus...")
 
-        # Close all workers
-        for topic, worker in list(self._workers.items()):
+        async def _close_worker(topic, worker):
             try:
                 await worker.close()
                 log_debug(f"Closed worker for topic: {topic}")
             except Exception as e:
                 log_error(f"Error closing worker for {topic}: {e}")
 
-        # Close all queues
-        for topic, queue in list(self._queues.items()):
+        # Worker shutdown may wait on Redis independently per queue. Closing
+        # hundreds of process-mode service workers serially makes clean restart
+        # take minutes and leaves stale locks when supervisors reach their
+        # timeout. They are independent resources, so close them concurrently.
+        await asyncio.gather(
+            *(_close_worker(topic, worker) for topic, worker in list(self._workers.items()))
+        )
+
+        async def _close_queue(topic, queue):
             try:
                 await queue.close()
                 log_debug(f"Closed queue for topic: {topic}")
             except Exception as e:
                 log_error(f"Error closing queue for {topic}: {e}")
+
+        await asyncio.gather(
+            *(_close_queue(topic, queue) for topic, queue in list(self._queues.items()))
+        )
 
         if self._pubsub_task:
             self._pubsub_task.cancel()
@@ -349,6 +359,12 @@ class BullMQBus:
                         identity_source=data.get("identity_source"),
                         method_type=data.get("method_type"),
                         caller_peer_id=data.get("caller_peer_id"),
+                        auth_grant_revision=data.get("auth_grant_revision"),
+                        manifest_revision=data.get("manifest_revision"),
+                        projected_service_id=data.get("projected_service_id"),
+                        projected_method_id=data.get("projected_method_id"),
+                        projected_method_topics=data.get("projected_method_topics"),
+                        projected_method_set_digest=data.get("projected_method_set_digest"),
                     )
                     await self._deliver_event(actual_topic, env)
                 except Exception as e:
@@ -401,6 +417,12 @@ class BullMQBus:
                     identity_source=job_data.get("identity_source"),
                     method_type=job_data.get("method_type"),
                     caller_peer_id=job_data.get("caller_peer_id"),
+                    auth_grant_revision=job_data.get("auth_grant_revision"),
+                    manifest_revision=job_data.get("manifest_revision"),
+                    projected_service_id=job_data.get("projected_service_id"),
+                    projected_method_id=job_data.get("projected_method_id"),
+                    projected_method_topics=job_data.get("projected_method_topics"),
+                    projected_method_set_digest=job_data.get("projected_method_set_digest"),
                 )
 
                 # Find matching handlers (direct + wildcard)
@@ -561,6 +583,12 @@ class BullMQBus:
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -598,7 +626,11 @@ class BullMQBus:
         # Broadcast events are copied to one durable per-subscriber queue.
         # A single BullMQ topic queue is point-to-point and would load-balance
         # lifecycle/config events across subscribers instead of broadcasting.
-        if event:
+        # ``reply.*`` is always a one-consumer request/response queue. Service
+        # handlers historically publish replies with ``event=True`` (matching
+        # LocalBus), so treating that flag as broadcast drops the response:
+        # request() registers a direct Worker, not an event-subscriber set.
+        if event and not self._is_ephemeral_reply_queue_name(topic):
             redis = await self._get_redis()
             subscriber_queues = await redis.smembers(self._event_subscriber_key(topic))
             job_id = str(uuid_lib.uuid4())
@@ -615,6 +647,12 @@ class BullMQBus:
                 "identity_source": identity_source,
                 "method_type": method_type,
                 "caller_peer_id": caller_peer_id,
+                "auth_grant_revision": auth_grant_revision,
+                "manifest_revision": manifest_revision,
+                "projected_service_id": projected_service_id,
+                "projected_method_id": projected_method_id,
+                "projected_method_topics": projected_method_topics,
+                "projected_method_set_digest": projected_method_set_digest,
                 "correlation_id": correlation_id,
                 "priority": priority,
                 "attempts": 0,
@@ -685,6 +723,12 @@ class BullMQBus:
             "identity_source": identity_source,
             "method_type": method_type,
             "caller_peer_id": caller_peer_id,
+            "auth_grant_revision": auth_grant_revision,
+            "manifest_revision": manifest_revision,
+            "projected_service_id": projected_service_id,
+            "projected_method_id": projected_method_id,
+            "projected_method_topics": projected_method_topics,
+            "projected_method_set_digest": projected_method_set_digest,
             "correlation_id": correlation_id,
         }
 
@@ -730,6 +774,12 @@ class BullMQBus:
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -780,13 +830,7 @@ class BullMQBus:
                 log_warning(f"Reply handler: unexpected payload type {type(env.payload)}")
                 result_data = {"data": str(env.payload)}
 
-            if isinstance(result_data, dict) and "ok" in result_data:
-                fut.set_result(QueryResult(**result_data))
-            elif isinstance(result_data, dict) and "error" in result_data and result_data["error"]:
-                error_msg = result_data.get("error", "Unknown service error")
-                fut.set_result(QueryResult(ok=False, error=error_msg, data=result_data))
-            else:
-                fut.set_result(QueryResult(ok=True, data=result_data))
+            fut.set_result(query_result_from_reply_payload(result_data))
 
         # Subscribe to reply topic (publish already exempts reply.* from contract validation)
         self.subscribe(reply_topic, _on_reply)
@@ -810,6 +854,12 @@ class BullMQBus:
                 identity_source=identity_source,
                 method_type=method_type,
                 caller_peer_id=caller_peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
                 correlation_id=request_correlation_id,
             )
 

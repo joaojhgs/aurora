@@ -699,6 +699,30 @@ Device                           RTCClient
 
 ---
 
+## WebView thin peer current proof
+
+The browser/WebView peer path is implemented through the shared TypeScript runtime and is live-proven against the Python Gateway in Chromium, Firefox, and WebKit. The retained reports are:
+
+- `reports/webrtc-interop/direct/report.json` — Chromium direct ICE with a truthful selected `host` pair or raw peer-reflexive/host pair, no gathered STUN evidence, and no relay evidence;
+- `reports/webrtc-interop/firefox-direct/report.json` and `reports/webrtc-interop/webkit-direct/report.json` — direct Firefox and Playwright WebKit evidence under the same direct-lane policy;
+- `reports/webrtc-interop/stun/report.json` — STUN lane proof from browser `RTCPeerConnection.getStats()` with raw `selectedCandidatePair.category` preserved; selected `prflx` is accepted only when `candidateProof` shows a configured STUN server gathered a true `srflx` candidate;
+- `reports/webrtc-interop/turn/report.json` — forced TURN relay with `selectedCandidatePair.category=relay` from browser `RTCPeerConnection.getStats()`;
+- `reports/webrtc-interop/firefox-stun/report.json` and `reports/webrtc-interop/firefox-turn/report.json` — the equivalent configured-STUN and forced-TURN lanes in Firefox; Firefox omits the STUN candidate URL from stats, so the STUN scanner accepts the selected reflexive pair only when exactly one configured STUN server makes the source unambiguous;
+- `reports/webrtc-interop/webkit-stun/report.json` and `reports/webrtc-interop/webkit-turn/report.json` — the equivalent configured-STUN and forced-TURN lanes in Playwright WebKit.
+
+Those lanes run with the Python HTTP API disabled and use MQTT only for signaling. Authenticated Aurora calls, results, events, and TTS event delivery travel over the `aurora-rpc` `RTCDataChannel`. Scoped authorization uses public production Auth pairing/connect/exchange and Gateway/Auth DataChannel method boundaries, not private service calls.
+
+Security assertions in the passing reports:
+
+- bilateral SAS pairing completes before service access;
+- canonical reconnect HMAC proof authorizes a returning peer without a new SAS prompt;
+- revocation fails closed and leaves the route unauthorized after revocation;
+- the uncertain-loss mutation proof starts `G009Interop.Mutate`, observes `G009Interop.MutationStarted`, disconnects before response settlement, and records execution count 1;
+- wildcard and wrong-correlation event deliveries are blocked;
+- report/output secret scans pass with secrets redacted.
+
+The direct, STUN, and forced-TURN lanes are live-proven in Chromium, Firefox, and Playwright WebKit. This remains bounded foreground harness evidence, not universal browser certification, packaged-WebView certification, or physical-mobile proof. Android thin has build/native-policy proof but no local emulator/physical runtime smoke in this environment. iOS remains preflight/planned.
+
 ## WebRTC Peer Lifecycle
 
 ### Auth Enabled Mode
@@ -1545,54 +1569,75 @@ Since event forwarding is now handled per-publish-call via `mesh=True`, the only
 
 ### Security Controls
 
-- **Sharing gate**: Remote peers can only call services explicitly marked `share: true`.
-- **Allowed peers**: Each shared service can restrict which peer IDs may call it via `allowed_peers`.
+- **Service export gate**: Remote peers can only call services explicitly exported with
+  `mesh_sharing.share: true`.
+- **Feature and method export**: `mesh_sharing.unshared_feature_ids` and
+  `mesh_sharing.unshared_method_ids` subtract sensitive callable features or exact bus
+  topics from the exported service. Empty lists export all current external-or-both
+  features and methods, so operators must account for compatible future methods.
 - **Capacity limits**: Each shared service specifies `max_concurrent`; calls beyond that limit get HTTP 429.
-- **Permission checks**: Standard RBAC permission checks apply to all inbound RPC calls.
+- **Permission checks**: Standard Auth RBAC scopes remain authoritative for each inbound
+  RPC call. Exporting a service or method does not grant a peer permission to invoke it.
+- **Outbound routing gate**: `mesh_routing` selects providers for calls originating on this
+  device. Its allowed provider IDs, feature requirements, capability tags, version floor,
+  preference, fallback, and selector requirement never grant inbound access.
 - **Version compatibility**: Configurable version matching policies (`exact`, `compatible`, `any`).
 - **Event forwarding scope**: Only events published with `mesh=True` from modules marked `share: true` are forwarded. A module that is not shared will never leak events to peers. Events without `mesh=True` (like audio streams) stay local regardless of config.
 
 ### Mesh Configuration
 
-All nine Aurora service modules are pre-populated in the default configuration with safe defaults (`share: false`, `prefer: "local"`), so users do not need to guess module names or write configuration objects from scratch — they only need to toggle the settings they want to change.
+Aurora's routable service modules are pre-populated with separate safe-default export and
+outbound-routing blocks. `mesh_sharing` answers **what this device advertises to peers**;
+`mesh_routing` answers **where this device may send its own work**. The latter is not an
+inbound access-control list.
 
 ```json
 {
-  "gateway": {
-    "mesh": {
-      "enabled": true,
-      "node_name": "aurora-desktop",
-      "sharing": {
-        "TTS": { "share": true, "max_concurrent": 10 },
-        "STTCoordinator": { "share": false, "max_concurrent": 10 },
-        "WakeWord": { "share": false, "max_concurrent": 10 },
-        "Transcription": { "share": false, "max_concurrent": 10 },
-        "DB": { "share": false, "max_concurrent": 10 },
-        "Orchestrator": { "share": true, "max_concurrent": 2 },
-        "Tooling": { "share": false, "max_concurrent": 10 },
-        "Scheduler": { "share": false, "max_concurrent": 10 },
-        "Config": { "share": false, "max_concurrent": 10 }
+  "services": {
+    "gateway": {
+      "mesh_network": {
+        "enabled": true,
+        "node_name": "aurora-desktop",
+        "version_policy": "compatible",
+        "peer_selection": "lowest_latency"
       },
-      "routing": {
-        "TTS": { "prefer": "network", "fallback": "local", "min_version": "1.0.0" },
-        "STTCoordinator": { "prefer": "local", "fallback": "local" },
-        "WakeWord": { "prefer": "local", "fallback": "local" },
-        "Transcription": { "prefer": "local", "fallback": "local" },
-        "DB": { "prefer": "local", "fallback": "local" },
-        "Orchestrator": { "prefer": "local", "fallback": "local" },
-        "Tooling": { "prefer": "local", "fallback": "local" },
-        "Scheduler": { "prefer": "local", "fallback": "local" },
-        "Config": { "prefer": "local", "fallback": "local" }
+      "webrtc": {
+        "enabled": true,
+        "app_id": "aurora",
+        "room": "generated-room",
+        "password": "generated-room-secret"
+      }
+    },
+    "tts": {
+      "mesh_sharing": {
+        "share": true,
+        "max_concurrent": 2,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": ["TTS.Request"]
       },
-      "version_policy": "compatible",
-      "peer_selection": "lowest_latency",
-      "ping_interval_s": 30.0,
-      "stale_peer_timeout_s": 120.0,
-      "remote_timeout_s": 30.0
+      "mesh_routing": {
+        "prefer": "network",
+        "fallback": "local",
+        "allowed_provider_peer_ids": ["stable-peer-id"],
+        "min_version": "1.0.0",
+        "required_provider_feature_ids": ["speech_synthesis"],
+        "required_provider_capability_tags": [],
+        "require_explicit_selector": false
+      }
     }
   }
 }
 ```
+
+This example exports TTS while excluding remote playback through the exact `TTS.Request`
+topic. Separately, this device prefers one stable peer for outbound synthesis. The selected
+provider's display name may change, but configuration and persistence use the stable peer
+ID. That outbound selection does not authorize the provider to call this device.
+
+> **Migration-only compatibility:** older generated configuration may place routing or
+> peer-filter fields inside `mesh_sharing`. Treat those fields only as legacy migration
+> input. Current policy writes keep export controls under `mesh_sharing`, outbound provider
+> controls under `mesh_routing`, and inbound authorization in Auth RBAC.
 
 ### Key Mesh Components
 

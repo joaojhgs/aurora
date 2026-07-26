@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, create_model
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging.priority_helpers import get_system_priority
 from app.services.gateway.admin_action import (
     ADMIN_ACTION_DIGEST_HEADER,
     ADMIN_ACTION_ID_HEADER,
@@ -30,9 +31,17 @@ from app.services.gateway.orchestrator_runtime_policy import (
 )
 from app.shared.config.interface import ConfigAPI
 from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
+from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
+from app.shared.contracts.models.db import (
+    DBEnsureSessionRequest,
+    DBMethods,
+    DBSaveMessageRequest,
+)
 from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.mesh.tracing import redacted_copy
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -72,6 +81,7 @@ _ADMIN_ACTION_REQUIRED_TOPICS = {
 _ADMIN_ACTION_EXEMPT_TOPICS = {
     AuthMethods.AUDIT_LOG,
     AuthMethods.LIST_DEVICES,
+    AuthMethods.LIST_PENDING_PAIRINGS,
     AuthMethods.LIST_PRINCIPALS,
     AuthMethods.LIST_TOKENS,
     GatewayMethods.ADMIN_ACTION_DRAFT,
@@ -80,8 +90,21 @@ _ADMIN_ACTION_EXEMPT_TOPICS = {
     GatewayMethods.GET_CAPABILITY_CATALOG,
     GatewayMethods.GET_CAPABILITY_GRAPH,
     GatewayMethods.GET_MESH_STATUS,
+    GatewayMethods.GET_MESH_INVITE_CONFIG,
     GatewayMethods.GET_SUPPORT_BUNDLE,
     GatewayMethods.LIST_EVENTS,
+    # Tooling management read models: contract-level method_type stays "manage"
+    # (RBAC still requires Tooling.manage), but pure reads must not demand a
+    # per-request AdminAction confirmation ceremony.
+    ToolingMethods.GET_SHARING_POLICY,
+    ToolingMethods.GET_POLICY_SUMMARY,
+    ToolingMethods.GET_TOOL_SOURCE_DETAIL,
+    ToolingMethods.GET_ONBOARDING_STATUS,
+    ToolingMethods.LIST_APPROVAL_GRANTS,
+    ToolingMethods.LIST_PENDING_APPROVALS,
+    ToolingMethods.LIST_POLICY_AUDIT_EVENTS,
+    ToolingMethods.LIST_TOOL_SOURCES,
+    ToolingMethods.TEST_SHARING_POLICY,
 }
 
 _admin_action_digest = admin_action_digest
@@ -108,6 +131,154 @@ async def _apply_orchestrator_dispatch_default(topic: str, payload: Any) -> Any:
     updated = dict(payload)
     updated["dispatch_selector"] = selector.model_dump(exclude_none=True)
     return updated
+
+
+def _response_mapping(value: Any) -> Mapping[str, Any] | None:
+    if isinstance(value, Mapping):
+        return value
+    if hasattr(value, "model_dump"):
+        dumped = value.model_dump()
+        return dumped if isinstance(dumped, Mapping) else None
+    return None
+
+
+async def _dispatch_peer_name(
+    bus: MessageBus,
+    *,
+    peer_id: str,
+    principal_id: str,
+) -> str | None:
+    """Resolve a stable peer ID to its current human-readable mesh node name."""
+
+    try:
+        result = await bus.request(
+            GatewayMethods.GET_MESH_STATUS,
+            EmptyInput(),
+            timeout=5.0,
+            priority=get_system_priority(),
+            origin="internal",
+            principal_id=principal_id,
+        )
+        if not result.ok:
+            return None
+        status = _response_mapping(result.data)
+        peers = status.get("peers") if status is not None else None
+        if not isinstance(peers, list):
+            return None
+        for peer in peers:
+            peer_data = _response_mapping(peer)
+            if peer_data is None or peer_data.get("peer_id") != peer_id:
+                continue
+            node_name = peer_data.get("node_name")
+            return node_name.strip() if isinstance(node_name, str) and node_name.strip() else None
+    except Exception as exc:
+        log_debug(f"Could not resolve dispatched peer display name for {peer_id}: {exc}")
+    return None
+
+
+async def _persist_dispatched_assistant_turn(
+    bus: MessageBus,
+    *,
+    payload: Mapping[str, Any],
+    response_data: Any,
+    principal_id: str | None,
+) -> None:
+    """Persist a remotely executed chat turn on the device that originated it."""
+
+    response = _response_mapping(response_data)
+    user_text = payload.get("text")
+    assistant_text = response.get("text") if response is not None else None
+    session_id = (
+        (response.get("session_id") if response is not None else None)
+        or payload.get("session_id")
+        or payload.get("request_id")
+        or payload.get("correlation_id")
+    )
+    if (
+        not isinstance(user_text, str)
+        or not isinstance(assistant_text, str)
+        or not isinstance(session_id, str)
+        or not session_id.strip()
+    ):
+        log_warning(
+            "Skipping origin persistence for dispatched assistant turn because "
+            "the response did not include persistable text/session data"
+        )
+        return
+
+    owner_principal_id = principal_id or "system"
+    selector = next(
+        (
+            selector_from_mapping(payload.get(key))
+            for key in ("dispatch_selector", "mesh_selector", "selector")
+            if selector_from_mapping(payload.get(key)) is not None
+        ),
+        None,
+    )
+    dispatch_metadata = {
+        "source_type": "Text",
+        "execution": "remote_dispatch",
+    }
+    if response is not None and isinstance(response.get("metadata"), Mapping):
+        dispatch_metadata.update(response["metadata"])
+        dispatch_metadata["source_type"] = "Text"
+        dispatch_metadata["execution"] = "remote_dispatch"
+    if selector is not None:
+        dispatch_metadata["dispatch_selector"] = selector.model_dump(exclude_none=True)
+        if selector.peer_id:
+            dispatch_metadata["execution_peer_id"] = selector.peer_id
+            peer_name = await _dispatch_peer_name(
+                bus,
+                peer_id=selector.peer_id,
+                principal_id=owner_principal_id,
+            )
+            if peer_name:
+                dispatch_metadata["execution_peer_name"] = peer_name
+
+    ensure_result = await bus.request(
+        DBMethods.ENSURE_SESSION,
+        DBEnsureSessionRequest(
+            principal_id=owner_principal_id,
+            type="chat",
+            session_id=session_id,
+            title=user_text.strip()[:80] or None,
+            activate=True,
+        ),
+        timeout=10.0,
+        priority=get_system_priority(),
+        origin="internal",
+        principal_id=owner_principal_id,
+    )
+    if not ensure_result.ok:
+        raise RuntimeError(ensure_result.error or "DB.EnsureSession failed")
+
+    for role, content in (("user", user_text), ("assistant", assistant_text)):
+        save_result = await bus.request(
+            DBMethods.SAVE_MESSAGE,
+            DBSaveMessageRequest(
+                content=content,
+                role=role,
+                session_id=session_id,
+                principal_id=owner_principal_id,
+                session_type="chat",
+                metadata=dict(dispatch_metadata),
+            ),
+            timeout=10.0,
+            priority=get_system_priority(),
+            origin="internal",
+            principal_id=owner_principal_id,
+        )
+        if not save_result.ok:
+            raise RuntimeError(save_result.error or f"DB.SaveMessage failed for {role} turn")
+        success = (
+            save_result.data.get("success")
+            if isinstance(save_result.data, Mapping)
+            else getattr(save_result.data, "success", False)
+        )
+        if not success:
+            raise RuntimeError(f"DB.SaveMessage did not commit the {role} turn")
+
+    log_info(f"Persisted remotely dispatched assistant turn in origin session {session_id}")
 
 
 def _admin_action_required(topic: str, method_type: str | None = None) -> bool:
@@ -619,9 +790,29 @@ class RouteGenerator:
                     if isinstance(payload, dict)
                     else None,
                 )
-                log_debug(f"Gateway received result: ok={result.ok}, data={result.data}")
+                log_debug(
+                    f"Gateway received result: ok={result.ok}, data={redacted_copy(result.data)}"
+                )
 
                 if result.ok:
+                    if isinstance(payload, Mapping) and runtime_dispatch_selector_present(
+                        topic, payload
+                    ):
+                        try:
+                            await _persist_dispatched_assistant_turn(
+                                self._bus,
+                                payload=payload,
+                                response_data=result.data,
+                                principal_id=principal_id,
+                            )
+                        except Exception as exc:
+                            # The remote answer already completed successfully. Persistence
+                            # failures must be visible in logs without discarding that answer.
+                            log_error(
+                                "Could not persist remotely dispatched assistant turn "
+                                f"on the origin device: {exc}",
+                                exc_info=True,
+                            )
                     # Return the data
                     if result.data is None:
                         response = {"success": True}
@@ -631,7 +822,7 @@ class RouteGenerator:
                         response = result.data if result.data else {"success": True}
                     else:
                         response = {"data": result.data}
-                    log_debug(f"Gateway returning response: {response}")
+                    log_debug(f"Gateway returning response: {redacted_copy(response)}")
                     return response
                 else:
                     # Service returned an error
@@ -743,7 +934,9 @@ class RouteGenerator:
                     payload,
                     principal_id=pid,
                     effective_perms=effective_perms,
-                    identity_source=identity_source,
+                    identity_source=(
+                        "gateway_admin_action" if admin_action_receipt else identity_source
+                    ),
                 )
                 # Return the raw result dict - don't filter through response model
                 # This preserves all fields from the service response
@@ -756,7 +949,7 @@ class RouteGenerator:
                 else:
                     response_data = {"data": result}
 
-                log_debug(f"typed_handler returning: {response_data}")
+                log_debug(f"typed_handler returning: {redacted_copy(response_data)}")
                 # Return JSONResponse to ensure proper serialization
                 headers = {}
                 if admin_action_receipt:

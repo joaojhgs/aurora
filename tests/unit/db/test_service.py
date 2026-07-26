@@ -2,11 +2,23 @@
 
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import aiosqlite
 import pytest
 
 from app.messaging import Envelope, MessageBus, QueryResult
+from app.services.db.manager import DatabaseManager
 from app.services.db.service import DBService
-from app.shared.contracts.models.db import DBMethods
+from app.shared.contracts.models.db import (
+    DBAllocateToolIdentityRequest,
+    DBAllocateToolIdentityResponse,
+    DBCreateTokenRequest,
+    DBExecuteSQLRequest,
+    DBMethods,
+    DBReconcileToolIdentityRequest,
+    DBReconcileToolIdentityResponse,
+    DBResolveToolIdentityAliasesRequest,
+    DBResolveToolIdentityAliasesResponse,
+)
 
 
 @pytest.fixture
@@ -67,6 +79,298 @@ class TestDBServiceInitialization:
         """Test service stop."""
         db_service.db_manager.close = AsyncMock()
         await db_service.stop()
+
+
+@pytest.mark.asyncio
+async def test_execute_sql_reports_statement_failure(db_service, tmp_path):
+    """Internal SQL callers can fail closed instead of mistaking errors for empty success."""
+
+    db_service.db_manager.db_path = str(tmp_path / "execute-sql-failure.db")
+    created = await db_service.execute_sql(
+        DBExecuteSQLRequest(sql="CREATE TABLE durable_state (id TEXT PRIMARY KEY)")
+    )
+    assert created.success is True
+    assert created.error is None
+
+    failed = await db_service.execute_sql(
+        DBExecuteSQLRequest(sql="INSERT INTO missing_table (id) VALUES (?)", params=["x"])
+    )
+
+    assert failed.success is False
+    assert "no such table" in (failed.error or "")
+    assert failed.rows == []
+    assert failed.rowcount == 0
+
+
+@pytest.mark.asyncio
+async def test_reconcile_tool_identity_delegates_to_typed_manager_transaction(db_service):
+    request = DBReconcileToolIdentityRequest(
+        canonical_global_tool_id="aurora-tool:v1:peer-a:Tooling:core.scheduler.list",
+        stable_peer_id="peer-a",
+        tool_contract_id="core.scheduler.list",
+        source_kind="core",
+        stable_source_id="core:scheduler",
+        provider_tool_id="list_scheduled_tasks_tool",
+        share_group_id="core:scheduler",
+        share_group_label="Scheduler",
+        current_local_name="List scheduled tasks",
+    )
+    expected = DBReconcileToolIdentityResponse(
+        success=True,
+        canonical_global_tool_id=request.canonical_global_tool_id,
+        created=True,
+    )
+    db_service.db_manager.reconcile_tool_identity = AsyncMock(return_value=expected)
+
+    response = await db_service.reconcile_tool_identity(request)
+
+    assert response == expected
+    db_service.db_manager.reconcile_tool_identity.assert_awaited_once_with(request)
+
+
+@pytest.mark.asyncio
+async def test_allocate_tool_identity_delegates_to_typed_manager_transaction(db_service):
+    request = DBAllocateToolIdentityRequest(
+        stable_peer_id="peer-a",
+        legacy_identity_locator="legacy:list",
+        source_kind="unknown",
+        stable_source_id="legacy:local",
+        provider_tool_id="list",
+        share_group_id="legacy:local",
+        share_group_label="Legacy",
+        current_local_name="List",
+    )
+    expected = DBAllocateToolIdentityResponse(
+        success=True,
+        canonical_global_tool_id="aurora-tool:v1:peer-a:Tooling:legacy.abc",
+        allocated_tool_contract_id="legacy.abc",
+    )
+    db_service.db_manager.allocate_tool_identity = AsyncMock(return_value=expected)
+
+    assert await db_service.allocate_tool_identity(request) == expected
+    db_service.db_manager.allocate_tool_identity.assert_awaited_once_with(request)
+
+
+@pytest.mark.asyncio
+async def test_resolve_tool_aliases_delegates_with_peer_scope(db_service):
+    request = DBResolveToolIdentityAliasesRequest(
+        global_tool_ids=["legacy:list"], stable_peer_id="peer-a"
+    )
+    expected = DBResolveToolIdentityAliasesResponse(
+        resolved={"legacy:list": "aurora-tool:v1:peer-a:Tooling:legacy.abc"}
+    )
+    db_service.db_manager.resolve_tool_identity_aliases = AsyncMock(return_value=expected)
+
+    assert await db_service.resolve_tool_identity_aliases(request) == expected
+    db_service.db_manager.resolve_tool_identity_aliases.assert_awaited_once_with(
+        request.global_tool_ids, stable_peer_id="peer-a"
+    )
+
+
+@pytest.mark.asyncio
+async def test_execute_sql_guards_protected_authority_writes(db_service, tmp_path):
+    db_service.db_manager.db_path = str(tmp_path / "execute-sql-guard.db")
+    async with aiosqlite.connect(db_service.db_manager.db_path) as db:
+        await db.executescript(
+            """
+            CREATE TABLE users (id TEXT PRIMARY KEY);
+            CREATE TABLE harmless (id TEXT PRIMARY KEY, note TEXT);
+            INSERT INTO users (id) VALUES ('u1');
+            """
+        )
+        await db.commit()
+
+    protected_writes = [
+        'InSeRt INTO "users" (id) VALUES ("u1")',
+        "/* before */ UPDATE `users` SET id = 'u2' WHERE id = 'u1'",
+        "-- comment naming harmless\nDELETE FROM [users] WHERE id = 'u1'",
+        "REPLACE INTO users (id) VALUES ('u1')",
+        "WITH incoming(id) AS (SELECT 'u1') INSERT INTO users SELECT id FROM incoming",
+        "WITH marker AS (SELECT '--') DELETE FROM users WHERE id = 'u1'",
+        "WITH marker AS (SELECT '/*x*/') UPDATE users SET id = 'u2' WHERE id = 'u1'",
+        "WITH marker AS (SELECT 'escaped ''-- marker') INSERT INTO users SELECT 'u3'",
+        "WITH marker AS (SELECT 'escaped ''/*x*/ marker') REPLACE INTO users (id) VALUES ('u4')",
+        'WITH marker AS (SELECT "--") DELETE FROM "users" WHERE id = "u1"',
+        'WITH marker AS (SELECT "/*x*/") UPDATE `users` SET id = "u2" WHERE id = "u1"',
+        'WITH "sent--inel" AS (SELECT 1) INSERT INTO [users] SELECT "u3"',
+        "WITH `sent/*inel*/` AS (SELECT 1) REPLACE INTO `users` (id) VALUES ('u4')",
+        "WITH [sent--inel] AS (SELECT 1) DELETE FROM [users] WHERE id = 'u1'",
+        "WITH [sent/*inel*/] AS (SELECT 1) UPDATE \"users\" SET id = 'u5' WHERE id = 'u1'",
+        "INSERT INTO tooling_tool_identity_aliases (legacy_global_tool_id) VALUES ('x')",
+        "DELETE FROM tooling_tool_identity_allocations",
+    ]
+
+    for sql in protected_writes:
+        response = await db_service.execute_sql(DBExecuteSQLRequest(sql=sql))
+        assert response.success is False
+        assert "protected authority tables" in (response.error or "")
+        assert response.rowcount == 0
+        remained = await db_service.execute_sql(
+            DBExecuteSQLRequest(sql="SELECT id FROM users ORDER BY id")
+        )
+        assert remained.rows == [{"id": "u1"}]
+
+    selected = await db_service.execute_sql(DBExecuteSQLRequest(sql="SELECT * FROM users"))
+    assert selected.success is True
+    assert selected.rows == [{"id": "u1"}]
+
+    harmless = await db_service.execute_sql(
+        DBExecuteSQLRequest(
+            sql="INSERT INTO harmless (id, note) VALUES (?, ?)",
+            params=["h1", "users mentioned only in a string"],
+        )
+    )
+    assert harmless.success is True
+    assert harmless.rowcount == 1
+
+
+@pytest.mark.asyncio
+async def test_mesh_managed_generic_mutations_return_explicit_error_code(db_service):
+    from app.services.db.manager import MeshManagedAuthorityError
+    from app.shared.contracts.models.db import (
+        DBDeleteDeviceRequest,
+        DBDeleteUserRequest,
+        DBRevokeTokenRequest,
+        DBUpdateTokenScopesRequest,
+        DBUpdateUserRequest,
+    )
+
+    rejection = MeshManagedAuthorityError("mesh_managed_authority")
+    db_service.db_manager.update_user = AsyncMock(side_effect=rejection)
+    db_service.db_manager.delete_user = AsyncMock(side_effect=rejection)
+    db_service.db_manager.delete_device = AsyncMock(side_effect=rejection)
+    db_service.db_manager.update_token_scopes = AsyncMock(side_effect=rejection)
+    db_service.db_manager.revoke_token_with_authority = AsyncMock(side_effect=rejection)
+
+    responses = [
+        await db_service.update_user(
+            DBUpdateUserRequest(user_id="mesh-user", fields={"permissions": ["DB.use"]})
+        ),
+        await db_service.delete_user(DBDeleteUserRequest(user_id="mesh-user")),
+        await db_service.delete_device(DBDeleteDeviceRequest(device_id="mesh-device")),
+        await db_service.update_token_scopes(
+            DBUpdateTokenScopesRequest(token_id="mesh-token", scopes=["DB.use"])
+        ),
+        await db_service.revoke_token(
+            DBRevokeTokenRequest(token_id="mesh-token", reject_mesh_linked=True)
+        ),
+    ]
+
+    assert all(response.success is False for response in responses)
+    assert all(response.error_code == "mesh_managed_authority" for response in responses)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "create_request",
+    [
+        DBCreateTokenRequest(
+            id="new-token",
+            token_hash="new-hash",
+            prefix="new",
+            user_id="mesh-user",
+            device_id="unlinked-device",
+            scopes=["DB.use"],
+        ),
+        DBCreateTokenRequest(
+            id="new-token",
+            token_hash="new-hash",
+            prefix="new",
+            user_id="unlinked-user",
+            device_id="mesh-device",
+            scopes=["DB.use"],
+        ),
+    ],
+)
+async def test_create_token_rejects_mesh_linked_user_or_device_without_changes(
+    db_service,
+    tmp_path,
+    create_request,
+):
+    db_path = str(tmp_path / "mesh-create-token-guard.db")
+    async with aiosqlite.connect(db_path) as db:
+        await db.executescript(
+            """
+            CREATE TABLE tokens (
+                id TEXT PRIMARY KEY,
+                device_id TEXT,
+                user_id TEXT,
+                token_hash TEXT NOT NULL,
+                prefix TEXT NOT NULL,
+                scopes TEXT NOT NULL,
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP
+            );
+            CREATE TABLE mesh_peers (
+                id TEXT PRIMARY KEY,
+                peer_id TEXT NOT NULL,
+                room_name TEXT NOT NULL,
+                outbound_status TEXT NOT NULL,
+                outbound_permissions TEXT NOT NULL,
+                outbound_user_id TEXT,
+                outbound_token_id TEXT,
+                outbound_device_id TEXT
+            );
+            INSERT INTO mesh_peers (
+                id, peer_id, room_name, outbound_status, outbound_permissions,
+                outbound_user_id, outbound_token_id, outbound_device_id
+            ) VALUES (
+                'mesh-row', 'stable-peer', 'room-a', 'approved', '["DB.use"]',
+                'mesh-user', 'mesh-token', 'mesh-device'
+            );
+            """
+        )
+        await db.commit()
+    db_service.db_manager = DatabaseManager(db_path=db_path)
+
+    response = await db_service.create_token(create_request)
+
+    assert response.success is False
+    assert response.error_code == "mesh_managed_authority"
+    async with aiosqlite.connect(db_path) as db:
+        token_count = await (await db.execute("SELECT count(*) FROM tokens")).fetchone()
+    assert token_count == (0,)
+
+
+@pytest.mark.asyncio
+async def test_typed_mesh_mutation_returns_immutable_authority_change(db_service):
+    from pydantic import ValidationError
+
+    from app.shared.contracts.models.db import (
+        DBDenyMeshPeerRequest,
+        DBMeshAuthorityChange,
+    )
+
+    change = DBMeshAuthorityChange(
+        peer_id="stable-peer",
+        auth_grant_revision=4,
+        disposition="present",
+        state="revoked",
+        effective_permissions=(),
+        reason="denied",
+    )
+    db_service.db_manager.deny_mesh_peer_with_authority = AsyncMock(return_value=(True, change))
+
+    response = await db_service.deny_mesh_peer(DBDenyMeshPeerRequest(peer_id="stable-peer"))
+
+    assert response.success is True
+    assert response.authority_changes == (change,)
+    with pytest.raises(ValidationError):
+        response.authority_changes[0].auth_grant_revision = 5
+
+
+@pytest.mark.asyncio
+async def test_authority_snapshot_failure_is_reraised(db_service):
+    from app.shared.contracts.models.db import DBGetMeshPeerAuthoritySnapshotRequest
+
+    db_service.db_manager.get_mesh_peer_authority_snapshot = AsyncMock(
+        side_effect=RuntimeError("snapshot unavailable")
+    )
+
+    with pytest.raises(RuntimeError, match="snapshot unavailable"):
+        await db_service.get_mesh_peer_authority_snapshot(
+            DBGetMeshPeerAuthoritySnapshotRequest(peer_id="stable-peer")
+        )
 
 
 class TestDBServiceMessageHandling:

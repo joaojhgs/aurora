@@ -1,5 +1,7 @@
 """Unit tests for orchestrator Tooling binding metadata."""
 
+import re
+
 from app.services.orchestrator.tool_bindings import (
     build_tool_approval_candidates,
     build_tool_bindings,
@@ -137,6 +139,36 @@ def test_build_tool_bindings_hides_explicitly_blocked_tools():
     assert bindings == {}
 
 
+def test_build_tool_bindings_defensively_hides_every_inactive_remote_state():
+    """Retained management history can never become LLM-callable if misrouted."""
+
+    inactive = [
+        "unshared",
+        "permission_blocked",
+        "provider_unavailable",
+        "removed",
+        "stale",
+        "schema_changed",
+        "protocol_unsupported",
+    ]
+    schemas = [
+        {
+            "name": f"remote_{state}",
+            "local_name": state,
+            "global_tool_id": f"peer:tool:{state}",
+            "description": state,
+            "args_schema": {"type": "object", "properties": {}},
+            "execution_location": "remote",
+            "source_type": "mesh_peer",
+            "effective_availability": state,
+        }
+        for state in inactive
+    ]
+    tools, bindings = build_tool_bindings(schemas)
+    assert tools == []
+    assert bindings == {}
+
+
 def test_build_tool_bindings_keeps_malformed_non_blocked_tools_visible():
     """Malformed schema metadata must not hide a non-blocked tool from the LLM."""
 
@@ -192,6 +224,90 @@ def test_build_tool_bindings_resolves_duplicate_names_deterministically():
     assert [tool.name for tool in tools] == ["remote_status", "remote_status_2"]
     assert bindings["remote_status"]["tool_name"] == "peer-a:service:tool:status"
     assert bindings["remote_status_2"]["tool_name"] == "peer-b:service:tool:status"
+
+
+def test_remote_tool_alias_uses_peer_name_while_binding_keeps_stable_identity():
+    """The model sees a semantic peer name while execution keeps stable IDs."""
+
+    stable_peer_id = "aurora-da2c3842004492c887b3ce878c8eb0cb"
+    stable_global_tool_id = (
+        f"{stable_peer_id}:remote_{stable_peer_id}_Tooling:tool:list_scheduled_tasks_tool"
+    )
+    tools, bindings = build_tool_bindings(
+        [
+            {
+                "name": "list_scheduled_tasks_tool",
+                "local_name": "list_scheduled_tasks_tool",
+                "global_tool_id": "local:Tooling:tool:list_scheduled_tasks_tool",
+                "description": "List scheduled tasks.",
+                "args_schema": {"type": "object", "properties": {}},
+                "execution_location": "local",
+                "source_type": "local",
+            },
+            {
+                "name": f"{stable_peer_id}_list_scheduled_tasks_tool",
+                "local_name": "list_scheduled_tasks_tool",
+                "global_tool_id": stable_global_tool_id,
+                "provider_peer_id": stable_peer_id,
+                "provider_service_instance_id": f"remote:{stable_peer_id}:Tooling",
+                "provider_label": "aurora-2",
+                "display_name": "aurora-2.list_scheduled_tasks_tool",
+                "description": "List scheduled tasks.",
+                "args_schema": {"type": "object", "properties": {}},
+                "execution_location": "remote",
+                "source_type": "mesh_peer",
+            },
+        ]
+    )
+
+    assert [tool.name for tool in tools] == [
+        "list_scheduled_tasks_tool",
+        "aurora-2_list_scheduled_tasks_tool",
+    ]
+    assert "Local tool on this Aurora device" in tools[0].description
+    assert "Remote tool on peer aurora-2" in tools[1].description
+    assert stable_peer_id not in tools[1].name
+    assert stable_peer_id not in tools[1].description
+    binding = bindings[tools[1].name]
+    assert binding["tool_name"] == stable_global_tool_id
+    assert binding["provider_peer_id"] == stable_peer_id
+    assert binding["provider_label"] == "aurora-2"
+    assert binding["mesh_selector"]["peer_id"] == stable_peer_id
+    assert binding["mesh_selector"]["tool_id"] == stable_global_tool_id
+
+
+def test_tool_aliases_are_provider_safe_bounded_and_collision_stable():
+    """Long/duplicate presentation names produce deterministic provider-safe aliases."""
+
+    schemas = [
+        {
+            "name": f"opaque-{peer_id}",
+            "local_name": "scheduler_hourly_time_announcement_tool",
+            "global_tool_id": f"{peer_id}:remote_{peer_id}_Tooling:tool:scheduler_hourly_time_announcement_tool",
+            "provider_peer_id": peer_id,
+            "provider_service_instance_id": f"remote:{peer_id}:Tooling",
+            "provider_label": "Aurora Kitchen Device !!! with a very long semantic display name",
+            "description": "Announce the time.",
+            "args_schema": {"type": "object", "properties": {}},
+            "execution_location": "remote",
+            "source_type": "mesh_peer",
+        }
+        for peer_id in ("stable-peer-a", "stable-peer-b")
+    ]
+
+    first_tools, first_bindings = build_tool_bindings(schemas)
+    second_tools, second_bindings = build_tool_bindings(list(reversed(schemas)))
+    first_by_id = {binding["global_tool_id"]: alias for alias, binding in first_bindings.items()}
+    second_by_id = {binding["global_tool_id"]: alias for alias, binding in second_bindings.items()}
+
+    assert len({tool.name for tool in first_tools}) == 2
+    assert first_by_id == second_by_id
+    assert all(re.fullmatch(r"[A-Za-z0-9_-]{1,64}", tool.name) for tool in first_tools)
+    assert all("Aurora_Kitchen_Device" in tool.name for tool in first_tools)
+    assert all(
+        binding["mesh_selector"]["tool_id"] == binding["global_tool_id"]
+        for binding in first_bindings.values()
+    )
 
 
 def test_build_tool_approval_candidates_preserves_provider_metadata():

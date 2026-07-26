@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from collections import deque
+from statistics import median
 from typing import TYPE_CHECKING
 
 from app.helpers.aurora_logger import log_debug, log_warning
@@ -38,6 +40,9 @@ class LatencyMonitor:
         self._interval = interval_s
         # Maps ping_id → (peer_id, send_monotonic_time)
         self._pending_pings: dict[str, tuple[str, float]] = {}
+        # A small median window prevents one busy event-loop turn from
+        # becoming the routing latency for a full monitoring interval.
+        self._recent_rtts: dict[str, deque[float]] = {}
         self._task: asyncio.Task | None = None
 
     async def start(self) -> None:
@@ -53,17 +58,18 @@ class LatencyMonitor:
                 await self._task
             self._task = None
         self._pending_pings.clear()
+        self._recent_rtts.clear()
 
     async def _ping_loop(self) -> None:
         """Continuously ping all connected peers at the configured interval."""
         while True:
             try:
-                await asyncio.sleep(self._interval)
                 # Clean up pings that never received a pong (leak prevention)
                 stale_count = self.cleanup_stale_pings(max_age_s=self._interval * 3)
                 if stale_count:
                     log_debug(f"LatencyMonitor: Cleaned up {stale_count} stale pings")
                 await self._ping_all_peers()
+                await asyncio.sleep(self._interval)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -74,15 +80,18 @@ class LatencyMonitor:
         peers = self._registry.get_negotiated_peers()
         for peer in peers:
             try:
-                self._send_ping(peer.peer_id)
+                self.ping_peer(peer.peer_id)
             except Exception as e:
                 log_debug(f"LatencyMonitor: Failed to ping {peer.peer_id}: {e}")
 
-    def _send_ping(self, peer_id: str) -> None:
-        """Send a single ping to a peer.
+    def ping_peer(self, peer_id: str) -> bool:
+        """Send one tracked latency ping to a peer.
 
         Args:
             peer_id: Target peer identifier
+
+        Returns:
+            True when the ping was sent and is awaiting a pong.
         """
         import json
         import uuid
@@ -96,7 +105,22 @@ class LatencyMonitor:
             "id": ping_id,
             "ts": send_time,
         }
-        self._rtc_client.send_to_peer(peer_id, json.dumps(msg))
+        try:
+            sent = self._rtc_client.send_to_peer(peer_id, json.dumps(msg))
+        except Exception:
+            self._pending_pings.pop(ping_id, None)
+            raise
+        if not sent:
+            self._pending_pings.pop(ping_id, None)
+            return False
+        return True
+
+    def reset_peer(self, peer_id: str) -> None:
+        """Discard stale samples before measuring a newly negotiated session."""
+        self._recent_rtts.pop(peer_id, None)
+        for ping_id, (pending_peer_id, _) in list(self._pending_pings.items()):
+            if pending_peer_id == peer_id:
+                self._pending_pings.pop(ping_id, None)
 
     def on_pong(self, peer_id: str, msg: dict) -> None:
         """Handle a pong response and calculate RTT.
@@ -125,10 +149,16 @@ class LatencyMonitor:
             return
 
         rtt_ms = (time.monotonic() - send_time) * 1000
-        log_debug(f"LatencyMonitor: Peer {peer_id} RTT = {rtt_ms:.1f}ms")
+        samples = self._recent_rtts.setdefault(peer_id, deque(maxlen=3))
+        samples.append(rtt_ms)
+        route_rtt_ms = float(median(samples))
+        log_debug(
+            f"LatencyMonitor: Peer {peer_id} RTT = {rtt_ms:.1f}ms "
+            f"(rolling median={route_rtt_ms:.1f}ms)"
+        )
 
         # Update the registry asynchronously
-        asyncio.create_task(self._registry.update_latency(peer_id, rtt_ms))
+        asyncio.create_task(self._registry.update_latency(peer_id, route_rtt_ms))
 
     def get_pending_ping_count(self) -> int:
         """Get the number of pending (unanswered) pings.

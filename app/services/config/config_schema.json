@@ -398,6 +398,9 @@
             "mesh_sharing": {
               "$ref": "#/$defs/mesh_sharing"
             },
+            "mesh_routing": {
+              "$ref": "#/$defs/mesh_routing"
+            },
             "hardware_acceleration": {
               "type": "boolean",
               "description": "Enable hardware acceleration for TTS",
@@ -479,6 +482,9 @@
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
+                },
+                "mesh_routing": {
+                  "$ref": "#/$defs/mesh_routing"
                 },
                 "session_timeout_s": {
                   "type": "number",
@@ -598,6 +604,9 @@
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
                 },
+                "mesh_routing": {
+                  "$ref": "#/$defs/mesh_routing"
+                },
                 "backend": {
                   "type": "string",
                   "enum": [
@@ -645,6 +654,9 @@
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
+                },
+                "mesh_routing": {
+                  "$ref": "#/$defs/mesh_routing"
                 },
                 "vad_enabled": {
                   "type": "boolean",
@@ -783,6 +795,9 @@
             },
             "mesh_sharing": {
               "$ref": "#/$defs/mesh_sharing"
+            },
+            "mesh_routing": {
+              "$ref": "#/$defs/mesh_routing"
             },
             "hardware_acceleration": {
               "type": "boolean",
@@ -1194,6 +1209,9 @@
             "mesh_sharing": {
               "$ref": "#/$defs/mesh_sharing"
             },
+            "mesh_routing": {
+              "$ref": "#/$defs/mesh_routing"
+            },
             "embeddings": {
               "type": "object",
               "description": "Embeddings configuration",
@@ -1220,6 +1238,9 @@
             },
             "mesh_sharing": {
               "$ref": "#/$defs/mesh_sharing"
+            },
+            "mesh_routing": {
+              "$ref": "#/$defs/mesh_routing"
             },
             "approval_policy": {
               "$ref": "#/$defs/tooling_approval_policy"
@@ -1543,6 +1564,9 @@
             },
             "mesh_sharing": {
               "$ref": "#/$defs/mesh_sharing"
+            },
+            "mesh_routing": {
+              "$ref": "#/$defs/mesh_routing"
             }
           }
         },
@@ -1625,6 +1649,91 @@
             "type": "string"
           },
           "description": "Remote service capabilities required before this service may be selected as a mesh provider.",
+          "default": []
+        },
+        "require_explicit_selector": {
+          "type": "boolean",
+          "description": "Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.",
+          "default": false
+        },
+        "unshared_feature_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Subtractive stable feature IDs excluded from sharing; empty means no exclusions so all external-or-both features remain shared. Unknown or stale IDs are retained.",
+          "default": []
+        },
+        "unshared_method_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Subtractive canonical full bus topics excluded from sharing; empty means no exclusions so all external-or-both methods remain shared. Unknown or stale IDs are retained.",
+          "default": []
+        }
+      }
+    },
+    "mesh_routing": {
+      "type": "object",
+      "description": "Per-service mesh provider routing selection policy. This block is additive during the service export versus routing transition and is not an inbound authority.",
+      "additionalProperties": false,
+      "properties": {
+        "prefer": {
+          "type": "string",
+          "enum": [
+            "local",
+            "network",
+            "network_only",
+            "local_only"
+          ],
+          "description": "Routing preference for selecting local or network providers.",
+          "default": "local"
+        },
+        "fallback": {
+          "type": "string",
+          "enum": [
+            "local",
+            "network",
+            "error",
+            "none"
+          ],
+          "description": "Fallback strategy when the preferred provider path is unavailable.",
+          "default": "local"
+        },
+        "allowed_provider_peer_ids": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Stable provider peer IDs eligible for outbound routing. Null means any otherwise-eligible provider, an empty array denies network providers, and populated arrays allow only listed stable IDs. Never grants inbound authority.",
+          "default": null
+        },
+        "min_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Minimum compatible provider service version required for outbound routing.",
+          "default": null
+        },
+        "required_provider_feature_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "All-of stable feature IDs that a recipient-visible callable provider must expose before it is eligible for outbound routing.",
+          "default": []
+        },
+        "required_provider_capability_tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "All-of provider metadata capability tags required for outbound routing. These tags are separate from feature IDs and never grant authority.",
           "default": []
         },
         "require_explicit_selector": {

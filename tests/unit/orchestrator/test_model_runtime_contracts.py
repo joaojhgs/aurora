@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.messaging import Envelope
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable
@@ -17,6 +17,7 @@ from app.services.orchestrator.service import (
     _fetch_openai_model_catalog,
     _remote_model_providers,
 )
+from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import (
     ModelRuntimeCatalogRequest,
@@ -30,6 +31,8 @@ from app.shared.contracts.models.orchestrator import (
     OrchestratorMethods,
 )
 from app.shared.contracts.registry import all_contracts, clear_registry  # noqa: E402
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+from tests.unit.gateway.verified_manifest_helpers import verified_peer_manifest
 
 
 class _FakeInferenceMessage:
@@ -430,15 +433,29 @@ async def test_model_catalog_remote_merge_normalizes_service_instance_selector_p
     mesh_config = MeshConfig(
         enabled=True,
         node_name="local-test",
-        services={"Orchestrator": MeshServiceConfig(prefer="local")},
+        services={"Orchestrator": mesh_policy(prefer="local")},
     )
     peer_registry = PeerRegistry(mesh_config)
     await peer_registry.register_peer("raspi-lab")
     await peer_registry.update_manifest(
         "raspi-lab",
-        PeerManifest(
-            peer_id="raspi-lab",
-            shared_services=[PeerServiceInfo(module="Orchestrator", version="1.0.0")],
+        verified_peer_manifest(
+            "raspi-lab",
+            [
+                PeerServiceInfo(
+                    module="Orchestrator",
+                    version="1.0.0",
+                    methods=[
+                        MethodInfo(
+                            name="InferChat",
+                            bus_topic=OrchestratorMethods.INFER_CHAT,
+                            exposure="external",
+                            method_type="use",
+                            required_perms=["Orchestrator.use"],
+                        )
+                    ],
+                )
+            ],
         ),
     )
     route = RoutingTable(mesh_config, peer_registry).resolve(

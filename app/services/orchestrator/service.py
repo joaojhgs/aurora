@@ -28,12 +28,20 @@ from app.messaging import (
     Envelope,
     MessageBus,
 )
-from app.messaging.priority_helpers import get_interactive_priority
+from app.messaging.priority_helpers import get_interactive_priority, get_system_priority
 from app.services.orchestrator.graph import GraphOrchestrator, set_orchestrator
 from app.shared.config.interface import ConfigAPI
 from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
-from app.shared.contracts.models.db import DBMethods, DBRAGStoreRequest
+from app.shared.contracts.models.db import (
+    DBEnsureSessionRequest,
+    DBMethods,
+    DBRAGStoreRequest,
+    DBResolveDaemonSessionRequest,
+    DBSaveMessageRequest,
+    DBSessionRecord,
+    DBSessionResponse,
+)
 from app.shared.contracts.models.orchestrator import (
     AssistantStreamEvent,
     AttachmentContextIngestRequest,
@@ -80,6 +88,7 @@ from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
 from app.shared.contracts.models.tts import (
     TTSMethods,
     TTSRequest,
+    TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
     TTSStreamStartRequest,
@@ -122,6 +131,10 @@ _OPENAI_NON_CHAT_MODEL_MARKERS = (
     "realtime",
 )
 _OPENAI_CHAT_MODEL_PREFIXES = ("gpt-", "chatgpt-", "o1", "o3", "o4")
+
+
+class _SessionPersistenceError(RuntimeError):
+    """A DB session request failed and the local turn must not continue ephemerally."""
 
 
 def _coerce_mesh_selector(value: Any) -> Any | None:
@@ -309,6 +322,158 @@ class OrchestratorService(BaseService):
             return
         log_debug(f"Ignoring unrelated config change for OrchestratorService: {key_path}")
 
+    @staticmethod
+    def _session_response(data: Any, operation: str) -> DBSessionRecord:
+        """Validate one DB session response without depending on transport shape."""
+
+        try:
+            response = (
+                data
+                if isinstance(data, DBSessionResponse)
+                else DBSessionResponse.model_validate(data)
+            )
+            return response.session
+        except Exception as exc:
+            raise RuntimeError(f"{operation} returned an invalid session response") from exc
+
+    async def _ensure_chat_session(
+        self,
+        *,
+        principal_id: str,
+        session_id: str,
+        title: str | None = None,
+    ) -> DBSessionRecord:
+        """Validate ownership or create one explicitly typed chat session."""
+
+        result = await self.bus.request(
+            DBMethods.ENSURE_SESSION,
+            DBEnsureSessionRequest(
+                principal_id=principal_id,
+                type="chat",
+                session_id=session_id,
+                title=title,
+                activate=True,
+            ),
+            timeout=10.0,
+            priority=get_system_priority(),
+            origin="internal",
+            principal_id=principal_id,
+        )
+        if not result.ok:
+            raise _SessionPersistenceError(result.error or "DB.EnsureSession failed")
+        return self._session_response(result.data, "DB.EnsureSession")
+
+    async def _resolve_daemon_chat_session(self) -> DBSessionRecord:
+        """Resolve the local wakeword target using the 24-hour active window."""
+
+        result = await self.bus.request(
+            DBMethods.RESOLVE_DAEMON_SESSION,
+            DBResolveDaemonSessionRequest(type="chat", stale_after_seconds=86_400),
+            timeout=10.0,
+            priority=get_system_priority(),
+            origin="internal",
+        )
+        if not result.ok:
+            raise _SessionPersistenceError(result.error or "DB.ResolveDaemonSession failed")
+        return self._session_response(result.data, "DB.ResolveDaemonSession")
+
+    async def _persist_chat_message(
+        self,
+        *,
+        principal_id: str,
+        session_id: str,
+        role: str,
+        content: str,
+        source: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Persist one chat turn after the session owner has been resolved."""
+
+        message_metadata = dict(metadata or {})
+        message_metadata.setdefault(
+            "source_type",
+            "STT" if source == "stt" and role == "user" else "Text",
+        )
+        result = await self.bus.request(
+            DBMethods.SAVE_MESSAGE,
+            DBSaveMessageRequest(
+                content=content,
+                role=role,
+                session_id=session_id,
+                principal_id=principal_id,
+                session_type="chat",
+                metadata=message_metadata,
+            ),
+            timeout=10.0,
+            priority=get_system_priority(),
+            origin="internal",
+            principal_id=principal_id,
+        )
+        if not result.ok:
+            raise RuntimeError(result.error or "DB.SaveMessage failed")
+        success = (
+            bool(getattr(result.data, "success", False))
+            if not isinstance(result.data, dict)
+            else bool(result.data.get("success"))
+        )
+        if not success:
+            raise RuntimeError("DB.SaveMessage did not commit the chat message")
+
+    @staticmethod
+    def _session_persistence_is_local(
+        *,
+        caller_peer_id: str | None,
+        caller_identity_source: str | None,
+    ) -> bool:
+        """Keep persisted chat sessions out of mesh and peer RPC paths."""
+
+        return not (
+            caller_peer_id or caller_identity_source in {"webrtc_rpc", "mesh_peer", "remote_peer"}
+        )
+
+    async def _prepare_chat_session(
+        self,
+        *,
+        text: str,
+        source: str,
+        session_id: str | None,
+        request_id: str | None,
+        correlation_id: str | None,
+        caller_principal_id: str | None,
+        caller_peer_id: str | None,
+        caller_identity_source: str | None,
+    ) -> tuple[str | None, str | None, bool]:
+        """Resolve a local persisted session, degrading to the existing ephemeral flow."""
+
+        if not self._session_persistence_is_local(
+            caller_peer_id=caller_peer_id,
+            caller_identity_source=caller_identity_source,
+        ):
+            return session_id, caller_principal_id, False
+
+        try:
+            if source == "stt":
+                session = await self._resolve_daemon_chat_session()
+            else:
+                requested_session_id = (
+                    session_id or request_id or correlation_id or f"assistant-session-{uuid4().hex}"
+                )
+                session = await self._ensure_chat_session(
+                    principal_id=caller_principal_id or "system",
+                    session_id=requested_session_id,
+                    title=text.strip()[:80] or None,
+                )
+            return session.id, session.principal_id, True
+        except _SessionPersistenceError:
+            raise
+        except Exception as exc:
+            if caller_principal_id:
+                raise _SessionPersistenceError(
+                    "DB returned an invalid persisted session response"
+                ) from exc
+            log_error(f"Chat session persistence is unavailable; continuing ephemerally: {exc}")
+            return session_id, caller_principal_id, False
+
     async def _on_transcription(self, env: Envelope) -> None:
         """Handle STT transcription event.
 
@@ -356,6 +521,11 @@ class OrchestratorService(BaseService):
         """Handle UI user input command."""
         try:
             log_info(f"Processing UI input: {cmd.text}")
+            process_kwargs: dict[str, Any] = {}
+            if cmd.client_tts_playback is not None:
+                process_kwargs["response_metadata"] = {
+                    "client_tts_playback": cmd.client_tts_playback
+                }
             await self._process_input(
                 cmd.text,
                 source="ui",
@@ -366,6 +536,7 @@ class OrchestratorService(BaseService):
                 inference_selector=cmd.inference_selector,
                 inference_provider_id=cmd.inference_provider_id,
                 inference_model_id=cmd.inference_model_id,
+                **process_kwargs,
             )
             return EmptyOutput()
 
@@ -381,6 +552,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["assistant_conversation"],
     )
     async def process_external_input(
         self,
@@ -388,13 +560,19 @@ class OrchestratorService(BaseService):
         envelope: Envelope | None = None,
     ) -> OrchestratorResponse:
         """Handle external user input command and return the response."""
+        session_id = (
+            cmd.session_id
+            or cmd.request_id
+            or cmd.correlation_id
+            or f"assistant-session-{uuid4().hex}"
+        )
         try:
             source = cmd.source or "external"
             log_info(f"Processing external input: {cmd.text}")
             metadata: dict[str, Any] = {"source": source, "stream": cmd.stream}
             if cmd.client_tts_playback is not None:
                 metadata["client_tts_playback"] = cmd.client_tts_playback
-            caller_context: dict[str, str | None] = {}
+            caller_context: dict[str, Any] = {}
             if envelope is not None:
                 caller_context = {
                     "caller_principal_id": getattr(envelope, "principal_id", None),
@@ -407,7 +585,7 @@ class OrchestratorService(BaseService):
             response_text = await self._process_input(
                 cmd.text,
                 source=source,
-                session_id=cmd.session_id,
+                session_id=session_id,
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
                 return_response=True,  # Return the response for external API
@@ -420,7 +598,7 @@ class OrchestratorService(BaseService):
             )
             return OrchestratorResponse(
                 text=response_text or "",
-                session_id=cmd.session_id,
+                session_id=session_id,
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
                 metadata=metadata,
@@ -430,7 +608,7 @@ class OrchestratorService(BaseService):
             log_error(f"Error processing external input: {e}", exc_info=True)
             return OrchestratorResponse(
                 text=f"Error: {e!s}",
-                session_id=cmd.session_id,
+                session_id=session_id,
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
                 metadata={"source": cmd.source or "external", "stream": cmd.stream, "error": True},
@@ -444,6 +622,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["inference"],
     )
     async def infer_chat(
         self,
@@ -472,6 +651,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["inference"],
     )
     async def stream_infer_chat(
         self,
@@ -499,6 +679,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["assistant_conversation"],
     )
     async def ingest_context(
         self, data: AttachmentContextIngestRequest
@@ -686,6 +867,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["tool_approval"],
     )
     async def list_pending_tool_approvals(
         self,
@@ -736,6 +918,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["tool_approval"],
     )
     async def resume_tool_approval(
         self,
@@ -886,6 +1069,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["assistant_control"],
     )
     async def interrupt_assistant(
         self,
@@ -926,14 +1110,17 @@ class OrchestratorService(BaseService):
                     )
                 )
             elif scope == "tts_playback":
+                tts_correlation_id = data.request_id or getattr(envelope, "correlation_id", None)
                 await self.bus.publish(
                     TTSMethods.STOP,
-                    EmptyInput(),
+                    TTSStopRequest(correlation_id=tts_correlation_id, reason=data.reason),
                     event=False,
                     priority=get_interactive_priority(),
                     origin="internal",
-                    correlation_id=getattr(envelope, "correlation_id", None),
+                    correlation_id=tts_correlation_id,
                     principal_id=getattr(envelope, "principal_id", None),
+                    identity_source=getattr(envelope, "identity_source", None),
+                    caller_peer_id=getattr(envelope, "caller_peer_id", None),
                 )
                 results.append(
                     OrchestratorInterruptScopeResult(
@@ -992,7 +1179,7 @@ class OrchestratorService(BaseService):
                 secrets_redacted=True,
             ),
             event=True,
-            mesh=True,
+            mesh=False,
             priority=get_interactive_priority(),
             origin="internal",
             correlation_id=getattr(envelope, "correlation_id", None),
@@ -1008,6 +1195,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["model_observability"],
     )
     async def get_model_runtime(self, data: ModelRuntimeRequest) -> ModelRuntimeResponse:
         """Return redacted runtime state for the selected or requested model provider."""
@@ -1051,6 +1239,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["model_observability"],
     )
     async def get_model_catalog(
         self,
@@ -1078,6 +1267,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="use",
         required_perms=["Orchestrator.use"],
+        callable_feature_ids=["model_observability"],
     )
     async def get_model_operation(
         self, data: ModelRuntimeOperationStatusRequest
@@ -1104,6 +1294,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="manage",
         required_perms=["Orchestrator.manage"],
+        callable_feature_ids=["model_management"],
     )
     async def import_model(
         self, data: ModelRuntimeOperationRequest
@@ -1119,6 +1310,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="manage",
         required_perms=["Orchestrator.manage"],
+        callable_feature_ids=["model_management"],
     )
     async def download_model(
         self, data: ModelRuntimeOperationRequest
@@ -1134,6 +1326,7 @@ class OrchestratorService(BaseService):
         exposure="external",
         method_type="manage",
         required_perms=["Orchestrator.manage"],
+        callable_feature_ids=["model_management"],
     )
     async def benchmark_model(
         self, data: ModelRuntimeOperationRequest
@@ -1176,10 +1369,20 @@ class OrchestratorService(BaseService):
         metadata = response_metadata if response_metadata is not None else {}
         metadata.setdefault("source", source)
         metadata.setdefault("stream", stream)
+        persist_session = False
+        mesh_response = not self._session_persistence_is_local(
+            caller_peer_id=caller_peer_id,
+            caller_identity_source=caller_identity_source,
+        )
         inference_override = await self._resolve_inference_override(
             inference_selector=inference_selector,
             inference_provider_id=inference_provider_id,
             inference_model_id=inference_model_id,
+            include_cloud_models=self._can_expand_graph_cloud_catalog(
+                caller_effective_perms=caller_effective_perms,
+                caller_identity_source=caller_identity_source,
+                source=source,
+            ),
         )
         self._authorize_inference_override(
             inference_override,
@@ -1195,7 +1398,42 @@ class OrchestratorService(BaseService):
             if self.orchestrator is None:
                 raise RuntimeError("Orchestrator not initialized")
 
+            session_id, caller_principal_id, persist_session = await self._prepare_chat_session(
+                text=text,
+                source=source,
+                session_id=session_id,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                caller_principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
+                caller_identity_source=caller_identity_source,
+            )
+            if current_task is not None:
+                await self._track_generation_task(current_task, session_id)
+            if session_id:
+                metadata["session_id"] = session_id
             metadata.update(await self._assistant_response_metadata())
+            if inference_override:
+                selected_provider_id = inference_override.get("inference_provider_id")
+                selected_model_id = inference_override.get("inference_model_id")
+                selected_provider_label = inference_override.get("inference_provider_label")
+                if selected_provider_id:
+                    metadata["provider"] = selected_provider_id
+                if selected_provider_label:
+                    metadata["provider_label"] = selected_provider_label
+                if selected_model_id:
+                    metadata["model"] = selected_model_id
+
+            if persist_session:
+                if not session_id or not caller_principal_id:
+                    raise RuntimeError("persisted chat requires a session and principal")
+                await self._persist_chat_message(
+                    principal_id=caller_principal_id,
+                    session_id=session_id,
+                    role="user",
+                    content=text,
+                    source=source,
+                )
 
             if stream:
                 response_text = await self._process_streaming_input(
@@ -1208,6 +1446,8 @@ class OrchestratorService(BaseService):
                     caller_principal_id=caller_principal_id,
                     caller_peer_id=caller_peer_id,
                     inference_override=inference_override,
+                    persist_session=persist_session,
+                    mesh_response=mesh_response,
                 )
             else:
                 response_text = await self.orchestrator.stream_graph_updates(
@@ -1236,6 +1476,16 @@ class OrchestratorService(BaseService):
                 metadata["tts_status"] = "skipped"
                 metadata["tts_reason"] = "Graph ended without a speakable assistant answer."
 
+            if publish_text and persist_session and not stream:
+                await self._persist_chat_message(
+                    principal_id=caller_principal_id or "system",
+                    session_id=session_id or "",
+                    role="assistant",
+                    content=publish_text,
+                    source=source,
+                    metadata={**metadata, "execution": "local"},
+                )
+
             if publish_text and not stream:
                 # Emit response event
                 # We need to use the new OrchestratorResponse model if we want to be consistent,
@@ -1256,10 +1506,12 @@ class OrchestratorService(BaseService):
                         },
                     ),
                     event=True,  # Broadcast to all subscribers (UI, TTS, etc.)
-                    mesh=True,
                     priority=get_interactive_priority(),
                     origin="internal",
                     correlation_id=correlation_id,
+                    principal_id=caller_principal_id,
+                    caller_peer_id=caller_peer_id,
+                    mesh=mesh_response,
                 )
 
                 # Voice-origin requests keep voice-to-voice playback. Typed UI and
@@ -1328,6 +1580,9 @@ class OrchestratorService(BaseService):
                             },
                         ),
                         sequence=1,
+                        principal_id=caller_principal_id,
+                        caller_peer_id=caller_peer_id,
+                        mesh=mesh_response,
                     )
                 else:
                     from app.shared.messaging.models.orchestrator_models import LLMResponseReady
@@ -1346,10 +1601,12 @@ class OrchestratorService(BaseService):
                             },
                         ),
                         event=True,
-                        mesh=True,
                         priority=get_interactive_priority(),
                         origin="internal",
                         correlation_id=correlation_id,
+                        principal_id=caller_principal_id,
+                        caller_peer_id=caller_peer_id,
+                        mesh=mesh_response,
                     )
             except Exception as publish_error:
                 log_error(
@@ -1376,6 +1633,8 @@ class OrchestratorService(BaseService):
         caller_principal_id: str | None = None,
         caller_peer_id: str | None = None,
         inference_override: dict[str, Any] | None = None,
+        persist_session: bool = False,
+        mesh_response: bool = True,
     ) -> str:
         """Publish correlated assistant stream events while graph generation runs."""
 
@@ -1387,8 +1646,10 @@ class OrchestratorService(BaseService):
         tts_stream_id: str | None = None
         tts_text_sequence = 0
         tts_buffer = ""
+        client_tts_playback = metadata.get("client_tts_playback") is True
         should_stream_tts = source == "stt" or (
-            source in {"ui", "external"} and self._ui_automatic_tts_readback
+            source in {"ui", "external"}
+            and (self._ui_automatic_tts_readback or client_tts_playback)
         )
         if should_stream_tts and get_contract(TTSMethods.STREAM_START) is not None:
             tts_stream_id = f"tts-{request_id or correlation_id or uuid4().hex}"
@@ -1403,6 +1664,8 @@ class OrchestratorService(BaseService):
                 event=False,
                 priority=get_interactive_priority(),
                 origin="internal",
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
                 correlation_id=correlation_id,
             )
             metadata["tts_status"] = "streaming"
@@ -1425,8 +1688,12 @@ class OrchestratorService(BaseService):
                         buffer=f"{tts_buffer}{event.delta}",
                         next_sequence=tts_text_sequence,
                         correlation_id=correlation_id,
+                        principal_id=caller_principal_id,
+                        caller_peer_id=caller_peer_id,
                         final=False,
                     )
+            elif event.kind == "assistant.completed" and event.text:
+                response_text = event.text
             await self._publish_assistant_stream_event(
                 event,
                 sequence=sequence,
@@ -1434,6 +1701,9 @@ class OrchestratorService(BaseService):
                 request_id=request_id,
                 correlation_id=correlation_id,
                 metadata=metadata,
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
+                mesh=mesh_response,
             )
 
         publish_text = response_text
@@ -1450,6 +1720,8 @@ class OrchestratorService(BaseService):
                 buffer=tts_buffer,
                 next_sequence=tts_text_sequence,
                 correlation_id=correlation_id,
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
                 final=True,
             )
             await self.bus.publish(
@@ -1463,6 +1735,8 @@ class OrchestratorService(BaseService):
                 event=False,
                 priority=get_interactive_priority(),
                 origin="internal",
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
                 correlation_id=correlation_id,
             )
         elif publish_text and publish_text != "Done.":
@@ -1471,6 +1745,16 @@ class OrchestratorService(BaseService):
                 source=source,
                 metadata=terminal_metadata,
                 skip_tts=False,
+            )
+
+        if publish_text and persist_session:
+            await self._persist_chat_message(
+                principal_id=caller_principal_id or "system",
+                session_id=session_id or "",
+                role="assistant",
+                content=publish_text,
+                source=source,
+                metadata={**terminal_metadata, "execution": "local"},
             )
 
         sequence += 1
@@ -1485,6 +1769,9 @@ class OrchestratorService(BaseService):
             request_id=request_id,
             correlation_id=correlation_id,
             metadata=terminal_metadata,
+            principal_id=caller_principal_id,
+            caller_peer_id=caller_peer_id,
+            mesh=mesh_response,
         )
         return publish_text
 
@@ -1495,6 +1782,8 @@ class OrchestratorService(BaseService):
         buffer: str,
         next_sequence: int,
         correlation_id: str | None,
+        principal_id: str | None,
+        caller_peer_id: str | None,
         final: bool,
     ) -> tuple[str, int]:
         """Flush sentence-sized TTS stream text chunks over the typed bus."""
@@ -1538,6 +1827,8 @@ class OrchestratorService(BaseService):
                 event=False,
                 priority=get_interactive_priority(),
                 origin="internal",
+                principal_id=principal_id,
+                caller_peer_id=caller_peer_id,
                 correlation_id=correlation_id,
             )
             next_sequence += 1
@@ -1552,6 +1843,9 @@ class OrchestratorService(BaseService):
         request_id: str | None = None,
         correlation_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        principal_id: str | None = None,
+        caller_peer_id: str | None = None,
+        mesh: bool = True,
     ) -> None:
         """Publish one typed assistant stream event with propagated identifiers."""
 
@@ -1577,16 +1871,20 @@ class OrchestratorService(BaseService):
             OrchestratorMethods.RESPONSE,
             payload,
             event=True,
-            mesh=True,
+            mesh=mesh,
             priority=get_interactive_priority(),
             origin="internal",
             correlation_id=payload.correlation_id,
+            principal_id=principal_id,
+            caller_peer_id=caller_peer_id,
         )
 
     def _should_play_tts_on_server(self, source: str, metadata: dict[str, Any]) -> bool:
         """Return whether streamed TTS should use the server audio device."""
         if source == "stt":
             return True
+        if source in {"ui", "external"} and metadata.get("client_tts_playback") is True:
+            return False
         if source in {"ui", "external"} and self._ui_automatic_tts_readback:
             return metadata.get("client_tts_playback") is False
         return False
@@ -1693,6 +1991,7 @@ class OrchestratorService(BaseService):
         inference_selector: Any | None = None,
         inference_provider_id: str | None = None,
         inference_model_id: str | None = None,
+        include_cloud_models: bool = False,
     ) -> dict[str, Any] | None:
         """Resolve per-request/default inference routing without affecting dispatch."""
 
@@ -1735,6 +2034,7 @@ class OrchestratorService(BaseService):
             ) = await self._validate_local_graph_inference_ids(
                 provider_id=inference_provider_id,
                 model_id=inference_model_id,
+                include_cloud_models=include_cloud_models,
             )
         if (
             selector is None
@@ -1804,11 +2104,32 @@ class OrchestratorService(BaseService):
             "Runtime inference provider/model selection requires Orchestrator.RemoteInference permission"
         )
 
+    def _can_expand_graph_cloud_catalog(
+        self,
+        *,
+        caller_effective_perms: list[str] | None,
+        caller_identity_source: str | None,
+        source: str,
+    ) -> bool:
+        """Allow live cloud-model validation only for trusted or authorized callers."""
+
+        externalish = source == "external" or caller_identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+        if not externalish:
+            return True
+        return bool(set(caller_effective_perms or []).intersection(_REMOTE_INFERENCE_PERMS))
+
     async def _validate_local_graph_inference_ids(
         self,
         *,
         provider_id: str | None,
         model_id: str | None,
+        include_cloud_models: bool = False,
     ) -> tuple[str, str | None, dict[str, Any]]:
         """Validate explicit graph inference ids against advertised local/cloud providers."""
 
@@ -1816,7 +2137,7 @@ class OrchestratorService(BaseService):
             include_unavailable=True,
             include_operations=False,
             include_remote=False,
-            include_cloud_models=False,
+            include_cloud_models=include_cloud_models,
         )
         provider, selected_model_id = self._validate_advertised_provider_from_catalog(
             catalog=catalog,
@@ -2038,7 +2359,8 @@ class OrchestratorService(BaseService):
             "inference_provider_is_cloud": provider_is_cloud,
             "inference_selection_is_default": selection_is_default,
             "inference_selected_provider_id": catalog.selected_provider_id,
-            "inference_selected_model_id": selected_default_model_id,
+            "inference_selected_model_id": selected_model_id,
+            "inference_provider_label": provider.display_name,
         }
 
     async def _inference_llm(self, data: OrchestratorInferChatRequest | None = None) -> Any:

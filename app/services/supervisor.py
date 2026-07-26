@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import os
 import signal
+from pathlib import Path
 from typing import Any, Literal
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
@@ -109,10 +112,24 @@ class Supervisor(BaseService):
         """Initialize the supervisor and message bus."""
         log_info("Initializing Aurora Supervisor...")
 
-        log_info("Initializing Aurora Supervisor...")
+        if os.getenv("AURORA_TOOLING_TARGET_MODE", "projection").lower() == "legacy":
+            from app.services.config.mesh_policy_migration import (
+                preflight_tooling_downgrade_start,
+            )
 
-        # Get architecture mode from environment variable (default: threads)
-        import os
+            config_file = os.getenv("AURORA_CONFIG_FILE", "config.json")
+            snapshot_file = os.getenv("AURORA_TOOLING_EXPORT_SNAPSHOT")
+            if not snapshot_file:
+                raise RuntimeError("unsafe_downgrade_blocked")
+            config = json.loads(Path(config_file).read_text())
+            snapshot = json.loads(Path(snapshot_file).read_text())
+            preflight = preflight_tooling_downgrade_start(
+                output_config=config,
+                output_file=config_file,
+                tooling_export_snapshot=snapshot,
+            )
+            if not preflight.ok:
+                raise RuntimeError(preflight.reason)
 
         self._mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 

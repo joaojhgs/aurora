@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from RealtimeTTS import PiperVoice, TextToAudioStream
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.messaging import Envelope
 from app.services.tts.piper_engine import PiperEngine
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
@@ -32,6 +33,7 @@ from app.shared.contracts.models.tts import (
     TTSMethods,
     TTSModule,
     TTSRequest,
+    TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
     TTSStreamStartRequest,
@@ -50,6 +52,7 @@ from app.shared.path_utils import resolve_path
 from app.shared.services.base_service import BaseService
 
 config_api = ConfigAPI()
+_GLOBAL_TTS_STREAM_CLEAR = object()
 
 
 @dataclass
@@ -63,6 +66,8 @@ class _TTSStreamState:
     speed: float
     play_on_server: bool
     correlation_id: str | None = None
+    caller_peer_id: str | None = None
+    principal_id: str | None = None
     pending: dict[int, str] = field(default_factory=dict)
     next_text_sequence: int = 0
     next_audio_sequence: int = 0
@@ -70,6 +75,70 @@ class _TTSStreamState:
     end_reason: str = "completed"
     emitted_sample_rate: int = 0
     draining: bool = False
+
+
+def _clean_envelope_string(value: object) -> str | None:
+    """Return a non-empty envelope string value, if present."""
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
+def _envelope_caller_peer_id(envelope: Envelope | None) -> str | None:
+    """Extract the stable caller peer id from a bus envelope."""
+    if envelope is None:
+        return None
+    return _clean_envelope_string(getattr(envelope, "caller_peer_id", None))
+
+
+def _envelope_principal_id(envelope: Envelope | None) -> str | None:
+    """Extract the authenticated principal id from a bus envelope."""
+    if envelope is None:
+        return None
+    return _clean_envelope_string(getattr(envelope, "principal_id", None))
+
+
+def _envelope_correlation_id(envelope: Envelope | None) -> str | None:
+    """Extract the correlation id from a bus envelope."""
+    if envelope is None:
+        return None
+    return _clean_envelope_string(getattr(envelope, "correlation_id", None))
+
+
+def _stream_update_allowed(
+    state: _TTSStreamState,
+    envelope: Envelope | None,
+    correlation_id: str | None = None,
+) -> bool:
+    """Return whether an incoming envelope may mutate an existing stream."""
+    if _envelope_caller_peer_id(envelope) != state.caller_peer_id:
+        return False
+    if _envelope_principal_id(envelope) != state.principal_id:
+        return False
+    if state.correlation_id is None:
+        return True
+    return (correlation_id or _envelope_correlation_id(envelope)) == state.correlation_id
+
+
+def _stream_matches_owner(
+    state: _TTSStreamState,
+    *,
+    caller_peer_id: str | None,
+    principal_id: str | None,
+    correlation_id: str | None,
+    stream_id: str | None = None,
+    require_correlation: bool = True,
+) -> bool:
+    """Return whether a stream is owned by the requested scoped stop/interrupt."""
+    if stream_id is not None and state.stream_id != stream_id:
+        return False
+    if state.caller_peer_id != caller_peer_id:
+        return False
+    if state.principal_id != principal_id:
+        return False
+    if require_correlation:
+        return correlation_id is not None and state.correlation_id == correlation_id
+    return True
 
 
 # TODO: Implement volume control functions
@@ -199,7 +268,7 @@ class TTSService(BaseService):
                     TTSMethods.STOPPED,
                     TTSStopped(request_id=request_id, reason="completed"),
                     event=True,
-                    mesh=True,
+                    mesh=False,
                     origin="internal",
                 ),
                 self._loop,
@@ -262,6 +331,7 @@ class TTSService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=[TTSMethods.REQUEST],
+        callable_feature_ids=["speech_playback"],
     )
     async def _on_tts_request(self, request: TTSRequest) -> EmptyOutput:
         """Handle TTS request command.
@@ -299,7 +369,7 @@ class TTSService(BaseService):
                 TTSMethods.ERROR,
                 TTSErrorEvent(request_id=request_id, error=str(e)),
                 event=True,
-                mesh=True,
+                mesh=False,
                 origin="internal",
             )
             return EmptyOutput()
@@ -312,18 +382,43 @@ class TTSService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=[TTSMethods.STREAM_START],
+        callable_feature_ids=["speech_streaming"],
     )
-    async def _on_stream_start(self, request: TTSStreamStartRequest) -> EmptyOutput:
+    async def _on_stream_start(
+        self, request: TTSStreamStartRequest, envelope: Envelope | None = None
+    ) -> EmptyOutput:
         """Start a streaming TTS session that emits audio chunk events."""
         try:
             log_info(
                 f"TTS stream start: stream_id={request.stream_id} interrupt={request.interrupt}"
             )
+            caller_peer_id = _envelope_caller_peer_id(envelope)
+            principal_id = _envelope_principal_id(envelope)
+            correlation_id = request.correlation_id or _envelope_correlation_id(envelope)
+            async with self._stream_state_lock:
+                existing = self._stream_states.get(request.stream_id)
+                if existing is not None and not _stream_update_allowed(
+                    existing, envelope, correlation_id
+                ):
+                    return EmptyOutput()
+
             if request.interrupt:
-                await self._stop_playback("interrupted")
-                await self._clear_tts_streams("interrupted")
+                if caller_peer_id is None and principal_id is None and request.play_on_server:
+                    await self._stop_playback("interrupted")
+                await self._clear_tts_streams(
+                    "interrupted",
+                    caller_peer_id=caller_peer_id,
+                    principal_id=principal_id,
+                    correlation_id=correlation_id,
+                    require_correlation=caller_peer_id is not None or principal_id is not None,
+                )
 
             async with self._stream_state_lock:
+                existing = self._stream_states.get(request.stream_id)
+                if existing is not None and not _stream_update_allowed(
+                    existing, envelope, correlation_id
+                ):
+                    return EmptyOutput()
                 self._stream_states[request.stream_id] = _TTSStreamState(
                     stream_id=request.stream_id,
                     audio_format=request.format,
@@ -331,12 +426,20 @@ class TTSService(BaseService):
                     voice=request.voice,
                     speed=request.speed,
                     play_on_server=request.play_on_server,
-                    correlation_id=request.correlation_id,
+                    correlation_id=correlation_id,
+                    caller_peer_id=caller_peer_id,
+                    principal_id=principal_id,
                 )
             return EmptyOutput()
         except Exception as e:
             log_error(f"Error starting TTS stream: {e}", exc_info=True)
-            await self._publish_stream_error(request.stream_id, str(e), request.correlation_id)
+            await self._publish_stream_error(
+                request.stream_id,
+                str(e),
+                request.correlation_id or _envelope_correlation_id(envelope),
+                caller_peer_id=_envelope_caller_peer_id(envelope),
+                principal_id=_envelope_principal_id(envelope),
+            )
             return EmptyOutput()
 
     @method_contract(
@@ -347,14 +450,22 @@ class TTSService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=[TTSMethods.STREAM_CHUNK],
+        callable_feature_ids=["speech_streaming"],
     )
-    async def _on_stream_chunk(self, request: TTSStreamChunkRequest) -> EmptyOutput:
+    async def _on_stream_chunk(
+        self, request: TTSStreamChunkRequest, envelope: Envelope | None = None
+    ) -> EmptyOutput:
         """Buffer and synthesize a text chunk once prior chunks have arrived."""
         try:
+            correlation_id = request.correlation_id or _envelope_correlation_id(envelope)
             async with self._stream_state_lock:
                 state = self._stream_states.get(request.stream_id)
                 if state is None:
                     raise ValueError(f"Unknown TTS stream_id: {request.stream_id}")
+                if not _stream_update_allowed(state, envelope, correlation_id):
+                    return EmptyOutput()
+                if correlation_id is not None and state.correlation_id is None:
+                    state.correlation_id = correlation_id
                 if request.sequence < state.next_text_sequence:
                     log_debug(
                         f"Ignoring duplicate TTS stream chunk: stream_id={request.stream_id} "
@@ -370,7 +481,13 @@ class TTSService(BaseService):
             return EmptyOutput()
         except Exception as e:
             log_error(f"Error processing TTS stream chunk: {e}", exc_info=True)
-            await self._publish_stream_error(request.stream_id, str(e), request.correlation_id)
+            await self._publish_stream_error(
+                request.stream_id,
+                str(e),
+                request.correlation_id or _envelope_correlation_id(envelope),
+                caller_peer_id=_envelope_caller_peer_id(envelope),
+                principal_id=_envelope_principal_id(envelope),
+            )
             return EmptyOutput()
 
     @method_contract(
@@ -381,13 +498,19 @@ class TTSService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=[TTSMethods.STREAM_END],
+        callable_feature_ids=["speech_streaming"],
     )
-    async def _on_stream_end(self, request: TTSStreamEndRequest) -> EmptyOutput:
+    async def _on_stream_end(
+        self, request: TTSStreamEndRequest, envelope: Envelope | None = None
+    ) -> EmptyOutput:
         """Mark a streaming TTS session complete after all expected chunks drain."""
         try:
+            correlation_id = request.correlation_id or _envelope_correlation_id(envelope)
             async with self._stream_state_lock:
                 state = self._stream_states.get(request.stream_id)
                 if state is None:
+                    return EmptyOutput()
+                if not _stream_update_allowed(state, envelope, correlation_id):
                     return EmptyOutput()
                 state.final_text_sequence = (
                     request.final_sequence
@@ -395,34 +518,67 @@ class TTSService(BaseService):
                     else max(state.pending.keys(), default=state.next_text_sequence - 1)
                 )
                 state.end_reason = request.reason
-                if request.correlation_id is not None:
-                    state.correlation_id = request.correlation_id
+                if correlation_id is not None and state.correlation_id is None:
+                    state.correlation_id = correlation_id
 
             await self._drain_stream(request.stream_id)
             return EmptyOutput()
         except Exception as e:
             log_error(f"Error ending TTS stream: {e}", exc_info=True)
-            await self._publish_stream_error(request.stream_id, str(e), request.correlation_id)
+            await self._publish_stream_error(
+                request.stream_id,
+                str(e),
+                request.correlation_id or _envelope_correlation_id(envelope),
+                caller_peer_id=_envelope_caller_peer_id(envelope),
+                principal_id=_envelope_principal_id(envelope),
+            )
             return EmptyOutput()
 
     @method_contract(
         method_id=TTSMethods.STOP,
         summary="Stop current TTS playback (server audio)",
-        input_model=EmptyInput,
+        input_model=TTSStopRequest,
         output_model=EmptyOutput,
         exposure="internal",
         method_type="use",
+        required_perms=[TTSMethods.STOP],
     )
-    async def _on_stop(self, request: EmptyInput) -> EmptyOutput:
+    async def _on_stop(
+        self, request: TTSStopRequest | EmptyInput | None = None, envelope: Envelope | None = None
+    ) -> EmptyOutput:
         """Handle TTS stop command.
 
         Args:
-            request: Empty input (payload already extracted by base_service wrapper)
+            request: Optional stop payload (empty payload remains valid for legacy callers).
         """
         try:
             log_info("TTS stop requested")
-            await self._stop_playback("stopped")
-            await self._clear_tts_streams("stopped")
+            stop_request = request if isinstance(request, TTSStopRequest) else TTSStopRequest()
+            caller_peer_id = _envelope_caller_peer_id(envelope)
+            principal_id = _envelope_principal_id(envelope)
+            correlation_id = stop_request.correlation_id or _envelope_correlation_id(envelope)
+            has_external_owner = caller_peer_id is not None or principal_id is not None
+            trusted_global_stop = (
+                not has_external_owner and correlation_id is None and stop_request.stream_id is None
+            )
+
+            if trusted_global_stop:
+                await self._stop_playback(stop_request.reason)
+                await self._clear_tts_streams(stop_request.reason)
+                return EmptyOutput()
+
+            if has_external_owner and correlation_id is None:
+                log_info("Ignoring scoped TTS stop without caller correlation")
+                return EmptyOutput()
+
+            await self._clear_tts_streams(
+                stop_request.reason,
+                caller_peer_id=caller_peer_id,
+                principal_id=principal_id,
+                correlation_id=correlation_id,
+                stream_id=stop_request.stream_id,
+                require_correlation=True,
+            )
             return EmptyOutput()
         except Exception as e:
             log_error(f"Error stopping TTS: {e}", exc_info=True)
@@ -435,6 +591,7 @@ class TTSService(BaseService):
         output_model=EmptyOutput,
         exposure="internal",
         method_type="use",
+        required_perms=[TTSMethods.PAUSE],
     )
     async def _on_pause(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS pause command.
@@ -454,7 +611,7 @@ class TTSService(BaseService):
                     TTSMethods.PAUSED,
                     TTSPaused(request_id=""),
                     event=True,
-                    mesh=True,
+                    mesh=False,
                     origin="internal",
                 )
             return EmptyOutput()
@@ -469,6 +626,7 @@ class TTSService(BaseService):
         output_model=EmptyOutput,
         exposure="internal",
         method_type="use",
+        required_perms=[TTSMethods.RESUME],
     )
     async def _on_resume(self, request: EmptyInput) -> EmptyOutput:
         """Handle TTS resume command.
@@ -488,7 +646,7 @@ class TTSService(BaseService):
                     TTSMethods.RESUMED,
                     TTSResumed(request_id=""),
                     event=True,
-                    mesh=True,
+                    mesh=False,
                     origin="internal",
                 )
             return EmptyOutput()
@@ -513,7 +671,7 @@ class TTSService(BaseService):
                 TTSMethods.STARTED,
                 TTSStarted(request_id=request_id, text=text),
                 event=True,
-                mesh=True,
+                mesh=False,
                 origin="internal",
             )
 
@@ -554,7 +712,7 @@ class TTSService(BaseService):
                 TTSMethods.STOPPED,
                 TTSStopped(request_id=request_id, reason=reason),
                 event=True,
-                mesh=True,
+                mesh=False,
                 origin="internal",
             )
             log_info(f"TTS playback stopped: {reason}")
@@ -631,6 +789,7 @@ class TTSService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=[TTSMethods.SYNTHESIZE],
+        callable_feature_ids=["speech_synthesis"],
     )
     async def synthesize(self, request: TTSSynthesizeRequest) -> TTSSynthesizeResponse:
         """Synthesize text to audio and return as base64-encoded data.
@@ -708,16 +867,20 @@ class TTSService(BaseService):
                     if state.next_text_sequence not in state.pending:
                         if self._stream_is_complete(state):
                             final_event = self._build_final_audio_chunk_event(state)
+                            final_event_context = (state.caller_peer_id, state.principal_id)
                             del self._stream_states[stream_id]
                         else:
                             state.draining = False
                             final_event = None
+                            final_event_context = (None, None)
                         text_sequence = None
                         text = None
                         audio_sequence = None
                         audio_format = "wav"
                         play_on_server = False
                         correlation_id = None
+                        caller_peer_id = None
+                        principal_id = None
                     else:
                         text_sequence = state.next_text_sequence
                         text = state.pending.pop(text_sequence)
@@ -725,12 +888,20 @@ class TTSService(BaseService):
                         audio_format = state.audio_format
                         play_on_server = state.play_on_server
                         correlation_id = state.correlation_id
+                        caller_peer_id = state.caller_peer_id
+                        principal_id = state.principal_id
+                        stream_epoch = state
                         state.next_text_sequence += 1
                         state.next_audio_sequence += 1
                         final_event = None
 
                 if final_event is not None:
-                    await self._publish_audio_chunk(final_event)
+                    await self._publish_audio_chunk(
+                        final_event,
+                        caller_peer_id=final_event_context[0],
+                        principal_id=final_event_context[1],
+                        correlation_id=final_event.correlation_id,
+                    )
                     return
 
                 if text_sequence is None or text is None or audio_sequence is None:
@@ -742,8 +913,9 @@ class TTSService(BaseService):
                 )
                 async with self._stream_state_lock:
                     state = self._stream_states.get(stream_id)
-                    if state is not None:
-                        state.emitted_sample_rate = sample_rate
+                    if state is not stream_epoch:
+                        return
+                    state.emitted_sample_rate = sample_rate
                 await self._publish_audio_chunk(
                     TTSAudioChunkEvent(
                         stream_id=stream_id,
@@ -757,7 +929,10 @@ class TTSService(BaseService):
                         source_sequence=text_sequence,
                         is_final=False,
                         correlation_id=correlation_id,
-                    )
+                    ),
+                    caller_peer_id=caller_peer_id,
+                    principal_id=principal_id,
+                    correlation_id=correlation_id,
                 )
                 if play_on_server:
                     await self._play_stream_text(text, stream_id)
@@ -779,7 +954,7 @@ class TTSService(BaseService):
                 TTSMethods.STARTED,
                 TTSStarted(request_id=stream_id, text=text),
                 event=True,
-                mesh=True,
+                mesh=False,
                 origin="internal",
             )
             self.stream.feed(text)
@@ -826,34 +1001,91 @@ class TTSService(BaseService):
             return wav_buffer.getvalue(), duration_ms
         return audio_bytes, duration_ms
 
-    async def _publish_audio_chunk(self, event: TTSAudioChunkEvent) -> None:
+    async def _publish_audio_chunk(
+        self,
+        event: TTSAudioChunkEvent,
+        *,
+        caller_peer_id: str | None = None,
+        principal_id: str | None = None,
+        correlation_id: str | None = None,
+    ) -> None:
         """Publish a TTS audio chunk event."""
+        target_peer_id = caller_peer_id or None
+        trace_id = correlation_id or event.correlation_id
         await self.bus.publish(
             TTSMethods.AUDIO_CHUNK,
             event,
             event=True,
-            mesh=True,
+            mesh=bool(target_peer_id and trace_id),
             origin="internal",
+            caller_peer_id=target_peer_id,
+            principal_id=principal_id,
+            correlation_id=trace_id,
         )
 
-    async def _clear_tts_streams(self, reason: str) -> None:
+    async def _clear_tts_streams(
+        self,
+        reason: str,
+        *,
+        caller_peer_id: str | None | object = _GLOBAL_TTS_STREAM_CLEAR,
+        principal_id: str | None = None,
+        correlation_id: str | None = None,
+        stream_id: str | None = None,
+        require_correlation: bool = False,
+    ) -> None:
         """Clear active TTS stream state and emit terminal chunk events."""
         async with self._stream_state_lock:
-            states = list(self._stream_states.values())
-            self._stream_states.clear()
+            if caller_peer_id is _GLOBAL_TTS_STREAM_CLEAR:
+                states = list(self._stream_states.values())
+                self._stream_states.clear()
+            else:
+                states = [
+                    state
+                    for state in self._stream_states.values()
+                    if _stream_matches_owner(
+                        state,
+                        caller_peer_id=caller_peer_id,
+                        principal_id=principal_id,
+                        correlation_id=correlation_id,
+                        stream_id=stream_id,
+                        require_correlation=require_correlation,
+                    )
+                ]
+                for state in states:
+                    self._stream_states.pop(state.stream_id, None)
 
         for state in states:
             state.end_reason = reason
-            await self._publish_audio_chunk(self._build_final_audio_chunk_event(state))
+            await self._publish_audio_chunk(
+                self._build_final_audio_chunk_event(state),
+                caller_peer_id=state.caller_peer_id,
+                principal_id=state.principal_id,
+                correlation_id=state.correlation_id,
+            )
 
     async def _publish_stream_error(
-        self, stream_id: str, error: str, correlation_id: str | None = None
+        self,
+        stream_id: str,
+        error: str,
+        correlation_id: str | None = None,
+        *,
+        caller_peer_id: str | None = None,
+        principal_id: str | None = None,
     ) -> None:
         """Publish a TTS stream error event using existing TTS error topic."""
+        async with self._stream_state_lock:
+            state = self._stream_states.get(stream_id)
+            if state is not None:
+                caller_peer_id = caller_peer_id or state.caller_peer_id
+                principal_id = principal_id or state.principal_id
+                correlation_id = correlation_id or state.correlation_id
         await self.bus.publish(
             TTSMethods.ERROR,
             TTSErrorEvent(request_id=stream_id, error=error),
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
+            caller_peer_id=caller_peer_id,
+            principal_id=principal_id,
+            correlation_id=correlation_id,
         )

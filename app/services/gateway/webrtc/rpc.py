@@ -8,13 +8,26 @@ after validating permissions against the aggregated registry and the peer's
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import secrets
 from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
+from app.services.gateway.mesh.tooling_projection_transport import (
+    TOOLING_PROJECTION_INVALIDATED_TOPIC,
+    bind_invalidation_to_authenticated_provider,
+)
 from app.services.gateway.orchestrator_runtime_policy import remote_data_movement_denial_reason
+from app.services.gateway.webrtc.event_subscriptions import (
+    MeshEventSubscriptionRegistry,
+    RejectedSubscriptionTopic,
+    SubscribeResult,
+)
+from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
+from app.shared.auth.permissions import check_access
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatChunk,
@@ -28,6 +41,7 @@ from app.shared.contracts.models.stt import (
     WakeWordMethods,
 )
 from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.mesh.tracing import (
     audit_details_hash,
     ensure_correlation_id,
@@ -57,6 +71,7 @@ def _is_streaming_transport_unavailable(exc: Exception) -> bool:
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
     from app.services.gateway.acl.identity import Identity
+    from app.services.gateway.mesh.provider_export import ProjectionResult
     from app.services.gateway.registry_aggregator import RegistryAggregator
     from app.shared.contracts.models.gateway import MethodInfo
 
@@ -64,6 +79,15 @@ if TYPE_CHECKING:
 
 
 class RPCHandler:
+    _UNTRUSTED_TOOLING_PROVIDER_AUTHORITY_FIELDS = frozenset(
+        {
+            "granted_permissions",
+            "provider_granted_permissions",
+            "provider_permissions",
+            "provider_available",
+            "provider_authorized",
+        }
+    )
     # RPC methods that ANONYMOUS peers may call (pairing + login flow)
     _ANON_ALLOWED_METHODS = {
         AuthMethods.PAIRING_START,
@@ -76,6 +100,13 @@ class RPCHandler:
     # internal-only. All other DataChannel RPC calls must target methods marked
     # external/both in the aggregated registry.
     _INFRASTRUCTURE_RPC_METHODS = _ANON_ALLOWED_METHODS
+    # G013 intentionally has no legacy full-catalog event fallback.  The sole
+    # Tooling event crossing RTC is metadata-only and targeted by PeerBridge.
+    _SAFE_FORWARDED_EVENT_TOPICS = {TOOLING_PROJECTION_INVALIDATED_TOPIC}
+    _ASSISTANT_SCOPED_EVENT_TOPICS = {
+        OrchestratorMethods.RESPONSE,
+        TTSMethods.AUDIO_CHUNK,
+    }
 
     def __init__(
         self,
@@ -86,8 +117,19 @@ class RPCHandler:
         audit_fn: Callable[..., Any] | None = None,
         mesh_config: Any | None = None,
         peer_id: str | None = None,
+        stable_peer_id_provider: Callable[[], str | None] | None = None,
         capacity_notify_fn: Callable[[str, int, int], None] | None = None,
         pairing_notify_fn: Callable[[str], None] | None = None,
+        pairing_denied_fn: Callable[[str], None] | None = None,
+        pairing_context_provider: Callable[[], dict[str, str] | None] | None = None,
+        policy_provider: Callable[[], Any] | None = None,
+        active_projection_provider: Callable[[], ProjectionResult | None] | None = None,
+        authenticated_peer_validator: Callable[[], bool] | None = None,
+        tooling_authority_revision_provider: Callable[[], tuple[int, int] | None] | None = None,
+        event_subscription_registry: MeshEventSubscriptionRegistry | None = None,
+        peer_supports_capability: Callable[[str], bool] | None = None,
+        local_peer_role_provider: Callable[[], str] | None = None,
+        event_topic_authorizer: Callable[[str, str, Identity], bool | Any] | None = None,
     ):
         self._bus = bus
         self._registry = registry
@@ -96,8 +138,19 @@ class RPCHandler:
         self._audit_fn = audit_fn
         self._mesh_config = mesh_config
         self._peer_id = peer_id
+        self._stable_peer_id_provider = stable_peer_id_provider
         self._capacity_notify_fn = capacity_notify_fn
         self._pairing_notify_fn = pairing_notify_fn
+        self._pairing_denied_fn = pairing_denied_fn
+        self._pairing_context_provider = pairing_context_provider
+        self._policy_provider = policy_provider
+        self._active_projection_provider = active_projection_provider
+        self._authenticated_peer_validator = authenticated_peer_validator
+        self._tooling_authority_revision_provider = tooling_authority_revision_provider
+        self._event_subscription_registry = event_subscription_registry
+        self._peer_supports_capability = peer_supports_capability
+        self._local_peer_role_provider = local_peer_role_provider
+        self._event_topic_authorizer = event_topic_authorizer
         # Track active remote calls per module for capacity limiting
         self._active_remote_calls: dict[str, int] = {}
         self._active_stream_tasks: dict[str, asyncio.Task[Any]] = {}
@@ -112,6 +165,75 @@ class RPCHandler:
         through to process-bus serialization.
         """
         self._bus = bus
+
+    def set_mesh_policy_provider(self, policy_provider: Callable[[], Any] | None) -> None:
+        """Update the live mesh policy provider used by future RPC calls."""
+
+        self._policy_provider = policy_provider
+
+    def _current_mesh_config(self) -> Any | None:
+        if self._policy_provider is not None:
+            return self._policy_provider().mesh_config
+        return self._mesh_config
+
+    def _is_mesh_transport_context(self) -> bool:
+        return self._mesh_config is not None or self._policy_provider is not None
+
+    async def _enforce_forwarded_service_event_policy(
+        self,
+        topic: str,
+        params: dict[str, Any],
+        mesh_config: Any | None,
+    ) -> bool:
+        """Return True when a forwarded service event may be published locally."""
+
+        if topic not in self._SAFE_FORWARDED_EVENT_TOPICS:
+            await self._audit_rpc_event(
+                "access.denied.event",
+                method_name=topic,
+                correlation_id=str(params.get("correlation_id") or ""),
+                status="denied",
+                reason="method_not_shared",
+                details={"topic": topic, "params": params},
+            )
+            return False
+        if mesh_config is None:
+            if self._is_mesh_transport_context():
+                await self._audit_rpc_event(
+                    "access.denied.event",
+                    method_name=topic,
+                    correlation_id=str(params.get("correlation_id") or ""),
+                    status="denied",
+                    reason="authority_unknown",
+                    details={"topic": topic, "params": params},
+                )
+                return False
+            return True
+        if not mesh_config.enabled:
+            await self._audit_rpc_event(
+                "access.denied.event",
+                method_name=topic,
+                correlation_id=str(params.get("correlation_id") or ""),
+                status="denied",
+                reason="mesh_disabled",
+                details={"params": params},
+            )
+            return False
+
+        module_name = topic.split(".", 1)[0]
+        sharing = mesh_config.services.get(module_name)
+        if not sharing or not sharing.export.share:
+            await self._audit_rpc_event(
+                "access.denied.event",
+                method_name=topic,
+                correlation_id=str(params.get("correlation_id") or ""),
+                status="denied",
+                reason="service_not_shared",
+                details={"module": module_name, "params": params},
+            )
+            return False
+
+        return True
 
     async def _handle_cancel(self, msg: dict[str, Any]) -> None:
         req_id = msg.get("id")
@@ -135,6 +257,10 @@ class RPCHandler:
             await self._handle_cancel(msg)
         elif msg_type == "event":
             await self._handle_event(msg)
+        elif msg_type == "subscribe":
+            await self._handle_subscribe(msg)
+        elif msg_type == "unsubscribe":
+            await self._handle_unsubscribe(msg)
         else:
             log_debug(f"RPCHandler: Ignoring message type: {msg_type}")
 
@@ -149,23 +275,246 @@ class RPCHandler:
         provider identity.
         """
 
-        if topic not in {
-            ToolingMethods.REMOTE_CATALOG_ANNOUNCED,
-            ToolingMethods.REMOTE_CATALOG_DELTA_ANNOUNCED,
-            ToolingMethods.REMOTE_CATALOG_REMOVED,
-        } or not isinstance(params, dict):
+        if topic != TOOLING_PROJECTION_INVALIDATED_TOPIC or not isinstance(params, dict):
             return params
 
-        source_peer_id = self._peer_id or str(params.get("peer_id") or "unknown-peer")
-        normalized = dict(params)
-        # Never trust peer/provider/service ids inside a mesh-forwarded catalog
-        # payload. Those fields define the cache key and policy scope, so the
-        # receiver must bind them to the authenticated DataChannel peer even if
-        # the sender claims another non-local identity.
-        normalized["peer_id"] = source_peer_id
-        normalized["provider_id"] = source_peer_id
-        normalized["service_instance_id"] = f"remote:{source_peer_id}:Tooling"
-        return normalized
+        source_peer_id = (
+            self._stable_authenticated_peer_id()
+            or self._authenticated_peer_id()
+            or str(params.get("peer_id") or "unknown-peer")
+        )
+        return bind_invalidation_to_authenticated_provider(
+            params,
+            stable_peer_id=source_peer_id,
+        )
+
+    def _authenticated_peer_id(self) -> str | None:
+        """Return peer attribution, preferring the durable authenticated identity."""
+
+        if self._stable_peer_id_provider is not None:
+            try:
+                stable_peer_id = self._stable_peer_id_provider()
+            except Exception as error:
+                log_warning(f"RPCHandler: Failed to resolve stable peer identity: {error}")
+            else:
+                if stable_peer_id:
+                    return stable_peer_id
+        return self._peer_id
+
+    def _stable_authenticated_peer_id(self) -> str | None:
+        """Return only the durable authenticated peer identity used for policy."""
+
+        if self._stable_peer_id_provider is None:
+            return None
+        try:
+            stable_peer_id = self._stable_peer_id_provider()
+        except Exception as error:
+            log_warning(f"RPCHandler: Failed to resolve stable peer identity: {error}")
+            return None
+        return stable_peer_id or None
+
+    def _supports_scoped_event_subscriptions(self) -> bool:
+        """Return whether this authenticated DataChannel negotiated scoped events."""
+
+        if self._peer_supports_capability is None:
+            return False
+        try:
+            return bool(self._peer_supports_capability(CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1))
+        except Exception as error:
+            log_warning(f"RPCHandler: Failed to check scoped event capability: {error}")
+            return False
+
+    def _local_peer_role(self) -> str:
+        if self._local_peer_role_provider is None:
+            return "hybrid"
+        try:
+            role = self._local_peer_role_provider()
+        except Exception as error:
+            log_warning(f"RPCHandler: Failed to resolve local peer role: {error}")
+            return "hybrid"
+        return role if role in {"provider", "consumer", "hybrid"} else "hybrid"
+
+    async def _authorized_event_topics(
+        self, requested_topics: tuple[str, ...], identity: Identity
+    ) -> set[str]:
+        """Return exact requested event topics authorized for this peer.
+
+        The default path intentionally fails closed unless the aggregated typed
+        registry exposes the exact topic and current mesh export policy shares
+        that module. Tests and later policy layers may inject a stricter
+        authorizer; requested peer IDs are never trusted.
+        """
+
+        allowed: set[str] = set()
+        for topic in requested_topics:
+            if self._event_topic_authorizer is not None:
+                verdict = self._event_topic_authorizer(
+                    self._stable_authenticated_peer_id() or "", topic, identity
+                )
+                if hasattr(verdict, "__await__"):
+                    verdict = await verdict
+                if verdict:
+                    allowed.add(topic)
+                continue
+
+            if topic in self._ASSISTANT_SCOPED_EVENT_TOPICS:
+                stable_peer_id = self._stable_authenticated_peer_id()
+                if (
+                    not stable_peer_id
+                    or identity.principal_id == "anonymous"
+                    or getattr(identity, "source", None) != "webrtc_peer"
+                    or (
+                        self._authenticated_peer_validator is not None
+                        and not self._authenticated_peer_validator()
+                    )
+                ):
+                    continue
+                if not check_access(
+                    set(identity.effective_perms),
+                    ["Orchestrator.use"],
+                    method_type="use",
+                ):
+                    continue
+                mesh_config = self._current_mesh_config()
+                if mesh_config is None or not getattr(mesh_config, "enabled", False):
+                    continue
+                svc_name = topic.split(".")[0]
+                sharing = getattr(mesh_config, "services", {}).get(svc_name)
+                if not sharing or not getattr(getattr(sharing, "export", None), "share", False):
+                    continue
+                allowed.add(topic)
+                continue
+
+            result = await self._find_method(topic)
+            if not result:
+                continue
+            svc_name, meta = result
+            if getattr(meta, "exposure", "internal") not in {"external", "both"}:
+                continue
+            perms_needed = list(getattr(meta, "required_perms", None) or [])
+            if perms_needed and not check_access(
+                set(identity.effective_perms),
+                perms_needed,
+                method_type=getattr(meta, "method_type", "use"),
+            ):
+                continue
+            mesh_config = self._current_mesh_config()
+            if mesh_config is None:
+                if self._is_mesh_transport_context():
+                    continue
+                allowed.add(topic)
+                continue
+            if not getattr(mesh_config, "enabled", False):
+                continue
+            sharing = getattr(mesh_config, "services", {}).get(svc_name)
+            if not sharing or not getattr(getattr(sharing, "export", None), "share", False):
+                continue
+            allowed.add(topic)
+        return allowed
+
+    @staticmethod
+    def _subscription_rejections_to_wire(
+        rejected: tuple[RejectedSubscriptionTopic, ...],
+    ) -> list[dict[str, str]]:
+        return [{"topic": item.topic, "reason": item.reason} for item in rejected]
+
+    def _send_subscribe_ack(self, req_id: Any, result: SubscribeResult) -> None:
+        self._send(
+            json.dumps(
+                {
+                    "type": "subscribed" if result.accepted else "subscribe_rejected",
+                    "id": req_id,
+                    "subscription_id": result.subscription_id,
+                    "accepted": result.accepted,
+                    "accepted_topics": list(result.accepted_topics),
+                    "rejected_topics": self._subscription_rejections_to_wire(
+                        result.rejected_topics
+                    ),
+                    "correlation_ids": list(result.correlation_ids),
+                    "ttl_seconds": (
+                        round(result.ttl_seconds, 3) if result.ttl_seconds is not None else None
+                    ),
+                    "reason": result.reason,
+                    "idempotent": result.idempotent,
+                },
+                default=_json_default,
+            )
+        )
+
+    async def _handle_subscribe(self, msg: dict[str, Any]) -> None:
+        req_id = msg.get("id")
+        if self._event_subscription_registry is None:
+            self._send_error(req_id, 501, "Scoped event subscriptions unavailable")
+            return
+        if not self._supports_scoped_event_subscriptions():
+            self._send_error(req_id, 426, "Scoped event subscriptions not negotiated")
+            return
+        identity: Identity = self._acl_provider()
+        stable_peer_id = self._stable_authenticated_peer_id()
+        if (
+            not stable_peer_id
+            or identity.principal_id == "anonymous"
+            or getattr(identity, "source", None) != "webrtc_peer"
+            or (
+                self._authenticated_peer_validator is not None
+                and not self._authenticated_peer_validator()
+            )
+        ):
+            self._send_error(req_id, 401, "Authentication required")
+            return
+        params = msg.get("params") if isinstance(msg.get("params"), dict) else msg
+        subscription_id = str(params.get("subscription_id") or req_id or "")
+        topics_value = params.get("topics") or params.get("requested_topics") or []
+        if not isinstance(topics_value, list | tuple):
+            topics_value = []
+        requested_topics = tuple(str(topic) for topic in topics_value)
+        correlation_value = params.get("correlation_ids") or []
+        if not isinstance(correlation_value, list | tuple):
+            correlation_value = []
+        correlation_ids = tuple(str(value) for value in correlation_value)
+        allowed_topics = await self._authorized_event_topics(requested_topics, identity)
+        result = self._event_subscription_registry.subscribe(
+            peer_id=stable_peer_id,
+            subscription_id=subscription_id,
+            requested_topics=requested_topics,
+            allowed_topics=allowed_topics,
+            correlation_ids=correlation_ids,
+            ttl_seconds=params.get("ttl_seconds"),
+        )
+        self._send_subscribe_ack(req_id, result)
+
+    async def _handle_unsubscribe(self, msg: dict[str, Any]) -> None:
+        req_id = msg.get("id")
+        if self._event_subscription_registry is None:
+            self._send_error(req_id, 501, "Scoped event subscriptions unavailable")
+            return
+        if not self._supports_scoped_event_subscriptions():
+            self._send_error(req_id, 426, "Scoped event subscriptions not negotiated")
+            return
+        identity: Identity = self._acl_provider()
+        stable_peer_id = self._stable_authenticated_peer_id()
+        if (
+            not stable_peer_id
+            or identity.principal_id == "anonymous"
+            or getattr(identity, "source", None) != "webrtc_peer"
+        ):
+            self._send_error(req_id, 401, "Authentication required")
+            return
+        params = msg.get("params") if isinstance(msg.get("params"), dict) else msg
+        subscription_id = str(params.get("subscription_id") or req_id or "")
+        result = self._event_subscription_registry.unsubscribe(
+            peer_id=stable_peer_id, subscription_id=subscription_id
+        )
+        self._send(
+            json.dumps(
+                {
+                    "type": "unsubscribed",
+                    "id": req_id,
+                    "subscription_id": result.subscription_id,
+                    "removed": result.removed,
+                }
+            )
+        )
 
     async def _handle_event(self, msg: dict[str, Any]) -> None:
         """Handle a forwarded event from a remote peer.
@@ -184,11 +533,29 @@ class RPCHandler:
         if not topic:
             log_debug("RPCHandler: Received event with no topic")
             return
+        operation_mesh_config = self._current_mesh_config()
 
         # Gap 2B: Block events from ANONYMOUS peers
         identity: Identity = self._acl_provider()
         if identity.principal_id == "anonymous":
             log_warning(f"RPCHandler: Blocked event {topic} from ANONYMOUS peer")
+            return
+        if topic == TOOLING_PROJECTION_INVALIDATED_TOPIC and (
+            not self._stable_authenticated_peer_id()
+            or (
+                self._authenticated_peer_validator is not None
+                and not self._authenticated_peer_validator()
+            )
+        ):
+            log_warning("RPCHandler: Blocked Tooling invalidation without stable RTC authority")
+            return
+
+        if not await self._enforce_forwarded_service_event_policy(
+            topic,
+            params if isinstance(params, dict) else {},
+            operation_mesh_config,
+        ):
+            log_warning(f"RPCHandler: Blocked forwarded event {topic} by mesh policy")
             return
 
         log_debug(
@@ -208,7 +575,7 @@ class RPCHandler:
                 origin="mesh_forwarded",
                 principal_id=identity.principal_id,
                 identity_source="mesh_peer",
-                caller_peer_id=self._peer_id,
+                caller_peer_id=self._authenticated_peer_id(),
                 correlation_id=correlation_id,
             )
         except Exception as e:
@@ -238,76 +605,69 @@ class RPCHandler:
             self._send_error(req_id, 400, "Missing method", correlation_id=correlation_id)
             return
 
-        delimiter = "." if "." in method_name else "/" if "/" in method_name else None
-        canonical_method = method_name.replace("/", ".", 1)
-        is_infra_method = canonical_method in self._ANON_ALLOWED_METHODS
-        mesh_shared_call = False
+        canonical_method = method_name
 
-        # Mesh sharing gate: check if the called service is shared
-        # (skip for infrastructure methods like pairing/auth that must always work)
-        if self._mesh_config and self._mesh_config.enabled and not is_infra_method:
-            module_name = method_name.split(delimiter, 1)[0] if delimiter else method_name
-
-            sharing = self._mesh_config.services.get(module_name)
-            if not sharing or not sharing.share:
-                await self._audit_rpc_event(
-                    "access.denied.rpc",
-                    method_name=method_name,
-                    correlation_id=correlation_id,
-                    status="denied",
-                    reason="service_not_shared",
-                    details={"module": module_name, "params": params},
-                )
+        # Mesh-v2 pairing metadata is derived locally from the exact WebRTC
+        # commit/reveal transcript. Never let an anonymous caller choose or
+        # replace the verification value that the local UI will display.
+        if canonical_method == AuthMethods.PAIRING_START:
+            pairing_context = (
+                self._pairing_context_provider()
+                if self._pairing_context_provider is not None
+                else None
+            )
+            if not pairing_context:
                 self._send_error(
                     req_id,
-                    403,
-                    f"Service {module_name} is not shared",
+                    409,
+                    "Pairing verification handshake is not ready",
                     correlation_id=correlation_id,
                 )
                 return
-
-            # Allowed-peers check (None = open to all authenticated peers)
-            if sharing.allowed_peers is not None and (
-                not self._peer_id or self._peer_id not in sharing.allowed_peers
+            if not isinstance(params, dict):
+                self._send_error(
+                    req_id,
+                    400,
+                    "Invalid pairing request",
+                    correlation_id=correlation_id,
+                )
+                return
+            for field in (
+                "pairing_session_id",
+                "verification_code",
+                "device_name",
+                "remote_peer_id",
+                "remote_node_name",
+                "room_name",
             ):
-                await self._audit_rpc_event(
-                    "access.denied.rpc",
-                    method_name=method_name,
-                    correlation_id=correlation_id,
-                    status="denied",
-                    reason="peer_not_allowed",
-                    details={"module": module_name, "params": params},
-                )
-                self._send_error(
-                    req_id,
-                    403,
-                    f"Peer not allowed to access service {module_name}",
-                    correlation_id=correlation_id,
-                )
-                return
-
-            # Capacity check
-            if sharing.max_concurrent > 0:
-                active = self._active_remote_calls.get(module_name, 0)
-                if active >= sharing.max_concurrent:
-                    await self._audit_rpc_event(
-                        "access.denied.rpc",
-                        method_name=method_name,
-                        correlation_id=correlation_id,
-                        status="denied",
-                        reason="service_at_capacity",
-                        details={"module": module_name, "active": active},
-                    )
+                claimed = str(params.get(field) or "")
+                expected = str(pairing_context.get(field) or "")
+                if not expected:
                     self._send_error(
                         req_id,
-                        429,
-                        f"Service {module_name} at capacity",
+                        409,
+                        "Pairing verification context is incomplete",
                         correlation_id=correlation_id,
                     )
                     return
-            mesh_shared_call = True
+                if claimed and not secrets.compare_digest(claimed, expected):
+                    self._send_error(
+                        req_id,
+                        409,
+                        "Pairing transcript mismatch",
+                        correlation_id=correlation_id,
+                    )
+                    return
+            params = {**params, **pairing_context}
 
-        result = await self._find_method(method_name)
+        is_infra_method = canonical_method in self._ANON_ALLOWED_METHODS
+        operation_mesh_config = self._current_mesh_config()
+
+        if "/" in method_name:
+            self._send_error(req_id, 404, "Method not found", correlation_id=correlation_id)
+            return
+
+        result = await self._find_method(canonical_method)
         if not result:
             self._send_error(req_id, 404, "Method not found", correlation_id=correlation_id)
             return
@@ -318,7 +678,6 @@ class RPCHandler:
         perms_needed = meta.required_perms or []
         identity: Identity = self._acl_provider()
 
-        # Gap 2C: Block ANONYMOUS from all methods except pairing/auth
         if (
             identity.principal_id == "anonymous"
             and canonical_method not in self._ANON_ALLOWED_METHODS
@@ -342,9 +701,187 @@ class RPCHandler:
             return
 
         if (
+            self._local_peer_role() == "consumer"
+            and canonical_method not in self._INFRASTRUCTURE_RPC_METHODS
+        ):
+            await self._deny_rpc(
+                req_id,
+                method_name,
+                correlation_id,
+                "consumer_only_peer",
+                405,
+                "Local peer is consumer-only",
+                params=params,
+                principal_id=identity.principal_id,
+            )
+            return
+
+        active_projection = None
+        projected_service = None
+        projected_method = None
+        max_concurrent = 0
+        if not is_infra_method and (
+            operation_mesh_config is not None or self._is_mesh_transport_context()
+        ):
+            if operation_mesh_config is None:
+                await self._deny_rpc(
+                    req_id,
+                    method_name,
+                    correlation_id,
+                    "authority_unknown",
+                    403,
+                    "Authority is not available",
+                    params=params,
+                    principal_id=identity.principal_id,
+                )
+                return
+            if not operation_mesh_config.enabled:
+                await self._deny_rpc(
+                    req_id,
+                    method_name,
+                    correlation_id,
+                    "mesh_disabled",
+                    403,
+                    "Mesh policy is disabled",
+                    params=params,
+                    principal_id=identity.principal_id,
+                )
+                return
+            if self._active_projection_provider is None:
+                await self._deny_rpc(
+                    req_id,
+                    method_name,
+                    correlation_id,
+                    "authority_unknown",
+                    403,
+                    "Authority is not available",
+                    params=params,
+                    principal_id=identity.principal_id,
+                )
+                return
+            else:
+                stable_peer_id = self._stable_authenticated_peer_id()
+                if (
+                    not stable_peer_id
+                    or identity.principal_id == "anonymous"
+                    or getattr(identity, "source", None) != "webrtc_peer"
+                    or (
+                        self._authenticated_peer_validator is not None
+                        and not self._authenticated_peer_validator()
+                    )
+                ):
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        "authentication_required",
+                        401,
+                        "Authentication required",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                active_projection = self._active_projection_provider()
+                authority_reason = self._projection_denial_reason(active_projection)
+                if authority_reason is not None:
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        authority_reason,
+                        403,
+                        "Authority is not available",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                if active_projection.cache_key.recipient_peer_id != stable_peer_id:
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        "authority_unknown",
+                        403,
+                        "Authority is not available",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                sharing = operation_mesh_config.services.get(svc_name)
+                if not sharing or not sharing.export.share:
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        "service_not_shared",
+                        403,
+                        f"Service {svc_name} is not shared",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                projected_service = next(
+                    (
+                        service
+                        for service in active_projection.services
+                        if service.service_id == svc_name
+                    ),
+                    None,
+                )
+                if projected_service is None:
+                    reason = (
+                        "method_not_shared"
+                        if sharing is not None and sharing.export.share
+                        else "service_not_shared"
+                    )
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        reason,
+                        403,
+                        "Service or method is not shared",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                topic_for_projection = meta.bus_topic or f"{svc_name}.{meta.name}"
+                if topic_for_projection != canonical_method:
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        "method_not_shared",
+                        403,
+                        "Method is not shared",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                projected_method = next(
+                    (
+                        method
+                        for method in projected_service.methods
+                        if method.topic == topic_for_projection
+                    ),
+                    None,
+                )
+                if projected_method is None:
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        "method_not_shared",
+                        403,
+                        "Method is not shared",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+
+        if (
             getattr(meta, "exposure", "internal") not in {"external", "both"}
             and canonical_method not in self._INFRASTRUCTURE_RPC_METHODS
-            and (not mesh_shared_call or canonical_method.endswith(".Login"))
         ):
             log_warning(
                 f"RPCHandler: Blocked non-external RPC call to {method_name} "
@@ -370,7 +907,27 @@ class RPCHandler:
             )
             return
 
-        if perms_needed and not identity.can(*perms_needed, method_type=meta.method_type):
+        if projected_method is not None:
+            projected_perms = projected_method.required_permissions
+            if projected_perms is None:
+                await self._deny_rpc(
+                    req_id,
+                    method_name,
+                    correlation_id,
+                    "authority_unknown",
+                    403,
+                    "Authority is not available",
+                    params=params,
+                    principal_id=identity.principal_id,
+                )
+                return
+            perms_needed = list(projected_perms)
+
+        if perms_needed and not check_access(
+            set(identity.effective_perms),
+            list(perms_needed),
+            method_type=meta.method_type,
+        ):
             log_warning(
                 f"RPCHandler: Forbidden call to {method_name} from "
                 f"{identity.principal_name} (need {perms_needed}, "
@@ -417,24 +974,44 @@ class RPCHandler:
 
         # Track active remote calls for capacity limiting
         module_for_capacity = svc_name
-        max_concurrent = 0
-        if self._mesh_config and self._mesh_config.enabled:
-            self._active_remote_calls[module_for_capacity] = (
-                self._active_remote_calls.get(module_for_capacity, 0) + 1
-            )
-            sharing = self._mesh_config.services.get(module_for_capacity)
-            max_concurrent = sharing.max_concurrent if sharing else 0
-            # Notify peers of capacity change
-            if self._capacity_notify_fn and max_concurrent > 0:
-                active = self._active_remote_calls[module_for_capacity]
-                self._capacity_notify_fn(
-                    module_for_capacity, max_concurrent - active, max_concurrent
-                )
+        capacity_acquired = False
         try:
+            if active_projection is not None and projected_service is not None:
+                capacity = dict(projected_service.capacity or {})
+                max_concurrent = int(capacity.get("max_concurrent") or 0)
+                if max_concurrent > 0:
+                    active = self._active_remote_calls.get(module_for_capacity, 0)
+                    if active >= max_concurrent:
+                        await self._deny_rpc(
+                            req_id,
+                            method_name,
+                            correlation_id,
+                            "service_at_capacity",
+                            429,
+                            f"Service {module_for_capacity} at capacity",
+                            params=params,
+                            principal_id=identity.principal_id,
+                            details={"module": module_for_capacity, "active": active},
+                        )
+                        return
+                self._active_remote_calls[module_for_capacity] = (
+                    self._active_remote_calls.get(module_for_capacity, 0) + 1
+                )
+                capacity_acquired = True
+                self._notify_capacity_change(module_for_capacity, max_concurrent)
+
             log_debug(f"RPCHandler: Executing {topic} via bus correlation_id={correlation_id}")
             typed_params = params
             if isinstance(params, dict):
-                if (
+                if topic.startswith("Tooling."):
+                    params = self._bind_tooling_request_identity(
+                        topic,
+                        params,
+                        identity.principal_id,
+                        correlation_id,
+                    )
+                    typed_params = params
+                elif (
                     topic
                     in {
                         AudioSessionMethods.PREPARE,
@@ -445,7 +1022,7 @@ class RPCHandler:
                 ):
                     params = {
                         **params,
-                        "caller_peer_id": self._peer_id,
+                        "caller_peer_id": self._stable_authenticated_peer_id() or self._peer_id,
                         "caller_principal_id": identity.principal_id,
                         "correlation_id": correlation_id,
                     }
@@ -460,7 +1037,7 @@ class RPCHandler:
                 }:
                     params = {
                         **params,
-                        "caller_peer_id": self._peer_id,
+                        "caller_peer_id": self._stable_authenticated_peer_id() or self._peer_id,
                         "caller_principal_id": identity.principal_id,
                     }
                     if topic in {SchedulerMethods.SCHEDULE, SchedulerMethods.SCHEDULE_ACTION}:
@@ -501,7 +1078,7 @@ class RPCHandler:
                         effective_perms=list(identity.effective_perms),
                         identity_source="webrtc_rpc",
                         method_type=meta.method_type or "use",
-                        caller_peer_id=self._peer_id,
+                        caller_peer_id=self._stable_authenticated_peer_id() or self._peer_id,
                         correlation_id=correlation_id,
                     ):
                         self._send_chunk(req_id, chunk)
@@ -531,6 +1108,58 @@ class RPCHandler:
                 finally:
                     self._active_stream_tasks.pop(req_id, None)
 
+            auth_grant_revision = None
+            manifest_revision = None
+            projected_service_id = None
+            projected_method_id = None
+            if canonical_method in {
+                ToolingMethods.GET_TOOLS,
+                ToolingMethods.GET_TOOL_BY_NAME,
+                ToolingMethods.GET_EXPORT_CATALOG,
+                ToolingMethods.PREPARE_EXECUTION,
+                ToolingMethods.EXECUTE_TOOL,
+                ToolingMethods.REQUEST_APPROVAL,
+            }:
+                revisions = (
+                    self._tooling_authority_revision_provider()
+                    if self._tooling_authority_revision_provider is not None
+                    else None
+                )
+                if revisions is None:
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        "authority_unknown",
+                        403,
+                        "Authority is not available",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                auth_grant_revision, manifest_revision = revisions
+                # These values come from the authenticated active projection
+                # selected above, never from caller parameters. Tooling can
+                # therefore prove the exact service and method were shared.
+                projected_service_id = projected_service.service_id
+                projected_method_id = projected_method.topic
+
+            projection_evidence: dict[str, Any] = {}
+            if projected_service_id is not None and projected_method_id is not None:
+                projected_method_topics = sorted(
+                    str(method.topic) for method in projected_service.methods
+                )
+                projection_evidence = {
+                    "projected_service_id": projected_service_id,
+                    "projected_method_id": projected_method_id,
+                    "projected_method_topics": projected_method_topics,
+                    "projected_method_set_digest": hashlib.sha256(
+                        json.dumps(
+                            projected_method_topics,
+                            separators=(",", ":"),
+                        ).encode()
+                    ).hexdigest(),
+                }
             res = await self._bus.request(
                 topic,
                 typed_params,  # type: ignore[arg-type]
@@ -540,14 +1169,27 @@ class RPCHandler:
                 effective_perms=list(identity.effective_perms),
                 identity_source="webrtc_rpc",
                 method_type=meta.method_type or "use",
-                caller_peer_id=self._peer_id,
+                caller_peer_id=self._stable_authenticated_peer_id() or self._peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                **projection_evidence,
                 correlation_id=correlation_id,
             )
 
-            if res.ok:
-                # Enhancement B: Notify RTCClient when PairingStart succeeds
+            contract_result = (
+                isinstance(res.data, dict)
+                and "ok" in res.data
+                and bool(set(res.data) - {"ok", "data", "error"})
+            )
+            if res.ok or contract_result:
+                # Notify RTCClient only after a real request handle was created.
+                # A bus-level success can still contain a contract error dict.
                 if canonical_method == AuthMethods.PAIRING_START and self._pairing_notify_fn:
-                    self._pairing_notify_fn(self._peer_id or "")
+                    pairing_data = (
+                        res.data.model_dump() if hasattr(res.data, "model_dump") else res.data
+                    )
+                    if isinstance(pairing_data, dict) and pairing_data.get("code"):
+                        self._pairing_notify_fn(self._peer_id or "")
 
                 if hasattr(res.data, "__aiter__"):
                     try:
@@ -566,13 +1208,25 @@ class RPCHandler:
                     result_data = res.data
                     if hasattr(res.data, "model_dump"):
                         result_data = res.data.model_dump()
-
-                    self._send(
-                        json.dumps(
-                            {"type": "result", "id": req_id, "result": result_data},
-                            default=_json_default,
-                        )
+                    pairing_was_denied = bool(
+                        canonical_method == AuthMethods.PAIRING_START
+                        and isinstance(result_data, dict)
+                        and result_data.get("status") == "denied"
                     )
+                    try:
+                        self._send(
+                            json.dumps(
+                                {"type": "result", "id": req_id, "result": result_data},
+                                default=_json_default,
+                            )
+                        )
+                    finally:
+                        # A best-effort terminal frame from the requesting peer
+                        # may be dropped when it immediately closes SCTP. Record
+                        # the exact local transport denial independently so the
+                        # deterministic offer owner cannot reconnect forever.
+                        if pairing_was_denied and self._pairing_denied_fn:
+                            self._pairing_denied_fn(self._peer_id or "")
             else:
                 await self._audit_rpc_event(
                     "mesh.rpc.error",
@@ -620,16 +1274,24 @@ class RPCHandler:
             self._send_error(req_id, 500, str(e), correlation_id=correlation_id)
         finally:
             # Decrement active remote call count for capacity tracking
-            if self._mesh_config and self._mesh_config.enabled:
+            if capacity_acquired:
                 count = self._active_remote_calls.get(module_for_capacity, 0)
                 if count > 0:
                     self._active_remote_calls[module_for_capacity] = count - 1
                 # Notify peers of capacity change
                 if self._capacity_notify_fn and max_concurrent > 0:
-                    active = self._active_remote_calls.get(module_for_capacity, 0)
-                    self._capacity_notify_fn(
-                        module_for_capacity, max_concurrent - active, max_concurrent
-                    )
+                    self._notify_capacity_change(module_for_capacity, max_concurrent)
+
+    def _notify_capacity_change(self, module: str, max_concurrent: int) -> None:
+        """Best-effort capacity notification that cannot affect RPC completion."""
+
+        if self._capacity_notify_fn is None or max_concurrent <= 0:
+            return
+        active = self._active_remote_calls.get(module, 0)
+        try:
+            self._capacity_notify_fn(module, max_concurrent - active, max_concurrent)
+        except Exception as error:
+            log_warning(f"RPCHandler: Capacity notification failed for {module}: {error}")
 
     def _send_chunk(self, req_id: Any, chunk: Any) -> None:
         """Send one stream chunk over the DataChannel in JSON-serializable form."""
@@ -677,7 +1339,7 @@ class RPCHandler:
             effective_perms=list(identity.effective_perms),
             identity_source="webrtc_rpc",
             method_type=meta.method_type or "use",
-            caller_peer_id=self._peer_id,
+            caller_peer_id=self._stable_authenticated_peer_id() or self._peer_id,
             correlation_id=correlation_id,
         )
         if not result.ok:
@@ -709,25 +1371,118 @@ class RPCHandler:
         )
         self._send(json.dumps({"type": "eof", "id": req_id}))
 
-    async def _find_method(self, method_name: str) -> tuple[str, MethodInfo] | None:
-        delimiter = "." if "." in method_name else "/" if "/" in method_name else None
-        if delimiter:
-            parts = method_name.split(delimiter, 1)
-            if len(parts) == 2:
-                svc, cmd = parts
-                announcement = await self._registry.get_service(svc)
-                if announcement:
-                    for m in announcement.methods:
-                        if m.name == cmd:
-                            return svc, m
+    def _bind_tooling_request_identity(
+        self,
+        topic: str,
+        params: dict[str, Any],
+        principal_id: str,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        stable_peer_id = self._stable_authenticated_peer_id() or self._peer_id or "unknown-peer"
+        normalized = dict(params)
+        for field in (
+            "peer_id",
+            "provider_id",
+            "provider_peer_id",
+            "provider_peer_ids",
+            "remote_peer_id",
+            "mesh_peer_id",
+            "target_peer_id",
+            "service_instance_id",
+            "source_service_instance_id",
+            "caller_peer_id",
+            "source_peer_id",
+            "principal_id",
+            "caller_principal_id",
+            "provider_principal_id",
+            "actor_principal_id",
+            "requested_by_principal_id",
+            "approver_principal_id",
+            "created_by",
+            "revoked_by",
+            "policy_peer_id",
+            "approval_peer_id",
+        ):
+            normalized.pop(field, None)
+        normalized["caller_peer_id"] = stable_peer_id
+        normalized["caller_principal_id"] = principal_id
+        normalized["correlation_id"] = correlation_id
+        actor_fields_by_topic = {
+            ToolingMethods.SET_SHARING_POLICY: ("actor_principal_id",),
+            ToolingMethods.REQUEST_APPROVAL: ("requested_by_principal_id",),
+            ToolingMethods.CONFIRM_EXECUTION: ("approver_principal_id",),
+            ToolingMethods.CREATE_APPROVAL_GRANT: ("created_by",),
+            ToolingMethods.REVOKE_APPROVAL_GRANT: ("revoked_by",),
+            ToolingMethods.SET_POLICY_MODE: ("actor_principal_id",),
+            ToolingMethods.UPSERT_SOURCE_POLICY: ("actor_principal_id",),
+            ToolingMethods.UPSERT_TOOL_POLICY_OVERRIDE: ("actor_principal_id",),
+        }
+        for field in actor_fields_by_topic.get(topic, ()):
+            normalized[field] = principal_id
+        if topic in {
+            ToolingMethods.REMOTE_CATALOG_ANNOUNCED,
+            ToolingMethods.REMOTE_CATALOG_DELTA_ANNOUNCED,
+            ToolingMethods.REMOTE_CATALOG_REMOVED,
+        }:
+            normalized["peer_id"] = stable_peer_id
+            normalized["provider_id"] = stable_peer_id
+            normalized["service_instance_id"] = f"remote:{stable_peer_id}:Tooling"
+        return normalized
 
-        # Fallback: search external methods
-        external_methods = await self._registry.get_external_methods()
-        for svc_name, method_info in external_methods:
-            if method_info.name == method_name:
-                return svc_name, method_info
+    async def _find_method(self, method_name: str) -> tuple[str, MethodInfo] | None:
+        if "." not in method_name:
+            return None
+        svc, _cmd = method_name.split(".", 1)
+        if not svc:
+            return None
+        announcement = await self._registry.get_service(svc)
+        if not announcement:
+            return None
+        for method_info in announcement.methods:
+            topic = method_info.bus_topic or f"{svc}.{method_info.name}"
+            if topic == method_name:
+                return svc, method_info
 
         return None
+
+    @staticmethod
+    def _projection_denial_reason(projection: ProjectionResult | None) -> str | None:
+        if projection is None:
+            return "authority_unknown"
+        if projection.readiness == "pending":
+            return "authority_pending"
+        if projection.readiness == "revoked":
+            return "authority_revoked"
+        if projection.readiness != "ready" or not projection.routable:
+            return "authority_unknown"
+        return None
+
+    async def _deny_rpc(
+        self,
+        req_id: Any,
+        method_name: str,
+        correlation_id: str,
+        reason: str,
+        code: int,
+        message: str,
+        *,
+        params: Any,
+        principal_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        audit_details = {"params": params}
+        if details:
+            audit_details.update(details)
+        await self._audit_rpc_event(
+            "access.denied.rpc",
+            method_name=method_name,
+            correlation_id=correlation_id,
+            status="denied",
+            reason=reason,
+            principal_id=principal_id,
+            details=audit_details,
+        )
+        self._send_error(req_id, code, message, correlation_id=correlation_id)
 
     async def _audit_rpc_event(
         self,
@@ -764,14 +1519,27 @@ class RPCHandler:
         message: str,
         *,
         correlation_id: str | None = None,
-    ) -> None:
-        self._send(
-            json.dumps(
-                {
-                    "type": "error",
-                    "id": req_id,
-                    "correlation_id": correlation_id,
-                    "error": {"code": code, "message": message},
-                }
-            )
+    ) -> bool:
+        """Send an RPC error when the transport is still available.
+
+        Error frames are terminal, best-effort responses. A peer can close the
+        DataChannel while its request is still executing, so failure to send
+        the response must not escape as an unhandled task exception.
+        """
+
+        frame = json.dumps(
+            {
+                "type": "error",
+                "id": req_id,
+                "correlation_id": correlation_id,
+                "error": {"code": code, "message": message},
+            }
         )
+        try:
+            self._send(frame)
+        except Exception:
+            log_warning(
+                f"RPCHandler: Dropped RPC error response after transport loss (code={code})"
+            )
+            return False
+        return True

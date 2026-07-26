@@ -64,6 +64,9 @@ _SECRET_KEYS = {
     "token",
 }
 _PREVIEW_MAX_CHARS = 240
+_APPROVAL_PLACEHOLDER_MESSAGE_ID_KEY = "approval_placeholder_message_id"
+_APPROVAL_CHECKPOINT_POLL_ATTEMPTS = 6
+_APPROVAL_CHECKPOINT_POLL_DELAY_SECONDS = 0.1
 _SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
@@ -129,6 +132,11 @@ def _redacted_preview(value: Any, *, depth: int = 0) -> Any:
 def _safe_result_preview(value: Any) -> dict[str, Any] | str | None:
     if value is None:
         return None
+    if hasattr(value, "model_dump"):
+        try:
+            value = value.model_dump(mode="json")
+        except Exception:
+            value = str(value)
     preview = _redacted_preview(value)
     if isinstance(preview, dict | str):
         return preview
@@ -184,6 +192,11 @@ class GraphOrchestrator:
         self.pending_tool_approvals: dict[str, OrchestratorPendingToolApproval] = {}
         self._pending_tool_requests: dict[str, ToolingRequestApprovalRequest] = {}
         self._pending_tool_call_ids_by_approval_id: dict[str, str] = {}
+        self._pending_tool_resolution_futures: dict[str, asyncio.Future[str | None]] = {}
+        self._pending_tool_resolution_events: dict[str, list[AssistantStreamEvent]] = {}
+        self._pending_tool_resolution_signals: dict[str, asyncio.Event] = {}
+        self._pending_tool_stream_turn_ids: dict[str, str] = {}
+        self._pending_tool_resolution_claims: set[str] = set()
         self._durable_pending_approvals_ready = False
         self.graph_builder = StateGraph(State)
 
@@ -266,28 +279,50 @@ class GraphOrchestrator:
                 else {}
             )
             if candidate and not binding:
-                await self._emit_tool_stream_event(
-                    kind="tool.requires_action",
-                    tool_call_id=tool_id,
-                    tool_name=tool_name,
-                    status="requires_action",
-                    tool_args=tool_args,
-                    candidate=candidate,
-                    summary="Tool requires operator approval before execution.",
-                )
                 approval_message = await self._request_tool_approval(
                     tool_name=tool_name,
                     tool_args=tool_args,
                     tool_call_id=tool_id,
                     candidate=candidate,
                 )
-                approval_pending = (
-                    approval_pending or self._tool_message_is_pending_approval(approval_message)
+                approval_pending = approval_pending or self._tool_message_is_pending_approval(
+                    approval_message
                 )
                 tool_messages.append(approval_message)
                 continue
 
             request = self._tool_execution_request(tool_name, tool_args, binding)
+
+            if binding and self._binding_has_policy_metadata(binding):
+                approval_message = await self._request_tool_approval(
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    tool_call_id=tool_id,
+                    candidate=binding,
+                    allow_not_required=True,
+                )
+                if self._tool_message_is_pending_approval(approval_message):
+                    approval_pending = True
+                    tool_messages.append(approval_message)
+                    continue
+                if not self._tool_message_is_approval_not_required(approval_message):
+                    redacted_error_msg = self._tool_message_error_text(
+                        approval_message,
+                        fallback="Tool approval was not actionable.",
+                    )
+                    await self._emit_tool_stream_event(
+                        kind="tool.failed",
+                        tool_call_id=tool_id,
+                        tool_name=tool_name,
+                        status="failed",
+                        tool_args=tool_args,
+                        binding=binding,
+                        error_details={"message": redacted_error_msg},
+                        error=redacted_error_msg,
+                        summary="Tool approval request failed.",
+                    )
+                    tool_messages.append(approval_message)
+                    continue
 
             log_debug(
                 f"Executing tool via bus: {tool_name} with args_preview: "
@@ -343,15 +378,6 @@ class GraphOrchestrator:
                 else:
                     error_msg = result.error or "Unknown error"
                     if self._execution_denial_requires_approval(result.data, error_msg):
-                        await self._emit_tool_stream_event(
-                            kind="tool.requires_action",
-                            tool_call_id=tool_id,
-                            tool_name=tool_name,
-                            status="requires_action",
-                            tool_args=tool_args,
-                            candidate=binding,
-                            summary="Tool requires operator approval before execution.",
-                        )
                         approval_message = await self._request_tool_approval(
                             tool_name=tool_name,
                             tool_args=tool_args,
@@ -414,7 +440,6 @@ class GraphOrchestrator:
 
         return {"messages": tool_messages, "approval_pending": approval_pending}
 
-
     @staticmethod
     def _tool_message_is_pending_approval(message: ToolMessage) -> bool:
         """Return whether a ToolMessage contains an actionable approval card."""
@@ -430,6 +455,56 @@ class GraphOrchestrator:
             and bool(payload.get("approval_request_id"))
         )
 
+    @staticmethod
+    def _tool_message_is_approval_not_required(message: ToolMessage) -> bool:
+        """Return whether Tooling policy said this call can execute immediately."""
+
+        try:
+            payload = json.loads(str(message.content))
+        except Exception:
+            return False
+        return (
+            isinstance(payload, dict)
+            and payload.get("type") == "tool_approval_request"
+            and payload.get("status") == "not_required"
+        )
+
+    @staticmethod
+    def _tool_message_error_text(message: ToolMessage, *, fallback: str) -> str:
+        """Extract a safe operator-facing error from a ToolMessage payload."""
+
+        try:
+            payload = json.loads(str(message.content))
+        except Exception:
+            return _safe_string(str(message.content)) or fallback
+        if isinstance(payload, dict):
+            return (
+                _safe_string(str(payload.get("reason") or payload.get("error") or "")) or fallback
+            )
+        return fallback
+
+    @staticmethod
+    def _binding_has_policy_metadata(binding: dict[str, Any]) -> bool:
+        """Return whether a binding came from Tooling catalog policy metadata.
+
+        Older tests and a few defensive call sites construct tiny ad-hoc
+        bindings. Real catalog bindings include these policy fields, which lets
+        the orchestrator ask Tooling for an approval decision before announcing
+        the tool as running.
+        """
+
+        policy_keys = {
+            "approval_required",
+            "safety_class",
+            "confirmation_required",
+            "trust_tier",
+            "capability_class",
+            "source_type",
+            "execution_location",
+            "required_permissions",
+        }
+        return any(key in binding for key in policy_keys)
+
     async def _request_tool_approval(
         self,
         *,
@@ -437,6 +512,7 @@ class GraphOrchestrator:
         tool_args: dict[str, Any],
         tool_call_id: str,
         candidate: dict[str, Any],
+        allow_not_required: bool = False,
     ) -> ToolMessage:
         """Create an approval request instead of executing a blocked tool."""
 
@@ -506,6 +582,14 @@ class GraphOrchestrator:
                 content=json.dumps(approval_payload, sort_keys=True),
                 tool_call_id=tool_call_id,
                 name=tool_name,
+                id=str(pending.metadata[_APPROVAL_PLACEHOLDER_MESSAGE_ID_KEY]),
+            )
+
+        if approval_payload.get("status") == "not_required" and allow_not_required:
+            return ToolMessage(
+                content=json.dumps(approval_payload, sort_keys=True),
+                tool_call_id=tool_call_id,
+                name=tool_name,
             )
 
         if not result.ok:
@@ -539,6 +623,7 @@ class GraphOrchestrator:
         thread_id = run_context.get("thread_id") or run_id
         message_id = run_context.get("message_id") or f"msg-{uuid4().hex[:12]}"
         pending_id = f"{thread_id}:{tool_call_id or uuid4().hex[:12]}"
+        approval_placeholder_message_id = f"approval-placeholder:{pending_id}"
         approval_request_id = approval_payload.get("approval_request_id")
         pending = OrchestratorPendingToolApproval(
             pending_id=pending_id,
@@ -560,19 +645,253 @@ class GraphOrchestrator:
             expires_at=approval_payload.get("expires_at"),
             metadata={
                 "provider_peer_id": candidate.get("provider_peer_id"),
+                "provider_label": candidate.get("provider_label"),
                 "provider_service_instance_id": candidate.get("provider_service_instance_id"),
                 "global_tool_id": candidate.get("global_tool_id"),
                 "mesh_selector": candidate.get("mesh_selector"),
+                _APPROVAL_PLACEHOLDER_MESSAGE_ID_KEY: approval_placeholder_message_id,
             },
         )
         self.pending_tool_approvals[pending_id] = pending
         self._pending_tool_requests[pending_id] = request
+        self._pending_tool_resolution_futures[pending_id] = (
+            asyncio.get_running_loop().create_future()
+        )
+        self._pending_tool_resolution_events[pending_id] = []
+        self._pending_tool_resolution_signals[pending_id] = asyncio.Event()
+        stream_turn_id = run_context.get("stream_turn_id")
+        if stream_turn_id:
+            self._pending_tool_stream_turn_ids[pending_id] = str(stream_turn_id)
         if approval_request_id:
             self._pending_tool_call_ids_by_approval_id[approval_request_id] = pending_id
         await self._persist_pending_tool_approval(pending, request)
         return pending
 
+    def _finish_pending_tool_resolution(
+        self,
+        pending_id: str,
+        assistant_text: str | None,
+        *,
+        tool_events: list[AssistantStreamEvent] | None = None,
+    ) -> None:
+        """Wake any active assistant stream waiting on an approval decision."""
+
+        future = self._pending_tool_resolution_futures.get(pending_id)
+        if future is not None and tool_events is not None:
+            for event in tool_events:
+                self._queue_pending_tool_event(pending_id, event)
+        if future is not None and not future.done():
+            future.set_result(assistant_text)
+
+    def _queue_pending_tool_event(
+        self,
+        pending_id: str,
+        event: AssistantStreamEvent,
+    ) -> None:
+        """Buffer an approval event and wake its live assistant stream immediately."""
+
+        if pending_id not in self._pending_tool_resolution_futures:
+            return
+        self._pending_tool_resolution_events.setdefault(pending_id, []).append(event)
+        self._pending_tool_resolution_signals.setdefault(pending_id, asyncio.Event()).set()
+
+    def _drain_pending_tool_events(self, pending_id: str) -> list[AssistantStreamEvent]:
+        """Drain buffered events without losing a concurrent approval notification."""
+
+        events = self._pending_tool_resolution_events.setdefault(pending_id, [])
+        drained = list(events)
+        events.clear()
+        signal = self._pending_tool_resolution_signals.get(pending_id)
+        if signal is not None:
+            signal.clear()
+        return drained
+
+    def _release_pending_resolution_waiter(
+        self,
+        pending_id: str,
+        *,
+        expected_future: asyncio.Future[str | None] | None = None,
+    ) -> None:
+        """Release turn-scoped stream state without deleting the durable approval."""
+
+        current = self._pending_tool_resolution_futures.get(pending_id)
+        if expected_future is not None and current is not expected_future:
+            return
+        self._pending_tool_resolution_futures.pop(pending_id, None)
+        self._pending_tool_resolution_events.pop(pending_id, None)
+        self._pending_tool_resolution_signals.pop(pending_id, None)
+        self._pending_tool_stream_turn_ids.pop(pending_id, None)
+
+    @staticmethod
+    def _approval_resolution_tool_event(
+        pending: OrchestratorPendingToolApproval,
+        *,
+        kind: Literal["tool.running", "tool.completed", "tool.failed"],
+        status: Literal["running", "completed", "failed"],
+        summary: str,
+        result: Any | None = None,
+        error: str | None = None,
+    ) -> AssistantStreamEvent:
+        """Build a safe terminal event for an approval-gated tool call."""
+
+        safe_error = _safe_string(error)
+        provider_id = _safe_string(pending.metadata.get("provider_peer_id"))
+        provider_label = _safe_string(pending.metadata.get("provider_label"))
+        return AssistantStreamEvent(
+            kind=kind,
+            message_id=pending.message_id,
+            metadata={"approval_resolved": kind != "tool.running"},
+            tool=AssistantToolStreamState(
+                tool_call_id=pending.tool_call_id,
+                tool_name=pending.tool_name,
+                display_name=pending.display_name or pending.tool_name,
+                status=status,
+                summary=summary,
+                target=provider_label or provider_id,
+                provider_id=provider_id,
+                redacted_args_preview=pending.arguments_preview,
+                result_preview=_safe_result_preview(result),
+                error=safe_error,
+                error_details={"message": safe_error} if safe_error else None,
+                policy_decision_id=pending.policy_decision_id,
+                pending_id=pending.pending_id,
+                approval_request_id=pending.approval_request_id,
+                approval_expires_at=pending.expires_at,
+            ),
+        )
+
+    @classmethod
+    def _approval_running_event(
+        cls, pending: OrchestratorPendingToolApproval
+    ) -> AssistantStreamEvent:
+        return cls._approval_resolution_tool_event(
+            pending,
+            kind="tool.running",
+            status="running",
+            summary="Approved tool execution started.",
+        )
+
+    @classmethod
+    def _approval_completed_event(
+        cls,
+        pending: OrchestratorPendingToolApproval,
+        result: Any,
+    ) -> AssistantStreamEvent:
+        return cls._approval_resolution_tool_event(
+            pending,
+            kind="tool.completed",
+            status="completed",
+            summary="Approved tool execution completed.",
+            result=result,
+        )
+
+    @classmethod
+    def _approval_failed_event(
+        cls,
+        pending: OrchestratorPendingToolApproval,
+        *,
+        error: str,
+        result: Any | None = None,
+    ) -> AssistantStreamEvent:
+        return cls._approval_resolution_tool_event(
+            pending,
+            kind="tool.failed",
+            status="failed",
+            summary="Approved tool execution did not complete.",
+            result=result,
+            error=error,
+        )
+
+    @staticmethod
+    def _approved_tool_fallback_text(tool_result: Any) -> str:
+        """Return a nonempty, redacted result when model continuation is unavailable."""
+
+        preview = _safe_result_preview(tool_result)
+        status = ""
+        if isinstance(preview, dict):
+            status = str(preview.get("status") or "").lower()
+        if status == "denied":
+            prefix = "The tool was not executed because approval was denied."
+        elif status in {"failed", "error"}:
+            prefix = "The approved tool did not complete."
+        else:
+            prefix = "The approved tool completed successfully."
+        if preview is None:
+            return prefix
+        preview_text = (
+            preview
+            if isinstance(preview, str)
+            else json.dumps(preview, sort_keys=True, ensure_ascii=True, default=str)
+        )
+        safe_preview = _safe_string(preview_text)
+        return f"{prefix} Result: {safe_preview}" if safe_preview else prefix
+
+    async def _fail_pending_tool_resolution(
+        self,
+        *,
+        pending_id: str,
+        pending: OrchestratorPendingToolApproval,
+        error: str,
+        assistant_text: str,
+    ) -> None:
+        """Persist a failure and always wake a waiting assistant stream."""
+
+        safe_error = _safe_string(error) or "tool_resolution_failed"
+        pending.status = "failed"
+        pending.metadata["resolution_error"] = safe_error
+        await self._update_pending_tool_approval_status(pending)
+        self._finish_pending_tool_resolution(
+            pending_id,
+            assistant_text,
+            tool_events=[self._approval_failed_event(pending, error=safe_error)],
+        )
+
     async def resolve_pending_tool_approval(
+        self,
+        *,
+        pending_id: str | None,
+        approval_request_id: str | None,
+        approve: bool,
+        grant_scope: str,
+        approver_principal_id: str | None,
+        expires_at: float | None,
+        include_future_tools: bool,
+        reason: str | None,
+        correlation_id: str | None,
+    ) -> tuple[OrchestratorPendingToolApproval | None, Any | None, str | None, str | None]:
+        """Atomically claim and resolve one pending approval exactly once."""
+
+        resolved_id = pending_id
+        if not resolved_id and approval_request_id:
+            resolved_id = self._pending_tool_call_ids_by_approval_id.get(approval_request_id)
+        if not resolved_id:
+            return None, None, None, "pending_approval_not_found"
+        pending = self.pending_tool_approvals.get(resolved_id)
+        request = self._pending_tool_requests.get(resolved_id)
+        if not pending or not request:
+            return None, None, None, "pending_approval_not_found"
+        if pending.status not in {"pending", "failed"}:
+            return pending, None, None, f"pending_approval_already_{pending.status}"
+        if resolved_id in self._pending_tool_resolution_claims:
+            return pending, None, None, "pending_approval_already_resolving"
+
+        self._pending_tool_resolution_claims.add(resolved_id)
+        try:
+            return await self._resolve_pending_tool_approval_claimed(
+                pending_id=resolved_id,
+                approval_request_id=approval_request_id,
+                approve=approve,
+                grant_scope=grant_scope,
+                approver_principal_id=approver_principal_id,
+                expires_at=expires_at,
+                include_future_tools=include_future_tools,
+                reason=reason,
+                correlation_id=correlation_id,
+            )
+        finally:
+            self._pending_tool_resolution_claims.discard(resolved_id)
+
+    async def _resolve_pending_tool_approval_claimed(
         self,
         *,
         pending_id: str | None,
@@ -600,23 +919,45 @@ class GraphOrchestrator:
             return pending, None, None, f"pending_approval_already_{pending.status}"
         if not approve:
             if pending.approval_request_id or approval_request_id:
-                await self.bus.request(
-                    ToolingMethods.CONFIRM_EXECUTION,
-                    ToolingConfirmExecutionRequest(
-                        approval_request_id=pending.approval_request_id
-                        or approval_request_id
-                        or "",
-                        approver_principal_id=approver_principal_id or "system",
-                        approve=False,
-                        grant_scope=grant_scope,  # type: ignore[arg-type]
-                        expires_at=expires_at,
-                        include_future_tools=include_future_tools,
-                        reason=reason,
-                        correlation_id=correlation_id or pending.correlation_id,
-                    ),
-                    timeout=10.0,
-                    priority=get_interactive_priority(),
-                )
+                try:
+                    denial_confirmation = await self.bus.request(
+                        ToolingMethods.CONFIRM_EXECUTION,
+                        ToolingConfirmExecutionRequest(
+                            approval_request_id=pending.approval_request_id
+                            or approval_request_id
+                            or "",
+                            approver_principal_id=approver_principal_id or "system",
+                            approve=False,
+                            grant_scope=grant_scope,  # type: ignore[arg-type]
+                            expires_at=expires_at,
+                            include_future_tools=include_future_tools,
+                            reason=reason,
+                            correlation_id=correlation_id or pending.correlation_id,
+                        ),
+                        timeout=10.0,
+                        priority=get_interactive_priority(),
+                    )
+                except Exception as error:
+                    safe_error = _safe_string(str(error)) or type(error).__name__
+                    assistant_text = f"Tool denial could not be recorded: {safe_error}"
+                    await self._fail_pending_tool_resolution(
+                        pending_id=resolved_id,
+                        pending=pending,
+                        error=safe_error,
+                        assistant_text=assistant_text,
+                    )
+                    return pending, None, assistant_text, safe_error
+                denial_error = _safe_string(denial_confirmation.error)
+                if not denial_confirmation.ok and denial_error != "approval_denied":
+                    safe_error = denial_error or "approval_denial_confirmation_failed"
+                    assistant_text = f"Tool denial could not be recorded: {safe_error}"
+                    await self._fail_pending_tool_resolution(
+                        pending_id=resolved_id,
+                        pending=pending,
+                        error=safe_error,
+                        assistant_text=assistant_text,
+                    )
+                    return pending, None, assistant_text, safe_error
             pending.status = "denied"
             await self._update_pending_tool_approval_status(pending)
             denial_result = {
@@ -632,27 +973,55 @@ class GraphOrchestrator:
                 tool_name=pending.tool_name,
                 tool_result=denial_result,
             )
+            self._finish_pending_tool_resolution(
+                resolved_id,
+                assistant_text,
+                tool_events=[
+                    self._approval_failed_event(
+                        pending,
+                        error=reason or "Tool execution was denied by the user.",
+                        result=denial_result,
+                    )
+                ],
+            )
             return pending, None, assistant_text, None
 
-        confirmation = await self.bus.request(
-            ToolingMethods.CONFIRM_EXECUTION,
-            ToolingConfirmExecutionRequest(
-                approval_request_id=pending.approval_request_id or approval_request_id or "",
-                approver_principal_id=approver_principal_id or "system",
-                approve=True,
-                grant_scope=grant_scope,  # type: ignore[arg-type]
-                expires_at=expires_at,
-                include_future_tools=include_future_tools,
-                reason=reason,
-                correlation_id=correlation_id or pending.correlation_id,
-            ),
-            timeout=10.0,
-            priority=get_interactive_priority(),
-        )
+        try:
+            confirmation = await self.bus.request(
+                ToolingMethods.CONFIRM_EXECUTION,
+                ToolingConfirmExecutionRequest(
+                    approval_request_id=pending.approval_request_id or approval_request_id or "",
+                    approver_principal_id=approver_principal_id or "system",
+                    approve=True,
+                    grant_scope=grant_scope,  # type: ignore[arg-type]
+                    expires_at=expires_at,
+                    include_future_tools=include_future_tools,
+                    reason=reason,
+                    correlation_id=correlation_id or pending.correlation_id,
+                ),
+                timeout=10.0,
+                priority=get_interactive_priority(),
+            )
+        except Exception as error:
+            safe_error = _safe_string(str(error)) or type(error).__name__
+            assistant_text = f"Tool approval could not be confirmed: {safe_error}"
+            await self._fail_pending_tool_resolution(
+                pending_id=resolved_id,
+                pending=pending,
+                error=safe_error,
+                assistant_text=assistant_text,
+            )
+            return pending, None, assistant_text, safe_error
         if not confirmation.ok:
-            pending.status = "failed"
-            await self._update_pending_tool_approval_status(pending)
-            return pending, None, None, confirmation.error or "approval_confirmation_failed"
+            error = _safe_string(confirmation.error) or "approval_confirmation_failed"
+            assistant_text = f"Tool approval could not be confirmed: {error}"
+            await self._fail_pending_tool_resolution(
+                pending_id=resolved_id,
+                pending=pending,
+                error=error,
+                assistant_text=assistant_text,
+            )
+            return pending, None, assistant_text, error
         confirmation_data = confirmation.data or {}
         token = (
             confirmation_data.get("approval_token")
@@ -660,26 +1029,63 @@ class GraphOrchestrator:
             else getattr(confirmation_data, "approval_token", None)
         )
         if not token:
-            pending.status = "failed"
-            await self._update_pending_tool_approval_status(pending)
-            return pending, None, None, "approval_token_missing"
+            error = "approval_token_missing"
+            assistant_text = (
+                "Tool approval could not continue because no approval token was issued."
+            )
+            await self._fail_pending_tool_resolution(
+                pending_id=resolved_id,
+                pending=pending,
+                error=error,
+                assistant_text=assistant_text,
+            )
+            return pending, None, assistant_text, error
 
-        execution = await self.bus.request(
-            ToolingMethods.EXECUTE_TOOL,
-            request.model_copy(update={"approval_token": token, "confirmed": True}),
-            timeout=30.0,
-            priority=get_interactive_priority(),
+        self._queue_pending_tool_event(
+            resolved_id,
+            self._approval_running_event(pending),
         )
+        try:
+            execution = await self.bus.request(
+                ToolingMethods.EXECUTE_TOOL,
+                request.model_copy(update={"approval_token": token, "confirmed": True}),
+                timeout=30.0,
+                priority=get_interactive_priority(),
+            )
+        except Exception as error:
+            safe_error = _safe_string(str(error)) or type(error).__name__
+            assistant_text = f"The approved tool failed to execute: {safe_error}"
+            await self._fail_pending_tool_resolution(
+                pending_id=resolved_id,
+                pending=pending,
+                error=safe_error,
+                assistant_text=assistant_text,
+            )
+            return pending, None, assistant_text, safe_error
         if not execution.ok:
-            pending.status = "failed"
-            await self._update_pending_tool_approval_status(pending)
-            return pending, None, None, execution.error or "tool_execution_failed"
+            error = _safe_string(execution.error) or "tool_execution_failed"
+            assistant_text = f"The approved tool failed to execute: {error}"
+            await self._fail_pending_tool_resolution(
+                pending_id=resolved_id,
+                pending=pending,
+                error=error,
+                assistant_text=assistant_text,
+            )
+            return pending, None, assistant_text, error
         pending.status = "executed"
+        self._queue_pending_tool_event(
+            resolved_id,
+            self._approval_completed_event(pending, execution.data),
+        )
         await self._update_pending_tool_approval_status(pending)
         assistant_text = await self._resume_graph_after_tool_result(
             pending=pending,
             tool_name=pending.tool_name,
             tool_result=execution.data,
+        )
+        self._finish_pending_tool_resolution(
+            resolved_id,
+            assistant_text,
         )
         return pending, execution.data, assistant_text, None
 
@@ -698,6 +1104,143 @@ class GraphOrchestrator:
             return None
         return self.pending_tool_approvals.get(resolved_id)
 
+    @staticmethod
+    def _is_approval_placeholder_message(
+        message: AnyMessage,
+        *,
+        tool_call_id: str,
+    ) -> bool:
+        """Return whether a checkpoint message is the approval placeholder to replace."""
+
+        if not isinstance(message, ToolMessage) or message.tool_call_id != tool_call_id:
+            return False
+        try:
+            payload = json.loads(str(message.content))
+        except Exception:
+            return False
+        return (
+            isinstance(payload, dict)
+            and payload.get("type") == "tool_approval_request"
+            and payload.get("status") == "requested"
+        )
+
+    @staticmethod
+    def _ai_message_owns_tool_call(message: AnyMessage, *, tool_call_id: str) -> bool:
+        """Return whether an assistant message issued the exact pending tool call."""
+
+        if not isinstance(message, AIMessage):
+            return False
+        for tool_call in getattr(message, "tool_calls", []) or []:
+            candidate_id = (
+                tool_call.get("id")
+                if isinstance(tool_call, dict)
+                else getattr(tool_call, "id", None)
+            )
+            if candidate_id == tool_call_id:
+                return True
+        return False
+
+    @classmethod
+    def _checkpoint_approval_placeholder(
+        cls,
+        messages: list[AnyMessage] | tuple[AnyMessage, ...],
+        *,
+        tool_call_id: str,
+        recorded_id: str | None,
+    ) -> tuple[Literal["found", "missing", "ambiguous"], str | None]:
+        """Find one committed placeholder owned by the matching assistant tool call."""
+
+        matches: list[str] = []
+        conflicting_placeholder = False
+        for index, message in enumerate(messages):
+            if not cls._is_approval_placeholder_message(
+                message,
+                tool_call_id=tool_call_id,
+            ):
+                continue
+            message_id = getattr(message, "id", None)
+            placeholder_id = str(message_id).strip() if message_id is not None else ""
+            if not placeholder_id:
+                conflicting_placeholder = True
+                continue
+            if recorded_id is not None and placeholder_id != recorded_id:
+                conflicting_placeholder = True
+                continue
+
+            owning_ai_message = next(
+                (prior for prior in reversed(messages[:index]) if isinstance(prior, AIMessage)),
+                None,
+            )
+            if owning_ai_message is None or not cls._ai_message_owns_tool_call(
+                owning_ai_message,
+                tool_call_id=tool_call_id,
+            ):
+                conflicting_placeholder = True
+                continue
+            matches.append(placeholder_id)
+
+        if len(matches) == 1 and not conflicting_placeholder:
+            return "found", matches[0]
+        if len(matches) > 1 or conflicting_placeholder:
+            return "ambiguous", None
+        return "missing", None
+
+    async def _approval_placeholder_message_id(
+        self,
+        pending: OrchestratorPendingToolApproval,
+    ) -> str | None:
+        """Resolve the checkpoint message ID that the approved result must replace."""
+
+        raw_recorded_id = pending.metadata.get(_APPROVAL_PLACEHOLDER_MESSAGE_ID_KEY)
+        recorded_id = (
+            str(raw_recorded_id).strip()
+            if raw_recorded_id is not None and str(raw_recorded_id).strip()
+            else None
+        )
+        config = {"configurable": {"thread_id": pending.thread_id}}
+        active_run = pending.pending_id in self._pending_tool_resolution_futures
+        attempts = _APPROVAL_CHECKPOINT_POLL_ATTEMPTS if active_run else 1
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                snapshot = await self.graph.aget_state(config)
+                last_error = None
+            except Exception as error:
+                snapshot = None
+                last_error = error
+
+            values = getattr(snapshot, "values", None)
+            if not isinstance(values, dict) and isinstance(snapshot, dict):
+                values = snapshot.get("values")
+            raw_messages = values.get("messages", []) if isinstance(values, dict) else []
+            messages = raw_messages if isinstance(raw_messages, list | tuple) else []
+            match_status, placeholder_id = self._checkpoint_approval_placeholder(
+                messages,
+                tool_call_id=pending.tool_call_id,
+                recorded_id=recorded_id,
+            )
+            if match_status == "found" and placeholder_id is not None:
+                if recorded_id != placeholder_id:
+                    pending.metadata[_APPROVAL_PLACEHOLDER_MESSAGE_ID_KEY] = placeholder_id
+                    await self._update_pending_tool_approval_status(pending)
+                return placeholder_id
+            if match_status == "ambiguous":
+                log_error(
+                    "Cannot resume assistant after tool approval because the checkpoint "
+                    "placeholder is ambiguous"
+                )
+                return None
+            if attempt + 1 < attempts:
+                await asyncio.sleep(_APPROVAL_CHECKPOINT_POLL_DELAY_SECONDS)
+
+        if last_error is not None:
+            log_error(
+                "Failed to inspect approval checkpoint before resuming: "
+                f"{_safe_string(str(last_error))}",
+                exc_info=True,
+            )
+        return None
+
     async def _resume_graph_after_tool_result(
         self,
         *,
@@ -707,6 +1250,19 @@ class GraphOrchestrator:
     ) -> str | None:
         """Continue the same LangGraph thread with the approved tool result."""
 
+        placeholder_message_id = await self._approval_placeholder_message_id(pending)
+        if placeholder_message_id is None:
+            log_error(
+                "Cannot resume assistant after tool approval because the checkpoint "
+                "placeholder message was not found"
+            )
+            pending.metadata["resume_error"] = "approval_placeholder_not_found"
+            fallback_text = self._approved_tool_fallback_text(tool_result)
+            pending.metadata["assistant_text"] = fallback_text
+            pending.metadata["assistant_text_fallback"] = "placeholder_not_found"
+            await self._update_pending_tool_approval_status(pending)
+            return fallback_text
+
         try:
             result = await self.graph.ainvoke(
                 {
@@ -715,8 +1271,10 @@ class GraphOrchestrator:
                             content=str(tool_result),
                             tool_call_id=pending.tool_call_id,
                             name=tool_name,
+                            id=placeholder_message_id,
                         )
-                    ]
+                    ],
+                    "approval_pending": False,
                 },
                 config={"configurable": {"thread_id": pending.thread_id}},
             )
@@ -726,8 +1284,11 @@ class GraphOrchestrator:
                 exc_info=True,
             )
             pending.metadata["resume_error"] = type(error).__name__
+            fallback_text = self._approved_tool_fallback_text(tool_result)
+            pending.metadata["assistant_text"] = fallback_text
+            pending.metadata["assistant_text_fallback"] = "resume_failed"
             await self._update_pending_tool_approval_status(pending)
-            return None
+            return fallback_text
 
         messages: list[AnyMessage] = []
         if isinstance(result, dict):
@@ -753,7 +1314,11 @@ class GraphOrchestrator:
                         pending.metadata["assistant_text"] = text
                         await self._update_pending_tool_approval_status(pending)
                         return text
-        return None
+        fallback_text = self._approved_tool_fallback_text(tool_result)
+        pending.metadata["assistant_text"] = fallback_text
+        pending.metadata["assistant_text_fallback"] = "empty_resume"
+        await self._update_pending_tool_approval_status(pending)
+        return fallback_text
 
     @staticmethod
     def _execution_denial_requires_approval(result_data: Any, error_msg: str) -> bool:
@@ -910,6 +1475,12 @@ class GraphOrchestrator:
 
         binding = binding if isinstance(binding, dict) else {}
         candidate = candidate if isinstance(candidate, dict) else {}
+        provider_peer_id = _safe_string(
+            binding.get("provider_peer_id") or candidate.get("provider_peer_id")
+        )
+        provider_label = _safe_string(
+            binding.get("provider_label") or candidate.get("provider_label")
+        )
         tool_state = AssistantToolStreamState(
             tool_call_id=tool_call_id or tool_name,
             tool_name=tool_name,
@@ -922,8 +1493,15 @@ class GraphOrchestrator:
             status=status,
             summary=summary,
             risk_class=_safe_string(binding.get("risk_class") or candidate.get("risk_class")),
-            target=_safe_string(binding.get("target") or candidate.get("target")),
-            provider_id=_safe_string(binding.get("provider_id") or candidate.get("provider_id")),
+            target=_safe_string(
+                binding.get("target")
+                or candidate.get("target")
+                or provider_label
+                or provider_peer_id
+            ),
+            provider_id=_safe_string(
+                binding.get("provider_id") or candidate.get("provider_id") or provider_peer_id
+            ),
             data_leaves_device=bool(
                 binding.get("data_leaves_device") or candidate.get("data_leaves_device") or False
             ),
@@ -1016,9 +1594,12 @@ class GraphOrchestrator:
 
         policy_decision = data.get("policy_decision") or {}
         approval_request_id = data.get("approval_request_id")
+        ok = bool(data.get("ok"))
         return {
             "type": "tool_approval_request",
-            "status": "requested" if data.get("ok") and approval_request_id else "failed",
+            "status": (
+                "requested" if ok and approval_request_id else "not_required" if ok else "failed"
+            ),
             "tool_name": tool_name,
             "display_name": candidate.get("display_name") or tool_name,
             "description": candidate.get("description") or "",
@@ -1143,6 +1724,7 @@ class GraphOrchestrator:
         event_queue: asyncio.Queue[AssistantStreamEvent | BaseException | None] = asyncio.Queue()
         final_text = ""
         saw_delta = False
+        stream_turn_id = f"turn-{uuid4().hex}"
 
         async def emit(event: AssistantStreamEvent) -> None:
             # Tool execution happens inside graph nodes and can block the next
@@ -1162,6 +1744,7 @@ class GraphOrchestrator:
                     "owner_principal_id": owner_principal_id,
                     "owner_peer_id": owner_peer_id,
                     "message_id": f"msg-{uuid4().hex[:12]}",
+                    "stream_turn_id": stream_turn_id,
                 }
             )
             try:
@@ -1222,10 +1805,12 @@ class GraphOrchestrator:
                 await event_queue.put(None)
 
         producer = asyncio.create_task(produce_graph_events())
+        graph_stream_completed = False
         try:
             while True:
                 queued = await event_queue.get()
                 if queued is None:
+                    graph_stream_completed = True
                     break
                 if isinstance(queued, BaseException):
                     raise queued
@@ -1236,18 +1821,173 @@ class GraphOrchestrator:
                 producer.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await producer
+            if not graph_stream_completed:
+                abandoned_ids = {
+                    pending_id
+                    for pending_id, owner_turn_id in self._pending_tool_stream_turn_ids.items()
+                    if owner_turn_id == stream_turn_id
+                }
+                for pending_id in abandoned_ids:
+                    self._release_pending_resolution_waiter(pending_id)
 
-        if not final_text:
-            try:
-                snapshot = await self.graph.aget_state(config)
-                messages = (snapshot.values or {}).get("messages", [])
-                if messages:
-                    final_text = str(getattr(messages[-1], "content", "") or "")
-            except Exception as e:
-                log_debug(f"Could not recover final graph state after streaming: {e}")
+        turn_pending_ids = {
+            pending_id
+            for pending_id, owner_turn_id in self._pending_tool_stream_turn_ids.items()
+            if owner_turn_id == stream_turn_id
+        }
+        try:
+            if not final_text:
+                try:
+                    snapshot = await self.graph.aget_state(config)
+                    values = snapshot.values or {}
+                    if values.get("approval_pending"):
+                        final_text = "Aurora paused for a tool approval decision."
+                    messages = values.get("messages", [])
+                    if not final_text and messages:
+                        final_text = str(getattr(messages[-1], "content", "") or "")
+                    # Do not emit a synthetic text delta for approval pauses. The
+                    # preceding ``tool.requires_action`` event already renders the
+                    # waiting state in UI; emitting the same sentence as a delta
+                    # appends a duplicate chat bubble message while the stream waits.
+                except Exception as e:
+                    log_debug(f"Could not recover final graph state after streaming: {e}")
 
-        if final_text != "END":
-            log_info(f"Jarvis stream complete: {final_text[:100]}...")
+            futures = self._pending_resolution_futures_for_thread(
+                thread_id,
+                pending_ids=turn_pending_ids,
+            )
+            if futures:
+                log_info("Assistant stream paused awaiting tool approval decision")
+                async for approval_event in self._wait_for_tool_approval_resolution(
+                    futures=futures,
+                ):
+                    if approval_event.text:
+                        final_text = approval_event.text
+                    yield approval_event
+
+            if final_text != "END":
+                log_info(f"Jarvis stream complete: {final_text[:100]}...")
+        finally:
+            for pending_id in turn_pending_ids:
+                self._release_pending_resolution_waiter(pending_id)
+
+    def _pending_resolution_futures_for_thread(
+        self,
+        thread_id: str,
+        *,
+        pending_ids: set[str] | None = None,
+    ) -> list[asyncio.Future[str | None]]:
+        """Return unconsumed approval futures owned by a graph checkpoint thread."""
+
+        futures: list[asyncio.Future[str | None]] = []
+        for pending_id, pending in self.pending_tool_approvals.items():
+            if pending_ids is not None and pending_id not in pending_ids:
+                continue
+            if pending.thread_id != thread_id:
+                continue
+            future = self._pending_tool_resolution_futures.get(pending_id)
+            if future is not None:
+                futures.append(future)
+        return futures
+
+    def _pending_resolution_id_for_future(self, future: asyncio.Future[str | None]) -> str | None:
+        for pending_id, candidate in self._pending_tool_resolution_futures.items():
+            if candidate is future:
+                return pending_id
+        return None
+
+    async def _wait_for_tool_approval_resolution(
+        self,
+        *,
+        futures: list[asyncio.Future[str | None]],
+    ) -> AsyncIterator[AssistantStreamEvent]:
+        """Hold the assistant stream open until an approval decision resumes the graph."""
+
+        pending: dict[str, asyncio.Future[str | None]] = {}
+        for future in futures:
+            pending_id = self._pending_resolution_id_for_future(future)
+            if pending_id is not None:
+                pending[pending_id] = future
+
+        signal_tasks: dict[str, asyncio.Task[bool]] = {
+            pending_id: asyncio.create_task(
+                self._pending_tool_resolution_signals.setdefault(pending_id, asyncio.Event()).wait()
+            )
+            for pending_id in pending
+        }
+        try:
+            while pending:
+                waitables: set[asyncio.Future[Any]] = set(pending.values())
+                waitables.update(signal_tasks.values())
+                done, _ = await asyncio.wait(
+                    waitables,
+                    timeout=15.0,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    yield AssistantStreamEvent(
+                        kind="assistant.delta",
+                        metadata={"approval_pending": True},
+                    )
+                    continue
+
+                for pending_id, task in list(signal_tasks.items()):
+                    if task not in done:
+                        continue
+                    signal_tasks.pop(pending_id, None)
+                    for event in self._drain_pending_tool_events(pending_id):
+                        yield event
+                    future = pending.get(pending_id)
+                    if future is not None and not future.done():
+                        signal_tasks[pending_id] = asyncio.create_task(
+                            self._pending_tool_resolution_signals.setdefault(
+                                pending_id, asyncio.Event()
+                            ).wait()
+                        )
+
+                for pending_id, future in list(pending.items()):
+                    if not future.done():
+                        continue
+                    signal_task = signal_tasks.pop(pending_id, None)
+                    if signal_task is not None:
+                        signal_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await signal_task
+                    tool_events = self._drain_pending_tool_events(pending_id)
+                    try:
+                        resolved_text = future.result()
+                    except Exception as error:
+                        safe_error = _safe_string(str(error)) or type(error).__name__
+                        resolved_text = f"Tool approval resolution failed: {safe_error}"
+                        if not tool_events:
+                            approval = self.pending_tool_approvals.get(pending_id)
+                            if approval is not None:
+                                tool_events = [
+                                    self._approval_failed_event(
+                                        approval,
+                                        error=safe_error,
+                                    )
+                                ]
+                    for event in tool_events:
+                        yield event
+                    if resolved_text:
+                        yield AssistantStreamEvent(
+                            kind="assistant.delta",
+                            delta=resolved_text,
+                            text=resolved_text,
+                            metadata={"approval_resolved": True},
+                        )
+                    pending.pop(pending_id, None)
+                    self._release_pending_resolution_waiter(
+                        pending_id,
+                        expected_future=future,
+                    )
+        finally:
+            for task in signal_tasks.values():
+                task.cancel()
+            for task in signal_tasks.values():
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
     async def stream_graph_updates(
         self,
@@ -1279,6 +2019,7 @@ class GraphOrchestrator:
 
         # Invoke the graph
         thread_id = self._checkpoint_thread_id(thread_id)
+        parent_stream_turn_id = (_CURRENT_RUN_CONTEXT.get() or {}).get("stream_turn_id")
         token = _CURRENT_RUN_CONTEXT.set(
             {
                 "run_id": thread_id,
@@ -1287,6 +2028,7 @@ class GraphOrchestrator:
                 "owner_principal_id": owner_principal_id,
                 "owner_peer_id": owner_peer_id,
                 "message_id": f"msg-{uuid4().hex[:12]}",
+                "stream_turn_id": parent_stream_turn_id,
             }
         )
         try:
@@ -1338,6 +2080,7 @@ class GraphOrchestrator:
 
         # Invoke the graph
         thread_id = self._checkpoint_thread_id(thread_id)
+        parent_stream_turn_id = (_CURRENT_RUN_CONTEXT.get() or {}).get("stream_turn_id")
         token = _CURRENT_RUN_CONTEXT.set(
             {
                 "run_id": thread_id,
@@ -1346,6 +2089,7 @@ class GraphOrchestrator:
                 "owner_principal_id": owner_principal_id,
                 "owner_peer_id": owner_peer_id,
                 "message_id": f"msg-{uuid4().hex[:12]}",
+                "stream_turn_id": parent_stream_turn_id,
             }
         )
         try:

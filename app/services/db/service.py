@@ -9,6 +9,8 @@ This service:
 
 from __future__ import annotations
 
+import inspect
+import re
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
@@ -16,46 +18,93 @@ from uuid import uuid4
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Envelope, QueryResult
-from app.services.db.manager import DatabaseManager
-from app.services.db.models import CronJob, JobStatus, Message, ScheduleType
+from app.services.db.manager import DatabaseManager, MeshManagedAuthorityError
+from app.services.db.models import CronJob, JobStatus, Message, MessageType, ScheduleType
 from app.services.db.rag_service import RAGService
 from app.services.db.scheduler_db_service import SchedulerDatabaseService
 from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.db import (
+    DBAbortToolingRemoteCatalogSyncRequest,
+    DBAbortToolingRemoteCatalogSyncResponse,
+    DBAcceptToolingRemoteToolSchemaRequest,
+    DBAcceptToolingRemoteToolSchemaResponse,
+    DBActivateToolingMeshEnforcementRequest,
+    DBActivateToolingMeshEnforcementResponse,
+    DBAllocateToolIdentityRequest,
+    DBAllocateToolIdentityResponse,
+    DBAppendToolingRemoteCatalogPageRequest,
+    DBAppendToolingRemoteCatalogPageResponse,
+    DBApproveMeshPeerRequest,
+    DBApproveMeshPeerResponse,
     DBAuditLogRequest,
     DBAuditLogResponse,
+    DBAuthorityMutationResponse,
+    DBBeginToolingRemoteCatalogSyncRequest,
+    DBBeginToolingRemoteCatalogSyncResponse,
     DBBoolResponse,
+    DBCommitToolingRemoteCatalogSyncRequest,
+    DBCommitToolingRemoteCatalogSyncResponse,
     DBCountAuditEventsRequest,
     DBCountResponse,
     DBCountUsersRequest,
     DBCreateDeviceRequest,
+    DBCreateSessionRequest,
     DBCreateTokenRequest,
     DBCreateUserRequest,
     DBDeleteCronJobRequest,
     DBDeleteDeviceRequest,
     DBDeleteMeshCredentialRequest,
     DBDeleteUserRequest,
+    DBDenyMeshPeerRequest,
     DBDeviceListResponse,
     DBDeviceResponse,
+    DBEnsureSessionRequest,
     DBExecuteSQLRequest,
     DBExecuteSQLResponse,
+    DBFinalizeToolingRemoteCatalogPolicyRequest,
+    DBFinalizeToolingRemoteCatalogPolicyResponse,
     DBGetCronJobsRequest,
     DBGetCronJobsResponse,
     DBGetDeviceByIdRequest,
     DBGetMeshCredentialByRoomRequest,
+    DBGetMeshPeerAuthoritySnapshotRequest,
+    DBGetMeshPeerAuthoritySnapshotResponse,
     DBGetMessagesForDateRequest,
     DBGetMessagesRequest,
     DBGetMessagesResponse,
+    DBGetSessionRequest,
+    DBGetSessionResponse,
     DBGetTokenByHashRequest,
     DBGetTokenByIdRequest,
+    DBGetToolingExportPolicySnapshotRequest,
+    DBGetToolingExportPolicySnapshotResponse,
+    DBGetToolingExposureLedgerRequest,
+    DBGetToolingExposureLedgerResponse,
+    DBGetToolingMeshActivationStateRequest,
+    DBGetToolingMeshActivationStateResponse,
+    DBGetToolingMeshSwitchesRequest,
+    DBGetToolingMeshSwitchesResponse,
+    DBGetToolingRemoteCatalogRequest,
+    DBGetToolingRemoteCatalogResponse,
     DBGetUserByIdRequest,
     DBGetUserByUsernameRequest,
+    DBImportLegacyToolingRemoteCatalogsRequest,
+    DBImportLegacyToolingRemoteCatalogsResponse,
+    DBIssueMeshPeerCredentialRequest,
+    DBLinkMeshPeerCredentialRequest,
     DBListDevicesRequest,
+    DBListSessionsRequest,
+    DBListSessionsResponse,
     DBListTokensRequest,
     DBListUsersRequest,
+    DBMatchMeshOutboundCredentialRequest,
     DBMeshCredentialResponse,
     DBMethods,
     DBModule,
+    DBMutateToolingExportPolicyRequest,
+    DBMutateToolingExportPolicyResponse,
+    DBPruneToolingRemoteCatalogRetentionRequest,
+    DBPruneToolingRemoteCatalogRetentionResponse,
     DBRAGDeleteRequest,
     DBRAGExportNamespaceRequest,
     DBRAGExportNamespaceResponse,
@@ -78,21 +127,198 @@ from app.shared.contracts.models.db import (
     DBRAGSearchRemoteResponse,
     DBRAGSearchRequest,
     DBRAGStoreRequest,
+    DBReconcileToolIdentityRequest,
+    DBReconcileToolIdentityResponse,
+    DBRecordToolingExposuresRequest,
+    DBRecordToolingExposuresResponse,
+    DBRecoverToolingRemoteCatalogsRequest,
+    DBRecoverToolingRemoteCatalogsResponse,
+    DBRemoveMeshPeerRequest,
+    DBResolveDaemonSessionRequest,
+    DBResolveToolIdentityAliasesRequest,
+    DBResolveToolIdentityAliasesResponse,
+    DBResolveToolingRemoteToolAliasesRequest,
+    DBResolveToolingRemoteToolAliasesResponse,
     DBRevokeTokenRequest,
     DBSaveMeshCredentialRequest,
+    DBSaveMeshInboundCredentialRequest,
     DBSaveMessageRequest,
     DBSaveMessageResponse,
+    DBSessionRecord,
+    DBSessionResponse,
+    DBSetActiveSessionRequest,
+    DBSetToolingMeshSwitchesRequest,
+    DBSetToolingMeshSwitchesResponse,
+    DBSetToolingRemoteProviderAvailabilityRequest,
+    DBSetToolingRemoteProviderAvailabilityResponse,
     DBStoreCronJobRequest,
     DBTokenListResponse,
     DBTokenResponse,
+    DBUpdateMeshPeerConnectionRequest,
+    DBUpdateMeshPeerPermissionsRequest,
     DBUpdateTokenScopesRequest,
     DBUpdateUserRequest,
+    DBUpsertMeshPeerRequest,
     DBUserListResponse,
     DBUserResponse,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.models.db import Device, MeshCredential, Token, User
 from app.shared.services.base_service import BaseService
+
+_PROTECTED_AUTHORITY_TABLES = frozenset(
+    {
+        "mesh_peers",
+        "mesh_peer_auth_grant_revisions",
+        "users",
+        "devices",
+        "tokens",
+        "tooling_tool_identities",
+        "tooling_tool_identity_allocations",
+        "tooling_tool_identity_aliases",
+        "tooling_tool_identity_conflicts",
+        "tooling_export_policy",
+        "tooling_export_rules",
+        "tooling_export_policy_audit",
+        "tooling_mesh_switches",
+        "tooling_mesh_switch_audit",
+        "tooling_remote_catalog_headers",
+        "tooling_remote_catalog_tools",
+        "tooling_remote_catalog_syncs",
+        "tooling_remote_catalog_stage_pages",
+        "tooling_remote_catalog_stage_tools",
+        "tooling_remote_catalog_stage_retirements",
+        "tooling_tool_exposure_ledger",
+        "tooling_remote_catalog_audit",
+        "tooling_remote_tool_aliases",
+        "tooling_remote_tool_identity_conflicts",
+        "tooling_remote_catalog_retention_tombstones",
+        "tooling_mesh_activation_state",
+        "tooling_mesh_activation_audit",
+    }
+)
+_SQL_TOKEN_RE = re.compile(
+    r'"([^"]+)"|`([^`]+)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*)',
+    re.ASCII,
+)
+
+
+def _mask_sql_non_code(sql: str) -> str:
+    """Mask SQL string/comment bodies while preserving lexical order.
+
+    Quoted identifiers and SQLite double-quoted string tokens remain intact for
+    protected-table matching. Single-quoted literals, line comments, and block
+    comments are blanked only when their delimiters are reached in normal SQL
+    code.
+    """
+
+    chars = list(sql)
+    i = 0
+    while i < len(chars):
+        char = chars[i]
+        next_char = chars[i + 1] if i + 1 < len(chars) else ""
+        if char == '"':
+            i += 1
+            while i < len(chars):
+                if chars[i] == '"':
+                    if i + 1 < len(chars) and chars[i + 1] == '"':
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            continue
+        if char == "`":
+            i += 1
+            while i < len(chars):
+                if chars[i] == "`":
+                    if i + 1 < len(chars) and chars[i + 1] == "`":
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            continue
+        if char == "[":
+            i += 1
+            while i < len(chars):
+                if chars[i] == "]":
+                    if i + 1 < len(chars) and chars[i + 1] == "]":
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            continue
+        if char == "'":
+            chars[i] = " "
+            i += 1
+            while i < len(chars):
+                if chars[i] == "'":
+                    chars[i] = " "
+                    if i + 1 < len(chars) and chars[i + 1] == "'":
+                        chars[i + 1] = " "
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                chars[i] = "\n" if chars[i] in "\r\n" else " "
+                i += 1
+            continue
+        if char == "-" and next_char == "-":
+            chars[i] = " "
+            chars[i + 1] = " "
+            i += 2
+            while i < len(chars) and chars[i] not in "\r\n":
+                chars[i] = " "
+                i += 1
+            continue
+        if char == "/" and next_char == "*":
+            chars[i] = " "
+            chars[i + 1] = " "
+            i += 2
+            while i < len(chars):
+                if chars[i] == "*" and i + 1 < len(chars) and chars[i + 1] == "/":
+                    chars[i] = " "
+                    chars[i + 1] = " "
+                    i += 2
+                    break
+                chars[i] = "\n" if chars[i] in "\r\n" else " "
+                i += 1
+            continue
+        i += 1
+    return "".join(chars)
+
+
+def _sql_tokens(sql: str) -> list[str]:
+    cleaned = _mask_sql_non_code(sql)
+    return [
+        next(group for group in match.groups() if group is not None).lower()
+        for match in _SQL_TOKEN_RE.finditer(cleaned)
+    ]
+
+
+def _is_read_only_sql(sql: str) -> bool:
+    tokens = _sql_tokens(sql)
+    if not tokens:
+        return True
+    if tokens[0] in {"select", "pragma", "explain"}:
+        return True
+    if tokens[0] == "with":
+        return not any(
+            token in {"insert", "update", "delete", "replace", "create", "drop", "alter"}
+            for token in tokens
+        )
+    return False
+
+
+def _protected_authority_write_error(sql: str) -> str | None:
+    if _is_read_only_sql(sql):
+        return None
+    mentioned = sorted(_PROTECTED_AUTHORITY_TABLES.intersection(_sql_tokens(sql)))
+    if not mentioned:
+        return None
+    return "DB.ExecuteSQL cannot mutate protected authority tables: " + ", ".join(mentioned)
 
 
 # Service implementation
@@ -405,6 +631,221 @@ class DBService(BaseService):
             value["_aurora_delete_reason"] = provenance.delete_reason
         return value
 
+    @staticmethod
+    def _session_record(session: Any) -> DBSessionRecord:
+        """Serialize one principal-owned session for the public contract."""
+
+        return DBSessionRecord.model_validate(session.to_dict())
+
+    @staticmethod
+    def _session_message(message: Message) -> dict[str, Any]:
+        """Serialize a stored message with a stable UI role."""
+
+        if message.message_type in {MessageType.USER_TEXT, MessageType.USER_VOICE}:
+            role = "user"
+        elif message.message_type == MessageType.ASSISTANT:
+            role = "assistant"
+        else:
+            role = "system"
+        return {
+            "id": message.id,
+            "role": role,
+            "content": message.content,
+            "message_type": message.message_type.value,
+            "timestamp": message.timestamp.isoformat(),
+            "session_id": message.session_id,
+            "metadata": message.metadata,
+            "source_type": message.source_type,
+        }
+
+    @staticmethod
+    def _local_session_principal(envelope: Envelope | None) -> str:
+        """Resolve the caller principal while keeping sessions off peer transports."""
+
+        if envelope is None:
+            return "system"
+
+        identity_source = getattr(envelope, "identity_source", None)
+        caller_peer_id = getattr(envelope, "caller_peer_id", None)
+        if identity_source in {"webrtc_rpc", "mesh_peer", "remote_peer"} or caller_peer_id:
+            raise PermissionError("chat sessions are local-only and are not available to peers")
+
+        principal_id = str(getattr(envelope, "principal_id", None) or "").strip()
+        if principal_id:
+            return principal_id
+        if getattr(envelope, "origin", "internal") in {"internal", "system"}:
+            return "system"
+        raise PermissionError("an authenticated principal is required for chat sessions")
+
+    @method_contract(
+        method_id=DBMethods.CREATE_SESSION,
+        input_model=DBCreateSessionRequest,
+        output_model=DBSessionResponse,
+        summary="Create a principal-owned local session",
+        exposure="external",
+        method_type="use",
+        required_perms=["DB.use"],
+        callable_feature_ids=["session_management"],
+    )
+    async def create_session(
+        self,
+        cmd: DBCreateSessionRequest,
+        envelope: Envelope | None = None,
+    ) -> DBSessionResponse:
+        """Create and activate a session for the authenticated principal."""
+
+        principal_id = self._local_session_principal(envelope)
+        session = await self.db_manager.ensure_session(
+            principal_id=principal_id,
+            session_type=cmd.type,
+            title=cmd.title,
+            activate=True,
+        )
+        return DBSessionResponse(session=self._session_record(session))
+
+    @method_contract(
+        method_id=DBMethods.LIST_SESSIONS,
+        input_model=DBListSessionsRequest,
+        output_model=DBListSessionsResponse,
+        summary="List sessions owned by the authenticated principal",
+        exposure="external",
+        method_type="use",
+        required_perms=["DB.use"],
+        callable_feature_ids=["session_management"],
+    )
+    async def list_sessions(
+        self,
+        query: DBListSessionsRequest,
+        envelope: Envelope | None = None,
+    ) -> DBListSessionsResponse:
+        """Return only the authenticated principal's local sessions."""
+
+        principal_id = self._local_session_principal(envelope)
+        sessions = await self.db_manager.list_sessions_for_principal(
+            principal_id,
+            session_type=query.type,
+            limit=query.limit,
+            offset=query.offset,
+        )
+        total = await self.db_manager.count_sessions_for_principal(
+            principal_id,
+            session_type=query.type,
+        )
+        active_session_id = sessions[0].id if query.offset == 0 and sessions else None
+        if query.offset > 0 and total > 0:
+            active_sessions = await self.db_manager.list_sessions_for_principal(
+                principal_id,
+                session_type=query.type,
+                limit=1,
+                offset=0,
+            )
+            active_session_id = active_sessions[0].id if active_sessions else None
+        return DBListSessionsResponse(
+            sessions=[self._session_record(session) for session in sessions],
+            active_session_id=active_session_id,
+            total=total,
+        )
+
+    @method_contract(
+        method_id=DBMethods.GET_SESSION,
+        input_model=DBGetSessionRequest,
+        output_model=DBGetSessionResponse,
+        summary="Load one session owned by the authenticated principal",
+        exposure="external",
+        method_type="use",
+        required_perms=["DB.use"],
+        callable_feature_ids=["session_management"],
+    )
+    async def get_session(
+        self,
+        query: DBGetSessionRequest,
+        envelope: Envelope | None = None,
+    ) -> DBGetSessionResponse:
+        """Load one principal-owned session and its chronological messages."""
+
+        principal_id = self._local_session_principal(envelope)
+        session = await self.db_manager.get_session_for_principal(
+            query.session_id,
+            principal_id,
+        )
+        if session is None:
+            raise LookupError("session was not found for the authenticated principal")
+        if query.activate:
+            session = await self.db_manager.set_active_session(query.session_id, principal_id)
+            if session is None:
+                raise LookupError("session was not found for the authenticated principal")
+        messages = await self.db_manager.get_session_messages_for_principal(
+            query.session_id,
+            principal_id,
+        )
+        return DBGetSessionResponse(
+            session=self._session_record(session),
+            messages=[self._session_message(message) for message in messages],
+        )
+
+    @method_contract(
+        method_id=DBMethods.SET_ACTIVE_SESSION,
+        input_model=DBSetActiveSessionRequest,
+        output_model=DBSessionResponse,
+        summary="Mark a principal-owned session as the last-opened thread",
+        exposure="external",
+        method_type="use",
+        required_perms=["DB.use"],
+        callable_feature_ids=["session_management"],
+    )
+    async def set_active_session(
+        self,
+        cmd: DBSetActiveSessionRequest,
+        envelope: Envelope | None = None,
+    ) -> DBSessionResponse:
+        """Persist the authenticated principal's last-opened session."""
+
+        principal_id = self._local_session_principal(envelope)
+        session = await self.db_manager.set_active_session(cmd.session_id, principal_id)
+        if session is None:
+            raise LookupError("session was not found for the authenticated principal")
+        return DBSessionResponse(session=self._session_record(session))
+
+    @method_contract(
+        method_id=DBMethods.ENSURE_SESSION,
+        input_model=DBEnsureSessionRequest,
+        output_model=DBSessionResponse,
+        summary="Validate or create an internal principal-owned session",
+        exposure="internal",
+        method_type="use",
+    )
+    async def ensure_session(self, cmd: DBEnsureSessionRequest) -> DBSessionResponse:
+        """Validate session ownership before an internal producer writes messages."""
+
+        session = await self.db_manager.ensure_session(
+            principal_id=cmd.principal_id,
+            session_type=cmd.type,
+            session_id=cmd.session_id,
+            title=cmd.title,
+            activate=cmd.activate,
+        )
+        return DBSessionResponse(session=self._session_record(session))
+
+    @method_contract(
+        method_id=DBMethods.RESOLVE_DAEMON_SESSION,
+        input_model=DBResolveDaemonSessionRequest,
+        output_model=DBSessionResponse,
+        summary="Resolve the recent active session for local daemon chat",
+        exposure="internal",
+        method_type="use",
+    )
+    async def resolve_daemon_session(
+        self,
+        query: DBResolveDaemonSessionRequest,
+    ) -> DBSessionResponse:
+        """Reuse the last-opened thread or create a typed session after staleness."""
+
+        session = await self.db_manager.resolve_daemon_session(
+            session_type=query.type,
+            stale_after_seconds=query.stale_after_seconds,
+        )
+        return DBSessionResponse(session=self._session_record(session))
+
     @method_contract(
         method_id=DBMethods.SAVE_MESSAGE,
         input_model=DBSaveMessageRequest,
@@ -418,34 +859,36 @@ class DBService(BaseService):
         try:
             log_debug(f"Storing message: {cmd.role} - {cmd.content[:50]}...")
 
+            metadata = dict(cmd.metadata or {})
+            session_id = cmd.session_id or metadata.get("session_id") or "default"
+            principal_id = cmd.principal_id or "system"
+            ensure_result = self.db_manager.ensure_session(
+                principal_id=principal_id,
+                session_type=cmd.session_type,
+                session_id=session_id,
+                activate=True,
+            )
+            if inspect.isawaitable(ensure_result):
+                await ensure_result
+
             # Map role to MessageType
             if cmd.role == "user":
                 # Determine if it's text or voice based on metadata
-                source_type = cmd.metadata.get("source_type", "Text") if cmd.metadata else "Text"
-                # Using session_id from metadata if not explicitly passed, or generating one
-                session_id = (
-                    cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
-                )
+                source_type = metadata.get("source_type", "Text")
 
                 if source_type == "STT":
                     message = Message.create_user_voice_message(cmd.content, session_id)
                 else:
                     message = Message.create_user_text_message(cmd.content, session_id)
             elif cmd.role == "assistant":
-                session_id = (
-                    cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
-                )
                 message = Message.create_assistant_message(cmd.content, session_id)
             else:
                 # Default to user text if role is unknown
-                session_id = (
-                    cmd.metadata.get("session_id", "default") if cmd.metadata else "default"
-                )
                 message = Message.create_user_text_message(cmd.content, session_id)
 
             # Set metadata if provided
-            if cmd.metadata:
-                message.metadata = cmd.metadata
+            if metadata:
+                message.metadata = metadata
 
             # Store in database
             success = await self.db_manager.store_message(message)
@@ -469,18 +912,32 @@ class DBService(BaseService):
         summary="Get recent chat messages",
         exposure="both",
         method_type="use",
+        required_perms=[DBMethods.GET_MESSAGES],
+        callable_feature_ids=["message_history_read"],
     )
-    async def get_messages(self, query: DBGetMessagesRequest) -> DBGetMessagesResponse:
+    async def get_messages(
+        self,
+        query: DBGetMessagesRequest,
+        envelope: Envelope | None = None,
+    ) -> DBGetMessagesResponse:
         """Handle get recent messages query."""
         try:
             log_debug(f"Retrieving {query.limit} recent messages")
 
-            # Get messages from database
-            messages = await self.db_manager.get_recent_messages(limit=query.limit)
+            if envelope is None:
+                messages = await self.db_manager.get_recent_messages(limit=query.limit)
+            else:
+                principal_id = self._local_session_principal(envelope)
+                messages = await self.db_manager.get_recent_messages_for_principal(
+                    principal_id,
+                    limit=query.limit,
+                    offset=query.offset,
+                )
 
-            # Convert to dict format
             messages_data = [
-                {
+                self._session_message(msg)
+                if isinstance(getattr(msg, "message_type", None), MessageType)
+                else {
                     "role": msg.role,
                     "content": msg.content,
                     "timestamp": msg.timestamp,
@@ -504,9 +961,13 @@ class DBService(BaseService):
         summary="Get messages for a specific date",
         exposure="both",
         method_type="use",
+        required_perms=[DBMethods.GET_MESSAGES_FOR_DATE],
+        callable_feature_ids=["message_history_read"],
     )
     async def get_messages_for_date(
-        self, query: DBGetMessagesForDateRequest
+        self,
+        query: DBGetMessagesForDateRequest,
+        envelope: Envelope | None = None,
     ) -> DBGetMessagesResponse:
         """Handle get messages for date query."""
         try:
@@ -519,12 +980,19 @@ class DBService(BaseService):
 
             log_debug(f"Retrieving messages for date: {target_date}")
 
-            # Get messages from database
-            messages = await self.db_manager.get_messages_for_date(target_date=target_date)
+            if envelope is None:
+                messages = await self.db_manager.get_messages_for_date(target_date=target_date)
+            else:
+                principal_id = self._local_session_principal(envelope)
+                messages = await self.db_manager.get_messages_for_date_for_principal(
+                    principal_id,
+                    target_date,
+                )
 
-            # Convert to dict format
             messages_data = [
-                {
+                self._session_message(msg)
+                if isinstance(getattr(msg, "message_type", None), MessageType)
+                else {
                     "role": msg.role,
                     "content": msg.content,
                     "timestamp": msg.timestamp.isoformat()
@@ -847,6 +1315,7 @@ class DBService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=["DB.RAGSearch"],
+        callable_feature_ids=["rag_discovery"],
     )
     async def rag_list_namespaces(
         self, query: DBRAGListNamespacesRequest
@@ -893,6 +1362,7 @@ class DBService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=["DB.RAGSearch"],
+        callable_feature_ids=["rag_discovery"],
     )
     async def rag_search_remote(self, query: DBRAGSearchRemoteRequest) -> DBRAGSearchRemoteResponse:
         """Search RAG with explicit remote namespace policy and provenance."""
@@ -960,6 +1430,7 @@ class DBService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=["DB.RAGSearch"],
+        callable_feature_ids=["rag_discovery"],
     )
     async def rag_get_provenance(
         self, query: DBRAGGetProvenanceRequest
@@ -1011,6 +1482,7 @@ class DBService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=["DB.manage"],
+        callable_feature_ids=["rag_transfer"],
     )
     async def rag_export_namespace(
         self, query: DBRAGExportNamespaceRequest
@@ -1102,6 +1574,7 @@ class DBService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=["DB.manage"],
+        callable_feature_ids=["rag_transfer"],
     )
     async def rag_import_namespace(
         self, cmd: DBRAGImportNamespaceRequest
@@ -1294,36 +1767,46 @@ class DBService(BaseService):
     @method_contract(
         method_id=DBMethods.UPDATE_USER,
         input_model=DBUpdateUserRequest,
-        output_model=DBBoolResponse,
+        output_model=DBAuthorityMutationResponse,
         summary="Update a user's fields",
         exposure="internal",
         method_type="manage",
     )
-    async def update_user(self, cmd: DBUpdateUserRequest) -> DBBoolResponse:
+    async def update_user(self, cmd: DBUpdateUserRequest) -> DBAuthorityMutationResponse:
         """Update a user's fields."""
         try:
             success = await self.db_manager.update_user(cmd.user_id, **cmd.fields)
-            return DBBoolResponse(success=success)
+            return DBAuthorityMutationResponse(success=success)
+        except MeshManagedAuthorityError:
+            return DBAuthorityMutationResponse(
+                success=False,
+                error_code="mesh_managed_authority",
+            )
         except Exception as e:
             log_error(f"Error updating user: {e}", exc_info=True)
-            return DBBoolResponse(success=False)
+            return DBAuthorityMutationResponse(success=False)
 
     @method_contract(
         method_id=DBMethods.DELETE_USER,
         input_model=DBDeleteUserRequest,
-        output_model=DBBoolResponse,
+        output_model=DBAuthorityMutationResponse,
         summary="Delete a user",
         exposure="internal",
         method_type="manage",
     )
-    async def delete_user(self, cmd: DBDeleteUserRequest) -> DBBoolResponse:
+    async def delete_user(self, cmd: DBDeleteUserRequest) -> DBAuthorityMutationResponse:
         """Delete a user."""
         try:
             success = await self.db_manager.delete_user(cmd.user_id)
-            return DBBoolResponse(success=success)
+            return DBAuthorityMutationResponse(success=success)
+        except MeshManagedAuthorityError:
+            return DBAuthorityMutationResponse(
+                success=False,
+                error_code="mesh_managed_authority",
+            )
         except Exception as e:
             log_error(f"Error deleting user: {e}", exc_info=True)
-            return DBBoolResponse(success=False)
+            return DBAuthorityMutationResponse(success=False)
 
     # ── Device CRUD ──────────────────────────────────────────────────────
 
@@ -1391,31 +1874,36 @@ class DBService(BaseService):
     @method_contract(
         method_id=DBMethods.DELETE_DEVICE,
         input_model=DBDeleteDeviceRequest,
-        output_model=DBBoolResponse,
+        output_model=DBAuthorityMutationResponse,
         summary="Delete a device",
         exposure="internal",
         method_type="manage",
     )
-    async def delete_device(self, cmd: DBDeleteDeviceRequest) -> DBBoolResponse:
+    async def delete_device(self, cmd: DBDeleteDeviceRequest) -> DBAuthorityMutationResponse:
         """Delete a device."""
         try:
             success = await self.db_manager.delete_device(cmd.device_id)
-            return DBBoolResponse(success=success)
+            return DBAuthorityMutationResponse(success=success)
+        except MeshManagedAuthorityError:
+            return DBAuthorityMutationResponse(
+                success=False,
+                error_code="mesh_managed_authority",
+            )
         except Exception as e:
             log_error(f"Error deleting device: {e}", exc_info=True)
-            return DBBoolResponse(success=False)
+            return DBAuthorityMutationResponse(success=False)
 
     # ── Token CRUD ───────────────────────────────────────────────────────
 
     @method_contract(
         method_id=DBMethods.CREATE_TOKEN,
         input_model=DBCreateTokenRequest,
-        output_model=DBBoolResponse,
+        output_model=DBAuthorityMutationResponse,
         summary="Create a token",
         exposure="internal",
         method_type="manage",
     )
-    async def create_token(self, cmd: DBCreateTokenRequest) -> DBBoolResponse:
+    async def create_token(self, cmd: DBCreateTokenRequest) -> DBAuthorityMutationResponse:
         """Create a new token."""
         try:
             from datetime import datetime
@@ -1430,10 +1918,15 @@ class DBService(BaseService):
                 expires_at=datetime.fromisoformat(cmd.expires_at) if cmd.expires_at else None,
             )
             success = await self.db_manager.create_token(token)
-            return DBBoolResponse(success=success)
+            return DBAuthorityMutationResponse(success=success)
+        except MeshManagedAuthorityError:
+            return DBAuthorityMutationResponse(
+                success=False,
+                error_code="mesh_managed_authority",
+            )
         except Exception as e:
             log_error(f"Error creating token: {e}", exc_info=True)
-            return DBBoolResponse(success=False)
+            return DBAuthorityMutationResponse(success=False)
 
     @method_contract(
         method_id=DBMethods.GET_TOKEN_BY_HASH,
@@ -1491,36 +1984,345 @@ class DBService(BaseService):
     @method_contract(
         method_id=DBMethods.UPDATE_TOKEN_SCOPES,
         input_model=DBUpdateTokenScopesRequest,
-        output_model=DBBoolResponse,
+        output_model=DBAuthorityMutationResponse,
         summary="Update token scopes",
         exposure="internal",
         method_type="manage",
     )
-    async def update_token_scopes(self, cmd: DBUpdateTokenScopesRequest) -> DBBoolResponse:
+    async def update_token_scopes(
+        self, cmd: DBUpdateTokenScopesRequest
+    ) -> DBAuthorityMutationResponse:
         """Update the scopes of a token."""
         try:
             success = await self.db_manager.update_token_scopes(cmd.token_id, cmd.scopes)
-            return DBBoolResponse(success=success)
+            return DBAuthorityMutationResponse(success=success)
+        except MeshManagedAuthorityError:
+            return DBAuthorityMutationResponse(
+                success=False,
+                error_code="mesh_managed_authority",
+            )
         except Exception as e:
             log_error(f"Error updating token scopes: {e}", exc_info=True)
-            return DBBoolResponse(success=False)
+            return DBAuthorityMutationResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.APPROVE_MESH_PEER,
+        input_model=DBApproveMeshPeerRequest,
+        output_model=DBApproveMeshPeerResponse,
+        summary="Atomically approve mesh peer trust rows and linked authority",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def approve_mesh_peer(self, cmd: DBApproveMeshPeerRequest) -> DBApproveMeshPeerResponse:
+        """Approve selected peer rows and their linked principals in one transaction."""
+        try:
+            (
+                success,
+                approved_rooms,
+                authority_change,
+            ) = await self.db_manager.approve_mesh_peer_with_authority(
+                peer_id=cmd.peer_id,
+                permissions=cmd.permissions,
+                approved_by=cmd.approved_by,
+                room_name=cmd.room_name,
+            )
+            return DBApproveMeshPeerResponse(
+                success=success,
+                approved_rooms=approved_rooms,
+                authority_changes=(authority_change,) if authority_change else (),
+            )
+        except Exception as e:
+            log_error(f"Error approving mesh peer: {e}", exc_info=True)
+            return DBApproveMeshPeerResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.UPDATE_MESH_PEER_PERMISSIONS,
+        input_model=DBUpdateMeshPeerPermissionsRequest,
+        output_model=DBAuthorityMutationResponse,
+        summary="Atomically update an approved mesh peer's authority graph",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def update_mesh_peer_permissions(
+        self, cmd: DBUpdateMeshPeerPermissionsRequest
+    ) -> DBAuthorityMutationResponse:
+        """Update mesh peer, user, and token permissions in one transaction."""
+        try:
+            (
+                success,
+                authority_change,
+            ) = await self.db_manager.update_mesh_peer_permissions_with_authority(
+                cmd.peer_id, cmd.permissions
+            )
+            return DBAuthorityMutationResponse(
+                success=success,
+                authority_changes=(authority_change,) if authority_change else (),
+            )
+        except Exception as e:
+            log_error(f"Error updating mesh peer permissions: {e}", exc_info=True)
+            return DBAuthorityMutationResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.DENY_MESH_PEER,
+        input_model=DBDenyMeshPeerRequest,
+        output_model=DBAuthorityMutationResponse,
+        summary="Atomically deny mesh peer authority",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def deny_mesh_peer(self, cmd: DBDenyMeshPeerRequest) -> DBAuthorityMutationResponse:
+        try:
+            success, change = await self.db_manager.deny_mesh_peer_with_authority(
+                cmd.peer_id,
+                room_name=cmd.room_name,
+            )
+            return DBAuthorityMutationResponse(
+                success=success,
+                authority_changes=(change,) if change else (),
+            )
+        except Exception as exc:
+            log_error(f"Error denying mesh peer: {exc}", exc_info=True)
+            return DBAuthorityMutationResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.REMOVE_MESH_PEER,
+        input_model=DBRemoveMeshPeerRequest,
+        output_model=DBAuthorityMutationResponse,
+        summary="Atomically remove mesh peer authority",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def remove_mesh_peer(self, cmd: DBRemoveMeshPeerRequest) -> DBAuthorityMutationResponse:
+        try:
+            success, change = await self.db_manager.remove_mesh_peer_with_authority(
+                cmd.peer_id,
+                revoke_token=cmd.revoke_token,
+            )
+            return DBAuthorityMutationResponse(
+                success=success,
+                authority_changes=(change,) if change else (),
+            )
+        except Exception as exc:
+            log_error(f"Error removing mesh peer: {exc}", exc_info=True)
+            return DBAuthorityMutationResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.LINK_MESH_PEER_CREDENTIAL,
+        input_model=DBLinkMeshPeerCredentialRequest,
+        output_model=DBAuthorityMutationResponse,
+        summary="Atomically link an issued mesh credential",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def link_mesh_peer_credential(
+        self, cmd: DBLinkMeshPeerCredentialRequest
+    ) -> DBAuthorityMutationResponse:
+        try:
+            success, change = await self.db_manager.link_mesh_peer_credential_with_authority(
+                peer_id=cmd.peer_id,
+                token_id=cmd.token_id,
+                device_id=cmd.device_id,
+                user_id=cmd.user_id,
+                room_name=cmd.room_name,
+            )
+            return DBAuthorityMutationResponse(
+                success=success,
+                authority_changes=(change,) if change else (),
+            )
+        except Exception as exc:
+            log_error(f"Error linking mesh peer credential: {exc}", exc_info=True)
+            return DBAuthorityMutationResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.ISSUE_MESH_PEER_CREDENTIAL,
+        input_model=DBIssueMeshPeerCredentialRequest,
+        output_model=DBAuthorityMutationResponse,
+        summary="Atomically issue and rotate an outbound mesh credential",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def issue_mesh_peer_credential(
+        self, cmd: DBIssueMeshPeerCredentialRequest
+    ) -> DBAuthorityMutationResponse:
+        try:
+            from datetime import datetime
+
+            user = User(
+                id=cmd.user.id,
+                username=cmd.user.username,
+                password_hash=cmd.user.password_hash,
+                role=cmd.user.role,
+                permissions=cmd.user.permissions or [],
+                is_admin=cmd.user.is_admin,
+                created_at=datetime.fromisoformat(cmd.user.created_at)
+                if cmd.user.created_at
+                else None,
+            )
+            device = Device(
+                id=cmd.device.id,
+                user_id=cmd.device.user_id,
+                name=cmd.device.name,
+                public_key=cmd.device.public_key,
+                is_trusted=cmd.device.is_trusted,
+                created_at=datetime.fromisoformat(cmd.device.created_at)
+                if cmd.device.created_at
+                else None,
+            )
+            token = Token(
+                id=cmd.token.id,
+                token_hash=cmd.token.token_hash,
+                prefix=cmd.token.prefix or "",
+                device_id=cmd.token.device_id,
+                user_id=cmd.token.user_id,
+                scopes=cmd.token.scopes or [],
+                expires_at=datetime.fromisoformat(cmd.token.expires_at)
+                if cmd.token.expires_at
+                else None,
+                created_at=datetime.fromisoformat(cmd.token.created_at)
+                if cmd.token.created_at
+                else None,
+            )
+            success, change = await self.db_manager.issue_mesh_peer_credential_with_authority(
+                peer_id=cmd.peer_id,
+                room_name=cmd.room_name,
+                user=user,
+                device=device,
+                token=token,
+            )
+            return DBAuthorityMutationResponse(
+                success=success,
+                authority_changes=(change,) if change else (),
+            )
+        except Exception as exc:
+            log_error(f"Error issuing mesh peer credential: {exc}", exc_info=True)
+            return DBAuthorityMutationResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.GET_MESH_PEER_AUTHORITY_SNAPSHOT,
+        input_model=DBGetMeshPeerAuthoritySnapshotRequest,
+        output_model=DBGetMeshPeerAuthoritySnapshotResponse,
+        summary="Read a stable secret-free mesh authority snapshot",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_mesh_peer_authority_snapshot(
+        self, query: DBGetMeshPeerAuthoritySnapshotRequest
+    ) -> DBGetMeshPeerAuthoritySnapshotResponse:
+        try:
+            authorities = await self.db_manager.get_mesh_peer_authority_snapshot(
+                peer_id=query.peer_id
+            )
+            return DBGetMeshPeerAuthoritySnapshotResponse(authorities=authorities)
+        except Exception as exc:
+            log_error(f"Error reading mesh peer authority snapshot: {exc}", exc_info=True)
+            raise
+
+    @method_contract(
+        method_id=DBMethods.UPSERT_MESH_PEER,
+        input_model=DBUpsertMeshPeerRequest,
+        output_model=DBBoolResponse,
+        summary="Create or update mesh peer discovery metadata",
+        exposure="internal",
+        method_type="use",
+    )
+    async def upsert_mesh_peer(self, cmd: DBUpsertMeshPeerRequest) -> DBBoolResponse:
+        success = await self.db_manager.upsert_mesh_peer(
+            row_id=cmd.id,
+            peer_id=cmd.peer_id,
+            room_name=cmd.room_name,
+            node_name=cmd.node_name,
+            ip=cmd.ip,
+            port=cmd.port,
+        )
+        return DBBoolResponse(success=success)
+
+    @method_contract(
+        method_id=DBMethods.SAVE_MESH_INBOUND_CREDENTIAL,
+        input_model=DBSaveMeshInboundCredentialRequest,
+        output_model=DBBoolResponse,
+        summary="Save encrypted inbound mesh credential fields",
+        exposure="internal",
+        method_type="use",
+    )
+    async def save_mesh_inbound_credential(
+        self, cmd: DBSaveMeshInboundCredentialRequest
+    ) -> DBBoolResponse:
+        success = await self.db_manager.save_mesh_inbound_credential(
+            peer_id=cmd.peer_id,
+            room_name=cmd.room_name,
+            encrypted_token=cmd.encrypted_token,
+            token_id=cmd.token_id,
+            permissions=cmd.permissions,
+            remote_device_id=cmd.remote_device_id,
+            remote_user_id=cmd.remote_user_id,
+            remote_node_name=cmd.remote_node_name,
+        )
+        return DBBoolResponse(success=success)
+
+    @method_contract(
+        method_id=DBMethods.UPDATE_MESH_PEER_CONNECTION,
+        input_model=DBUpdateMeshPeerConnectionRequest,
+        output_model=DBBoolResponse,
+        summary="Update mesh peer connection metadata",
+        exposure="internal",
+        method_type="use",
+    )
+    async def update_mesh_peer_connection(
+        self, cmd: DBUpdateMeshPeerConnectionRequest
+    ) -> DBBoolResponse:
+        success = await self.db_manager.update_mesh_peer_connection_status(
+            cmd.peer_id,
+            cmd.connection_status,
+        )
+        return DBBoolResponse(success=success)
+
+    @method_contract(
+        method_id=DBMethods.MATCH_MESH_OUTBOUND_CREDENTIAL,
+        input_model=DBMatchMeshOutboundCredentialRequest,
+        output_model=DBBoolResponse,
+        summary="Match exact outbound mesh credential ownership",
+        exposure="internal",
+        method_type="use",
+    )
+    async def match_mesh_outbound_credential(
+        self, query: DBMatchMeshOutboundCredentialRequest
+    ) -> DBBoolResponse:
+        matched = await self.db_manager.mesh_outbound_credential_matches(
+            token_id=query.token_id,
+            device_id=query.device_id,
+            user_id=query.user_id,
+            claimant_peer_id=query.claimant_peer_id,
+            room_name=query.room_name,
+        )
+        return DBBoolResponse(success=matched)
 
     @method_contract(
         method_id=DBMethods.REVOKE_TOKEN,
         input_model=DBRevokeTokenRequest,
-        output_model=DBBoolResponse,
+        output_model=DBAuthorityMutationResponse,
         summary="Revoke a token",
         exposure="internal",
         method_type="manage",
     )
-    async def revoke_token(self, cmd: DBRevokeTokenRequest) -> DBBoolResponse:
+    async def revoke_token(self, cmd: DBRevokeTokenRequest) -> DBAuthorityMutationResponse:
         """Revoke (delete) a token."""
         try:
-            success = await self.db_manager.revoke_token(cmd.token_id)
-            return DBBoolResponse(success=success)
+            success, changes = await self.db_manager.revoke_token_with_authority(
+                cmd.token_id,
+                reject_mesh_linked=cmd.reject_mesh_linked,
+            )
+            return DBAuthorityMutationResponse(
+                success=success,
+                authority_changes=changes,
+            )
+        except MeshManagedAuthorityError:
+            return DBAuthorityMutationResponse(
+                success=False,
+                error_code="mesh_managed_authority",
+            )
         except Exception as e:
             log_error(f"Error revoking token: {e}", exc_info=True)
-            return DBBoolResponse(success=False)
+            return DBAuthorityMutationResponse(success=False)
 
     # ── Audit Log ────────────────────────────────────────────────────────
 
@@ -1656,6 +2458,312 @@ class DBService(BaseService):
             log_error(f"Error deleting mesh credential: {e}", exc_info=True)
             return DBBoolResponse(success=False)
 
+    # ── Durable Tooling identity ────────────────────────────────────────
+
+    @method_contract(
+        method_id=DBMethods.RECONCILE_TOOL_IDENTITY,
+        input_model=DBReconcileToolIdentityRequest,
+        output_model=DBReconcileToolIdentityResponse,
+        summary="Atomically reconcile one Tooling identity and legacy aliases",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def reconcile_tool_identity(
+        self,
+        cmd: DBReconcileToolIdentityRequest,
+    ) -> DBReconcileToolIdentityResponse:
+        """Persist identity and re-key dependent Tooling authority/cache state."""
+
+        return await self.db_manager.reconcile_tool_identity(cmd)
+
+    @method_contract(
+        method_id=DBMethods.ALLOCATE_TOOL_IDENTITY,
+        input_model=DBAllocateToolIdentityRequest,
+        output_model=DBAllocateToolIdentityResponse,
+        summary="Allocate/reuse one immutable legacy Tooling identity",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def allocate_tool_identity(
+        self, cmd: DBAllocateToolIdentityRequest
+    ) -> DBAllocateToolIdentityResponse:
+        """Persist a one-time ID for an unstamped local or legacy remote tool."""
+
+        return await self.db_manager.allocate_tool_identity(cmd)
+
+    @method_contract(
+        method_id=DBMethods.RESOLVE_TOOL_IDENTITY_ALIASES,
+        input_model=DBResolveToolIdentityAliasesRequest,
+        output_model=DBResolveToolIdentityAliasesResponse,
+        summary="Resolve durable Tooling aliases after restart",
+        exposure="internal",
+        method_type="use",
+    )
+    async def resolve_tool_identity_aliases(
+        self, cmd: DBResolveToolIdentityAliasesRequest
+    ) -> DBResolveToolIdentityAliasesResponse:
+        """Map canonical and legacy IDs, omitting unknown/colliding identities."""
+
+        return await self.db_manager.resolve_tool_identity_aliases(
+            cmd.global_tool_ids, stable_peer_id=cmd.stable_peer_id
+        )
+
+    @method_contract(
+        method_id=DBMethods.GET_TOOLING_EXPORT_POLICY_SNAPSHOT,
+        input_model=DBGetToolingExportPolicySnapshotRequest,
+        output_model=DBGetToolingExportPolicySnapshotResponse,
+        summary="Read the atomic Tooling export authority snapshot",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def get_tooling_export_policy_snapshot(
+        self, cmd: DBGetToolingExportPolicySnapshotRequest
+    ) -> DBGetToolingExportPolicySnapshotResponse:
+        return await self.db_manager.get_tooling_export_policy_snapshot(cmd)
+
+    @method_contract(
+        method_id=DBMethods.MUTATE_TOOLING_EXPORT_POLICY,
+        input_model=DBMutateToolingExportPolicyRequest,
+        output_model=DBMutateToolingExportPolicyResponse,
+        summary="Atomically mutate and audit Tooling export authority",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def mutate_tooling_export_policy(
+        self, cmd: DBMutateToolingExportPolicyRequest
+    ) -> DBMutateToolingExportPolicyResponse:
+        return await self.db_manager.mutate_tooling_export_policy(cmd)
+
+    @method_contract(
+        method_id=DBMethods.GET_TOOLING_MESH_SWITCHES,
+        input_model=DBGetToolingMeshSwitchesRequest,
+        output_model=DBGetToolingMeshSwitchesResponse,
+        summary="Read persisted provider and consumer Tooling switches",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def get_tooling_mesh_switches(
+        self, _cmd: DBGetToolingMeshSwitchesRequest
+    ) -> DBGetToolingMeshSwitchesResponse:
+        return DBGetToolingMeshSwitchesResponse(
+            switches=await self.db_manager.get_tooling_mesh_switches()
+        )
+
+    @method_contract(
+        method_id=DBMethods.SET_TOOLING_MESH_SWITCHES,
+        input_model=DBSetToolingMeshSwitchesRequest,
+        output_model=DBSetToolingMeshSwitchesResponse,
+        summary="Atomically persist bilateral Tooling switches",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def set_tooling_mesh_switches(
+        self, cmd: DBSetToolingMeshSwitchesRequest
+    ) -> DBSetToolingMeshSwitchesResponse:
+        return await self.db_manager.set_tooling_mesh_switches(cmd)
+
+    @method_contract(
+        method_id=DBMethods.BEGIN_TOOLING_REMOTE_CATALOG_SYNC,
+        input_model=DBBeginToolingRemoteCatalogSyncRequest,
+        output_model=DBBeginToolingRemoteCatalogSyncResponse,
+        summary="Begin a non-bindable Tooling projection staging generation",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def begin_tooling_remote_catalog_sync(
+        self, cmd: DBBeginToolingRemoteCatalogSyncRequest
+    ) -> DBBeginToolingRemoteCatalogSyncResponse:
+        return await self.db_manager.begin_tooling_remote_catalog_sync(cmd)
+
+    @method_contract(
+        method_id=DBMethods.APPEND_TOOLING_REMOTE_CATALOG_PAGE,
+        input_model=DBAppendToolingRemoteCatalogPageRequest,
+        output_model=DBAppendToolingRemoteCatalogPageResponse,
+        summary="Stage one bound Tooling projection page",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def append_tooling_remote_catalog_page(
+        self, cmd: DBAppendToolingRemoteCatalogPageRequest
+    ) -> DBAppendToolingRemoteCatalogPageResponse:
+        return await self.db_manager.append_tooling_remote_catalog_page(cmd)
+
+    @method_contract(
+        method_id=DBMethods.COMMIT_TOOLING_REMOTE_CATALOG_SYNC,
+        input_model=DBCommitToolingRemoteCatalogSyncRequest,
+        output_model=DBCommitToolingRemoteCatalogSyncResponse,
+        summary="Verify and atomically promote a complete Tooling projection",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def commit_tooling_remote_catalog_sync(
+        self, cmd: DBCommitToolingRemoteCatalogSyncRequest
+    ) -> DBCommitToolingRemoteCatalogSyncResponse:
+        return await self.db_manager.commit_tooling_remote_catalog_sync(cmd)
+
+    @method_contract(
+        method_id=DBMethods.FINALIZE_TOOLING_REMOTE_CATALOG_POLICY,
+        input_model=DBFinalizeToolingRemoteCatalogPolicyRequest,
+        output_model=DBFinalizeToolingRemoteCatalogPolicyResponse,
+        summary="Activate a committed Tooling catalog after durable policy reconciliation",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def finalize_tooling_remote_catalog_policy(
+        self, cmd: DBFinalizeToolingRemoteCatalogPolicyRequest
+    ) -> DBFinalizeToolingRemoteCatalogPolicyResponse:
+        return await self.db_manager.finalize_tooling_remote_catalog_policy(cmd)
+
+    @method_contract(
+        method_id=DBMethods.ABORT_TOOLING_REMOTE_CATALOG_SYNC,
+        input_model=DBAbortToolingRemoteCatalogSyncRequest,
+        output_model=DBAbortToolingRemoteCatalogSyncResponse,
+        summary="Discard a non-bindable Tooling projection staging generation",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def abort_tooling_remote_catalog_sync(
+        self, cmd: DBAbortToolingRemoteCatalogSyncRequest
+    ) -> DBAbortToolingRemoteCatalogSyncResponse:
+        return await self.db_manager.abort_tooling_remote_catalog_sync(cmd)
+
+    @method_contract(
+        method_id=DBMethods.GET_TOOLING_REMOTE_CATALOG,
+        input_model=DBGetToolingRemoteCatalogRequest,
+        output_model=DBGetToolingRemoteCatalogResponse,
+        summary="Read normalized committed Tooling projection state",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_tooling_remote_catalog(
+        self, cmd: DBGetToolingRemoteCatalogRequest
+    ) -> DBGetToolingRemoteCatalogResponse:
+        return await self.db_manager.get_tooling_remote_catalog(cmd)
+
+    @method_contract(
+        method_id=DBMethods.SET_TOOLING_REMOTE_PROVIDER_AVAILABILITY,
+        input_model=DBSetToolingRemoteProviderAvailabilityRequest,
+        output_model=DBSetToolingRemoteProviderAvailabilityResponse,
+        summary="Fail closed retained Tooling tools when provider authority is unavailable",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def set_tooling_remote_provider_availability(
+        self, cmd: DBSetToolingRemoteProviderAvailabilityRequest
+    ) -> DBSetToolingRemoteProviderAvailabilityResponse:
+        return await self.db_manager.set_tooling_remote_provider_availability(cmd)
+
+    @method_contract(
+        method_id=DBMethods.ACCEPT_TOOLING_REMOTE_TOOL_SCHEMA,
+        input_model=DBAcceptToolingRemoteToolSchemaRequest,
+        output_model=DBAcceptToolingRemoteToolSchemaResponse,
+        summary="Accept one current verified remote Tooling schema after explicit review",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def accept_tooling_remote_tool_schema(
+        self, cmd: DBAcceptToolingRemoteToolSchemaRequest
+    ) -> DBAcceptToolingRemoteToolSchemaResponse:
+        return await self.db_manager.accept_tooling_remote_tool_schema(cmd)
+
+    @method_contract(
+        method_id=DBMethods.IMPORT_LEGACY_TOOLING_REMOTE_CATALOGS,
+        input_model=DBImportLegacyToolingRemoteCatalogsRequest,
+        output_model=DBImportLegacyToolingRemoteCatalogsResponse,
+        summary="Import legacy Tooling JSON catalogs as stale management history",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def import_legacy_tooling_remote_catalogs(
+        self, cmd: DBImportLegacyToolingRemoteCatalogsRequest
+    ) -> DBImportLegacyToolingRemoteCatalogsResponse:
+        return await self.db_manager.import_legacy_tooling_remote_catalogs(cmd)
+
+    @method_contract(
+        method_id=DBMethods.RECOVER_TOOLING_REMOTE_CATALOGS,
+        input_model=DBRecoverToolingRemoteCatalogsRequest,
+        output_model=DBRecoverToolingRemoteCatalogsResponse,
+        exposure="internal",
+    )
+    async def recover_tooling_remote_catalogs(
+        self, cmd: DBRecoverToolingRemoteCatalogsRequest
+    ) -> DBRecoverToolingRemoteCatalogsResponse:
+        return await self.db_manager.recover_tooling_remote_catalogs(cmd)
+
+    @method_contract(
+        method_id=DBMethods.PRUNE_TOOLING_REMOTE_CATALOG_RETENTION,
+        input_model=DBPruneToolingRemoteCatalogRetentionRequest,
+        output_model=DBPruneToolingRemoteCatalogRetentionResponse,
+        exposure="internal",
+    )
+    async def prune_tooling_remote_catalog_retention(
+        self, cmd: DBPruneToolingRemoteCatalogRetentionRequest
+    ) -> DBPruneToolingRemoteCatalogRetentionResponse:
+        return await self.db_manager.prune_tooling_remote_catalog_retention(cmd)
+
+    @method_contract(
+        method_id=DBMethods.RESOLVE_TOOLING_REMOTE_TOOL_ALIASES,
+        input_model=DBResolveToolingRemoteToolAliasesRequest,
+        output_model=DBResolveToolingRemoteToolAliasesResponse,
+        exposure="internal",
+    )
+    async def resolve_tooling_remote_tool_aliases(
+        self, cmd: DBResolveToolingRemoteToolAliasesRequest
+    ) -> DBResolveToolingRemoteToolAliasesResponse:
+        return await self.db_manager.resolve_tooling_remote_tool_aliases(cmd)
+
+    @method_contract(
+        method_id=DBMethods.GET_TOOLING_MESH_ACTIVATION_STATE,
+        input_model=DBGetToolingMeshActivationStateRequest,
+        output_model=DBGetToolingMeshActivationStateResponse,
+        summary="Read the durable atomic Tooling mesh activation state",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_tooling_mesh_activation_state(
+        self, _query: DBGetToolingMeshActivationStateRequest
+    ) -> DBGetToolingMeshActivationStateResponse:
+        return await self.db_manager.get_tooling_mesh_activation_state()
+
+    @method_contract(
+        method_id=DBMethods.ACTIVATE_TOOLING_MESH_ENFORCEMENT,
+        input_model=DBActivateToolingMeshEnforcementRequest,
+        output_model=DBActivateToolingMeshEnforcementResponse,
+        summary="Atomically activate G013 Tooling enforcement and retire the legacy guard",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def activate_tooling_mesh_enforcement(
+        self, cmd: DBActivateToolingMeshEnforcementRequest
+    ) -> DBActivateToolingMeshEnforcementResponse:
+        return await self.db_manager.activate_tooling_mesh_enforcement(cmd)
+
+    @method_contract(
+        method_id=DBMethods.GET_TOOLING_EXPOSURE_LEDGER,
+        input_model=DBGetToolingExposureLedgerRequest,
+        output_model=DBGetToolingExposureLedgerResponse,
+        summary="Read recipient-scoped Tooling provider exposure history",
+        exposure="internal",
+        method_type="use",
+    )
+    async def get_tooling_exposure_ledger(
+        self, query: DBGetToolingExposureLedgerRequest
+    ) -> DBGetToolingExposureLedgerResponse:
+        return await self.db_manager.get_tooling_exposure_ledger(query)
+
+    @method_contract(
+        method_id=DBMethods.RECORD_TOOLING_EXPOSURES,
+        input_model=DBRecordToolingExposuresRequest,
+        output_model=DBRecordToolingExposuresResponse,
+        summary="Record tools actually serialized to one projection recipient",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def record_tooling_exposures(
+        self, cmd: DBRecordToolingExposuresRequest
+    ) -> DBRecordToolingExposuresResponse:
+        return await self.db_manager.record_tooling_exposures(cmd)
+
     # ── Generic SQL Execution ────────────────────────────────────────────
 
     @method_contract(
@@ -1675,6 +2783,15 @@ class DBService(BaseService):
         try:
             import aiosqlite
 
+            protected_error = _protected_authority_write_error(cmd.sql)
+            if protected_error is not None:
+                return DBExecuteSQLResponse(
+                    rows=[],
+                    rowcount=0,
+                    success=False,
+                    error=protected_error,
+                )
+
             params = tuple(cmd.params) if cmd.params else ()
             async with aiosqlite.connect(self.db_manager.db_path) as db:
                 db.row_factory = aiosqlite.Row
@@ -1687,13 +2804,15 @@ class DBService(BaseService):
                     return DBExecuteSQLResponse(
                         rows=[dict(row) for row in rows],
                         rowcount=len(rows),
+                        success=True,
                     )
                 else:
                     await db.commit()
                     return DBExecuteSQLResponse(
                         rows=[],
                         rowcount=cursor.rowcount,
+                        success=True,
                     )
         except Exception as e:
             log_error(f"Error executing SQL: {e}", exc_info=True)
-            return DBExecuteSQLResponse(rows=[], rowcount=0)
+            return DBExecuteSQLResponse(rows=[], rowcount=0, success=False, error=str(e))

@@ -353,6 +353,38 @@ def test_live_assistant_tool_payload_preserves_safe_query_without_diagnostic_has
     assert "must-not-leak" not in json.dumps(live_payload)
 
 
+def test_live_assistant_approval_tool_payload_keeps_resume_identifiers():
+    live_payload = _live_display_payload(
+        OrchestratorMethods.RESPONSE,
+        {
+            "kind": "tool.requires_action",
+            "session_id": "session-tool-approval",
+            "request_id": "request-tool-approval",
+            "tool": {
+                "tool_call_id": "call-scheduler",
+                "tool_name": "list_scheduled_tasks_tool",
+                "status": "requires_action",
+                "summary": "Tool requires operator approval before execution.",
+                "target": "openai",
+                "data_leaves_device": False,
+                "pending_id": "aurora-session-1:call-scheduler",
+                "approval_request_id": "approval-scheduler-1",
+                "approval_expires_at": 1783622200.0,
+                "approval_token": "must-not-leak",
+                "redacted_args_preview": {},
+            },
+        },
+    )
+
+    assert live_payload is not None
+    tool = live_payload["tool"]
+    assert tool["pending_id"] == "aurora-session-1:call-scheduler"
+    assert tool["approval_request_id"] == "approval-scheduler-1"
+    assert tool["approval_expires_at"] == 1783622200.0
+    assert "approval_token" not in tool
+    assert "must-not-leak" not in json.dumps(live_payload)
+
+
 @pytest.mark.parametrize(
     ("status", "expected_kind", "expected_severity"),
     [
@@ -783,6 +815,8 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     assert bundle.webrtc_diagnostics.connected_peer_count == 1
     assert bundle.native_capabilities[0].status == "unavailable"
     assert bundle.sidecar_logs[0].status == "metadata_only"
+    assert bundle.mesh_rollout.secrets_redacted is True
+    assert bundle.mesh_rollout.downgrade_status == "not_applicable"
     assert bundle.audit_receipt and bundle.audit_receipt.startswith("support_bundle:")
     assert bundle.audit_error is None
     assert bundle.capability_catalog_summary.providers == 1
@@ -792,6 +826,8 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     assert "redis://localhost:6379" not in dumped
     assert "/models/private.bin" not in dumped
     assert bundle.secrets_redacted is True
+    assert "raw catalog schemas and projection cursors" in bundle.redaction.omitted_payloads
+    assert "newly hidden tool names" in bundle.redaction.omitted_payloads
     audit_request = service.bus.request.await_args.args[1]
     assert service.bus.request.await_args.args[0] == AuthMethods.STORE_AUDIT_EVENT
     assert audit_request.event == "diagnostics.support_bundle.exported"
@@ -815,6 +851,13 @@ async def test_support_bundle_surfaces_audit_storage_failure_without_raw_payload
     assert bundle.audit_receipt is None
     assert bundle.audit_error == "audit offline"
     assert bundle.secrets_redacted is True
+
+
+def test_downgrade_status_does_not_infer_verification_from_legacy_mode(monkeypatch):
+    monkeypatch.setenv("AURORA_TOOLING_TARGET_MODE", "legacy")
+    monkeypatch.delenv("AURORA_TOOLING_EXPORT_SNAPSHOT", raising=False)
+
+    assert GatewayService._tooling_downgrade_status() == "verification_unavailable"
 
 
 def test_audit_trace_filters_mesh_operator_fields_and_aliases():

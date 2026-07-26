@@ -14,6 +14,8 @@ from app.shared.contracts.models.scheduler import (
     SchedulerToolBinding,
     SchedulerToolExecuteAction,
 )
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 # Simple in-memory storage for current Pomodoro session
 _current_session = {
@@ -343,6 +345,13 @@ async def _break_session_end(bus: MessageBus | None = None) -> dict[str, Any]:
     except Exception as e:
         log_error(f"Error in break_session_end: {e}")
         return {"success": False, "message": str(e)}
+
+
+for _tts_pomodoro_tool in (start_pomodoro_tool, pomodoro_transition_tool):
+    _tts_pomodoro_tool.metadata = {
+        **(_tts_pomodoro_tool.metadata or {}),
+        "required_permissions": [ToolingMethods.EXECUTE_TOOL, TTSMethods.REQUEST],
+    }
 
 
 # Legacy callback compatibility for existing rows only. New rows are created via

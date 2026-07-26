@@ -6,13 +6,212 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.messaging.bus import Envelope
+from app.services.auth.auth_manager import MeshPairingDeniedError
 from app.services.auth.service import AuthService
+from app.shared.contracts.mesh_surface import PUBLIC_INFRASTRUCTURE_TOPICS
 from app.shared.contracts.models.auth import (
+    AuthMethods,
+    ListPendingPairingsRequest,
+    PairingConnectRequest,
+    PairingExchangeRequest,
+    PairingStartRequest,
     PrincipalListRequest,
     TokenCreateRequest,
     TokenListRequest,
 )
 from app.shared.models.db import Token, User
+
+
+def test_auth_public_infrastructure_markers_are_exact_bootstrap_allowlist() -> None:
+    marked = {
+        metadata["method_id"]
+        for _name, member in AuthService.__dict__.items()
+        if (metadata := getattr(member, "_contract_metadata", None))
+        and metadata.get("public_infrastructure")
+    }
+
+    assert marked == set(PUBLIC_INFRASTRUCTURE_TOPICS)
+    assert marked == {
+        AuthMethods.LOGIN,
+        AuthMethods.PAIRING_START,
+        AuthMethods.PAIRING_CONNECT,
+        AuthMethods.PAIRING_EXCHANGE,
+    }
+
+
+@pytest.mark.asyncio
+async def test_pairing_start_uses_transport_peer_for_rate_limit_not_payload_identity() -> None:
+    service = AuthService()
+    service._manager = SimpleNamespace(start_pairing=AsyncMock(return_value="123456"))
+    request = PairingStartRequest(
+        device_name="Untrusted request",
+        client_ip="spoofed-client-ip",
+        remote_peer_id="spoofed-stable-peer",
+        remote_node_name="Spoofed node",
+    )
+    envelope = Envelope(
+        type="Auth.PairingStart",
+        payload=request,
+        origin="external",
+        caller_peer_id="transport-peer-id",
+    )
+
+    response = await service.handle_pairing_start(request, envelope=envelope)
+
+    assert not isinstance(response, dict)
+    assert response.code == "123456"
+    service.manager.start_pairing.assert_awaited_once_with(
+        "Untrusted request",
+        "spoofed-client-ip",
+        remote_peer_id="spoofed-stable-peer",
+        remote_node_name="Spoofed node",
+        room_name="",
+        pairing_session_id="",
+        verification_code="",
+        trusted_rate_limit_key="webrtc:transport-peer-id",
+    )
+
+
+@pytest.mark.asyncio
+async def test_pairing_start_round_trips_bilateral_session_metadata() -> None:
+    """The opaque request handle stays separate from the display-only SAS."""
+    service = AuthService()
+    service._manager = SimpleNamespace(
+        start_pairing=AsyncMock(return_value="opaque-request-handle")
+    )
+    pairing_session_id = "a" * 64
+    verification_code = "48271935"
+    request = PairingStartRequest(
+        device_name="Aurora 1",
+        remote_peer_id="stable-peer-a",
+        remote_node_name="Aurora 1",
+        room_name="private-mesh-room",
+        pairing_session_id=pairing_session_id,
+        verification_code=verification_code,
+    )
+    envelope = Envelope(
+        type="Auth.PairingStart",
+        payload=request,
+        origin="external",
+        identity_source="webrtc_rpc",
+        caller_peer_id="transport-peer-a",
+    )
+
+    response = await service.handle_pairing_start(request, envelope=envelope)
+
+    assert not isinstance(response, dict)
+    assert response.code == "opaque-request-handle"
+    assert response.code != verification_code
+    assert response.pairing_session_id == pairing_session_id
+    assert response.verification_code == verification_code
+    service.manager.start_pairing.assert_awaited_once_with(
+        "Aurora 1",
+        "unknown",
+        remote_peer_id="stable-peer-a",
+        remote_node_name="Aurora 1",
+        room_name="private-mesh-room",
+        pairing_session_id=pairing_session_id,
+        verification_code=verification_code,
+        trusted_rate_limit_key="webrtc:transport-peer-a",
+        raise_on_denied=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_pairing_start_returns_terminal_status_for_durably_denied_mesh_peer() -> None:
+    service = AuthService()
+    service._manager = SimpleNamespace(start_pairing=AsyncMock(side_effect=MeshPairingDeniedError))
+    request = PairingStartRequest(
+        device_name="Aurora 1",
+        remote_peer_id="stable-peer-a",
+        remote_node_name="Aurora 1",
+        room_name="private-mesh-room",
+        pairing_session_id="a" * 64,
+        verification_code="48271935",
+    )
+    envelope = Envelope(
+        type="Auth.PairingStart",
+        payload=request,
+        origin="external",
+        identity_source="webrtc_rpc",
+        caller_peer_id="transport-peer-a",
+    )
+
+    response = await service.handle_pairing_start(request, envelope=envelope)
+
+    assert response == {"error": "Pairing denied", "status": "denied"}
+
+
+@pytest.mark.asyncio
+async def test_pairing_connect_and_pending_queue_preserve_bilateral_metadata() -> None:
+    pairing_session_id = "c" * 64
+    verification_code = "48271935"
+    stored_request = {
+        "id": "request-1",
+        "request_id": "request-1",
+        "code": "opaque-request-handle",
+        "device_name": "Aurora 1",
+        "client_ip": "unknown",
+        "status": "pending",
+        "created_at": "2026-07-10T12:00:00Z",
+        "expires_at": "2099-01-01T00:00:00Z",
+        "remote_peer_id": "stable-peer-a",
+        "remote_node_name": "Aurora 1",
+        "approved_by": None,
+        "denied_by": None,
+        "denied_reason": "",
+        "granted_permissions": [],
+        "granted_is_admin": False,
+        "pairing_session_id": pairing_session_id,
+        "verification_code": verification_code,
+    }
+    service = AuthService()
+    service._manager = SimpleNamespace(
+        connect_pairing=AsyncMock(return_value=stored_request),
+        list_pending_pairings=AsyncMock(return_value=([stored_request], 0)),
+    )
+    service._audit_admin_pairing_queue_list = AsyncMock()
+
+    connected = await service.handle_pairing_connect(
+        PairingConnectRequest(code="opaque-request-handle")
+    )
+    listed = await service.handle_list_pending_pairings(ListPendingPairingsRequest())
+
+    assert not isinstance(connected, dict)
+    assert connected.pairing_session_id == pairing_session_id
+    assert connected.verification_code == verification_code
+    assert listed.pairings[0].pairing_session_id == pairing_session_id
+    assert listed.pairings[0].verification_code == verification_code
+
+
+@pytest.mark.asyncio
+async def test_pairing_exchange_preserves_stable_mesh_identity() -> None:
+    service = AuthService()
+    service._manager = SimpleNamespace(
+        exchange_pairing=AsyncMock(
+            return_value={
+                "token": "issued-token",
+                "device_id": "device-1",
+                "user_id": "user-1",
+                "permissions": ["Gateway.use"],
+                "token_id": "token-1",
+                "peer_id": "stable-peer-1",
+                "node_name": "Aurora Studio",
+            }
+        )
+    )
+
+    response = await service.handle_pairing_exchange(PairingExchangeRequest(code="123456"))
+
+    assert not isinstance(response, dict)
+    assert response.peer_id == "stable-peer-1"
+    assert response.node_name == "Aurora Studio"
+    service.manager.exchange_pairing.assert_awaited_once_with(
+        "123456",
+        pairing_session_id="",
+        trusted_rate_limit_key="pairing:external",
+    )
 
 
 @pytest.mark.asyncio

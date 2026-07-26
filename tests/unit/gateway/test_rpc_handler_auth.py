@@ -91,11 +91,20 @@ async def test_anonymous_blocked_from_rpc_call(mock_bus, mock_registry, mock_sen
 @pytest.mark.asyncio
 async def test_anonymous_allowed_pairing_start(mock_bus, mock_registry, mock_send_fn):
     """ANONYMOUS peer calling PairingStart is allowed through."""
+    pairing_context = {
+        "pairing_session_id": "a" * 64,
+        "verification_code": "48271935",
+        "device_name": "test-device",
+        "remote_peer_id": "stable-test-peer",
+        "remote_node_name": "test-device",
+        "room_name": "private-room",
+    }
     handler = RPCHandler(
         mock_bus,
         mock_registry,
         mock_send_fn,
         _make_anonymous_acl(),
+        pairing_context_provider=lambda: pairing_context,
     )
 
     method_info = MagicMock(spec=MethodInfo)
@@ -120,7 +129,14 @@ async def test_anonymous_allowed_pairing_start(mock_bus, mock_registry, mock_sen
                 "type": "call",
                 "id": "2",
                 "method": "Auth.PairingStart",
-                "params": {"device_name": "test-device"},
+                "params": {
+                    "device_name": "test-device",
+                    "remote_peer_id": "stable-test-peer",
+                    "remote_node_name": "test-device",
+                    "pairing_session_id": "a" * 64,
+                    "verification_code": "48271935",
+                    "room_name": "private-room",
+                },
             }
         )
     )
@@ -129,6 +145,62 @@ async def test_anonymous_allowed_pairing_start(mock_bus, mock_registry, mock_sen
     mock_send_fn.assert_called_once()
     response = json.loads(mock_send_fn.call_args[0][0])
     assert response["type"] == "result"
+
+
+@pytest.mark.asyncio
+async def test_durable_pairing_denial_notifies_transport_after_result_is_sent(
+    mock_bus,
+    mock_registry,
+):
+    """The local RTC must suppress retry even if the peer's terminal is dropped."""
+    events: list[str] = []
+    send_fn = MagicMock(side_effect=lambda _message: events.append("result_sent"))
+    denied_fn = MagicMock(side_effect=lambda _peer: events.append("denial_notified"))
+    pairing_context = {
+        "pairing_session_id": "a" * 64,
+        "verification_code": "48271935",
+        "device_name": "test-device",
+        "remote_peer_id": "stable-test-peer",
+        "remote_node_name": "test-device",
+        "room_name": "private-room",
+    }
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        send_fn,
+        _make_anonymous_acl(),
+        peer_id="signaling-peer",
+        pairing_context_provider=lambda: pairing_context,
+        pairing_denied_fn=denied_fn,
+    )
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = "PairingStart"
+    method_info.required_perms = []
+    method_info.bus_topic = "Auth.PairingStart"
+    method_info.method_type = "use"
+    method_info.exposure = "external"
+    method_info.input_model = None
+    announcement = MagicMock(spec=ServiceAnnouncement)
+    announcement.methods = [method_info]
+    mock_registry.get_service.return_value = announcement
+    mock_bus.request.return_value = QueryResult(
+        ok=True,
+        data={"error": "Pairing denied", "status": "denied"},
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "denied-1",
+                "method": "Auth.PairingStart",
+                "params": pairing_context,
+            }
+        )
+    )
+
+    assert events == ["result_sent", "denial_notified"]
+    denied_fn.assert_called_once_with("signaling-peer")
 
 
 @pytest.mark.asyncio

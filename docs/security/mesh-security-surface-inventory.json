@@ -1,0 +1,2013 @@
+{
+  "schema_version": 1,
+  "inventory_status": "complete",
+  "mesh_capable_modules": [
+    "STTCoordinator",
+    "WakeWord",
+    "Transcription",
+    "DB",
+    "TTS",
+    "Tooling",
+    "Scheduler",
+    "Orchestrator"
+  ],
+  "methods": [
+    {
+      "module": "DB",
+      "bus_topic": "DB.CreateSession",
+      "handler": "create_session",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 680
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "DB.use"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "session_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.ListSessions",
+      "handler": "list_sessions",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 706
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "DB.use"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "session_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.GetSession",
+      "handler": "get_session",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 749
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "DB.use"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "session_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.SetActiveSession",
+      "handler": "set_active_session",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 786
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "DB.use"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "session_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.GetMessages",
+      "handler": "get_messages",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 908
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "DB.GetMessages"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "message_history_read",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.GetMessagesForDate",
+      "handler": "get_messages_for_date",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 957
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "DB.GetMessagesForDate"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "message_history_read",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.RAGListNamespaces",
+      "handler": "rag_list_namespaces",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 1310
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "DB.RAGSearch"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "rag_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.RAGSearchRemote",
+      "handler": "rag_search_remote",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 1357
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "DB.RAGSearch"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "rag_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.RAGGetProvenance",
+      "handler": "rag_get_provenance",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 1425
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "DB.RAGSearch"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "rag_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.RAGExportNamespace",
+      "handler": "rag_export_namespace",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 1477
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "DB.manage"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "rag_transfer",
+      "permission_status": "protected"
+    },
+    {
+      "module": "DB",
+      "bus_topic": "DB.RAGImportNamespace",
+      "handler": "rag_import_namespace",
+      "source": {
+        "file": "app/services/db/service.py",
+        "line": 1569
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "DB.manage"
+      ],
+      "module_capabilities": [
+        "message_persistence",
+        "cron_jobs",
+        "rag_storage",
+        "vector_search"
+      ],
+      "proposed_feature_id": "rag_transfer",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.ExternalUserInput",
+      "handler": "process_external_input",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 547
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "assistant_conversation",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.InferChat",
+      "handler": "infer_chat",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 617
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "inference",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.StreamInferChat",
+      "handler": "stream_infer_chat",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 646
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "inference",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.IngestContext",
+      "handler": "ingest_context",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 674
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "assistant_conversation",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.ListPendingToolApprovals",
+      "handler": "list_pending_tool_approvals",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 862
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "tool_approval",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.ResumeToolApproval",
+      "handler": "resume_tool_approval",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 913
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "tool_approval",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.Interrupt",
+      "handler": "interrupt_assistant",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 1064
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "assistant_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.GetModelRuntime",
+      "handler": "get_model_runtime",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 1190
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "model_observability",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.GetModelCatalog",
+      "handler": "get_model_catalog",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 1234
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "model_observability",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.GetModelOperation",
+      "handler": "get_model_operation",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 1262
+      },
+      "exposure": "external",
+      "method_type": "use",
+      "required_perms": [
+        "Orchestrator.use"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "model_observability",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.ImportModel",
+      "handler": "import_model",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 1289
+      },
+      "exposure": "external",
+      "method_type": "manage",
+      "required_perms": [
+        "Orchestrator.manage"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "model_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.DownloadModel",
+      "handler": "download_model",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 1305
+      },
+      "exposure": "external",
+      "method_type": "manage",
+      "required_perms": [
+        "Orchestrator.manage"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "model_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Orchestrator",
+      "bus_topic": "Orchestrator.BenchmarkModel",
+      "handler": "benchmark_model",
+      "source": {
+        "file": "app/services/orchestrator/service.py",
+        "line": 1321
+      },
+      "exposure": "external",
+      "method_type": "manage",
+      "required_perms": [
+        "Orchestrator.manage"
+      ],
+      "module_capabilities": [
+        "llm_processing",
+        "agent_execution",
+        "tool_use"
+      ],
+      "proposed_feature_id": "model_management",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Scheduler",
+      "bus_topic": "Scheduler.ScheduleAction",
+      "handler": "schedule_action",
+      "source": {
+        "file": "app/services/scheduler/service.py",
+        "line": 561
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Scheduler.manage"
+      ],
+      "module_capabilities": [
+        "cron_scheduling",
+        "job_execution"
+      ],
+      "proposed_feature_id": "job_scheduling",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Scheduler",
+      "bus_topic": "Scheduler.Schedule",
+      "handler": "schedule_job",
+      "source": {
+        "file": "app/services/scheduler/service.py",
+        "line": 653
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Scheduler.Schedule"
+      ],
+      "module_capabilities": [
+        "cron_scheduling",
+        "job_execution"
+      ],
+      "proposed_feature_id": "job_scheduling",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Scheduler",
+      "bus_topic": "Scheduler.Cancel",
+      "handler": "cancel_job",
+      "source": {
+        "file": "app/services/scheduler/service.py",
+        "line": 738
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Scheduler.Cancel"
+      ],
+      "module_capabilities": [
+        "cron_scheduling",
+        "job_execution"
+      ],
+      "proposed_feature_id": "job_lifecycle",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Scheduler",
+      "bus_topic": "Scheduler.Pause",
+      "handler": "pause_job",
+      "source": {
+        "file": "app/services/scheduler/service.py",
+        "line": 810
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Scheduler.Pause"
+      ],
+      "module_capabilities": [
+        "cron_scheduling",
+        "job_execution"
+      ],
+      "proposed_feature_id": "job_lifecycle",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Scheduler",
+      "bus_topic": "Scheduler.Resume",
+      "handler": "resume_job",
+      "source": {
+        "file": "app/services/scheduler/service.py",
+        "line": 876
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Scheduler.Resume"
+      ],
+      "module_capabilities": [
+        "cron_scheduling",
+        "job_execution"
+      ],
+      "proposed_feature_id": "job_lifecycle",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Scheduler",
+      "bus_topic": "Scheduler.ListJobs",
+      "handler": "list_jobs",
+      "source": {
+        "file": "app/services/scheduler/service.py",
+        "line": 942
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Scheduler.ListJobs"
+      ],
+      "module_capabilities": [
+        "cron_scheduling",
+        "job_execution"
+      ],
+      "proposed_feature_id": "job_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.Listen",
+      "handler": "_on_listen",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1103
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "STTCoordinator.use"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "STTCoordinator",
+      "bus_topic": "STTCoordinator.StopListening",
+      "handler": "_on_stop_listening",
+      "source": {
+        "file": "app/services/stt_coordinator/service.py",
+        "line": 1145
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "STTCoordinator.use"
+      ],
+      "module_capabilities": [
+        "audio_capture",
+        "session_management",
+        "stt_coordination"
+      ],
+      "proposed_feature_id": "listening_session_control",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
+      "bus_topic": "Transcription.ProcessAudio",
+      "handler": "_on_external_audio",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 766
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.ProcessAudio"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
+      "bus_topic": "Transcription.Transcribe",
+      "handler": "transcribe_audio",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 1044
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.Transcribe"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
+      "bus_topic": "WakeWord.ProcessAudio",
+      "handler": "_on_external_audio",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 304
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.ProcessAudio"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
+      "bus_topic": "WakeWord.Detect",
+      "handler": "detect_wake_word",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 489
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.Detect"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetExportCatalog",
+      "handler": "_on_get_export_catalog",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 5948
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.GetTools"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "catalog_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetTools",
+      "handler": "_on_get_tools",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 6366
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.GetTools"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "catalog_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetToolCatalog",
+      "handler": "_on_get_tool_catalog",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 6638
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.GetTools"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "catalog_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetToolByName",
+      "handler": "_on_get_tool_by_name",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7022
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.GetTools"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "catalog_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetStats",
+      "handler": "_on_get_stats",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7111
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.GetStats"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "catalog_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetSharingPolicy",
+      "handler": "_on_get_sharing_policy",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7143
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "legacy_sharing_policy",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.SetSharingPolicy",
+      "handler": "_on_set_sharing_policy",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7160
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "legacy_sharing_policy",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetToolExportPolicy",
+      "handler": "_on_get_tool_export_policy",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7209
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "export_policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.SetToolExportDefault",
+      "handler": "_on_set_tool_export_default",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7289
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "export_policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.UpsertToolGroupExportPolicy",
+      "handler": "_on_upsert_tool_group_export_policy",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7326
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "export_policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.UpsertToolExportOverride",
+      "handler": "_on_upsert_tool_export_override",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7381
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "export_policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ClearToolExportOverride",
+      "handler": "_on_clear_tool_export_override",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7432
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "export_policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.PreviewToolExportDecision",
+      "handler": "_on_preview_tool_export_decision",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7471
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "export_policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.TestSharingPolicy",
+      "handler": "_on_test_sharing_policy",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 7988
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "legacy_sharing_policy",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.PrepareExecution",
+      "handler": "_on_prepare_execution",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8009
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.ExecuteTool"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "execution",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.RequestApproval",
+      "handler": "_on_request_approval",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8072
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.ExecuteTool"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "execution",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ConfirmExecution",
+      "handler": "_on_confirm_execution",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8158
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "approval_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ListApprovalGrants",
+      "handler": "_on_list_approval_grants",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8353
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "approval_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.CreateApprovalGrant",
+      "handler": "_on_create_approval_grant",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8391
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "approval_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.RevokeApprovalGrant",
+      "handler": "_on_revoke_approval_grant",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8429
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "approval_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.EvaluateApprovalGrant",
+      "handler": "_on_evaluate_approval_grant",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8477
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.ExecuteTool"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "execution",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetPolicySummary",
+      "handler": "_on_get_policy_summary",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8790
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ListToolSources",
+      "handler": "_on_list_tool_sources",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8828
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ListPendingApprovals",
+      "handler": "_on_list_pending_approvals",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8848
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetToolSourceDetail",
+      "handler": "_on_get_tool_source_detail",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8864
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.AcceptRemoteToolSchema",
+      "handler": "_on_accept_remote_tool_schema",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 8965
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.SetPolicyMode",
+      "handler": "_on_set_policy_mode",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9031
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.UpsertSourcePolicy",
+      "handler": "_on_upsert_source_policy",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9095
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ClearSourcePolicy",
+      "handler": "_on_clear_source_policy",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9153
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.UpsertToolPolicyOverride",
+      "handler": "_on_upsert_tool_policy_override",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9191
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ClearToolPolicyOverride",
+      "handler": "_on_clear_tool_policy_override",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9251
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.TestMCPSource",
+      "handler": "_on_test_mcp_source",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9397
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "source_onboarding",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.TestPluginSource",
+      "handler": "_on_test_plugin_source",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9425
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "source_onboarding",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.CreateMCPSource",
+      "handler": "_on_create_mcp_source",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9453
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "source_onboarding",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.CreatePluginSource",
+      "handler": "_on_create_plugin_source",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9477
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "source_onboarding",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ListPolicyAuditEvents",
+      "handler": "_on_list_policy_audit_events",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9500
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "policy_administration",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetOnboardingStatus",
+      "handler": "_on_get_onboarding_status",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9574
+      },
+      "exposure": "both",
+      "method_type": "manage",
+      "required_perms": [
+        "Tooling.manage"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "source_onboarding",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.GetMCPStatus",
+      "handler": "_on_get_mcp_status",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9696
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.GetMCPStatus"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "catalog_discovery",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Tooling",
+      "bus_topic": "Tooling.ExecuteTool",
+      "handler": "_on_execute_tool",
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 9764
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Tooling.ExecuteTool"
+      ],
+      "module_capabilities": [
+        "tool_discovery",
+        "tool_execution",
+        "mcp_integration"
+      ],
+      "proposed_feature_id": "execution",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.Request",
+      "handler": "_on_tts_request",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 326
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.Request"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_playback",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.StreamStart",
+      "handler": "_on_stream_start",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 377
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.StreamStart"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_streaming",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.StreamChunk",
+      "handler": "_on_stream_chunk",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 445
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.StreamChunk"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_streaming",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.StreamEnd",
+      "handler": "_on_stream_end",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 493
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.StreamEnd"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_streaming",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.Synthesize",
+      "handler": "synthesize",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 784
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.Synthesize"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_synthesis",
+      "permission_status": "protected"
+    }
+  ],
+  "mesh_publishers": [],
+  "tooling_rule_selectors": {
+    "matching_semantics": "non_null_conjunctive_exact_match",
+    "precedence": "first_match_wins",
+    "selectors": [
+      {
+        "field": "tool_name",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_provider_local_tool_name"
+      },
+      {
+        "field": "global_tool_id",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_current_name_derived_global_tool_id"
+      },
+      {
+        "field": "execution_location",
+        "value_type": "local|remote|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality"
+      },
+      {
+        "field": "source_type",
+        "value_type": "core|plugin|mcp|toolkit|mesh_peer|unknown|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality; mesh_peer_is_runtime_valid_but_missing_from_schema_generated_config_enum"
+      },
+      {
+        "field": "toolkit_name",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_best_effort_toolkit_or_server_name"
+      },
+      {
+        "field": "safety_class",
+        "value_type": "standard|sensitive|dangerous|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality"
+      },
+      {
+        "field": "operation_class",
+        "value_type": "read|write|external|admin|hardware|data-egress|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality"
+      },
+      {
+        "field": "resource_namespace",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_resource_selector_then_mesh_selector"
+      },
+      {
+        "field": "hardware_target",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_resource_selector_then_mesh_selector"
+      },
+      {
+        "field": "data_scope",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_resource_selector_then_mesh_selector"
+      },
+      {
+        "field": "caller_peer_id",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_request_payload; spoofable_until_authenticated_RPC_context_overwrites_it"
+      },
+      {
+        "field": "caller_principal_id",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_request_payload; external_authority_binding_requires_audit"
+      },
+      {
+        "field": "caller_device_id",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_request_payload; external_authority_binding_requires_audit"
+      },
+      {
+        "field": "caller_permissions",
+        "value_type": "array<string>|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "never_matches_when_non_null_because_policy_context_and_schema_generated_config_omit_this_field; exact_list_equality_would_be_order_sensitive"
+      },
+      {
+        "field": "provider_peer_id",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_selected_provider_peer_id"
+      },
+      {
+        "field": "provider_service_instance_id",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_selected_provider_service_instance_id"
+      },
+      {
+        "field": "route_privacy_class",
+        "value_type": "string|null",
+        "null_semantics": "unset_is_wildcard",
+        "match_semantics": "exact_equality_against_tool_metadata"
+      }
+    ]
+  },
+  "stable_identity": [
+    {
+      "field": "authenticated_peer_id",
+      "scope": "mesh peer authorization and recipient policy",
+      "stable": true,
+      "derivation": "RPC stable_peer_id_provider result, falling back to session peer_id only when unavailable",
+      "persistence": "Stable peer identity is owned by Auth peer records and used to overwrite forwarded Tooling provider identity.",
+      "gaps": [
+        "Fallback session peer_id is not guaranteed durable when the stable provider is absent",
+        "Tooling request caller_peer_id is still read directly by current policy context until G007 authority binding"
+      ],
+      "source": {
+        "file": "app/services/gateway/webrtc/rpc.py",
+        "line": 291
+      }
+    },
+    {
+      "field": "provider_service_instance_id",
+      "scope": "Tooling provider routing and remote snapshot partition",
+      "stable": true,
+      "derivation": "stable contract namespace for durable identity; live service_instance_id is routing instance metadata only",
+      "persistence": "Stored with peer_id as the tooling_remote_catalog_snapshots primary key and in approval grants/tombstones.",
+      "gaps": [
+        "String formula is not versioned",
+        "Compatibility callers may construct service IDs before authenticated normalization"
+      ],
+      "source": {
+        "file": "app/services/gateway/webrtc/rpc.py",
+        "line": 1429
+      }
+    },
+    {
+      "field": "global_tool_id",
+      "scope": "durable per-tool grants, tombstones, policy selectors, and catalog identity",
+      "stable": true,
+      "derivation": "aurora-tool:v1:<stable-peer-id>:Tooling:<tool-contract-id>",
+      "persistence": "Stored in ToolingToolInfo, tooling_approval_grants, remote snapshot JSON, and tooling_remote_catalog_tombstones.",
+      "gaps": [
+        "Tool rename changes identity",
+        "Lossy safe_identifier can collapse distinct names",
+        "No versioned canonical namespace",
+        "No immutable tool_contract_id",
+        "No durable legacy alias or transactional re-key map"
+      ],
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 996
+      }
+    },
+    {
+      "field": "bindable_tool_name",
+      "scope": "LLM/UI callable presentation name for a remote tool",
+      "stable": false,
+      "derivation": "safe(peer display label)_safe(provider local tool name)",
+      "persistence": "Serialized into cached remote ToolingToolInfo but should be treated as presentation only.",
+      "gaps": [
+        "Peer display-name rename changes the bindable name",
+        "Only provider-local name is retained as an alias",
+        "Must never key durable policy or grants"
+      ],
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 1052
+      }
+    },
+    {
+      "field": "remote_source_id",
+      "scope": "per-source management grouping for mesh tools",
+      "stable": true,
+      "derivation": "mesh:<stable_peer_id>:<safe(normalized_service_instance_id)>",
+      "persistence": "Serialized in ToolingToolInfo and copied into approval-grant metadata.",
+      "gaps": [
+        "Stability depends on authenticated peer normalization occurring before persistence",
+        "No version marker"
+      ],
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 1755
+      }
+    },
+    {
+      "field": "local_core_source_id",
+      "scope": "per-source management grouping for built-in tools",
+      "stable": true,
+      "derivation": "constant local:core",
+      "persistence": "Serialized in ToolingToolInfo and used by source-wide approval grants.",
+      "gaps": [
+        "All core tools collapse into one group",
+        "Cannot represent required core:scheduler, core:tts, core:pomodoro functional share groups",
+        "A source-wide rule affects unrelated security domains"
+      ],
+      "source": {
+        "file": "app/services/tooling/identity.py",
+        "line": 169
+      }
+    },
+    {
+      "field": "plugin_source_id",
+      "scope": "per-source management grouping for plugin tools",
+      "stable": false,
+      "derivation": "local:plugin:<safe(explicit loader plugin marker or plugin/package/toolkit/module/name fallback)>",
+      "persistence": "Serialized in ToolingToolInfo and used by source-wide approval grants.",
+      "gaps": [
+        "Only selected loaders stamp an explicit _aurora_plugin_id",
+        "Module/name fallbacks can change across packaging or rename",
+        "Lossy sanitization can collide"
+      ],
+      "source": {
+        "file": "app/services/tooling/tools_manager.py",
+        "line": 187
+      }
+    },
+    {
+      "field": "mcp_source_id",
+      "scope": "per-source management grouping for MCP tools",
+      "stable": true,
+      "derivation": "persistent MCP source ID plus provider-declared tool ID",
+      "persistence": "Serialized when a tool is correctly classified as MCP and used by source-wide approval grants.",
+      "gaps": [
+        "MultiServerMCPClient output is flattened without Aurora server identity stamping",
+        "ToolsManager does not mark loaded MCP tools with source/server IDs",
+        "Fallback to tool name prevents stable server grouping",
+        "Two servers can collapse or tools can be misclassified unknown"
+      ],
+      "source": {
+        "file": "app/services/tooling/mcp/mcp_client.py",
+        "line": 229
+      }
+    },
+    {
+      "field": "remote_catalog_snapshot_key",
+      "scope": "durable remote provider catalog snapshot",
+      "stable": true,
+      "derivation": "composite peer_id plus service_instance_id",
+      "persistence": "PRIMARY KEY(peer_id, service_instance_id) in tooling_remote_catalog_snapshots.",
+      "gaps": [
+        "Snapshot-level shared_by_policy conflates provider catalog state and cannot express per-tool availability",
+        "No recipient-specific export-policy revision in key"
+      ],
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 1455
+      }
+    },
+    {
+      "field": "approval_grant_tool_key",
+      "scope": "durable Tooling approval/refusal decision",
+      "stable": false,
+      "derivation": "provider_peer_id, provider_service_instance_id, and current global_tool_id columns",
+      "persistence": "tooling_approval_grants table survives restart and unavailability.",
+      "gaps": [
+        "Inherits rename and collision defects from global_tool_id",
+        "No schema hash bound directly to stable immutable tool contract ID",
+        "No alias migration substrate"
+      ],
+      "source": {
+        "file": "app/services/tooling/service.py",
+        "line": 1395
+      }
+    },
+    {
+      "field": "local_rag_tool_key",
+      "scope": "local loaded-tool search registry",
+      "stable": false,
+      "derivation": "tool.name",
+      "persistence": "DB RAG namespace main.tools is synchronized by name.",
+      "gaps": [
+        "Rename is processed as deletion plus insertion",
+        "No immutable identity or group metadata",
+        "Cannot support durable aliases"
+      ],
+      "source": {
+        "file": "app/services/tooling/tools_manager.py",
+        "line": 435
+      }
+    },
+    {
+      "field": "tool_contract_id",
+      "scope": "desired immutable provider-local tool identity",
+      "stable": true,
+      "derivation": "immutable provider-local tool contract ID persisted across rename and restart",
+      "persistence": "Not persisted.",
+      "gaps": [
+        "ToolingToolInfo has no tool_contract_id",
+        "Built-ins/plugins/MCP cannot retain policy identity across rename",
+        "No versioned aurora-tool canonical key"
+      ],
+      "source": {
+        "file": "app/shared/contracts/models/tooling.py",
+        "line": 173
+      }
+    },
+    {
+      "field": "share_group_id",
+      "scope": "desired functional tool export grouping",
+      "stable": true,
+      "derivation": "stable provider-declared functional sharing group ID",
+      "persistence": "Not persisted.",
+      "gaps": [
+        "ToolingToolInfo has no share_group_id or share_group_label",
+        "Core functional groups and MCP/plugin source groups cannot be represented independently from approval policy"
+      ],
+      "source": {
+        "file": "app/shared/contracts/models/tooling.py",
+        "line": 173
+      }
+    }
+  ]
+}
