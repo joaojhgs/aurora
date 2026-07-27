@@ -116,6 +116,12 @@ class _ActiveProjectionRecord:
     projection: ProjectionResult
 
 
+@dataclass(slots=True)
+class _QueuedPeerSend:
+    text: str
+    future: asyncio.Future[bool]
+
+
 _DIAGNOSTIC_REDACTED = "[REDACTED]"
 _DIAGNOSTIC_WEBRTC_REDACTED = "[REDACTED_WEBRTC_PAYLOAD]"
 _DIAGNOSTIC_MAX_INPUT_CHARS = 4096
@@ -419,6 +425,8 @@ class RTCClient:
         self._provider_export_diagnostics: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._provider_export_registry_callback_registered = False
         self._authority_refresh_callback: Any = None
+        self._peer_send_queues: dict[str, deque[_QueuedPeerSend]] = {}
+        self._peer_send_workers: dict[str, asyncio.Task[None]] = {}
         self._local_protocol_hello = build_protocol_hello(
             role="hybrid",
             capabilities=DEFAULT_PEER_CAPABILITIES,
@@ -546,6 +554,7 @@ class RTCClient:
         controller = self._flow_controllers.pop(session_peer_id, None)
         if controller is not None:
             controller.cleanup()
+        self._cancel_peer_send_lane(session_peer_id)
         self._peer_send_locks.pop(session_peer_id, None)
 
     def _send_protocol_hello(self, peer_id: str) -> bool:
@@ -641,8 +650,8 @@ class RTCClient:
         else:
             asyncio.create_task(handler.on_message(text))
 
-    async def send_to_peer_async(self, peer_id: str, text: str) -> bool:
-        """Async ordered send with negotiated fragmentation/backpressure support."""
+    async def _send_to_peer_now(self, peer_id: str, text: str) -> bool:
+        """Send one already-ordered message with fragmentation and backpressure."""
 
         session_peer_id = self._session_for_peer_id(peer_id)
         channel = self._peer_data_channels.get(session_peer_id)
@@ -702,18 +711,95 @@ class RTCClient:
                 )
                 return False
 
+    def _enqueue_peer_send(self, peer_id: str, text: str) -> asyncio.Future[bool]:
+        """Reserve a FIFO position before any asynchronous send work can race."""
+
+        session_peer_id = self._session_for_peer_id(peer_id)
+        future = asyncio.get_running_loop().create_future()
+        if self._closing:
+            future.set_result(False)
+            return future
+
+        queue = self._peer_send_queues.setdefault(session_peer_id, deque())
+        queue.append(_QueuedPeerSend(text=text, future=future))
+        worker = self._peer_send_workers.get(session_peer_id)
+        if worker is None or worker.done():
+            worker = asyncio.create_task(
+                self._drain_peer_send_lane(session_peer_id),
+                name=f"webrtc-peer-send:{session_peer_id[:8]}",
+            )
+            self._peer_send_workers[session_peer_id] = worker
+            self._rpc_send_tasks.add(worker)
+            worker.add_done_callback(
+                lambda completed, peer=session_peer_id: self._peer_send_worker_done(peer, completed)
+            )
+        return future
+
+    async def _drain_peer_send_lane(self, session_peer_id: str) -> None:
+        """Drain one peer's outbound messages strictly in enqueue order."""
+
+        queue = self._peer_send_queues.get(session_peer_id)
+        if queue is None:
+            return
+        while queue:
+            item = queue[0]
+            try:
+                sent = await self._send_to_peer_now(session_peer_id, item.text)
+            except asyncio.CancelledError:
+                if not item.future.done():
+                    item.future.set_result(False)
+                raise
+            except Exception as exc:
+                self._record_diagnostic_error(
+                    "datachannel_async_send_failed", str(exc), session_peer_id
+                )
+                sent = False
+            if not item.future.done():
+                item.future.set_result(sent)
+            if queue and queue[0] is item:
+                queue.popleft()
+
+    def _peer_send_worker_done(
+        self,
+        session_peer_id: str,
+        worker: asyncio.Task[None],
+    ) -> None:
+        """Release one completed FIFO worker without disturbing a replacement."""
+
+        self._rpc_send_tasks.discard(worker)
+        if self._peer_send_workers.get(session_peer_id) is not worker:
+            return
+        self._peer_send_workers.pop(session_peer_id, None)
+        queue = self._peer_send_queues.get(session_peer_id)
+        if not queue:
+            self._peer_send_queues.pop(session_peer_id, None)
+
+    def _cancel_peer_send_lane(self, session_peer_id: str) -> None:
+        """Fail queued sends and stop the exact disconnected peer's worker."""
+
+        worker = self._peer_send_workers.pop(session_peer_id, None)
+        if worker is not None and worker is not asyncio.current_task():
+            worker.cancel()
+        queue = self._peer_send_queues.pop(session_peer_id, deque())
+        for item in queue:
+            if not item.future.done():
+                item.future.set_result(False)
+
+    async def send_to_peer_async(self, peer_id: str, text: str) -> bool:
+        """Send through the peer FIFO with fragmentation and backpressure."""
+
+        return await self._enqueue_peer_send(peer_id, text)
+
     def _schedule_rpc_send(self, peer_id: str, text: str) -> None:
         """Queue an RPC frame through ordered fragmentation and backpressure."""
 
-        async def _send() -> bool:
-            sent = await self.send_to_peer_async(peer_id, text)
-            if not sent:
-                log_warning(f"RTCClient: Failed to send RPC frame to peer {peer_id}")
-            return sent
+        future = self._enqueue_peer_send(peer_id, text)
 
-        task = asyncio.create_task(_send(), name=f"webrtc-rpc-send:{peer_id[:8]}")
-        self._rpc_send_tasks.add(task)
-        task.add_done_callback(self._rpc_send_tasks.discard)
+        def _warn_on_failure(completed: asyncio.Future[bool]) -> None:
+            if not completed.cancelled() and completed.result() is False:
+                log_warning(f"RTCClient: Failed to send RPC frame to peer {peer_id}")
+
+        future.add_done_callback(_warn_on_failure)
 
     def _remember_stable_peer_id(
         self, session_peer_id: str, stable_peer_id: str | None, node_name: str = ""
@@ -1071,11 +1157,15 @@ class RTCClient:
             await asyncio.gather(*shadow_tasks, return_exceptions=True)
         self._provider_export_tasks.clear()
         rpc_send_tasks = list(self._rpc_send_tasks)
+        for peer_id in list(self._peer_send_queues):
+            self._cancel_peer_send_lane(peer_id)
         for task in rpc_send_tasks:
             task.cancel()
         if rpc_send_tasks:
             await asyncio.gather(*rpc_send_tasks, return_exceptions=True)
         self._rpc_send_tasks.clear()
+        self._peer_send_queues.clear()
+        self._peer_send_workers.clear()
         refresh_tasks = list(self._tooling_projection_refresh_tasks.values())
         for task in refresh_tasks:
             task.cancel()

@@ -211,6 +211,37 @@ async def test_scheduled_rpc_response_uses_fragmented_ordered_send_path() -> Non
     assert not client._rpc_send_tasks  # noqa: SLF001
 
 
+@pytest.mark.asyncio
+async def test_scheduled_ack_reserves_fifo_before_awaited_event_send() -> None:
+    client = _client()
+    ack_started = asyncio.Event()
+    release_ack = asyncio.Event()
+    completed: list[str] = []
+
+    async def delayed_send(_peer_id: str, text: str) -> bool:
+        if text == "subscription-ack":
+            ack_started.set()
+            await release_ack.wait()
+        completed.append(text)
+        return True
+
+    client._send_to_peer_now = delayed_send  # type: ignore[method-assign]  # noqa: SLF001
+
+    client._schedule_rpc_send("session-peer", "subscription-ack")  # noqa: SLF001
+    event_send = asyncio.create_task(client.send_to_peer_async("session-peer", "scoped-event"))
+    await ack_started.wait()
+    await asyncio.sleep(0)
+
+    assert completed == []
+    assert not event_send.done()
+
+    release_ack.set()
+    assert await event_send is True
+    await asyncio.gather(*list(client._rpc_send_tasks))  # noqa: SLF001
+
+    assert completed == ["subscription-ack", "scoped-event"]
+
+
 @pytest.mark.unit
 def test_protocol_cleanup_is_scoped_to_disconnected_peer() -> None:
     client = _client()
