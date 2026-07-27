@@ -235,6 +235,8 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       pendingSubscriptionCount: sdk?.pendingSubscriptionCount ?? 0,
       pendingFragmentCount: sdk?.pendingFragmentCount ?? 0,
       bufferPressureHighWaterBytes: sdk?.bufferPressureHighWaterBytes ?? 0,
+      sentFragmentCount: sdk?.sentFragmentCount ?? 0,
+      receivedFragmentCount: sdk?.receivedFragmentCount ?? 0,
       updatedAt: sdk?.updatedAt ?? new Date().toISOString(),
       status: statusFromSnapshot(sdk, this.mode, this.creationError, this.fallbackReason, this.disconnected, this.attemptedConnect),
       secureContext: isSecureBrowserContext(),

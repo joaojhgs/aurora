@@ -435,6 +435,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       expectedStablePeerId: profile?.expectedStablePeerId,
       connectedStablePeerId: snapshot?.remoteStableId,
       connectedSignalingPeerId: snapshot?.remoteSignalingId,
+      negotiationRole: snapshot?.role,
       nodeName: profile?.nodeName,
       selectedSignalingBrokerOrigin: this.signaling?.snapshot().selectedBrokerOrigin,
       icePathCategory: snapshot?.icePath ?? 'unknown',
@@ -445,6 +446,8 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       pendingSubscriptionCount: bridgeDiagnostics?.pendingSubscriptionCount ?? 0,
       pendingFragmentCount: bridgeDiagnostics?.pendingFragmentCount ?? 0,
       bufferPressureHighWaterBytes: bridgeDiagnostics?.bufferPressureHighWaterBytes ?? 0,
+      sentFragmentCount: bridgeDiagnostics?.sentFragmentCount ?? 0,
+      receivedFragmentCount: bridgeDiagnostics?.receivedFragmentCount ?? 0,
       lastRedactedError: snapshot?.lastError ? diagnostic('session_error', snapshot.lastError) : lastDiagnostic,
       updatedAt: new Date().toISOString(),
       ...(this.pendingPairing ? { pendingPairing: { sessionId: this.pendingPairing.pairingSessionId, verificationCode: this.pendingPairing.verificationCode, remoteStablePeerId: this.pendingPairing.remoteStablePeerId, remoteNodeName: this.pendingPairing.remoteNodeName } } : {})

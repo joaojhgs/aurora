@@ -134,6 +134,7 @@ export interface PeerConnectionSnapshot {
   expectedStablePeerId?: string
   connectedStablePeerId?: string
   connectedSignalingPeerId?: string
+  negotiationRole?: 'unknown' | 'offerer' | 'answerer'
   nodeName?: string
   selectedSignalingBrokerOrigin?: string
   icePathCategory: IcePathCategory
@@ -144,6 +145,8 @@ export interface PeerConnectionSnapshot {
   pendingSubscriptionCount: number
   pendingFragmentCount: number
   bufferPressureHighWaterBytes: number
+  sentFragmentCount: number
+  receivedFragmentCount: number
   lastRedactedError?: RedactedPeerDiagnostic
   pendingPairing?: {
     sessionId: string

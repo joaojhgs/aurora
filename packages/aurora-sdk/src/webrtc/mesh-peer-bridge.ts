@@ -68,6 +68,19 @@ type StreamController = {
   error: unknown
 }
 
+type RpcStreamController = {
+  id: string
+  queue: unknown[]
+  waiters: Array<() => void>
+  done: boolean
+  completed: boolean
+  cancelSent: boolean
+  error: unknown
+  timer: unknown
+  signal?: AbortSignal | undefined
+  abortListener?: (() => void) | undefined
+}
+
 type SubscribeAck = {
   subscriptionId: string
   acceptedTopics: string[]
@@ -96,12 +109,15 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly pendingSubscribes = new Map<string, PendingSubscribe>()
   private readonly pendingManifests = new Map<string, PendingManifest>()
   private readonly streams = new Map<string, StreamController>()
+  private readonly rpcStreams = new Map<string, RpcStreamController>()
   private readonly eventSubscriptions: MeshEventSubscriptionRegistry
   private reassembler: FragmentReassembler
   private readonly timers = new Set<unknown>()
   private remoteProtocol: ProtocolHello | null = null
   private closed = false
   private manifest: MeshPeerManifest | null = null
+  private sentFragmentCount = 0
+  private receivedFragmentCount = 0
   private unsubscribeFrames: (() => void) | undefined
   private unsubscribeSession: (() => void) | undefined
 
@@ -180,6 +196,14 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     })
   }
 
+  streamCall<TChunk = unknown, TPayload = unknown>(
+    request: MeshRpcRequest<TPayload>
+  ): AsyncIterable<TChunk> {
+    this.assertOpen()
+    this.assertPeer(request.peerId)
+    return this.iterateRpcCall<TChunk, TPayload>(request)
+  }
+
   subscribe<TEventPayload = unknown>(request: MeshStreamRpcRequest): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> {
     this.assertOpen()
     this.assertPeer(request.peerId)
@@ -242,14 +266,18 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     pendingSubscriptionCount: number
     pendingFragmentCount: number
     bufferPressureHighWaterBytes: number
+    sentFragmentCount: number
+    receivedFragmentCount: number
     remoteProtocolCapabilities: string[]
   } {
     return {
       pendingCallCount: this.pending.size,
-      pendingStreamCount: this.streams.size,
+      pendingStreamCount: this.streams.size + this.rpcStreams.size,
       pendingSubscriptionCount: this.pendingSubscribes.size,
       pendingFragmentCount: 0,
       bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: this.sentFragmentCount,
+      receivedFragmentCount: this.receivedFragmentCount,
       remoteProtocolCapabilities: [...(this.remoteProtocol?.capabilities ?? [])]
     }
   }
@@ -276,6 +304,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.pendingManifests.clear()
     for (const stream of this.streams.values()) this.failStream(stream, new Error(reason))
     this.streams.clear()
+    for (const stream of this.rpcStreams.values()) this.failRpcStream(stream, new Error(reason))
+    this.rpcStreams.clear()
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.clearAllTimers()
   }
@@ -333,6 +363,65 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     }
   }
 
+  private async *iterateRpcCall<TChunk, TPayload>(
+    request: MeshRpcRequest<TPayload>
+  ): AsyncIterable<TChunk> {
+    this.assertOpen()
+    this.assertPeer(request.peerId)
+    if (request.signal?.aborted) throw abortError()
+    const id = request.correlationId ?? this.randomId()
+    const timeoutMs = request.timeoutMs || this.timeoutMs
+    const stream: RpcStreamController = {
+      id,
+      queue: [],
+      waiters: [],
+      done: false,
+      completed: false,
+      cancelSent: false,
+      error: null,
+      timer: undefined
+    }
+    const abort = () => {
+      this.failRpcStream(stream, abortError())
+      void this.sendRpcStreamCancel(stream)
+    }
+    if (request.signal) {
+      stream.signal = request.signal
+      stream.abortListener = abort
+      request.signal.addEventListener('abort', abort, { once: true })
+    }
+    stream.timer = this.armTimer(timeoutMs, () => {
+      this.failRpcStream(stream, new TimeoutError(`WebRTC mesh stream timed out: ${request.busTopic || request.method}`))
+      void this.sendRpcStreamCancel(stream)
+    })
+    this.rpcStreams.set(id, stream)
+    const frame: Record<string, unknown> = {
+      type: 'call',
+      id,
+      correlation_id: id,
+      method: request.busTopic || request.method,
+      params: stripMeshSelectorKeys(request.payload),
+      identity: buildIdentity(request)
+    }
+    try {
+      await this.sendLogicalFrame(frame)
+      while (true) {
+        if (stream.error) throw stream.error
+        const next = stream.queue.shift()
+        if (next !== undefined) {
+          yield next as TChunk
+          continue
+        }
+        if (stream.done) return
+        await new Promise<void>((resolve) => stream.waiters.push(resolve))
+      }
+    } finally {
+      const shouldCancel = !stream.completed && !this.closed
+      this.cleanupRpcStream(stream)
+      if (shouldCancel) await this.sendRpcStreamCancel(stream)
+    }
+  }
+
   private resetEpoch(reason: string): void {
     const error = new TransportClosedError(
       `WebRTC mesh transport lost during epoch reset: ${reason}`
@@ -351,6 +440,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.pendingManifests.clear()
     for (const stream of this.streams.values()) this.failStream(stream, error)
     this.streams.clear()
+    for (const stream of this.rpcStreams.values()) this.failRpcStream(stream, error)
+    this.rpcStreams.clear()
     for (const subscription of this.eventSubscriptions.snapshot(this.remotePeerId)) {
       try { this.eventSubscriptions.unsubscribe(this.remotePeerId, subscription.id) } catch {}
     }
@@ -388,6 +479,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private logicalFrameFromRaw(raw: unknown): unknown | null {
     if (isRecord(raw) && raw.type === 'fragment') {
       if (!this.remoteProtocol?.capabilities.has(CAP_FRAGMENTATION_V1)) throw new Error('received fragment before fragmentation capability negotiation')
+      this.receivedFragmentCount += 1
       const json = this.reassembler.receive(this.remotePeerId, raw)
       return json === null ? null : JSON.parse(json)
     }
@@ -401,19 +493,24 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.setRemoteProtocol(parseProtocolHello(frame))
         return
       case 'result':
+        if (this.resolveRpcStreamResult(String(frame.id), frame.result)) return
         this.resolvePending(String(frame.id), frame.result)
         return
       case 'error':
+        if (this.failRpcStreamById(String(frame.id), normalizeRemoteError(frame.error))) return
         this.resolvePendingError(String(frame.id), frame as unknown as { error: unknown; correlation_id?: string })
         this.failStreamById(String(frame.id), normalizeRemoteError(frame.error))
         return
       case 'chunk':
+        if (this.enqueueRpcStream(String(frame.id), frame.data)) return
         this.enqueueStream(String(frame.id), frame.data)
         return
       case 'eof':
+        if (this.finishRpcStream(String(frame.id))) return
         this.finishStream(String(frame.id))
         return
       case 'cancel':
+        if (this.finishRpcStream(String(frame.id))) return
         this.finishStream(String(frame.id))
         return
       case 'event':
@@ -463,6 +560,70 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     pending.cleanup()
     const code = isRecord(frame.error) && typeof frame.error.code === 'number' ? frame.error.code : undefined
     pending.resolve({ error: frame.error, status: code, correlationId: frame.correlation_id ?? pending.correlationId, peerId: this.remotePeerId, targetPeerId: this.remotePeerId })
+  }
+
+  private enqueueRpcStream(id: string, data: unknown): boolean {
+    const stream = this.rpcStreams.get(id)
+    if (!stream || stream.done) return false
+    if (stream.queue.length >= this.streamQueueLimit) {
+      this.failRpcStream(stream, new Error('WebRTC mesh RPC stream queue overflow'))
+      void this.sendRpcStreamCancel(stream)
+      return true
+    }
+    stream.queue.push(data)
+    this.wakeRpcStream(stream)
+    return true
+  }
+
+  private resolveRpcStreamResult(id: string, data: unknown): boolean {
+    const stream = this.rpcStreams.get(id)
+    if (!stream || stream.done) return false
+    stream.queue.push(data)
+    stream.completed = true
+    stream.done = true
+    this.clearTimer(stream.timer)
+    this.wakeRpcStream(stream)
+    return true
+  }
+
+  private finishRpcStream(id: string): boolean {
+    const stream = this.rpcStreams.get(id)
+    if (!stream) return false
+    stream.completed = true
+    stream.done = true
+    this.clearTimer(stream.timer)
+    this.wakeRpcStream(stream)
+    return true
+  }
+
+  private failRpcStreamById(id: string, error: unknown): boolean {
+    const stream = this.rpcStreams.get(id)
+    if (!stream) return false
+    this.failRpcStream(stream, error)
+    return true
+  }
+
+  private failRpcStream(stream: RpcStreamController, error: unknown): void {
+    if (stream.done) return
+    stream.error = error
+    stream.done = true
+    this.wakeRpcStream(stream)
+  }
+
+  private wakeRpcStream(stream: RpcStreamController): void {
+    for (const resolve of stream.waiters.splice(0)) resolve()
+  }
+
+  private cleanupRpcStream(stream: RpcStreamController): void {
+    this.rpcStreams.delete(stream.id)
+    this.clearTimer(stream.timer)
+    if (stream.abortListener) stream.signal?.removeEventListener('abort', stream.abortListener)
+  }
+
+  private async sendRpcStreamCancel(stream: RpcStreamController): Promise<void> {
+    if (stream.cancelSent || this.closed) return
+    stream.cancelSent = true
+    await this.sendLogicalFrame({ type: 'cancel', id: stream.id }).catch(() => undefined)
   }
 
   private enqueueStream(id: string, data: unknown): void {
@@ -573,7 +734,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     const fragmentThresholdBytes = Math.min(this.fragmentationThresholdBytes, limits.fragmentPayloadBytes)
     if (bytes > fragmentThresholdBytes) {
       if (!this.remoteProtocol?.capabilities.has(CAP_FRAGMENTATION_V1)) throw new Error('WebRTC mesh peer did not negotiate fragmentation_v1')
-      for (const fragment of fragmentMessage(json, { messageId: this.randomId(), limits })) {
+      const fragments = fragmentMessage(json, { messageId: this.randomId(), limits })
+      this.sentFragmentCount += fragments.length
+      for (const fragment of fragments) {
         await this.session.sendFrame(fragment)
       }
       return

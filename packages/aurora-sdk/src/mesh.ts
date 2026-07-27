@@ -86,6 +86,9 @@ export interface MeshPeerBridge {
   call<TPayload = unknown>(
     request: MeshRpcRequest<TPayload>
   ): Promise<MeshRpcResponse<unknown> | AuroraTransportEnvelope<unknown> | unknown>
+  streamCall?<TChunk = unknown, TPayload = unknown>(
+    request: MeshRpcRequest<TPayload>
+  ): AsyncIterable<TChunk>
   subscribe?<TEventPayload = unknown>(
     request: MeshStreamRpcRequest
   ): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
@@ -201,6 +204,59 @@ export class MeshP2PTransport implements AuroraTransport {
       })
     }
     return this.bridge.getManifest(peerId)
+  }
+
+  async *streamRequest<TChunk = unknown, TPayload = unknown>(
+    request: AuroraTransportRequest<TPayload>
+  ): AsyncIterable<TChunk> {
+    if (!this.bridge.streamCall) {
+      throw new AuroraError({
+        code: 'unsupported_feature',
+        message: 'Mesh peer streaming RPC is not supported by this bridge.',
+        method: request.method,
+        busTopic: request.busTopic
+      })
+    }
+    const topic = request.busTopic ?? request.method
+    const resolution = await this.resolveRoute(request)
+    if (resolution.privacyBlockedReason) {
+      throw meshError('privacy_blocked', resolution.privacyBlockedReason, request, {
+        reason_code: 'privacy_blocked',
+        selector: resolution.selector ?? null
+      })
+    }
+    if (!resolution.peerId) {
+      throw meshError(
+        'unavailable_service',
+        resolution.unavailableReason ?? `No mesh provider for ${topic}`,
+        request,
+        { reason_code: resolution.unavailableReason ?? 'no_route', candidates: resolution.candidates ?? [] }
+      )
+    }
+
+    const candidates = normalizeCandidates(resolution, this.fallbackPeerIds)
+    const callRequest: MeshRpcRequest<TPayload> = {
+      peerId: resolution.peerId,
+      method: request.method,
+      busTopic: topic,
+      payload: request.payload,
+      timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
+      signal: request.signal,
+      candidates
+    }
+    if (resolution.selector) callRequest.selector = resolution.selector
+    const correlationId = request.audit?.correlationId ?? readString(request.payload, 'correlation_id', 'correlationId', 'request_id', 'requestId')
+    if (correlationId) callRequest.correlationId = correlationId
+    if (request.audit) callRequest.audit = request.audit
+
+    try {
+      for await (const chunk of this.bridge.streamCall<TChunk, TPayload>(callRequest)) {
+        yield chunk
+      }
+    } catch (error) {
+      if (error instanceof AuroraError) throw error
+      throw normalizeMeshTransportError(error, request)
+    }
   }
 
   async subscribe<TEventPayload = unknown>(

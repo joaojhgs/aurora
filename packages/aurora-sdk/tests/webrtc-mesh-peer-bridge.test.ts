@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { AuroraClient } from '../src/client.js'
+import { MeshP2PTransport } from '../src/mesh.js'
 import {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
@@ -118,6 +119,95 @@ describe('WebRtcMeshPeerBridge', () => {
     await expect(iterator.next()).resolves.toMatchObject({ value: { kind: 'Orchestrator.Response', topic: 'Orchestrator.Response', payload: { text: 'ok' }, correlation_id: 'corr-1' }, done: false })
     await iterator.return?.()
     expect(session.sent.some((frame) => (frame as any).type === 'unsubscribe' && (frame as any).id === 'sub-1')).toBe(true)
+  })
+
+  it('streams RPC chunks through the mesh transport and cancels exactly once on abort', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      randomId: (() => {
+        let index = 0
+        return () => `stream-${++index}`
+      })()
+    })
+    session.emit(hello())
+    const transport = new MeshP2PTransport({
+      bridge,
+      defaultPeerId: 'peer-a'
+    })
+
+    const stream = transport.streamRequest<{ delta: string }>({
+      method: 'Orchestrator.StreamInferChat',
+      busTopic: 'Orchestrator.StreamInferChat',
+      payload: { message: 'hello' },
+      timeoutMs: 1000
+    })
+    const iterator = stream[Symbol.asyncIterator]()
+    const first = iterator.next()
+    await flush()
+    expect(session.sent[0]).toMatchObject({
+      type: 'call',
+      id: 'stream-1',
+      correlation_id: 'stream-1',
+      method: 'Orchestrator.StreamInferChat'
+    })
+    session.emit({ type: 'chunk', id: 'stream-1', data: { delta: 'one' } })
+    await expect(first).resolves.toEqual({ value: { delta: 'one' }, done: false })
+    const second = iterator.next()
+    session.emit({ type: 'chunk', id: 'stream-1', data: { delta: 'two' } })
+    session.emit({ type: 'eof', id: 'stream-1' })
+    await expect(second).resolves.toEqual({ value: { delta: 'two' }, done: false })
+    await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true })
+    expect(session.sent.filter((frame) => (frame as any).type === 'cancel' && (frame as any).id === 'stream-1')).toHaveLength(0)
+
+    const abortController = new AbortController()
+    const cancelled = transport.streamRequest<{ delta: string }>({
+      method: 'Orchestrator.StreamInferChat',
+      busTopic: 'Orchestrator.StreamInferChat',
+      payload: { message: 'cancel me' },
+      timeoutMs: 1000,
+      signal: abortController.signal
+    })
+    const cancelledIterator = cancelled[Symbol.asyncIterator]()
+    const cancelledFirst = cancelledIterator.next()
+    await flush()
+    session.emit({ type: 'chunk', id: 'stream-2', data: { delta: 'started' } })
+    await expect(cancelledFirst).resolves.toEqual({ value: { delta: 'started' }, done: false })
+    abortController.abort()
+    await expect(cancelledIterator.next()).rejects.toThrow('timed out')
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'cancel' && (frame as any).id === 'stream-2')).toHaveLength(1)
+    session.emit({ type: 'chunk', id: 'stream-2', data: { delta: 'late' } })
+    session.emit({ type: 'eof', id: 'stream-2', cancelled: true })
+    expect(bridge.getDiagnostics().pendingStreamCount).toBe(0)
+  })
+
+  it('surfaces streamed RPC errors without resolving an ordinary call', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      randomId: () => 'stream-error'
+    })
+    const stream = bridge.streamCall({
+      peerId: 'peer-a',
+      method: 'Orchestrator.StreamInferChat',
+      busTopic: 'Orchestrator.StreamInferChat',
+      payload: {},
+      timeoutMs: 1000,
+      candidates: []
+    })
+    const next = stream[Symbol.asyncIterator]().next()
+    await flush()
+    session.emit({
+      type: 'error',
+      id: 'stream-error',
+      correlation_id: 'stream-error',
+      error: { code: 500, message: 'stream exploded' }
+    })
+
+    await expect(next).rejects.toThrow('stream exploded')
   })
 
   it('handles subscribe rejection, stream overflow/cancel, inbound consumer call rejection, manifest, and transport smoke', async () => {

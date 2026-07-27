@@ -468,6 +468,8 @@ class FakeBrowserPeer {
       pendingSubscriptionCount: 0,
       pendingFragmentCount: 0,
       bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
       updatedAt: new Date().toISOString(),
       status: 'pairing',
       secureContext: true,

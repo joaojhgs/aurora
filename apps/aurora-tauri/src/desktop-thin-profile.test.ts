@@ -77,6 +77,8 @@ function fakeAndroidThinRuntime(mode: 'http-only' | 'webrtc-only' | 'webrtc-pref
     pendingSubscriptionCount: 0,
     pendingFragmentCount: 0,
     bufferPressureHighWaterBytes: 0,
+    sentFragmentCount: 0,
+    receivedFragmentCount: 0,
     updatedAt: '2026-07-26T00:00:00.000Z',
     status: 'idle',
     secureContext: true,
