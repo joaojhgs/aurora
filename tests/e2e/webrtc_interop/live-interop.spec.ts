@@ -7,7 +7,8 @@ import http from 'node:http'
 import path from 'node:path'
 
 import {
-  candidatePairMatchesLane,
+  assertInteropBrowserResult,
+  forbiddenInteropTransportRequests,
   type InteropBrowserResult,
 } from './assertions.js'
 
@@ -15,6 +16,7 @@ type BrowserConfig = {
   lane: string
   brokerUrl: string
   expectedStablePeerId: string
+  expectedNegotiationRole: 'offerer' | 'answerer'
   timeoutMs: number
   [key: string]: unknown
 }
@@ -44,6 +46,11 @@ const reportPath =
   path.join(artifactDir, 'browser-report.json')
 const roomSecret = process.env.WEBRTC_INTEROP_ROOM_SECRET ?? ''
 const bundlePath = path.join(artifactDir, 'browser-bundle.js')
+const mqttBundlePath = path.join(artifactDir, 'mqtt-bundle.mjs')
+const cryptoWorkerBundlePath = path.join(
+  artifactDir,
+  'crypto-worker-bundle.js',
+)
 const configured = Boolean(
   process.env.WEBRTC_INTEROP_LANE &&
     readyPath &&
@@ -78,24 +85,76 @@ test.beforeAll(async () => {
       'esbuild',
       path.join(root, 'tests/e2e/webrtc_interop/browser-entry.ts'),
       '--bundle',
-      '--format=iife',
-      '--global-name=AuroraInteropBundle',
+      '--format=esm',
       `--outfile=${bundlePath}`,
       '--platform=browser',
       '--target=chrome112,firefox112,safari16',
+      '--external:mqtt',
+      '--minify',
+      '--log-level=silent',
+    ],
+    { stdio: 'inherit' },
+  )
+  execFileSync(
+    'pnpm',
+    [
+      'exec',
+      'esbuild',
+      path.join(root, 'tests/e2e/webrtc_interop/mqtt-entry.ts'),
+      '--bundle',
+      '--format=esm',
+      `--outfile=${mqttBundlePath}`,
+      '--platform=browser',
+      '--target=chrome112,firefox112,safari16',
+      '--minify',
+      '--log-level=silent',
+    ],
+    { stdio: 'inherit' },
+  )
+  execFileSync(
+    'pnpm',
+    [
+      'exec',
+      'esbuild',
+      path.join(
+        root,
+        'packages/aurora-sdk/src/webrtc/crypto-worker.ts',
+      ),
+      '--bundle',
+      '--format=iife',
+      `--outfile=${cryptoWorkerBundlePath}`,
+      '--platform=browser',
+      '--target=chrome112,firefox112,safari16',
+      '--minify',
       '--log-level=silent',
     ],
     { stdio: 'inherit' },
   )
 
   const html =
-    '<!doctype html><html><head><meta charset="utf-8"><title>Aurora WebRTC Interop</title></head><body><script src="/browser-bundle.js"></script></body></html>'
+    '<!doctype html><html><head><meta charset="utf-8"><title>Aurora WebRTC Interop</title></head><body><script type="module" src="/browser-bundle.js"></script></body></html>'
   server = http.createServer(async (request, response) => {
+    if (request.url === '/mqtt-bundle.mjs') {
+      response.writeHead(200, {
+        'content-type': 'application/javascript',
+        'cache-control': 'no-store',
+      })
+      response.end(await fs.readFile(mqttBundlePath))
+      return
+    }
     if (request.url === '/browser-bundle.js') {
       response.writeHead(200, {
         'content-type': 'application/javascript',
       })
       response.end(await fs.readFile(bundlePath))
+      return
+    }
+    if (request.url === '/crypto-worker-bundle.js') {
+      response.writeHead(200, {
+        'content-type': 'application/javascript',
+        'cache-control': 'no-store',
+      })
+      response.end(await fs.readFile(cryptoWorkerBundlePath))
       return
     }
     response.writeHead(200, { 'content-type': 'text/html' })
@@ -171,61 +230,24 @@ test('browser thin shell interoperates with the Python WebRTC peer without HTTP 
         ),
     )
 
-    const forbiddenHttp = forbiddenHttpRequests(
+    const forbiddenHttp = forbiddenInteropTransportRequests(
       networkRequests,
       baseUrl,
       ready.brokerUrl,
     )
 
-    await test.step('assert the selected ICE path and DataChannel behavior', async () => {
-      expect(browserResult.authorized).toBe(true)
-      expect(
-        candidatePairMatchesLane(lane, browserResult.selectedCandidatePair),
-      ).toBe(true)
-      expect(browserResult.connectedStablePeerId).toBe(
-        ready.expectedStablePeerId,
-      )
-      expect(browserResult.selectedSignalingBrokerOrigin).toBeTruthy()
-      expect(browserResult.registryModuleCount).toBeGreaterThan(0)
-      expect(browserResult.pendingCallCount).toBe(0)
-      expect(browserResult.event).toBeTruthy()
-      expect(browserResult.ttsEvent).toBeTruthy()
-      expect(browserResult.scopedEventEvidence).toEqual({
-        wrongCorrelationDelivered: false,
-        wildcardDelivered: false,
-      })
-    })
-
-    await test.step('assert reconnect, at-most-once, and revocation behavior', async () => {
-      expect(browserResult.reconnectEvidence.registryModuleCount).toBeGreaterThan(
-        0,
-      )
-      expect(browserResult.reconnectEvidence.authorizedWithoutSas).toBe(true)
-      expect(browserResult.reconnectEvidence.pendingPairingPrompts).toBe(0)
-      expect(
-        browserResult.mutationEvidence.uncertainLossWindow
-          .startedAckBeforeDisconnect,
-      ).toBe(true)
-      expect(
-        browserResult.mutationEvidence.uncertainLossWindow
-          .disconnectBeforeResponseSettled,
-      ).toBe(true)
-      expect(browserResult.mutationEvidence.executionCountAtMostOnce).toBe(true)
-      expect(
-        browserResult.mutationEvidence.pairingPromptsDuringMutationReconnect,
-      ).toBe(0)
-      expect(
-        browserResult.revocationEvidence.routeAuthorizedAfterRevocation,
-      ).toBe(false)
-      expect(
-        browserResult.revocationEvidence.pendingPairingPrompts,
-      ).toBeGreaterThanOrEqual(1)
-      expect(browserResult.hostileCaseEvidence.failClosedObserved).toBe(true)
-    })
+    await test.step(
+      'assert protocol, selected ICE path, reconnect, mutation, and revocation behavior',
+      async () => {
+        assertInteropBrowserResult(browserResult, {
+          lane,
+          expectedStablePeerId: ready.expectedStablePeerId,
+          expectedNegotiationRole: ready.expectedNegotiationRole,
+        })
+      },
+    )
 
     await test.step('assert no HTTP transport fallback or unexpected request', async () => {
-      expect(browserResult.noHttpFetchTransportUsed).toBe(true)
-      expect(browserResult.httpFetchCalls).toEqual([])
       expect(forbiddenHttp).toEqual([])
     })
 
@@ -270,22 +292,6 @@ test('browser thin shell interoperates with the Python WebRTC peer without HTTP 
     throw error
   }
 })
-
-function forbiddenHttpRequests(
-  requests: NetworkRequest[],
-  harnessBaseUrl: string,
-  brokerUrl: string,
-): NetworkRequest[] {
-  const harness = new URL(harnessBaseUrl)
-  return requests.filter((request) => {
-    if (request.url.startsWith(`blob:${harnessBaseUrl}/`)) return false
-    const url = new URL(request.url)
-    return !(
-      (url.hostname === harness.hostname && url.port === harness.port) ||
-      request.url.startsWith(brokerUrl)
-    )
-  })
-}
 
 async function writeReport(
   outputPath: string,

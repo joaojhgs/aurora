@@ -1,6 +1,12 @@
+from pathlib import Path
+
 import pytest
 
-from scripts.webrtc_interop_scan import candidate_pair_matches_lane, scan_files
+from scripts.webrtc_interop_scan import (
+    build_interop_report,
+    candidate_pair_matches_lane,
+    scan_files,
+)
 
 
 def _pair(
@@ -161,3 +167,219 @@ def test_scan_rejects_every_raw_ice_candidate_type(tmp_path, candidate_type: str
 
     assert result["passed"] is False
     assert result["findings"] == [{"file": str(artifact), "pattern": "raw_ice_candidate"}]
+
+
+def _passing_reports() -> tuple[dict[str, object], dict[str, object]]:
+    request_sha256 = "request-sha256"
+    result_sha256 = "result-sha256"
+    python_report: dict[str, object] = {
+        "gatewayHttpApiEnabled": False,
+        "gatewayHttpReachable": False,
+        "scopedEventEvidence": {"wildcardInterested": False},
+        "manifestSent": True,
+        "largeRpcRecords": [
+            {
+                "request_bytes": 512 * 1024,
+                "result_bytes": 512 * 1024,
+                "request_sha256": request_sha256,
+                "result_sha256": result_sha256,
+            }
+        ],
+        "streamRecords": {
+            "g009-stream-complete-direct": {
+                "started": True,
+                "completed": True,
+                "cancelled": False,
+                "chunk_count": 2,
+            },
+            "g009-stream-cancel-direct": {
+                "started": True,
+                "completed": False,
+                "cancelled": True,
+                "chunk_count": 1,
+            },
+        },
+    }
+    browser_result: dict[str, object] = {
+        "negotiationRole": "offerer",
+        "selectedCandidatePair": _pair("host", "host", "host"),
+        "manifestEvidence": {
+            "peerId": "python-gateway-g009",
+            "serviceCount": 2,
+            "methodCount": 4,
+        },
+        "errorEvidence": {
+            "rejected": True,
+            "code": "unknown",
+            "message": "intentional interop RPC failure",
+        },
+        "largeRpcEvidence": {
+            "requestBytes": 512 * 1024,
+            "requestSha256": request_sha256,
+            "resultBytes": 512 * 1024,
+            "resultSha256": result_sha256,
+            "expectedResultSha256": result_sha256,
+            "sentFragmentCount": 33,
+            "receivedFragmentCount": 33,
+        },
+        "rpcStreamEvidence": {
+            "completedChunks": [{"delta": "first"}, {"delta": "second"}],
+            "cancelledFirstChunk": {"delta": "first"},
+            "cancelledClientError": "Aurora request timed out",
+            "pythonStatus": {
+                "started": True,
+                "completed": False,
+                "cancelled": True,
+                "chunk_count": 1,
+            },
+        },
+        "reconnectEvidence": {"authorizedWithoutSas": True},
+        "mutationEvidence": {
+            "executionCountAtMostOnce": True,
+            "uncertainLossWindow": {
+                "startedAckBeforeDisconnect": True,
+                "disconnectBeforeResponseSettled": True,
+            },
+        },
+        "revocationEvidence": {
+            "routeAuthorizedAfterRevocation": False,
+            "pendingPairingPrompts": 1,
+        },
+        "scopedEventEvidence": {
+            "wrongCorrelationDelivered": False,
+            "wildcardDelivered": False,
+        },
+        "ttsEvent": {"kind": "tts.chunk"},
+        "httpFetchCalls": [],
+        "noHttpFetchTransportUsed": True,
+    }
+    browser_report: dict[str, object] = {
+        "status": "passed",
+        "browserResult": browser_result,
+        "noHttpFetchTransportUsed": True,
+    }
+    return python_report, browser_report
+
+
+def _aggregate(
+    tmp_path: Path,
+    python_report: dict[str, object],
+    browser_report: dict[str, object],
+) -> dict[str, object]:
+    return build_interop_report(
+        lane="direct",
+        artifact_dir=tmp_path,
+        python_report=python_report,
+        browser_report=browser_report,
+        python_report_path=tmp_path / "python.json",
+        browser_report_path=tmp_path / "browser.json",
+    )
+
+
+def test_aggregate_accepts_complete_http_disabled_proof(tmp_path: Path) -> None:
+    python_report, browser_report = _passing_reports()
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "passed"
+    assert report["httpDisabledProof"]["requiredEvidencePassed"] is True
+    assert report["protocolInteropEvidence"]["negotiationDirectionPassed"] is True
+    assert report["protocolInteropEvidence"]["manifestPassed"] is True
+    assert report["protocolInteropEvidence"]["errorPassed"] is True
+    assert report["protocolInteropEvidence"]["largeRpcPassed"] is True
+    assert report["protocolInteropEvidence"]["rpcStreamPassed"] is True
+
+
+@pytest.mark.parametrize(
+    ("target", "field", "value"),
+    [
+        ("python", "gatewayHttpApiEnabled", True),
+        ("python", "gatewayHttpReachable", True),
+        ("browser", "noHttpFetchTransportUsed", False),
+        ("browser_result", "noHttpFetchTransportUsed", False),
+        ("browser_result", "httpFetchCalls", ["http://127.0.0.1:8000/api/registry"]),
+    ],
+)
+def test_aggregate_rejects_incomplete_http_disabled_proof(
+    tmp_path: Path,
+    target: str,
+    field: str,
+    value: object,
+) -> None:
+    python_report, browser_report = _passing_reports()
+    if target == "python":
+        python_report[field] = value
+    elif target == "browser":
+        browser_report[field] = value
+    else:
+        browser_result = browser_report["browserResult"]
+        assert isinstance(browser_result, dict)
+        browser_result[field] = value
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["httpDisabledProof"]["requiredEvidencePassed"] is False
+
+
+@pytest.mark.parametrize(
+    ("target", "field", "value"),
+    [
+        ("browser_result", "negotiationRole", "answerer"),
+        ("python", "manifestSent", False),
+        ("browser_manifest", "peerId", "unexpected-peer"),
+        ("browser_manifest", "serviceCount", 0),
+        ("browser_error", "rejected", False),
+        ("browser_error", "code", "validation"),
+        ("browser_large", "resultBytes", 1),
+        ("browser_large", "sentFragmentCount", 1),
+        ("browser_stream", "completedChunks", []),
+        ("browser_stream_status", "chunk_count", 2),
+        ("python_cancelled_stream", "cancelled", False),
+    ],
+)
+def test_aggregate_rejects_incomplete_cross_language_protocol_evidence(
+    tmp_path: Path,
+    target: str,
+    field: str,
+    value: object,
+) -> None:
+    python_report, browser_report = _passing_reports()
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    if target == "python":
+        python_report[field] = value
+    elif target == "browser_result":
+        browser_result[field] = value
+    elif target == "browser_manifest":
+        manifest = browser_result["manifestEvidence"]
+        assert isinstance(manifest, dict)
+        manifest[field] = value
+    elif target == "browser_error":
+        error_evidence = browser_result["errorEvidence"]
+        assert isinstance(error_evidence, dict)
+        error_evidence[field] = value
+    elif target == "browser_large":
+        large_rpc = browser_result["largeRpcEvidence"]
+        assert isinstance(large_rpc, dict)
+        large_rpc[field] = value
+    elif target == "browser_stream":
+        rpc_stream = browser_result["rpcStreamEvidence"]
+        assert isinstance(rpc_stream, dict)
+        rpc_stream[field] = value
+    elif target == "browser_stream_status":
+        rpc_stream = browser_result["rpcStreamEvidence"]
+        assert isinstance(rpc_stream, dict)
+        python_status = rpc_stream["pythonStatus"]
+        assert isinstance(python_status, dict)
+        python_status[field] = value
+    else:
+        stream_records = python_report["streamRecords"]
+        assert isinstance(stream_records, dict)
+        cancelled_stream = stream_records["g009-stream-cancel-direct"]
+        assert isinstance(cancelled_stream, dict)
+        cancelled_stream[field] = value
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "app/services/gateway/webrtc/**"
+      - "packages/aurora-sdk/src/mesh.ts"
       - "packages/aurora-sdk/src/webrtc/**"
       - "packages/aurora-ui/src/browser-peer-persistence.ts"
       - "packages/aurora-ui/src/web-thin-runtime.ts"
@@ -47,25 +48,7 @@ jobs:
       - name: Run strict direct, STUN, and TURN interoperability matrix
         env:
           WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS: "1"
-        run: |
-          set -euo pipefail
-          trap 'scripts/webrtc_interop_services.sh down' EXIT
-          pnpm test:webrtc:browsers
-          WEBRTC_INTEROP_BROWSER=chromium \
-            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/stun \
-            scripts/webrtc_interop.sh stun
-          WEBRTC_INTEROP_BROWSER=firefox \
-            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/firefox-stun \
-            scripts/webrtc_interop.sh stun
-          WEBRTC_INTEROP_BROWSER=firefox \
-            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/firefox-turn \
-            scripts/webrtc_interop.sh turn
-          WEBRTC_INTEROP_BROWSER=webkit \
-            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/webkit-stun \
-            scripts/webrtc_interop.sh stun
-          WEBRTC_INTEROP_BROWSER=webkit \
-            WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/webkit-turn \
-            scripts/webrtc_interop.sh turn
+        run: pnpm test:webrtc:browsers
       - uses: actions/upload-artifact@v4
         if: always()
         with:

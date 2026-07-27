@@ -103,32 +103,96 @@ def candidate_pair_matches_lane(lane: str, selected_pair: dict[str, Any]) -> tup
     return False, "unsupported-lane"
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--artifact-dir", required=True)
-    parser.add_argument("--python-report", required=True)
-    parser.add_argument("--browser-report", required=True)
-    parser.add_argument("--out", required=True)
-    parser.add_argument("--lane", required=True, choices=("direct", "stun", "turn"))
-    args = parser.parse_args()
-    artifact_dir = Path(args.artifact_dir)
-    python_report = load(Path(args.python_report))
-    browser_report = load(Path(args.browser_report))
+def build_interop_report(
+    *,
+    lane: str,
+    artifact_dir: Path,
+    python_report: dict[str, Any],
+    browser_report: dict[str, Any],
+    python_report_path: Path,
+    browser_report_path: Path,
+) -> dict[str, Any]:
+    """Build the aggregate report and enforce every release-gating proof."""
     scan = scan_files(artifact_dir)
     br = browser_report.get("browserResult") or {}
     selected_pair = br.get("selectedCandidatePair") or {}
     ice = selected_pair.get("category") or "unknown"
     stun_gather = selected_pair.get("stunServerReflexiveCandidate") or {}
-    path_ok, path_acceptance_reason = candidate_pair_matches_lane(args.lane, selected_pair)
+    path_ok, path_acceptance_reason = candidate_pair_matches_lane(lane, selected_pair)
     mutation = br.get("mutationEvidence") or {}
     reconnect = br.get("reconnectEvidence") or {}
     revocation = br.get("revocationEvidence") or {}
     scoped = br.get("scopedEventEvidence") or {}
     tts_event = br.get("ttsEvent")
+    browser_fetch_calls = br.get("httpFetchCalls")
+    manifest = br.get("manifestEvidence") or {}
+    error_evidence = br.get("errorEvidence") or {}
+    large_rpc = br.get("largeRpcEvidence") or {}
+    rpc_stream = br.get("rpcStreamEvidence") or {}
+    python_large_records = python_report.get("largeRpcRecords") or []
+    python_large = python_large_records[-1] if python_large_records else {}
+    python_stream_records = python_report.get("streamRecords") or {}
+    completed_stream = python_stream_records.get(f"g009-stream-complete-{lane}") or {}
+    cancelled_stream = python_stream_records.get(f"g009-stream-cancel-{lane}") or {}
+    expected_negotiation_role = "offerer" if lane in {"direct", "turn"} else "answerer"
+    manifest_ok = (
+        python_report.get("manifestSent") is True
+        and manifest.get("peerId") == "python-gateway-g009"
+        and manifest.get("serviceCount", 0) > 0
+        and manifest.get("methodCount", 0) > 0
+    )
+    error_ok = (
+        error_evidence.get("rejected") is True
+        and error_evidence.get("code") == "unknown"
+        and "intentional interop rpc failure" in str(error_evidence.get("message") or "").lower()
+    )
+    large_rpc_ok = (
+        large_rpc.get("requestBytes") == 512 * 1024
+        and large_rpc.get("resultBytes") == 512 * 1024
+        and large_rpc.get("requestSha256") == python_large.get("request_sha256")
+        and large_rpc.get("resultSha256") == large_rpc.get("expectedResultSha256")
+        and large_rpc.get("resultSha256") == python_large.get("result_sha256")
+        and python_large.get("request_bytes") == 512 * 1024
+        and python_large.get("result_bytes") == 512 * 1024
+        and large_rpc.get("sentFragmentCount", 0) > 1
+        and large_rpc.get("receivedFragmentCount", 0) > 1
+    )
+    completed_chunks = rpc_stream.get("completedChunks") or []
+    stream_ok = (
+        len(completed_chunks) == 2
+        and completed_stream.get("started") is True
+        and completed_stream.get("completed") is True
+        and completed_stream.get("cancelled") is False
+        and completed_stream.get("chunk_count") == 2
+        and bool(rpc_stream.get("cancelledFirstChunk"))
+        and bool(rpc_stream.get("cancelledClientError"))
+        and cancelled_stream.get("started") is True
+        and cancelled_stream.get("completed") is False
+        and cancelled_stream.get("cancelled") is True
+        and cancelled_stream.get("chunk_count") == 1
+        and rpc_stream.get("pythonStatus") == cancelled_stream
+    )
+    negotiation_ok = br.get("negotiationRole") == expected_negotiation_role
+    no_http_transport = (
+        browser_report.get("noHttpFetchTransportUsed") is True
+        and br.get("noHttpFetchTransportUsed") is True
+        and browser_fetch_calls == []
+    )
+    http_disabled = (
+        python_report.get("gatewayHttpApiEnabled") is False
+        and python_report.get("gatewayHttpReachable") is False
+    )
     required_ok = (
         browser_report.get("status") == "passed"
         and scan["passed"]
         and path_ok
+        and http_disabled
+        and no_http_transport
+        and negotiation_ok
+        and manifest_ok
+        and error_ok
+        and large_rpc_ok
+        and stream_ok
         and reconnect.get("authorizedWithoutSas") is True
         and mutation.get("executionCountAtMostOnce") is True
         and (mutation.get("uncertainLossWindow") or {}).get("startedAckBeforeDisconnect") is True
@@ -143,18 +207,18 @@ def main() -> int:
     )
     final = {
         "schema": "aurora.webrtc_interop.report.v1",
-        "lane": args.lane,
+        "lane": lane,
         "status": "passed" if required_ok else "failed",
         "commands": {
-            "lane": f"./scripts/webrtc_interop.sh {args.lane}",
+            "lane": f"./scripts/webrtc_interop.sh {lane}",
             "docker": "docker compose -f docker-compose.webrtc-interop.yml up -d webrtc-interop-mqtt webrtc-interop-turn",
         },
-        "laneIntent": args.lane,
+        "laneIntent": lane,
         "pathCategory": ice,
         "pathCategoryAccepted": path_ok,
         "pathAcceptanceReason": path_acceptance_reason,
         "candidateProof": {
-            "laneIntent": args.lane,
+            "laneIntent": lane,
             "selectedPairCategory": ice,
             "selectedPairAcceptedForLane": path_ok,
             "acceptanceReason": path_acceptance_reason,
@@ -181,10 +245,25 @@ def main() -> int:
         "httpDisabledProof": {
             "gatewayApiEnabled": python_report.get("gatewayHttpApiEnabled"),
             "gatewayHttpReachable": python_report.get("gatewayHttpReachable"),
-            "browserHttpFetchCalls": (browser_report.get("browserResult") or {}).get(
-                "httpFetchCalls", []
-            ),
+            "browserHttpFetchCalls": browser_fetch_calls,
             "noHttpFetchTransportUsed": browser_report.get("noHttpFetchTransportUsed"),
+            "requiredEvidencePassed": http_disabled and no_http_transport,
+        },
+        "protocolInteropEvidence": {
+            "expectedNegotiationRole": expected_negotiation_role,
+            "observedNegotiationRole": br.get("negotiationRole"),
+            "negotiationDirectionPassed": negotiation_ok,
+            "manifest": manifest,
+            "manifestPassed": manifest_ok,
+            "error": error_evidence,
+            "errorPassed": error_ok,
+            "largeRpc": large_rpc,
+            "pythonLargeRpc": python_large,
+            "largeRpcPassed": large_rpc_ok,
+            "rpcStream": rpc_stream,
+            "pythonCompletedStream": completed_stream,
+            "pythonCancelledStream": cancelled_stream,
+            "rpcStreamPassed": stream_ok,
         },
         "timings": {
             "pythonDurationMs": python_report.get("durationMs"),
@@ -197,6 +276,11 @@ def main() -> int:
                 "registryModuleCount", 0
             )
             > 0,
+            "negotiationDirection": negotiation_ok,
+            "manifestExchange": manifest_ok,
+            "errorParity": error_ok,
+            "fragmented512KiBRpc": large_rpc_ok,
+            "streamCompletionAndCancel": stream_ok,
             "eventOverDataChannel": bool(br.get("event")),
             "eventSentByPython": python_report.get("eventSent"),
             "ttsEventOverDataChannel": bool(tts_event),
@@ -227,10 +311,32 @@ def main() -> int:
             ],
         },
         "redaction": scan,
-        "pythonReport": str(Path(args.python_report)),
-        "browserReport": str(Path(args.browser_report)),
+        "pythonReport": str(python_report_path),
+        "browserReport": str(browser_report_path),
         "secretsRedacted": scan["passed"],
     }
+    return final
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--artifact-dir", required=True)
+    parser.add_argument("--python-report", required=True)
+    parser.add_argument("--browser-report", required=True)
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--lane", required=True, choices=("direct", "stun", "turn"))
+    args = parser.parse_args()
+    artifact_dir = Path(args.artifact_dir)
+    python_report_path = Path(args.python_report)
+    browser_report_path = Path(args.browser_report)
+    final = build_interop_report(
+        lane=args.lane,
+        artifact_dir=artifact_dir,
+        python_report=load(python_report_path),
+        browser_report=load(browser_report_path),
+        python_report_path=python_report_path,
+        browser_report_path=browser_report_path,
+    )
     Path(args.out).write_text(json.dumps(final, indent=2, sort_keys=True) + "\n")
     return 0 if final["status"] == "passed" else 1
 

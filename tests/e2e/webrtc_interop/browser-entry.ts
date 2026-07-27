@@ -1,7 +1,5 @@
 import '../../../apps/aurora-tauri/src/legacy-webview-polyfills.js'
 import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, MqttWebSocketSignalingClient, type WebRtcPeerConnectionProfile } from '../../../packages/aurora-sdk/src/webrtc/index.js'
-import * as mqtt from 'mqtt'
-import { scryptAsync } from '@noble/hashes/scrypt.js'
 import {
   candidatePairMatchesLane,
   type InteropCandidatePairEvidence
@@ -15,6 +13,8 @@ export type InteropBrowserConfig = {
   brokerUrl: string
   expectedStablePeerId: string
   localStablePeerId: string
+  localSignalingId: string
+  expectedNegotiationRole: 'offerer' | 'answerer'
   nodeName: string
   stunServers: string[]
   turnServers: string[]
@@ -32,6 +32,10 @@ export type InteropBrowserConfig = {
   mutationCountTopic: string
   mutationStartedTopic: string
   revokeTopic: string
+  largeEchoTopic: string
+  errorTopic: string
+  streamTopic: string
+  streamStatusTopic: string
   runtimeLocation?: {
     protocol: string
     hostname: string
@@ -39,6 +43,71 @@ export type InteropBrowserConfig = {
 }
 
 type Snapshot = ReturnType<ReturnType<typeof createBrowserWebRtcAuroraRuntime>['peer']['snapshot']>
+
+type PeerConnectionDiagnostic = {
+  at: string
+  connectionId: number
+  event: string
+  connectionState?: string
+  iceConnectionState?: string
+  iceGatheringState?: string
+  signalingState?: string
+  candidateType?: string
+  candidateProtocol?: string
+  errorCode?: number
+  errorText?: string
+}
+
+let peerConnectionSequence = 0
+
+function recordPeerConnectionDiagnostic(
+  connectionId: number,
+  pc: RTCPeerConnection,
+  event: string,
+  details: Partial<PeerConnectionDiagnostic> = {}
+): void {
+  const existing = Reflect.get(
+    globalThis,
+    '__auroraWebRtcInteropPeerConnectionDiagnostics'
+  )
+  const diagnostics = Array.isArray(existing) ? existing : []
+  diagnostics.push({
+    at: new Date().toISOString(),
+    connectionId,
+    event,
+    connectionState: pc.connectionState,
+    iceConnectionState: pc.iceConnectionState,
+    iceGatheringState: pc.iceGatheringState,
+    signalingState: pc.signalingState,
+    ...details
+  })
+  if (diagnostics.length > 100) diagnostics.splice(0, diagnostics.length - 100)
+  Object.assign(globalThis, {
+    __auroraWebRtcInteropPeerConnectionDiagnostics: diagnostics
+  })
+}
+
+function recordInteropProgress(phase: string, snapshot?: Snapshot): void {
+  Object.assign(globalThis, {
+    __auroraWebRtcInteropProgress: {
+      phase,
+      at: new Date().toISOString(),
+      peer: snapshot
+        ? {
+            state: snapshot.state,
+            icePathCategory: snapshot.icePathCategory,
+            negotiationRole: snapshot.negotiationRole,
+            connectedStablePeerId: snapshot.connectedStablePeerId,
+            connectedSignalingPeerId: snapshot.connectedSignalingPeerId,
+            selectedSignalingBrokerOrigin:
+              snapshot.selectedSignalingBrokerOrigin,
+            hasPendingPairing: Boolean(snapshot.pendingPairing),
+            lastRedactedError: snapshot.lastRedactedError
+          }
+        : null
+    }
+  })
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -59,9 +128,22 @@ async function waitFor(
 }
 
 
-function mqttFactory(brokerUrl: string, options: any): any {
-  const candidate: any = mqtt as any
-  const connect = candidate.connect ?? candidate.default?.connect ?? candidate.default
+async function mqttFactory(brokerUrl: string, options: any): Promise<any> {
+  const mqttModuleUrl = '/mqtt-bundle.mjs'
+  let candidate: any = await import(mqttModuleUrl)
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (
+      typeof candidate?.connect === 'function' ||
+      typeof candidate === 'function'
+    ) {
+      break
+    }
+    candidate = candidate?.default
+  }
+  const connect =
+    typeof candidate?.connect === 'function'
+      ? candidate.connect
+      : candidate
   if (typeof connect !== 'function') throw new Error('mqtt.connect is unavailable in bundled browser harness')
   return connect(brokerUrl, options)
 }
@@ -132,6 +214,51 @@ function makePeerConnectionFactory(
     if (iceServers !== undefined) next.iceServers = iceServers
     if (forceRelay) next.iceTransportPolicy = 'relay'
     const pc = new RTCPeerConnection(next)
+    const connectionId = ++peerConnectionSequence
+    recordPeerConnectionDiagnostic(connectionId, pc, 'created', {
+      candidateType: next.iceTransportPolicy ?? 'all'
+    })
+    for (const event of [
+      'connectionstatechange',
+      'iceconnectionstatechange',
+      'icegatheringstatechange',
+      'signalingstatechange',
+      'negotiationneeded',
+      'datachannel'
+    ]) {
+      pc.addEventListener(event, () => {
+        recordPeerConnectionDiagnostic(connectionId, pc, event)
+      })
+    }
+    pc.addEventListener('icecandidate', (event) => {
+      const candidate = event.candidate
+      if (candidate === null) {
+        recordPeerConnectionDiagnostic(connectionId, pc, 'icecandidate:complete')
+        return
+      }
+      const candidateText = candidate.candidate
+      const candidateType =
+        (candidate as RTCIceCandidate & { type?: string }).type ??
+        /\styp\s(\S+)/u.exec(candidateText)?.[1]
+      const candidateProtocol =
+        (candidate as RTCIceCandidate & { protocol?: string }).protocol ??
+        candidateText.split(/\s+/u)[2]
+      recordPeerConnectionDiagnostic(connectionId, pc, 'icecandidate', {
+        ...(candidateType ? { candidateType } : {}),
+        ...(candidateProtocol ? { candidateProtocol } : {})
+      })
+    })
+    pc.addEventListener('icecandidateerror', (event) => {
+      const error = event as Event & { errorCode?: number; errorText?: string }
+      recordPeerConnectionDiagnostic(connectionId, pc, 'icecandidateerror', {
+        ...(typeof error.errorCode === 'number'
+          ? { errorCode: error.errorCode }
+          : {}),
+        ...(error.errorText
+          ? { errorText: error.errorText.slice(0, 160) }
+          : {})
+      })
+    })
     return suppressHostCandidates ? suppressHostIceCandidates(pc) : pc
   }
 }
@@ -160,6 +287,42 @@ function countPendingPairing(snapshots: Snapshot[], startIndex = 0): number {
   return snapshots.slice(startIndex).filter((item) => Boolean(item.pendingPairing)).length
 }
 
+function signalingIdFactory(signalingId: string): () => string {
+  let first = true
+  return () => {
+    if (first) {
+      first = false
+      return signalingId
+    }
+    return globalThis.crypto.randomUUID()
+  }
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function waitForStreamStatus(
+  runtime: ReturnType<typeof createBrowserWebRtcAuroraRuntime>,
+  topic: string,
+  probeId: string,
+  timeoutMs: number
+): Promise<Record<string, unknown>> {
+  const deadline = Date.now() + timeoutMs
+  let last: Record<string, unknown> = {}
+  while (Date.now() < deadline) {
+    last = await runtime.client.request<Record<string, unknown>>(
+      topic,
+      { probe_id: probeId },
+      { busTopic: topic, timeoutMs: 5000 }
+    )
+    if (last.cancelled === true) return last
+    await sleep(100)
+  }
+  throw new Error(`Timed out waiting for Python stream cancellation: ${JSON.stringify(last)}`)
+}
+
 async function waitForSelectedCandidatePair(runtime: ReturnType<typeof createBrowserWebRtcAuroraRuntime>, lane: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs
   let last: InteropCandidatePairEvidence = await runtime.peer.getSelectedCandidatePairEvidence()
@@ -172,6 +335,7 @@ async function waitForSelectedCandidatePair(runtime: ReturnType<typeof createBro
 }
 
 export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
+  recordInteropProgress('initializing')
   const fetchCalls: string[] = []
   const suppressedUnhandledRejections: string[] = []
   const errorHandler = (event: ErrorEvent) => {
@@ -225,10 +389,24 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       config.turnUsername,
       config.turnCredential
     ),
-    signalingFactory: (options) => new MqttWebSocketSignalingClient({ ...options, mqttFactory }),
+    signalingFactory: (options) => {
+      const signaling = new MqttWebSocketSignalingClient({
+        ...options,
+        mqttFactory
+      })
+      Object.assign(globalThis, {
+        __auroraWebRtcInteropSignalingDiagnostics: () =>
+          signaling.diagnostics()
+      })
+      return signaling
+    },
+    randomId: signalingIdFactory(config.localSignalingId),
     allowInsecureLoopback: true,
     windowLocation: config.runtimeLocation ?? window.location,
-    scryptDeriver: async (password, salt, params) => scryptAsync(password, salt, { N: params.N, r: params.r, p: params.p, dkLen: params.dkLen }),
+    scryptWorkerFactory: () =>
+      new Worker(
+        new URL('/crypto-worker-bundle.js', window.location.href)
+      ),
     pairingConnectPoll: {
       maxAttempts: Math.max(20, Math.ceil(config.timeoutMs / 500)),
       initialDelayMs: 100,
@@ -236,9 +414,11 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       rpcTimeoutMs: 5000
     }
   })
+  recordInteropProgress('runtime-created', runtime.peer.snapshot())
 
   runtime.peer.subscribe((snapshot) => {
     snapshots.push(snapshot)
+    recordInteropProgress(`peer:${snapshot.state}`, snapshot)
     console.log('g009-snapshot', snapshot.state, snapshot.icePathCategory, snapshot.selectedSignalingBrokerOrigin || '', snapshot.connectedSignalingPeerId || '', Boolean(snapshot.pendingPairing), snapshot.lastRedactedError?.code || '', snapshot.lastRedactedError?.message || '')
     const pending = snapshot.pendingPairing
     if (pending && autoConfirmPairing) void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined)
@@ -246,9 +426,73 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
 
   try {
     await runtime.peer.connect(profile)
+    recordInteropProgress('connect-returned', runtime.peer.snapshot())
     await waitFor(() => runtime.peer.snapshot().state === 'authorized', 'authorized WebRTC DataChannel', config.timeoutMs)
+    const authorizedSnapshot = runtime.peer.snapshot()
+    recordInteropProgress('authorized', authorizedSnapshot)
 
     const registry = await runtime.client.registry.getRegistry()
+    const meshTransport = runtime.meshTransport
+    if (!meshTransport) throw new Error('authorized browser runtime did not expose its mesh transport')
+    const manifest = await meshTransport.getManifest(config.expectedStablePeerId)
+    if (!manifest) throw new Error('Python peer did not return a manifest over the DataChannel')
+    recordInteropProgress('registry-and-manifest-complete', runtime.peer.snapshot())
+
+    const intentionalError = await runtime.client.requestResult(
+      config.errorTopic,
+      {},
+      { busTopic: config.errorTopic, timeoutMs: 5000 }
+    )
+
+    const fragmentCountsBefore = runtime.peer.snapshot()
+    const largeRequestBlob = 'x'.repeat(512 * 1024)
+    const largeResult = await runtime.client.request<{ blob: string }>(
+      config.largeEchoTopic,
+      { blob: largeRequestBlob },
+      { busTopic: config.largeEchoTopic, timeoutMs: config.timeoutMs }
+    )
+    const fragmentCountsAfter = runtime.peer.snapshot()
+    const expectedLargeResultBlob = 'y'.repeat(512 * 1024)
+
+    const completedStreamProbeId = `g009-stream-complete-${config.lane}`
+    const completedStreamChunks: unknown[] = []
+    for await (const chunk of meshTransport.streamRequest({
+      method: config.streamTopic,
+      busTopic: config.streamTopic,
+      payload: { probe_id: completedStreamProbeId, mode: 'complete' },
+      timeoutMs: config.timeoutMs,
+      audit: { correlationId: completedStreamProbeId }
+    })) {
+      completedStreamChunks.push(chunk)
+    }
+
+    const cancelledStreamProbeId = `g009-stream-cancel-${config.lane}`
+    const streamAbort = new AbortController()
+    const cancelledStream = meshTransport.streamRequest<Record<string, unknown>>({
+      method: config.streamTopic,
+      busTopic: config.streamTopic,
+      payload: { probe_id: cancelledStreamProbeId, mode: 'cancel' },
+      timeoutMs: config.timeoutMs,
+      signal: streamAbort.signal,
+      audit: { correlationId: cancelledStreamProbeId }
+    })
+    const cancelledIterator = cancelledStream[Symbol.asyncIterator]()
+    const cancelledFirstChunk = await cancelledIterator.next()
+    streamAbort.abort()
+    let cancelledClientError = ''
+    try {
+      await cancelledIterator.next()
+    } catch (error) {
+      cancelledClientError = error instanceof Error ? error.message : String(error)
+    }
+    const cancelledStreamStatus = await waitForStreamStatus(
+      runtime,
+      config.streamStatusTopic,
+      cancelledStreamProbeId,
+      config.timeoutMs
+    )
+    recordInteropProgress('rpc-and-streams-complete', runtime.peer.snapshot())
+
     const selectedCandidatePair = await waitForSelectedCandidatePair(runtime, config.lane, Math.min(8000, config.timeoutMs))
     const subscription = runtime.client.events.subscribe({
       stream: 'generic',
@@ -284,6 +528,7 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
     await waitFor(() => runtime.peer.snapshot().state === 'authorized', 'authorized reconnect WebRTC DataChannel', config.timeoutMs)
     const reconnectRegistry = await runtime.client.registry.getRegistry()
     const reconnectPairingPrompts = countPendingPairing(snapshots, reconnectStart)
+    recordInteropProgress('reconnect-complete', runtime.peer.snapshot())
 
     const mutationId = `g009-${config.lane}-${Date.now().toString(36)}`
     const mutationStart = snapshots.length
@@ -308,6 +553,7 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
     await waitFor(() => runtime.peer.snapshot().state === 'authorized', 'post-mutation reconnect WebRTC DataChannel', config.timeoutMs)
     const mutationReconnectPairingPrompts = countPendingPairing(snapshots, mutationStart)
     const mutationCount = await runtime.client.request(config.mutationCountTopic, { mutation_id: mutationId }, { busTopic: config.mutationCountTopic, timeoutMs: 5000 })
+    recordInteropProgress('mutation-reconnect-complete', runtime.peer.snapshot())
 
     const revokeResult = await runtime.client.request(config.revokeTopic, {}, { busTopic: config.revokeTopic, timeoutMs: 5000 })
     const revokedStart = snapshots.length
@@ -317,6 +563,7 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
     await sleep(Math.min(2500, Math.max(1200, config.timeoutMs / 8)))
     const revokedSnapshot = runtime.peer.snapshot()
     const revokedPendingPairing = countPendingPairing(snapshots, revokedStart)
+    recordInteropProgress('revocation-complete', revokedSnapshot)
 
     const snapshot = runtime.peer.snapshot()
     return {
@@ -333,9 +580,36 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       connectedStablePeerId: snapshot.connectedStablePeerId || config.expectedStablePeerId,
       connectedSignalingPeerId: snapshot.connectedSignalingPeerId,
       protocolCapabilities: snapshot.protocolCapabilities,
+      negotiationRole: authorizedSnapshot.negotiationRole,
       pendingCallCount: snapshot.pendingCallCount,
       registryModuleCount: Array.isArray((registry as any).modules) ? (registry as any).modules.length : 0,
       registryDigest: (registry as any).digest ?? '',
+      manifestEvidence: {
+        peerId: manifest.peerId,
+        nodeName: manifest.nodeName,
+        serviceCount: manifest.services?.length ?? 0,
+        methodCount: manifest.services?.reduce((count, service) => count + (service.methods?.length ?? 0), 0) ?? 0
+      },
+      errorEvidence: {
+        rejected: intentionalError.ok === false,
+        code: intentionalError.ok ? null : intentionalError.error.code,
+        message: intentionalError.ok ? null : intentionalError.error.message
+      },
+      largeRpcEvidence: {
+        requestBytes: largeRequestBlob.length,
+        requestSha256: await sha256Hex(largeRequestBlob),
+        resultBytes: largeResult.blob.length,
+        resultSha256: await sha256Hex(largeResult.blob),
+        expectedResultSha256: await sha256Hex(expectedLargeResultBlob),
+        sentFragmentCount: fragmentCountsAfter.sentFragmentCount - fragmentCountsBefore.sentFragmentCount,
+        receivedFragmentCount: fragmentCountsAfter.receivedFragmentCount - fragmentCountsBefore.receivedFragmentCount
+      },
+      rpcStreamEvidence: {
+        completedChunks: completedStreamChunks,
+        cancelledFirstChunk: cancelledFirstChunk.value,
+        cancelledClientError,
+        pythonStatus: cancelledStreamStatus
+      },
       event,
       ttsEvent,
       scopedEventEvidence: {
@@ -384,7 +658,16 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       suppressedUnhandledRejections
     }
   } finally {
+    recordInteropProgress('closing', runtime.peer.snapshot())
     await runtime.close()
+    Reflect.deleteProperty(
+      globalThis,
+      '__auroraWebRtcInteropSignalingDiagnostics'
+    )
+    Reflect.deleteProperty(
+      globalThis,
+      '__auroraWebRtcInteropPeerConnectionDiagnostics'
+    )
     globalThis.fetch = originalFetch
     window.removeEventListener('unhandledrejection', unhandledRejectionHandler)
     window.removeEventListener('error', errorHandler)

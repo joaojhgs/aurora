@@ -1,14 +1,19 @@
 {
   "assertions": {
     "authorizedPeerCount": 0,
+    "errorParity": true,
     "eventOverDataChannel": true,
     "eventSentByPython": true,
+    "fragmented512KiBRpc": true,
+    "manifestExchange": true,
     "mutationAtMostOnce": true,
     "mutationUncertainLossWindow": true,
+    "negotiationDirection": true,
     "reconnectWithoutSas": true,
     "registryReadOverDataChannel": true,
     "revokedCredentialFailsClosed": true,
     "rtcStarted": true,
+    "streamCompletionAndCancel": true,
     "ttsEventOverDataChannel": true,
     "ttsEventSentByPython": true,
     "wildcardDelivered": false,
@@ -17,13 +22,13 @@
   },
   "browserReport": "reports/webrtc-interop/direct/browser-report.json",
   "candidateProof": {
-    "acceptanceReason": "selected-peer-reflexive-host-pair-without-stun",
+    "acceptanceReason": "selected-host-pair",
     "configuredStunServerCount": null,
     "configuredStunServerEvidence": "unproven",
     "laneIntent": "direct",
     "rawAddressRedacted": true,
     "selectedPairAcceptedForLane": true,
-    "selectedPairCategory": "prflx",
+    "selectedPairCategory": "host",
     "statsSource": "RTCPeerConnection.getStats",
     "stunServerReflexiveCandidateGathered": false,
     "stunServerReflexiveCandidateMatchesConfiguredServer": null
@@ -46,7 +51,8 @@
     "browserHttpFetchCalls": [],
     "gatewayApiEnabled": false,
     "gatewayHttpReachable": false,
-    "noHttpFetchTransportUsed": true
+    "noHttpFetchTransportUsed": true,
+    "requiredEvidencePassed": true
   },
   "iceCandidatePolicy": {
     "source": "browser default ICE candidate policy",
@@ -58,9 +64,9 @@
     "executionCountAtMostOnce": true,
     "mutationCount": {
       "execution_count": 1,
-      "mutation_id": "g009-direct-ms26avoe"
+      "mutation_id": "g009-direct-ms33q5so"
     },
-    "mutationId": "g009-direct-ms26avoe",
+    "mutationId": "g009-direct-ms33q5so",
     "mutationResult": {
       "message": "g009 uncertain transport loss before mutation response settled",
       "settled": "rejected",
@@ -69,7 +75,7 @@
     "mutationStartedEvent": {
       "audit": {
         "busTopic": "G009Interop.MutationStarted",
-        "correlationId": "g009-direct-ms26avoe",
+        "correlationId": "g009-direct-ms33q5so",
         "eventKind": "mutation.started",
         "method": null,
         "peerId": "python-gateway-g009",
@@ -91,14 +97,14 @@
       "kind": "mutation.started",
       "method": null,
       "payload": {
-        "correlation_id": "g009-direct-ms26avoe",
+        "correlation_id": "g009-direct-ms33q5so",
         "execution_count": 1,
         "kind": "mutation.started",
-        "mutation_id": "g009-direct-ms26avoe",
-        "request_id": "webrtc-3ysn8pv4lq9-ms26avoe",
+        "mutation_id": "g009-direct-ms33q5so",
+        "request_id": "webrtc-tdrxs0rphd-ms33q5so",
         "timing_category": "started_before_response_delay"
       },
-      "receivedAt": "2026-07-26T19:10:33.234Z",
+      "receivedAt": "2026-07-27T10:46:13.516Z",
       "redaction": {
         "redactedFields": [],
         "secretsRedacted": true,
@@ -116,9 +122,89 @@
       "startedAckBeforeDisconnect": true
     }
   },
-  "pathAcceptanceReason": "selected-peer-reflexive-host-pair-without-stun",
-  "pathCategory": "prflx",
+  "pathAcceptanceReason": "selected-host-pair",
+  "pathCategory": "host",
   "pathCategoryAccepted": true,
+  "protocolInteropEvidence": {
+    "error": {
+      "code": "unknown",
+      "message": "intentional interop RPC failure",
+      "rejected": true
+    },
+    "errorPassed": true,
+    "expectedNegotiationRole": "offerer",
+    "largeRpc": {
+      "expectedResultSha256": "ada7d34299a07770b1d2499502a9458b37bc5da01a577d93a2f0e884734af4cc",
+      "receivedFragmentCount": 33,
+      "requestBytes": 524288,
+      "requestSha256": "ec8bb338811bbf800a8b5e507d06e08a1d9d05bde74294f6f7388f3bbfba82e5",
+      "resultBytes": 524288,
+      "resultSha256": "ada7d34299a07770b1d2499502a9458b37bc5da01a577d93a2f0e884734af4cc",
+      "sentFragmentCount": 33
+    },
+    "largeRpcPassed": true,
+    "manifest": {
+      "methodCount": 16,
+      "nodeName": "G009 Python Gateway",
+      "peerId": "python-gateway-g009",
+      "serviceCount": 6
+    },
+    "manifestPassed": true,
+    "negotiationDirectionPassed": true,
+    "observedNegotiationRole": "offerer",
+    "pythonCancelledStream": {
+      "cancelled": true,
+      "chunk_count": 1,
+      "completed": false,
+      "probe_id": "g009-stream-cancel-direct",
+      "started": true
+    },
+    "pythonCompletedStream": {
+      "cancelled": false,
+      "chunk_count": 2,
+      "completed": true,
+      "probe_id": "g009-stream-complete-direct",
+      "started": true
+    },
+    "pythonLargeRpc": {
+      "request_bytes": 524288,
+      "request_sha256": "ec8bb338811bbf800a8b5e507d06e08a1d9d05bde74294f6f7388f3bbfba82e5",
+      "result_bytes": 524288,
+      "result_sha256": "ada7d34299a07770b1d2499502a9458b37bc5da01a577d93a2f0e884734af4cc"
+    },
+    "rpcStream": {
+      "cancelledClientError": "Mesh RPC request timed out",
+      "cancelledFirstChunk": {
+        "delta": "first",
+        "kind": "assistant.delta",
+        "probe_id": "g009-stream-cancel-direct",
+        "sequence": 0
+      },
+      "completedChunks": [
+        {
+          "delta": "first",
+          "kind": "assistant.delta",
+          "probe_id": "g009-stream-complete-direct",
+          "sequence": 0
+        },
+        {
+          "delta": "second",
+          "final": true,
+          "kind": "assistant.delta",
+          "probe_id": "g009-stream-complete-direct",
+          "sequence": 1
+        }
+      ],
+      "pythonStatus": {
+        "cancelled": true,
+        "chunk_count": 1,
+        "completed": false,
+        "probe_id": "g009-stream-cancel-direct",
+        "started": true
+      }
+    },
+    "rpcStreamPassed": true
+  },
   "pythonReport": "reports/webrtc-interop/direct/python-gateway-report.json",
   "reconnectEvidence": {
     "authorizedWithoutSas": true,
@@ -150,8 +236,8 @@
   },
   "secretsRedacted": true,
   "selectedCandidatePair": {
-    "category": "prflx",
-    "localCandidateType": "prflx",
+    "category": "host",
+    "localCandidateType": "host",
     "localProtocol": "udp",
     "nominated": true,
     "pairState": "succeeded",
@@ -163,7 +249,7 @@
   },
   "status": "passed",
   "timings": {
-    "browserDurationMs": 5365,
-    "pythonDurationMs": 6147
+    "browserDurationMs": 4821,
+    "pythonDurationMs": 7153
   }
 }

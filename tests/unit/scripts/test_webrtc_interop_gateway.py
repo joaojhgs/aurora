@@ -8,6 +8,10 @@ import json
 
 import pytest
 
+from app.services.gateway.mesh.provider_export import (
+    LEGACY_MANIFEST_PROTOCOL,
+    SUPPORTED_PROTOCOLS,
+)
 from app.shared.contracts.models.auth import (
     AuthMethods,
     build_mesh_reconnect_proof_message,
@@ -43,6 +47,22 @@ def test_registry_response_is_sorted_and_digest_is_stable() -> None:
     assert modules == ["Auth", "Config", "G009Interop", "Gateway", "Orchestrator", "TTS"]
     assert first.digest == second.digest
     assert len(first.digest) == 64
+
+
+def test_harness_manifest_declares_the_canonical_legacy_protocol() -> None:
+    manifest = InteropRegistry().legacy_manifest(
+        "python-gateway-g009",
+        "G009 Python Gateway",
+    )
+
+    assert manifest["type"] == "manifest"
+    assert manifest["active_protocol"] == LEGACY_MANIFEST_PROTOCOL
+    assert manifest["active_version"] == "v0"
+    assert manifest["active_tier"] == "legacy"
+    assert manifest["supported_protocols"] == list(SUPPORTED_PROTOCOLS)
+    assert manifest["projection_supported"] is True
+    assert manifest["projection_active"] is False
+    assert manifest["recipient_projection_evidence"] is None
 
 
 @pytest.mark.asyncio
@@ -232,6 +252,7 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
         wrong_correlation_interested=False,
         wildcard_interested=False,
         revoked_reconnect_failures=1,
+        manifest_sent=True,
     )
     serialized = json.dumps(report, sort_keys=True)
 

@@ -18,6 +18,7 @@ import re
 import socket
 import sys
 import time
+from collections.abc import AsyncIterator
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +35,12 @@ from app.services.gateway.config import (  # noqa: E402
     PermissionSettings,
     Settings,
     WebRTCSettings,
+)
+from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo  # noqa: E402
+from app.services.gateway.mesh.negotiation import manifest_to_dict  # noqa: E402
+from app.services.gateway.mesh.provider_export import (  # noqa: E402
+    LEGACY_MANIFEST_PROTOCOL,
+    SUPPORTED_PROTOCOLS,
 )
 from app.services.gateway.webrtc.rtc_client import RTCClient  # noqa: E402
 from app.shared.auth.identity import build_identity  # noqa: E402
@@ -60,6 +67,19 @@ MUTATE_TOPIC = "G009Interop.Mutate"
 MUTATION_COUNT_TOPIC = "G009Interop.MutationCount"
 REVOKE_TOPIC = "G009Interop.RevokeCredential"
 MUTATION_STARTED_TOPIC = "G009Interop.MutationStarted"
+LARGE_ECHO_TOPIC = "G009Interop.LargeEcho"
+ERROR_TOPIC = "G009Interop.IntentionalError"
+STREAM_STATUS_TOPIC = "G009Interop.StreamStatus"
+PYTHON_SIGNALING_IDS = {
+    "direct": "100-python-g009",
+    "stun": "000-python-g009",
+    "turn": "100-python-g009",
+}
+BROWSER_SIGNALING_IDS = {
+    "direct": "000-browser-g009",
+    "stun": "100-browser-g009",
+    "turn": "000-browser-g009",
+}
 
 
 def now() -> str:
@@ -151,7 +171,14 @@ class InteropRegistry:
                     exposure="both",
                     method_type="use",
                     required_perms=["Orchestrator.use"],
-                )
+                ),
+                MethodInfo(
+                    name="StreamInferChat",
+                    bus_topic=OrchestratorMethods.STREAM_INFER_CHAT,
+                    exposure="both",
+                    method_type="use",
+                    required_perms=["Orchestrator.use"],
+                ),
             ],
         )
         self._services["G009Interop"] = ServiceAnnouncement(
@@ -186,6 +213,27 @@ class InteropRegistry:
                     method_type="use",
                     required_perms=["G009Interop.use"],
                 ),
+                MethodInfo(
+                    name="LargeEcho",
+                    bus_topic=LARGE_ECHO_TOPIC,
+                    exposure="both",
+                    method_type="query",
+                    required_perms=["G009Interop.use"],
+                ),
+                MethodInfo(
+                    name="IntentionalError",
+                    bus_topic=ERROR_TOPIC,
+                    exposure="both",
+                    method_type="query",
+                    required_perms=["G009Interop.use"],
+                ),
+                MethodInfo(
+                    name="StreamStatus",
+                    bus_topic=STREAM_STATUS_TOPIC,
+                    exposure="both",
+                    method_type="query",
+                    required_perms=["G009Interop.use"],
+                ),
             ],
         )
 
@@ -216,6 +264,32 @@ class InteropRegistry:
             modules=modules, digest=hashlib.sha256(digest_source.encode()).hexdigest()
         )
 
+    def legacy_manifest(self, peer_id: str, node_name: str) -> dict[str, Any]:
+        """Build a canonical Python legacy manifest for browser lookup/ACK proof."""
+
+        manifest = PeerManifest(
+            peer_id=peer_id,
+            node_name=node_name,
+            aurora_version="interop",
+            shared_services=[
+                PeerServiceInfo(
+                    module=service.module,
+                    version=service.version,
+                    capabilities=service.capabilities,
+                    methods=service.methods,
+                )
+                for service in sorted(self._services.values(), key=lambda item: item.module)
+            ],
+            active_protocol=LEGACY_MANIFEST_PROTOCOL,
+            active_version="v0",
+            active_tier="legacy",
+            supported_protocols=list(SUPPORTED_PROTOCOLS),
+            projection_supported=True,
+            projection_active=False,
+            timestamp=now(),
+        )
+        return manifest_to_dict(manifest)
+
 
 class InteropBus:
     def __init__(self, registry: InteropRegistry, token_value: str) -> None:
@@ -230,6 +304,8 @@ class InteropBus:
         self.mutation_releases: dict[str, asyncio.Event] = {}
         self.on_mutation_started: Any | None = None
         self.revoked = False
+        self.large_rpc_records: list[dict[str, Any]] = []
+        self.stream_records: dict[str, dict[str, Any]] = {}
 
     async def request(self, topic: str, payload: Any = None, **kwargs: Any) -> QueryResult:
         params = (
@@ -319,6 +395,34 @@ class InteropBus:
         if topic == REVOKE_TOPIC:
             self.revoked = True
             return QueryResult(ok=True, data={"revoked": True, "route": "datachannel"})
+        if topic == LARGE_ECHO_TOPIC:
+            blob = str(params.get("blob") or "")
+            result_blob = "y" * len(blob)
+            self.large_rpc_records.append(
+                {
+                    "request_bytes": len(blob.encode()),
+                    "result_bytes": len(result_blob.encode()),
+                    "request_sha256": hashlib.sha256(blob.encode()).hexdigest(),
+                    "result_sha256": hashlib.sha256(result_blob.encode()).hexdigest(),
+                }
+            )
+            return QueryResult(ok=True, data={"blob": result_blob})
+        if topic == ERROR_TOPIC:
+            return QueryResult(ok=False, error="intentional interop RPC failure")
+        if topic == STREAM_STATUS_TOPIC:
+            probe_id = str(params.get("probe_id") or "")
+            return QueryResult(
+                ok=True,
+                data=self.stream_records.get(
+                    probe_id,
+                    {
+                        "probe_id": probe_id,
+                        "started": False,
+                        "completed": False,
+                        "cancelled": False,
+                    },
+                ),
+            )
         if topic == AuthMethods.PAIRING_EXCHANGE:
             code = str(params.get("code") or "")
             return QueryResult(
@@ -331,6 +435,53 @@ class InteropBus:
                 },
             )
         return QueryResult(ok=False, error=f"Unhandled interop bus topic {topic}")
+
+    async def stream_request(
+        self, topic: str, payload: Any = None, **kwargs: Any
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Yield deterministic chunks and expose remote cancellation evidence."""
+
+        if topic != OrchestratorMethods.STREAM_INFER_CHAT:
+            raise RuntimeError(f"Unhandled interop stream topic {topic}")
+        params = (
+            payload.model_dump(mode="json")
+            if hasattr(payload, "model_dump")
+            else payload
+            if isinstance(payload, dict)
+            else {}
+        )
+        probe_id = str(params.get("probe_id") or kwargs.get("correlation_id") or "stream")
+        mode = str(params.get("mode") or "complete")
+        record = {
+            "probe_id": probe_id,
+            "started": True,
+            "completed": False,
+            "cancelled": False,
+            "chunk_count": 0,
+        }
+        self.stream_records[probe_id] = record
+        try:
+            record["chunk_count"] += 1
+            yield {
+                "kind": "assistant.delta",
+                "probe_id": probe_id,
+                "sequence": 0,
+                "delta": "first",
+            }
+            if mode == "cancel":
+                await asyncio.Event().wait()
+            record["chunk_count"] += 1
+            yield {
+                "kind": "assistant.delta",
+                "probe_id": probe_id,
+                "sequence": 1,
+                "delta": "second",
+                "final": True,
+            }
+            record["completed"] = True
+        except asyncio.CancelledError:
+            record["cancelled"] = True
+            raise
 
     async def publish(self, topic: str, payload: Any = None, **kwargs: Any) -> None:
         self.publish_records.append(
@@ -454,6 +605,8 @@ def build_ready_payload(
         "brokerUrl": broker_url,
         "expectedStablePeerId": "python-gateway-g009",
         "localStablePeerId": "browser-g009",
+        "localSignalingId": BROWSER_SIGNALING_IDS[lane],
+        "expectedNegotiationRole": "offerer" if lane in {"direct", "turn"} else "answerer",
         "nodeName": "G009 Python Gateway",
         "stunServers": stun_servers,
         "turnServers": turn_servers,
@@ -470,6 +623,10 @@ def build_ready_payload(
         "mutationCountTopic": MUTATION_COUNT_TOPIC,
         "mutationStartedTopic": MUTATION_STARTED_TOPIC,
         "revokeTopic": REVOKE_TOPIC,
+        "largeEchoTopic": LARGE_ECHO_TOPIC,
+        "errorTopic": ERROR_TOPIC,
+        "streamTopic": OrchestratorMethods.STREAM_INFER_CHAT,
+        "streamStatusTopic": STREAM_STATUS_TOPIC,
         "timeoutMs": int(timeout_seconds * 1000),
         "gatewayHttpApiEnabled": False,
         "gatewayHttpReachable": gateway_http_reachable,
@@ -490,6 +647,7 @@ def build_gateway_report(
     wrong_correlation_interested: bool,
     wildcard_interested: bool,
     revoked_reconnect_failures: int,
+    manifest_sent: bool,
 ) -> dict[str, Any]:
     """Build the redacted Python-peer report consumed by the aggregate scanner."""
     return {
@@ -513,6 +671,9 @@ def build_gateway_report(
         "mutationRecords": bus.mutation_records,
         "revoked": bus.revoked,
         "reconnectEvidence": {"revokedReconnectFailuresObserved": revoked_reconnect_failures},
+        "manifestSent": manifest_sent,
+        "largeRpcRecords": bus.large_rpc_records,
+        "streamRecords": bus.stream_records,
         "requests": bus.requests,
         "publishes": bus.publish_records,
         "diagnostics": diagnostics,
@@ -583,6 +744,7 @@ async def main() -> int:
         event_topic_authorizer=lambda _peer, topic, _identity: topic in allowed_event_topics,
         outbound_ice_candidate_allowed=non_host_ice_candidate if args.lane == "stun" else None,
     )
+    rtc._peer_id = PYTHON_SIGNALING_IDS[args.lane]  # noqa: SLF001
     rtc.set_mesh_identity("python-gateway-g009", "G009 Python Gateway")
 
     async def _send_mutation_started(started: dict[str, Any]) -> None:
@@ -651,6 +813,7 @@ async def main() -> int:
     wrong_corr_interest = False
     wildcard_interest = False
     revoked_reconnect_failures = 0
+    manifest_sent = False
     deadline = time.monotonic() + args.timeout
     while time.monotonic() < deadline and not done_path.exists():
         for error in rtc.get_diagnostics().recent_errors:
@@ -659,6 +822,13 @@ async def main() -> int:
         for peer in rtc.get_connected_peers():
             stable = str(peer.get("stable_peer_id") or "")
             if stable == "browser-g009" and peer.get("connection_state") == "connected":
+                if not manifest_sent:
+                    manifest_sent = await rtc.send_to_peer_async(
+                        stable,
+                        json.dumps(
+                            registry.legacy_manifest("python-gateway-g009", "G009 Python Gateway")
+                        ),
+                    )
                 if not event_sent and rtc.event_subscriptions.is_interested(
                     stable, SAFE_EVENT_TOPIC, f"g009-corr-{args.lane}"
                 ):
@@ -723,6 +893,7 @@ async def main() -> int:
             wrong_correlation_interested=wrong_corr_interest,
             wildcard_interested=wildcard_interest,
             revoked_reconnect_failures=revoked_reconnect_failures,
+            manifest_sent=manifest_sent,
         ),
     )
     await rtc.close()

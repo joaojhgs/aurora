@@ -1,14 +1,19 @@
 {
   "assertions": {
     "authorizedPeerCount": 0,
+    "errorParity": true,
     "eventOverDataChannel": true,
     "eventSentByPython": true,
+    "fragmented512KiBRpc": true,
+    "manifestExchange": true,
     "mutationAtMostOnce": true,
     "mutationUncertainLossWindow": true,
+    "negotiationDirection": true,
     "reconnectWithoutSas": true,
     "registryReadOverDataChannel": true,
     "revokedCredentialFailsClosed": true,
     "rtcStarted": true,
+    "streamCompletionAndCancel": true,
     "ttsEventOverDataChannel": true,
     "ttsEventSentByPython": true,
     "wildcardDelivered": false,
@@ -46,7 +51,8 @@
     "browserHttpFetchCalls": [],
     "gatewayApiEnabled": false,
     "gatewayHttpReachable": false,
-    "noHttpFetchTransportUsed": true
+    "noHttpFetchTransportUsed": true,
+    "requiredEvidencePassed": true
   },
   "iceCandidatePolicy": {
     "source": "harness browser and Python signaling candidate/SDP filters",
@@ -58,9 +64,9 @@
     "executionCountAtMostOnce": true,
     "mutationCount": {
       "execution_count": 1,
-      "mutation_id": "g009-stun-ms26b11z"
+      "mutation_id": "g009-stun-ms33qcox"
     },
-    "mutationId": "g009-stun-ms26b11z",
+    "mutationId": "g009-stun-ms33qcox",
     "mutationResult": {
       "message": "g009 uncertain transport loss before mutation response settled",
       "settled": "rejected",
@@ -69,7 +75,7 @@
     "mutationStartedEvent": {
       "audit": {
         "busTopic": "G009Interop.MutationStarted",
-        "correlationId": "g009-stun-ms26b11z",
+        "correlationId": "g009-stun-ms33qcox",
         "eventKind": "mutation.started",
         "method": null,
         "peerId": "python-gateway-g009",
@@ -91,14 +97,14 @@
       "kind": "mutation.started",
       "method": null,
       "payload": {
-        "correlation_id": "g009-stun-ms26b11z",
+        "correlation_id": "g009-stun-ms33qcox",
         "execution_count": 1,
         "kind": "mutation.started",
-        "mutation_id": "g009-stun-ms26b11z",
-        "request_id": "webrtc-md81olis6c9-ms26b11z",
+        "mutation_id": "g009-stun-ms33qcox",
+        "request_id": "webrtc-lzq432n7z6n-ms33qcox",
         "timing_category": "started_before_response_delay"
       },
-      "receivedAt": "2026-07-26T19:10:40.202Z",
+      "receivedAt": "2026-07-27T10:46:22.454Z",
       "redaction": {
         "redactedFields": [],
         "secretsRedacted": true,
@@ -111,7 +117,7 @@
     "uncertainLossWindow": {
       "browserResultCategory": "transport_lost_before_response",
       "disconnectBeforeResponseSettled": true,
-      "requestStartedToDisconnectMs": 52,
+      "requestStartedToDisconnectMs": 53,
       "responseSettledBeforeDisconnect": false,
       "startedAckBeforeDisconnect": true
     }
@@ -119,6 +125,86 @@
   "pathAcceptanceReason": "selected-reflexive-pair-with-configured-stun-proof",
   "pathCategory": "srflx",
   "pathCategoryAccepted": true,
+  "protocolInteropEvidence": {
+    "error": {
+      "code": "unknown",
+      "message": "intentional interop RPC failure",
+      "rejected": true
+    },
+    "errorPassed": true,
+    "expectedNegotiationRole": "answerer",
+    "largeRpc": {
+      "expectedResultSha256": "ada7d34299a07770b1d2499502a9458b37bc5da01a577d93a2f0e884734af4cc",
+      "receivedFragmentCount": 33,
+      "requestBytes": 524288,
+      "requestSha256": "ec8bb338811bbf800a8b5e507d06e08a1d9d05bde74294f6f7388f3bbfba82e5",
+      "resultBytes": 524288,
+      "resultSha256": "ada7d34299a07770b1d2499502a9458b37bc5da01a577d93a2f0e884734af4cc",
+      "sentFragmentCount": 33
+    },
+    "largeRpcPassed": true,
+    "manifest": {
+      "methodCount": 16,
+      "nodeName": "G009 Python Gateway",
+      "peerId": "python-gateway-g009",
+      "serviceCount": 6
+    },
+    "manifestPassed": true,
+    "negotiationDirectionPassed": true,
+    "observedNegotiationRole": "answerer",
+    "pythonCancelledStream": {
+      "cancelled": true,
+      "chunk_count": 1,
+      "completed": false,
+      "probe_id": "g009-stream-cancel-stun",
+      "started": true
+    },
+    "pythonCompletedStream": {
+      "cancelled": false,
+      "chunk_count": 2,
+      "completed": true,
+      "probe_id": "g009-stream-complete-stun",
+      "started": true
+    },
+    "pythonLargeRpc": {
+      "request_bytes": 524288,
+      "request_sha256": "ec8bb338811bbf800a8b5e507d06e08a1d9d05bde74294f6f7388f3bbfba82e5",
+      "result_bytes": 524288,
+      "result_sha256": "ada7d34299a07770b1d2499502a9458b37bc5da01a577d93a2f0e884734af4cc"
+    },
+    "rpcStream": {
+      "cancelledClientError": "Mesh RPC request timed out",
+      "cancelledFirstChunk": {
+        "delta": "first",
+        "kind": "assistant.delta",
+        "probe_id": "g009-stream-cancel-stun",
+        "sequence": 0
+      },
+      "completedChunks": [
+        {
+          "delta": "first",
+          "kind": "assistant.delta",
+          "probe_id": "g009-stream-complete-stun",
+          "sequence": 0
+        },
+        {
+          "delta": "second",
+          "final": true,
+          "kind": "assistant.delta",
+          "probe_id": "g009-stream-complete-stun",
+          "sequence": 1
+        }
+      ],
+      "pythonStatus": {
+        "cancelled": true,
+        "chunk_count": 1,
+        "completed": false,
+        "probe_id": "g009-stream-cancel-stun",
+        "started": true
+      }
+    },
+    "rpcStreamPassed": true
+  },
   "pythonReport": "reports/webrtc-interop/stun/python-gateway-report.json",
   "reconnectEvidence": {
     "authorizedWithoutSas": true,
@@ -172,7 +258,7 @@
   },
   "status": "passed",
   "timings": {
-    "browserDurationMs": 4837,
-    "pythonDurationMs": 5538
+    "browserDurationMs": 5239,
+    "pythonDurationMs": 7545
   }
 }
