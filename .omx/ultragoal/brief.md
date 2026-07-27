@@ -674,6 +674,7 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 19. Forced TURN relay passes for browser, desktop Tauri, Android, and iOS before public support claims.
 20. Seeded tokens/passwords/nonces/audio markers are absent from logs, diagnostics, browser storage, URL query strings, and support artifacts.
 21. Existing desktop-local, HTTP web, HTTP thin, SDK conformance, Tauri boundary, Python mesh, and documentation checks remain green.
+22. The packaged Android System WebView and standalone Android mobile browser each pair with an external Python `RTCClient` while the Aurora HTTP application API is disabled, and both pass the shared negotiation-direction, pairing, manifest, structured-error, 512 KiB fragmentation, stream/cancel, scoped-event/TTS, reconnect, uncertain-mutation, revocation, and redaction assertions inside one consolidated Android CI check.
 
 ## 10. Risks and mitigations
 

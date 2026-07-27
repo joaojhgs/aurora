@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-07-25T20:04:19.853Z",
-  "updatedAt": "2026-07-26T09:04:25.303Z",
+  "updatedAt": "2026-07-27T11:01:28.780Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -106,11 +106,11 @@
     {
       "id": "G009-cross-language-interoperability-roll",
       "title": "Cross-language interoperability, rollout, and final quality gates",
-      "objective": "Add real browser-to-Python interop with the Python HTTP API disabled, direct/STUN/forced-TURN coverage, reconnect/revocation/mutation-no-replay/security tests, docs/status updates, full affected regression suites, changed-files cleanup, independent code review, and architect invariant proof. Exit only when all supported claims are evidence-backed and final Ultragoal quality gate is clean.",
+      "objective": "Add real browser-to-Python interop with the Python HTTP API disabled, direct/STUN/forced-TURN coverage, reconnect/revocation/mutation-no-replay/security tests, packaged Android System WebView and standalone Android mobile-browser interoperability with an external Python peer using the shared browser assertions, docs/status updates, full affected regression suites, changed-files cleanup, independent code review, and architect invariant proof. Exit only when all supported claims are evidence-backed and final Ultragoal quality gate is clean.",
       "status": "in_progress",
       "attempt": 1,
       "createdAt": "2026-07-25T20:04:19.853Z",
-      "updatedAt": "2026-07-26T09:04:25.303Z",
+      "updatedAt": "2026-07-27T11:01:28.780Z",
       "startedAt": "2026-07-26T09:04:25.303Z"
     }
   ],
