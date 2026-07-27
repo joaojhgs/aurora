@@ -65,9 +65,17 @@ def test_mesh_gap_harness_covers_required_modes_scenarios_and_artifacts(tmp_path
         assert report.summary["status"] == "pass"
         assert report.summary["dependency_gap_modes"] == []
         assert all(result["status"] == "pass" for result in process_results)
+        local_process_scenarios = {
+            "safe_local_tool",
+            "dangerous_local_approval",
+        }
         assert all(
             result["evidence"]["transport_path"]
-            == "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
+            == (
+                "LocalBus.request"
+                if result["scenario_id"] in local_process_scenarios
+                else "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
+            )
             for result in process_results
         )
 
