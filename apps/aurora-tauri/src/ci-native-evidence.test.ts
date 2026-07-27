@@ -126,6 +126,9 @@ describe('Tauri CI native evidence contract', () => {
       expect(androidWorkflow, `Android AAB CI must install Rust target ${target}`).toContain(target)
     }
     expect(packageJson.scripts['android:webrtc:interop']).toContain('android-python-webrtc.e2e.test.ts')
+    expect(packageJson.scripts['android:webrtc:interop']).toContain(
+      'android-browser-python-webrtc.e2e.test.ts',
+    )
     expect(packageJson.scripts['android:build:thin:apk']).not.toMatch(/python|uv/i)
     expect(packageJson.scripts['android:build:thin:aab']).not.toMatch(/python|uv/i)
     expect(androidWorkflow).toContain('Set up Python interop peer')
@@ -133,11 +136,15 @@ describe('Tauri CI native evidence contract', () => {
     expect(androidWorkflow).toContain('uv sync --extra gateway')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:smoke')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:webrtc:interop')
-    expect(androidWorkflow).toContain('apps/aurora-tauri/reports/webrtc-interop/android-webview/')
+    expect(androidWorkflow).toContain(
+      'apps/aurora-tauri/reports/webrtc-interop/',
+    )
     expect(androidWorkflow).toContain('api-level: 30')
     expect(androidWorkflow).toContain('api-level: 35')
     expect(androidWorkflow).toContain('Android 11 baseline WebView and native payload E2E')
-    expect(androidWorkflow).toContain('Android 15 current WebView, native payload, and Python peer WebRTC E2E')
+    expect(androidWorkflow).toContain(
+      'Android 15 current WebView, mobile browser, native payload, and Python peer WebRTC E2E',
+    )
     expect(iosBaselineWorkflow).toContain('runs-on: macos-latest')
     expect(iosBaselineWorkflow).toContain('CODE_SIGNING_ALLOWED: "NO"')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:build:thin:simulator')

@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import crypto from 'node:crypto'
+import dgram from 'node:dgram'
 import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import http from 'node:http'
@@ -11,7 +12,8 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
-  candidatePairMatchesLane,
+  assertInteropBrowserResult,
+  forbiddenInteropTransportRequests,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
 
@@ -19,6 +21,7 @@ type BrowserConfig = {
   lane: string
   brokerUrl: string
   expectedStablePeerId: string
+  expectedNegotiationRole: 'offerer' | 'answerer'
   timeoutMs: number
   [key: string]: unknown
 }
@@ -48,10 +51,31 @@ const browserEntry = resolve(
   repoRoot,
   'tests/e2e/webrtc_interop/browser-entry.ts',
 )
+const mqttEntry = resolve(
+  repoRoot,
+  'tests/e2e/webrtc_interop/mqtt-entry.ts',
+)
+const cryptoWorkerEntry = resolve(
+  repoRoot,
+  'packages/aurora-sdk/src/webrtc/crypto-worker.ts',
+)
 const appId = process.env.AURORA_ANDROID_APP_ID ?? 'dev.aurora.desktop'
 const artifactDir =
   process.env.AURORA_ANDROID_WEBRTC_ARTIFACT_DIR ??
   resolve(appRoot, 'reports/webrtc-interop/android-webview')
+const interopTimeoutMs = Number(
+  process.env.AURORA_ANDROID_WEBRTC_TIMEOUT_MS ?? 180_000,
+)
+const interopLane = (() => {
+  const lane = process.env.AURORA_ANDROID_WEBRTC_LANE ?? 'turn'
+  if (lane !== 'direct' && lane !== 'stun' && lane !== 'turn') {
+    throw new Error(
+      `AURORA_ANDROID_WEBRTC_LANE must be direct, stun, or turn; received ${lane}`,
+    )
+  }
+  return lane
+})()
+const testTimeoutMs = Math.max(480_000, interopTimeoutMs + 120_000)
 
 let cleanup: (() => Promise<void>) | undefined
 
@@ -138,64 +162,22 @@ describe('Android thin-shell WebRTC interoperability', () => {
           resources.timeoutMs,
         )
 
-        const forbiddenHttp = forbiddenHttpRequests(
+        const forbiddenHttp = forbiddenInteropTransportRequests(
           networkRequests,
           resources.deviceHarnessUrl,
           ready.brokerUrl,
         )
 
-        expect(browserResult.authorized).toBe(true)
-        expect(
-          candidatePairMatchesLane('turn', browserResult.selectedCandidatePair),
-        ).toBe(true)
-        expect(browserResult.connectedStablePeerId).toBe(
-          ready.expectedStablePeerId,
-        )
-        expect(browserResult.selectedSignalingBrokerOrigin).toBeTruthy()
-        expect(browserResult.registryModuleCount).toBeGreaterThan(0)
-        expect(browserResult.pendingCallCount).toBe(0)
-        expect(browserResult.event).toBeTruthy()
-        expect(browserResult.ttsEvent).toBeTruthy()
-        expect(browserResult.scopedEventEvidence).toEqual({
-          wrongCorrelationDelivered: false,
-          wildcardDelivered: false,
+        assertInteropBrowserResult(browserResult, {
+          lane: interopLane,
+          expectedStablePeerId: ready.expectedStablePeerId,
+          expectedNegotiationRole: ready.expectedNegotiationRole,
         })
-        expect(browserResult.reconnectEvidence).toMatchObject({
-          authorizedWithoutSas: true,
-          pendingPairingPrompts: 0,
-        })
-        expect(
-          browserResult.reconnectEvidence.registryModuleCount,
-        ).toBeGreaterThan(0)
-        expect(
-          browserResult.mutationEvidence.uncertainLossWindow
-            .startedAckBeforeDisconnect,
-        ).toBe(true)
-        expect(
-          browserResult.mutationEvidence.uncertainLossWindow
-            .disconnectBeforeResponseSettled,
-        ).toBe(true)
-        expect(
-          browserResult.mutationEvidence.executionCountAtMostOnce,
-        ).toBe(true)
-        expect(
-          browserResult.mutationEvidence
-            .pairingPromptsDuringMutationReconnect,
-        ).toBe(0)
-        expect(
-          browserResult.revocationEvidence.routeAuthorizedAfterRevocation,
-        ).toBe(false)
-        expect(
-          browserResult.revocationEvidence.pendingPairingPrompts,
-        ).toBeGreaterThanOrEqual(1)
-        expect(browserResult.hostileCaseEvidence.failClosedObserved).toBe(true)
-        expect(browserResult.noHttpFetchTransportUsed).toBe(true)
-        expect(browserResult.httpFetchCalls).toEqual([])
         expect(forbiddenHttp).toEqual([])
         expect(consoleErrors).toEqual([])
 
         await writeJson(resources.browserReportPath, {
-          lane: 'turn',
+          lane: interopLane,
           browserName: 'android-webview',
           status: 'passed',
           durationMs: Date.now() - started,
@@ -247,7 +229,7 @@ describe('Android thin-shell WebRTC interoperability', () => {
             '--out',
             resources.finalReportPath,
             '--lane',
-            'turn',
+            interopLane,
           ],
           repoRoot,
         )
@@ -258,14 +240,13 @@ describe('Android thin-shell WebRTC interoperability', () => {
         )
         expect(aggregate).toMatchObject({
           status: 'passed',
-          lane: 'turn',
-          pathCategory: 'relay',
+          lane: interopLane,
           pathCategoryAccepted: true,
           secretsRedacted: true,
         })
       } catch (error) {
         await writeJson(resources.browserReportPath, {
-          lane: 'turn',
+          lane: interopLane,
           browserName: 'android-webview',
           status: 'failed',
           durationMs: Date.now() - started,
@@ -282,23 +263,32 @@ describe('Android thin-shell WebRTC interoperability', () => {
         throw error
       }
     },
-    480_000,
+    testTimeoutMs,
   )
 })
 
 async function createInteropResources() {
-  const timeoutMs = Number(
-    process.env.AURORA_ANDROID_WEBRTC_TIMEOUT_MS ?? 180_000,
-  )
+  const timeoutMs = interopTimeoutMs
   const roomSecret = crypto.randomBytes(32).toString('base64url')
   const token = `android.${crypto.randomBytes(24).toString('base64url')}`
   const room = `android-webview-${process.pid}-${Date.now().toString(36)}`
+  const turnServer =
+    interopLane === 'turn'
+      ? (process.env.AURORA_ANDROID_WEBRTC_TURN_URL ??
+        `turn:${await resolveHostIpv4()}:3478?transport=tcp`)
+      : undefined
   const readyPath = join(artifactDir, 'gateway-ready.json')
   const donePath = join(artifactDir, 'android-done.json')
   const pythonReportPath = join(artifactDir, 'python-gateway-report.json')
   const browserReportPath = join(artifactDir, 'android-webview-report.json')
   const finalReportPath = join(artifactDir, 'report.json')
   const bundlePath = join(artifactDir, 'android-webview-bundle.js')
+  const mqttBundlePath = join(artifactDir, 'mqtt-bundle.mjs')
+  const legacyMqttBundlePath = join(artifactDir, 'mqtt-bundle.js')
+  const cryptoWorkerBundlePath = join(
+    artifactDir,
+    'crypto-worker-bundle.js',
+  )
   const transientPaths = [
     readyPath,
     donePath,
@@ -306,6 +296,9 @@ async function createInteropResources() {
     browserReportPath,
     finalReportPath,
     bundlePath,
+    mqttBundlePath,
+    legacyMqttBundlePath,
+    cryptoWorkerBundlePath,
   ]
   await fs.mkdir(artifactDir, { recursive: true })
   await Promise.all(
@@ -374,23 +367,72 @@ async function createInteropResources() {
         'esbuild',
         browserEntry,
         '--bundle',
-        '--format=iife',
-        '--global-name=AuroraInteropBundle',
+        '--format=esm',
         `--outfile=${bundlePath}`,
         '--platform=browser',
         '--target=chrome83',
+        '--external:mqtt',
+        '--minify',
+        '--log-level=silent',
+      ],
+      repoRoot,
+    )
+    run(
+      'pnpm',
+      [
+        'exec',
+        'esbuild',
+        mqttEntry,
+        '--bundle',
+        '--format=esm',
+        `--outfile=${mqttBundlePath}`,
+        '--platform=browser',
+        '--target=chrome83',
+        '--minify',
+        '--log-level=silent',
+      ],
+      repoRoot,
+    )
+    run(
+      'pnpm',
+      [
+        'exec',
+        'esbuild',
+        cryptoWorkerEntry,
+        '--bundle',
+        '--format=iife',
+        `--outfile=${cryptoWorkerBundlePath}`,
+        '--platform=browser',
+        '--target=chrome83',
+        '--minify',
         '--log-level=silent',
       ],
       repoRoot,
     )
 
     server = http.createServer(async (request, response) => {
+      if (request.url === '/mqtt-bundle.mjs') {
+        response.writeHead(200, {
+          'content-type': 'application/javascript',
+          'cache-control': 'no-store',
+        })
+        response.end(await fs.readFile(mqttBundlePath))
+        return
+      }
       if (request.url === '/android-webview-bundle.js') {
         response.writeHead(200, {
           'content-type': 'application/javascript',
           'cache-control': 'no-store',
         })
         response.end(await fs.readFile(bundlePath))
+        return
+      }
+      if (request.url === '/crypto-worker-bundle.js') {
+        response.writeHead(200, {
+          'content-type': 'application/javascript',
+          'cache-control': 'no-store',
+        })
+        response.end(await fs.readFile(cryptoWorkerBundlePath))
         return
       }
       if (request.url === '/favicon.ico') {
@@ -403,7 +445,7 @@ async function createInteropResources() {
         'cache-control': 'no-store',
       })
       response.end(
-        '<!doctype html><html><head><meta charset="utf-8"><title>Aurora Android WebRTC Interop</title></head><body><script src="/android-webview-bundle.js"></script></body></html>',
+        '<!doctype html><html><head><meta charset="utf-8"><title>Aurora Android WebRTC Interop</title></head><body><script type="module" src="/android-webview-bundle.js"></script></body></html>',
       )
     })
     await new Promise<void>((resolvePromise) =>
@@ -417,6 +459,9 @@ async function createInteropResources() {
     hostPort = address.port
     run('adb', ['wait-for-device'])
     ensureAndroidAppInstalled()
+    run('adb', ['shell', 'svc', 'power', 'stayon', 'true'])
+    run('adb', ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
+    run('adb', ['shell', 'wm', 'dismiss-keyguard'])
     for (const port of [hostPort, 9001, 3478]) {
       run('adb', ['reverse', `tcp:${port}`, `tcp:${port}`])
       reversedPorts.add(port)
@@ -432,29 +477,31 @@ async function createInteropResources() {
       '1',
     ])
 
+    const gatewayArgs = [
+      'run',
+      'python',
+      gatewayScript,
+      '--lane',
+      interopLane,
+      '--ready',
+      readyPath,
+      '--done',
+      donePath,
+      '--report',
+      pythonReportPath,
+      '--broker',
+      'ws://127.0.0.1:9001/mqtt',
+      '--room',
+      room,
+      '--timeout',
+      String(timeoutMs / 1000),
+    ]
+    if (turnServer !== undefined) {
+      gatewayArgs.push('--turn', turnServer)
+    }
     pythonPeer = spawn(
       'uv',
-      [
-        'run',
-        'python',
-        gatewayScript,
-        '--lane',
-        'turn',
-        '--ready',
-        readyPath,
-        '--done',
-        donePath,
-        '--report',
-        pythonReportPath,
-        '--broker',
-        'ws://127.0.0.1:9001/mqtt',
-        '--room',
-        room,
-        '--turn',
-        'turn:127.0.0.1:3478?transport=tcp',
-        '--timeout',
-        String(timeoutMs / 1000),
-      ],
+      gatewayArgs,
       {
         cwd: repoRoot,
         env: {
@@ -492,6 +539,31 @@ async function createInteropResources() {
     await close()
     throw error
   }
+}
+
+async function resolveHostIpv4(): Promise<string> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const socket = dgram.createSocket('udp4')
+    const closeWithError = (error: Error) => {
+      socket.close()
+      rejectPromise(error)
+    }
+    socket.once('error', closeWithError)
+    socket.connect(9, '192.0.2.1', () => {
+      const address = socket.address()
+      socket.off('error', closeWithError)
+      socket.close()
+      if (typeof address === 'string' || !address.address) {
+        rejectPromise(
+          new Error(
+            'Could not resolve a host IPv4 address for Android TURN interop',
+          ),
+        )
+        return
+      }
+      resolvePromise(address.address)
+    })
+  })
 }
 
 function ensureAndroidAppInstalled(): void {
@@ -536,9 +608,9 @@ async function connectAndroidWebView(
   packageName: string,
   onEvent: (message: CdpMessage) => void,
 ) {
-  const deadline = Date.now() + 90_000
+  const deadline = Date.now() + Math.max(90_000, interopTimeoutMs)
   while (Date.now() < deadline) {
-    const pid = adbOutput(['shell', 'pidof', packageName])
+    const pid = adbOutputOrEmpty(['shell', 'pidof', packageName])
       .trim()
       .split(/\s+/)[0]
     if (!pid) {
@@ -547,7 +619,7 @@ async function connectAndroidWebView(
     }
     const socketName = `webview_devtools_remote_${pid}`
     if (
-      !adbOutput(['shell', 'cat', '/proc/net/unix']).includes(
+      !adbOutputOrEmpty(['shell', 'cat', '/proc/net/unix']).includes(
         `@${socketName}`,
       )
     ) {
@@ -596,6 +668,10 @@ async function connectCdp(
   url: string,
   onEvent: (message: CdpMessage) => void,
 ) {
+  const commandTimeoutMs = Math.min(
+    120_000,
+    Math.max(30_000, Math.floor(interopTimeoutMs / 5)),
+  )
   const socket = new WebSocket(url)
   const pending = new Map<
     number,
@@ -639,7 +715,7 @@ async function connectCdp(
     send(
       method: string,
       params: Record<string, unknown> = {},
-      timeoutMs = 30_000,
+      timeoutMs = commandTimeoutMs,
     ): Promise<CdpMessage> {
       const id = ++sequence
       return new Promise((resolvePromise, rejectPromise) => {
@@ -692,54 +768,98 @@ async function evaluateInterop(
   roomSecret: string,
   timeoutMs: number,
 ): Promise<InteropBrowserResult> {
-  const expression = `globalThis.runAuroraWebRtcInterop(${JSON.stringify({
+  const outcomeKey = `__auroraWebRtcInteropOutcome_${crypto
+    .randomBytes(8)
+    .toString('hex')}`
+  const expression = `(() => {
+    const outcomeKey = ${JSON.stringify(outcomeKey)};
+    globalThis[outcomeKey] = { status: 'running' };
+    Promise.resolve(globalThis.runAuroraWebRtcInterop(${JSON.stringify({
     ...config,
     roomSecret,
-  })})`
-  const response = await client.send(
+  })})).then(
+      (result) => { globalThis[outcomeKey] = { status: 'passed', result }; },
+      (error) => {
+        globalThis[outcomeKey] = {
+          status: 'failed',
+          error: {
+            name: error?.name ?? 'Error',
+            message: error?.message ?? String(error),
+            stack: error?.stack ?? ''
+          }
+        };
+      }
+    );
+    return true;
+  })()`
+  await client.send(
     'Runtime.evaluate',
     {
       expression,
-      awaitPromise: true,
       returnByValue: true,
     },
-    timeoutMs + 30_000,
   )
-  const exception = response.result?.exceptionDetails
-  if (exception) {
-    throw new Error(
-      String(
-        exception.exception?.description ??
-          exception.text ??
-          'Android WebView interop evaluation failed',
-      ),
-    )
-  }
-  const value = response.result?.result?.value
-  if (!value || typeof value !== 'object') {
-    throw new Error('Android WebView interop returned no structured result')
-  }
-  return value as InteropBrowserResult
-}
 
-function forbiddenHttpRequests(
-  requests: NetworkRequest[],
-  harnessUrl: string,
-  brokerUrl: string,
-): NetworkRequest[] {
-  const harness = new URL(harnessUrl)
-  return requests.filter((request) => {
-    if (request.url.startsWith(`blob:${harness.origin}/`)) return false
-    try {
-      const url = new URL(request.url)
-      return !(
-        (url.hostname === harness.hostname && url.port === harness.port) ||
-        request.url.startsWith(brokerUrl)
-      )
-    } catch {
-      return true
+  const deadline = Date.now() + timeoutMs
+  let lastProgress: unknown = null
+  try {
+    while (Date.now() < deadline) {
+      const response = await client.send('Runtime.evaluate', {
+        expression: `JSON.stringify({
+          outcome: globalThis[${JSON.stringify(outcomeKey)}],
+          progress: globalThis.__auroraWebRtcInteropProgress ?? null,
+          signaling:
+            typeof globalThis.__auroraWebRtcInteropSignalingDiagnostics === 'function'
+              ? globalThis.__auroraWebRtcInteropSignalingDiagnostics()
+              : null,
+          peerConnection:
+            globalThis.__auroraWebRtcInteropPeerConnectionDiagnostics ?? null
+        })`,
+        returnByValue: true,
+      })
+      const value = response.result?.result?.value
+      if (typeof value !== 'string') {
+        throw new Error(
+          'Android WebView interop returned no structured poll result',
+        )
+      }
+      const polled = JSON.parse(value) as {
+        outcome?: {
+          status?: string
+          result?: InteropBrowserResult
+          error?: { message?: string; stack?: string }
+        }
+        progress?: unknown
+        signaling?: unknown
+        peerConnection?: unknown
+      }
+      lastProgress = {
+        progress: polled.progress,
+        signaling: polled.signaling,
+        peerConnection: polled.peerConnection,
+      }
+      if (polled.outcome?.status === 'passed' && polled.outcome.result) {
+        return polled.outcome.result
+      }
+      if (polled.outcome?.status === 'failed') {
+        throw new Error(
+          polled.outcome.error?.stack ||
+            polled.outcome.error?.message ||
+            'Android WebView interop evaluation failed',
+        )
+      }
+      await sleep(500)
     }
-  })
+    throw new Error(
+      `Timed out waiting for Android WebView interop result; last progress: ${JSON.stringify(lastProgress)}`,
+    )
+  } finally {
+    await client
+      .send('Runtime.evaluate', {
+        expression: `delete globalThis[${JSON.stringify(outcomeKey)}]`,
+      })
+      .catch(() => undefined)
+  }
 }
 
 async function waitForJson<T>(
@@ -832,6 +952,12 @@ function adbOutput(args: string[]): string {
     )
   }
   return result.stdout
+}
+
+function adbOutputOrEmpty(args: string[]): string {
+  const result = spawnSync('adb', args, { encoding: 'utf8' })
+  if (result.error) throw result.error
+  return result.status === 0 ? result.stdout : ''
 }
 
 function run(command: string, args: string[], cwd = appRoot): void {

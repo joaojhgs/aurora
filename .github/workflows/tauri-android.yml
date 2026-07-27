@@ -161,7 +161,7 @@ jobs:
           emulator-boot-timeout: 1200
           script: pnpm --filter @aurora/tauri-ui android:smoke
 
-      - name: Android 15 current WebView, native payload, and Python peer WebRTC E2E
+      - name: Android 15 current WebView, mobile browser, native payload, and Python peer WebRTC E2E
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -172,10 +172,10 @@ jobs:
             pnpm --filter @aurora/tauri-ui android:smoke
             pnpm --filter @aurora/tauri-ui android:webrtc:interop
 
-      - name: Upload Android WebView to Python WebRTC evidence
+      - name: Upload Android to Python WebRTC evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aurora-android-python-webrtc-interop
-          path: apps/aurora-tauri/reports/webrtc-interop/android-webview/
+          path: apps/aurora-tauri/reports/webrtc-interop/
           if-no-files-found: warn
