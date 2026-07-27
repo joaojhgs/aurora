@@ -27,7 +27,7 @@ jobs:
   macos-tauri-ios:
     name: macOS Xcode Tauri iOS init and build
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -110,8 +110,12 @@ jobs:
       - name: Install, launch, and screenshot the thin app in an iOS simulator
         run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
 
-      - name: Pair iOS MobileSafari with the external Python peer over WebRTC
-        run: pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser
+      - name: Pair iOS MobileSafari and packaged WKWebView with the external Python peer over WebRTC
+        env:
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
 
       - name: Smoke invoke Aurora App Intent handoff
         run: |
@@ -176,10 +180,12 @@ jobs:
             apps/aurora-tauri/reports/ios-simulator-smoke.log
           if-no-files-found: warn
 
-      - name: Upload iOS mobile-browser to Python WebRTC evidence
+      - name: Upload iOS WebView and mobile-browser to Python WebRTC evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-ios-mobile-browser-python-webrtc-interop
-          path: apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/
+          name: aurora-ios-python-webrtc-interop
+          path: |
+            apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/
+            apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview/
           if-no-files-found: warn

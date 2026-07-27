@@ -37,11 +37,20 @@ AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS="wss://signaling.example" \
 AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only \
 pnpm --filter @aurora/tauri-ui ios:build:thin:simulator
 
-# iOS simulator MobileSafari ↔ external Python peer, on macOS/Xcode
-pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser
+# iOS simulator MobileSafari + packaged WKWebView ↔ external Python peer, on macOS/Xcode
+pnpm --filter @aurora/tauri-ui ios:webrtc:interop
 ```
 
 These packages still need STUN and usually TURN URLs in the imported peer invite/profile. WSS signaling is rendezvous only; Aurora RPC, streams, cancellation, and events use the WebRTC DataChannel after negotiation.
+
+The iOS interop command is one serial E2E gate in the existing macOS workflow.
+It writes separate MobileSafari and packaged-Tauri-WKWebView reports while
+reusing the same external Python `RTCClient`, bilateral pairing, RPC/stream,
+reconnect, revocation, HTTP-disabled, and redaction assertions. The packaged
+test app embeds only the browser harness, declares no external binaries or
+resources, and is scanned for forbidden Python/sidecar paths. Passing simulator
+reports remain pending until the macOS job runs; physical-device
+direct/STUN/TURN evidence is separate.
 
 ## Thin WebRTC rollout controls
 
@@ -242,9 +251,9 @@ Required QA evidence for IOS-008:
 | Desktop local | `pnpm --filter @aurora/tauri-ui tauri dev`; `dev:smoke` in `tauri-desktop.yml` | Rust-supervised Python sidecar, loopback Gateway, secure storage/native command status, unified logs. | Dev path does not use packaged sidecar staging. |
 | Desktop packaged local | `build:bundle:desktop-local`, `build:bundle:desktop-local-minimal`, or another explicit local `build:bundle:<profile>` | Profile-specific sidecar staged into Tauri external binaries. | Local/CI scripts pass `--no-sign`; signing/notarization are release-only. |
 | Desktop packaged thin | `build:bundle:desktop-thin`; `verify:bundle:desktop-thin` | Python-free Tauri shell with mode-specific exact HTTPS Gateway and/or WSS signaling configuration and AppImage/deb artifact proof report. WSS-only packaging is supported for `webrtc-only`. | Requires the operator-managed endpoint(s) selected by mode; no local wakeword/background Python service ownership. |
-| Android | `android:init`, `android:preflight:ci`, `android:build:thin:apk`, `android:verify:thin:apk`, `android:build:thin:aab`, `android:verify:thin:aab`, `android:smoke` | Android thin APK/AAB artifact proof; native manifest payloads for assistant role, fallback entrypoints, Keystore peer credentials/proofs, biometric/admin unlock, foreground WebView mic policy, lifecycle, and device matrix. | Local emulator/physical runtime smoke is not proven without KVM/device; release AAB/signing needs keystore inputs and Play/App Distribution workflow. |
+| Android | `android:init`, `android:preflight:ci`, `android:build:thin:apk`, `android:verify:thin:apk`, `android:build:thin:aab`, `android:verify:thin:aab`, `android:smoke`, `android:webrtc:interop` | Android thin APK/AAB artifact proof; native manifest payloads for assistant role, fallback entrypoints, Keystore peer credentials/proofs, biometric/admin unlock, foreground WebView mic policy, lifecycle, and device matrix; one API 35 job runs packaged System WebView and standalone Chrome pairing against the external Python peer. | Passing KVM/physical mobile WebRTC reports remain pending; release AAB/signing needs keystore inputs and Play/App Distribution workflow. |
 | iOS thin policy/source | `ios:policy` | Shared WebView HTTP/WebRTC routing, least-privilege thin capability/overlay, device-only Keychain peer credential/proof adapter, nonsecret profile storage, and no default system-assistant claim. | Linux-safe source/policy evidence only; not a simulator/device WebRTC result. |
-| iOS build/preflight | `tauri ios init`, `ios:build:thin:simulator`, `ios:smoke:simulator`, `ios:webrtc:mobile-browser`, `tauri ios build`, `ios:preflight` | macOS/Xcode generated project and simulator build/runtime lanes for baseline plus Python-free thin overlay; MobileSafari direct WebRTC ↔ external-Python protocol evidence; App Intent/share/deep-link/file evidence when targets exist. | Requires macOS/Xcode; MobileSafari is not packaged WKWebView proof; WKWebView/STUN/TURN/physical-device smoke remains required; App Store/TestFlight dry run requires Apple credentials. |
+| iOS build/preflight | `tauri ios init`, `ios:build:thin:simulator`, `ios:smoke:simulator`, `ios:webrtc:interop`, `tauri ios build`, `ios:preflight` | macOS/Xcode generated project and simulator build/runtime lanes for baseline plus Python-free thin overlay; one serial E2E runs the complete external-Python direct-path protocol in MobileSafari and a packaged Tauri WKWebView app; App Intent/share/deep-link/file evidence runs when targets exist. | Requires macOS/Xcode; passing MobileSafari and packaged-WKWebView reports are still pending; physical-device STUN/TURN smoke remains required; App Store/TestFlight dry run requires Apple credentials. |
 
 ## Commands
 
@@ -255,6 +264,7 @@ pnpm --filter @aurora/tauri-ui ios:policy
 pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
 pnpm --filter @aurora/tauri-ui android:verify:thin:apk
 pnpm --filter @aurora/tauri-ui android:verify:thin:aab
+pnpm --filter @aurora/tauri-ui ios:webrtc:interop
 pnpm test:webrtc:interop
 pnpm test:webrtc:turn
 pnpm test:webrtc:browsers

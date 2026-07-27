@@ -6,13 +6,15 @@ import {
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process'
 import crypto from 'node:crypto'
+import { existsSync, statSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import http, {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http'
 import net from 'node:net'
-import { dirname, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -51,6 +53,22 @@ type SimulatorDevice = {
   runtime: string
 }
 
+type WkWebViewArtifactProof = {
+  checkedEntries: number
+  forbiddenMatchCount: 0
+  pythonSidecarPackaged: false
+}
+
+type IosInteropSurface = {
+  id: 'mobile-safari' | 'tauri-wkwebview'
+  testName: string
+  browserName: string
+  artifactDir: string
+  artifactPrefix: string
+  command: string
+  observation: string
+}
+
 const repoRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../..',
@@ -76,13 +94,43 @@ const cryptoWorkerEntry = resolve(
   repoRoot,
   'packages/aurora-sdk/src/webrtc/crypto-worker.ts',
 )
-const artifactDir =
-  process.env.AURORA_IOS_MOBILE_WEBRTC_ARTIFACT_DIR ??
-  resolve(appRoot, 'reports/webrtc-interop/ios-mobile-safari')
+const surfaces: IosInteropSurface[] = [
+  {
+    id: 'mobile-safari',
+    testName:
+      'pairs MobileSafari in an iOS simulator with an external Python peer without HTTP transport fallback',
+    browserName: 'ios-mobile-safari-simulator',
+    artifactDir:
+      process.env.AURORA_IOS_MOBILE_WEBRTC_ARTIFACT_DIR ??
+      resolve(
+        appRoot,
+        'reports/webrtc-interop/ios-mobile-safari',
+      ),
+    artifactPrefix: 'ios-mobile-safari',
+    command:
+      'pnpm --filter @aurora/tauri-ui ios:webrtc:interop',
+    observation:
+      'auto-running same-origin harness in MobileSafari; application fetches are instrumented inside the WebRTC runtime and the result callback runs only after runtime close',
+  },
+  {
+    id: 'tauri-wkwebview',
+    testName:
+      'pairs a packaged Tauri WKWebView simulator app with an external Python peer without HTTP transport fallback',
+    browserName: 'ios-tauri-wkwebview-simulator',
+    artifactDir:
+      process.env.AURORA_IOS_WKWEBVIEW_WEBRTC_ARTIFACT_DIR ??
+      resolve(appRoot, 'reports/webrtc-interop/ios-wkwebview'),
+    artifactPrefix: 'ios-wkwebview',
+    command:
+      'pnpm --filter @aurora/tauri-ui ios:webrtc:interop',
+    observation:
+      'auto-running harness embedded in a dedicated unsigned Tauri iOS simulator app; loopback HTTP is test control only, while Aurora application RPC and events remain on the WebRTC DataChannel with the Python HTTP API disabled',
+  },
+]
 const interopTimeoutMs = Number(
   process.env.AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 180_000,
 )
-const testTimeoutMs = Math.max(480_000, interopTimeoutMs + 120_000)
+const testTimeoutMs = Math.max(900_000, interopTimeoutMs + 180_000)
 const safariBundleId = 'com.apple.mobilesafari'
 const describeOnMac = process.platform === 'darwin' ? describe : describe.skip
 
@@ -93,166 +141,172 @@ afterEach(async () => {
   cleanup = undefined
 })
 
-describeOnMac('iOS mobile-browser WebRTC interoperability', () => {
-  it(
-    'pairs MobileSafari in an iOS simulator with an external Python peer without HTTP transport fallback',
-    async () => {
-      const resources = await createInteropResources()
-      cleanup = resources.close
-      const started = Date.now()
-      let mobileResult: MobileResult | undefined
-      try {
-        const ready = await waitForJson<BrowserConfig>(
-          resources.readyPath,
-          resources.timeoutMs,
-          'Python peer readiness',
-          resources.pythonPeer,
-          resources.getPythonOutput,
-        )
-        resources.setReadyConfig(ready)
-        await resources.launchBrowser()
-
-        mobileResult = await resources.waitForMobileResult(
-          resources.timeoutMs,
-        )
-        if (!mobileResult.ok || !mobileResult.result) {
-          throw new Error(
-            mobileResult.error?.stack ||
-              mobileResult.error?.message ||
-              'iOS MobileSafari reported an unknown interop failure',
-          )
-        }
-
-        const browserResult = mobileResult.result
-        resources.assertNoSeededSecrets(browserResult)
-        assertInteropBrowserResult(browserResult, {
-          lane: 'direct',
-          expectedStablePeerId: ready.expectedStablePeerId,
-          expectedNegotiationRole: ready.expectedNegotiationRole,
-        })
-        expect(mobileResult.consoleErrors ?? []).toEqual([])
-
-        await resources.captureSimulatorEvidence()
-        await writeJson(resources.browserReportPath, {
-          lane: 'direct',
-          browserName: 'ios-mobile-safari-simulator',
-          status: 'passed',
-          durationMs: Date.now() - started,
-          command:
-            'pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser',
-          browserResult,
-          noHttpFetchTransportUsed: true,
-          observation:
-            'auto-running same-origin harness in MobileSafari; application fetches are instrumented inside the WebRTC runtime and the result callback runs only after runtime close',
-          consoleErrors: mobileResult.consoleErrors ?? [],
-          simulator: resources.simulator,
-          screenshotPath: '<artifact-dir>/ios-mobile-safari.png',
-          logPath: '<artifact-dir>/ios-mobile-safari.log',
-          reportDigest: crypto
-            .createHash('sha256')
-            .update(JSON.stringify(browserResult))
-            .digest('hex'),
-          secretsRedacted: true,
-        })
-        await writeJson(resources.donePath, {
-          ok: true,
-          at: new Date().toISOString(),
-        })
-
-        await waitForChild(resources.pythonPeer, 30_000)
-        const pythonReport = await waitForJson<Record<string, unknown>>(
-          resources.pythonReportPath,
-          10_000,
-          'Python peer report',
-        )
-        resources.assertNoSeededSecrets(pythonReport)
-        expect(pythonReport).toMatchObject({
-          gatewayHttpApiEnabled: false,
-          rtcStarted: true,
-          eventSent: true,
-          ttsEventSent: true,
-          revoked: true,
-          secretsRedacted: true,
-        })
-
-        run(
-          'uv',
-          [
-            'run',
-            'python',
-            scannerScript,
-            '--artifact-dir',
-            artifactDir,
-            '--python-report',
-            resources.pythonReportPath,
-            '--browser-report',
-            resources.browserReportPath,
-            '--out',
-            resources.finalReportPath,
-            '--lane',
-            'direct',
-          ],
-          repoRoot,
-        )
-        const aggregate = await waitForJson<Record<string, unknown>>(
-          resources.finalReportPath,
-          10_000,
-          'aggregate iOS mobile WebRTC report',
-        )
-        resources.assertNoSeededSecrets(aggregate)
-        expect(aggregate).toMatchObject({
-          status: 'passed',
-          lane: 'direct',
-          pathCategoryAccepted: true,
-          secretsRedacted: true,
-        })
-      } catch (error) {
-        await resources.captureSimulatorEvidence().catch(() => undefined)
-        const redactedError = resources.redactArtifactValue(
-          error instanceof Error ? error.message : String(error),
-        )
-        const failureReport = resources.redactArtifactValue({
-          lane: 'direct',
-          browserName: 'ios-mobile-safari-simulator',
-          status: 'failed',
-          durationMs: Date.now() - started,
-          error: redactedError,
-          mobileResult,
-          simulator: resources.simulator,
-          secretsRedacted: true,
-        })
-        resources.assertNoSeededSecrets(failureReport)
-        await writeJson(resources.browserReportPath, failureReport)
-        await writeJson(resources.donePath, {
-          ok: false,
-          at: new Date().toISOString(),
-        })
-        throw new Error(redactedError)
-      }
-    },
-    testTimeoutMs,
-  )
+describeOnMac('iOS browser and packaged WKWebView WebRTC interoperability', () => {
+  for (const surface of surfaces) {
+    it(surface.testName, () => runIosInterop(surface), testTimeoutMs)
+  }
 })
 
-async function createInteropResources() {
+async function runIosInterop(surface: IosInteropSurface): Promise<void> {
+  const resources = await createInteropResources(surface)
+  cleanup = resources.close
+  const started = Date.now()
+  let mobileResult: MobileResult | undefined
+  try {
+    const ready = await waitForJson<BrowserConfig>(
+      resources.readyPath,
+      resources.timeoutMs,
+      'Python peer readiness',
+      resources.pythonPeer,
+      resources.getPythonOutput,
+    )
+    resources.setReadyConfig(ready)
+    await resources.launchBrowser()
+
+    mobileResult = await resources.waitForMobileResult(
+      resources.timeoutMs,
+    )
+    if (!mobileResult.ok || !mobileResult.result) {
+      throw new Error(
+        mobileResult.error?.stack ||
+          mobileResult.error?.message ||
+          `${surface.browserName} reported an unknown interop failure`,
+      )
+    }
+
+    const browserResult = mobileResult.result
+    resources.assertNoSeededSecrets(browserResult)
+    assertInteropBrowserResult(browserResult, {
+      lane: 'direct',
+      expectedStablePeerId: ready.expectedStablePeerId,
+      expectedNegotiationRole: ready.expectedNegotiationRole,
+    })
+    expect(mobileResult.consoleErrors ?? []).toEqual([])
+
+    await resources.captureSimulatorEvidence()
+    await writeJson(resources.browserReportPath, {
+      lane: 'direct',
+      browserName: surface.browserName,
+      status: 'passed',
+      durationMs: Date.now() - started,
+      command: surface.command,
+      browserResult,
+      noHttpFetchTransportUsed: true,
+      observation: surface.observation,
+      consoleErrors: mobileResult.consoleErrors ?? [],
+      simulator: resources.simulator,
+      surface: resources.surfaceEvidence,
+      screenshotPath: `<artifact-dir>/${surface.artifactPrefix}.png`,
+      logPath: `<artifact-dir>/${surface.artifactPrefix}.log`,
+      reportDigest: crypto
+        .createHash('sha256')
+        .update(JSON.stringify(browserResult))
+        .digest('hex'),
+      secretsRedacted: true,
+    })
+    await writeJson(resources.donePath, {
+      ok: true,
+      at: new Date().toISOString(),
+    })
+
+    await waitForChild(resources.pythonPeer, 30_000)
+    const pythonReport = await waitForJson<Record<string, unknown>>(
+      resources.pythonReportPath,
+      10_000,
+      'Python peer report',
+    )
+    resources.assertNoSeededSecrets(pythonReport)
+    expect(pythonReport).toMatchObject({
+      gatewayHttpApiEnabled: false,
+      rtcStarted: true,
+      eventSent: true,
+      ttsEventSent: true,
+      revoked: true,
+      secretsRedacted: true,
+    })
+
+    run(
+      'uv',
+      [
+        'run',
+        'python',
+        scannerScript,
+        '--artifact-dir',
+        resources.artifactDir,
+        '--python-report',
+        resources.pythonReportPath,
+        '--browser-report',
+        resources.browserReportPath,
+        '--out',
+        resources.finalReportPath,
+        '--lane',
+        'direct',
+      ],
+      repoRoot,
+    )
+    const aggregate = await waitForJson<Record<string, unknown>>(
+      resources.finalReportPath,
+      10_000,
+      `aggregate ${surface.browserName} WebRTC report`,
+    )
+    resources.assertNoSeededSecrets(aggregate)
+    expect(aggregate).toMatchObject({
+      status: 'passed',
+      lane: 'direct',
+      pathCategoryAccepted: true,
+      secretsRedacted: true,
+    })
+  } catch (error) {
+    await resources.captureSimulatorEvidence().catch(() => undefined)
+    const redactedError = resources.redactArtifactValue(
+      error instanceof Error ? error.message : String(error),
+    )
+    const failureReport = resources.redactArtifactValue({
+      lane: 'direct',
+      browserName: surface.browserName,
+      status: 'failed',
+      durationMs: Date.now() - started,
+      error: redactedError,
+      mobileResult,
+      simulator: resources.simulator,
+      surface: resources.surfaceEvidence,
+      secretsRedacted: true,
+    })
+    resources.assertNoSeededSecrets(failureReport)
+    await writeJson(resources.browserReportPath, failureReport)
+    await writeJson(resources.donePath, {
+      ok: false,
+      at: new Date().toISOString(),
+    })
+    throw new Error(redactedError)
+  }
+}
+
+async function createInteropResources(surface: IosInteropSurface) {
   assertCommandAvailable('xcrun', ['--version'])
   assertCommandAvailable('mosquitto', ['-h'])
 
   const timeoutMs = interopTimeoutMs
+  const artifactDir = surface.artifactDir
   const roomSecret = crypto.randomBytes(32).toString('base64url')
-  const token = `ios-mobile.${crypto.randomBytes(24).toString('base64url')}`
+  const token = `ios-${surface.id}.${crypto
+    .randomBytes(24)
+    .toString('base64url')}`
   const seededSecrets = [roomSecret, token]
-  const room = `ios-mobile-${process.pid}-${Date.now().toString(36)}`
+  const room = `ios-${surface.id}-${process.pid}-${Date.now().toString(36)}`
   const brokerPort = await allocateTcpPort()
   const readyPath = join(artifactDir, 'gateway-ready.json')
-  const donePath = join(artifactDir, 'ios-mobile-done.json')
+  const donePath = join(
+    artifactDir,
+    `${surface.artifactPrefix}-done.json`,
+  )
   const pythonReportPath = join(
     artifactDir,
     'python-gateway-report.json',
   )
   const browserReportPath = join(
     artifactDir,
-    'ios-mobile-browser-report.json',
+    `${surface.artifactPrefix}-browser-report.json`,
   )
   const finalReportPath = join(artifactDir, 'report.json')
   const bundlePath = join(
@@ -274,11 +328,11 @@ async function createInteropResources() {
   )
   const simulatorLogPath = join(
     artifactDir,
-    'ios-mobile-safari.log',
+    `${surface.artifactPrefix}.log`,
   )
   const simulatorScreenshotPath = join(
     artifactDir,
-    'ios-mobile-safari.png',
+    `${surface.artifactPrefix}.png`,
   )
   const transientPaths = [
     readyPath,
@@ -396,6 +450,7 @@ async function createInteropResources() {
   })
 
   let server: http.Server | undefined
+  let controlOrigin: string | undefined
   let pythonPeer: ChildProcessWithoutNullStreams | undefined
   let pythonOutput = ''
   let readyConfig: BrowserConfig | undefined
@@ -411,6 +466,25 @@ async function createInteropResources() {
       }
     },
   )
+  let targetBundleId = safariBundleId
+  let launchedPid: number | undefined
+  let wkWebViewHarness:
+    | Awaited<ReturnType<typeof buildWkWebViewHarness>>
+    | undefined
+  let surfaceEvidence: Record<string, unknown> =
+    surface.id === 'tauri-wkwebview'
+      ? {
+          kind: 'packaged-tauri-wkwebview',
+          packagedTauriAppExpected: true,
+          buildProfile: 'debug-ios-simulator',
+          pythonSidecarConfigured: false,
+          controlOrigin: '<loopback-test-control-origin>',
+        }
+      : {
+          kind: 'mobile-browser',
+          packagedTauriApp: false,
+          browserBundleId: safariBundleId,
+        }
   let closed = false
   const close = async () => {
     if (closed) return
@@ -421,7 +495,7 @@ async function createInteropResources() {
         'simctl',
         'terminate',
         simulator.udid,
-        safariBundleId,
+        targetBundleId,
       ],
       { stdio: 'ignore' },
     )
@@ -440,6 +514,22 @@ async function createInteropResources() {
       mosquittoLogPath,
       redactProcessOutput(mosquittoOutput),
     )
+    if (wkWebViewHarness) {
+      spawnSync(
+        'xcrun',
+        [
+          'simctl',
+          'uninstall',
+          simulator.udid,
+          wkWebViewHarness.bundleId,
+        ],
+        { stdio: 'ignore' },
+      )
+      await fs.rm(wkWebViewHarness.tempDir, {
+        recursive: true,
+        force: true,
+      })
+    }
     if (
       bootedByHarness &&
       process.env.AURORA_IOS_SIMULATOR_KEEP_BOOTED !== '1'
@@ -477,9 +567,17 @@ async function createInteropResources() {
           mqttBundlePath,
           cryptoWorkerBundlePath,
           () => {
+            if (!controlOrigin) {
+              throw new Error(
+                'iOS interop control origin is not ready',
+              )
+            }
+            return controlOrigin
+          },
+          () => {
             if (!readyConfig) {
               throw new Error(
-                'Python peer configuration is not ready for MobileSafari',
+                `Python peer configuration is not ready for ${surface.browserName}`,
               )
             }
             return {
@@ -516,6 +614,27 @@ async function createInteropResources() {
       )
     }
     const deviceHarnessUrl = `http://127.0.0.1:${address.port}/`
+    controlOrigin = new URL(deviceHarnessUrl).origin
+    if (surface.id === 'tauri-wkwebview') {
+      wkWebViewHarness = await buildWkWebViewHarness({
+        simulator,
+        bundlePath,
+        mqttBundlePath,
+        cryptoWorkerBundlePath,
+        controlOrigin,
+        brokerPort,
+      })
+      targetBundleId = wkWebViewHarness.bundleId
+      surfaceEvidence = {
+        kind: 'packaged-tauri-wkwebview',
+        packagedTauriApp: true,
+        bundleId: wkWebViewHarness.bundleId,
+        buildProfile: 'debug-ios-simulator',
+        frontendEmbedded: true,
+        artifactProof: wkWebViewHarness.artifactProof,
+        controlOrigin: '<loopback-test-control-origin>',
+      }
+    }
 
     pythonPeer = spawn(
       'uv',
@@ -557,7 +676,9 @@ async function createInteropResources() {
 
     return {
       timeoutMs,
+      artifactDir,
       simulator,
+      surfaceEvidence,
       readyPath,
       donePath,
       pythonReportPath,
@@ -585,16 +706,29 @@ async function createInteropResources() {
             'simctl',
             'terminate',
             simulator.udid,
-            safariBundleId,
+            targetBundleId,
           ],
           { stdio: 'ignore' },
         )
-        run('xcrun', [
+        if (surface.id === 'mobile-safari') {
+          run('xcrun', [
+            'simctl',
+            'openurl',
+            simulator.udid,
+            deviceHarnessUrl,
+          ])
+          return
+        }
+        const launchOutput = capture('xcrun', [
           'simctl',
-          'openurl',
+          'launch',
           simulator.udid,
-          deviceHarnessUrl,
+          targetBundleId,
         ])
+        launchedPid = parseSimulatorLaunchPid(
+          launchOutput,
+          targetBundleId,
+        )
       },
       async waitForMobileResult(waitMs: number): Promise<MobileResult> {
         const deadline = Date.now() + waitMs
@@ -614,14 +748,14 @@ async function createInteropResources() {
             pythonPeer?.exitCode !== undefined
           ) {
             throw new Error(
-              `Python WebRTC peer exited before MobileSafari returned a result with ${pythonPeer.exitCode}: ${redactProcessOutput(
+              `Python WebRTC peer exited before ${surface.browserName} returned a result with ${pythonPeer.exitCode}: ${redactProcessOutput(
                 redactInteropSeededText(pythonOutput, seededSecrets),
               )}`,
             )
           }
         }
         throw new Error(
-          `Timed out waiting for iOS mobile-browser interop result after ${waitMs}ms`,
+          `Timed out waiting for ${surface.browserName} interop result after ${waitMs}ms`,
         )
       },
       async captureSimulatorEvidence(): Promise<void> {
@@ -641,6 +775,14 @@ async function createInteropResources() {
             `Could not capture iOS simulator screenshot: ${screenshot.stderr}`,
           )
         }
+        if (
+          !existsSync(simulatorScreenshotPath) ||
+          statSync(simulatorScreenshotPath).size === 0
+        ) {
+          throw new Error(
+            `iOS simulator did not create ${surface.browserName} screenshot evidence`,
+          )
+        }
         const log = capture(
           'xcrun',
           [
@@ -654,7 +796,9 @@ async function createInteropResources() {
             '--last',
             '5m',
             '--predicate',
-            'process == "MobileSafari" OR process == "com.apple.WebKit.WebContent"',
+            launchedPid
+              ? `processIdentifier == ${launchedPid} OR process == "com.apple.WebKit.WebContent"`
+              : 'process == "MobileSafari" OR process == "com.apple.WebKit.WebContent"',
           ],
           { allowFailure: true },
         )
@@ -668,16 +812,350 @@ async function createInteropResources() {
           )
         ) {
           throw new Error(
-            'iOS simulator log contains MobileSafari/WebContent crash evidence',
+            `iOS simulator log contains ${surface.browserName}/WebContent crash evidence`,
           )
         }
       },
       close,
     }
   } catch (error) {
-    await close()
+    const redactedError = redactInteropArtifactValue(
+      error instanceof Error ? error.message : String(error),
+      seededSecrets,
+    )
+    const failureReport = redactInteropArtifactValue(
+      {
+        lane: 'direct',
+        browserName: surface.browserName,
+        status: 'failed',
+        phase: 'setup',
+        error: redactedError,
+        simulator,
+        surface: surfaceEvidence,
+        secretsRedacted: true,
+      },
+      seededSecrets,
+    )
+    assertNoInteropSeededSecrets(failureReport, seededSecrets)
+    try {
+      await writeJson(browserReportPath, failureReport)
+      await writeJson(donePath, {
+        ok: false,
+        at: new Date().toISOString(),
+      })
+    } finally {
+      await close()
+    }
+    throw new Error(String(redactedError))
+  }
+}
+
+async function buildWkWebViewHarness({
+  simulator,
+  bundlePath,
+  mqttBundlePath,
+  cryptoWorkerBundlePath,
+  controlOrigin,
+  brokerPort,
+}: {
+  simulator: SimulatorDevice
+  bundlePath: string
+  mqttBundlePath: string
+  cryptoWorkerBundlePath: string
+  controlOrigin: string
+  brokerPort: number
+}): Promise<{
+  tempDir: string
+  bundleId: string
+  artifactProof: WkWebViewArtifactProof
+}> {
+  const tempDir = await fs.mkdtemp(
+    join(tmpdir(), 'aurora-ios-wkwebview-interop-'),
+  )
+  const distDir = join(tempDir, 'dist')
+  const configPath = join(tempDir, 'tauri.wkwebview-interop.conf.json')
+  const bundleId = 'dev.aurora.desktop'
+  try {
+    await fs.mkdir(distDir, { recursive: true })
+    await Promise.all([
+      fs.copyFile(
+        bundlePath,
+        join(distDir, 'ios-mobile-browser-bundle.js'),
+      ),
+      fs.copyFile(
+        mqttBundlePath,
+        join(distDir, 'mqtt-bundle.mjs'),
+      ),
+      fs.copyFile(
+        cryptoWorkerBundlePath,
+        join(distDir, 'crypto-worker-bundle.js'),
+      ),
+      fs.writeFile(
+        join(distDir, 'index.html'),
+        wkWebViewHarnessHtml(),
+      ),
+      fs.writeFile(
+        join(distDir, 'ios-wkwebview-runner.js'),
+        wkWebViewHarnessRunner(controlOrigin),
+      ),
+    ])
+    await fs.writeFile(
+      configPath,
+      `${JSON.stringify(
+        {
+          build: {
+            beforeBuildCommand: null,
+            frontendDist: './dist',
+          },
+          app: {
+            windows: [
+              {
+                label: 'main',
+                title: 'Aurora WebRTC Interop',
+                width: 430,
+                height: 932,
+              },
+            ],
+            security: {
+              capabilities: [
+                'aurora-ios-thin',
+                'aurora-mobile-mesh',
+              ],
+              csp: [
+                "default-src 'self'",
+                `connect-src 'self' ${controlOrigin} ws://127.0.0.1:${brokerPort}`,
+                "img-src 'self' data: blob:",
+                "media-src 'self' blob: mediastream:",
+                "style-src 'self' 'unsafe-inline'",
+                "script-src 'self'",
+                "worker-src 'self' blob:",
+              ].join('; '),
+            },
+          },
+          bundle: {
+            active: true,
+            externalBin: [],
+            resources: {},
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    )
+
+    run(
+      'pnpm',
+      [
+        'tauri',
+        'ios',
+        'build',
+        '--debug',
+        '--target',
+        'aarch64-sim',
+        '--config',
+        configPath,
+      ],
+      appRoot,
+    )
+    const appPath = findBuiltSimulatorApp(bundleId)
+    const artifactProof = inspectWkWebViewArtifact(appPath)
+    run('xcrun', [
+      'simctl',
+      'install',
+      simulator.udid,
+      appPath,
+    ])
+    return {
+      tempDir,
+      bundleId,
+      artifactProof,
+    }
+  } catch (error) {
+    await fs.rm(tempDir, { recursive: true, force: true })
     throw error
   }
+}
+
+function inspectWkWebViewArtifact(
+  appPath: string,
+): WkWebViewArtifactProof {
+  const result = spawnSync('find', [appPath, '-print'], {
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    throw new Error(
+      'Could not inspect the packaged iOS WKWebView application',
+    )
+  }
+  const entries = String(result.stdout)
+    .split('\n')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => relative(appPath, value))
+    .filter(Boolean)
+  const forbiddenPatterns = [
+    /aurora-sidecar/iu,
+    /prepare-sidecar/iu,
+    /config_defaults\.json/iu,
+    /(^|[/\\])python(?:\d+(?:\.\d+)?)?(?:\.exe)?$/iu,
+    /libpython[^/\\]*\.(?:so|dylib|dll)$/iu,
+    /pyvenv\.cfg/iu,
+    /site-packages/iu,
+    /__pycache__/iu,
+    /(^|[/\\])main\.py$/iu,
+  ]
+  const forbiddenMatches = entries.filter((entry) =>
+    forbiddenPatterns.some((pattern) => pattern.test(entry)),
+  )
+  if (forbiddenMatches.length > 0) {
+    throw new Error(
+      `Packaged iOS WKWebView application contains forbidden Python/sidecar paths: ${forbiddenMatches
+        .slice(0, 10)
+        .join(', ')}`,
+    )
+  }
+  return {
+    checkedEntries: entries.length,
+    forbiddenMatchCount: 0,
+    pythonSidecarPackaged: false,
+  }
+}
+
+function findBuiltSimulatorApp(expectedBundleId: string): string {
+  const buildRoot = join(appRoot, 'src-tauri', 'gen', 'apple')
+  if (!existsSync(buildRoot)) {
+    throw new Error(
+      'Generated iOS project is missing; run tauri ios init before WKWebView interoperability',
+    )
+  }
+  const result = spawnSync(
+    'find',
+    [buildRoot, '-type', 'd', '-name', '*.app', '-prune'],
+    { encoding: 'utf8' },
+  )
+  if (result.status !== 0) {
+    throw new Error(
+      'Could not enumerate built iOS simulator applications',
+    )
+  }
+  const candidates = String(result.stdout)
+    .split('\n')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  candidates.sort(
+    (left, right) =>
+      statSync(right).mtimeMs - statSync(left).mtimeMs,
+  )
+  for (const candidate of candidates) {
+    const candidateBundleId = capture(
+      'plutil',
+      [
+        '-extract',
+        'CFBundleIdentifier',
+        'raw',
+        '-o',
+        '-',
+        join(candidate, 'Info.plist'),
+      ],
+      { allowFailure: true },
+    ).trim()
+    if (candidateBundleId === expectedBundleId) return candidate
+  }
+  throw new Error(
+    `No built iOS simulator app has bundle id ${expectedBundleId}`,
+  )
+}
+
+function parseSimulatorLaunchPid(
+  output: string,
+  expectedBundleId: string,
+): number {
+  const match = new RegExp(
+    `${escapeRegex(expectedBundleId)}:\\s*(\\d+)`,
+    'u',
+  ).exec(output)
+  const pid = Number(match?.[1])
+  if (!Number.isInteger(pid) || pid <= 0) {
+    throw new Error(
+      `simctl launch did not return a process id for ${expectedBundleId}`,
+    )
+  }
+  return pid
+}
+
+function wkWebViewHarnessHtml(): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aurora Tauri WKWebView WebRTC Interop</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; padding: 2rem; }
+      [data-status="passed"] { color: #087a32; }
+      [data-status="failed"] { color: #a00; }
+    </style>
+  </head>
+  <body>
+    <h1>Aurora packaged WKWebView interoperability</h1>
+    <p id="status" data-status="running">Connecting to the Python peer…</p>
+    <script type="module" src="/ios-mobile-browser-bundle.js"></script>
+    <script type="module" src="/ios-wkwebview-runner.js"></script>
+  </body>
+</html>`
+}
+
+function wkWebViewHarnessRunner(controlOrigin: string): string {
+  return `const controlOrigin = ${JSON.stringify(controlOrigin)};
+const status = document.getElementById('status');
+const consoleErrors = [];
+window.addEventListener('error', (event) => {
+  consoleErrors.push(String(event.error?.message ?? event.message));
+});
+window.addEventListener('unhandledrejection', (event) => {
+  consoleErrors.push(String(event.reason?.message ?? event.reason));
+});
+const publish = async (value) => {
+  await fetch(controlOrigin + '/interop-result', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...value, consoleErrors })
+  });
+};
+Promise.resolve().then(async () => {
+  const configResponse = await fetch(controlOrigin + '/interop-config', {
+    cache: 'no-store'
+  });
+  if (!configResponse.ok) {
+    throw new Error('Could not load the interop configuration');
+  }
+  const config = await configResponse.json();
+  const moduleDeadline = Date.now() + 120000;
+  while (
+    typeof globalThis.runAuroraWebRtcInterop !== 'function' &&
+    Date.now() < moduleDeadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (typeof globalThis.runAuroraWebRtcInterop !== 'function') {
+    throw new Error('runAuroraWebRtcInterop was not installed');
+  }
+  const result = await globalThis.runAuroraWebRtcInterop(config);
+  status.dataset.status = 'passed';
+  status.textContent = 'Paired with the Python peer over WebRTC.';
+  await publish({ ok: true, result });
+}).catch(async (error) => {
+  status.dataset.status = 'failed';
+  status.textContent = 'WebRTC interoperability failed.';
+  await publish({
+    ok: false,
+    error: {
+      name: error?.name ?? 'Error',
+      message: error?.message ?? String(error),
+      stack: error?.stack ?? ''
+    }
+  }).catch(() => undefined);
+});\n`
 }
 
 async function handleHarnessRequest(
@@ -686,6 +1164,7 @@ async function handleHarnessRequest(
   bundlePath: string,
   mqttBundlePath: string,
   cryptoWorkerBundlePath: string,
+  getControlOrigin: () => string,
   getConfig: () => Record<string, unknown>,
   publishResult: (result: MobileResult) => void,
 ): Promise<void> {
@@ -693,6 +1172,40 @@ async function handleHarnessRequest(
     request.url ?? '/',
     `http://${request.headers.host ?? '127.0.0.1'}`,
   )
+  const requestOrigin = request.headers.origin
+  const controlOrigin = getControlOrigin()
+  const allowedOrigins = new Set([
+    controlOrigin,
+    'tauri://localhost',
+    'http://tauri.localhost',
+    'https://tauri.localhost',
+  ])
+  if (
+    requestUrl.origin !== controlOrigin ||
+    (requestOrigin !== undefined &&
+      !allowedOrigins.has(requestOrigin))
+  ) {
+    response.writeHead(403, { 'cache-control': 'no-store' })
+    response.end()
+    return
+  }
+  const corsHeaders =
+    requestOrigin === undefined
+      ? {}
+      : {
+          'access-control-allow-origin': requestOrigin,
+          'access-control-allow-methods': 'GET, POST, OPTIONS',
+          'access-control-allow-headers': 'content-type',
+          vary: 'origin',
+        }
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204, {
+      ...corsHeaders,
+      'cache-control': 'no-store',
+    })
+    response.end()
+    return
+  }
   if (requestUrl.pathname === '/mqtt-bundle.mjs') {
     response.writeHead(200, {
       'content-type': 'application/javascript',
@@ -719,6 +1232,7 @@ async function handleHarnessRequest(
   }
   if (requestUrl.pathname === '/interop-config') {
     response.writeHead(200, {
+      ...corsHeaders,
       'content-type': 'application/json',
       'cache-control': 'no-store',
     })
@@ -733,7 +1247,10 @@ async function handleHarnessRequest(
       await readRequestBody(request, 2 * 1024 * 1024),
     ) as MobileResult
     publishResult(value)
-    response.writeHead(204, { 'cache-control': 'no-store' })
+    response.writeHead(204, {
+      ...corsHeaders,
+      'cache-control': 'no-store',
+    })
     response.end()
     return
   }
@@ -1135,6 +1652,10 @@ function redactProcessOutput(value: string): string {
       '$1[REDACTED]',
     )
     .slice(-20_000)
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
 
 function run(

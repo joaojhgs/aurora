@@ -89,6 +89,7 @@ describe('Tauri CI native evidence contract', () => {
     const iosPolicyWorkflow = repoText('.github/workflows/tauri-ios-release.yml')
     const androidThinBuildWrapper = repoText('apps/aurora-tauri/scripts/build-android-thin-bundle.mjs')
     const androidInteropRunner = repoText('apps/aurora-tauri/scripts/run-android-webrtc-interop.mjs')
+    const iosInteropTest = repoText('apps/aurora-tauri/tests/ios/ios-python-webrtc.e2e.test.ts')
 
     expect(packageJson.scripts['android:sync-native-plugin']).toBe('node ./scripts/install-android-native-plugin.mjs')
     expect(packageJson.scripts['android:init']).toContain('android:sync-native-plugin')
@@ -107,7 +108,46 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['ios:build:thin:simulator']).toContain('build-ios-thin-bundle.mjs')
     expect(packageJson.scripts['ios:smoke:simulator']).toContain('ios-simulator-smoke.mjs')
     expect(packageJson.scripts['ios:webrtc:mobile-browser']).toContain(
-      'ios-browser-python-webrtc.e2e.test.ts',
+      'ios-python-webrtc.e2e.test.ts',
+    )
+    expect(packageJson.scripts['ios:webrtc:interop']).toContain(
+      'ios-python-webrtc.e2e.test.ts',
+    )
+    expect(packageJson.scripts['ios:webrtc:interop']).toContain(
+      '--no-file-parallelism',
+    )
+    expect(packageJson.scripts['ios:webrtc:wkwebview']).toContain(
+      'packaged Tauri WKWebView',
+    )
+    expect(iosInteropTest).toContain('buildWkWebViewHarness')
+    expect(iosInteropTest).toContain('beforeBuildCommand: null')
+    expect(iosInteropTest).toContain("frontendDist: './dist'")
+    expect(iosInteropTest).toContain(
+      "kind: 'packaged-tauri-wkwebview'",
+    )
+    expect(iosInteropTest).toContain(
+      'pythonSidecarPackaged: false',
+    )
+    expect(iosInteropTest).toContain(
+      "browserName: 'ios-tauri-wkwebview-simulator'",
+    )
+    expect(iosInteropTest).toContain("id: 'mobile-safari'")
+    expect(iosInteropTest).toContain("id: 'tauri-wkwebview'")
+    expect(iosInteropTest).toContain(
+      'for (const surface of surfaces)',
+    )
+    expect(iosInteropTest).toContain('assertInteropBrowserResult')
+    expect(iosInteropTest).toContain(
+      'gatewayHttpApiEnabled: false',
+    )
+    expect(iosInteropTest).toContain(
+      'artifactProof: wkWebViewHarness.artifactProof',
+    )
+    expect(iosInteropTest).toContain(
+      'function inspectWkWebViewArtifact',
+    )
+    expect(iosInteropTest).toContain(
+      'forbiddenMatchCount: 0',
     )
     expect(packageJson.scripts['build:frontend:ios-thin']).toBe('node ./scripts/build-ios-thin-frontend.mjs')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
@@ -175,10 +215,13 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('uv sync --extra gateway')
     expect(iosBaselineWorkflow).toContain('brew install mosquitto')
     expect(iosBaselineWorkflow).toContain(
-      'pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser',
+      'pnpm --filter @aurora/tauri-ui ios:webrtc:interop',
     )
     expect(iosBaselineWorkflow).toContain(
       'apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/',
+    )
+    expect(iosBaselineWorkflow).toContain(
+      'apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview/',
     )
     expect(iosPolicyWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:policy')
     expect(iosPolicyWorkflow).toContain("if: inputs.app_store_dry_run == 'true'")
