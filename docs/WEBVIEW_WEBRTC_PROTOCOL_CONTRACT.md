@@ -2,7 +2,7 @@
 
 **Status:** Current source of truth
 
-**Last reviewed:** 2026-07-26
+**Last reviewed:** 2026-07-27
 
 This document describes the implemented browser/WebView WebRTC protocol shared by hosted web thin, desktop Tauri thin, and Android thin. Python remains the reference peer for room/signaling/auth semantics; TypeScript implements the browser/WebView runtime and consumes Python-owned protocol fixtures.
 
@@ -12,7 +12,7 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 - Signaling: MQTT over WebSocket/WSS in browser/WebView clients; MQTT topics carry room/app/channel presence, offers, answers, ICE candidates, and departure frames.
 - Peer transport: one ordered `RTCDataChannel` labeled `aurora-rpc`.
 - Application payloads: Aurora RPC calls/results/errors, streams, cancellation, manifests/auth frames, scoped subscribe/unsubscribe, events, fragmentation, and reconnect proof frames.
-- Live-proven peer: Chromium browser SDK to Python Gateway RTC client/RPC handler with the Python HTTP API disabled.
+- Live-proven peers: Chromium, Firefox, and Playwright-WebKit browser SDKs to the Python Gateway RTC client/RPC handler across direct, configured-STUN, and forced-TURN lanes with the Python HTTP API disabled.
 
 ## Reference implementations
 
@@ -29,11 +29,11 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 ## Security contract
 
 - Production app endpoints must be `https://`; production signaling must be `wss://`. Loopback `http://`/`ws://` is development-only and must be explicitly allowed.
-- Room passwords derive signaling and data keys with deterministic Scrypt/HKDF-compatible behavior. Browser Scrypt runs off the UI thread.
+- Room passwords derive signaling and data keys with deterministic Scrypt/HKDF-compatible behavior. Browser Scrypt uses `@noble/hashes` in a dedicated Worker, runs off the UI thread, zeroes transferred password/salt buffers, and is checked against Python-generated vectors.
 - Signaling and optional application-layer DataChannel encryption use AES-GCM-compatible envelopes where configured; WebRTC DTLS still protects the DataChannel in transit.
 - Pairing uses bilateral SAS v2 with SDP/channel binding and canonical JSON commitments.
 - Reconnect uses the canonical `mesh_auth_proof_v1` HMAC proof bound to challenge, channel binding, stable peer IDs, signaling peer IDs, and room. Python, TypeScript, and native Android proof commands must stay fixture-compatible and must not emit legacy `proof_hmac_sha256`.
-- Browser-hosted credentials are memory-only by default. Desktop/mobile native stores may persist scoped peer reconnect material, but profiles must not store raw invite secrets or bearer tokens.
+- Hosted-browser reconnect material is encrypted before IndexedDB persistence with a non-extractable origin-scoped WebCrypto AES-GCM key. Unsupported or denied durable storage falls back to memory-only. Desktop/mobile native stores persist scoped reconnect material through OS credential stores. Profiles must not store raw invite secrets or bearer tokens.
 - Revoked credentials fail closed; mutation retry logic must not replay uncertain in-flight mutations on a different transport. Current live proof covers a mutation started event followed by disconnect before response settlement with execution count 1, not a broad exactly-once guarantee.
 - Event delivery is subscription/correlation scoped. Wildcard or wrong-correlation event leakage is a test failure. Scoped authorization stays on public production Auth/Gateway/DataChannel boundaries rather than private service calls.
 
@@ -57,4 +57,11 @@ pnpm test:webrtc:turn
 pnpm test:webrtc:browsers
 ```
 
-Current checked reports prove direct, configured-STUN, and forced-TURN foreground interop in Chromium, Firefox, and Playwright WebKit. `pnpm test:webrtc:browsers` still records an explicit skip when an optional Playwright engine or its host runtime is unavailable; a skip is not compatibility proof. Required CI uses strict browser availability.
+Current checked reports prove direct, configured-STUN, and forced-TURN
+foreground interop in Chromium, Firefox, and Playwright WebKit. Every lane
+also proves deterministic negotiation direction, manifest exchange,
+structured error parity, fragmented 512 KiB request/response transfer,
+stream completion, and cancellation observed by the Python peer.
+`pnpm test:webrtc:browsers` records an explicit skip when an optional
+Playwright engine or its host runtime is unavailable; a skip is not
+compatibility proof. Required CI uses strict browser availability.
