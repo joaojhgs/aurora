@@ -244,6 +244,7 @@ const DEFAULT_RECONNECT: PeerSessionReconnectOptions = {
   maxDelayMs: 5_000,
   jitterRatio: 0.2
 }
+const MAX_STARTUP_SIGNALING_MESSAGES = 64
 
 function defaultTimers(): PeerSessionTimerPort {
   return {
@@ -284,6 +285,7 @@ export class WebRtcPeerSession {
   private readonly listeners = new Set<PeerSessionListener>()
   private readonly frameListeners = new Set<PeerSessionFrameListener>()
   private readonly timerHandles = new Set<unknown>()
+  private readonly startupSignalingMessages: SignalingMessage[] = []
   private unsubscribeSignaling: (() => void) | undefined
   private pc: PeerConnectionLike | undefined
   private channel: DataChannelLike | undefined
@@ -377,6 +379,11 @@ export class WebRtcPeerSession {
       this.clearTimerKind('signaling')
       this.transition('discovering-peer')
       this.armTimeout('discovery', this.timeouts.discoveryMs, () => this.fail('peer discovery timeout', true))
+      const startupMessages = this.startupSignalingMessages.splice(0)
+      for (const message of startupMessages) {
+        if (this.isTerminal()) break
+        await this.handleSignalingMessage(message)
+      }
     } catch (error) {
       this.fail(error, true)
     }
@@ -409,6 +416,13 @@ export class WebRtcPeerSession {
 
   private async handleSignalingMessage(message: SignalingMessage): Promise<void> {
     if (this.isTerminal()) return
+    if (this.state === 'signaling-connecting') {
+      if (this.startupSignalingMessages.length >= MAX_STARTUP_SIGNALING_MESSAGES) {
+        this.startupSignalingMessages.shift()
+      }
+      this.startupSignalingMessages.push(message)
+      return
+    }
     if (!this.acceptRemoteIdentity(message)) return
 
     if (message.channel === 'presence') {

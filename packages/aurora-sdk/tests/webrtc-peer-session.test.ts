@@ -264,6 +264,41 @@ describe('WebRtcPeerSession', () => {
     expect(session.getDiagnostics()).toMatchObject({ icePath: 'relay' })
   })
 
+  it('processes retained presence delivered before signaling connect resolves', async () => {
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection('startup-race-offer')
+    signaling.connect = vi.fn(async () => {
+      signaling.emit(presence('z-remote'))
+    })
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'a-local',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers: new FakeTimers(),
+      auth: {
+        tryReconnect: async () => true,
+        handleFrame: async () => undefined
+      }
+    })
+
+    await session.start()
+    await flush()
+
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'negotiating',
+      role: 'offerer',
+      remoteSignalingId: 'z-remote',
+      remoteStableId: 'stable-z-remote'
+    })
+    expect(
+      signaling.published.find((item) => item.channel === 'offer')?.envelope,
+    ).toMatchObject({
+      type: 'offer',
+      sdp: 'startup-race-offer'
+    })
+  })
+
   it('answers offers, accepts only aurora-rpc label, and authorizes after reconnect', async () => {
     const signaling = new FakeSignaling()
     const pc = new FakePeerConnection('unused-offer', 'exact-answer-sdp')
