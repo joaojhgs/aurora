@@ -127,8 +127,10 @@ const surfaces: IosInteropSurface[] = [
       'auto-running harness embedded in a dedicated unsigned Tauri iOS simulator app; loopback HTTP is test control only, while Aurora application RPC and events remain on the WebRTC DataChannel with the Python HTTP API disabled',
   },
 ]
+// Cold simulator WebKit startup plus the full reconnect/revocation proof can
+// exceed three minutes on shared macOS runners.
 const interopTimeoutMs = Number(
-  process.env.AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 180_000,
+  process.env.AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 600_000,
 )
 const testTimeoutMs = Math.max(900_000, interopTimeoutMs + 180_000)
 const safariBundleId = 'com.apple.mobilesafari'
@@ -905,7 +907,9 @@ async function buildWkWebViewHarness({
         {
           build: {
             beforeBuildCommand: null,
-            frontendDist: './dist',
+            // The additional config is merged from src-tauri, so a relative
+            // path would resolve there instead of beside this temp config.
+            frontendDist: distDir,
           },
           app: {
             windows: [

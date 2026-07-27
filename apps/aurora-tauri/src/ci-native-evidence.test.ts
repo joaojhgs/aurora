@@ -167,7 +167,11 @@ describe('Tauri CI native evidence contract', () => {
     )
     expect(iosInteropTest).toContain('buildWkWebViewHarness')
     expect(iosInteropTest).toContain('beforeBuildCommand: null')
-    expect(iosInteropTest).toContain("frontendDist: './dist'")
+    expect(iosInteropTest).toContain(
+      'AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 600_000',
+    )
+    expect(iosInteropTest).toContain('frontendDist: distDir')
+    expect(iosInteropTest).not.toContain("frontendDist: './dist'")
     expect(iosInteropTest).toContain(
       "kind: 'packaged-tauri-wkwebview'",
     )
