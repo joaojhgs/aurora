@@ -172,11 +172,12 @@ describe('Tauri CI native evidence contract', () => {
     )
     expect(iosInteropTest).toContain('frontendDist: distDir')
     expect(iosInteropTest).not.toContain("frontendDist: './dist'")
+    expect(iosInteropTest).toContain('const iosBuildRoot = join(')
     expect(iosInteropTest).toContain(
-      "'aurora-tauri_iOS.xcarchive'",
+      'await fs.rm(iosBuildRoot, { recursive: true, force: true })',
     )
     expect(iosInteropTest).toContain(
-      'await fs.rm(iosArchivePath, { recursive: true, force: true })',
+      'redactIosWebRtcArtifactLog(log)',
     )
     expect(iosInteropTest).toContain(
       "kind: 'packaged-tauri-wkwebview'",

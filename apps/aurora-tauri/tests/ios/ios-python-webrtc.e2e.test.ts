@@ -25,6 +25,7 @@ import {
   redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
+import { redactIosWebRtcArtifactLog } from '../../src/ios-webrtc-log-redaction'
 
 type BrowserConfig = {
   lane: string
@@ -806,7 +807,9 @@ async function createInteropResources(surface: IosInteropSurface) {
         )
         await fs.writeFile(
           simulatorLogPath,
-          redactProcessOutput(log),
+          redactProcessOutput(
+            redactIosWebRtcArtifactLog(log),
+          ),
         )
         if (
           /\b(?:EXC_CRASH|EXC_BAD_ACCESS)\b|Terminating app due to uncaught exception|dyld: Library not loaded|\bfatal error:/iu.test(
@@ -877,13 +880,12 @@ async function buildWkWebViewHarness({
   const distDir = join(tempDir, 'dist')
   const configPath = join(tempDir, 'tauri.wkwebview-interop.conf.json')
   const bundleId = 'dev.aurora.desktop'
-  const iosArchivePath = join(
+  const iosBuildRoot = join(
     appRoot,
     'src-tauri',
     'gen',
     'apple',
     'build',
-    'aurora-tauri_iOS.xcarchive',
   )
   try {
     await fs.mkdir(distDir, { recursive: true })
@@ -955,11 +957,11 @@ async function buildWkWebViewHarness({
       )}\n`,
     )
 
-    // The baseline and thin-build steps intentionally use the same generated
-    // Xcode project before this dedicated harness build. Tauri's iOS packager
-    // cannot replace a populated archive atomically, so remove only that
-    // derived archive while preserving the generated project itself.
-    await fs.rm(iosArchivePath, { recursive: true, force: true })
+    // The baseline and thin-build steps intentionally reuse the generated
+    // Xcode project. Tauri exports simulator apps to a fixed path under its
+    // derived build root, so clear all derived output before this harness
+    // build while preserving the generated Xcode project itself.
+    await fs.rm(iosBuildRoot, { recursive: true, force: true })
     run(
       'pnpm',
       [
