@@ -355,7 +355,6 @@ class TestStaleTimeoutPolicy:
         registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
         observed_status_after_zero_check = []
         sleep_calls = 0
-        real_sleep = asyncio.sleep
 
         async def fake_sleep(_interval):
             nonlocal sleep_calls
@@ -367,7 +366,6 @@ class TestStaleTimeoutPolicy:
                 store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
             else:
                 raise asyncio.CancelledError
-            await real_sleep(0)
 
         monkeypatch.setattr(registry, "_sleep", fake_sleep)
 
@@ -403,7 +401,6 @@ class TestStaleTimeoutPolicy:
         activate_positive_timeout = asyncio.Event()
         stale_peer_detected = asyncio.Event()
         sleep_calls = 0
-        real_sleep = asyncio.sleep
 
         async def status_changed(_peer_id, _node_name, status):
             if status == "stale":
@@ -415,13 +412,12 @@ class TestStaleTimeoutPolicy:
             nonlocal sleep_calls
             sleep_calls += 1
             if sleep_calls == 1:
-                await real_sleep(0)
                 return
             if sleep_calls == 2:
                 idle_iteration_completed.set()
                 await activate_positive_timeout.wait()
                 return
-            await real_sleep(3600)
+            await asyncio.Future()
 
         monkeypatch.setattr(registry, "_sleep", fake_sleep)
 
