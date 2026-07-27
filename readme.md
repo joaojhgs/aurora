@@ -4,7 +4,6 @@
 
 [![Python Tests](https://github.com/joaojhgs/aurora/actions/workflows/python-tests.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/python-tests.yml)
 [![Quality](https://github.com/joaojhgs/aurora/actions/workflows/quality.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/quality.yml)
-[![E2E](https://github.com/joaojhgs/aurora/actions/workflows/e2e.yml/badge.svg)](https://github.com/joaojhgs/aurora/actions/workflows/e2e.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Versions](https://img.shields.io/badge/python-3.10%20|%203.11-blue)](docs/INSTALL.md)
 

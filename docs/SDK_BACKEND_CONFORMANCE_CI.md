@@ -88,9 +88,9 @@ The backend conformance checker also scans generated artifacts for obvious unred
 This workflow is contract/SDK evidence only. It does not replace:
 
 - Tauri desktop packaging smoke logs from `tauri-desktop.yml`.
-- Android APK/emulator and physical/OEM matrix evidence from Android workflows and release operations.
+- Android APK/emulator and physical/OEM matrix evidence from Android workflows and release operations. The Android workflow now includes a real packaged System WebView ↔ Python peer WebRTC protocol E2E, but that does not replace physical/OEM certification.
 - iOS simulator/TestFlight/device evidence from iOS workflows and release operations.
-- Mesh transport E2E coverage from `e2e.yml`.
+- Mesh transport E2E coverage from the consolidated `python-tests.yml` workflow.
 - Frontend accessibility/responsive/visual checks from `frontend-sdk.yml`.
 
 Emulator-only mobile evidence must stay marked as partial until physical/device/OEM evidence is attached to the relevant release record.

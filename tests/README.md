@@ -26,6 +26,7 @@ Aurora's test suite is divided into several categories:
    - Locations: `tests/e2e/browser_persistence/`, `tests/e2e/webrtc_interop/`
    - Run hosted peer persistence with: `pnpm test:web-persistence`
    - Run live browser/Python WebRTC lanes with the root `test:webrtc:*` scripts
+   - Run packaged Android System WebView ↔ Python peer WebRTC E2E with `pnpm --filter @aurora/tauri-ui android:webrtc:interop` while an emulator/device is running
 
 ## Running Tests
 
@@ -112,20 +113,22 @@ make check-docs
 Aurora's CI/CD pipeline is configured with durable workflow lanes. See `docs/CI_CD.md` for the full map.
 See `docs/TEST_HARNESS_INVENTORY.md` for which executable scripts are product/build runners, which assertions already have normal tests, and which live harnesses still merit partial conversion.
 
-1. **Python Tests** - Unit, integration, and Redis-backed process-mode tests
+1. **Python Tests** - Consolidated unit, integration, Redis-backed process-mode, and Python E2E tests
    - Workflow file: `.github/workflows/python-tests.yml`
 
-2. **End-to-End Tests** - Mesh transport E2E harness
-   - Workflow file: `.github/workflows/e2e.yml`
-
-3. **Performance and Benchmarks** - Scheduled/manual performance and SDK resilience tests
+2. **Performance and Benchmarks** - Scheduled/manual performance and SDK resilience tests
    - Workflow file: `.github/workflows/performance.yml`
 
-4. **Frontend and SDK** - TypeScript SDK/UI/web tests and builds
+3. **Frontend and SDK** - TypeScript SDK/UI/web tests and builds
    - Workflow file: `.github/workflows/frontend-sdk.yml`
 
-5. **Browser persistence and WebRTC interoperability** - Cross-engine encrypted refresh restoration plus live browser/Python direct, STUN, and TURN lanes
+4. **Browser persistence and WebRTC interoperability** - One consolidated check for cross-engine encrypted refresh restoration plus live browser/Python direct, STUN, and TURN lanes
    - Workflow file: `.github/workflows/webrtc-interop.yml`
+
+5. **Platform-specific packaged WebViews** - Existing Android and iOS workflows own emulator-only assertions that cannot run in the general browser lane
+   - Android keeps APK/AAB proof, API 30/API 35 UI/native smoke, and API 35 packaged WebView ↔ external Python peer WebRTC interop in `.github/workflows/tauri-android.yml`
+   - iOS keeps Xcode build plus simulator install/launch/screenshot/keep-alive evidence in `.github/workflows/tauri-ios.yml`
+   - These are platform workflows, not one-test-per-assertion checks
 
 ## Writing Tests
 

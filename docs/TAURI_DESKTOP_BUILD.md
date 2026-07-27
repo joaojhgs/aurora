@@ -161,8 +161,8 @@ Packaged desktop-local builds should use path 2. Desktop thin mode never starts 
 Relevant workflows:
 
 - `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, runs a desktop bundle matrix for `desktop-local` and Python-free `desktop-thin`, runs `cargo check` for both lanes, verifies desktop-thin artifact contents, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb for the local lane so `tauri dev` fails on missing Gateway readiness, early process exit, or missing `[tauri]`/`[aurora][...]` logs, and runs a sidecar profile staging matrix across `desktop-local-minimal`, local CPU, accelerator, and legacy full profiles.
-- `.github/workflows/tauri-android.yml` builds Android thin debug APK/AAB artifacts, verifies Python-free artifact contents, runs Android preflight/native plugin parity, and attempts emulator native payload smoke where runner virtualization allows it.
-- `.github/workflows/tauri-ios.yml` builds the iOS simulator baseline on macOS.
+- `.github/workflows/tauri-android.yml` builds Android thin debug APK/AAB artifacts, verifies Python-free artifact contents, runs Android preflight/native plugin parity, proves UI/native-payload behavior on API 30 and API 35 emulators, and runs the packaged API 35 System WebView against an external Python WebRTC peer. Python is test infrastructure only and is not embedded in the thin package.
+- `.github/workflows/tauri-ios.yml` builds the iOS simulator baseline on macOS and installs/launches the Python-free thin `.app` in a real simulator, capturing a screenshot, process log, and keep-alive report.
 - `.github/workflows/frontend-sdk.yml` runs shared UI and SDK package checks.
 - `.github/workflows/release.yml` runs manual semantic-release readiness checks and publication.
 

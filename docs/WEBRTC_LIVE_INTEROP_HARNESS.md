@@ -21,6 +21,7 @@ WEBRTC_INTEROP_BROWSER=webkit WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop
 WEBRTC_INTEROP_BROWSER=webkit WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/webkit-turn ./scripts/webrtc_interop.sh turn
 WEBRTC_INTEROP_BROWSER=firefox WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/firefox-stun ./scripts/webrtc_interop.sh stun
 WEBRTC_INTEROP_BROWSER=firefox WEBRTC_INTEROP_ARTIFACT_DIR=reports/webrtc-interop/firefox-turn ./scripts/webrtc_interop.sh turn
+pnpm --filter @aurora/tauri-ui android:webrtc:interop  # running Android emulator/device + built thin APK
 ```
 
 On Linux, Playwright's `--with-deps` step installs host libraries in addition
@@ -29,6 +30,27 @@ must not treat a downloaded browser whose host libraries are unavailable as
 compatibility proof.
 
 `pnpm test:webrtc:interop` starts local Mosquitto WebSocket MQTT and coturn through `scripts/webrtc_interop_services.sh up`, waits until both published TCP listeners accept connections, then runs the direct lane. Required broker/TURN setup lives in `docker-compose.webrtc-interop.yml`; coturn uses long-term TURN credentials for the relay lane.
+
+The shell runner now invokes the discoverable
+`tests/e2e/webrtc_interop/live-interop.spec.ts` Playwright Test. Named test
+steps assert the selected ICE lane, DataChannel registry/events, reconnect
+without a repeated SAS prompt, uncertain-loss at-most-once behavior,
+revocation fail-closed behavior, and absence of HTTP fallback. The bundled
+`browser-entry.ts` remains the in-page scenario helper; process coordination
+and redacted aggregate report assembly remain shell/Python responsibilities.
+
+Android uses a second normal test rather than another shell-only assertion:
+`apps/aurora-tauri/tests/android/android-python-webrtc.e2e.test.ts`.
+It bundles the same `browser-entry.ts` for the legacy WebView target, launches
+the packaged Tauri Android app, connects to its System WebView over CDP, and
+starts the same external Python `RTCClient`. ADB reverse mappings expose only
+the local HTTP test document, MQTT-over-WebSocket signaling, and TCP TURN to
+the emulator. The test requires a selected relay pair plus bilateral pairing,
+typed registry/events, scoped subscription isolation, reconnect without a new
+SAS prompt, uncertain-loss at-most-once mutation, revocation fail-closed,
+redacted reports, and no Aurora HTTP transport. It is appended to the existing
+API 35 Android workflow step so these assertions do not create additional PR
+checks.
 
 The STUN lane uses the same local coturn server in STUN mode and applies harness-only ICE policies that suppress outbound `typ host` candidates in both the browser and Python signaling SDP/trickle path. The Python filter is a default-off `RTCClient` injection seam; production behavior is unchanged. This prevents same-host shortcut nomination from satisfying the STUN proof while preserving truthful `RTCPeerConnection.getStats()` evidence. Peer-reflexive (`prflx`) is reported as `prflx`, not normalized to `srflx`; a `prflx` selected pair passes STUN only when candidate stats also prove a configured STUN server gathered a true `srflx` candidate. Firefox requires the locally published non-loopback coturn address and omits the candidate URL from stats, so its scanner proof additionally requires exactly one configured STUN server; a reported URL mismatch or multiple ambiguous configured servers still fails.
 
@@ -45,8 +67,16 @@ The STUN lane uses the same local coturn server in STUN mode and applies harness
 | WebKit direct | `reports/webrtc-interop/webkit-direct/report.json` | Passed | Current selected category is raw `prflx`; the scanner accepts the peer-reflexive/host pair only without gathered STUN or relay evidence |
 | WebKit STUN/reflexive | `reports/webrtc-interop/webkit-stun/report.json` | Passed | Current selected category is `srflx`, with configured-STUN URL-match evidence from `getStats()` |
 | WebKit TURN relay | `reports/webrtc-interop/webkit-turn/report.json` | Passed | `selectedCandidatePair.category=relay` |
+| Android System WebView TURN relay | `apps/aurora-tauri/reports/webrtc-interop/android-webview/report.json` | Pending first CI run | The existing Android API 35 job owns the packaged WebView ↔ Python peer test and requires a selected relay pair; do not count it as passed until the unpushed workflow runs |
 
 The current checked reports prove direct, configured-STUN, and forced-TURN lanes in Chromium, Firefox, and Playwright WebKit. On another host, the default developer direct-matrix command preserves an explicit optional-engine skip; CI sets `WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS=1`, so an unavailable required direct engine fails rather than counting as compatibility proof.
+
+The Android test needs either hardware virtualization or a physical device for
+authoritative crypto/WebRTC evidence. A software-only x86 emulator is useful
+for UI/native payload smoke, but must not be treated as a substitute when its
+guest CPU/WebView cannot execute the SDK crypto workload correctly. CI uses
+the KVM-backed API 35 emulator and uploads the Android/Python/aggregate
+redacted reports from the same Android job.
 
 ## ICE path evidence schema
 
