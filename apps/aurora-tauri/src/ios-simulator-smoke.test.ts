@@ -65,18 +65,37 @@ describe('iOS simulator smoke runner', () => {
     expect(report.error).toContain('did not return a process id')
     expect(report.secretsRedacted).toBe(true)
   })
+
+  it('discovers the newest simulator app from a generated build tree', () => {
+    const fixture = createFixture({ useGeneratedAppTree: true })
+    const result = runSmoke(fixture, { useConfiguredApp: false })
+    const invocations = readFileSync(fixture.invocationPath, 'utf8')
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(invocations).toContain(
+      `simctl install ios-simulator-1 ${fixture.appPath}`,
+    )
+  })
 })
 
-function createFixture(options: { invalidLaunchOutput?: boolean } = {}) {
+function createFixture(
+  options: {
+    invalidLaunchOutput?: boolean
+    useGeneratedAppTree?: boolean
+  } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), 'aurora-ios-simulator-smoke-'))
   const bin = join(root, 'bin')
-  const appPath = join(root, 'Aurora.app')
+  const searchRoot = join(root, 'gen-apple')
+  const appPath = options.useGeneratedAppTree
+    ? join(searchRoot, 'build', 'aarch64-sim', 'Aurora.app')
+    : join(root, 'Aurora.app')
   const reportPath = join(root, 'report.json')
   const screenshotPath = join(root, 'screenshot.png')
   const logPath = join(root, 'simulator.log')
   const invocationPath = join(root, 'invocations.log')
   mkdirSync(bin)
-  mkdirSync(appPath)
+  mkdirSync(appPath, { recursive: true })
   writeFileSync(join(appPath, 'Info.plist'), '<plist/>')
 
   const xcrunPath = join(bin, 'xcrun')
@@ -116,6 +135,7 @@ if (args.join(' ') === 'simctl list devices available -j') {
     root,
     bin,
     appPath,
+    searchRoot,
     reportPath,
     screenshotPath,
     logPath,
@@ -123,14 +143,20 @@ if (args.join(' ') === 'simctl list devices available -j') {
   }
 }
 
-function runSmoke(fixture: ReturnType<typeof createFixture>) {
+function runSmoke(
+  fixture: ReturnType<typeof createFixture>,
+  options: { useConfiguredApp?: boolean } = {},
+) {
+  const useConfiguredApp = options.useConfiguredApp ?? true
   return spawnSync(process.execPath, [smokeScript], {
     cwd: packageRoot,
     env: {
       ...process.env,
       PATH: `${fixture.bin}${delimiter}${process.env.PATH ?? ''}`,
       AURORA_IOS_STUB_INVOCATIONS: fixture.invocationPath,
-      AURORA_IOS_SIMULATOR_APP: fixture.appPath,
+      ...(useConfiguredApp
+        ? { AURORA_IOS_SIMULATOR_APP: fixture.appPath }
+        : { AURORA_IOS_SIMULATOR_SEARCH_ROOT: fixture.searchRoot }),
       AURORA_IOS_SIMULATOR_REPORT: fixture.reportPath,
       AURORA_IOS_SIMULATOR_SCREENSHOT: fixture.screenshotPath,
       AURORA_IOS_SIMULATOR_LOG: fixture.logPath,

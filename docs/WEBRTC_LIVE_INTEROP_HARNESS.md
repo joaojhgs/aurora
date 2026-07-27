@@ -46,7 +46,10 @@ Android uses two normal tests rather than shell-only assertions:
 Android app, and connects to its System WebView over CDP. The second launches
 standalone Android Chrome without CDP, auto-runs the same shared browser
 harness, and returns its result over a loopback callback only after the WebRTC
-runtime has closed. Both start an external Python `RTCClient`. ADB reverse
+runtime has closed. CI runs the standalone Chrome lane with forced TURN because
+emulator direct ICE host reachability is not stable enough for a required PR
+gate; it remains a WebRTC/DataChannel proof rather than HTTP transport. Both
+start an external Python `RTCClient`. ADB reverse
 mappings expose only the local test document/result callback,
 MQTT-over-WebSocket signaling, and TURN to the emulator. Both tests execute the
 same browser entry and aggregate scanner as the desktop browser lanes,
@@ -92,7 +95,7 @@ The STUN lane uses the same local coturn server in STUN mode and applies harness
 | WebKit STUN/reflexive | `reports/webrtc-interop/webkit-stun/report.json` | Passed | Current selected category is `srflx`, with configured-STUN URL-match evidence from `getStats()` |
 | WebKit TURN relay | `reports/webrtc-interop/webkit-turn/report.json` | Passed | `selectedCandidatePair.category=relay` |
 | Android System WebView TURN relay | `apps/aurora-tauri/reports/webrtc-interop/android-webview/report.json` | Pending first CI run | The existing Android API 35 job owns the packaged WebView ↔ Python peer test and requires a selected relay pair; do not count it as passed until the unpushed workflow runs |
-| Android Chrome direct | `apps/aurora-tauri/reports/webrtc-interop/android-mobile-browser/report.json` | Pending first CI run | The same API 35 job launches the standalone mobile browser without CDP and requires a direct selected pair plus the complete shared interop assertion set |
+| Android Chrome TURN relay | `apps/aurora-tauri/reports/webrtc-interop/android-mobile-browser/report.json` | Pending first CI run | The same API 35 job launches the standalone mobile browser without CDP and requires a selected relay pair plus the complete shared interop assertion set |
 | iOS MobileSafari simulator direct | `apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/report.json` | Pending first CI run | The existing macOS iOS job launches MobileSafari without CDP/Web Inspector and requires a direct selected pair plus the complete shared external-Python interop assertion set |
 | iOS packaged Tauri WKWebView simulator direct | `apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview/report.json` | Pending first CI run | The same macOS job builds, scans, installs, and launches a dedicated Python-free Tauri WKWebView app and requires the same direct selected pair, pairing/RPC/reconnect/revocation, HTTP-disabled, and redaction evidence |
 

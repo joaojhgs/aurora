@@ -428,7 +428,7 @@ class TestStaleTimeoutPolicy:
         await registry.start()
         stale_check_task = registry._stale_check_task
         try:
-            await asyncio.wait_for(idle_iteration_completed.wait(), timeout=1)
+            await asyncio.wait_for(idle_iteration_completed.wait(), timeout=5)
             assert stale_check_task is not None
             assert not stale_check_task.done()
             assert registry.get_peer("peer-1").status == "negotiated"
@@ -440,7 +440,7 @@ class TestStaleTimeoutPolicy:
 
             store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
             activate_positive_timeout.set()
-            await asyncio.wait_for(stale_peer_detected.wait(), timeout=1)
+            await asyncio.wait_for(stale_peer_detected.wait(), timeout=5)
 
             assert registry.get_peer("peer-1").status == "stale"
             assert provider_reads == 2

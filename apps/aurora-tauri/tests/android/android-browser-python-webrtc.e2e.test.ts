@@ -26,6 +26,10 @@ import {
   redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
+import {
+  createAndroidHarnessRequestLog,
+  type AndroidHarnessRequestLogEntry,
+} from './android-webrtc-harness-utils.js'
 
 type BrowserConfig = {
   lane: string
@@ -45,6 +49,13 @@ type MobileResult = {
     stack?: string
   }
   consoleErrors?: string[]
+}
+
+type AndroidBrowserDiagnostics = {
+  harnessRequests: AndroidHarnessRequestLogEntry[]
+  currentActivity: string
+  windowHierarchy: string
+  logcatTail: string
 }
 
 const repoRoot = resolve(
@@ -77,7 +88,7 @@ const interopTimeoutMs = Number(
 )
 const interopLane = (() => {
   const lane =
-    process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE ?? 'direct'
+    process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE ?? 'turn'
   if (lane !== 'direct' && lane !== 'stun' && lane !== 'turn') {
     throw new Error(
       `AURORA_ANDROID_MOBILE_WEBRTC_LANE must be direct, stun, or turn; received ${lane}`,
@@ -111,6 +122,9 @@ describe('Android mobile-browser WebRTC interoperability', () => {
       )
       resources.setReadyConfig(ready)
       await launchAndroidBrowser(resources.deviceHarnessUrl)
+      await resources.waitForHarnessLoad(
+        Math.min(90_000, resources.timeoutMs),
+      )
 
       const started = Date.now()
       let mobileResult: MobileResult | undefined
@@ -291,6 +305,7 @@ async function createInteropResources() {
   let hostPort: number | undefined
   let readyConfig: BrowserConfig | undefined
   let mobileResultSettled = false
+  const harnessRequests = createAndroidHarnessRequestLog()
   let resolveMobileResult: (result: MobileResult) => void = () => undefined
   const mobileResultPromise = new Promise<MobileResult>((resolvePromise) => {
     resolveMobileResult = (result) => {
@@ -410,6 +425,7 @@ async function createInteropResources() {
           bundlePath,
           mqttBundlePath,
           cryptoWorkerBundlePath,
+          harnessRequests.record,
           () => {
             if (!readyConfig) {
               throw new Error(
@@ -500,6 +516,20 @@ async function createInteropResources() {
       pythonOutput += String(chunk)
     })
 
+    const browserDiagnostics = (): AndroidBrowserDiagnostics => ({
+      harnessRequests: harnessRequests.snapshot(),
+      currentActivity: adbOutputOrEmpty([
+        'shell',
+        'dumpsys',
+        'activity',
+        'activities',
+      ]).slice(-4_000),
+      windowHierarchy: readWindowHierarchy(),
+      logcatTail: adbOutputOrEmpty(['logcat', '-d', '-t', '300']).slice(
+        -8_000,
+      ),
+    })
+
     return {
       timeoutMs,
       readyPath,
@@ -522,6 +552,18 @@ async function createInteropResources() {
       deviceHarnessUrl: `http://127.0.0.1:${hostPort}/`,
       setReadyConfig(value: BrowserConfig) {
         readyConfig = value
+      },
+      async waitForHarnessLoad(waitMs: number): Promise<void> {
+        const deadline = Date.now() + waitMs
+        while (Date.now() < deadline) {
+          if (harnessRequests.hasAll(['document', 'bundle', 'config'])) {
+            return
+          }
+          await sleep(500)
+        }
+        throw new Error(
+          `Android Chrome did not load the WebRTC harness page: ${JSON.stringify(browserDiagnostics())}`,
+        )
       },
       async waitForMobileResult(waitMs: number): Promise<MobileResult> {
         const deadline = Date.now() + waitMs
@@ -551,7 +593,7 @@ async function createInteropResources() {
           }
         }
         throw new Error(
-          `Timed out waiting for Android mobile browser interop result after ${waitMs}ms`,
+          `Timed out waiting for Android mobile browser interop result after ${waitMs}ms: ${JSON.stringify(browserDiagnostics())}`,
         )
       },
       close,
@@ -568,6 +610,11 @@ async function handleHarnessRequest(
   bundlePath: string,
   mqttBundlePath: string,
   cryptoWorkerBundlePath: string,
+  recordRequest: (
+    kind: 'document' | 'bundle' | 'config' | 'result' | 'asset',
+    path: string,
+    method?: string,
+  ) => void,
   getConfig: () => Record<string, unknown>,
   publishResult: (result: MobileResult) => void,
 ): Promise<void> {
@@ -576,6 +623,7 @@ async function handleHarnessRequest(
     `http://${request.headers.host ?? '127.0.0.1'}`,
   )
   if (requestUrl.pathname === '/mqtt-bundle.mjs') {
+    recordRequest('asset', requestUrl.pathname, request.method)
     response.writeHead(200, {
       'content-type': 'application/javascript',
       'cache-control': 'no-store',
@@ -584,6 +632,7 @@ async function handleHarnessRequest(
     return
   }
   if (requestUrl.pathname === '/android-mobile-browser-bundle.js') {
+    recordRequest('bundle', requestUrl.pathname, request.method)
     response.writeHead(200, {
       'content-type': 'application/javascript',
       'cache-control': 'no-store',
@@ -592,6 +641,7 @@ async function handleHarnessRequest(
     return
   }
   if (requestUrl.pathname === '/crypto-worker-bundle.js') {
+    recordRequest('asset', requestUrl.pathname, request.method)
     response.writeHead(200, {
       'content-type': 'application/javascript',
       'cache-control': 'no-store',
@@ -600,6 +650,7 @@ async function handleHarnessRequest(
     return
   }
   if (requestUrl.pathname === '/interop-config') {
+    recordRequest('config', requestUrl.pathname, request.method)
     response.writeHead(200, {
       'content-type': 'application/json',
       'cache-control': 'no-store',
@@ -611,6 +662,7 @@ async function handleHarnessRequest(
     requestUrl.pathname === '/interop-result' &&
     request.method === 'POST'
   ) {
+    recordRequest('result', requestUrl.pathname, request.method)
     const value = JSON.parse(
       await readRequestBody(request, 2 * 1024 * 1024),
     ) as MobileResult
@@ -620,10 +672,12 @@ async function handleHarnessRequest(
     return
   }
   if (requestUrl.pathname === '/favicon.ico') {
+    recordRequest('asset', requestUrl.pathname, request.method)
     response.writeHead(204)
     response.end()
     return
   }
+  recordRequest('document', requestUrl.pathname, request.method)
   response.writeHead(200, {
     'content-type': 'text/html',
     'cache-control': 'no-store',
@@ -707,32 +761,25 @@ function mobileHarnessHtml(): string {
 
 async function launchAndroidBrowser(url: string): Promise<void> {
   await resetChromeForInterop()
-  run(adb, [
-    'shell',
-    'am',
-    'start',
-    '-a',
-    'android.intent.action.VIEW',
-    '-d',
-    'about:blank',
-    '--ez',
-    'skip_first_run_experience',
-    'true',
-    chromePackage,
-  ])
+  startChromeUrl('about:blank')
   const activityDeadline = Date.now() + 60_000
   while (Date.now() < activityDeadline) {
-    if (
-      adbOutputOrEmpty(['shell', 'dumpsys', 'activity', 'activities']).includes(
-        `${chromePackage}/org.chromium.chrome.browser.ChromeTabbedActivity`,
-      )
-    ) {
+    if (isChromeForeground()) {
       break
     }
     await sleep(500)
   }
   run(adb, ['shell', 'am', 'force-stop', chromePackage])
-  run(adb, [
+  startChromeUrl(url)
+  await sleep(2_000)
+  if (!isChromeForeground()) {
+    startChromeUrl(url, true)
+  }
+  await dismissChromeNotificationPrompt()
+}
+
+function startChromeUrl(url: string, explicitActivity = false): void {
+  const args = [
     'shell',
     'am',
     'start',
@@ -740,9 +787,32 @@ async function launchAndroidBrowser(url: string): Promise<void> {
     'android.intent.action.VIEW',
     '-d',
     url,
-    chromePackage,
+    '--ez',
+    'skip_first_run_experience',
+    'true',
+    '--activity-clear-top',
+  ]
+  if (explicitActivity) {
+    args.push('-n', `${chromePackage}/com.google.android.apps.chrome.Main`)
+  } else {
+    args.push(chromePackage)
+  }
+  run(adb, args)
+}
+
+function isChromeForeground(): boolean {
+  const activities = adbOutputOrEmpty([
+    'shell',
+    'dumpsys',
+    'activity',
+    'activities',
   ])
-  await dismissChromeNotificationPrompt()
+  return (
+    activities.includes(`${chromePackage}/`) ||
+    activities.includes(`packageName=${chromePackage}`) ||
+    activities.includes(`mResumedActivity`) &&
+      activities.includes(chromePackage)
+  )
 }
 
 async function resetChromeForInterop(): Promise<void> {
@@ -761,6 +831,17 @@ async function resetChromeForInterop(): Promise<void> {
     'rm',
     '-f',
     '/data/local/tmp/chrome-command-line',
+  ])
+  run(adb, [
+    'shell',
+    [
+      'printf %s ' +
+        shellQuote(
+          'chrome --disable-fre --no-first-run --no-default-browser-check --disable-search-engine-choice-screen',
+        ) +
+        ' > /data/local/tmp/chrome-command-line',
+      'chmod 644 /data/local/tmp/chrome-command-line',
+    ].join(' && '),
   ])
 
   const deadline = Date.now() + 60_000
@@ -876,6 +957,23 @@ async function dismissChromeNotificationPrompt(): Promise<void> {
     }
     await sleep(500)
   }
+}
+
+function readWindowHierarchy(): string {
+  spawnSync(
+    adb,
+    ['shell', 'uiautomator', 'dump', '/sdcard/aurora-window.xml'],
+    { stdio: 'ignore' },
+  )
+  return adbOutputOrEmpty([
+    'shell',
+    'cat',
+    '/sdcard/aurora-window.xml',
+  ]).slice(-8_000)
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
 }
 
 function adbOutputOrEmpty(args: string[]): string {

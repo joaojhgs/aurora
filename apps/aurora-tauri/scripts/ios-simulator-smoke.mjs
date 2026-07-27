@@ -177,13 +177,16 @@ function resolveSimulatorApp() {
     return path
   }
 
-  const root = join(packageRoot, 'src-tauri', 'gen', 'apple')
+  const root = resolve(
+    process.env.AURORA_IOS_SIMULATOR_SEARCH_ROOT ??
+      join(packageRoot, 'src-tauri', 'gen', 'apple'),
+  )
   if (!existsSync(root)) {
     throw new Error(
       'Generated iOS build directory is missing; run the iOS simulator build first',
     )
   }
-  const candidates = walk(root)
+  const candidates = Array.from(walk(root))
     .filter((path) => path.endsWith('.app'))
     .sort((left, right) => {
       const thinDelta = Number(right.includes('aarch64-sim')) - Number(left.includes('aarch64-sim'))

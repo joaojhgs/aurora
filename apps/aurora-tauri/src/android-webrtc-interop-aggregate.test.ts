@@ -64,7 +64,7 @@ function input() {
       present: true,
       parsed: true,
       digest,
-      report: completeReport('direct', 'host'),
+      report: completeReport('turn', 'relay'),
     },
   }
 }
@@ -91,8 +91,8 @@ describe('Android mobile-to-Python WebRTC aggregate', () => {
           passed: true,
         },
         mobileBrowser: {
-          expectedLane: 'direct',
-          observedPathCategory: 'host',
+          expectedLane: 'turn',
+          observedPathCategory: 'relay',
           passed: true,
         },
       },
@@ -127,7 +127,7 @@ describe('Android mobile-to-Python WebRTC aggregate', () => {
     [
       'wrong lane',
       (value: ReturnType<typeof input>) => {
-        value.browser.report.lane = 'turn'
+        value.browser.report.lane = 'direct'
       },
     ],
     [

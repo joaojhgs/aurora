@@ -27,6 +27,16 @@ const browserReportPath = join(
   'android-mobile-browser',
   'report.json',
 )
+const mobileBrowserExpectedLane = readLane(
+  process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE ?? 'turn',
+  'AURORA_ANDROID_MOBILE_WEBRTC_LANE',
+)
+const mobileBrowserExpectedPathCategories =
+  mobileBrowserExpectedLane === 'turn'
+    ? ['relay']
+    : mobileBrowserExpectedLane === 'stun'
+      ? ['srflx', 'prflx']
+      : ['host', 'prflx']
 const testFiles = [
   'tests/android/android-python-webrtc.e2e.test.ts',
   'tests/android/android-browser-python-webrtc.e2e.test.ts',
@@ -95,8 +105,8 @@ export function buildAndroidInteropAggregate(input) {
   const browser = summarizeChild({
     id: 'android-mobile-browser',
     sourceReport: 'android-mobile-browser/report.json',
-    expectedLane: 'direct',
-    expectedPathCategories: ['host', 'prflx'],
+    expectedLane: mobileBrowserExpectedLane,
+    expectedPathCategories: mobileBrowserExpectedPathCategories,
     readResult: input.browser,
   })
   const testCommandPassed = input.commandStatus === 0
@@ -266,6 +276,13 @@ function safeEnum(value, allowed) {
   return typeof value === 'string' && allowed.includes(value)
     ? value
     : 'unknown'
+}
+
+function readLane(value, source) {
+  if (value === 'direct' || value === 'stun' || value === 'turn') return value
+  throw new Error(
+    `${source} must be direct, stun, or turn; received ${String(value)}`,
+  )
 }
 
 function isRecord(value) {

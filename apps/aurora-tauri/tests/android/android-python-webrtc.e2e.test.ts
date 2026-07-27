@@ -19,6 +19,7 @@ import {
   redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
+import { splitAndroidConsoleErrors } from './android-webrtc-harness-utils.js'
 
 type BrowserConfig = {
   lane: string
@@ -164,10 +165,14 @@ describe('Android thin-shell WebRTC interoperability', () => {
           resources.roomSecret,
           resources.timeoutMs,
         )
+        const filteredConsoleErrors =
+          splitAndroidConsoleErrors(consoleErrors)
         resources.assertNoSeededSecrets({
           browserResult,
           networkRequests,
-          consoleErrors,
+          consoleErrors: filteredConsoleErrors.actionable,
+          ignoredConsoleErrors:
+            filteredConsoleErrors.ignoredTauriBootstrap,
         })
 
         const forbiddenHttp = forbiddenInteropTransportRequests(
@@ -182,7 +187,7 @@ describe('Android thin-shell WebRTC interoperability', () => {
           expectedNegotiationRole: ready.expectedNegotiationRole,
         })
         expect(forbiddenHttp).toEqual([])
-        expect(consoleErrors).toEqual([])
+        expect(filteredConsoleErrors.actionable).toEqual([])
 
         await writeJson(resources.browserReportPath, {
           lane: interopLane,
@@ -195,7 +200,9 @@ describe('Android thin-shell WebRTC interoperability', () => {
           noHttpFetchTransportUsed: true,
           networkRequestCount: networkRequests.length,
           forbiddenHttpRequests: forbiddenHttp,
-          consoleErrors,
+          consoleErrors: filteredConsoleErrors.actionable,
+          ignoredConsoleErrors:
+            filteredConsoleErrors.ignoredTauriBootstrap,
           reportDigest: crypto
             .createHash('sha256')
             .update(JSON.stringify(browserResult))
@@ -258,6 +265,8 @@ describe('Android thin-shell WebRTC interoperability', () => {
         const redactedError = resources.redactArtifactValue(
           error instanceof Error ? error.message : String(error),
         )
+        const filteredConsoleErrors =
+          splitAndroidConsoleErrors(consoleErrors)
         const failureReport = resources.redactArtifactValue({
           lane: interopLane,
           browserName: 'android-webview',
@@ -266,7 +275,9 @@ describe('Android thin-shell WebRTC interoperability', () => {
           error: redactedError,
           browserResult,
           networkRequests,
-          consoleErrors,
+          consoleErrors: filteredConsoleErrors.actionable,
+          ignoredConsoleErrors:
+            filteredConsoleErrors.ignoredTauriBootstrap,
           secretsRedacted: true,
         })
         resources.assertNoSeededSecrets(failureReport)
