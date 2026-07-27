@@ -676,15 +676,18 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 21. Existing desktop-local, HTTP web, HTTP thin, SDK conformance, Tauri boundary, Python mesh, and documentation checks remain green.
 22. The packaged Android System WebView and standalone Android mobile browser each pair with an external Python `RTCClient` while the Aurora HTTP application API is disabled, and both pass the shared negotiation-direction, pairing, manifest, structured-error, 512 KiB fragmentation, stream/cancel, scoped-event/TTS, reconnect, uncertain-mutation, revocation, and redaction assertions inside one consolidated Android CI check.
 23. MobileSafari in an iOS simulator pairs with an external Python `RTCClient` on the direct path while the Aurora HTTP application API is disabled and passes the same shared assertions inside the existing macOS iOS check; this browser-engine evidence must remain explicitly separate from packaged WKWebView and physical-device certification.
+24. A dedicated packaged iOS Tauri WKWebView simulator app pairs with an external Python `RTCClient` on the direct path while the Aurora HTTP application API is disabled, passes the shared browser assertions inside the existing macOS iOS check, and proves the built app contains no Python or sidecar payload.
 
 ### Active mobile-to-Python interoperability checklist
 
 - [x] Keep the packaged Android System WebView ↔ external Python `RTCClient` E2E in the consolidated Android workflow and on the shared browser assertion/scanner contract.
 - [x] Keep the standalone Android Chrome ↔ external Python `RTCClient` E2E in that same Android workflow without using CDP as the test-control/data path.
 - [x] Keep the iOS simulator MobileSafari ↔ external Python `RTCClient` direct-path E2E in the existing macOS iOS workflow and on the shared assertion/scanner contract.
+- [x] Keep the packaged iOS Tauri WKWebView ↔ external Python `RTCClient` direct-path E2E in that same iOS workflow, using the shared assertions and a built-app Python/sidecar scan.
 - [ ] Record a passing KVM-backed Android aggregate for both mobile peers; local software-renderer failure or a skipped host is not passing evidence.
 - [ ] Record a passing macOS iOS-simulator MobileSafari report.
-- [ ] Add separate packaged iOS WKWebView and physical Android/iOS direct/STUN/TURN evidence before claiming those client/device paths supported.
+- [ ] Record a passing macOS packaged iOS Tauri WKWebView report.
+- [ ] Add physical Android/iOS direct/STUN/TURN evidence before claiming those physical-device paths supported.
 
 ## 10. Risks and mitigations
 
