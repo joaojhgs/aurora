@@ -466,6 +466,9 @@ async function createInteropResources() {
     }
 
     hostPort = address.port
+    // `adb root` restarts adbd and clears reverse-port mappings. Elevate the
+    // emulator before installing the mappings that Chrome and WebRTC consume.
+    spawnSync(adb, ['root'], { stdio: 'ignore' })
     run(adb, ['wait-for-device'])
     run(adb, ['shell', 'svc', 'power', 'stayon', 'true'])
     run(adb, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
@@ -820,8 +823,6 @@ async function resetChromeForInterop(): Promise<void> {
     `/data/data/${chromePackage}/shared_prefs/` +
     `${chromePackage}_preferences.xml`
 
-  spawnSync(adb, ['root'], { stdio: 'ignore' })
-  run(adb, ['wait-for-device'])
   spawnSync(adb, ['logcat', '-c'], { stdio: 'ignore' })
   run(adb, ['shell', 'pm', 'enable', chromePackage])
   run(adb, ['shell', 'pm', 'clear', chromePackage])
