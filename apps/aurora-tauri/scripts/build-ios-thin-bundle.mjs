@@ -15,6 +15,7 @@ const tempDir = mkdtempSync(join(tmpdir(), 'aurora-ios-thin-simulator-'))
 const tempConfigPath = join(tempDir, 'tauri.ios-thin.conf.json')
 const tempPrepareReportPath = join(tempDir, 'ios-thin-bundle-prepare.json')
 const buildProvenancePath = join(reportDir, 'ios-thin-simulator-build-provenance.json')
+const appleBuildRoot = join(srcTauriRoot, 'gen', 'apple', 'build')
 
 try {
   run(process.execPath, [prepareScript], {
@@ -37,6 +38,9 @@ try {
     tempConfigPath,
   ]
 
+  // Tauri uses a fixed simulator archive path. A preceding baseline build can
+  // leave Aurora.app there and make the thin build's final rename fail.
+  rmSync(appleBuildRoot, { recursive: true, force: true })
   run('pnpm', buildArgs)
 
   mkdirSync(reportDir, { recursive: true })

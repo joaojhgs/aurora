@@ -227,6 +227,10 @@ describe('iOS thin bundle policy', () => {
     expect(wrapper).toContain('AURORA_TAURI_IOS_THIN_CONFIG_PATH')
     expect(wrapper).toContain("'--config',")
     expect(wrapper).toContain("'aarch64-sim'")
+    expect(wrapper).toContain("join(srcTauriRoot, 'gen', 'apple', 'build')")
+    expect(wrapper).toContain(
+      'rmSync(appleBuildRoot, { recursive: true, force: true })',
+    )
     expect(wrapper).toContain('pythonSidecarStaged: false')
     expect(frontendBuilder).toContain("'webrtc-only', 'webrtc-preferred'")
     expect(frontendBuilder).toContain(

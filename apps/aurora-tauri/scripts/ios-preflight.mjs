@@ -151,6 +151,8 @@ function validateThinWebRtcContract() {
     'AURORA_TAURI_IOS_THIN_CONFIG_PATH',
     "'--config',",
     "'aarch64-sim'",
+    "join(srcTauriRoot, 'gen', 'apple', 'build')",
+    'rmSync(appleBuildRoot, { recursive: true, force: true })',
     'pythonSidecarStaged: false'
   ]) {
     assert(buildThinBundle.includes(invariant), `iOS thin build wrapper is missing ${invariant}`)
