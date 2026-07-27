@@ -877,6 +877,14 @@ async function buildWkWebViewHarness({
   const distDir = join(tempDir, 'dist')
   const configPath = join(tempDir, 'tauri.wkwebview-interop.conf.json')
   const bundleId = 'dev.aurora.desktop'
+  const iosArchivePath = join(
+    appRoot,
+    'src-tauri',
+    'gen',
+    'apple',
+    'build',
+    'aurora-tauri_iOS.xcarchive',
+  )
   try {
     await fs.mkdir(distDir, { recursive: true })
     await Promise.all([
@@ -947,6 +955,11 @@ async function buildWkWebViewHarness({
       )}\n`,
     )
 
+    // The baseline and thin-build steps intentionally use the same generated
+    // Xcode project before this dedicated harness build. Tauri's iOS packager
+    // cannot replace a populated archive atomically, so remove only that
+    // derived archive while preserving the generated project itself.
+    await fs.rm(iosArchivePath, { recursive: true, force: true })
     run(
       'pnpm',
       [
