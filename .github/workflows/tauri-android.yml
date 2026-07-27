@@ -4,11 +4,22 @@ on:
   pull_request:
     paths:
       - "apps/aurora-tauri/**"
+      - "app/services/gateway/mesh/**"
+      - "app/services/gateway/webrtc/**"
+      - "app/services/gateway/utils/crypto.py"
+      - "app/shared/contracts/models/auth.py"
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
+      - "tests/e2e/webrtc_interop/**"
+      - "scripts/webrtc_interop_gateway.py"
+      - "scripts/webrtc_interop_scan.py"
+      - "scripts/webrtc_interop_services.sh"
+      - "docker-compose.webrtc-interop.yml"
       - "package.json"
+      - "pyproject.toml"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "uv.lock"
       - ".github/workflows/tauri-android.yml"
   workflow_dispatch:
 
@@ -32,6 +43,14 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Set up Python interop peer
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv for the external Python peer
+        uses: astral-sh/setup-uv@v5
+
       - name: Enable KVM for emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -47,6 +66,7 @@ jobs:
             "build-tools;35.0.0" \
             "ndk;27.0.12077973" \
             "emulator" \
+            "system-images;android-30;default;x86_64" \
             "system-images;android-35;google_apis;x86_64"
 
       - name: Set up Rust
@@ -65,6 +85,9 @@ jobs:
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install Python WebRTC peer dependencies
+        run: uv sync --extra gateway
 
       - name: Build shared UI packages
         run: |
@@ -129,11 +152,30 @@ jobs:
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
           if-no-files-found: error
 
-      - name: Emulator install and native payload smoke
+      - name: Android 11 baseline WebView and native payload E2E
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          emulator-boot-timeout: 1200
+          script: pnpm --filter @aurora/tauri-ui android:smoke
+
+      - name: Android 15 current WebView, native payload, and Python peer WebRTC E2E
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
           emulator-boot-timeout: 1200
-          script: pnpm --filter @aurora/tauri-ui android:smoke
+          script: |
+            pnpm --filter @aurora/tauri-ui android:smoke
+            pnpm --filter @aurora/tauri-ui android:webrtc:interop
+
+      - name: Upload Android WebView to Python WebRTC evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-python-webrtc-interop
+          path: apps/aurora-tauri/reports/webrtc-interop/android-webview/
+          if-no-files-found: warn

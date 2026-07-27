@@ -58,23 +58,23 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Baselines regenerated after the responsive mobile navigation sheet became
-  // explicitly aria-hidden and inert while closed. The always-visible desktop
-  // primary navigation remains exposed to assistive technology.
+  // Baselines regenerated after the shell gained explicit legacy-WebView CSS
+  // hooks and removed its duplicate hidden navigation control. The responsive
+  // sheet remains aria-hidden and inert while closed.
   assistant: {
-    desktop: '794b01c9d163',
-    tablet: '6ccf67acd98e',
-    mobile: '8d0a05fabce5'
+    desktop: 'f15d225f1d79',
+    tablet: '85f9be4bf254',
+    mobile: '13545f27828f'
   },
   admin: {
-    desktop: '49bed4a0ba69',
-    tablet: '0d2e7323469b',
-    mobile: 'f50f4e0a4ad5'
+    desktop: 'd3dc702f624f',
+    tablet: 'a76ffa690b0a',
+    mobile: '8d680daa3330'
   },
   'mobile-settings': {
-    desktop: 'ede9ebb11055',
-    tablet: 'dce0da861634',
-    mobile: 'e3544c03cab4'
+    desktop: '108d7aa844fd',
+    tablet: '0aafa73fc26b',
+    mobile: 'e2c3c0a31324'
   }
 }
 

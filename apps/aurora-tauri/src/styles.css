@@ -66,3 +66,11 @@ body[data-aurora-surface='overlay'] {
   margin: 0;
   overflow: hidden;
 }
+
+html[data-aurora-platform='android'] .aui-shell {
+  padding-bottom: 7rem;
+}
+
+html[data-aurora-platform='android'] .aui-mobile-tabs {
+  padding-bottom: max(env(safe-area-inset-bottom), 3rem);
+}

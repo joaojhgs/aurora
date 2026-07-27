@@ -65,7 +65,8 @@ describe('Tauri CI native evidence contract', () => {
       ['.github/workflows/tauri-android.yml', 'Tauri Android Verification', ['Android thin APK/AAB build and emulator smoke']],
       ['.github/workflows/tauri-ios.yml', 'Tauri iOS Baseline', ['macOS Xcode Tauri iOS init and build']],
       ['.github/workflows/tauri-ios-release.yml', 'Tauri iOS Policy and Signing', ['iOS manifest and UI policy', 'macOS Xcode iOS preflight']],
-      ['.github/workflows/e2e.yml', 'End-to-End Tests', ['Mesh transport E2E harness']],
+      ['.github/workflows/python-tests.yml', 'Python Tests', ['Unit, integration, and E2E tests']],
+      ['.github/workflows/webrtc-interop.yml', 'WebRTC live interop', ['Browser persistence and cross-engine network paths']],
     ]
     const seen = new Set<string>()
 
@@ -103,6 +104,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['ios:policy']).toBe('node ./scripts/ios-preflight.mjs --policy-only')
     expect(packageJson.scripts['ios:prepare:thin']).toContain('prepare-ios-thin-bundle.mjs')
     expect(packageJson.scripts['ios:build:thin:simulator']).toContain('build-ios-thin-bundle.mjs')
+    expect(packageJson.scripts['ios:smoke:simulator']).toContain('ios-simulator-smoke.mjs')
     expect(packageJson.scripts['build:frontend:ios-thin']).toBe('node ./scripts/build-ios-thin-frontend.mjs')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:thin:apk')
@@ -123,8 +125,19 @@ describe('Tauri CI native evidence contract', () => {
     ]) {
       expect(androidWorkflow, `Android AAB CI must install Rust target ${target}`).toContain(target)
     }
-    expect(androidWorkflow).not.toMatch(/Set up Python|uv sync|python3-dev/)
+    expect(packageJson.scripts['android:webrtc:interop']).toContain('android-python-webrtc.e2e.test.ts')
+    expect(packageJson.scripts['android:build:thin:apk']).not.toMatch(/python|uv/i)
+    expect(packageJson.scripts['android:build:thin:aab']).not.toMatch(/python|uv/i)
+    expect(androidWorkflow).toContain('Set up Python interop peer')
+    expect(androidWorkflow).toContain('Install uv for the external Python peer')
+    expect(androidWorkflow).toContain('uv sync --extra gateway')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:smoke')
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:webrtc:interop')
+    expect(androidWorkflow).toContain('apps/aurora-tauri/reports/webrtc-interop/android-webview/')
+    expect(androidWorkflow).toContain('api-level: 30')
+    expect(androidWorkflow).toContain('api-level: 35')
+    expect(androidWorkflow).toContain('Android 11 baseline WebView and native payload E2E')
+    expect(androidWorkflow).toContain('Android 15 current WebView, native payload, and Python peer WebRTC E2E')
     expect(iosBaselineWorkflow).toContain('runs-on: macos-latest')
     expect(iosBaselineWorkflow).toContain('CODE_SIGNING_ALLOWED: "NO"')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:build:thin:simulator')
@@ -133,6 +146,8 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(iosBaselineWorkflow).not.toContain('https://gateway.example.invalid')
     expect(iosBaselineWorkflow).toContain('ios-thin-simulator-build-provenance.json')
+    expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:smoke:simulator')
+    expect(iosBaselineWorkflow).toContain('ios-simulator-smoke.json')
     expect(iosBaselineWorkflow).not.toMatch(/Set up Python|uv sync|python3-dev/)
     expect(iosPolicyWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:policy')
     expect(iosPolicyWorkflow).toContain("if: inputs.app_store_dry_run == 'true'")

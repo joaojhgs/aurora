@@ -637,7 +637,7 @@ function retainedToolDisabledReason(retained: ToolRetainedRemoteToolModel): stri
     return `Blocked by peer permissions. Missing: ${retained.missingPermissions.join(', ')}.`
   }
   const reason = retained.providerReasonCode || retained.reasonCode || retained.effectiveAvailability
-  const readableReason = reason.replaceAll('_', ' ')
+  const readableReason = reason.split('_').join(' ')
   return `Retained peer tool is currently unavailable: ${readableReason}.`
 }
 

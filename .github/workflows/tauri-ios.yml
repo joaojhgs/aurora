@@ -80,6 +80,9 @@ jobs:
           AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"
         run: pnpm --filter @aurora/tauri-ui ios:build:thin:simulator
 
+      - name: Install, launch, and screenshot the thin app in an iOS simulator
+        run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
+
       - name: Smoke invoke Aurora App Intent handoff
         run: |
           xcrun swiftc \
@@ -131,3 +134,14 @@ jobs:
         with:
           name: aurora-ios-thin-build-provenance
           path: apps/aurora-tauri/reports/ios-thin-simulator-build-provenance.json
+
+      - name: Upload iOS simulator runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-simulator-smoke
+          path: |
+            apps/aurora-tauri/reports/ios-simulator-smoke.json
+            apps/aurora-tauri/reports/ios-simulator-smoke.png
+            apps/aurora-tauri/reports/ios-simulator-smoke.log
+          if-no-files-found: warn

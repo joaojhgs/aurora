@@ -1639,7 +1639,9 @@ fn redact_sensitive_value(value: &Value) -> Value {
         Value::Object(map) => Value::Object(
             map.iter()
                 .map(|(key, value)| {
-                    let redacted = if is_sensitive_log_key(key) {
+                    let redacted = if is_safe_redaction_metadata(key, value) {
+                        value.clone()
+                    } else if is_sensitive_log_key(key) {
                         json!("[redacted]")
                     } else {
                         redact_sensitive_value(value)
@@ -1651,6 +1653,22 @@ fn redact_sensitive_value(value: &Value) -> Value {
         Value::Array(values) => Value::Array(values.iter().map(redact_sensitive_value).collect()),
         Value::String(value) => Value::String(redact_sensitive_text(value)),
         _ => value.clone(),
+    }
+}
+
+fn is_safe_redaction_metadata(key: &str, value: &Value) -> bool {
+    match (key, value) {
+        ("secretsRedacted", Value::Bool(_)) => true,
+        ("android.secureCredentialStorage", Value::Bool(_)) => true,
+        ("android.secureCredentialStorage", Value::String(state)) => matches!(
+            state.as_str(),
+            "available"
+                | "degraded"
+                | "fallback"
+                | "needs_native_permission"
+                | "unsupported_platform"
+        ),
+        _ => false,
     }
 }
 
@@ -5451,6 +5469,53 @@ mod tests {
         }
         assert!(serialized.contains("[redacted]"));
         assert!(serialized.contains("raw-audio"));
+    }
+
+    #[test]
+    fn log_serialization_preserves_typed_redaction_and_capability_metadata() {
+        let payload = json!({
+            "secretsRedacted": true,
+            "capabilities": {
+                "android.secureCredentialStorage": true
+            },
+            "capabilityStates": {
+                "android.secureCredentialStorage": "available"
+            },
+            "credential": {
+                "tokenId": "token-id",
+                "rawBearerToken": "gateway-token"
+            }
+        });
+
+        let redacted = redact_sensitive_value(&payload);
+
+        assert_eq!(redacted["secretsRedacted"], json!(true));
+        assert_eq!(
+            redacted["capabilities"]["android.secureCredentialStorage"],
+            json!(true)
+        );
+        assert_eq!(
+            redacted["capabilityStates"]["android.secureCredentialStorage"],
+            json!("available")
+        );
+        assert_eq!(redacted["credential"], json!("[redacted]"));
+        assert!(!redacted.to_string().contains("gateway-token"));
+    }
+
+    #[test]
+    fn log_serialization_does_not_allow_arbitrary_credential_metadata_values() {
+        let payload = json!({
+            "android.secureCredentialStorage": "raw-credential",
+            "secretsRedacted": "not-a-boolean"
+        });
+
+        let redacted = redact_sensitive_value(&payload);
+
+        assert_eq!(
+            redacted["android.secureCredentialStorage"],
+            json!("[redacted]")
+        );
+        assert_eq!(redacted["secretsRedacted"], json!("[redacted]"));
     }
 
     #[test]

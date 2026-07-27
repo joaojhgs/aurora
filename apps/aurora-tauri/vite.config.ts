@@ -9,6 +9,7 @@ const omxWorktreeMarker = `${sep}.omx${sep}team${sep}`
 const leaderRepoRoot = repoRoot.includes(omxWorktreeMarker)
   ? repoRoot.slice(0, repoRoot.indexOf(omxWorktreeMarker))
   : repoRoot
+const webviewTarget = process.env.VITE_AURORA_WEBVIEW_TARGET?.trim()
 
 export default defineConfig({
   plugins: [react()],
@@ -24,6 +25,7 @@ export default defineConfig({
   envPrefix: ['VITE_', 'AURORA_'],
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    target: webviewTarget || undefined
   }
 })

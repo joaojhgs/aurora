@@ -29,6 +29,7 @@ const signaling = connectionMode === 'http-only' ? undefined : signalingCandidat
 const env = {
   ...process.env,
   VITE_AURORA_RUNTIME_MODE: 'android-thin',
+  VITE_AURORA_WEBVIEW_TARGET: 'chrome83',
   VITE_AURORA_GATEWAY_URL: gateway?.origin ?? '',
   VITE_AURORA_SIGNALING_URL: signaling?.origin ?? '',
   VITE_AURORA_CONNECTION_MODE: connectionMode,

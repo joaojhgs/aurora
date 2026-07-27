@@ -227,7 +227,7 @@ describeIfNode('Android-thin bundle artifact proof', () => {
     const stubDir = mkdtempSync(join(tmpdir(), 'aurora-android-thin-pnpm-'))
     const envPath = join(stubDir, 'frontend-env.json')
     const pnpmStub = join(stubDir, 'pnpm')
-    writeFileSync(pnpmStub, `#!/usr/bin/env node\nconst fs = require('node:fs')\nfs.writeFileSync(${JSON.stringify(envPath)}, JSON.stringify({ argv: process.argv.slice(2), gateway: process.env.VITE_AURORA_GATEWAY_URL, signaling: process.env.VITE_AURORA_SIGNALING_URL, connectionMode: process.env.VITE_AURORA_CONNECTION_MODE, mode: process.env.VITE_AURORA_RUNTIME_MODE }, null, 2))\n`)
+    writeFileSync(pnpmStub, `#!/usr/bin/env node\nconst fs = require('node:fs')\nfs.writeFileSync(${JSON.stringify(envPath)}, JSON.stringify({ argv: process.argv.slice(2), gateway: process.env.VITE_AURORA_GATEWAY_URL, signaling: process.env.VITE_AURORA_SIGNALING_URL, connectionMode: process.env.VITE_AURORA_CONNECTION_MODE, mode: process.env.VITE_AURORA_RUNTIME_MODE, webviewTarget: process.env.VITE_AURORA_WEBVIEW_TARGET }, null, 2))\n`)
     chmodSync(pnpmStub, 0o755)
 
     const ok = spawnSync(process.execPath, [buildFrontend], {
@@ -247,7 +247,8 @@ describeIfNode('Android-thin bundle artifact proof', () => {
       gateway: 'https://gateway.example.invalid',
       signaling: 'wss://signaling.example.invalid',
       connectionMode: 'webrtc-preferred',
-      mode: 'android-thin'
+      mode: 'android-thin',
+      webviewTarget: 'chrome83',
     })
 
     const webrtcOnly = spawnSync(process.execPath, [buildFrontend], {
@@ -269,6 +270,7 @@ describeIfNode('Android-thin bundle artifact proof', () => {
       signaling: 'wss://signaling.example.invalid',
       connectionMode: 'webrtc-only',
       mode: 'android-thin',
+      webviewTarget: 'chrome83',
     })
   })
 

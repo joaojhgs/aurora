@@ -331,7 +331,7 @@ const isAllowKind = (kind: string) =>
 
 const approvalOptionLabel = (option: ToolApprovalOption) =>
   option.label ??
-  (Object.hasOwn(APPROVAL_OPTION_DEFAULT_LABELS, option.kind)
+  (Object.prototype.hasOwnProperty.call(APPROVAL_OPTION_DEFAULT_LABELS, option.kind)
     ? APPROVAL_OPTION_DEFAULT_LABELS[option.kind]
     : undefined) ??
   option.id;
@@ -366,7 +366,7 @@ function ToolFallbackApproval({
   // always preserves a refusal path.
   const declaredOptions = respondToApproval ? approval?.options : undefined;
   const options = declaredOptions?.filter((o) =>
-    Object.hasOwn(APPROVAL_OPTION_DEFAULT_LABELS, o.kind),
+    Object.prototype.hasOwnProperty.call(APPROVAL_OPTION_DEFAULT_LABELS, o.kind),
   );
 
   const respond = (approved: boolean) => {

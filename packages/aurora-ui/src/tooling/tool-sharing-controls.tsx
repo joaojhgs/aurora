@@ -437,7 +437,7 @@ export function decisionSourceLabel(source: ToolExportDecisionModel['inheritedFr
     case 'peer_group': return `Group default for ${peerLabel}`
     case 'global_group': return 'Group default for all peers'
     case 'global_default': return 'Global default'
-    default: return String(source).replaceAll('_', ' ')
+    default: return String(source).split('_').join(' ')
   }
 }
 

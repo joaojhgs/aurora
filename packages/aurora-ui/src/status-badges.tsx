@@ -123,18 +123,13 @@ export function presentableSignal(label: string): string {
   if (/^cloud\s*\//i.test(normalized)) return 'Cloud'
   if (/^native[:/]/i.test(normalized)) return 'Native'
   return label
-    .replaceAll('Aurora', 'Aurora')
-    .replaceAll('Local transport', 'Local mode')
-    .replaceAll('service state', 'service state')
-    .replaceAll('Service state', 'Service state')
-    .replaceAll('No service state', 'Not ready')
-    .replaceAll('route state', 'route state')
-    .replaceAll('Route state', 'Route state')
-    .replaceAll('evidence', 'state')
+    .split('Local transport').join('Local mode')
+    .split('No service state').join('Not ready')
+    .split('evidence').join('state')
     .replace(/evidence/gi, 'State')
-    .replaceAll('mock', 'Local')
-    .replaceAll('demo only', 'local preview')
-    .replaceAll('demo', 'local')
+    .split('mock').join('Local')
+    .split('demo only').join('local preview')
+    .split('demo').join('local')
 }
 
 function statusLabel(state: AvailabilityState): string {

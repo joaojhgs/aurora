@@ -9511,7 +9511,7 @@ body { margin:0;overflow:hidden;background:var(--aui-bg);color:var(--aui-ink);fo
 a { color:inherit;text-decoration:none }
 button,input,select,textarea { font:inherit }
 :focus-visible { outline:3px solid color-mix(in srgb,var(--aui-focus) 70%,var(--aui-bg));outline-offset:2px }
-.aui-shell { display:flex;min-height:100dvh;height:100dvh;overflow:hidden;background:var(--aui-bg) }
+.aui-shell { display:flex;min-height:100vh;min-height:100dvh;height:100vh;height:100dvh;overflow:hidden;background:var(--aui-bg) }
 .aui-sidebar { display:flex;flex:0 0 248px;flex-direction:column;border-right:1px solid var(--aui-border);background:var(--aui-surface) }
 .aui-shell[data-activity-collapsed="true"] .aui-content-grid { grid-template-columns:minmax(0,1fr) }
 .aui-shell[data-activity-collapsed="true"] .aui-content-grid>.aui-activity { display:none }
@@ -9544,7 +9544,8 @@ button,input,select,textarea { font:inherit }
 .aui-mobile-menu summary,.aui-mobile-menu button { display:grid;width:2.4rem;height:2.4rem;place-items:center;border:1px solid var(--aui-border);border-radius:0.45rem;cursor:pointer;list-style:none }
 .aui-mobile-menu summary::-webkit-details-marker { display:none }
 .aui-mobile-menu button { color:var(--aui-ink);background:transparent }
-.aui-mobile-sheet { position:fixed;inset:3.6rem auto 0 0;z-index:20;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(19rem,90vw);max-height:calc(100dvh - 3.6rem);border-right:1px solid var(--aui-border);background:var(--aui-surface);box-shadow:0 1rem 3rem rgb(0 0 0 / 0.16);overflow:auto }
+.aui-mobile-sheet { position:fixed;top:3.6rem;right:auto;bottom:0;left:0;inset:3.6rem auto 0 0;z-index:20;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(19rem,90vw);max-height:calc(100vh - 3.6rem);max-height:calc(100dvh - 3.6rem);border-right:1px solid var(--aui-border);background:var(--aui-surface);box-shadow:0 1rem 3rem rgb(0 0 0 / 0.16);overflow:auto }
+.aui-mobile-sheet-layout { display:flex;height:100%;flex-direction:column }
 .aui-mobile-menu .aui-mobile-sheet { visibility:hidden;opacity:0;transform:translateX(-105%);pointer-events:none;transition:opacity 0.16s ease,transform 0.16s ease,visibility 0.16s ease }
 .aui-mobile-menu[data-open="true"] .aui-mobile-sheet,.aui-mobile-menu:focus-within .aui-mobile-sheet { visibility:visible;opacity:1;transform:translateX(0);pointer-events:auto }
 .aui-mobile-sheet-body { min-width:0;overflow:auto }
@@ -10469,7 +10470,7 @@ button,input,select,textarea { font:inherit }
 @media (max-width: 720px) { .aui-status-row .aui-shell-status:nth-of-type(n+3) { display:none }.aui-page-header,.aui-assistant-header,.aui-config-header { display:grid }.aui-page-header-badges,.aui-assistant-badges { justify-content:flex-start }.aui-route-matrix,.aui-diagnostics-grid { grid-template-columns:minmax(0,1fr) }.aui-assistant-runtime-strip dl,.aui-device-posture-grid,.aui-token-create-preview { grid-template-columns:minmax(0,1fr) }.aui-assistant-form { position:sticky;bottom:4.6rem;z-index:10 }.aui-activity-drawer-panel { top:4.2rem;right:0.5rem;width:calc(100vw - 1rem) } }
 /* Visual Ralph correction:match the mock cockpit structure,not a dashboard skin. */
  .aui-sr-only { position:absolute !important;width:1px !important;height:1px !important;padding:0 !important;margin:-1px !important;overflow:hidden !important;clip:rect(0,0,0,0) !important;white-space:nowrap !important;border:0 !important }
-.aui-shell { height:100dvh;min-height:0;overflow:hidden;background:var(--aui-bg) }
+.aui-shell { height:100vh;height:100dvh;min-height:0;overflow:hidden;background:var(--aui-bg) }
 .aui-sidebar { flex:0 0 16rem;background:#15171b;box-shadow:none;backdrop-filter:none }
 .aui-brand { min-height:3.75rem;padding:0.85rem 1rem }
 .aui-brand-mark { width:2rem;height:2rem;border-radius:0.5rem;color:var(--aui-primary);background:rgb(94 234 212 / 0.15);box-shadow:none }
@@ -10548,7 +10549,7 @@ button,input,select,textarea { font:inherit }
 .aui-route-panel-head button { display:grid;width:2.2rem;height:2.2rem;place-items:center;border:1px solid var(--aui-border);border-radius:0.65rem;background:transparent;color:var(--aui-muted) }
 .aui-voice-panel,.aui-attachment-panel { margin:1rem }
 @media (max-width: 1280px) { .aui-content-grid { display:flex }.aui-content-grid>.aui-activity { display:none } }
-@media (max-width: 1040px) { .aui-shell { display:flex;height:100dvh;overflow:hidden;padding-bottom:0 }.aui-main-column { height:100dvh }.aui-content { padding:0 0 4rem }.aui-content:has(.aui-assistant) { padding:0 0 4rem }.aui-activity-drawer { display:none }.aui-topbar { min-height:3.5rem;height:3.5rem }.aui-status-row .aui-shell-status:nth-of-type(n+4) { display:none }.aui-assistant-grid { flex-basis:calc(100dvh - 7.5rem);min-height:calc(100dvh - 7.5rem) }.aui-conversation-rail { display:none } }
+@media (max-width: 1040px) { .aui-shell { display:flex;height:100vh;height:100dvh;overflow:hidden;padding-bottom:0 }.aui-main-column { height:100vh;height:100dvh }.aui-content { padding:0 0 4rem }.aui-content:has(.aui-assistant) { padding:0 0 4rem }.aui-activity-drawer { display:none }.aui-topbar { min-height:3.5rem;height:3.5rem }.aui-status-row .aui-shell-status:nth-of-type(n+4) { display:none }.aui-assistant-grid { flex-basis:calc(100vh - 7.5rem);flex-basis:calc(100dvh - 7.5rem);min-height:calc(100vh - 7.5rem);min-height:calc(100dvh - 7.5rem) }.aui-conversation-rail { display:none } }
 @media (max-width: 720px) { .aui-chat-panel { gap:1.25rem;padding:1.5rem 1rem }.aui-chat-bubble { max-width:92% }.aui-assistant-form { position:relative;bottom:auto;z-index:1;grid-template-columns:auto minmax(0,1fr) auto auto;padding:0.75rem 1rem calc(1rem + env(safe-area-inset-bottom)) }.aui-route-panel { top:0;width:min(26rem,100vw) } }
 .aui-assistant-form .aui-route-trigger { width:auto;min-height:1.6rem;border:0;border-radius:0;background:transparent;color:var(--aui-muted);padding:0;font-weight:650 }
 .aui-assistant-form .aui-route-trigger:hover { background:transparent;color:var(--aui-ink) }
@@ -10709,7 +10710,7 @@ body { font-size:14px;line-height:1.45 }
 .aui-assistant-form { padding-inline:max(1rem,calc((100% - var(--aui-chat-width)) / 2)) }
 .aui-assistant-form>.aui-composer-send { width:2.45rem;height:2.45rem;min-height:2.45rem;border-radius:999px }
 @media (max-width: 1040px) { .aui-topbar::after { display:none } }
-@media (max-width: 720px) { .aui-mobile-menu button { border-color:transparent;background:transparent;border-radius:0 }.aui-content:has(.aui-assistant) { overflow:auto }.aui-assistant { height:auto;min-height:calc(100dvh - 3.5rem);overflow:visible }.aui-assistant-grid { flex:none;min-height:auto;height:auto }.aui-chat-workspace { display:flex;flex-direction:column;min-height:auto }.aui-chat-panel { overflow:visible;padding-inline:1rem;padding-bottom:1rem }.aui-chat-user { max-width:82% }.aui-chat-assistant { max-width:94% }.aui-assistant-form { position:static;margin-top:0.75rem;padding-inline:1rem } }
+@media (max-width: 720px) { .aui-mobile-menu button { border-color:transparent;background:transparent;border-radius:0 }.aui-content:has(.aui-assistant) { overflow:auto }.aui-assistant { height:auto;min-height:calc(100vh - 3.5rem);min-height:calc(100dvh - 3.5rem);overflow:visible }.aui-assistant-grid { flex:none;min-height:auto;height:auto }.aui-chat-workspace { display:flex;flex-direction:column;min-height:auto }.aui-chat-panel { overflow:visible;padding-inline:1rem;padding-bottom:1rem }.aui-chat-user { max-width:82% }.aui-chat-assistant { max-width:94% }.aui-assistant-form { position:static;margin-top:0.75rem;padding-inline:1rem } }
 @media (max-width: 720px) { .aui-topbar { gap:0.25rem;padding-inline:0.75rem 0.45rem }.aui-status-row { gap:0.22rem }.aui-shell-status { gap:0.24rem;padding:0.22rem 0.46rem;font-size:0.74rem }.aui-shell-status>svg,.aui-topbar-icon { width:12px;height:12px }.aui-chat-panel { gap:1rem;padding-top:1.05rem }.aui-chat-bubble { font-size:0.9rem }.aui-chat-user>p { font-size:0.94rem;line-height:1.45 }.aui-chat-assistant>p { font-size:0.94rem;line-height:1.48 }.aui-message-sources,.aui-message-actions { font-size:0.74rem }.aui-assistant-tool-card { margin-top:-0.15rem;padding:0.75rem 0.85rem } }
 /* Visual Ralph correction pass 9:prevent mobile tool badge wrapping. */
  .aui-assistant-tool-card header span { white-space:nowrap }
@@ -11556,4 +11557,8 @@ body { font-size:14px;line-height:1.45 }
   .aui-composer-toolbar [data-slot="model-selector-trigger"] { max-width:68vw }
   .aui-assistant-model-selector-trigger { max-width:45vw !important }
   .aui-selector-prefix { display:none }
+}
+@media (max-width: 860px) {
+  /* Chrome 83 ignores the inset shorthand used by Android 11 System WebView. */
+  .aui-mobile-tabs { top:auto;right:0;bottom:0;left:0 }
 }

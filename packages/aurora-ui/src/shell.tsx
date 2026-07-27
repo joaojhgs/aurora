@@ -118,25 +118,12 @@ export function AppShell({
       </aside>
       <div className="aui-main-column flex min-w-0 flex-1 flex-col">
         <header className="aui-topbar flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={navigationOpen ? "Hide navigation menu" : "Show navigation menu"}
-            aria-expanded={navigationOpen}
-            aria-controls="primary-navigation"
-            onClick={handleMobileMenuToggle}
-            className="hidden"
-            tabIndex={-1}
-          >
-            <Menu size={20} aria-hidden />
-          </Button>
           <div className="aui-mobile-menu md:hidden" data-open={navigationOpen ? "true" : "false"}>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Open menu"
+              aria-label={navigationOpen ? "Hide navigation menu" : "Show navigation menu"}
               aria-expanded={navigationOpen}
               aria-controls="primary-navigation"
               onClick={handleMobileMenuToggle}
@@ -158,12 +145,12 @@ export function AppShell({
             </div>
           </div>
           <div className="aui-status-row flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
-            <ModeBadge mode={shellSurfaceLabel(snapshot)} />
-            <HealthBadge health={shellHealthLabel(snapshot)} />
-            <IdentityBadge identity={shellIdentityBadgeLabel(snapshot)} />
+            <ModeBadge mode={shellSurfaceLabel(snapshot)} className="aui-shell-status" />
+            <HealthBadge health={shellHealthLabel(snapshot)} className="aui-shell-status" />
+            <IdentityBadge identity={shellIdentityBadgeLabel(snapshot)} className="aui-shell-status" />
           </div>
           <span
-            className="shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
+            className="aui-runtime-chip shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
             aria-label="Aurora version and uptime"
           >
             v0.9.2 <strong className="text-success">· 4h 12m</strong>
@@ -179,7 +166,7 @@ export function AppShell({
             aria-pressed={activityRailCollapsed}
             title="Toggle activity rail"
             onClick={handleActivityRailToggle}
-            className="shrink-0"
+            className="aui-activity-toggle shrink-0"
           >
             <PanelRight size={18} aria-hidden />
           </Button>
@@ -229,10 +216,10 @@ function MobileNavigationSheet({
 }) {
   const activeRoute = routes.find((route) => route.item.href === activePath);
   return (
-    <div className="flex h-full flex-col" role="dialog" aria-labelledby="aui-mobile-sheet-title">
+    <div className="aui-mobile-sheet-layout flex h-full flex-col" role="dialog" aria-labelledby="aui-mobile-sheet-title">
       <BrandHeader snapshot={snapshot} />
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
-        <p className="text-sm font-semibold" id="aui-mobile-sheet-title">
+      <div className="aui-mobile-sheet-body flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+        <p className="aui-mobile-sheet-title text-sm font-semibold" id="aui-mobile-sheet-title">
           Navigation
         </p>
         <MobileSheetRouteSummary route={activeRoute} snapshot={snapshot} />
@@ -243,8 +230,8 @@ function MobileNavigationSheet({
           {...(onNavigate ? { onNavigate } : {})}
         />
       </div>
-      <div className="flex items-center gap-2 border-t border-border p-3" aria-label="Mobile identity">
-        <Avatar className="size-[26px]">
+      <div className="aui-mobile-sheet-footer flex items-center gap-2 border-t border-border p-3" aria-label="Mobile identity">
+        <Avatar className="aui-avatar size-[26px]">
           <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">AD</AvatarFallback>
         </Avatar>
         <div>
@@ -264,7 +251,7 @@ function MobileSheetRouteSummary({
   snapshot: AuroraShellSnapshot;
 }) {
   return (
-    <Card className="p-3" aria-label="Current mobile route">
+    <Card className="aui-mobile-sheet-summary p-3" aria-label="Current mobile route">
       <div className="flex flex-col gap-0.5">
         <span className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Current route</span>
         <strong className="text-sm">{route?.item.label ?? "Assistant"}</strong>
@@ -272,7 +259,7 @@ function MobileSheetRouteSummary({
           {route ? shellRouteSummaryLabel(route) : "Aurora cockpit ready."}
         </small>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Current mobile route state">
+      <div className="aui-mobile-sheet-summary-badges mt-2 flex flex-wrap items-center gap-1.5" aria-label="Current mobile route state">
         <EvidenceBadge label={route ? shellRouteBadgeLabel(route) : "Ready"} />
         <EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} ready`} />
       </div>
@@ -291,7 +278,7 @@ function MobileBottomTabs({
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]));
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-border bg-background py-1.5 md:hidden" aria-label="Mobile navigation">
+    <nav className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-border bg-background py-1.5 md:hidden" aria-label="Mobile navigation">
       {auroraMobileTabs.map((tab) => (
         <MobileBottomTab
           key={tab.id}
@@ -348,7 +335,7 @@ export function ShellNavigation({
   const routeById = new Map(routes.map((route) => [route.item.id, route]));
   return (
     <nav
-      className={cn("flex flex-1 flex-col gap-4", compact ? "p-0" : "p-2.5")}
+      className={cn("aui-nav flex flex-1 flex-col gap-4", compact ? "p-0" : "p-2.5")}
       aria-label={compact ? "Mobile sheet route navigation" : "Primary route navigation"}
     >
       {auroraNavSections.map((section) => (
