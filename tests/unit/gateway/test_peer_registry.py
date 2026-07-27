@@ -125,6 +125,14 @@ def _with_service(mesh_config: MeshConfig, module: str, policy) -> MeshConfig:
     return mesh_config.model_copy(update={"services": services})
 
 
+def _stale_timeout_and_ping() -> tuple[float, float]:
+    """Return a positive timeout and an older, still-valid monotonic timestamp."""
+
+    observed_at = time.monotonic()
+    assert observed_at > 0
+    return observed_at / 4, observed_at / 2
+
+
 class TestPeerRegistration:
     """Tests for register/remove operations."""
 
@@ -332,7 +340,7 @@ class TestStaleTimeoutPolicy:
         await registry.register_peer("peer-1")
         await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
         registry.on_peer_status_changed.reset_mock()
-        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+        _, registry.get_peer("peer-1").last_ping = _stale_timeout_and_ping()
 
         await registry._check_stale_peers()
 
@@ -345,14 +353,15 @@ class TestStaleTimeoutPolicy:
         mesh_config,
         monkeypatch,
     ):
+        positive_timeout, stale_last_ping = _stale_timeout_and_ping()
         store = MeshPolicyStore()
-        store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
+        store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": positive_timeout}))
         registry = PeerRegistry(store.current().mesh_config, store.provider())
         registry.on_peer_status_changed = AsyncMock()
         await registry.register_peer("peer-1")
         await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
         registry.on_peer_status_changed.reset_mock()
-        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+        registry.get_peer("peer-1").last_ping = stale_last_ping
         observed_status_after_zero_check = []
         sleep_calls = 0
 
@@ -363,7 +372,11 @@ class TestStaleTimeoutPolicy:
                 store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 0}))
             elif sleep_calls == 2:
                 observed_status_after_zero_check.append(registry.get_peer("peer-1").status)
-                store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
+                store.replace(
+                    mesh_config.model_copy(
+                        update={"stale_peer_timeout_s": positive_timeout},
+                    )
+                )
             else:
                 raise asyncio.CancelledError
 
@@ -381,6 +394,7 @@ class TestStaleTimeoutPolicy:
         mesh_config,
         monkeypatch,
     ):
+        positive_timeout, stale_last_ping = _stale_timeout_and_ping()
         store = MeshPolicyStore()
         store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 0}))
         provider_reads = 0
@@ -395,7 +409,7 @@ class TestStaleTimeoutPolicy:
         await registry.register_peer("peer-1")
         await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
         registry.on_peer_status_changed.reset_mock()
-        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+        registry.get_peer("peer-1").last_ping = stale_last_ping
 
         idle_iteration_completed = asyncio.Event()
         activate_positive_timeout = asyncio.Event()
@@ -434,7 +448,11 @@ class TestStaleTimeoutPolicy:
             await registry.start()
             assert registry._stale_check_task is stale_check_task
 
-            store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 30.0}))
+            store.replace(
+                mesh_config.model_copy(
+                    update={"stale_peer_timeout_s": positive_timeout},
+                )
+            )
             activate_positive_timeout.set()
             await asyncio.wait_for(stale_peer_detected.wait(), timeout=5)
 
@@ -461,7 +479,7 @@ class TestStaleTimeoutPolicy:
         store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 0}))
         registry = PeerRegistry(store.current().mesh_config, provider)
         await registry.register_peer("peer-1")
-        registry.get_peer("peer-1").last_ping = time.monotonic() - 3600
+        _, registry.get_peer("peer-1").last_ping = _stale_timeout_and_ping()
 
         await registry._check_stale_peers(store.current().mesh_config)
 
