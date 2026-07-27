@@ -22,6 +22,7 @@ class FakeMqttClient implements MqttClientLike {
   unsubscriptions: string[] = []
   publishes: Array<{ topic: string; payload: Uint8Array; options: MqttPublishOptions }> = []
   ended = false
+  endForce: boolean | undefined
 
   on(event: any, handler: (...args: any[]) => void): this {
     const list = this.handlers.get(event) ?? []
@@ -38,8 +39,16 @@ class FakeMqttClient implements MqttClientLike {
     this.subscriptions.push({ topic, qos: options.qos })
   }
 
+  async subscribeAsync(topic: string, options: { qos: 0 | 1 }) {
+    this.subscribe(topic, options)
+  }
+
   unsubscribe(topic: string) {
     this.unsubscriptions.push(topic)
+  }
+
+  async unsubscribeAsync(topic: string) {
+    this.unsubscribe(topic)
   }
 
   publish(topic: string, payload: Uint8Array, options: MqttPublishOptions) {
@@ -47,8 +56,17 @@ class FakeMqttClient implements MqttClientLike {
     return { waitForPublish: vi.fn() }
   }
 
-  end() {
+  async publishAsync(topic: string, payload: Uint8Array, options: MqttPublishOptions) {
+    this.publish(topic, payload, options)
+  }
+
+  end(force?: boolean) {
     this.ended = true
+    this.endForce = force
+  }
+
+  async endAsync(force?: boolean) {
+    this.end(force)
   }
 }
 
@@ -176,6 +194,43 @@ describe('MQTT WebSocket signaling contract', () => {
     expect(seen).toHaveLength(1)
     expect(seen[0]).toEqual(expect.objectContaining({ sdp: 'exact-sdp' }))
     expect(signaling.diagnostics().lastError).toBe('malformed_or_undecryptable_signaling_payload')
+  })
+
+  it('publishes an acknowledged departure before closing the signaling session', async () => {
+    const client = new FakeMqttClient()
+    const signaling = new MqttWebSocketSignalingClient({
+      brokers: ['wss://mqtt.example.test/mqtt'],
+      crypto: jsonCrypto(),
+      mqttFactory: delayedFactory(client).factory,
+      randomId: () => 'peer-offer'
+    })
+
+    await signaling.connect(room)
+    await signaling.close()
+
+    const departure = JSON.parse(
+      new TextDecoder().decode(client.publishes.at(-1)?.payload)
+    )
+    expect(departure).toEqual(expect.objectContaining({
+      type: 'presence_departed',
+      peer_id: 'peer-offer',
+      stable_peer_id: 'stable-offer'
+    }))
+    expect(client.publishes.at(-1)?.options).toEqual({
+      qos: 1,
+      retain: true,
+      properties: { messageExpiryInterval: 300 }
+    })
+    expect(client.unsubscriptions).toEqual(
+      roomSubscriptions('aurora', 'aurora-fixture', 'lab-room', 'peer-offer')
+        .map(({ topic }) => topic)
+    )
+    expect(client.ended).toBe(true)
+    expect(client.endForce).toBe(false)
+    expect(signaling.snapshot()).toEqual(expect.objectContaining({
+      connected: false,
+      closed: true
+    }))
   })
 
   it('fails over brokers, redacts diagnostics, restores room state on reconnect, and suppresses explicit close reconnect', async () => {

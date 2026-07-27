@@ -69,9 +69,13 @@ export interface MqttClientLike {
   on(event: 'message', handler: (topic: string, payload: Uint8Array | Buffer | string) => void): this
   on(event: 'close' | 'offline' | 'error', handler: (error?: unknown) => void): this
   subscribe(topic: string, options: MqttSubscribeOptions): void | Promise<void>
+  subscribeAsync?(topic: string, options: MqttSubscribeOptions): Promise<unknown>
   unsubscribe(topic: string): void | Promise<void>
+  unsubscribeAsync?(topic: string): Promise<unknown>
   publish(topic: string, payload: Uint8Array, options: MqttPublishOptions): MqttPublishPacket | Promise<MqttPublishPacket | void> | void
+  publishAsync?(topic: string, payload: Uint8Array, options: MqttPublishOptions): Promise<unknown>
   end(force?: boolean): void | Promise<void>
+  endAsync?(force?: boolean): Promise<void>
 }
 
 export interface MqttConnectOptions {
@@ -232,6 +236,7 @@ export class MqttWebSocketSignalingClient {
   private explicitClose = false
   private connected = false
   private reconnecting = false
+  private departurePublished = false
 
   constructor(options: MqttSignalingOptions) {
     if (options.brokers.length === 0) throw new Error('At least one MQTT signaling broker is required')
@@ -277,6 +282,7 @@ export class MqttWebSocketSignalingClient {
     for (const broker of this.options.brokers) {
       try {
         validateBrokerUrl(broker, this.options)
+        this.departurePublished = false
         const connectOptions: MqttConnectOptions = {
           protocolVersion: 5,
           reconnectPeriod: 0,
@@ -330,15 +336,16 @@ export class MqttWebSocketSignalingClient {
   }
 
   async leave(): Promise<void> {
-    if (!this.client || !this.room) return
+    if (!this.client || !this.room || !this.connected) return
     const payload = await this.options.crypto.seal(this.presenceEnvelope('presence_departed'))
     await this.publish(this.topic(`presence/${this.room.signalingPeerId}`), payload, {
       qos: PRESENCE_QOS,
       retain: true,
       properties: { messageExpiryInterval: DEPARTURE_EXPIRY_SECONDS }
     })
+    this.departurePublished = true
     for (const { topic } of roomSubscriptions(this.root, this.room.appId, this.room.room, this.room.signalingPeerId)) {
-      await this.client.unsubscribe(topic)
+      await this.unsubscribe(topic)
     }
     this.connected = false
   }
@@ -346,12 +353,31 @@ export class MqttWebSocketSignalingClient {
   async close(reason = 'explicit_close'): Promise<void> {
     void reason
     this.explicitClose = true
-    this.closed = true
-    this.connected = false
     const client = this.client
-    this.client = null
-    if (client) await client.end(true)
-    this.handlers.clear()
+    let departedGracefully = this.departurePublished
+    try {
+      if (client && this.room && this.connected) {
+        await this.leave()
+        departedGracefully = true
+      }
+    } catch (error) {
+      this.diagnosticsState.lastError = this.redactError(error)
+    } finally {
+      this.closed = true
+      this.connected = false
+      this.client = null
+      try {
+        if (client) {
+          if (typeof client.endAsync === 'function') {
+            await client.endAsync(!departedGracefully)
+          } else {
+            await client.end(!departedGracefully)
+          }
+        }
+      } finally {
+        this.handlers.clear()
+      }
+    }
   }
 
   private installClient(client: MqttClientLike, broker: string): void {
@@ -402,7 +428,7 @@ export class MqttWebSocketSignalingClient {
   private async restoreRoomState(): Promise<void> {
     if (!this.client || !this.room) return
     for (const sub of roomSubscriptions(this.root, this.room.appId, this.room.room, this.room.signalingPeerId)) {
-      await this.client.subscribe(sub.topic, { qos: sub.qos })
+      await this.subscribe(sub.topic, { qos: sub.qos })
     }
     const payload = await this.options.crypto.seal(this.presenceEnvelope('presence'))
     await this.publish(this.topic(`presence/${this.room.signalingPeerId}`), payload, { qos: PRESENCE_QOS, retain: true })
@@ -504,9 +530,31 @@ export class MqttWebSocketSignalingClient {
 
   private async publish(topic: string, payload: Uint8Array, options: MqttPublishOptions): Promise<void> {
     if (!this.client) throw new Error('MQTT signaling is not connected')
+    if (typeof this.client.publishAsync === 'function') {
+      await this.client.publishAsync(topic, payload, options)
+      return
+    }
     const result = await this.client.publish(topic, payload, options)
     const wait = result?.waitForPublish
     if (typeof wait === 'function') await wait.call(result)
+  }
+
+  private async subscribe(topic: string, options: MqttSubscribeOptions): Promise<void> {
+    if (!this.client) throw new Error('MQTT signaling is not connected')
+    if (typeof this.client.subscribeAsync === 'function') {
+      await this.client.subscribeAsync(topic, options)
+      return
+    }
+    await this.client.subscribe(topic, options)
+  }
+
+  private async unsubscribe(topic: string): Promise<void> {
+    if (!this.client) return
+    if (typeof this.client.unsubscribeAsync === 'function') {
+      await this.client.unsubscribeAsync(topic)
+      return
+    }
+    await this.client.unsubscribe(topic)
   }
 
   private redactError(error: unknown): string {
