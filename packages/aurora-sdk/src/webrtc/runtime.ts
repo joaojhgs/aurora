@@ -428,7 +428,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
 
   private snapshotFromSession(snapshot: PeerSessionSnapshot | null, profile: WebRtcPeerConnectionProfile | undefined): PeerConnectionSnapshot {
     const bridgeDiagnostics = this.bridge?.getDiagnostics?.()
-    const lastDiagnostic = this.diagnostics.at(-1)
+    const lastDiagnostic = this.diagnostics[this.diagnostics.length - 1]
     return {
       state: snapshot?.state ?? (this.mode === 'http-only' ? 'idle' : 'closed'),
       connectionMode: this.mode,
@@ -967,7 +967,7 @@ function assertSecureRuntime(profile: WebRtcPeerConnectionProfile, options: Brow
 }
 
 function isLoopbackHost(host: string): boolean {
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
+  return host === 'localhost' || host === 'tauri.localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
 }
 
 function defaultPeerConnectionFactory(configuration: RTCConfiguration): PeerConnectionLike {

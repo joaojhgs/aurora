@@ -8,6 +8,7 @@ on:
       - "packages/aurora-ui/src/browser-peer-persistence.ts"
       - "packages/aurora-ui/src/web-thin-runtime.ts"
       - "apps/aurora-web/app/aurora-client.ts"
+      - "apps/aurora-tauri/src/legacy-webview-polyfills.ts"
       - "tests/e2e/webrtc_interop/**"
       - "tests/e2e/browser_persistence/**"
       - "scripts/webrtc_interop*"
@@ -19,21 +20,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  browser-persistent-reconnect:
+  live-interop:
+    name: Browser persistence and cross-engine network paths
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium firefox webkit
-      - run: pnpm test:web-persistence
+    timeout-minutes: 90
 
-  chromium-direct:
-    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,56 +36,15 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
-      - run: uv sync --all-extras
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:webrtc:interop
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: webrtc-interop-direct
-          path: reports/webrtc-interop/direct/
 
-  chromium-turn:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: astral-sh/setup-uv@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
-      - run: uv sync --all-extras
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:webrtc:turn
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: webrtc-interop-turn
-          path: reports/webrtc-interop/turn/
-
-  cross-engine-network-paths:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: astral-sh/setup-uv@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: pnpm
       - run: uv sync --all-extras
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
-      - name: Run strict direct and supported network-path matrix
+
+      - name: Run encrypted browser persistence E2E tests
+        run: pnpm test:web-persistence
+
+      - name: Run strict direct, STUN, and TURN interoperability matrix
         env:
           WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS: "1"
         run: |
@@ -119,5 +69,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: webrtc-interop-cross-engine-network-paths
+          name: webrtc-interop-e2e
           path: reports/webrtc-interop/
+          if-no-files-found: warn

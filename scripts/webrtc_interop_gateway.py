@@ -434,6 +434,92 @@ def non_host_ice_candidate(candidate_sdp: str) -> bool:
     return re.search(r"\btyp\s+host\b", candidate_sdp, flags=re.IGNORECASE) is None
 
 
+def build_ready_payload(
+    *,
+    lane: str,
+    app_id: str,
+    room: str,
+    broker_url: str,
+    stun_servers: list[str],
+    turn_servers: list[str],
+    timeout_seconds: float,
+    gateway_http_reachable: bool,
+    ready_at: str,
+) -> dict[str, Any]:
+    """Build the browser handoff without serializing room-password or bearer secrets."""
+    return {
+        "lane": lane,
+        "appId": app_id,
+        "room": room,
+        "brokerUrl": broker_url,
+        "expectedStablePeerId": "python-gateway-g009",
+        "localStablePeerId": "browser-g009",
+        "nodeName": "G009 Python Gateway",
+        "stunServers": stun_servers,
+        "turnServers": turn_servers,
+        "turnUsername": "interop" if turn_servers else None,
+        "turnCredential": "interop" if turn_servers else None,
+        "forceRelay": lane == "turn",
+        "suppressHostCandidates": lane == "stun",
+        "eventTopic": SAFE_EVENT_TOPIC,
+        "eventCorrelationId": f"g009-corr-{lane}",
+        "ttsEventTopic": TTS_EVENT_TOPIC,
+        "ttsCorrelationId": f"g009-tts-{lane}",
+        "wrongCorrelationId": f"g009-wrong-{lane}",
+        "mutationTopic": MUTATE_TOPIC,
+        "mutationCountTopic": MUTATION_COUNT_TOPIC,
+        "mutationStartedTopic": MUTATION_STARTED_TOPIC,
+        "revokeTopic": REVOKE_TOPIC,
+        "timeoutMs": int(timeout_seconds * 1000),
+        "gatewayHttpApiEnabled": False,
+        "gatewayHttpReachable": gateway_http_reachable,
+        "readyAt": ready_at,
+    }
+
+
+def build_gateway_report(
+    *,
+    lane: str,
+    started_at: str,
+    duration_ms: int,
+    gateway_http_reachable: bool,
+    diagnostics: dict[str, Any],
+    bus: InteropBus,
+    event_sent: bool,
+    tts_event_sent: bool,
+    wrong_correlation_interested: bool,
+    wildcard_interested: bool,
+    revoked_reconnect_failures: int,
+) -> dict[str, Any]:
+    """Build the redacted Python-peer report consumed by the aggregate scanner."""
+    return {
+        "lane": lane,
+        "startedAt": started_at,
+        "durationMs": duration_ms,
+        "gatewayHttpApiEnabled": False,
+        "gatewayHttpReachable": gateway_http_reachable,
+        "rtcStarted": diagnostics.get("started"),
+        "localSignalingPeerIdPresent": bool(diagnostics.get("local_signaling_peer_id")),
+        "localMeshPeerId": diagnostics.get("local_mesh_peer_id"),
+        "connectedPeerCount": diagnostics.get("connected_peer_count"),
+        "authenticatedPeerCount": diagnostics.get("authenticated_peer_count"),
+        "eventSent": event_sent,
+        "ttsEventSent": tts_event_sent,
+        "scopedEventEvidence": {
+            "wrongCorrelationInterested": wrong_correlation_interested,
+            "wildcardInterested": wildcard_interested,
+        },
+        "mutationCounts": bus.mutation_counts,
+        "mutationRecords": bus.mutation_records,
+        "revoked": bus.revoked,
+        "reconnectEvidence": {"revokedReconnectFailuresObserved": revoked_reconnect_failures},
+        "requests": bus.requests,
+        "publishes": bus.publish_records,
+        "diagnostics": diagnostics,
+        "secretsRedacted": True,
+    }
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lane", required=True, choices=["direct", "stun", "turn"])
@@ -547,34 +633,17 @@ async def main() -> int:
 
     write_json(
         ready_path,
-        {
-            "lane": args.lane,
-            "appId": args.app_id,
-            "room": args.room,
-            "brokerUrl": args.broker,
-            "expectedStablePeerId": "python-gateway-g009",
-            "localStablePeerId": "browser-g009",
-            "nodeName": "G009 Python Gateway",
-            "stunServers": args.stun,
-            "turnServers": args.turn,
-            "turnUsername": "interop" if args.turn else None,
-            "turnCredential": "interop" if args.turn else None,
-            "forceRelay": args.lane == "turn",
-            "suppressHostCandidates": args.lane == "stun",
-            "eventTopic": SAFE_EVENT_TOPIC,
-            "eventCorrelationId": f"g009-corr-{args.lane}",
-            "ttsEventTopic": TTS_EVENT_TOPIC,
-            "ttsCorrelationId": f"g009-tts-{args.lane}",
-            "wrongCorrelationId": f"g009-wrong-{args.lane}",
-            "mutationTopic": MUTATE_TOPIC,
-            "mutationCountTopic": MUTATION_COUNT_TOPIC,
-            "mutationStartedTopic": MUTATION_STARTED_TOPIC,
-            "revokeTopic": REVOKE_TOPIC,
-            "timeoutMs": int(args.timeout * 1000),
-            "gatewayHttpApiEnabled": False,
-            "gatewayHttpReachable": can_connect("127.0.0.1", 8000),
-            "readyAt": now(),
-        },
+        build_ready_payload(
+            lane=args.lane,
+            app_id=args.app_id,
+            room=args.room,
+            broker_url=args.broker,
+            stun_servers=args.stun,
+            turn_servers=args.turn,
+            timeout_seconds=args.timeout,
+            gateway_http_reachable=can_connect("127.0.0.1", 8000),
+            ready_at=now(),
+        ),
     )
 
     event_sent = False
@@ -642,32 +711,19 @@ async def main() -> int:
     diagnostics = rtc.get_diagnostics().model_dump(mode="json")
     write_json(
         report_path,
-        {
-            "lane": args.lane,
-            "startedAt": now(),
-            "durationMs": round((time.monotonic() - started_at) * 1000),
-            "gatewayHttpApiEnabled": False,
-            "gatewayHttpReachable": can_connect("127.0.0.1", 8000),
-            "rtcStarted": diagnostics.get("started"),
-            "localSignalingPeerIdPresent": bool(diagnostics.get("local_signaling_peer_id")),
-            "localMeshPeerId": diagnostics.get("local_mesh_peer_id"),
-            "connectedPeerCount": diagnostics.get("connected_peer_count"),
-            "authenticatedPeerCount": diagnostics.get("authenticated_peer_count"),
-            "eventSent": event_sent,
-            "ttsEventSent": tts_event_sent,
-            "scopedEventEvidence": {
-                "wrongCorrelationInterested": wrong_corr_interest,
-                "wildcardInterested": wildcard_interest,
-            },
-            "mutationCounts": bus.mutation_counts,
-            "mutationRecords": bus.mutation_records,
-            "revoked": bus.revoked,
-            "reconnectEvidence": {"revokedReconnectFailuresObserved": revoked_reconnect_failures},
-            "requests": bus.requests,
-            "publishes": bus.publish_records,
-            "diagnostics": diagnostics,
-            "secretsRedacted": True,
-        },
+        build_gateway_report(
+            lane=args.lane,
+            started_at=now(),
+            duration_ms=round((time.monotonic() - started_at) * 1000),
+            gateway_http_reachable=can_connect("127.0.0.1", 8000),
+            diagnostics=diagnostics,
+            bus=bus,
+            event_sent=event_sent,
+            tts_event_sent=tts_event_sent,
+            wrong_correlation_interested=wrong_corr_interest,
+            wildcard_interested=wildcard_interest,
+            revoked_reconnect_failures=revoked_reconnect_failures,
+        ),
     )
     await rtc.close()
     return 0 if done_path.exists() else 2

@@ -211,7 +211,7 @@ function parseSubscribe(object: Record<string, unknown>, limits: ParserLimits): 
 }
 
 function parseSubscribed(object: Record<string, unknown>, limits: ParserLimits): SubscribedFrame {
-  if (Object.hasOwn(object, 'expires_at')) throw new WebRtcProtocolParseError('subscribed uses ttl_seconds, not expires_at')
+  if (Object.prototype.hasOwnProperty.call(object, 'expires_at')) throw new WebRtcProtocolParseError('subscribed uses ttl_seconds, not expires_at')
   return {
     type: 'subscribed',
     id: requireId(object.id) as string,
@@ -312,13 +312,13 @@ function parsePairingTerminal(object: Record<string, unknown>): PairingTerminalF
 }
 
 function parseMeshAuthChallenge(object: Record<string, unknown>): MeshAuthChallengeFrame {
-  if (Object.hasOwn(object, 'token_id')) throw new WebRtcProtocolParseError('mesh_auth_challenge_v1 must not include token_id')
-  if (Object.hasOwn(object, 'proof') || Object.hasOwn(object, 'proof_hmac_sha256')) throw new WebRtcProtocolParseError('mesh_auth_challenge_v1 must not include proof')
+  if (Object.prototype.hasOwnProperty.call(object, 'token_id')) throw new WebRtcProtocolParseError('mesh_auth_challenge_v1 must not include token_id')
+  if (Object.prototype.hasOwnProperty.call(object, 'proof') || Object.prototype.hasOwnProperty.call(object, 'proof_hmac_sha256')) throw new WebRtcProtocolParseError('mesh_auth_challenge_v1 must not include proof')
   return parseMeshAuthBindings(object, 'mesh_auth_challenge_v1') as MeshAuthChallengeFrame
 }
 
 function parseMeshAuthProof(object: Record<string, unknown>): MeshAuthProofFrame {
-  if (Object.hasOwn(object, 'proof_hmac_sha256')) throw new WebRtcProtocolParseError('mesh_auth_proof_v1 uses proof, not proof_hmac_sha256')
+  if (Object.prototype.hasOwnProperty.call(object, 'proof_hmac_sha256')) throw new WebRtcProtocolParseError('mesh_auth_proof_v1 uses proof, not proof_hmac_sha256')
   return {
     ...(parseMeshAuthBindings(object, 'mesh_auth_proof_v1') as MeshAuthProofFrame),
     token_id: requireString(object.token_id, 'token_id', ID_MAX),

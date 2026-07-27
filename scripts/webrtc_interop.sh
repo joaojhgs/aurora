@@ -95,16 +95,26 @@ for _ in $(seq 1 200); do
 done
 [[ -s "$READY" ]] || { echo "Gateway readiness timed out" >&2; exit 1; }
 
-node scripts/webrtc_interop_browser.mjs \
-  --lane "$LANE" \
-  --browser "$BROWSER" \
-  --ready "$READY" \
-  --done "$DONE" \
-  --report "$BROWSER_REPORT" \
-  --artifact-dir "$ARTIFACT_ROOT"
+set +e
+WEBRTC_INTEROP_LANE="$LANE" \
+  WEBRTC_INTEROP_READY="$READY" \
+  WEBRTC_INTEROP_DONE="$DONE" \
+  WEBRTC_INTEROP_BROWSER_REPORT="$BROWSER_REPORT" \
+  WEBRTC_INTEROP_ARTIFACT_DIR="$ARTIFACT_ROOT" \
+  pnpm exec playwright test \
+    --config tests/e2e/webrtc_interop/playwright.config.ts \
+    --project "$BROWSER"
+BROWSER_STATUS=$?
+set -e
 
 wait "$PY_PID" || PY_STATUS=$?
 PY_STATUS=${PY_STATUS:-0}
 
+set +e
 python scripts/webrtc_interop_scan.py --artifact-dir "$ARTIFACT_ROOT" --python-report "$PY_REPORT" --browser-report "$BROWSER_REPORT" --out "$FINAL_REPORT" --lane "$LANE"
-exit "$PY_STATUS"
+SCAN_STATUS=$?
+set -e
+
+if [[ "$BROWSER_STATUS" -ne 0 ]]; then exit "$BROWSER_STATUS"; fi
+if [[ "$PY_STATUS" -ne 0 ]]; then exit "$PY_STATUS"; fi
+exit "$SCAN_STATUS"

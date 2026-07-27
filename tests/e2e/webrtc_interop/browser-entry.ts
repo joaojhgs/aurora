@@ -1,6 +1,11 @@
+import '../../../apps/aurora-tauri/src/legacy-webview-polyfills.js'
 import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, MqttWebSocketSignalingClient, type WebRtcPeerConnectionProfile } from '../../../packages/aurora-sdk/src/webrtc/index.js'
 import * as mqtt from 'mqtt'
 import { scryptAsync } from '@noble/hashes/scrypt.js'
+import {
+  candidatePairMatchesLane,
+  type InteropCandidatePairEvidence
+} from './assertions.js'
 
 export type InteropBrowserConfig = {
   lane: string
@@ -27,6 +32,10 @@ export type InteropBrowserConfig = {
   mutationCountTopic: string
   mutationStartedTopic: string
   revokeTopic: string
+  runtimeLocation?: {
+    protocol: string
+    hostname: string
+  }
 }
 
 type Snapshot = ReturnType<ReturnType<typeof createBrowserWebRtcAuroraRuntime>['peer']['snapshot']>
@@ -151,41 +160,9 @@ function countPendingPairing(snapshots: Snapshot[], startIndex = 0): number {
   return snapshots.slice(startIndex).filter((item) => Boolean(item.pendingPairing)).length
 }
 
-type CandidatePairEvidence = Awaited<ReturnType<ReturnType<typeof createBrowserWebRtcAuroraRuntime>['peer']['getSelectedCandidatePairEvidence']>>
-
-function candidatePairMatchesLane(lane: string, evidence: CandidatePairEvidence): boolean {
-  if (evidence.selected !== true) return false
-  if (lane === 'direct') {
-    const candidateTypes = [evidence.localCandidateType, evidence.remoteCandidateType]
-    return evidence.category === 'host'
-      || (
-        evidence.category === 'prflx'
-        && candidateTypes.includes('prflx')
-        && candidateTypes.includes('host')
-        && !candidateTypes.includes('relay')
-        && evidence.stunServerReflexiveCandidate?.gathered !== true
-      )
-  }
-  if (lane === 'turn') return evidence.category === 'relay' && [evidence.localCandidateType, evidence.remoteCandidateType].includes('relay')
-  if (lane === 'stun') {
-    const selectedReflexive = [evidence.localCandidateType, evidence.remoteCandidateType]
-      .some((type) => type === 'srflx' || type === 'prflx')
-    const configuredStunUrlProven = evidence.stunServerReflexiveCandidate?.urlMatchesConfiguredStunServer === true
-      || (
-        evidence.stunServerReflexiveCandidate?.urlMatchesConfiguredStunServer === undefined
-        && evidence.stunServerReflexiveCandidate?.configuredStunServerCount === 1
-      )
-    const gatheredViaConfiguredStun = evidence.stunServerReflexiveCandidate?.gathered === true
-      && configuredStunUrlProven
-    return selectedReflexive
-      && (evidence.category === 'srflx' || (evidence.category === 'prflx' && gatheredViaConfiguredStun))
-  }
-  return evidence.category !== 'unknown'
-}
-
 async function waitForSelectedCandidatePair(runtime: ReturnType<typeof createBrowserWebRtcAuroraRuntime>, lane: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs
-  let last = await runtime.peer.getSelectedCandidatePairEvidence()
+  let last: InteropCandidatePairEvidence = await runtime.peer.getSelectedCandidatePairEvidence()
   while (Date.now() < deadline) {
     if (candidatePairMatchesLane(lane, last)) return last
     await sleep(100)
@@ -250,7 +227,7 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
     ),
     signalingFactory: (options) => new MqttWebSocketSignalingClient({ ...options, mqttFactory }),
     allowInsecureLoopback: true,
-    windowLocation: window.location,
+    windowLocation: config.runtimeLocation ?? window.location,
     scryptDeriver: async (password, salt, params) => scryptAsync(password, salt, { N: params.N, r: params.r, p: params.p, dkLen: params.dkLen }),
     pairingConnectPoll: {
       maxAttempts: Math.max(20, Math.ceil(config.timeoutMs / 500)),
@@ -346,7 +323,7 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       lane: config.lane,
       authorized: snapshot.state === 'authorized' || revokedSnapshot.state === 'awaiting-sas-confirmation',
       finalStateAfterRevocation: revokedSnapshot.state,
-      icePathCategory: snapshots.findLast((item) => item.icePathCategory !== 'unknown')?.icePathCategory ?? snapshot.icePathCategory,
+      icePathCategory: [...snapshots].reverse().find((item) => item.icePathCategory !== 'unknown')?.icePathCategory ?? snapshot.icePathCategory,
       selectedCandidatePair,
       selectedSignalingBrokerOrigin: snapshot.selectedSignalingBrokerOrigin,
       iceCandidatePolicy: {

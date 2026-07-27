@@ -511,6 +511,9 @@ export class MqttWebSocketSignalingClient {
 
   private redactError(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error ?? 'unknown error')
-    return this.options.brokers.reduce((redacted, broker) => redacted.replaceAll(broker, redactBrokerUrl(broker)), message)
+    return this.options.brokers.reduce(
+      (redacted, broker) => redacted.split(broker).join(redactBrokerUrl(broker)),
+      message,
+    )
   }
 }

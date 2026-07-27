@@ -288,6 +288,18 @@ describe('browser WebRTC Aurora runtime facade', () => {
     })).not.toThrow()
   })
 
+  it('allows the packaged Tauri local origin when loopback signaling is explicitly enabled', () => {
+    expect(() => createBrowserWebRtcAuroraRuntime({
+      mode: 'webrtc-only',
+      profile: profile({
+        mode: 'webrtc-only',
+        allowInsecureLoopbackSignaling: true,
+      }),
+      allowInsecureLoopback: true,
+      windowLocation: { protocol: 'http:', hostname: 'tauri.localhost' },
+    })).not.toThrow()
+  })
+
   it('removes visibility listeners when the thin runtime closes', async () => {
     const visibilityDocument = {
       visibilityState: 'visible' as const,

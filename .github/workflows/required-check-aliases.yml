@@ -15,7 +15,7 @@ jobs:
       - name: Alias current process-mode test lane
         run: |
           echo "Compatibility status for stale branch-protection context."
-          echo "Canonical check: Python Tests / Process-mode integration tests."
+          echo "Canonical check: Python Tests / Unit, integration, and E2E tests."
 
   lint-alias:
     name: lint (3.11)
@@ -33,4 +33,4 @@ jobs:
       - name: Alias current unit and integration test lane
         run: |
           echo "Compatibility status for stale branch-protection context."
-          echo "Canonical check: Python Tests / Unit and integration tests."
+          echo "Canonical check: Python Tests / Unit, integration, and E2E tests."
