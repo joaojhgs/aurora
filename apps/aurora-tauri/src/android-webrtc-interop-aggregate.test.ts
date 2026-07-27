@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 // @ts-expect-error The Node-executed .mjs runner intentionally has no TS build output.
-import {
-  buildAndroidInteropAggregate,
-  resolveMobileBrowserExpectations,
-} from '../scripts/run-android-webrtc-interop.mjs'
+import { buildAndroidInteropAggregate, resolveMobileBrowserExpectations } from '../scripts/run-android-webrtc-interop.mjs'
 
 const digest = 'a'.repeat(64)
 
