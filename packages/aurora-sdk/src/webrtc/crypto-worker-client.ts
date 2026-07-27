@@ -55,8 +55,8 @@ export function deriveScryptInWorker(
       worker.removeEventListener('error', onError)
       options.signal?.removeEventListener('abort', onAbort)
       worker.terminate()
-      zeroBytes(passwordCopy)
-      zeroBytes(saltCopy)
+      if (passwordCopy.byteLength > 0) zeroBytes(passwordCopy)
+      if (saltCopy.byteLength > 0) zeroBytes(saltCopy)
     }
 
     const finish = (callback: () => void): void => {

@@ -35,7 +35,10 @@ describe('WebRTC package boundary', () => {
       import: './dist/webrtc-protocol-contract.js',
       default: './dist/webrtc-protocol-contract.js'
     })
-    expect(pkg.dependencies).toEqual({ '@noble/hashes': '2.2.0', mqtt: '5.15.2' })
+    expect(pkg.dependencies).toEqual({
+      '@noble/hashes': '2.2.0',
+      mqtt: '5.15.2'
+    })
   })
 
   it('does not expose raw room/data keys, bearer tokens, raw RTC objects, or MQTT package adapter types', () => {

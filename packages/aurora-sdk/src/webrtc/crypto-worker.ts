@@ -58,6 +58,7 @@ workerScope.addEventListener('message', (event: MessageEvent<ScryptRequest>) => 
       workerScope.postMessage(response)
     } finally {
       request.password.fill(0)
+      request.salt.fill(0)
     }
   })()
 })

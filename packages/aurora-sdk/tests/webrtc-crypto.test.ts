@@ -1,4 +1,4 @@
-import { scryptAsync } from '@noble/hashes/scrypt.js'
+import { scrypt } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -55,8 +55,27 @@ function fixture(): Fixture {
   return JSON.parse(readFileSync(resolve(process.cwd(), '../../tests/fixtures/webrtc_web_thin_protocol_vectors.json'), 'utf8'))
 }
 
-const nobleScryptDeriver: AuroraScryptDeriver = async (password, salt, params) =>
-  scryptAsync(password, salt, { N: params.N, r: params.r, p: params.p, dkLen: params.dkLen })
+const nodeScryptDeriver: AuroraScryptDeriver = async (password, salt, params) =>
+  await new Promise<Uint8Array>((resolvePromise, rejectPromise) => {
+    scrypt(
+      password,
+      salt,
+      params.dkLen,
+      {
+        N: params.N,
+        r: params.r,
+        p: params.p,
+        maxmem: 256 * 1024 * 1024
+      },
+      (error, value) => {
+        if (error) {
+          rejectPromise(error)
+          return
+        }
+        resolvePromise(new Uint8Array(value))
+      }
+    )
+  })
 
 describe('Aurora WebRTC crypto', () => {
   it('matches the Python room key and AES-GCM fixture vectors', async () => {
@@ -65,7 +84,7 @@ describe('Aurora WebRTC crypto', () => {
     expect(bytesToHex(salt)).toBe(vector.salt_sha256_hex)
 
     const keys = await deriveRoomKeys(vector.inputs.password, vector.inputs.app_id, vector.inputs.room, {
-      scryptDeriver: nobleScryptDeriver
+      scryptDeriver: nodeScryptDeriver
     })
     expect(bytesToHex(keys.k0)).toBe(vector.k0_hex)
     expect(bytesToHex(keys.kSig)).toBe(vector.k_sig_hex)
@@ -114,7 +133,7 @@ describe('Aurora WebRTC crypto', () => {
   it('supports E2EE on/off JSON payload codec behavior', async () => {
     const vector = fixture().room_crypto
     const keys = await deriveRoomKeys(vector.inputs.password, vector.inputs.app_id, vector.inputs.room, {
-      scryptDeriver: nobleScryptDeriver
+      scryptDeriver: nodeScryptDeriver
     })
     const orderedPlaintext = { type: 'presence', app_id: 'aurora-fixture', room: 'lab-room', peer_id: 'peer-offer', node_name: 'Fixture Offerer' }
     const clear = await encodeJsonPayload(orderedPlaintext)
@@ -142,12 +161,58 @@ describe('Aurora WebRTC crypto', () => {
     await expect(deriveRoomKeys('password', 'app', 'room')).rejects.toThrow(/Worker|deriver/u)
   })
 
+  it('runs the production pure-JS scrypt worker against the Python fixture', async () => {
+    const vector = fixture().room_crypto
+    const password = new TextEncoder().encode(vector.inputs.password)
+    const salt = hexToBytes(vector.salt_sha256_hex)
+    let messageListener: ((event: MessageEvent) => void) | undefined
+    let resolveResponse: ((value: { type: string; key?: Uint8Array; error?: string }) => void) | undefined
+    const response = new Promise<{ type: string; key?: Uint8Array; error?: string }>((resolvePromise) => {
+      resolveResponse = resolvePromise
+    })
+    const workerScope = {
+      addEventListener: vi.fn((type: string, listener: (event: MessageEvent) => void) => {
+        if (type === 'message') messageListener = listener
+      }),
+      postMessage: vi.fn((message: { type: string; key?: Uint8Array; error?: string }) => {
+        resolveResponse?.(message)
+      })
+    }
+    const hadSelf = Reflect.has(globalThis, 'self')
+    const oldSelf = Reflect.get(globalThis, 'self')
+    Reflect.set(globalThis, 'self', workerScope)
+    try {
+      await import('../src/webrtc/crypto-worker.js')
+      expect(messageListener).toBeTypeOf('function')
+      messageListener?.({
+        data: {
+          id: 1,
+          type: 'scrypt',
+          password,
+          salt,
+          params: { N: 65_536, r: 8, p: 1, dkLen: 32 }
+        }
+      } as MessageEvent)
+      const result = await response
+      expect(result.type).toBe('scrypt:result')
+      expect(bytesToHex(result.key ?? new Uint8Array())).toBe(vector.k0_hex)
+      expect(password).toEqual(new Uint8Array(password.length))
+      expect(salt).toEqual(new Uint8Array(salt.length))
+    } finally {
+      if (hadSelf) Reflect.set(globalThis, 'self', oldSelf)
+      else Reflect.deleteProperty(globalThis, 'self')
+    }
+  }, 20_000)
+
   it('cleans up a successful injected scrypt worker', async () => {
     const terminate = vi.fn()
     let messageListener: ((event: MessageEvent) => void) | undefined
     const worker = {
-      postMessage: vi.fn((message: unknown) => {
-        const id = (message as { id: number }).id
+      postMessage: vi.fn((message: unknown, transfer?: Transferable[]) => {
+        const delivered = structuredClone(message, {
+          transfer: transfer ?? [],
+        }) as { id: number }
+        const id = delivered.id
         queueMicrotask(() => messageListener?.({ data: { id, type: 'scrypt:result', key: new Uint8Array([7, 8, 9]) } } as MessageEvent))
       }),
       terminate,
