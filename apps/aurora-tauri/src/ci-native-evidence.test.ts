@@ -88,6 +88,7 @@ describe('Tauri CI native evidence contract', () => {
     const iosBaselineWorkflow = repoText('.github/workflows/tauri-ios.yml')
     const iosPolicyWorkflow = repoText('.github/workflows/tauri-ios-release.yml')
     const androidThinBuildWrapper = repoText('apps/aurora-tauri/scripts/build-android-thin-bundle.mjs')
+    const androidInteropRunner = repoText('apps/aurora-tauri/scripts/run-android-webrtc-interop.mjs')
 
     expect(packageJson.scripts['android:sync-native-plugin']).toBe('node ./scripts/install-android-native-plugin.mjs')
     expect(packageJson.scripts['android:init']).toContain('android:sync-native-plugin')
@@ -128,9 +129,20 @@ describe('Tauri CI native evidence contract', () => {
     ]) {
       expect(androidWorkflow, `Android AAB CI must install Rust target ${target}`).toContain(target)
     }
-    expect(packageJson.scripts['android:webrtc:interop']).toContain('android-python-webrtc.e2e.test.ts')
-    expect(packageJson.scripts['android:webrtc:interop']).toContain(
+    expect(packageJson.scripts['android:webrtc:interop']).toBe(
+      'node ./scripts/run-android-webrtc-interop.mjs',
+    )
+    expect(androidInteropRunner).toContain(
+      'android-python-webrtc.e2e.test.ts',
+    )
+    expect(androidInteropRunner).toContain(
       'android-browser-python-webrtc.e2e.test.ts',
+    )
+    expect(androidInteropRunner).toContain(
+      'android-aggregate-report.json',
+    )
+    expect(androidInteropRunner).toContain(
+      'aurora.android_webrtc_interop.aggregate.v1',
     )
     expect(packageJson.scripts['android:build:thin:apk']).not.toMatch(/python|uv/i)
     expect(packageJson.scripts['android:build:thin:aab']).not.toMatch(/python|uv/i)
