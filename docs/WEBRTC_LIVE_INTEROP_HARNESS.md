@@ -18,6 +18,7 @@ pnpm test:webrtc:browsers  # Chromium/Firefox/WebKit × direct/STUN/TURN; explic
 WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS=1 pnpm test:webrtc:browsers  # CI/release gate: missing engines fail
 ./scripts/webrtc_interop.sh stun  # explicit STUN/reflexive lane
 pnpm --filter @aurora/tauri-ui android:webrtc:interop  # running Android emulator/device + built thin APK
+pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser  # macOS/Xcode iPhone simulator + Homebrew Mosquitto
 ```
 
 On Linux, Playwright's `--with-deps` step installs host libraries in addition
@@ -57,6 +58,17 @@ at-most-once mutation, revocation fail-closed, redacted reports, and no Aurora
 HTTP transport. They run sequentially in the existing API 35 Android workflow
 step, so these assertions do not create additional PR checks.
 
+The existing macOS iOS workflow also owns
+`apps/aurora-tauri/tests/ios/ios-browser-python-webrtc.e2e.test.ts`.
+It boots an available iPhone simulator, launches MobileSafari without a remote
+debugging dependency, and uses a same-origin callback only after the shared
+browser runtime has closed. A Homebrew Mosquitto process supplies local
+MQTT-over-WebSocket signaling; the external Python `RTCClient`, browser entry,
+shared assertions, aggregate scanner, seeded-secret scan, and HTTP-disabled
+contract are the same as the desktop-browser and Android lanes. This is
+simulator MobileSafari evidence, not packaged Tauri WKWebView or physical-device
+evidence.
+
 The STUN lane uses the same local coturn server in STUN mode and applies harness-only ICE policies that suppress outbound `typ host` candidates in both the browser and Python signaling SDP/trickle path. The Python filter is a default-off `RTCClient` injection seam; production behavior is unchanged. This prevents same-host shortcut nomination from satisfying the STUN proof while preserving truthful `RTCPeerConnection.getStats()` evidence. Peer-reflexive (`prflx`) is reported as `prflx`, not normalized to `srflx`; a `prflx` selected pair passes STUN only when candidate stats also prove a configured STUN server gathered a true `srflx` candidate. Firefox requires the locally published non-loopback coturn address and omits the candidate URL from stats, so its scanner proof additionally requires exactly one configured STUN server; a reported URL mismatch or multiple ambiguous configured servers still fails.
 
 ## Current report locations
@@ -74,6 +86,7 @@ The STUN lane uses the same local coturn server in STUN mode and applies harness
 | WebKit TURN relay | `reports/webrtc-interop/webkit-turn/report.json` | Passed | `selectedCandidatePair.category=relay` |
 | Android System WebView TURN relay | `apps/aurora-tauri/reports/webrtc-interop/android-webview/report.json` | Pending first CI run | The existing Android API 35 job owns the packaged WebView ↔ Python peer test and requires a selected relay pair; do not count it as passed until the unpushed workflow runs |
 | Android Chrome direct | `apps/aurora-tauri/reports/webrtc-interop/android-mobile-browser/report.json` | Pending first CI run | The same API 35 job launches the standalone mobile browser without CDP and requires a direct selected pair plus the complete shared interop assertion set |
+| iOS MobileSafari simulator direct | `apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/report.json` | Pending first CI run | The existing macOS iOS job launches MobileSafari without CDP/Web Inspector and requires a direct selected pair plus the complete shared interop assertion set; it does not certify the packaged WKWebView |
 
 The current checked reports prove direct, configured-STUN, and forced-TURN
 lanes in Chromium, Firefox, and Playwright WebKit. On another host, the default

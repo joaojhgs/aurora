@@ -13,7 +13,7 @@ Aurora CI is organized around durable product lanes rather than one-off issue ga
 | `sdk-backend-contract-conformance.yml` | Backend/SDK contract drift protection. | Generated backend inventory, SDK fixture/type conformance, SDK package checks. |
 | `tauri-desktop.yml` | Desktop Tauri shell and sidecar packaging smoke. | Rust check, desktop-local sidecar/smoke lanes, and a Python-free WSS-only desktop-thin AppImage/deb build plus artifact proof. |
 | `tauri-android.yml` | Android thin build, emulator smoke, and mobile WebRTC interop. | One required check covers Android init, unsigned CI preflight, Python-free WSS-only x86_64 debug APK/universal debug AAB proof, API 30 packaged UI/native-payload smoke, and API 35 external-Python-peer WebRTC evidence from both the packaged System WebView (forced TURN) and standalone Android Chrome (direct, without CDP). Both mobile peers run the shared pairing/RPC/reconnect/revocation assertions. Python exists only as the remote test peer; it is not packaged into the Android artifact. The job installs compile SDK 36 and all four Android Rust targets required by the AAB. |
-| `tauri-ios.yml` | iOS simulator baseline, thin-shell build, and runtime smoke. | Tauri iOS init, unsigned baseline simulator build, Python-free WSS-only thin simulator build, real simulator install/launch/screenshot/keep-alive evidence, and Swift smoke tests for native entrypoints. |
+| `tauri-ios.yml` | iOS simulator baseline, thin-shell build, runtime smoke, and mobile-browser WebRTC interop. | Tauri iOS init, unsigned baseline simulator build, Python-free WSS-only thin simulator build, real simulator install/launch/screenshot/keep-alive evidence, Swift smoke tests for native entrypoints, and MobileSafari direct-path pairing/RPC/reconnect/revocation against an external Python peer with the Aurora HTTP API disabled. |
 | `tauri-ios-release.yml` | iOS policy/signing preflight. | Linux policy-only validation plus optional macOS signing dry run. |
 | `performance.yml` | Scheduled/manual performance and resilience. | Python performance tests and SDK offline/reconnect/resilience checks. |
 | `docker-build.yml` | Container and process-mode topology validation. | `docker-compose.process.yml` config validation, per-service image builds; pushes only on tags or explicit manual request. |
@@ -52,6 +52,8 @@ pnpm test:webrtc:interop
 pnpm test:webrtc:turn
 pnpm test:webrtc:browsers
 WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS=1 pnpm test:webrtc:browsers
+# macOS/Xcode only; uses the existing iOS workflow and a local Mosquitto broker
+pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser
 
 # Tauri desktop/mobile profiles
 pnpm --filter @aurora/tauri-ui prepare:sidecar:desktop-local-minimal
@@ -88,6 +90,7 @@ Use these commands when preparing or reproducing the production UI gate:
 | iOS policy baseline | `pnpm --filter @aurora/tauri-ui ios:policy` | Linux-safe policy/source check for shared WebView routing, device-only Keychain reconnect proof, nonsecret profile storage, least-privilege thin capabilities, and approved platform copy. It is not build/runtime evidence. |
 | iOS thin simulator build | `AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS="wss://signaling.example" AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only pnpm --filter @aurora/tauri-ui ios:build:thin:simulator` | Requires macOS/Xcode. Generates a temporary WSS-only, Python-free `aurora-ios-thin` overlay with no Gateway origin, builds the shared WebRTC WebView simulator app, and writes `apps/aurora-tauri/reports/ios-thin-simulator-build-provenance.json`. |
 | iOS simulator runtime smoke | `pnpm --filter @aurora/tauri-ui ios:smoke:simulator` | Requires macOS/Xcode and a built simulator `.app`. Selects an available iPhone simulator, boots it when necessary, installs and launches the app, waits through a settle window, captures a screenshot and process-scoped log, rejects crash evidence, proves the app can still be terminated, and writes `apps/aurora-tauri/reports/ios-simulator-smoke.json`. |
+| iOS MobileSafari ↔ Python WebRTC | `pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser` | Requires macOS/Xcode, Homebrew Mosquitto, and `uv sync --extra gateway`. It boots an iPhone simulator, opens an auto-running MobileSafari harness, pairs with an external Python `RTCClient`, and applies the shared negotiation, manifest, error, 512 KiB fragmentation, stream/cancel, scoped-event/TTS, reconnect, uncertain-mutation, revocation, HTTP-disabled, and redaction assertions. The report lives under `apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/`. This proves the iOS browser engine on a simulator, not the packaged Tauri WKWebView or a physical device. |
 | iOS build/preflight | `pnpm --filter @aurora/tauri-ui tauri ios init`, `pnpm --filter @aurora/tauri-ui tauri ios build`, `pnpm --filter @aurora/tauri-ui ios:preflight` | Requires macOS with Xcode and the generated iOS project. Simulator/device WebRTC and signing evidence remain separate gates. |
 | Docs hygiene | `make check-docs` | Runs `uv run python scripts/check_docs.py`. |
 
@@ -117,7 +120,7 @@ The repository no longer keeps one-off issue-specific gate generator workflows f
 
 ## Release and signing policy
 
-Default desktop/mobile CI builds are unsigned and intended for validation only. Android pull-request CI uses `android:preflight:ci` after `android:init`: it requires the generated Android project but does not require keystore secrets. The Python installed in the Android job is an external protocol peer used by the emulator E2E; APK/AAB artifact proof remains independently Python-free. Package signing, notarization, App Store Connect, and Play upload remain explicit release operations requiring platform secrets; Android release readiness uses `android:preflight:strict`.
+Default desktop/mobile CI builds are unsigned and intended for validation only. Android pull-request CI uses `android:preflight:ci` after `android:init`: it requires the generated Android project but does not require keystore secrets. Python installed in the Android and iOS simulator jobs is an external protocol peer used only by E2E tests; APK/AAB/iOS thin artifact proof remains independently Python-free. Package signing, notarization, App Store Connect, and Play upload remain explicit release operations requiring platform secrets; Android release readiness uses `android:preflight:strict`.
 
 ## Final quality gate structure
 

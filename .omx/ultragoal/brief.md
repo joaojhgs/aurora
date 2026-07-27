@@ -675,6 +675,7 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 20. Seeded tokens/passwords/nonces/audio markers are absent from logs, diagnostics, browser storage, URL query strings, and support artifacts.
 21. Existing desktop-local, HTTP web, HTTP thin, SDK conformance, Tauri boundary, Python mesh, and documentation checks remain green.
 22. The packaged Android System WebView and standalone Android mobile browser each pair with an external Python `RTCClient` while the Aurora HTTP application API is disabled, and both pass the shared negotiation-direction, pairing, manifest, structured-error, 512 KiB fragmentation, stream/cancel, scoped-event/TTS, reconnect, uncertain-mutation, revocation, and redaction assertions inside one consolidated Android CI check.
+23. MobileSafari in an iOS simulator pairs with an external Python `RTCClient` on the direct path while the Aurora HTTP application API is disabled and passes the same shared assertions inside the existing macOS iOS check; this browser-engine evidence must remain explicitly separate from packaged WKWebView and physical-device certification.
 
 ## 10. Risks and mitigations
 

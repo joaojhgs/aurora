@@ -4,8 +4,17 @@ on:
   pull_request:
     paths:
       - "apps/aurora-tauri/**"
+      - "app/services/gateway/mesh/**"
+      - "app/services/gateway/webrtc/**"
+      - "app/services/gateway/utils/crypto.py"
+      - "app/shared/contracts/models/auth.py"
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
+      - "tests/e2e/webrtc_interop/**"
+      - "scripts/webrtc_interop_gateway.py"
+      - "scripts/webrtc_interop_scan.py"
+      - "pyproject.toml"
+      - "uv.lock"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -18,7 +27,7 @@ jobs:
   macos-tauri-ios:
     name: macOS Xcode Tauri iOS init and build
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +42,14 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+
+      - name: Set up Python interop peer
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv for the external Python peer
+        uses: astral-sh/setup-uv@v5
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -50,8 +67,18 @@ jobs:
           fi
           pod --version
 
+      - name: Install local WebSocket MQTT broker
+        run: |
+          if ! command -v mosquitto >/dev/null 2>&1; then
+            brew install mosquitto
+          fi
+          mosquitto -h >/dev/null
+
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install Python WebRTC peer dependencies
+        run: uv sync --extra gateway
 
       - name: Build Tauri workspace dependencies
         run: |
@@ -82,6 +109,9 @@ jobs:
 
       - name: Install, launch, and screenshot the thin app in an iOS simulator
         run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
+
+      - name: Pair iOS MobileSafari with the external Python peer over WebRTC
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser
 
       - name: Smoke invoke Aurora App Intent handoff
         run: |
@@ -144,4 +174,12 @@ jobs:
             apps/aurora-tauri/reports/ios-simulator-smoke.json
             apps/aurora-tauri/reports/ios-simulator-smoke.png
             apps/aurora-tauri/reports/ios-simulator-smoke.log
+          if-no-files-found: warn
+
+      - name: Upload iOS mobile-browser to Python WebRTC evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-mobile-browser-python-webrtc-interop
+          path: apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/
           if-no-files-found: warn

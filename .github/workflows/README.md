@@ -9,7 +9,7 @@ Current durable workflow lanes:
 - `sdk-backend-contract-conformance.yml` — backend inventory and SDK fixture/type conformance.
 - `tauri-desktop.yml` — desktop-local sidecar and Python-free desktop-thin build/runtime checks.
 - `tauri-android.yml` — one Android check for Python-free APK/AAB proof, API 30 UI/native payload smoke, and API 35 packaged-System-WebView plus standalone-mobile-browser ↔ external Python peer WebRTC interop.
-- `tauri-ios.yml`, `tauri-ios-release.yml` — macOS simulator build/runtime smoke and the separate signing-policy lane.
+- `tauri-ios.yml`, `tauri-ios-release.yml` — one macOS simulator build/runtime/MobileSafari ↔ external-Python WebRTC check plus the separate signing-policy lane.
 - `performance.yml` — manual/scheduled performance and resilience checks.
 - `docker-build.yml` — per-service container image matrix.
 - `release.yml` — manual semantic-release publication.

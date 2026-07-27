@@ -105,6 +105,9 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['ios:prepare:thin']).toContain('prepare-ios-thin-bundle.mjs')
     expect(packageJson.scripts['ios:build:thin:simulator']).toContain('build-ios-thin-bundle.mjs')
     expect(packageJson.scripts['ios:smoke:simulator']).toContain('ios-simulator-smoke.mjs')
+    expect(packageJson.scripts['ios:webrtc:mobile-browser']).toContain(
+      'ios-browser-python-webrtc.e2e.test.ts',
+    )
     expect(packageJson.scripts['build:frontend:ios-thin']).toBe('node ./scripts/build-ios-thin-frontend.mjs')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:thin:apk')
@@ -155,7 +158,16 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('ios-thin-simulator-build-provenance.json')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:smoke:simulator')
     expect(iosBaselineWorkflow).toContain('ios-simulator-smoke.json')
-    expect(iosBaselineWorkflow).not.toMatch(/Set up Python|uv sync|python3-dev/)
+    expect(iosBaselineWorkflow).toContain('Set up Python interop peer')
+    expect(iosBaselineWorkflow).toContain('Install uv for the external Python peer')
+    expect(iosBaselineWorkflow).toContain('uv sync --extra gateway')
+    expect(iosBaselineWorkflow).toContain('brew install mosquitto')
+    expect(iosBaselineWorkflow).toContain(
+      'pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser',
+    )
+    expect(iosBaselineWorkflow).toContain(
+      'apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/',
+    )
     expect(iosPolicyWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:policy')
     expect(iosPolicyWorkflow).toContain("if: inputs.app_store_dry_run == 'true'")
     expect(iosPolicyWorkflow).toContain('APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}')

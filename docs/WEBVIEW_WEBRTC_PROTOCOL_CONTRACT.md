@@ -55,6 +55,8 @@ pnpm --dir packages/aurora-sdk test -- tests/webrtc-runtime.test.ts
 pnpm test:webrtc:interop
 pnpm test:webrtc:turn
 pnpm test:webrtc:browsers
+pnpm --filter @aurora/tauri-ui android:webrtc:interop
+pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser
 ```
 
 Current checked reports prove direct, configured-STUN, and forced-TURN
