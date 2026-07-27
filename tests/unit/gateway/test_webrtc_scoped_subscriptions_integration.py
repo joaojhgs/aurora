@@ -271,6 +271,52 @@ async def test_peer_bridge_event_filtering_is_exact_and_sensitive_fail_closed() 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_legacy_event_broadcast_rollout_flag_disables_only_unscoped_compatibility() -> None:
+    subscriptions = MeshEventSubscriptionRegistry()
+    subscriptions.subscribe(
+        peer_id="peer-scoped",
+        subscription_id="sub-scoped",
+        requested_topics=[TTSMethods.STARTED],
+        allowed_topics=[TTSMethods.STARTED],
+        correlation_ids=["corr-a"],
+    )
+    rtc = MagicMock()
+    rtc.event_subscriptions = subscriptions
+    rtc.peer_supports_capability.side_effect = (
+        lambda peer_id, capability: peer_id == "peer-scoped"
+        and capability == CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
+    )
+    rtc.send_to_peer_async = AsyncMock(return_value=True)
+    bridge = PeerBridge(rtc, MagicMock(), legacy_event_broadcast=False)
+
+    assert (
+        await bridge.fire_event_async("peer-scoped", TTSMethods.STARTED, Payload(), "corr-a")
+        is True
+    )
+    assert (
+        await bridge.fire_event_async("peer-legacy", TTSMethods.STARTED, Payload(), "corr-a")
+        is False
+    )
+    assert (
+        await bridge.fire_event_async("peer-legacy", TTSMethods.AUDIO_CHUNK, Payload(), "corr-a")
+        is False
+    )
+    assert rtc.send_to_peer_async.await_count == 1
+
+    bridge.set_legacy_event_broadcast(True)
+    assert (
+        await bridge.fire_event_async("peer-legacy", TTSMethods.STARTED, Payload(), "corr-a")
+        is True
+    )
+    assert (
+        await bridge.fire_event_async("peer-legacy", TTSMethods.AUDIO_CHUNK, Payload(), "corr-a")
+        is False
+    )
+    assert rtc.send_to_peer_async.await_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_targeted_assistant_events_route_only_to_targeted_scoped_interest() -> None:
     subscription_registry = MeshEventSubscriptionRegistry(clock=lambda: 1000.0)
     for peer_id, correlation_id in (("peer-a", "corr-a"), ("peer-b", "corr-b")):

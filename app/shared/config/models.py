@@ -176,6 +176,10 @@ class Webrtc(BaseConfigModel):
     """
     When true, all WebRTC DataChannel JSON messages are sealed as binary AEAD payloads with the room data key. Peers with mismatched settings do not fall back to plaintext.
     """
+    legacy_event_broadcast: bool | None = True
+    """
+    Temporary compatibility switch for non-sensitive events sent to peers that do not advertise scoped_event_subscriptions_v1. Sensitive and scoped-only topics remain blocked regardless of this value.
+    """
     stun_servers: list[str] | None = ["stun:stun.l.google.com:19302"]
     """
     STUN server URLs for NAT traversal

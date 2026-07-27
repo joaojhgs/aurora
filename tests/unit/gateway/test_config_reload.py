@@ -13,7 +13,7 @@ import pytest
 from app.messaging.bus import QueryResult
 from app.services.config.config_manager import ConfigManager
 from app.services.gateway.acl.identity import Identity
-from app.services.gateway.config import MeshConfig, PermissionSettings, Settings
+from app.services.gateway.config import MeshConfig, PermissionSettings, Settings, WebRTCSettings
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
@@ -121,6 +121,10 @@ def test_permission_settings_defaults():
     ps = PermissionSettings()
     assert ps.default_pairing_permissions == []
     assert ps.webrtc_auth_timeout_seconds == 10.0
+
+
+def test_webrtc_legacy_event_broadcast_defaults_to_compatibility_on() -> None:
+    assert WebRTCSettings().legacy_event_broadcast is True
 
 
 def test_settings_includes_permissions():
@@ -448,6 +452,9 @@ async def test_reload_mesh_config_updates_rtc_and_reannounces_manifest(
     service._rtc_client.update_mesh_config.assert_called_once_with(
         settings.mesh,
         policy_provider=service._mesh_policy_provider,
+    )
+    service._mesh_peer_bridge.set_legacy_event_broadcast.assert_called_once_with(
+        settings.webrtc.legacy_event_broadcast
     )
     service._rtc_client.reannounce_manifest.assert_awaited_once()
 

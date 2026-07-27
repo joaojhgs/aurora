@@ -109,12 +109,19 @@ class PeerBridge:
         self,
         rtc_client: RTCClient,
         peer_registry: PeerRegistry,
+        *,
+        legacy_event_broadcast: bool = True,
     ) -> None:
         self._rtc_client = rtc_client
         self._registry = peer_registry
+        self._legacy_event_broadcast = bool(legacy_event_broadcast)
         self._pending_calls: dict[tuple[str, str], asyncio.Future] = {}
         self._pending_streams: dict[tuple[str, str], asyncio.Queue] = {}
         self._latency_monitor: LatencyMonitor | None = None
+
+    def set_legacy_event_broadcast(self, enabled: bool) -> None:
+        """Enable or disable non-sensitive broadcasts to pre-subscription peers."""
+        self._legacy_event_broadcast = bool(enabled)
 
     def set_latency_monitor(self, monitor: LatencyMonitor) -> None:
         """Set the latency monitor for pong routing.
@@ -505,6 +512,12 @@ class PeerBridge:
             log_debug(
                 f"PeerBridge: Suppressed sensitive/scoped event {topic} to {peer_id}; "
                 "scoped subscriptions absent"
+            )
+            return False
+        elif not self._legacy_event_broadcast:
+            log_debug(
+                f"PeerBridge: Suppressed legacy event {topic} to {peer_id}; "
+                "legacy event broadcast disabled"
             )
             return False
 

@@ -3978,7 +3978,15 @@ class GatewayService(BaseService):
                 self._mesh_peer_registry,
                 policy_provider=self._mesh_policy_provider,
             )
-            self._mesh_peer_bridge = PeerBridge(self._rtc_client, self._mesh_peer_registry)
+            self._mesh_peer_bridge = PeerBridge(
+                self._rtc_client,
+                self._mesh_peer_registry,
+                legacy_event_broadcast=getattr(
+                    settings.webrtc,
+                    "legacy_event_broadcast",
+                    True,
+                ),
+            )
 
             self._mesh_latency_monitor = LatencyMonitor(
                 self._rtc_client,
@@ -4410,6 +4418,14 @@ class GatewayService(BaseService):
         try:
             settings = await self._get_gateway_config()
             mesh_config = settings.mesh
+            if self._mesh_peer_bridge:
+                self._mesh_peer_bridge.set_legacy_event_broadcast(
+                    getattr(
+                        settings.webrtc,
+                        "legacy_event_broadcast",
+                        True,
+                    )
+                )
             previous_snapshot = self._mesh_policy_store.current()
             snapshot = self._mesh_policy_store.replace(
                 mesh_config,

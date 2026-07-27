@@ -104,6 +104,7 @@ The gateway is configured in `config.json`:
 - **webrtc.password**: Room password (auto-generated if empty; required when auth is enabled)
 - **webrtc.encrypt_signaling**: Encrypt MQTT presence with AEAD (default: `false`)
 - **webrtc.enable_app_layer_e2ee**: Encrypt WebRTC DataChannel JSON messages with AEAD in addition to WebRTC DTLS (default: `false`). When enabled, both peers must enable it and share the same room password-derived data key; plaintext DataChannel messages are dropped instead of downgraded.
+- **webrtc.legacy_event_broadcast**: Temporary compatibility switch for non-sensitive events sent to authenticated peers that do not advertise `scoped_event_subscriptions_v1` (default: `true`). Setting it to `false` suppresses that legacy unscoped path. Sensitive and scoped-only topics remain blocked regardless.
 
 ### Dynamic Configuration
 
@@ -649,6 +650,16 @@ WebRTC DataChannels are protected in transit by WebRTC DTLS. Aurora can also add
 - `webrtc.enable_app_layer_e2ee=true`: those same JSON messages are sealed with AES-GCM using the room password-derived DataChannel key and sent as binary frames.
 
 The mode is strict. A peer with app-layer E2EE enabled drops plaintext DataChannel messages, and a peer with it disabled cannot decode encrypted binary frames. This avoids silent downgrade behavior; paired peers must use matching `enable_app_layer_e2ee`, `webrtc.app_id`, `webrtc.room`, and `webrtc.password` values.
+
+### Scoped-event compatibility rollout
+
+`services.gateway.webrtc.legacy_event_broadcast` is the temporary migration
+window for authenticated peers that predate
+`scoped_event_subscriptions_v1`. ConfigService applies changes to the live
+`PeerBridge` without a Gateway restart. When disabled, non-sensitive events
+are no longer broadcast to an unscoped legacy peer. Peers that negotiated
+scoped subscriptions continue to receive only exact authorized subscriptions,
+and sensitive/scoped-only topics remain fail-closed in both modes.
 
 ### Bilateral Mesh Pairing
 

@@ -266,6 +266,11 @@
                   "description": "When true, all WebRTC DataChannel JSON messages are sealed as binary AEAD payloads with the room data key. Peers with mismatched settings do not fall back to plaintext.",
                   "default": false
                 },
+                "legacy_event_broadcast": {
+                  "type": "boolean",
+                  "description": "Temporary compatibility switch for non-sensitive events sent to peers that do not advertise scoped_event_subscriptions_v1. Sensitive and scoped-only topics remain blocked regardless of this value.",
+                  "default": true
+                },
                 "stun_servers": {
                   "type": "array",
                   "description": "STUN server URLs for NAT traversal",

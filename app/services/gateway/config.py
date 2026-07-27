@@ -170,6 +170,7 @@ class WebRTCSettings(BaseModel):
     password: str = ""
     encrypt_signaling: bool = True
     enable_app_layer_e2ee: bool = False
+    legacy_event_broadcast: bool = True
     stun_servers: list[str] = ["stun:stun.l.google.com:19302"]
     turn_servers: list[str] = Field(default_factory=list)
     turn_username: str | None = None

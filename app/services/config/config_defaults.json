@@ -52,6 +52,7 @@
         "password": "",
         "encrypt_signaling": true,
         "enable_app_layer_e2ee": false,
+        "legacy_event_broadcast": true,
         "stun_servers": [
           "stun:stun.l.google.com:19302"
         ],

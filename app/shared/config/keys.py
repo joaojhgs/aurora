@@ -771,6 +771,7 @@ class _ServicesGatewayWebrtcConfigPath(ConfigPath):
     enable_app_layer_e2ee: ConfigPath
     enabled: ConfigPath
     encrypt_signaling: ConfigPath
+    legacy_event_broadcast: ConfigPath
     password: ConfigPath
     room: ConfigPath
     strategy: ConfigPath
@@ -783,6 +784,7 @@ class _ServicesGatewayWebrtcConfigPath(ConfigPath):
         self.enable_app_layer_e2ee = ConfigPath("services.gateway.webrtc.enable_app_layer_e2ee")
         self.enabled = ConfigPath("services.gateway.webrtc.enabled")
         self.encrypt_signaling = ConfigPath("services.gateway.webrtc.encrypt_signaling")
+        self.legacy_event_broadcast = ConfigPath("services.gateway.webrtc.legacy_event_broadcast")
         self.password = ConfigPath("services.gateway.webrtc.password")
         self.room = ConfigPath("services.gateway.webrtc.room")
         self.strategy = ConfigPath("services.gateway.webrtc.strategy")
