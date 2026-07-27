@@ -450,11 +450,14 @@ async function runtimeKeys() {
   return deriveRoomKeys('memory-room-secret', 'aurora', 'room-1', { scryptDeriver: async () => new Uint8Array(32).fill(7) })
 }
 
+// WebCrypto jobs share constrained CI worker pools with other workspace tests.
+const RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS = 4_000
+
 async function waitForSent(channel: RuntimeFakeChannel, count: number): Promise<void> {
-  const deadline = Date.now() + 1_000
+  const deadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
   while (channel.sent.length < count) {
     if (Date.now() > deadline) throw new Error(`Expected ${count} encrypted WebRTC frame(s), saw ${channel.sent.length}`)
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 1))
   }
 }
 
@@ -488,10 +491,10 @@ async function flushRuntime(): Promise<void> {
 }
 
 async function waitForRuntimeState(runtime: ReturnType<typeof createBrowserWebRtcAuroraRuntime>, state: string): Promise<void> {
-  const deadline = Date.now() + 1_000
+  const deadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
   while (runtime.peer.snapshot().state !== state) {
     if (Date.now() > deadline) throw new Error(`Expected runtime state ${state}, saw ${runtime.peer.snapshot().state}`)
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 1))
   }
 }
 
