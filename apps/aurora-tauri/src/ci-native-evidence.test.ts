@@ -52,10 +52,28 @@ describe('Tauri CI native evidence contract', () => {
     expect(frontendWorkflow).toContain('pnpm --filter @aurora/tauri-ui test:ci-regression-gates')
     expect(desktopWorkflow).toContain('cargo check')
     expect(desktopWorkflow).toContain('xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke')
+    expect(desktopWorkflow).toContain('AURORA_TAURI_DEV_SMOKE_TIMEOUT_MS: "360000"')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/tauri-dev-smoke.json')
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui eventstream:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/eventstream-smoke.json')
     expect(desktopWorkflow).toContain('if-no-files-found: warn')
+  })
+
+  it('prepares clean-runner SDK and WebRTC dependencies before exercising them', () => {
+    const frontendWorkflow = repoText('.github/workflows/frontend-sdk.yml')
+    const conformanceWorkflow = repoText('.github/workflows/sdk-backend-contract-conformance.yml')
+    const interopWorkflow = repoText('.github/workflows/webrtc-interop.yml')
+    const sdkBuild = 'pnpm --filter @aurora/client build'
+    const sdkTest = 'pnpm --filter @aurora/client test'
+
+    expect(frontendWorkflow.indexOf(sdkBuild)).toBeLessThan(
+      frontendWorkflow.indexOf(sdkTest),
+    )
+    expect(conformanceWorkflow.indexOf(sdkBuild)).toBeLessThan(
+      conformanceWorkflow.indexOf(sdkTest),
+    )
+    expect(interopWorkflow).toContain('uv sync --extra gateway')
+    expect(interopWorkflow).not.toContain('uv sync --all-extras')
   })
 
   it('keeps Tauri and frontend CI check names canonical and non-duplicative', () => {
@@ -211,6 +229,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:smoke:simulator')
     expect(iosBaselineWorkflow).toContain('ios-simulator-smoke.json')
     expect(iosBaselineWorkflow).toContain('Set up Python interop peer')
+    expect(iosBaselineWorkflow).toContain('python-version: "3.11"')
     expect(iosBaselineWorkflow).toContain('Install uv for the external Python peer')
     expect(iosBaselineWorkflow).toContain('uv sync --extra gateway')
     expect(iosBaselineWorkflow).toContain('brew install mosquitto')

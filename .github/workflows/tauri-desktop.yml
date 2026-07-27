@@ -147,6 +147,8 @@ jobs:
 
       - name: Smoke launch Tauri shell
         if: matrix.smoke_local
+        env:
+          AURORA_TAURI_DEV_SMOKE_TIMEOUT_MS: "360000"
         run: xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke
 
       - name: Upload Tauri dev smoke report

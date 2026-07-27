@@ -38,7 +38,7 @@ jobs:
           node-version: "22"
           cache: pnpm
 
-      - run: uv sync --all-extras
+      - run: uv sync --extra gateway
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 

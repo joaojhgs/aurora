@@ -236,7 +236,8 @@ describeIfNode('Android-thin bundle artifact proof', () => {
       env: {
         ...process.env,
         PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
-        AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: 'https://gateway.example.invalid/ wss://signaling.example.invalid'
+        AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: 'https://gateway.example.invalid/ wss://signaling.example.invalid',
+        AURORA_TAURI_THIN_CONNECTION_MODE: 'webrtc-preferred',
       }
     })
 

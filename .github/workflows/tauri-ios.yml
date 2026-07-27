@@ -46,7 +46,7 @@ jobs:
       - name: Set up Python interop peer
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.11"
+          python-version: "3.11"
 
       - name: Install uv for the external Python peer
         uses: astral-sh/setup-uv@v5

@@ -47,9 +47,7 @@ function prepare(origins: string, connectionMode?: string) {
       AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS: origins,
       AURORA_TAURI_IOS_THIN_CONFIG_PATH: configPath,
       AURORA_TAURI_IOS_THIN_REPORT_PATH: reportPath,
-      ...(connectionMode
-        ? { AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode }
-        : {}),
+      AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode ?? '',
     },
   })
   return {

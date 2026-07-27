@@ -64,11 +64,11 @@ jobs:
       - name: Typecheck SDK generated contract surface
         run: pnpm --filter @aurora/client typecheck
 
-      - name: Run SDK transport and security/privacy conformance tests
-        run: pnpm --filter @aurora/client test
-
       - name: Build SDK package
         run: pnpm --filter @aurora/client build
+
+      - name: Run SDK transport and security/privacy conformance tests
+        run: pnpm --filter @aurora/client test
 
       - name: Upload conformance evidence
         if: always()
