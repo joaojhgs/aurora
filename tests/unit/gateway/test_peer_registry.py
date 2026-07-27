@@ -369,10 +369,7 @@ class TestStaleTimeoutPolicy:
                 raise asyncio.CancelledError
             await real_sleep(0)
 
-        monkeypatch.setattr(
-            "app.services.gateway.mesh.peer_registry.asyncio.sleep",
-            fake_sleep,
-        )
+        monkeypatch.setattr(registry, "_sleep", fake_sleep)
 
         await registry._stale_check_loop()
 
@@ -426,10 +423,7 @@ class TestStaleTimeoutPolicy:
                 return
             await real_sleep(3600)
 
-        monkeypatch.setattr(
-            "app.services.gateway.mesh.peer_registry.asyncio.sleep",
-            fake_sleep,
-        )
+        monkeypatch.setattr(registry, "_sleep", fake_sleep)
 
         await registry.start()
         stale_check_task = registry._stale_check_task

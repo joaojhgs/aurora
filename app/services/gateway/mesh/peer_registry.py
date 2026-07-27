@@ -80,6 +80,7 @@ class PeerRegistry:
         self._legacy_leases: dict[str, list[CapacityLease]] = {}
         self._lock = asyncio.Lock()
         self._stale_check_task: asyncio.Task | None = None
+        self._sleep: Callable[[float], Coroutine[Any, Any, None]] = asyncio.sleep
 
         # Lifecycle callbacks (set by gateway for DB persistence)
         self.on_peer_registered: PeerLifecycleCallback | None = None
@@ -828,7 +829,7 @@ class PeerRegistry:
         interval = 10.0
         while True:
             try:
-                await asyncio.sleep(interval)
+                await self._sleep(interval)
                 mesh_config = self._snapshot_config()
                 timeout = mesh_config.stale_peer_timeout_s
                 interval = max(timeout / 3, 10.0) if timeout > 0 else 10.0
