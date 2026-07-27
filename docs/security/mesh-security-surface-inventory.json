@@ -695,7 +695,7 @@
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 766
+        "line": 779
       },
       "exposure": "both",
       "method_type": "use",
@@ -716,7 +716,7 @@
       "handler": "transcribe_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1044
+        "line": 1057
       },
       "exposure": "both",
       "method_type": "use",
@@ -1598,7 +1598,7 @@
       "handler": "_on_tts_request",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 326
+        "line": 327
       },
       "exposure": "both",
       "method_type": "use",
@@ -1618,7 +1618,7 @@
       "handler": "_on_stream_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 377
+        "line": 378
       },
       "exposure": "both",
       "method_type": "use",
@@ -1638,7 +1638,7 @@
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 445
+        "line": 446
       },
       "exposure": "both",
       "method_type": "use",
@@ -1658,7 +1658,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 493
+        "line": 494
       },
       "exposure": "both",
       "method_type": "use",
@@ -1678,7 +1678,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 784
+        "line": 785
       },
       "exposure": "both",
       "method_type": "use",

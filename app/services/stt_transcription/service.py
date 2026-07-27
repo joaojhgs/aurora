@@ -23,10 +23,9 @@ import wave
 from collections import deque
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 import numpy as np
-import webrtcvad
-from faster_whisper import WhisperModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
@@ -65,6 +64,20 @@ from app.shared.services.base_service import BaseService
 config_api = ConfigAPI()
 
 
+def _create_vad(mode: int) -> Any:
+    """Create the optional WebRTC VAD runtime when transcription starts."""
+    import webrtcvad
+
+    return webrtcvad.Vad(mode)
+
+
+def _create_whisper_model(*args: Any, **kwargs: Any) -> Any:
+    """Create the optional Faster Whisper runtime when model loading starts."""
+    from faster_whisper import WhisperModel
+
+    return WhisperModel(*args, **kwargs)
+
+
 class VADMode(Enum):
     """Voice Activity Detection aggressiveness modes."""
 
@@ -98,8 +111,8 @@ class TranscriptionService(BaseService):
         self._paused = False
 
         # Models
-        self._realtime_model: WhisperModel | None = None
-        self._accurate_model: WhisperModel | None = None
+        self._realtime_model: Any | None = None
+        self._accurate_model: Any | None = None
         self._model_lock = threading.Lock()
 
         # Audio buffering
@@ -114,7 +127,7 @@ class TranscriptionService(BaseService):
         self._current_stream_id: str = "default"  # Default stream ID
 
         # VAD for speech detection
-        self._vad: webrtcvad.Vad | None = None
+        self._vad: Any | None = None
         self._vad_mode = VADMode.MEDIUM
         # Active utterance audio must not be capped to a short rolling window.
         # The coordinator bounds listening with session_timeout_s, so this
@@ -271,7 +284,7 @@ class TranscriptionService(BaseService):
     def _initialize_vad(self) -> None:
         """Initialize Voice Activity Detection."""
         try:
-            self._vad = webrtcvad.Vad(self._vad_mode.value)
+            self._vad = _create_vad(self._vad_mode.value)
             log_info(f"VAD initialized (mode: {self._vad_mode.name})")
         except Exception as e:
             log_error(f"Failed to initialize VAD: {e}")
@@ -313,7 +326,7 @@ class TranscriptionService(BaseService):
             # Load realtime model (fast, lower accuracy)
             if self._realtime_enabled:
                 log_info(f"Loading realtime model ({realtime_model_size}) on {realtime_device}...")
-                self._realtime_model = WhisperModel(
+                self._realtime_model = _create_whisper_model(
                     realtime_model_size,
                     device=realtime_device,
                     compute_type=realtime_compute_type,
@@ -324,7 +337,7 @@ class TranscriptionService(BaseService):
             # Load accurate model (slower, higher accuracy)
             if self._accurate_enabled:
                 log_info(f"Loading accurate model ({accurate_model_size}) on {accurate_device}...")
-                self._accurate_model = WhisperModel(
+                self._accurate_model = _create_whisper_model(
                     accurate_model_size,
                     device=accurate_device,
                     compute_type=accurate_compute_type,
@@ -572,7 +585,7 @@ class TranscriptionService(BaseService):
     def _transcribe_with_model(
         self,
         audio: np.ndarray,
-        model: WhisperModel,
+        model: Any,
         transcription_type: TranscriptionType,
         duration_ms: float,
     ) -> None:

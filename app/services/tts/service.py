@@ -19,11 +19,8 @@ import tempfile
 import wave
 from dataclasses import dataclass, field
 
-from RealtimeTTS import PiperVoice, TextToAudioStream
-
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
-from app.services.tts.piper_engine import PiperEngine
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Tts
@@ -207,6 +204,10 @@ class TTSService(BaseService):
     async def _initialize_engine(self) -> None:
         """Initialize the RealtimeTTS engine with Piper voice."""
         try:
+            from RealtimeTTS import PiperVoice, TextToAudioStream
+
+            from app.services.tts.piper_engine import PiperEngine
+
             # Get voice model paths from env vars or config
             model_file, config_file = await self._get_model_paths()
 

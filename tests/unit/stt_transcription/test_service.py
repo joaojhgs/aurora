@@ -93,7 +93,7 @@ def mock_config():
 @pytest.fixture
 def mock_whisper_model():
     """Create a mock WhisperModel."""
-    with patch("app.services.stt_transcription.service.WhisperModel") as mock_cls:
+    with patch("app.services.stt_transcription.service._create_whisper_model") as mock_cls:
         mock_model = MagicMock()
 
         # Mock transcribe method to return segments
@@ -113,7 +113,7 @@ def mock_whisper_model():
 @pytest.fixture
 def mock_vad():
     """Create a mock VAD."""
-    with patch("app.services.stt_transcription.service.webrtcvad.Vad") as mock_vad_cls:
+    with patch("app.services.stt_transcription.service._create_vad") as mock_vad_cls:
         mock_vad_instance = MagicMock()
         mock_vad_instance.is_speech.return_value = True
         mock_vad_cls.return_value = mock_vad_instance
