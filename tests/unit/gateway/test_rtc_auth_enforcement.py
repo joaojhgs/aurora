@@ -447,6 +447,7 @@ async def test_forwarded_tooling_catalog_uses_authenticated_stable_peer_id(mock_
             enabled=True,
             services={"Tooling": mesh_policy(share=True)},
         )
+        peer_connection.connectionState = "connected"
 
         task = channel.emit(
             "message",

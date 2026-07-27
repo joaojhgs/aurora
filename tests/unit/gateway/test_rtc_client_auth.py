@@ -1347,6 +1347,59 @@ class MockPeerConnectionWithEvents:
 
 
 @pytest.mark.asyncio
+async def test_closed_datachannel_closes_and_cleans_owning_peer_connection(mock_deps):
+    """A closed RPC channel cannot leave an authenticated session resident."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "a-local-peer"
+    client._adapter = MagicMock()
+    client._audit = AsyncMock()
+    client.connect_to = AsyncMock()
+    peer = "z-remote-peer"
+    stable_peer = "stable-remote-peer"
+
+    pc = MockPeerConnectionWithEvents()
+    pc.connectionState = "connected"
+    channel = MockDataChannel()
+    pc.createDataChannel.return_value = channel
+
+    async def close_pc() -> None:
+        pc.connectionState = "closed"
+        await pc._handlers["connectionstatechange"]()
+
+    pc.close = AsyncMock(side_effect=close_pc)
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
+        return_value=pc,
+    ):
+        await client._ensure_pc(peer, is_offer_initiator=True)
+        identity = Identity(
+            principal_id="remote-user",
+            principal_name="Remote Aurora",
+            effective_perms=frozenset({"read"}),
+            source="webrtc_peer",
+        )
+        client._peer_acl[peer] = identity
+        client._peer_acl[stable_peer] = identity
+        client._remember_stable_peer_id(peer, stable_peer, "Remote Aurora")
+
+        channel.readyState = "closed"
+        close_task = channel.emit("close")
+        assert close_task is not None
+        await close_task
+
+    pc.close.assert_awaited_once()
+    assert peer not in client._pcs
+    assert peer not in client._peer_data_channels
+    assert peer not in client._peer_acl
+    assert stable_peer not in client._peer_acl
+    assert stable_peer not in client._stable_peer_sessions
+    assert peer not in client._peer_reconnect_tasks
+    client.connect_to.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_rtc_client_disconnect_resolves_only_that_peers_rpc_calls(mock_deps):
     """Peer A cleanup must not abort an unrelated in-flight call to peer B."""
     settings, bus, registry, auth_service = mock_deps

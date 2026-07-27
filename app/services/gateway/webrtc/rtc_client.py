@@ -1254,6 +1254,18 @@ class RTCClient:
             )
         return peers
 
+    def _is_peer_session_active(self, session_peer_id: str) -> bool:
+        """Return whether a peer has an operational RPC DataChannel."""
+        pc = self._pcs.get(session_peer_id)
+        channel = self._peer_data_channels.get(session_peer_id)
+        connection_state = getattr(pc, "connectionState", None)
+        return bool(
+            pc is not None
+            and channel is not None
+            and connection_state not in ("disconnected", "failed", "closed")
+            and getattr(channel, "readyState", None) == "open"
+        )
+
     def get_diagnostics(self) -> WebRTCDiagnosticsResponse:
         """Return a redacted WebRTC/ICE/DataChannel diagnostic snapshot."""
         signaling = WebRTCSignalingDiagnostic(
@@ -1273,6 +1285,7 @@ class RTCClient:
         )
 
         peers: list[WebRTCPeerDiagnostic] = []
+        connected_count = 0
         authenticated_count = 0
         for signaling_peer_id, pc in sorted(self._pcs.items()):
             authenticated_stable_peer_id = self._stable_peer_id_for_session(signaling_peer_id)
@@ -1281,7 +1294,10 @@ class RTCClient:
                 authenticated_stable_peer_id,
                 ANONYMOUS,
             )
-            if identity != ANONYMOUS:
+            session_active = self._is_peer_session_active(signaling_peer_id)
+            if session_active:
+                connected_count += 1
+            if session_active and identity != ANONYMOUS:
                 authenticated_count += 1
             channel = self._peer_data_channels.get(signaling_peer_id)
             rtt_ms = None
@@ -1340,7 +1356,7 @@ class RTCClient:
             app_layer_e2ee_enabled=bool(self._settings.webrtc.enable_app_layer_e2ee),
             signaling=signaling,
             peers=peers,
-            connected_peer_count=len(peers),
+            connected_peer_count=connected_count,
             authenticated_peer_count=authenticated_count,
             pairing_peer_count=len(self._peer_pairing_active),
             pending_rpc_count=len(self._pending_rpc),
@@ -2501,6 +2517,8 @@ class RTCClient:
         if not session_peer_id:
             return False
         if self._peer_stable_ids.get(session_peer_id) != stable_peer_id:
+            return False
+        if not self._is_peer_session_active(session_peer_id):
             return False
         session_identity = self._peer_acl.get(session_peer_id)
         stable_identity = self._peer_acl.get(stable_peer_id)
@@ -4276,6 +4294,7 @@ class RTCClient:
         self._rpc_handlers[peer] = handler
 
         def setup_channel(chan: Any, is_initiator: bool = False) -> None:
+            channel_close_handled = False
             existing_channel = self._peer_data_channels.get(peer)
             if existing_channel is not None:
                 if existing_channel is not chan:
@@ -4288,6 +4307,30 @@ class RTCClient:
 
             # Store one canonical channel for both RPC and bilateral pairing.
             self._peer_data_channels[peer] = chan
+
+            @chan.on("close")
+            async def on_close() -> None:
+                nonlocal channel_close_handled
+
+                if channel_close_handled:
+                    return
+                channel_close_handled = True
+                if self._peer_data_channels.get(peer) is not chan or self._pcs.get(peer) is not pc:
+                    return
+                log_info(
+                    f"DataChannel '{chan.label}' closed with peer {peer}; "
+                    "closing its peer connection"
+                )
+                if (
+                    getattr(pc, "connectionState", None) not in ("failed", "closed")
+                    and getattr(pc, "signalingState", None) != "closed"
+                ):
+                    # A DataChannel close is an explicit end to this signaling
+                    # session. A genuinely returning peer will announce fresh
+                    # presence; blindly reconnecting the old ephemeral session
+                    # strands offers after browser refresh/navigation.
+                    self._reconnect_suppressed_pcs.add(pc)
+                    await pc.close()
 
             @chan.on("open")
             def on_open() -> None:

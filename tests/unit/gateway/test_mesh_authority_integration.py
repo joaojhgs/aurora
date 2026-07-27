@@ -68,6 +68,11 @@ def _client() -> RTCClient:
     client._mesh_config = MeshConfig(enabled=True)
     client._stable_peer_sessions["peer-a"] = "session-a"
     client._peer_stable_ids["session-a"] = "peer-a"
+    pc = MagicMock()
+    pc.connectionState = "connected"
+    pc.close = AsyncMock()
+    client._pcs["session-a"] = pc
+    client._peer_data_channels["session-a"] = SimpleNamespace(readyState="open")
     identity = _identity({"Gateway.GetServices"})
     client._peer_acl["peer-a"] = identity
     client._peer_acl["session-a"] = identity

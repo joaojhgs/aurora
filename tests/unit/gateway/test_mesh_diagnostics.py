@@ -295,16 +295,15 @@ async def test_rtc_client_diagnostics_reports_ice_channel_auth_and_redacts_error
             signalingState="stable",
         )
     }
-    client._peer_acl = {
-        "session-peer": Identity(
-            principal_id="principal-1",
-            principal_name="remote",
-            is_admin=False,
-            permissions=frozenset({"Gateway.manage"}),
-            effective_perms=frozenset({"Gateway.manage"}),
-            source="webrtc_peer",
-        )
-    }
+    identity = Identity(
+        principal_id="principal-1",
+        principal_name="remote",
+        is_admin=False,
+        permissions=frozenset({"Gateway.manage"}),
+        effective_perms=frozenset({"Gateway.manage"}),
+        source="webrtc_peer",
+    )
+    client._peer_acl = {"session-peer": identity, "stable-peer": identity}
     client._peer_tokens = {}
     client._peer_timeout_tasks = {"session-peer": object()}
     client._auth_timeout = 10.0
@@ -375,6 +374,16 @@ async def test_rtc_client_diagnostics_reports_ice_channel_auth_and_redacts_error
     assert "secret-token" not in payload
     assert "password" not in payload.lower()
     assert response.secrets_redacted is True
+
+    assert client._has_authenticated_stable_peer("stable-peer") is True
+    client._peer_data_channels["session-peer"].readyState = "closed"
+    stale_response = client.get_diagnostics()
+    assert len(stale_response.peers) == 1
+    assert stale_response.peers[0].connection_state == "connected"
+    assert stale_response.peers[0].data_channel_state == "closed"
+    assert stale_response.connected_peer_count == 0
+    assert stale_response.authenticated_peer_count == 0
+    assert client._has_authenticated_stable_peer("stable-peer") is False
 
 
 def test_webrtc_diagnostic_errors_redact_sdp_ice_audio_and_secret_material() -> None:

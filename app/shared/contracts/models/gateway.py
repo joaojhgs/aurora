@@ -632,7 +632,12 @@ class WebRTCDiagnosticError(IOModel):
 
 
 class WebRTCDiagnosticsResponse(IOModel):
-    """Read-only WebRTC, ICE, signaling, and DataChannel diagnostics."""
+    """Read-only WebRTC, ICE, signaling, and DataChannel diagnostics.
+
+    Peer counts include only sessions whose peer connection and canonical RPC
+    DataChannel are both operational. The full ``peers`` collection can also
+    contain transitional or terminal sessions awaiting asynchronous cleanup.
+    """
 
     enabled: bool = False
     started: bool = False

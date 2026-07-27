@@ -87,6 +87,11 @@ def _client() -> RTCClient:
     client._mesh_config = _mesh_config()
     client._stable_peer_sessions["recipient-peer"] = "signaling-peer"
     client._peer_stable_ids["signaling-peer"] = "recipient-peer"
+    pc = MagicMock()
+    pc.connectionState = "connected"
+    pc.close = AsyncMock()
+    client._pcs["signaling-peer"] = pc
+    client._peer_data_channels["signaling-peer"] = SimpleNamespace(readyState="open")
     identity = _authenticated_identity()
     client._peer_acl["signaling-peer"] = identity
     client._peer_acl["recipient-peer"] = identity
