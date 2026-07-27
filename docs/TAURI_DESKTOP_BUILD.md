@@ -18,7 +18,7 @@ Use the package Tauri command for local desktop development. This command is the
 pnpm --filter @aurora/tauri-ui tauri dev
 ```
 
-The Tauri package wraps the CLI for `dev` only. It automatically selects `.venv/bin/python` when available; otherwise it falls back to `uv run python main.py` from the repository root. It sets threads mode, points the UI at the loopback Gateway, and enables the managed local sidecar. The dev path is deliberately different from packaged builds:
+The Tauri package wraps the CLI for `dev` only. It automatically selects `.venv/bin/python` when available; otherwise it falls back to `uv run --no-dev --extra sidecar-thin python main.py` from the repository root. It sets threads mode, points the UI at the loopback Gateway, and enables the managed local sidecar. The dev path is deliberately different from packaged builds:
 
 - **Dev** runs Python directly for fast iteration and clear service logs.
 - **Package/build** stages a profiled sidecar executable for Tauri bundling.
@@ -156,11 +156,17 @@ The Rust shell starts the sidecar in this order:
 
 Packaged desktop-local builds should use path 2. Desktop thin mode never starts a sidecar.
 
+For path 2, Rust creates the platform Tauri application-data directory before
+launch and uses it as the sidecar working directory. It points
+`AURORA_CONFIG_FILE`, `AURORA_ENV_FILE`, and `AURORA_DATA_DIR` at persistent
+paths below that directory. The PyInstaller extraction directory and the
+read-only installation/resource directory are never used for mutable state.
+
 ## CI coverage
 
 Relevant workflows:
 
-- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, runs a desktop bundle matrix for `desktop-local` and Python-free `desktop-thin`, runs `cargo check` for both lanes, verifies desktop-thin artifact contents, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb for the local lane so `tauri dev` fails on missing Gateway readiness, early process exit, or missing `[tauri]`/`[aurora][...]` logs, and runs a sidecar profile staging matrix across `desktop-local-minimal`, local CPU, accelerator, and legacy full profiles.
+- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, runs a desktop bundle matrix for `desktop-local` and Python-free `desktop-thin`, boots the actual packaged minimal sidecar and requires healthy services/routes plus persistent config/data evidence, runs `cargo check` for both lanes, verifies desktop-thin artifact contents, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb for the local lane so `tauri dev` fails on missing Gateway readiness, early process exit, or missing `[tauri]`/`[aurora][...]` logs, and runs a sidecar profile staging matrix across `desktop-local-minimal`, local CPU, accelerator, and legacy full profiles.
 - `.github/workflows/tauri-android.yml` builds Android thin debug APK/AAB artifacts, verifies Python-free artifact contents, runs Android preflight/native plugin parity, proves UI/native-payload behavior on API 30 and API 35 emulators, and runs the packaged API 35 System WebView against an external Python WebRTC peer. Python is test infrastructure only and is not embedded in the thin package.
 - `.github/workflows/tauri-ios.yml` builds the iOS simulator baseline on macOS and installs/launches the Python-free thin `.app` in a real simulator, capturing a screenshot, process log, and keep-alive report.
 - `.github/workflows/frontend-sdk.yml` runs shared UI and SDK package checks.

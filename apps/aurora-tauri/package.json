@@ -49,6 +49,7 @@
     "prepare:sidecar:local-sycl": "node ./scripts/prepare-sidecar.mjs --profile local-sycl",
     "prepare:sidecar:local-rpc": "node ./scripts/prepare-sidecar.mjs --profile local-rpc",
     "prepare:sidecar:full": "node ./scripts/prepare-sidecar.mjs --profile full",
+    "sidecar:runtime:smoke": "node ./scripts/sidecar-runtime-smoke.mjs",
     "eventstream:smoke": "node ./scripts/eventstream-smoke.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --environment jsdom --no-file-parallelism src",

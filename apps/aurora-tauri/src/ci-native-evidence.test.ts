@@ -56,15 +56,39 @@ describe('Tauri CI native evidence contract', () => {
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/tauri-dev-smoke.json')
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui eventstream:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/eventstream-smoke.json')
+    expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui sidecar:runtime:smoke')
+    expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/sidecar-runtime-smoke.json')
     expect(desktopWorkflow).toContain('if-no-files-found: warn')
   })
 
+  it('boots the packaged sidecar against persistent runtime paths before bundling', () => {
+    const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
+    const smoke = repoText('apps/aurora-tauri/scripts/sidecar-runtime-smoke.mjs')
+
+    expect(packageJson.scripts['sidecar:runtime:smoke']).toBe(
+      'node ./scripts/sidecar-runtime-smoke.mjs',
+    )
+    expect(smoke).toContain("AURORA_TAURI_MANAGED_SIDECAR: '1'")
+    expect(smoke).toContain('AURORA_CONFIG_FILE: join(runtimeDir,')
+    expect(smoke).toContain('AURORA_ENV_FILE: join(runtimeDir,')
+    expect(smoke).toContain('AURORA_DATA_DIR: join(runtimeDir,')
+    expect(smoke).toContain("payload.status !== 'healthy'")
+    expect(smoke).toContain('payload.services.healthy !== payload.services.total')
+    expect(smoke).toContain('report.persistentState.configFileCreated')
+    expect(smoke).toContain('secretsRedacted: true')
+  })
+
   it('prepares clean-runner SDK and WebRTC dependencies before exercising them', () => {
+    const rootPackage = JSON.parse(repoText('package.json')) as {
+      devDependencies?: Record<string, string>
+    }
     const frontendWorkflow = repoText('.github/workflows/frontend-sdk.yml')
     const conformanceWorkflow = repoText('.github/workflows/sdk-backend-contract-conformance.yml')
     const interopWorkflow = repoText('.github/workflows/webrtc-interop.yml')
     const sdkBuild = 'pnpm --filter @aurora/client build'
     const sdkTest = 'pnpm --filter @aurora/client test'
+    const playwrightInstall = 'pnpm exec playwright install --with-deps chromium'
+    const tauriRegressionGate = 'pnpm --filter @aurora/tauri-ui test:ci-regression-gates'
 
     expect(frontendWorkflow.indexOf(sdkBuild)).toBeLessThan(
       frontendWorkflow.indexOf(sdkTest),
@@ -72,6 +96,10 @@ describe('Tauri CI native evidence contract', () => {
     expect(conformanceWorkflow.indexOf(sdkBuild)).toBeLessThan(
       conformanceWorkflow.indexOf(sdkTest),
     )
+    expect(frontendWorkflow.indexOf(playwrightInstall)).toBeLessThan(
+      frontendWorkflow.indexOf(tauriRegressionGate),
+    )
+    expect(rootPackage.devDependencies?.esbuild).toBeDefined()
     expect(interopWorkflow).toContain('uv sync --extra gateway')
     expect(interopWorkflow).not.toContain('uv sync --all-extras')
   })
