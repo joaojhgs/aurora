@@ -374,7 +374,12 @@ describe('browser WebRTC Aurora runtime facade', () => {
 
 import { base64UrlDecode, decodeJsonPayload, deriveRoomKeys, encodeJsonPayload } from '../src/webrtc/crypto.js'
 import { PairingSasHandshake, deriveChannelBinding, nonceCommitment, pairingIdentity } from '../src/webrtc/pairing.js'
-import { buildProtocolHello, CAP_FRAGMENTATION_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1 } from '../src/webrtc/peer-protocol.js'
+import {
+  buildProtocolHello,
+  CAP_CONSUMER_ONLY_V1,
+  CAP_FRAGMENTATION_V1,
+  CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+} from '../src/webrtc/peer-protocol.js'
 import type { DataChannelLike, PeerConnectionLike } from '../src/webrtc/peer-session.js'
 
 class RuntimeFakeSignaling {
@@ -505,6 +510,8 @@ function makeRuntimeHarness(options: {
   runtimeProfile?: WebRtcPeerConnectionProfile
   pairingConnectPoll?: Parameters<typeof createBrowserWebRtcAuroraRuntime>[0]['pairingConnectPoll']
   credentialStore?: MemoryPeerCredentialStore
+  localProtocolCapabilities?: readonly string[]
+  appLayerE2eeAllowed?: boolean
 } = {}): RuntimeHarness {
   const signaling = new RuntimeFakeSignaling()
   const pc = new RuntimeFakePeerConnection('offer-sdp', 'answer-sdp')
@@ -523,6 +530,8 @@ function makeRuntimeHarness(options: {
     createPeerConnection: () => pc,
     scryptDeriver: async () => new Uint8Array(32).fill(7),
     randomId: () => (id++ === 0 ? 'a-local' : `rpc-${id}`),
+    localProtocolCapabilities: options.localProtocolCapabilities,
+    appLayerE2eeAllowed: options.appLayerE2eeAllowed,
     windowLocation: secureLocation
   })
   return { runtime, signaling, pc, store, runtimeProfile }
@@ -635,6 +644,110 @@ async function authorizeHarness(harness: RuntimeHarness): Promise<{ channel: Run
 }
 
 describe('browser WebRTC runtime Python gateway auth interop', () => {
+  it('advertises only enabled local capabilities and negotiates their intersection', async () => {
+    const harness = makeRuntimeHarness({
+      mode: 'webrtc-only',
+      localProtocolCapabilities: [CAP_CONSUMER_ONLY_V1],
+    })
+    const { channel } = await authorizeHarnessToReconnectProof(harness)
+
+    channel.receive(await encodeInbound(buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1],
+    })))
+    await waitForRuntimeState(harness.runtime, 'authorized')
+    const localHello = await decodeSent(channel, 1)
+
+    expect(localHello).toMatchObject({
+      type: 'protocol_hello',
+      role: 'consumer',
+      capabilities: [CAP_CONSUMER_ONLY_V1],
+    })
+    expect(harness.runtime.peer.snapshot().protocolCapabilities).toEqual([])
+    await harness.runtime.close()
+  })
+
+  it('uses plaintext JSON only when the profile permits it and the E2EE rollout gate is off', async () => {
+    const runtimeProfile = profile({
+      mode: 'webrtc-only',
+      expectedSignalingPeerId: 'z-remote',
+      requireAppLayerE2ee: false,
+    })
+    const harness = makeRuntimeHarness({
+      mode: 'webrtc-only',
+      runtimeProfile,
+      appLayerE2eeAllowed: false,
+    })
+    await harness.store.save('peer-remote', {
+      tokenId: 'token-row-1',
+      claimantPeerId: 'local-stable',
+      verifierPeerId: 'peer-remote',
+      claimantSignalingPeerId: 'a-local',
+      verifierSignalingPeerId: 'z-remote',
+      roomName: 'room-1',
+      rawBearerToken: 'saved-token',
+    })
+
+    await harness.runtime.peer.connect(runtimeProfile)
+    harness.signaling.emit({ channel: 'presence', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'presence', stable_peer_id: 'peer-remote' } })
+    await flushRuntime()
+    harness.signaling.emit({ channel: 'answer', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'answer', sdp: 'answer-sdp' } })
+    await flushRuntime()
+    const channel = harness.pc.channels[0] as RuntimeFakeChannel
+    channel.open()
+    await flushRuntime()
+    const binding = await deriveChannelBinding({
+      appId: 'aurora',
+      room: 'room-1',
+      offererSignalingId: 'a-local',
+      answererSignalingId: 'z-remote',
+      offerSdp: 'offer-sdp',
+      answerSdp: 'answer-sdp',
+    })
+    channel.receive(JSON.stringify({
+      type: 'mesh_auth_challenge_v1',
+      challenge: 'a'.repeat(64),
+      channel_binding: binding,
+      claimant_peer_id: 'local-stable',
+      verifier_peer_id: 'peer-remote',
+      claimant_signaling_peer_id: 'a-local',
+      verifier_signaling_peer_id: 'z-remote',
+      room_name: 'room-1',
+    }))
+    await waitForSent(channel, 1)
+
+    expect(typeof channel.sent[0]).toBe('string')
+    expect(JSON.parse(String(channel.sent[0]))).toMatchObject({
+      type: 'mesh_auth_proof_v1',
+      token_id: 'token-row-1',
+    })
+    channel.receive(JSON.stringify(buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1],
+    })))
+    await waitForRuntimeState(harness.runtime, 'authorized')
+    await waitForSent(channel, 2)
+    expect(JSON.parse(String(channel.sent[1]))).toMatchObject({ type: 'protocol_hello' })
+    await harness.runtime.close()
+  })
+
+  it('never downgrades a profile that requires application-layer E2EE', async () => {
+    const runtimeProfile = profile({
+      mode: 'webrtc-only',
+      expectedSignalingPeerId: 'z-remote',
+      requireAppLayerE2ee: true,
+    })
+    const harness = makeRuntimeHarness({
+      mode: 'webrtc-only',
+      runtimeProfile,
+      appLayerE2eeAllowed: false,
+    })
+
+    await expect(harness.runtime.peer.connect(runtimeProfile)).rejects.toThrow(/requires application-layer E2EE/i)
+    expect(harness.pc.channels).toHaveLength(0)
+    await harness.runtime.close()
+  })
+
   it('single-flights pairing bootstrap when channel-open and inbound commit race', async () => {
     const harness = makeRuntimeHarness({ mode: 'webrtc-only' })
     await harness.runtime.peer.connect(harness.runtimeProfile)

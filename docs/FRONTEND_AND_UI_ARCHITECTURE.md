@@ -45,6 +45,17 @@ The complete target client catalog and cross-surface feature checklist live in [
 
 The selected direct-peer direction is implemented as one TypeScript WebRTC runtime in the SDK/browser layer, reused by hosted web and desktop/mobile WebViews. Rust, Kotlin, and Swift remain narrow adapters for secure storage, permissions, lifecycle/background behavior, OS integrations, and optional native model runtimes. Current live proof covers Chromium, Firefox, and Playwright-WebKit direct, configured-STUN, and forced-TURN browser-to-Python Gateway sessions over MQTT signaling and the `aurora-rpc` DataChannel with the Python HTTP API disabled. Android packaged-WebView/Chrome and iOS MobileSafari simulator gates are wired but await their first unpushed CI run; packaged iOS WKWebView and physical mobile proof remain unclaimed.
 
+The shared runtime also owns rollout behavior. Hosted web reads
+`NEXT_PUBLIC_AURORA_WEBRTC_*` gates and Tauri reads matching
+`VITE_AURORA_WEBRTC_*` gates for the thin-client entry point, scoped
+subscriptions, fragmentation/backpressure, and optional app-layer E2EE. The
+main kill switch leaves HTTP and desktop-local factories intact:
+`webrtc-preferred` selects configured HTTP without consuming or rewriting peer
+credentials, while `webrtc-only` fails closed. Capability gates are carried in
+the local protocol hello and therefore take effect only through the
+Python/TypeScript negotiated intersection. A profile that requires
+application-layer E2EE never downgrades to plaintext.
+
 ## Assistant streaming and voice playback
 
 Assistant screens consume `AuroraClient.assistant.streamMessage(...)` and `streamVoiceAssistantResponses(...)`. Those helpers subscribe to `Orchestrator.Response` for token/tool state and `TTS.AudioChunk` for streamed speech, then normalize everything into `AssistantStreamUpdate`. Shared UI components should render only SDK updates.

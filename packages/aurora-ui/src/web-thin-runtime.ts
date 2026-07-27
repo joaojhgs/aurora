@@ -6,6 +6,10 @@ import {
   type JsonObject,
 } from '@aurora/client'
 import {
+  CAP_BACKPRESSURE_V1,
+  CAP_CONSUMER_ONLY_V1,
+  CAP_FRAGMENTATION_V1,
+  CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   MemoryPeerCredentialStore,
   createBrowserWebRtcAuroraRuntime,
   type BrowserWebRtcRuntime,
@@ -23,6 +27,7 @@ import type { BrowserPeerPersistenceStatus, BrowserWebRtcCredentialStore } from 
 export type AuroraThinConnectionMode = 'http-only' | 'webrtc-only' | 'webrtc-preferred'
 export type BrowserWebRtcStatus =
   | 'idle'
+  | 'disabled'
   | 'needs-secure-context'
   | 'needs-invite'
   | 'connecting'
@@ -31,6 +36,20 @@ export type BrowserWebRtcStatus =
   | 'fallback-http'
   | 'closed'
   | 'failed'
+
+export interface AuroraWebRtcRolloutFlags {
+  webrtc_thin_client: boolean
+  webrtc_scoped_subscriptions: boolean
+  webrtc_fragmentation: boolean
+  webrtc_app_layer_e2ee: boolean
+}
+
+export const DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS: Readonly<AuroraWebRtcRolloutFlags> = Object.freeze({
+  webrtc_thin_client: true,
+  webrtc_scoped_subscriptions: true,
+  webrtc_fragmentation: true,
+  webrtc_app_layer_e2ee: true,
+})
 
 export interface BrowserThinRuntimeConfig {
   mode?: AuroraThinConnectionMode | null | undefined
@@ -45,6 +64,7 @@ export interface BrowserThinRuntimeConfig {
   nodeName?: string | null | undefined
   localStablePeerId?: string | null | undefined
   demoMode?: boolean | undefined
+  rolloutFlags?: Partial<AuroraWebRtcRolloutFlags> | undefined
   production?: boolean | undefined
   allowInsecureLoopbackSignaling?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
@@ -96,13 +116,47 @@ const DEFAULT_MODE: AuroraThinConnectionMode = 'http-only'
 
 export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {}): BrowserWebThinRuntime {
   const mode = normalizeConnectionMode(config.mode)
+  const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
+  const http = httpOptionsFromConfig(config)
+  const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
+  const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? http : null
   const surface = getAuroraSurfaceProfile({
     runtimeMode: config.runtimeMode ?? (mode === 'http-only' ? 'web' : 'web-thin'),
-    transportKind: mode === 'http-only' ? 'http' : 'mesh',
+    transportKind: mode === 'http-only' || rollbackHttp ? 'http' : 'mesh',
     nativePlatform: config.nativePlatform,
     userAgent: config.userAgent ?? browserUserAgent(),
   })
-  const http = httpOptionsFromConfig(config)
+  if (webrtcDisabled) {
+    const disabled = new AuroraError({
+      code: 'unsupported_feature',
+      message: 'WebRTC thin-client sessions are disabled by the webrtc_thin_client rollout flag.',
+    })
+    const rollbackRuntime = rollbackHttp
+      ? createBrowserWebRtcAuroraRuntime<AuroraClient>({
+          mode: 'http-only',
+          http: rollbackHttp,
+          ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
+          ...(config.createClient ? { createClient: config.createClient } : {}),
+        })
+      : null
+    const peer = new BrowserWebRtcPeerController(null, mode, {
+      httpFallback: Boolean(rollbackHttp),
+      disabledReason: disabled.message,
+      credentialStore: config.credentialStore,
+      config,
+      visibilityDocument: config.visibilityDocument,
+    })
+    return {
+      client: rollbackRuntime?.client ?? clientFromFactory(config, new FailingTransport(disabled, mode)),
+      peer,
+      surface,
+      mode,
+      async close() {
+        await peer.disconnect('runtime closed')
+        await rollbackRuntime?.close()
+      },
+    }
+  }
   const credentialStore: NonNullable<BrowserThinRuntimeConfig['credentialStore']> =
     config.credentialStore ?? new MemoryOnlyWebRtcCredentialStore()
   const parsedInvite = config.profile ? null : parseWebRtcInvite(config.inviteText, config)
@@ -131,6 +185,8 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ...(config.random ? { random: config.random } : {}),
       ...(config.scryptDeriver ? { scryptDeriver: config.scryptDeriver } : {}),
       ...(config.scryptWorkerFactory ? { scryptWorkerFactory: config.scryptWorkerFactory } : {}),
+      localProtocolCapabilities: localProtocolCapabilities(rolloutFlags),
+      appLayerE2eeAllowed: rolloutFlags.webrtc_app_layer_e2ee,
       ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
       ...(config.windowLocation ? { windowLocation: config.windowLocation } : {}),
       ...(config.createClient ? { createClient: config.createClient } : {}),
@@ -175,12 +231,17 @@ export function webRtcProfileFromInvite(
 
 export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {}): string[] {
   const mode = normalizeConnectionMode(config.mode)
+  const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
   const invite = config.inviteText ? decodeMeshInvite(config.inviteText) : null
   const summary = invite ? meshInviteSummary(invite) : null
   const notes = [`mode=${mode}`]
   if (config.gatewayUrl) notes.push('http endpoint configured')
   if (config.signalingUrl) notes.push('signaling endpoint configured')
-  if (summary) notes.push(`invite room=${summary.room}; brokers=${summary.brokerCount}; secret=${summary.includesPassword ? 'memory-only' : 'missing'}`)
+  if (mode !== 'http-only' && !rolloutFlags.webrtc_thin_client) notes.push('WebRTC disabled by webrtc_thin_client rollout flag; HTTP/local modes remain available')
+  if (mode !== 'http-only' && !rolloutFlags.webrtc_scoped_subscriptions) notes.push('scoped WebRTC subscriptions disabled by rollout flag')
+  if (mode !== 'http-only' && !rolloutFlags.webrtc_fragmentation) notes.push('WebRTC fragmentation/backpressure disabled by rollout flag')
+  if (mode !== 'http-only' && !rolloutFlags.webrtc_app_layer_e2ee) notes.push('application-layer WebRTC E2EE disabled by rollout flag; profiles requiring it fail closed')
+  if (summary) notes.push(`invite room=${summary.room}; brokers=${summary.brokerCount}; secret=${summary.includesPassword ? 'provided' : 'missing'}`)
   if (mode !== 'http-only' && typeof window !== 'undefined' && !isSecureBrowserContext(config.windowLocation)) notes.push('blocked: secure context required')
   if (mode === 'webrtc-only' && !summary && !config.profile) notes.push('blocked: invite/profile required')
   return notes
@@ -192,8 +253,9 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private readonly mode: AuroraThinConnectionMode
   private readonly httpFallback: boolean
   private readonly creationError: unknown
+  private readonly disabledReason: string | undefined
   private readonly credentialStore: BrowserThinRuntimeConfig['credentialStore']
-  private readonly config: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl'>
+  private readonly config: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl' | 'windowLocation'>
   private sdkSnapshot: PeerConnectionSnapshot | null = null
   private fallbackReason: string | undefined
   private visibilityDiagnostic: string | undefined
@@ -204,11 +266,12 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private unsubscribe: (() => void) | undefined
   private removeVisibilityListeners: (() => void) | undefined
 
-  constructor(peer: PeerConnectionController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl'>; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument'] }) {
+  constructor(peer: PeerConnectionController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl' | 'windowLocation'>; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument'] }) {
     this.peer = peer
     this.mode = mode
     this.httpFallback = options.httpFallback
     this.creationError = options.creationError
+    this.disabledReason = options.disabledReason
     this.credentialStore = options.credentialStore
     this.config = options.config ?? {}
     if (peer) this.unsubscribe = peer.subscribe((snapshot) => {
@@ -221,7 +284,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
 
   snapshot(): BrowserWebRtcSnapshot {
     const sdk = this.sdkSnapshot ?? this.peer?.snapshot() ?? null
-    const diagnostic = this.visibilityDiagnostic ?? this.connectionDiagnostic ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
+    const diagnostic = this.visibilityDiagnostic ?? this.connectionDiagnostic ?? this.disabledReason ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
     const pendingPairing = pendingPairingFromSnapshot(sdk)
     const persistence = this.credentialStore?.persistenceStatus?.()
     const out: BrowserWebRtcSnapshot = {
@@ -238,8 +301,8 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       sentFragmentCount: sdk?.sentFragmentCount ?? 0,
       receivedFragmentCount: sdk?.receivedFragmentCount ?? 0,
       updatedAt: sdk?.updatedAt ?? new Date().toISOString(),
-      status: statusFromSnapshot(sdk, this.mode, this.creationError, this.fallbackReason, this.disconnected, this.attemptedConnect),
-      secureContext: isSecureBrowserContext(),
+      status: statusFromSnapshot(sdk, this.mode, this.creationError, this.disabledReason, this.fallbackReason, this.disconnected, this.attemptedConnect),
+      secureContext: isSecureBrowserContext(this.config.windowLocation),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
       focused: typeof document === 'undefined' || document.hasFocus(),
       hasHttpFallback: this.httpFallback,
@@ -267,6 +330,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   }
 
   importInvite(inviteText: string): WebRtcPeerConnectionProfile {
+    if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
     const parsed = parseWebRtcInvite(inviteText, this.config)
     if (!parsed) throw new AuroraError({ code: 'validation', message: 'Paste a valid Aurora mesh invite before connecting WebRTC thin mode.' })
     if (this.credentialStore?.setRoomSecret) this.credentialStore.setRoomSecret(parsed.profile.roomSecretRef, parsed.roomSecret)
@@ -275,6 +339,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   }
 
   async connect(profile?: WebRtcPeerConnectionProfile): Promise<void> {
+    if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
     if (!this.peer) throw new AuroraError({ code: 'unavailable_service', message: diagnosticFromError(this.creationError) ?? 'WebRTC runtime is unavailable.' })
     this.fallbackReason = undefined
     this.connectionDiagnostic = undefined
@@ -414,6 +479,33 @@ function normalizeConnectionMode(value: string | null | undefined): AuroraThinCo
   return DEFAULT_MODE
 }
 
+export function normalizeAuroraWebRtcRolloutFlags(
+  value: Partial<AuroraWebRtcRolloutFlags> | null | undefined
+): AuroraWebRtcRolloutFlags {
+  return {
+    webrtc_thin_client:
+      value?.webrtc_thin_client
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.webrtc_thin_client,
+    webrtc_scoped_subscriptions:
+      value?.webrtc_scoped_subscriptions
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.webrtc_scoped_subscriptions,
+    webrtc_fragmentation:
+      value?.webrtc_fragmentation
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.webrtc_fragmentation,
+    webrtc_app_layer_e2ee:
+      value?.webrtc_app_layer_e2ee
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.webrtc_app_layer_e2ee,
+  }
+}
+
+function localProtocolCapabilities(flags: AuroraWebRtcRolloutFlags): string[] {
+  return [
+    ...(flags.webrtc_fragmentation ? [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1] : []),
+    ...(flags.webrtc_scoped_subscriptions ? [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1] : []),
+    CAP_CONSUMER_ONLY_V1,
+  ]
+}
+
 interface ParsedWebRtcInvite {
   profile: WebRtcPeerConnectionProfile
   roomSecret: string
@@ -468,10 +560,12 @@ function statusFromSnapshot(
   snapshot: PeerConnectionSnapshot | null,
   mode: AuroraThinConnectionMode,
   creationError: unknown,
+  disabledReason: string | undefined,
   fallbackReason: string | undefined,
   disconnected: boolean,
   attemptedConnect: boolean,
 ): BrowserWebRtcStatus {
+  if (disabledReason) return 'disabled'
   if (fallbackReason) return 'fallback-http'
   if (creationError) return /secure/i.test(diagnosticFromError(creationError) ?? '') ? 'needs-secure-context' : 'failed'
   if (mode === 'http-only') return 'idle'

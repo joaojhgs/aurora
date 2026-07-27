@@ -2,13 +2,18 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PeerConnectionSnapshot, WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
+import {
+  MemoryPeerCredentialStore,
+  type PeerConnectionSnapshot,
+  type WebRtcPeerConnectionProfile,
+} from '@aurora/client/webrtc'
 import { AuroraClient, AuroraError, MockAuroraTransport, type AuroraTransport, type JsonObject } from '@aurora/client'
 import {
   BrowserWebRtcPeerController,
   WebThinConnectionPanel,
   createBrowserWebThinRuntime,
   encodeMeshInviteToken,
+  explainBrowserThinRuntime,
   getAuroraSurfaceProfile,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
@@ -90,6 +95,18 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(sessionStorageSet).not.toHaveBeenCalled()
   })
 
+  it('describes invite presence without making a persistence-backend claim', () => {
+    const notes = explainBrowserThinRuntime({
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+    })
+
+    expect(notes).toContain(
+      'invite room=studio-room; brokers=1; secret=provided',
+    )
+    expect(notes.join('\n')).not.toContain('secret=memory-only')
+  })
+
   it('uses the exact nonsecret profile signaling endpoint over invite metadata', () => {
     const profile = webRtcProfileFromInvite(inviteText(), {
       nodeName: 'Desktop shell',
@@ -128,6 +145,59 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(preferred.peer.snapshot().hasHttpFallback).toBe(true)
     await httpOnly.close()
     await preferred.close()
+  })
+
+  it('rolls WebRTC-preferred back to HTTP without consuming or rewriting peer credentials', async () => {
+    const credentialStore = Object.assign(new MemoryPeerCredentialStore(), {
+      loadConnectionProfile: vi.fn(() => null),
+      saveConnectionProfile: vi.fn(),
+      setRoomSecret: vi.fn(),
+    })
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-preferred',
+      inviteText: inviteText(),
+      gatewayUrl: 'https://aurora.example',
+      credentialStore,
+      rolloutFlags: { webrtc_thin_client: false },
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+
+    expect(runtime.mode).toBe('webrtc-preferred')
+    expect(runtime.client.transport.kind).toBe('http')
+    expect(runtime.peer.snapshot()).toMatchObject({
+      status: 'disabled',
+      hasHttpFallback: true,
+      diagnostic: expect.stringMatching(/rollout flag/i),
+    })
+    expect(credentialStore.loadConnectionProfile).not.toHaveBeenCalled()
+    expect(credentialStore.saveConnectionProfile).not.toHaveBeenCalled()
+    expect(credentialStore.setRoomSecret).not.toHaveBeenCalled()
+    await runtime.close()
+  })
+
+  it('fails WebRTC-only closed when the thin-client rollout flag is disabled', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      gatewayUrl: 'https://aurora.example',
+      rolloutFlags: { webrtc_thin_client: false },
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+
+    expect(runtime.client.transport.kind).toBe('mesh')
+    expect(runtime.peer.snapshot()).toMatchObject({
+      status: 'disabled',
+      hasHttpFallback: false,
+      diagnostic: expect.stringMatching(/rollout flag/i),
+    })
+    await expect(runtime.peer.connect()).rejects.toThrow(/rollout flag/i)
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/rollout flag/i)
+    await runtime.close()
   })
 
   it('fails closed for WebRTC-only on insecure non-loopback contexts', async () => {

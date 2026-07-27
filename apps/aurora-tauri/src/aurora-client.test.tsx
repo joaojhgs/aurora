@@ -998,6 +998,31 @@ describe("Aurora Tauri runtime wrapper", () => {
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__;
   });
 
+  it("keeps desktop-thin HTTP and sidecar isolation intact when WebRTC rollout is disabled", async () => {
+    vi.stubEnv("VITE_AURORA_GATEWAY_URL", "https://gateway.example.test");
+    vi.stubEnv("VITE_AURORA_CONNECTION_MODE", "webrtc-preferred");
+    vi.stubEnv("VITE_AURORA_WEBRTC_THIN_CLIENT", "false");
+    Object.defineProperty(window, "__TAURI__", {
+      value: {},
+      configurable: true,
+    });
+
+    const runtime = createAuroraTauriRuntime();
+
+    expect(runtime.mode).toBe("desktop-thin");
+    expect(runtime.thinConnectionMode).toBe("webrtc-preferred");
+    expect(runtime.client.transport.kind).toBe("http");
+    expect(runtime.thinPeer?.snapshot()).toMatchObject({
+      status: "disabled",
+      hasHttpFallback: true,
+    });
+    await expect(runtime.sidecarStatus()).resolves.toBeNull();
+    await expect(runtime.startSidecar()).resolves.toBeNull();
+    await expect(runtime.stopSidecar()).resolves.toBeNull();
+    await runtime.dispose();
+    delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__;
+  });
+
   it("uses thin HTTP mode for browser previews with an explicit Gateway URL", async () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "http://127.0.0.1:8000");
 

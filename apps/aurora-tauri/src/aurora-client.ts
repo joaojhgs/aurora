@@ -16,6 +16,7 @@ import {
   createBrowserWebThinRuntime,
   explainBrowserThinRuntime,
   getAuroraSurfaceProfile,
+  type AuroraWebRtcRolloutFlags,
   type AuroraThinConnectionMode,
   type BrowserWebThinRuntime,
 } from "@aurora/ui";
@@ -608,6 +609,7 @@ function createTauriWebThinRuntime({
     bearerToken: () => runtime.client.auth.bearerToken(),
     signalingUrl,
     inviteText,
+    rolloutFlags: tauriWebRtcRolloutFlags(),
     credentialStore:
       isDesktopTauriRuntime() ||
       isAndroidTauriRuntime() ||
@@ -646,6 +648,7 @@ function explainTauriThinRuntime(
     gatewayUrl,
     signalingUrl,
     inviteText,
+    rolloutFlags: tauriWebRtcRolloutFlags(),
     allowInsecureLoopback: truthy(
       import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
     ),
@@ -1325,6 +1328,29 @@ function tauriThinConnectionMode(): AuroraThinConnectionMode {
   )
     return value;
   return DEFAULT_THIN_CONNECTION_MODE;
+}
+
+function tauriWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {
+  return {
+    webrtc_thin_client: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_THIN_CLIENT,
+    ),
+    webrtc_scoped_subscriptions: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_SCOPED_SUBSCRIPTIONS,
+    ),
+    webrtc_fragmentation: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_FRAGMENTATION,
+    ),
+    webrtc_app_layer_e2ee: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_APP_LAYER_E2EE,
+    ),
+  };
+}
+
+function enabledUnlessExplicitlyFalse(value: string | undefined): boolean {
+  return !["0", "false", "no", "off"].includes(
+    value?.trim().toLowerCase() ?? "",
+  );
 }
 
 function consumeFragmentInviteFromRuntime(): string | null {

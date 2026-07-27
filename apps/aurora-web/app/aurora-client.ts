@@ -11,6 +11,7 @@ import {
   BrowserPersistentPeerCredentialStore,
   createBrowserWebThinRuntime,
   explainBrowserThinRuntime,
+  type AuroraWebRtcRolloutFlags,
   type AuroraThinConnectionMode,
   type BrowserWebThinRuntime,
 } from '@aurora/ui'
@@ -64,8 +65,9 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
   if (cached?.key === key) return cached.runtime
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
   const mode = browserConnectionMode()
+  const rolloutFlags = browserWebRtcRolloutFlags()
   const gatewayUrl = process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL
-  const credentialStore = mode === 'http-only'
+  const credentialStore = mode === 'http-only' || !rolloutFlags.webrtc_thin_client
     ? undefined
     : new BrowserPersistentPeerCredentialStore()
   const persistedProfile = credentialStore?.loadConnectionProfile() ?? undefined
@@ -76,6 +78,7 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
     bearerToken: () => runtime.client.auth.bearerToken(),
     runtimeMode: browserRuntimeMode(),
     demoMode: isBrowserDemoMode(),
+    rolloutFlags,
     allowInsecureLoopback: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
     allowInsecureLoopbackSignaling: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
     nodeName: process.env.NEXT_PUBLIC_AURORA_NODE_NAME ?? 'Aurora Web thin client',
@@ -87,7 +90,7 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
     createClient: (transport) => new AuroraClient({ transport }),
     createDemoClient: () => new AuroraClient({ transport: new MockAuroraTransport() }),
   })
-  if (persistedProfile) {
+  if (persistedProfile && rolloutFlags.webrtc_thin_client) {
     queueMicrotask(() => {
       void runtime.peer.connect(persistedProfile).catch(() => undefined)
     })
@@ -113,6 +116,7 @@ export function auroraBrowserRuntimeDiagnostics(): string[] {
   return explainBrowserThinRuntime({
     mode: browserConnectionMode(),
     gatewayUrl: process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL,
+    rolloutFlags: browserWebRtcRolloutFlags(),
   })
 }
 
@@ -122,6 +126,7 @@ function browserClientCacheKey(): string {
     mode: browserConnectionMode(),
     demoMode: isBrowserDemoMode(),
     nodeName: process.env.NEXT_PUBLIC_AURORA_NODE_NAME ?? '',
+    rolloutFlags: browserWebRtcRolloutFlags(),
   })
 }
 
@@ -137,6 +142,14 @@ function browserRuntimeMode(): string {
   return 'web-thin'
 }
 
+function browserWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {
+  return {
+    webrtc_thin_client: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT),
+    webrtc_scoped_subscriptions: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_WEBRTC_SCOPED_SUBSCRIPTIONS),
+    webrtc_fragmentation: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_WEBRTC_FRAGMENTATION),
+    webrtc_app_layer_e2ee: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_WEBRTC_APP_LAYER_E2EE),
+  }
+}
 
 function isServerDemoMode(): boolean {
   return process.env.NODE_ENV === 'test' || truthy(process.env.AURORA_WEB_DEMO_MODE)
@@ -148,4 +161,8 @@ function isBrowserDemoMode(): boolean {
 
 function truthy(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true' || value?.toLowerCase() === 'yes'
+}
+
+function enabledUnlessExplicitlyFalse(value: string | undefined): boolean {
+  return !['0', 'false', 'no', 'off'].includes(value?.trim().toLowerCase() ?? '')
 }

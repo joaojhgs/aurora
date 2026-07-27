@@ -2,13 +2,17 @@ import { MeshP2PTransport, type MeshP2PTransportOptions, type MeshPeerBridge, ty
 import type { AuroraEvent } from '../types.js'
 import { MeshEventSubscriptionRegistry } from './event-subscriptions.js'
 import {
+  CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   FragmentReassembler,
   PeerProtocolLimits,
+  buildProtocolHello,
   fragmentMessage,
+  negotiateProtocol,
   parseProtocolHello,
+  type NegotiatedPeerProtocol,
   type ProtocolHello
 } from './peer-protocol.js'
 import type { WebRtcPeerSession, PeerSessionSnapshot } from './peer-session.js'
@@ -22,6 +26,7 @@ export interface WebRtcMeshPeerBridgeOptions {
   timeoutMs?: number
   streamQueueLimit?: number
   fragmentationThresholdBytes?: number
+  localProtocolHello?: unknown
   randomId?: () => string
   manifestParser?: (frame: unknown, expectedPeerId: string) => MeshPeerManifest
   clock?: () => number
@@ -111,9 +116,10 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly streams = new Map<string, StreamController>()
   private readonly rpcStreams = new Map<string, RpcStreamController>()
   private readonly eventSubscriptions: MeshEventSubscriptionRegistry
+  private readonly localProtocol: ProtocolHello
   private reassembler: FragmentReassembler
   private readonly timers = new Set<unknown>()
-  private remoteProtocol: ProtocolHello | null = null
+  private remoteProtocol: NegotiatedPeerProtocol | null = null
   private closed = false
   private manifest: MeshPeerManifest | null = null
   private sentFragmentCount = 0
@@ -128,6 +134,17 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.streamQueueLimit = options.streamQueueLimit ?? DEFAULT_STREAM_QUEUE_LIMIT
     this.fragmentationThresholdBytes = options.fragmentationThresholdBytes ?? DEFAULT_FRAGMENT_THRESHOLD
+    this.localProtocol = parseProtocolHello(
+      options.localProtocolHello ?? buildProtocolHello({
+        role: this.localPeerRole,
+        capabilities: [
+          CAP_FRAGMENTATION_V1,
+          CAP_BACKPRESSURE_V1,
+          CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+          ...(this.localPeerRole === 'consumer' ? [CAP_CONSUMER_ONLY_V1] : []),
+        ],
+      })
+    )
     this.randomId = options.randomId ?? (() => `webrtc-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`)
     this.manifestParser = options.manifestParser ?? ((frame, expectedPeerId) => parseWebRtcMeshManifest(assertRecord(frame, 'manifest frame'), expectedPeerId))
     this.clock = options.clock ?? (() => Date.now() / 1000)
@@ -540,9 +557,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   }
 
   private setRemoteProtocol(protocol: ProtocolHello): void {
-    this.remoteProtocol = protocol
+    this.remoteProtocol = negotiateProtocol(this.localProtocol, protocol)
     this.reassembler.cleanupPeer(this.remotePeerId)
-    this.reassembler = new FragmentReassembler({ limits: protocol.limits, clock: this.clock })
+    this.reassembler = new FragmentReassembler({ limits: this.remoteProtocol.limits, clock: this.clock })
   }
 
   private resolvePending(id: string, value: unknown): void {
@@ -863,7 +880,7 @@ function buildManifestAck(manifest: MeshPeerManifest): Record<string, unknown> {
 }
 
 
-function parserLimitsFor(protocol: ProtocolHello | null): Partial<typeof DEFAULT_PARSER_LIMITS> {
+function parserLimitsFor(protocol: NegotiatedPeerProtocol | null): Partial<typeof DEFAULT_PARSER_LIMITS> {
   const max = protocol?.limits.maxLogicalBytes ?? DEFAULT_PARSER_LIMITS.maxStringLength
   return { maxStringLength: Math.max(DEFAULT_PARSER_LIMITS.maxStringLength, max), maxArrayLength: DEFAULT_PARSER_LIMITS.maxArrayLength, maxDepth: DEFAULT_PARSER_LIMITS.maxDepth, maxObjectKeys: DEFAULT_PARSER_LIMITS.maxObjectKeys }
 }

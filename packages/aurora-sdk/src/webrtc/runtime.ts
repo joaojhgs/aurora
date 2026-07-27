@@ -99,6 +99,8 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   random?: () => number
   scryptDeriver?: AuroraScryptDeriver | undefined
   scryptWorkerFactory?: ScryptWorkerFactory | undefined
+  localProtocolCapabilities?: readonly string[] | undefined
+  appLayerE2eeAllowed?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
   pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
   visibilityDocument?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'> | undefined
@@ -229,6 +231,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
   private lastSnapshot: PeerConnectionSnapshot
   private removeVisibilityListener: (() => void) | undefined
   private establishedAuthorizedRoute = false
+  private activeLocalProtocolHello: Record<string, unknown> | null = null
 
   constructor(
     mode: AuroraConnectionMode,
@@ -269,6 +272,9 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     const keys = await deriveRoomKeysFromProfile(profile, this.options)
     this.keyMaterial = keys
     try {
+      const appLayerE2eeEnabled = resolveAppLayerE2eeEnabled(profile, this.options)
+      const localProtocolHello = buildLocalProtocolHello(this.options)
+      this.activeLocalProtocolHello = localProtocolHello
       const crypto: MqttSealOpen = {
         seal: (value) => encodeJsonPayload(value, { key: keys.kSig }).then((out) => out.payload),
         open: (payload) => decodeJsonPayload(payload, { key: keys.kSig, encrypted: true })
@@ -309,15 +315,17 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
         iceServers: iceServersFromProfile(profile),
         signaling: signalingPort,
         createPeerConnection: this.options.createPeerConnection ?? defaultPeerConnectionFactory,
-        codec: {
-          seal: (frame: unknown) => encodeJsonPayload(frame, { key: keys.kData }).then((out) => out.payload),
-          open: (data: string | ArrayBuffer | ArrayBufferView) => decodeJsonPayload(bytesFromDataChannel(data), { key: keys.kData, encrypted: true })
-        },
+        codec: appLayerE2eeEnabled
+          ? {
+              seal: (frame: unknown) => encodeJsonPayload(frame, { key: keys.kData }).then((out) => out.payload),
+              open: (data: string | ArrayBuffer | ArrayBufferView) => decodeJsonPayload(bytesFromDataChannel(data), { key: keys.kData, encrypted: true })
+            }
+          : {
+              seal: async (frame: unknown) => JSON.stringify(frame),
+              open: async (data: string | ArrayBuffer | ArrayBufferView) => JSON.parse(textFromDataChannel(data)) as unknown
+            },
         auth,
-        localProtocolHello: buildProtocolHello({
-          role: 'consumer',
-          capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_CONSUMER_ONLY_V1]
-        })
+        localProtocolHello
       }
       if (this.options.localStablePeerId !== undefined) sessionOptions.localStableId = this.options.localStablePeerId
       if (profile.expectedSignalingPeerId !== undefined) sessionOptions.expectedRemoteSignalingId = profile.expectedSignalingPeerId
@@ -330,6 +338,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       session.subscribe((snapshot) => this.handleSessionSnapshot(snapshot, profile))
       await session.start()
     } catch (error) {
+      this.activeLocalProtocolHello = null
       this.zeroKeyMaterial()
       throw error
     }
@@ -366,6 +375,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     this.signaling = null
     this.pendingPairing = null
     this.activeProfile = null
+    this.activeLocalProtocolHello = null
     this.zeroKeyMaterial()
     if (session) await session.close()
     else if (signaling) await signaling.close(reason)
@@ -405,7 +415,14 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
 
   private installAuthorizedBridge(session: WebRtcPeerSession, profile: WebRtcPeerConnectionProfile): void {
     if (!profile.expectedStablePeerId) return
-    this.bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: profile.expectedStablePeerId })
+    const bridgeOptions = {
+      session,
+      remotePeerId: profile.expectedStablePeerId,
+      ...(this.activeLocalProtocolHello
+        ? { localProtocolHello: this.activeLocalProtocolHello }
+        : {})
+    }
+    this.bridge = new WebRtcMeshPeerBridge(bridgeOptions)
     const meshOptions = {
       bridge: this.bridge,
       defaultPeerId: profile.expectedStablePeerId
@@ -961,6 +978,34 @@ function iceServersFromProfile(profile: WebRtcPeerConnectionProfile): Array<{ ur
   return [...(profile.stunServers ?? []), ...(profile.turnServers ?? [])].map((url) => ({ urls: url }))
 }
 
+function buildLocalProtocolHello(
+  options: BrowserWebRtcRuntimeOptions<unknown>
+): Record<string, unknown> {
+  const configured = options.localProtocolCapabilities ?? [
+    CAP_FRAGMENTATION_V1,
+    CAP_BACKPRESSURE_V1,
+    CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  ]
+  return buildProtocolHello({
+    role: 'consumer',
+    capabilities: [...new Set([...configured, CAP_CONSUMER_ONLY_V1])]
+  })
+}
+
+function resolveAppLayerE2eeEnabled(
+  profile: WebRtcPeerConnectionProfile,
+  options: BrowserWebRtcRuntimeOptions<unknown>
+): boolean {
+  const profileEnablesE2ee = profile.requireAppLayerE2ee !== false
+  if (profileEnablesE2ee && options.appLayerE2eeAllowed === false) {
+    throw new AuroraError({
+      code: 'unsupported_feature',
+      message: 'This WebRTC profile requires application-layer E2EE, but the local rollout gate disables it.'
+    })
+  }
+  return profileEnablesE2ee
+}
+
 function assertSecureRuntime(profile: WebRtcPeerConnectionProfile, options: BrowserWebRtcRuntimeOptions<unknown>): void {
   const location = options.windowLocation ?? (typeof window === 'undefined' ? undefined : window.location)
   if (!location) return
@@ -990,6 +1035,12 @@ function bytesFromDataChannel(data: string | ArrayBuffer | ArrayBufferView): Uin
   if (typeof data === 'string') return new TextEncoder().encode(data)
   if (data instanceof ArrayBuffer) return new Uint8Array(data)
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+}
+
+function textFromDataChannel(data: string | ArrayBuffer | ArrayBufferView): string {
+  return typeof data === 'string'
+    ? data
+    : new TextDecoder().decode(bytesFromDataChannel(data))
 }
 
 async function createReconnectProof(credentialStore: InternalPeerCredentialStore | undefined, peerId: string, challenge: MeshReconnectChallengeMessage) {

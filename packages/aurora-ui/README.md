@@ -19,11 +19,22 @@ of three explicit policies:
   uncertain in-flight mutation automatically.
 
 Connection profiles contain only nonsecret endpoint and stable-peer metadata.
-Browser reconnect material is memory-only; desktop/mobile shells delegate
+Hosted web encrypts reconnect and room-secret material with an origin-scoped,
+non-extractable WebCrypto key before IndexedDB persistence and falls back to
+memory-only when that vault is unavailable. Desktop/mobile shells delegate
 opaque credential status, proof, and deletion operations to their native
 stores. UI components receive typed controller state and actions and never
 hold raw MQTT clients, peer connections, room passwords, long-lived peer
 tokens, SDP, or ICE credentials.
+
+`BrowserThinRuntimeConfig.rolloutFlags` provides reversible gates for the
+WebRTC entry point, scoped subscriptions, fragmentation/backpressure, and
+optional application-layer E2EE. Defaults preserve the current protocol.
+Disabling `webrtc_thin_client` sends `webrtc-preferred` to its configured HTTP
+transport, keeps `webrtc-only` fail-closed, and leaves saved peer credentials
+untouched. Capability gates change the local protocol hello, so Python and
+TypeScript both use only the negotiated intersection. An E2EE-required profile
+never silently downgrades to plaintext.
 
 Voice ownership is centralized in `src/platform-surface.ts`. Focused
 push-to-talk and waveform capture use browser/WebView microphone APIs when the

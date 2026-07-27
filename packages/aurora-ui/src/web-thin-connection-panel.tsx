@@ -65,7 +65,7 @@ export function WebThinConnectionPanel({
   }), [mode, transportKind, nativePlatform])
   const invite = useMemo(() => decodeMeshInvite(inviteText), [inviteText])
   const summary = invite ? meshInviteSummary(invite) : null
-  const connectDisabled = mode === 'http-only' || !invite || !snapshot.secureContext
+  const connectDisabled = mode === 'http-only' || snapshot.status === 'disabled' || !invite || !snapshot.secureContext
   useEffect(() => peer.subscribe(setSnapshot), [peer])
   useEffect(() => {
     if (initialInviteText) setInviteText(initialInviteText)
@@ -238,6 +238,13 @@ export function WebThinConnectionPanel({
             <AlertTriangle size={16} aria-hidden />
             <AlertTitle>Secure context required</AlertTitle>
             <AlertDescription>Use HTTPS, localhost, or a trusted native WebView before enabling browser WebRTC and microphone capture.</AlertDescription>
+          </Alert>
+        ) : null}
+        {snapshot.status === 'disabled' ? (
+          <Alert>
+            <WifiOff size={16} aria-hidden />
+            <AlertTitle>WebRTC rollout disabled</AlertTitle>
+            <AlertDescription>{snapshot.diagnostic ?? 'HTTP and desktop-local modes remain available.'}</AlertDescription>
           </Alert>
         ) : null}
         {snapshot.fallbackReason ? (

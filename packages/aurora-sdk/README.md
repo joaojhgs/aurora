@@ -257,6 +257,16 @@ client.permissions.check(['TTS.Synthesize'], 'use').allowed
 
 Mesh errors are classified into the shared SDK codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
 
+The browser runtime accepts an explicit local capability list and intersects it
+with the authenticated Python peer's `protocol_hello`. Fragmentation,
+backpressure, and scoped subscriptions are used only when both peers advertise
+them; `consumer_only_v1` remains mandatory for the thin client. The
+`appLayerE2eeAllowed` rollout input is subordinate to the connection profile:
+profiles that require application-layer E2EE fail with
+`unsupported_feature` when the local gate is off, while profiles that
+explicitly permit DTLS-only JSON can use plaintext DataChannel frames. There
+is no automatic security downgrade.
+
 ## Route And Privacy Policy
 
 `client.routes.evaluatePolicy()` combines backend `Gateway.ExplainRoute` output with `Gateway.GetCapabilityCatalog` policy facts. It does not guess the backend route; it preserves the selected candidate, denial code, explicit selector requirement, approval state, privacy class, redacted payload preview, fallback behavior, and audit target for RouteSheet/tool approval UI.

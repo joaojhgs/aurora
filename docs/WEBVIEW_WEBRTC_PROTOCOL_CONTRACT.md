@@ -36,6 +36,25 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 - Hosted-browser reconnect material is encrypted before IndexedDB persistence with a non-extractable origin-scoped WebCrypto AES-GCM key. Unsupported or denied durable storage falls back to memory-only. Desktop/mobile native stores persist scoped reconnect material through OS credential stores. Profiles must not store raw invite secrets or bearer tokens.
 - Revoked credentials fail closed; mutation retry logic must not replay uncertain in-flight mutations on a different transport. Current live proof covers a mutation started event followed by disconnect before response settlement with execution count 1, not a broad exactly-once guarantee.
 - Event delivery is subscription/correlation scoped. Wildcard or wrong-correlation event leakage is a test failure. Scoped authorization stays on public production Auth/Gateway/DataChannel boundaries rather than private service calls.
+- Fragmentation/backpressure and scoped-event extensions are activated only from the authenticated intersection of the local and remote `protocol_hello` capability sets. A local rollout gate therefore cannot be overridden by a remote advertisement.
+- The application-layer E2EE rollout gate is an allowance, not a downgrade switch. A profile requiring E2EE fails closed when the gate is off; only a profile that explicitly permits DTLS-only JSON may use plaintext DataChannel frames.
+
+## Rollout contract
+
+Hosted web exposes `NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT`,
+`NEXT_PUBLIC_AURORA_WEBRTC_SCOPED_SUBSCRIPTIONS`,
+`NEXT_PUBLIC_AURORA_WEBRTC_FRAGMENTATION`, and
+`NEXT_PUBLIC_AURORA_WEBRTC_APP_LAYER_E2EE`. Tauri/WebView builds expose the
+matching `VITE_AURORA_WEBRTC_*` variables. Unset values preserve the current
+enabled behavior.
+
+Disabling the main thin-client gate closes/prevents WebRTC sessions without
+touching saved credentials. `webrtc-preferred` may use its configured HTTP
+transport; `webrtc-only` remains disabled and fail-closed; desktop-local is
+unchanged. The Python Gateway separately exposes the temporary
+`webrtc.legacy_event_broadcast` compatibility policy for non-sensitive
+unscoped events. That policy never enables sensitive or scoped-only
+broadcasts.
 
 ## Dependency posture
 

@@ -512,7 +512,21 @@ function parseLimits(value: unknown): PeerProtocolLimits {
 }
 
 function isProtocolHello(value: unknown): value is ProtocolHello {
-  return isRecord(value) && value.type === PROTOCOL_HELLO_TYPE && value.v === PEER_PROTOCOL_VERSION && typeof value.role === 'string' && value.capabilities instanceof Set && value.limits instanceof PeerProtocolLimits
+  return isRecord(value)
+    && (value.role === 'provider' || value.role === 'consumer' || value.role === 'hybrid')
+    && value.capabilities instanceof Set
+    && value.capabilities.size <= MAX_CAPABILITIES
+    && [...value.capabilities].every((capability) =>
+      typeof capability === 'string' && KNOWN_PEER_CAPABILITIES.has(capability)
+    )
+    && value.limits instanceof PeerProtocolLimits
+    && Array.isArray(value.rawCapabilities)
+    && value.rawCapabilities.length <= MAX_CAPABILITIES
+    && value.rawCapabilities.every((capability) =>
+      typeof capability === 'string'
+      && capability.length > 0
+      && capability.length <= MAX_CAPABILITY_LENGTH
+    )
 }
 
 function parseFragmentFrame(frame: unknown, limits: PeerProtocolLimits): {

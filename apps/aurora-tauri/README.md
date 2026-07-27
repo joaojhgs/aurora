@@ -43,6 +43,22 @@ pnpm --filter @aurora/tauri-ui ios:webrtc:mobile-browser
 
 These packages still need STUN and usually TURN URLs in the imported peer invite/profile. WSS signaling is rendezvous only; Aurora RPC, streams, cancellation, and events use the WebRTC DataChannel after negotiation.
 
+## Thin WebRTC rollout controls
+
+The frontend rollout gates default to enabled so existing profiles retain
+their current behavior:
+
+| Variable | Effect when set to `0`, `false`, `no`, or `off` |
+| --- | --- |
+| `VITE_AURORA_WEBRTC_THIN_CLIENT` | Prevents new WebRTC sessions. `webrtc-preferred` uses its configured HTTP endpoint; `webrtc-only` remains fail-closed. Desktop-local sidecar mode is unchanged. |
+| `VITE_AURORA_WEBRTC_SCOPED_SUBSCRIPTIONS` | Removes `scoped_event_subscriptions_v1` from the local protocol hello. |
+| `VITE_AURORA_WEBRTC_FRAGMENTATION` | Removes both `fragmentation_v1` and `backpressure_v1` from the local protocol hello. |
+| `VITE_AURORA_WEBRTC_APP_LAYER_E2EE` | Disallows optional app-layer E2EE locally. Profiles that require E2EE fail closed instead of sending plaintext. |
+
+These are Vite build inputs. Rebuild the thin artifact to change them. The
+kill switch does not delete or translate stored peer or HTTP credentials, so
+re-enabling it does not require a credential migration.
+
 ## One-command desktop development
 
 From the repository root, the normal dev command is enough to start Vite, the Tauri Rust shell, and the local Aurora Python services in threads mode. This command is the real local development stack; fixture/demo fallbacks are explicitly labeled separately and are not acceptance evidence for desktop-local behavior:

@@ -191,6 +191,7 @@ Every supported client profile must preserve these rules:
 ### R7 — Release certification and parity
 
 - Run cross-surface route, accessibility, auth, redaction, reconnect, NAT/TURN, lifecycle, package-content, upgrade, and rollback suites.
+- Keep the five rollout controls explicit and reversible: the hosted/Tauri thin-client, scoped-subscription, fragmentation/backpressure, and app-layer-E2EE gates plus the Gateway legacy-event compatibility gate. A thin-client kill-switch test must preserve HTTP/desktop-local operation and stored credentials; E2EE-required profiles must never downgrade.
 - Publish a release matrix that distinguishes automated harness proof from signed artifact, store, and physical-device proof.
 - Gate public “supported” claims on the evidence in [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md).
 

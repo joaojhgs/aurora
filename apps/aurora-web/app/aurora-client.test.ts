@@ -136,6 +136,22 @@ describe('createAuroraBrowserClient', () => {
     expect(runtime.peer.snapshot().diagnostic ?? '').not.toContain('do-not-read')
   })
 
+  it('uses the WebRTC rollout kill switch to keep hosted preferred mode on HTTP', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_CONNECTION_MODE', 'webrtc-preferred')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_GATEWAY_URL', 'https://aurora.example')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT', '0')
+
+    const runtime = createAuroraBrowserRuntime()
+
+    expect(runtime.mode).toBe('webrtc-preferred')
+    expect(runtime.client.transport.kind).toBe('http')
+    expect(runtime.peer.snapshot()).toMatchObject({
+      status: 'disabled',
+      hasHttpFallback: true,
+    })
+  })
+
   it('ignores query invites and only consumes scrubbed fragment invites without reload', () => {
     const testDir = dirname(fileURLToPath(import.meta.url))
     const clientSource = readFileSync(join(testDir, 'aurora-client.ts'), 'utf8')
