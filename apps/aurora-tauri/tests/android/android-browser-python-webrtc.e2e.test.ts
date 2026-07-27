@@ -88,7 +88,7 @@ const interopTimeoutMs = Number(
 )
 const interopLane = (() => {
   const lane =
-    process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE ?? 'turn'
+    process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE ?? 'direct'
   if (lane !== 'direct' && lane !== 'stun' && lane !== 'turn') {
     throw new Error(
       `AURORA_ANDROID_MOBILE_WEBRTC_LANE must be direct, stun, or turn; received ${lane}`,

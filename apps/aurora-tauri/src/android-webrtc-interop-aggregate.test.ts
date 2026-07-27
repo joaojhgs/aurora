@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 // @ts-expect-error The Node-executed .mjs runner intentionally has no TS build output.
-import { buildAndroidInteropAggregate } from '../scripts/run-android-webrtc-interop.mjs'
+import {
+  buildAndroidInteropAggregate,
+  resolveMobileBrowserExpectations,
+} from '../scripts/run-android-webrtc-interop.mjs'
 
 const digest = 'a'.repeat(64)
 
@@ -64,7 +67,7 @@ function input() {
       present: true,
       parsed: true,
       digest,
-      report: completeReport('turn', 'relay'),
+      report: completeReport('direct', 'host'),
     },
   }
 }
@@ -91,8 +94,8 @@ describe('Android mobile-to-Python WebRTC aggregate', () => {
           passed: true,
         },
         mobileBrowser: {
-          expectedLane: 'turn',
-          observedPathCategory: 'relay',
+          expectedLane: 'direct',
+          observedPathCategory: 'host',
           passed: true,
         },
       },
@@ -127,7 +130,7 @@ describe('Android mobile-to-Python WebRTC aggregate', () => {
     [
       'wrong lane',
       (value: ReturnType<typeof input>) => {
-        value.browser.report.lane = 'direct'
+        value.browser.report.lane = 'turn'
       },
     ],
     [
@@ -189,6 +192,24 @@ describe('Android mobile-to-Python WebRTC aggregate', () => {
       testCommandPassed: false,
       bothChildReportsPassed: true,
     })
+  })
+
+  it('accepts explicit TURN mobile-browser lane expectations from CI', () => {
+    const value = input()
+    value.browser.report = completeReport('turn', 'relay')
+
+    const aggregate = buildAndroidInteropAggregate(
+      value,
+      resolveMobileBrowserExpectations('turn'),
+    )
+
+    expect(aggregate.children.mobileBrowser).toMatchObject({
+      expectedLane: 'turn',
+      observedLane: 'turn',
+      observedPathCategory: 'relay',
+      passed: true,
+    })
+    expect(aggregate.status).toBe('passed')
   })
 
   it('never copies arbitrary child errors or invalid digest values', () => {

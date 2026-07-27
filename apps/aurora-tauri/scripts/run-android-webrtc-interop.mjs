@@ -27,16 +27,9 @@ const browserReportPath = join(
   'android-mobile-browser',
   'report.json',
 )
-const mobileBrowserExpectedLane = readLane(
-  process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE ?? 'turn',
-  'AURORA_ANDROID_MOBILE_WEBRTC_LANE',
+const mobileBrowserExpectations = resolveMobileBrowserExpectations(
+  process.env.AURORA_ANDROID_MOBILE_WEBRTC_LANE,
 )
-const mobileBrowserExpectedPathCategories =
-  mobileBrowserExpectedLane === 'turn'
-    ? ['relay']
-    : mobileBrowserExpectedLane === 'stun'
-      ? ['srflx', 'prflx']
-      : ['host', 'prflx']
 const testFiles = [
   'tests/android/android-python-webrtc.e2e.test.ts',
   'tests/android/android-browser-python-webrtc.e2e.test.ts',
@@ -94,7 +87,10 @@ const requiredNegativeAssertions = [
  *   },
  * }} input
  */
-export function buildAndroidInteropAggregate(input) {
+export function buildAndroidInteropAggregate(
+  input,
+  expectations = mobileBrowserExpectations,
+) {
   const webview = summarizeChild({
     id: 'android-webview',
     sourceReport: 'android-webview/report.json',
@@ -105,8 +101,8 @@ export function buildAndroidInteropAggregate(input) {
   const browser = summarizeChild({
     id: 'android-mobile-browser',
     sourceReport: 'android-mobile-browser/report.json',
-    expectedLane: mobileBrowserExpectedLane,
-    expectedPathCategories: mobileBrowserExpectedPathCategories,
+    expectedLane: expectations.lane,
+    expectedPathCategories: expectations.pathCategories,
     readResult: input.browser,
   })
   const testCommandPassed = input.commandStatus === 0
@@ -278,7 +274,19 @@ function safeEnum(value, allowed) {
     : 'unknown'
 }
 
+export function resolveMobileBrowserExpectations(value = 'direct') {
+  const lane = readLane(value, 'AURORA_ANDROID_MOBILE_WEBRTC_LANE')
+  const pathCategories =
+    lane === 'turn'
+      ? ['relay']
+      : lane === 'stun'
+        ? ['srflx', 'prflx']
+        : ['host', 'prflx']
+  return { lane, pathCategories }
+}
+
 function readLane(value, source) {
+  if (value === undefined) return 'direct'
   if (value === 'direct' || value === 'stun' || value === 'turn') return value
   throw new Error(
     `${source} must be direct, stun, or turn; received ${String(value)}`,
