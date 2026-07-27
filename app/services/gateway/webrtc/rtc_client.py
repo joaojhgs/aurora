@@ -408,6 +408,7 @@ class RTCClient:
         self._provider_export_active: dict[str, _ActiveProjectionRecord] = {}
         self._manifest_ack_expectations: dict[str, tuple[str, str]] = {}
         self._provider_export_tasks: set[asyncio.Task[None]] = set()
+        self._rpc_send_tasks: set[asyncio.Task[bool]] = set()
         self._tooling_projection_refresh_tasks: dict[str, asyncio.Task[None]] = {}
         self._tooling_remote_authority_revisions: dict[str, tuple[int, int]] = {}
         self._tooling_outbound_manifest_revisions: dict[str, int] = {}
@@ -700,6 +701,19 @@ class RTCClient:
                     "datachannel_async_send_failed", str(exc), session_peer_id
                 )
                 return False
+
+    def _schedule_rpc_send(self, peer_id: str, text: str) -> None:
+        """Queue an RPC frame through ordered fragmentation and backpressure."""
+
+        async def _send() -> bool:
+            sent = await self.send_to_peer_async(peer_id, text)
+            if not sent:
+                log_warning(f"RTCClient: Failed to send RPC frame to peer {peer_id}")
+            return sent
+
+        task = asyncio.create_task(_send(), name=f"webrtc-rpc-send:{peer_id[:8]}")
+        self._rpc_send_tasks.add(task)
+        task.add_done_callback(self._rpc_send_tasks.discard)
 
     def _remember_stable_peer_id(
         self, session_peer_id: str, stable_peer_id: str | None, node_name: str = ""
@@ -1056,6 +1070,12 @@ class RTCClient:
         if shadow_tasks:
             await asyncio.gather(*shadow_tasks, return_exceptions=True)
         self._provider_export_tasks.clear()
+        rpc_send_tasks = list(self._rpc_send_tasks)
+        for task in rpc_send_tasks:
+            task.cancel()
+        if rpc_send_tasks:
+            await asyncio.gather(*rpc_send_tasks, return_exceptions=True)
+        self._rpc_send_tasks.clear()
         refresh_tasks = list(self._tooling_projection_refresh_tasks.values())
         for task in refresh_tasks:
             task.cancel()
@@ -4109,14 +4129,19 @@ class RTCClient:
         channel = pc.createDataChannel("aurora-rpc") if is_offer_initiator else None
 
         def send_fn(text: str) -> None:
-            try:
-                active_channel = self._peer_data_channels.get(peer)
-                if active_channel is None:
-                    raise RuntimeError("canonical DataChannel is unavailable")
-                self._send_channel_text(active_channel, text)
-            except Exception:
-                log_debug(f"RTCClient: Failed to send to peer {peer} (channel closed)")
-                raise
+            protocol = self._peer_protocols.get(peer)
+            if protocol and (
+                protocol.supports(CAP_FRAGMENTATION_V1) or protocol.supports(CAP_BACKPRESSURE_V1)
+            ):
+                self._schedule_rpc_send(peer, text)
+                return
+
+            # Preserve the legacy/pre-negotiation synchronous send contract.
+            # Once capabilities are negotiated, every RPC frame takes the
+            # ordered async path so small frames cannot overtake fragments.
+            active_channel = self._peer_data_channels.get(peer)
+            if active_channel is None or not self._send_channel_text(active_channel, text):
+                raise RuntimeError("canonical DataChannel is unavailable")
 
         # Store the send function for mesh P2P outbound messaging
         self._peer_send_fns[peer] = send_fn

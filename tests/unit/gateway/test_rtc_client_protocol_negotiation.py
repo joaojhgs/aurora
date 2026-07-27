@@ -188,6 +188,29 @@ async def test_send_to_peer_async_legacy_sends_small_unfragmented() -> None:
     assert channel.sent == ['{"type":"ping"}']
 
 
+@pytest.mark.asyncio
+async def test_scheduled_rpc_response_uses_fragmented_ordered_send_path() -> None:
+    client = _client()
+    limits = _small_limits()
+    hello = build_protocol_hello(
+        role="hybrid", capabilities=(CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1), limits=limits
+    )
+    client._peer_protocols["session-peer"] = negotiate_protocol(hello, hello)  # noqa: SLF001
+    channel = FakeDataChannel()
+    client._peer_data_channels["session-peer"] = channel  # noqa: SLF001
+
+    client._schedule_rpc_send(  # noqa: SLF001
+        "session-peer",
+        json.dumps({"type": "result", "id": "large-rpc", "result": "x" * 40}),
+    )
+    tasks = list(client._rpc_send_tasks)  # noqa: SLF001
+    await asyncio.gather(*tasks)
+
+    assert len(channel.sent) > 1
+    assert all(json.loads(payload)["type"] == FRAGMENT_FRAME_TYPE for payload in channel.sent)
+    assert not client._rpc_send_tasks  # noqa: SLF001
+
+
 @pytest.mark.unit
 def test_protocol_cleanup_is_scoped_to_disconnected_peer() -> None:
     client = _client()
