@@ -1,7 +1,7 @@
 # WebView WebRTC thin-shell implementation plan
 
 - **Created:** 2026-07-23
-- **Status:** Core implementation complete; KVM Android, macOS iOS-simulator, packaged WKWebView, and physical-device certification remain open
+- **Status:** Core implementation complete; KVM Android, macOS MobileSafari/packaged-WKWebView runtime, and physical-device certification remain open
 - **Scope:** Hosted web, desktop Tauri thin, Android Tauri thin, and iOS Tauri thin direct-peer operation through one browser/WebView WebRTC implementation
 - **Primary decision:** Implement Aurora's peer transport in TypeScript under `packages/aurora-sdk`; do not duplicate it in Rust or embed the Python runtime
 - **Roadmap:** `docs/UI_CLIENT_SURFACE_ROADMAP.md`
@@ -44,7 +44,7 @@ The implementation is complete only when:
 - Encrypted signaling is mandatory for production profiles. Optional application-layer DataChannel E2EE must interoperate with Python's binary AES-GCM mode (`app/services/gateway/webrtc/rtc_client.py:1061-1119`). WebRTC DTLS remains required regardless.
 - Room discovery is not authorization. Invites pin the expected stable peer ID; pairing/auth must finish before service calls.
 - Thin shells advertise a consumer-only/minimal manifest and reject inbound service calls unless a future explicit provider mode is enabled.
-- Browser secrets are memory-only by default. Tauri/mobile use OS credential stores; proof operations should occur in the native layer where practical.
+- Hosted-browser reconnect and room secrets may persist only as AES-GCM ciphertext behind a non-extractable origin-scoped WebCrypto key, with validated nonsecret metadata and a fail-closed memory-only fallback. Tauri/mobile use OS credential stores; proof operations should occur in the native layer where practical.
 - Logs, errors, support bundles, analytics, and URLs must not expose long-lived tokens, room passwords, pairing nonces, raw audio, SDP, ICE credentials, or unredacted service payloads.
 - Event subscriptions are exact-topic, permission-checked, correlation-scoped where applicable, bounded, expiring, and removed on disconnect.
 - No automatic replay of an uncertain in-flight mutation during transport fallback.
@@ -382,7 +382,7 @@ interface PeerCredentialStore {
 
 Implementations:
 
-- `MemoryPeerCredentialStore` for hosted web; cleared on refresh/close and never uses web storage;
+- `BrowserPersistentPeerCredentialStore` for hosted web; encrypted secret records and the non-extractable vault key use IndexedDB, validated nonsecret profile/stable-ID metadata may use `localStorage`, and any WebCrypto/IndexedDB/metadata failure downgrades the entire store to memory-only without plaintext fallback;
 - desktop Tauri adapter using OS keychain-backed commands;
 - Android Keystore and iOS Keychain adapters through existing native plugin boundaries;
 - test-only deterministic store.
@@ -474,11 +474,11 @@ Each phase is independently reviewable and must leave the existing HTTP/local pa
 1. Implement pairing v2 commit/reveal and exact SAS.
 2. Require explicit local confirmation and matching remote terminal state before accepting authorization.
 3. Exchange/store the issued peer credential with strict timeouts and identity binding.
-4. Implement reconnect challenge/proof with native proof adapters on Tauri/mobile and memory-only browser behavior.
+4. Implement reconnect challenge/proof with native proof adapters on Tauri/mobile and encrypted hosted-browser persistence that fails closed to memory-only.
 5. Reject identity changes, reused/expired invites, invalid commitments, proof replays, and unsolicited peers.
 6. Add remove/revoke flows that clear native storage and active sessions.
 
-**Gate:** first pairing and later reconnect both work with the Python peer; token bytes are absent from logs and durable browser storage.
+**Gate:** first pairing and later reconnect both work with the Python peer; raw token bytes are absent from logs, URLs, metadata storage, and plaintext durable browser records.
 
 ### Phase 6 — RPC bridge, streaming, fragmentation, and cancellation
 
@@ -539,9 +539,9 @@ Each phase is independently reviewable and must leave the existing HTTP/local pa
 **Files:** `apps/aurora-web` runtime/provider, browser configuration, Playwright matrix, deployment docs.
 
 1. Lazy-load peer runtime only in the browser; keep server rendering deterministic.
-2. Use HTTPS and WSS; no persistent browser credential by default.
+2. Use HTTPS and WSS; persist reconnect and room material only through the encrypted origin-scoped browser vault, with no plaintext fallback.
 3. Use URL fragments or paste/import for ephemeral invite material so it is not sent in HTTP requests; redact it from navigation/history where feasible.
-4. Handle page visibility, offline/online, suspend/resume, and explicit re-pair after memory loss.
+4. Handle page visibility, offline/online, suspend/resume, automatic re-dial after a validated vault restore, and explicit re-pair after vault loss or a memory-only fallback session ends.
 5. Verify PWA/service-worker code does not claim ownership of a persistent peer connection.
 6. Run Chromium, Firefox, and WebKit Playwright interop.
 
@@ -665,7 +665,7 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 10. `Orchestrator.Response` and `TTS.AudioChunk` reach only the authorized peer with a matching active subscription/correlation; a second connected peer receives zero matching frames.
 11. Assistant text, client audio playback, stop/cancel, and focused push-to-talk work without WebRTC media tracks.
 12. `http-only`, `webrtc-only`, and `webrtc-preferred` select the documented transport for new calls; an in-flight mutation is never replayed automatically.
-13. Onboarding changes runtime endpoint/invite without rebuilding, closes the old runtime, and does not persist secrets in browser storage.
+13. Onboarding changes runtime endpoint/invite without rebuilding, closes the old runtime, scrubs ephemeral invite material, persists only validated nonsecret metadata plus encrypted vault records, and never writes plaintext secrets to browser storage.
 14. Production web and Tauri profiles reject `ws:` signaling and insecure remote `http:`; loopback development remains available under a separate policy.
 15. UI source-boundary tests find no raw MQTT/WebRTC imports outside approved SDK/app runtime adapters.
 16. Rust service-boundary tests still reject PyO3/libpython/service-specific business logic.
@@ -677,6 +677,7 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 22. The packaged Android System WebView and standalone Android mobile browser each pair with an external Python `RTCClient` while the Aurora HTTP application API is disabled, and both pass the shared negotiation-direction, pairing, manifest, structured-error, 512 KiB fragmentation, stream/cancel, scoped-event/TTS, reconnect, uncertain-mutation, revocation, and redaction assertions inside one consolidated Android CI check.
 23. MobileSafari in an iOS simulator pairs with an external Python `RTCClient` on the direct path while the Aurora HTTP application API is disabled and passes the same shared assertions inside the existing macOS iOS check; this browser-engine evidence must remain explicitly separate from packaged WKWebView and physical-device certification.
 24. A dedicated packaged iOS Tauri WKWebView simulator app pairs with an external Python `RTCClient` on the direct path while the Aurora HTTP application API is disabled, passes the shared browser assertions inside the existing macOS iOS check, and proves the built app contains no Python or sidecar payload.
+25. Hosted web refresh restores a validated peer profile and stable browser identity, unlocks reconnect and room material only from AES-GCM ciphertext in IndexedDB, and re-dials without re-entering SAS in Chromium, Firefox, and WebKit; unsupported or failed persistence falls back all-or-nothing to memory-only, and no claim is made that the origin-scoped vault resists active same-origin XSS or full browser-profile compromise.
 
 ### Active mobile-to-Python interoperability checklist
 
@@ -704,7 +705,7 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 | Page/mobile suspension drops sessions | Poor reliability | Foreground-only contract, visibility/app lifecycle integration, deterministic reconnect and user-visible state. |
 | `webrtc-preferred` duplicates side effects | Data corruption | Never replay in-flight calls; retry only by explicit user/idempotence-aware workflow. |
 | CSP widened for arbitrary endpoints | Increased exfiltration surface | Scheme-minimal CSP, strict app profile allowlist, no arbitrary URL credentials, security tests and docs. |
-| Browser has no durable secure store | Re-pair friction | Memory-only default; make persistence opt-in only after a separately reviewed WebAuthn/wrapped-key design. |
+| Browser origin storage is not hardware-bound secure storage | Active XSS or full profile compromise can invoke or steal an unlocked origin vault | Store only AES-GCM ciphertext plus a non-extractable origin key, keep metadata nonsecret, fail closed to memory-only, enforce strict CSP/dependency hygiene, document the boundary, and retain WebAuthn PRF/device-key binding as the stronger future design. |
 | Native proof API expands Tauri attack surface | Secret compromise | Narrow peer-scoped store/proof/delete commands, capability restrictions, no generic secret read command. |
 | Existing Python peers lack subscription/fragment support | Compatibility split | Additive capability negotiation, compatibility window, diagnostics, staged rollout. |
 | Full matrix is expensive/flaky | Slow delivery | Layered deterministic unit tests, containerized interop, small browser smoke per PR, full device/TURN lanes nightly/release. |
