@@ -20,7 +20,10 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  assertNoInteropSeededSecrets,
   assertInteropBrowserResult,
+  redactInteropArtifactValue,
+  redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
 
@@ -124,6 +127,7 @@ describe('Android mobile-browser WebRTC interoperability', () => {
         }
 
         const browserResult = mobileResult.result
+        resources.assertNoSeededSecrets(mobileResult)
         assertInteropBrowserResult(browserResult, {
           lane: interopLane,
           expectedStablePeerId: ready.expectedStablePeerId,
@@ -160,6 +164,7 @@ describe('Android mobile-browser WebRTC interoperability', () => {
           10_000,
           'Python peer report',
         )
+        resources.assertNoSeededSecrets(pythonReport)
         expect(pythonReport).toMatchObject({
           gatewayHttpApiEnabled: false,
           rtcStarted: true,
@@ -193,6 +198,7 @@ describe('Android mobile-browser WebRTC interoperability', () => {
           10_000,
           'aggregate Android mobile WebRTC report',
         )
+        resources.assertNoSeededSecrets(aggregate)
         expect(aggregate).toMatchObject({
           status: 'passed',
           lane: interopLane,
@@ -205,20 +211,25 @@ describe('Android mobile-browser WebRTC interoperability', () => {
         )
         if (holdMs > 0) await sleep(holdMs)
       } catch (error) {
-        await writeJson(resources.browserReportPath, {
+        const redactedError = resources.redactArtifactValue(
+          error instanceof Error ? error.message : String(error),
+        )
+        const failureReport = resources.redactArtifactValue({
           lane: interopLane,
           browserName: 'android-chrome',
           status: 'failed',
           durationMs: Date.now() - started,
-          error: error instanceof Error ? error.message : String(error),
+          error: redactedError,
           mobileResult,
           secretsRedacted: true,
         })
+        resources.assertNoSeededSecrets(failureReport)
+        await writeJson(resources.browserReportPath, failureReport)
         await writeJson(resources.donePath, {
           ok: false,
           at: new Date().toISOString(),
         })
-        throw error
+        throw new Error(redactedError)
       }
     },
     testTimeoutMs,
@@ -231,6 +242,7 @@ async function createInteropResources() {
   const token = `android-mobile.${crypto
     .randomBytes(24)
     .toString('base64url')}`
+  const seededSecrets = [roomSecret, token]
   const room = `android-mobile-${process.pid}-${Date.now().toString(36)}`
   const hostIpv4 =
     interopLane === 'direct' ? undefined : await resolveHostIpv4()
@@ -324,7 +336,12 @@ async function createInteropResources() {
       pythonPeer.exitCode !== 0 &&
       pythonOutput
     ) {
-      console.error(redactProcessOutput(pythonOutput))
+      console.error(
+        redactInteropSeededText(
+          redactProcessOutput(pythonOutput),
+          seededSecrets,
+        ),
+      )
     }
   }
 
@@ -491,7 +508,17 @@ async function createInteropResources() {
       browserReportPath,
       finalReportPath,
       pythonPeer,
-      getPythonOutput: () => pythonOutput,
+      getPythonOutput: () =>
+        redactInteropSeededText(
+          redactProcessOutput(pythonOutput),
+          seededSecrets,
+        ),
+      assertNoSeededSecrets(value: unknown): void {
+        assertNoInteropSeededSecrets(value, seededSecrets)
+      },
+      redactArtifactValue<T>(value: T): T {
+        return redactInteropArtifactValue(value, seededSecrets)
+      },
       deviceHarnessUrl: `http://127.0.0.1:${hostPort}/`,
       setReadyConfig(value: BrowserConfig) {
         readyConfig = value

@@ -87,6 +87,44 @@ export type InteropNetworkRequest = {
   url: string
 }
 
+export function redactInteropSeededText(
+  value: string,
+  seededSecrets: readonly string[],
+): string {
+  return seededSecrets.reduce(
+    (redacted, secret) =>
+      secret ? redacted.replaceAll(secret, '[REDACTED]') : redacted,
+    value,
+  )
+}
+
+export function redactInteropArtifactValue<T>(
+  value: T,
+  seededSecrets: readonly string[],
+): T {
+  return JSON.parse(
+    redactInteropSeededText(
+      JSON.stringify(value ?? null),
+      seededSecrets,
+    ),
+  ) as T
+}
+
+export function assertNoInteropSeededSecrets(
+  value: unknown,
+  seededSecrets: readonly string[],
+): void {
+  const serialized = JSON.stringify(value ?? null)
+  const leakedSecretCount = seededSecrets.filter(
+    (secret) => Boolean(secret) && serialized.includes(secret),
+  ).length
+  if (leakedSecretCount > 0) {
+    throw new Error(
+      `WebRTC interop artifact contains ${leakedSecretCount} seeded secret value(s)`,
+    )
+  }
+}
+
 export function candidatePairMatchesLane(
   lane: string,
   evidence: InteropCandidatePairEvidence,

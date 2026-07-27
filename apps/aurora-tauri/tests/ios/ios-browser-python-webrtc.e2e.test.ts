@@ -17,7 +17,10 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  assertNoInteropSeededSecrets,
   assertInteropBrowserResult,
+  redactInteropArtifactValue,
+  redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
 
@@ -208,16 +211,18 @@ describeOnMac('iOS mobile-browser WebRTC interoperability', () => {
         const redactedError = resources.redactArtifactValue(
           error instanceof Error ? error.message : String(error),
         )
-        await writeJson(resources.browserReportPath, {
+        const failureReport = resources.redactArtifactValue({
           lane: 'direct',
           browserName: 'ios-mobile-safari-simulator',
           status: 'failed',
           durationMs: Date.now() - started,
           error: redactedError,
-          mobileResult: resources.redactArtifactValue(mobileResult),
+          mobileResult,
           simulator: resources.simulator,
           secretsRedacted: true,
         })
+        resources.assertNoSeededSecrets(failureReport)
+        await writeJson(resources.browserReportPath, failureReport)
         await writeJson(resources.donePath, {
           ok: false,
           at: new Date().toISOString(),
@@ -451,7 +456,7 @@ async function createInteropResources() {
       pythonOutput
     ) {
       console.error(
-        redactSeededText(
+        redactInteropSeededText(
           redactProcessOutput(pythonOutput),
           seededSecrets,
         ),
@@ -560,20 +565,15 @@ async function createInteropResources() {
       finalReportPath,
       pythonPeer,
       getPythonOutput: () =>
-        redactSeededText(
+        redactInteropSeededText(
           redactProcessOutput(pythonOutput),
           seededSecrets,
         ),
       assertNoSeededSecrets(value: unknown): void {
-        const serialized = JSON.stringify(value)
-        for (const secret of seededSecrets) {
-          expect(serialized).not.toContain(secret)
-        }
+        assertNoInteropSeededSecrets(value, seededSecrets)
       },
       redactArtifactValue<T>(value: T): T {
-        return JSON.parse(
-          redactSeededText(JSON.stringify(value ?? null), seededSecrets),
-        ) as T
+        return redactInteropArtifactValue(value, seededSecrets)
       },
       setReadyConfig(value: BrowserConfig) {
         readyConfig = value
@@ -615,7 +615,7 @@ async function createInteropResources() {
           ) {
             throw new Error(
               `Python WebRTC peer exited before MobileSafari returned a result with ${pythonPeer.exitCode}: ${redactProcessOutput(
-                redactSeededText(pythonOutput, seededSecrets),
+                redactInteropSeededText(pythonOutput, seededSecrets),
               )}`,
             )
           }
@@ -1135,17 +1135,6 @@ function redactProcessOutput(value: string): string {
       '$1[REDACTED]',
     )
     .slice(-20_000)
-}
-
-function redactSeededText(
-  value: string,
-  seededSecrets: string[],
-): string {
-  return seededSecrets.reduce(
-    (redacted, secret) =>
-      secret ? redacted.replaceAll(secret, '[REDACTED]') : redacted,
-    value,
-  )
 }
 
 function run(

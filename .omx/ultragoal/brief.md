@@ -1,7 +1,7 @@
 # WebView WebRTC thin-shell implementation plan
 
 - **Created:** 2026-07-23
-- **Status:** Implementation-ready planning artifact; no implementation in this pass
+- **Status:** Core implementation complete; KVM Android, macOS iOS-simulator, packaged WKWebView, and physical-device certification remain open
 - **Scope:** Hosted web, desktop Tauri thin, Android Tauri thin, and iOS Tauri thin direct-peer operation through one browser/WebView WebRTC implementation
 - **Primary decision:** Implement Aurora's peer transport in TypeScript under `packages/aurora-sdk`; do not duplicate it in Rust or embed the Python runtime
 - **Roadmap:** `docs/UI_CLIENT_SURFACE_ROADMAP.md`
@@ -676,6 +676,15 @@ No diagnostic payload may include SDP, ICE candidate strings, room password, MQT
 21. Existing desktop-local, HTTP web, HTTP thin, SDK conformance, Tauri boundary, Python mesh, and documentation checks remain green.
 22. The packaged Android System WebView and standalone Android mobile browser each pair with an external Python `RTCClient` while the Aurora HTTP application API is disabled, and both pass the shared negotiation-direction, pairing, manifest, structured-error, 512 KiB fragmentation, stream/cancel, scoped-event/TTS, reconnect, uncertain-mutation, revocation, and redaction assertions inside one consolidated Android CI check.
 23. MobileSafari in an iOS simulator pairs with an external Python `RTCClient` on the direct path while the Aurora HTTP application API is disabled and passes the same shared assertions inside the existing macOS iOS check; this browser-engine evidence must remain explicitly separate from packaged WKWebView and physical-device certification.
+
+### Active mobile-to-Python interoperability checklist
+
+- [x] Keep the packaged Android System WebView ↔ external Python `RTCClient` E2E in the consolidated Android workflow and on the shared browser assertion/scanner contract.
+- [x] Keep the standalone Android Chrome ↔ external Python `RTCClient` E2E in that same Android workflow without using CDP as the test-control/data path.
+- [x] Keep the iOS simulator MobileSafari ↔ external Python `RTCClient` direct-path E2E in the existing macOS iOS workflow and on the shared assertion/scanner contract.
+- [ ] Record a passing KVM-backed Android aggregate for both mobile peers; local software-renderer failure or a skipped host is not passing evidence.
+- [ ] Record a passing macOS iOS-simulator MobileSafari report.
+- [ ] Add separate packaged iOS WKWebView and physical Android/iOS direct/STUN/TURN evidence before claiming those client/device paths supported.
 
 ## 10. Risks and mitigations
 

@@ -24,6 +24,7 @@ For target clients and sequencing, read [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIE
 - iOS thin source wiring is implemented: the Tauri runtime selects the shared WebView HTTP/WebRTC path, the Rust commands route to Swift, peer reconnect bearer material is held in device-only/non-synchronizing Keychain items behind status/delete/proof commands, and nonsecret profiles use `UserDefaults`. The supported simulator build wrapper generates a temporary least-privilege Python-free overlay from exact operator HTTPS/WSS origins, rejects insecure/broad origins, and records successful-build provenance. This environment cannot produce Xcode artifacts, so iOS remains build/live-limited until macOS simulator/device direct-STUN-TURN, microphone/lifecycle, signing, and App Store/TestFlight evidence passes.
 - Python-in-Rust compilation or embedding was rejected/deferred. Thin shells do not need Python; desktop-local keeps Python as a separate supervised sidecar process.
 - Hosted web thin now persists the reconnect bearer and room secret only as AES-GCM ciphertext in IndexedDB, persists a validated nonsecret connection profile and stable browser peer ID in `localStorage`, scrubs the invite fragment, and automatically re-dials the saved profile after a refresh. If IndexedDB, WebCrypto, key structured-cloning, or metadata storage fails, the runtime reports the downgrade and remains memory-only; it never writes plaintext secrets as a fallback.
+- Reversible WebRTC rollout gates are implemented across hosted web and Tauri/WebView shells. Disabling the main thin-client gate sends only `webrtc-preferred` profiles with an explicit Gateway to HTTP, keeps `webrtc-only` fail-closed, leaves desktop-local intact, and neither loads nor rewrites saved peer credentials. Scoped-subscription and fragmentation/backpressure gates alter the local capability hello, so the Python and TypeScript peers use the same negotiated intersection. An E2EE-required profile fails closed when its local E2EE gate is disabled. The Gateway legacy non-sensitive broadcast compatibility path is separately configurable and hot-reloadable; sensitive/scoped-only topics remain blocked.
 
 ## Current client readiness
 
@@ -57,6 +58,20 @@ Runtime and UI evidence:
 - `packages/aurora-ui/src/web-thin-runtime.ts`, `packages/aurora-ui/src/browser-peer-persistence.ts`, and `packages/aurora-ui/src/web-thin-connection-panel.tsx` expose invite import, secure-context checks, persistence/fallback diagnostics, encrypted browser secrets, and validated profile metadata.
 - `apps/aurora-web/app/aurora-client.ts` selects `http-only`, `webrtc-only`, or `webrtc-preferred` from `NEXT_PUBLIC_AURORA_CONNECTION_MODE`, restores the stable peer/profile, automatically re-dials after refresh, and keeps server-side demo fallback explicitly labeled.
 - `apps/aurora-tauri/src/aurora-client.ts` and `apps/aurora-tauri/src/tauri-app.tsx` use the same runtime for desktop/mobile thin profiles while keeping desktop-local sidecar behavior separate.
+
+Rollout inputs default to enabled for backward compatibility:
+
+| Gate | Hosted web | Tauri/WebView | Verified rollback behavior |
+| --- | --- | --- | --- |
+| Thin-client entry point | `NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT` | `VITE_AURORA_WEBRTC_THIN_CLIENT` | `webrtc-preferred` uses configured HTTP; `webrtc-only` fails closed; stored peer credentials are not consumed, deleted, or migrated. |
+| Scoped subscriptions | `NEXT_PUBLIC_AURORA_WEBRTC_SCOPED_SUBSCRIPTIONS` | `VITE_AURORA_WEBRTC_SCOPED_SUBSCRIPTIONS` | Removes `scoped_event_subscriptions_v1` from the local hello; both peers use the negotiated intersection. |
+| Fragmentation/backpressure | `NEXT_PUBLIC_AURORA_WEBRTC_FRAGMENTATION` | `VITE_AURORA_WEBRTC_FRAGMENTATION` | Removes `fragmentation_v1` and `backpressure_v1`; oversized frames fail instead of using an unnegotiated extension. |
+| Application E2EE allowance | `NEXT_PUBLIC_AURORA_WEBRTC_APP_LAYER_E2EE` | `VITE_AURORA_WEBRTC_APP_LAYER_E2EE` | A profile explicitly allowing DTLS-only JSON can run plaintext; a profile requiring app-layer E2EE fails closed. |
+
+The Python compatibility gate is
+`services.gateway.webrtc.legacy_event_broadcast`. It affects only the temporary
+non-sensitive unscoped broadcast path and can be updated through normal
+Gateway config reload.
 
 ## Live WebRTC interoperability evidence
 
@@ -115,8 +130,8 @@ The following checks completed in the local 2026-07-27 verification environment:
 | --- | --- |
 | Playwright installation | Playwright `1.61.1`; Chromium, Firefox, and WebKit executables installed. |
 | Python quality/config | `make check` and `make check-config-generated` passed. |
-| Python suite | Fresh `make unit`: **2193 passed, 38 skipped**, 76% coverage. Previous broader `make test` baseline: **2266 passed, 76 skipped**, 77% coverage; all **18** Python E2E tests, including both two-instance mesh modes, passed earlier in this change series. |
-| TypeScript suite | Fresh `pnpm -r test`: **754 passed** across SDK (316), shared UI (277), Tauri (145), web (13), and mock (3). The Tauri aggregate runs test files serially so subprocess-heavy package proof tests cannot starve UI route-test timers; Android/iOS/desktop bundle proof files explicitly use the Node test environment. |
+| Python suite | Fresh `make unit`: **2195 passed, 38 skipped**, 76% coverage. Previous broader `make test` baseline: **2266 passed, 76 skipped**, 77% coverage; all **18** Python E2E tests, including both two-instance mesh modes, passed earlier in this change series. |
+| TypeScript suite | Fresh `pnpm -r test`: **765 passed** across SDK (319), shared UI (280), Tauri (149), web (14), and mock (3). The Tauri aggregate runs test files serially so subprocess-heavy package proof tests cannot starve UI route-test timers; Android/iOS/desktop bundle proof files explicitly use the Node test environment. |
 | TypeScript static/build | `pnpm -r typecheck` and `pnpm -r build` passed. |
 | Rust host checks | `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-targets --all-features` passed; **46 Rust tests passed**. |
 | Browser route smoke | Playwright route crawl: **4 passed**. |
@@ -125,7 +140,7 @@ The following checks completed in the local 2026-07-27 verification environment:
 | Desktop thin package | Fresh AppImage/deb build and `desktop-thin-bundle-proof.json` passed. |
 | Android thin packages | The final WSS-only x86_64 debug APK was rebuilt after the WebView compatibility fixes and its artifact proof passed with `gatewayOrigin=null` and zero forbidden Python/sidecar matches. The universal debug AAB and proof also passed earlier in this change series. |
 | Android emulator/Mobile MCP | The API 30 default AOSP packaged UI/native-payload test passed. Mobile MCP connected to the current API 35 Google-APIs emulator and inspected Android Chrome during the new mobile-browser test. |
-| Android WebView/browser ↔ Python WebRTC | Both normal Android E2E tests and the shared API 35 KVM CI wiring are implemented and statically verified. A final local no-CDP Android Chrome ↔ external Python run reached the real harness, then failed closed when the software-only Chrome 124 renderer terminated with `SIGTRAP` during the production-strength SDK crypto/interop workload; it emitted an explicitly failed, redacted report and no passing aggregate. Authoritative Android reports remain pending the first pushed KVM-backed CI run. |
+| Android WebView/browser ↔ Python WebRTC | Both normal Android E2E tests and the shared API 35 KVM CI wiring are implemented and statically verified. Local runs against the real external Python peer reached both Android clients, but the `-accel off` API 35 emulator could not complete either lane: the packaged WebView renderer crashed and terminated the Tauri app, and standalone Chrome 124 later terminated its renderer with `SIGTRAP`. The WebView harness now rejects closed CDP sessions immediately and always emits a failed browser/done report even when setup crashes. Shared artifact helpers redact the generated room secret/token, assert they are absent from success reports, and never echo a leaked credential in assertion errors. Neither failed report produces a passing aggregate; authoritative Android evidence remains pending a KVM-backed run. |
 | Android evidence integrity | Bundle/proof unit tests write only to temporary config, provenance, proof, and preflight paths. SHA-256 checks before and after targeted, full Tauri, and full workspace test runs confirmed that the real APK/AAB provenance and artifact-proof reports were unchanged. |
 | Android preflight | **15 checks passed**; the one non-required blocked item is absent release-signing configuration in local non-strict mode. |
 | iOS thin source/policy | Tauri/SDK tests, `build:frontend:ios-thin`, `ios:prepare:thin`, and `ios:policy` pass for shared iOS WebView routing, Keychain/profile/proof source invariants, exact-origin least-privilege overlay generation, and the macOS simulator CI wrapper/provenance command. This is not Xcode build or runtime proof. |
@@ -161,12 +176,14 @@ Python-in-Rust alternatives were rejected/deferred for the current product split
 
 Runtime rollback uses explicit profile selection rather than hidden transport mutation:
 
+- Set the surface-specific `*_AURORA_WEBRTC_THIN_CLIENT` build gate to false for an emergency stop of new WebRTC sessions. Preferred profiles with a configured Gateway select HTTP; WebRTC-only profiles report disabled and fail closed.
 - Switch hosted web or Tauri thin profile to `http-only` to bypass WebRTC for new calls.
 - Use `webrtc-only` only when the operator wants fail-closed direct-peer behavior with no HTTP fallback.
 - Use `webrtc-preferred` when both a Gateway endpoint and WebRTC invite/profile exist; fallback applies to new calls only.
 - Revoke a peer credential to force the next WebRTC route to fail closed and return to SAS pairing. Every current live lane report proves this behavior.
 - Rebuild/redeploy desktop/mobile thin artifacts when allowed HTTPS/WSS origins change; strict CSP is part of the package boundary.
 - Keep desktop-local sidecar profiles (`desktop-local-minimal`, `local-cpu`, GPU profiles, `full`) separate from thin profiles. Do not use sidecar preparation as a rollback for web/desktop/mobile thin.
+- Do not delete, rewrite, or translate peer or HTTP credentials during rollback. Re-enable uses the same saved material unless it was separately revoked.
 
 ## Security limitations still open
 

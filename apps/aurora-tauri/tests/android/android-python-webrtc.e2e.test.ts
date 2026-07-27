@@ -12,8 +12,11 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  assertNoInteropSeededSecrets,
   assertInteropBrowserResult,
   forbiddenInteropTransportRequests,
+  redactInteropArtifactValue,
+  redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
 
@@ -100,55 +103,55 @@ describe('Android thin-shell WebRTC interoperability', () => {
       )
       const consoleErrors: string[] = []
       const networkRequests: NetworkRequest[] = []
-      const client = await connectAndroidWebView(appId, (message) => {
-        if (message.method === 'Runtime.exceptionThrown') {
-          const details = message.params?.exceptionDetails
-          consoleErrors.push(
-            String(
-              details?.exception?.description ??
-                details?.text ??
-                'Uncaught Android WebView exception',
-            ),
-          )
-        }
-        if (
-          message.method === 'Log.entryAdded' &&
-          message.params?.entry?.level === 'error'
-        ) {
-          consoleErrors.push(String(message.params.entry.text))
-        }
-        if (message.method === 'Network.requestWillBeSent') {
-          networkRequests.push({
-            url: String(message.params?.request?.url ?? ''),
-            kind: 'http',
-          })
-        }
-        if (message.method === 'Network.webSocketCreated') {
-          networkRequests.push({
-            url: String(message.params?.url ?? ''),
-            kind: 'websocket',
-          })
-        }
-      })
-      resources.setCdpClient(client)
-
-      await client.send('Runtime.enable')
-      await client.send('Log.enable')
-      await client.send('Network.enable')
-      await client.send('Page.enable')
-      await client.send('Page.navigate', {
-        url: resources.deviceHarnessUrl,
-      })
-      await waitForRuntimeExpression(
-        client,
-        "document.readyState === 'complete' && typeof globalThis.runAuroraWebRtcInterop === 'function'",
-        resources.timeoutMs,
-        'Android WebView interop bundle',
-      )
-
       const started = Date.now()
       let browserResult: InteropBrowserResult | undefined
       try {
+        const client = await connectAndroidWebView(appId, (message) => {
+          if (message.method === 'Runtime.exceptionThrown') {
+            const details = message.params?.exceptionDetails
+            consoleErrors.push(
+              String(
+                details?.exception?.description ??
+                  details?.text ??
+                  'Uncaught Android WebView exception',
+              ),
+            )
+          }
+          if (
+            message.method === 'Log.entryAdded' &&
+            message.params?.entry?.level === 'error'
+          ) {
+            consoleErrors.push(String(message.params.entry.text))
+          }
+          if (message.method === 'Network.requestWillBeSent') {
+            networkRequests.push({
+              url: String(message.params?.request?.url ?? ''),
+              kind: 'http',
+            })
+          }
+          if (message.method === 'Network.webSocketCreated') {
+            networkRequests.push({
+              url: String(message.params?.url ?? ''),
+              kind: 'websocket',
+            })
+          }
+        })
+        resources.setCdpClient(client)
+
+        await client.send('Runtime.enable')
+        await client.send('Log.enable')
+        await client.send('Network.enable')
+        await client.send('Page.enable')
+        await client.send('Page.navigate', {
+          url: resources.deviceHarnessUrl,
+        })
+        await waitForRuntimeExpression(
+          client,
+          "document.readyState === 'complete' && typeof globalThis.runAuroraWebRtcInterop === 'function'",
+          resources.timeoutMs,
+          'Android WebView interop bundle',
+        )
+
         browserResult = await evaluateInterop(
           client,
           {
@@ -161,6 +164,11 @@ describe('Android thin-shell WebRTC interoperability', () => {
           resources.roomSecret,
           resources.timeoutMs,
         )
+        resources.assertNoSeededSecrets({
+          browserResult,
+          networkRequests,
+          consoleErrors,
+        })
 
         const forbiddenHttp = forbiddenInteropTransportRequests(
           networkRequests,
@@ -205,6 +213,7 @@ describe('Android thin-shell WebRTC interoperability', () => {
           10_000,
           'Python peer report',
         )
+        resources.assertNoSeededSecrets(pythonReport)
         expect(pythonReport).toMatchObject({
           gatewayHttpApiEnabled: false,
           rtcStarted: true,
@@ -238,6 +247,7 @@ describe('Android thin-shell WebRTC interoperability', () => {
           10_000,
           'aggregate Android WebRTC report',
         )
+        resources.assertNoSeededSecrets(aggregate)
         expect(aggregate).toMatchObject({
           status: 'passed',
           lane: interopLane,
@@ -245,22 +255,27 @@ describe('Android thin-shell WebRTC interoperability', () => {
           secretsRedacted: true,
         })
       } catch (error) {
-        await writeJson(resources.browserReportPath, {
+        const redactedError = resources.redactArtifactValue(
+          error instanceof Error ? error.message : String(error),
+        )
+        const failureReport = resources.redactArtifactValue({
           lane: interopLane,
           browserName: 'android-webview',
           status: 'failed',
           durationMs: Date.now() - started,
-          error: error instanceof Error ? error.message : String(error),
+          error: redactedError,
           browserResult,
           networkRequests,
           consoleErrors,
           secretsRedacted: true,
         })
+        resources.assertNoSeededSecrets(failureReport)
+        await writeJson(resources.browserReportPath, failureReport)
         await writeJson(resources.donePath, {
           ok: false,
           at: new Date().toISOString(),
         })
-        throw error
+        throw new Error(redactedError)
       }
     },
     testTimeoutMs,
@@ -271,6 +286,7 @@ async function createInteropResources() {
   const timeoutMs = interopTimeoutMs
   const roomSecret = crypto.randomBytes(32).toString('base64url')
   const token = `android.${crypto.randomBytes(24).toString('base64url')}`
+  const seededSecrets = [roomSecret, token]
   const room = `android-webview-${process.pid}-${Date.now().toString(36)}`
   const turnServer =
     interopLane === 'turn'
@@ -349,7 +365,12 @@ async function createInteropResources() {
       pythonPeer.exitCode !== 0 &&
       pythonOutput
     ) {
-      console.error(redactProcessOutput(pythonOutput))
+      console.error(
+        redactInteropSeededText(
+          redactProcessOutput(pythonOutput),
+          seededSecrets,
+        ),
+      )
     }
   }
 
@@ -528,7 +549,17 @@ async function createInteropResources() {
       browserReportPath,
       finalReportPath,
       pythonPeer,
-      getPythonOutput: () => pythonOutput,
+      getPythonOutput: () =>
+        redactInteropSeededText(
+          redactProcessOutput(pythonOutput),
+          seededSecrets,
+        ),
+      assertNoSeededSecrets(value: unknown): void {
+        assertNoInteropSeededSecrets(value, seededSecrets)
+      },
+      redactArtifactValue<T>(value: T): T {
+        return redactInteropArtifactValue(value, seededSecrets)
+      },
       deviceHarnessUrl: `http://127.0.0.1:${hostPort}/`,
       setCdpClient(client: Awaited<ReturnType<typeof connectCdp>>) {
         cdpClient = client
@@ -682,6 +713,17 @@ async function connectCdp(
     }
   >()
   let sequence = 0
+  let closed = false
+
+  const rejectPending = (error: Error) => {
+    if (closed) return
+    closed = true
+    for (const waiter of pending.values()) {
+      clearTimeout(waiter.timer)
+      waiter.reject(error)
+    }
+    pending.clear()
+  }
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     socket.addEventListener('open', () => resolvePromise(), { once: true })
@@ -710,6 +752,16 @@ async function connectCdp(
     }
     onEvent(message)
   })
+  socket.addEventListener('close', () => {
+    rejectPending(
+      new Error(
+        'Android WebView CDP connection closed; the app or renderer may have exited',
+      ),
+    )
+  })
+  socket.addEventListener('error', () => {
+    rejectPending(new Error('Android WebView CDP connection failed'))
+  })
 
   return {
     send(
@@ -717,6 +769,13 @@ async function connectCdp(
       params: Record<string, unknown> = {},
       timeoutMs = commandTimeoutMs,
     ): Promise<CdpMessage> {
+      if (closed || socket.readyState !== WebSocket.OPEN) {
+        return Promise.reject(
+          new Error(
+            `Android WebView CDP connection is not open: ${method}`,
+          ),
+        )
+      }
       const id = ++sequence
       return new Promise((resolvePromise, rejectPromise) => {
         const timer = setTimeout(() => {
@@ -735,11 +794,7 @@ async function connectCdp(
     },
     close() {
       socket.close()
-      for (const waiter of pending.values()) {
-        clearTimeout(waiter.timer)
-        waiter.reject(new Error('Android WebView CDP connection closed'))
-      }
-      pending.clear()
+      rejectPending(new Error('Android WebView CDP connection closed'))
     },
   }
 }
