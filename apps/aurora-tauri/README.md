@@ -76,7 +76,7 @@ From the repository root, the normal dev command is enough to start Vite, the Ta
 pnpm --filter @aurora/tauri-ui tauri dev
 ```
 
-The package wrapper selects `.venv/bin/python` when it exists; otherwise it falls back to `uv run python main.py` from the repository root. It sets `AURORA_ARCHITECTURE_MODE=threads`, enables the managed local sidecar, and points the UI at `http://127.0.0.1:8000`. You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.
+The package wrapper selects `.venv/bin/python` when it exists; otherwise it falls back to `uv run --no-dev --extra sidecar-thin python main.py` from the repository root. It sets `AURORA_ARCHITECTURE_MODE=threads`, enables the managed local sidecar, and points the UI at `http://127.0.0.1:8000`. You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.
 
 Dev logging is intentionally unified in the same terminal:
 
@@ -87,7 +87,7 @@ Dev logging is intentionally unified in the same terminal:
 - Desktop-local is not shown as ready until the Tauri sidecar status command succeeds and the SDK can read `/api/health`, `/api/registry`, and a core read-only `/api/services` sample through the Gateway boundary.
 - Ctrl-C forwards shutdown to the Tauri child process; closing the Tauri window stops the supervised Python sidecar.
 
-Packaged desktop builds still use the profiled sidecar staging flow described below; the direct Python sidecar path is for local development and diagnostics.
+Packaged desktop builds still use the profiled sidecar staging flow described below; the direct Python sidecar path is for local development and diagnostics. Rust launches a bundled sidecar from the platform Tauri application-data directory and sets its `AURORA_CONFIG_FILE`, `AURORA_ENV_FILE`, and `AURORA_DATA_DIR` there. Configuration, migrated secrets, and the database therefore persist across one-file extraction directories and app restarts without requiring write access to the installation directory.
 
 Desktop local sidecar defaults:
 

@@ -340,8 +340,10 @@ def get_platform_args(
         # Add data files
         f"--add-data={PROJECT_ROOT / 'app'}:app",
         f"--add-data={prepare_bundle_config_json()}:.",
-        # Optimize
-        "--optimize=2",
+        # Keep function docstrings in sidecars because LangChain's @tool
+        # registration reads them at import time. PyInstaller optimize=2
+        # matches Python -OO and strips those required docstrings.
+        f"--optimize={1 if sidecar_profile else 2}",
         "--strip",
     ]
 
@@ -349,6 +351,9 @@ def get_platform_args(
         common_args.append(f"--add-data={PROJECT_ROOT / 'modules'}:modules")
 
     if sidecar_profile:
+        # Passlib resolves configured schemes through its registry at runtime,
+        # so PyInstaller cannot infer the Argon2 handler from AuthManager.
+        common_args.append("--hidden-import=passlib.handlers.argon2")
         for module in sidecar_profile.excludes:
             common_args.append(f"--exclude-module={module}")
 

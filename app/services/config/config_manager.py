@@ -763,12 +763,13 @@ class ConfigManager:
         Returns True if any migration occurred.
         """
         migrated = False
-        env_path = ".env"
+        env_path = os.environ.get("AURORA_ENV_FILE", ".env")
         try:
             from dotenv import set_key
 
             from app.services.config.env_config import ENV_CONFIG_MAP, SENSITIVE_KEYS
 
+            Path(env_path).parent.mkdir(parents=True, exist_ok=True)
             if not os.path.exists(env_path):
                 open(env_path, "a").close()
             for config_path in SENSITIVE_KEYS:

@@ -71,7 +71,7 @@ function applyDevSidecarDefaults(env) {
       env.AURORA_TAURI_SIDECAR_ARGS ??= 'main.py'
     } else {
       env.AURORA_TAURI_SIDECAR_PROGRAM = 'uv'
-      env.AURORA_TAURI_SIDECAR_ARGS ??= 'run python main.py'
+      env.AURORA_TAURI_SIDECAR_ARGS ??= 'run --no-dev --extra sidecar-thin python main.py'
     }
   } else {
     env.AURORA_TAURI_SIDECAR_ARGS ??= 'main.py'

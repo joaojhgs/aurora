@@ -31,7 +31,9 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(wrapper).toContain("env.AURORA_TAURI_DEV_AUTOSIDECAR ??= '1'")
     expect(wrapper).toContain("env.AURORA_TAURI_SIDECAR_ARGS ??= 'main.py'")
     expect(wrapper).toContain("env.AURORA_TAURI_SIDECAR_PROGRAM = 'uv'")
-    expect(wrapper).toContain("env.AURORA_TAURI_SIDECAR_ARGS ??= 'run python main.py'")
+    expect(wrapper).toContain(
+      "env.AURORA_TAURI_SIDECAR_ARGS ??= 'run --no-dev --extra sidecar-thin python main.py'"
+    )
     expect(wrapper).toContain("env.AURORA_GATEWAY_URL ??= 'http://127.0.0.1:8000'")
     expect(wrapper).toContain("'.venv'")
     expect(wrapper).toContain('AURORA_TAURI_SIDECAR_PROGRAM')
@@ -80,6 +82,21 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(docs).toContain('`[vite]` for frontend bundler output')
     expect(docs).toContain('`[tauri]` for wrapper/Rust shell output')
     expect(docs).toContain('`[aurora][stdout]`')
+  })
+
+  it('keeps bundled sidecar state in the writable Tauri application data directory', () => {
+    const rustShell = repoText('apps/aurora-tauri/src-tauri/src/lib.rs')
+    const pythonMain = repoText('main.py')
+    const configManager = repoText('app/services/config/config_manager.py')
+
+    expect(rustShell).toContain('app.path().app_data_dir()')
+    expect(rustShell).toContain('if launch.bundled')
+    expect(rustShell).toContain('AURORA_TAURI_SIDECAR_CONFIG_FILE')
+    expect(rustShell).toContain('command.env("AURORA_CONFIG_FILE"')
+    expect(rustShell).toContain('command.env("AURORA_ENV_FILE"')
+    expect(rustShell).toContain('command.env("AURORA_DATA_DIR"')
+    expect(pythonMain).toContain('load_dotenv(os.environ.get("AURORA_ENV_FILE", ".env"))')
+    expect(configManager).toContain('os.environ.get("AURORA_ENV_FILE", ".env")')
   })
 
   it('fails the desktop dev smoke when Gateway, process, or log evidence is missing', () => {

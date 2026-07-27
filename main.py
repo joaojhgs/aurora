@@ -7,6 +7,7 @@ All services communicate via the message bus for full decoupling.
 
 import asyncio
 import logging
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -31,7 +32,7 @@ if hasattr(sys.stderr, "reconfigure"):
 logging.getLogger("alsa").setLevel(logging.ERROR)
 
 # Load environment variables
-load_dotenv()
+load_dotenv(os.environ.get("AURORA_ENV_FILE", ".env"))
 config_api.migrate_from_env()
 
 

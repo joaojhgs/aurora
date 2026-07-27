@@ -132,6 +132,24 @@ def test_secret_migration_keeps_value_effective_in_current_process(
     assert "AURORA_WEBRTC_PASSWORD='shared-room-password'" in (tmp_path / ".env").read_text()
 
 
+def test_secret_migration_honors_native_runtime_env_file(
+    reset_config_manager,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    env_path = tmp_path / "native-runtime" / ".env"
+    monkeypatch.setenv("AURORA_ENV_FILE", str(env_path))
+    monkeypatch.delenv("AURORA_WEBRTC_PASSWORD", raising=False)
+    manager = ConfigManager()
+    manager.set("services.gateway.webrtc.password", "native-room-password")
+
+    assert manager.migrate_secrets_to_env() is True
+
+    assert env_path.is_file()
+    assert "AURORA_WEBRTC_PASSWORD='native-room-password'" in env_path.read_text()
+    assert not (tmp_path / ".env").exists()
+
+
 def test_failed_save_does_not_corrupt_existing_config(reset_config_manager) -> None:
     config_path = reset_config_manager
     manager = ConfigManager()

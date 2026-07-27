@@ -4107,7 +4107,28 @@ fn spawn_sidecar(app: &AppHandle, gateway: &Url, token: &str) -> Result<Child, A
     let launch = sidecar_launch(app)?;
     let mut command = Command::new(&launch.program);
     command.args(&launch.args);
-    command.current_dir(&launch.working_dir);
+    if launch.bundled {
+        let runtime_dir = app.path().app_data_dir().map_err(|error| {
+            AuroraCommandError::SidecarProcess(format!(
+                "Could not resolve the Aurora application data directory: {error}"
+            ))
+        })?;
+        let data_dir = runtime_dir.join("data");
+        let config_file = env::var_os("AURORA_TAURI_SIDECAR_CONFIG_FILE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| runtime_dir.join("config.json"));
+        std::fs::create_dir_all(&data_dir).map_err(|error| {
+            AuroraCommandError::SidecarProcess(format!(
+                "Could not prepare the Aurora sidecar runtime directory: {error}"
+            ))
+        })?;
+        command.current_dir(&runtime_dir);
+        command.env("AURORA_CONFIG_FILE", config_file);
+        command.env("AURORA_ENV_FILE", runtime_dir.join(".env"));
+        command.env("AURORA_DATA_DIR", data_dir);
+    } else {
+        command.current_dir(&launch.working_dir);
+    }
     command.env("AURORA_ARCHITECTURE_MODE", "threads");
     command.env("AURORA_TAURI_MANAGED_SIDECAR", "1");
     command.env("AURORA_TAURI_DISABLE_GATEWAY_AUTH", "1");
@@ -4383,6 +4404,7 @@ struct SidecarLaunch {
     program: String,
     args: Vec<String>,
     working_dir: PathBuf,
+    bundled: bool,
 }
 
 fn sidecar_launch(app: &AppHandle) -> Result<SidecarLaunch, AuroraCommandError> {
@@ -4391,6 +4413,7 @@ fn sidecar_launch(app: &AppHandle) -> Result<SidecarLaunch, AuroraCommandError> 
             program: sidecar_program(),
             args: sidecar_args(),
             working_dir: sidecar_working_dir(),
+            bundled: false,
         });
     }
 
@@ -4403,6 +4426,7 @@ fn sidecar_launch(app: &AppHandle) -> Result<SidecarLaunch, AuroraCommandError> 
             program: program.display().to_string(),
             args: Vec::new(),
             working_dir,
+            bundled: true,
         });
     }
 
@@ -4410,6 +4434,7 @@ fn sidecar_launch(app: &AppHandle) -> Result<SidecarLaunch, AuroraCommandError> 
         program: "python".to_string(),
         args: vec!["main.py".to_string()],
         working_dir: sidecar_working_dir(),
+        bundled: false,
     })
 }
 

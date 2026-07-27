@@ -1210,6 +1210,12 @@ class GatewayService(BaseService):
         self._mesh_infer_stream_owners_by_id: dict[str, tuple[str | None, ...]] = {}
         self._mesh_rollout_metrics = MeshRolloutMetrics()
 
+    async def _is_runtime_enabled(self) -> bool:
+        """Keep the Rust-managed desktop loopback gateway active."""
+        if os.environ.get("AURORA_TAURI_MANAGED_SIDECAR") == "1":
+            return True
+        return await super()._is_runtime_enabled()
+
     async def on_start(self) -> None:
         """Service-specific startup logic."""
         self.bus.subscribe(self._event_stream_subscription_topic, self._capture_gateway_event)
@@ -3089,15 +3095,19 @@ class GatewayService(BaseService):
 
             api_d = dict(gw_d.get("api") or {})
             if os.environ.get("AURORA_TAURI_MANAGED_SIDECAR") == "1":
+                gateway_for_api_enabled = True
                 api_d["host"] = os.environ.get(
                     "AURORA_GATEWAY_HOST", api_d.get("host", "127.0.0.1")
                 )
                 if os.environ.get("AURORA_GATEWAY_PORT"):
                     api_d["port"] = int(os.environ["AURORA_GATEWAY_PORT"])
+            else:
+                gateway_for_api_enabled = bool(gw_d.get("enabled", True))
             if "token_secret" in api_d:
                 api_d["token_secret"] = _config_secret_plain(api_d.get("token_secret"))
 
             gateway_for_api = {k: v for k, v in gw_d.items() if k != "api"}
+            gateway_for_api["enabled"] = gateway_for_api_enabled
             gateway_for_api.update(api_d)
             gateway_for_api["auth"] = dict(auth_d)
             if (
@@ -3249,7 +3259,8 @@ class GatewayService(BaseService):
                 plain_secret = _config_secret_plain(existing_secret)
                 has_config = bool(str(plain_secret).strip()) if plain_secret is not None else False
                 if not has_env and not has_config:
-                    env_path = ".env"
+                    env_path = os.environ.get("AURORA_ENV_FILE", ".env")
+                    Path(env_path).parent.mkdir(parents=True, exist_ok=True)
                     if not os.path.exists(env_path):
                         open(env_path, "a").close()
                     set_key(env_path, "AURORA_TOKEN_SECRET", config.token_secret)

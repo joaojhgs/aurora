@@ -31,6 +31,9 @@ def test_thin_sidecar_profile_avoids_full_runtime_and_local_ai_modules():
         dist_dir=Path("dist/sidecars/thin"),
     )
     assert "--onefile" in args
+    assert "--hidden-import=passlib.handlers.argon2" in args
+    assert "--optimize=1" in args
+    assert "--optimize=2" not in args
     assert "--exclude-module=torch" in args
     assert "--exclude-module=app.services.tts" in args
     assert not any("modules:modules" in arg for arg in args)
@@ -53,6 +56,9 @@ def test_local_profiles_are_explicit_and_profile_specific():
 
     assert build_script.sidecar_dist_dir(cpu) == build_script.DIST_DIR / "sidecars" / "local-cpu"
     assert build_script.sidecar_dist_dir(cuda) == build_script.DIST_DIR / "sidecars" / "local-cuda"
+
+    args = build_script.get_platform_args()
+    assert "--optimize=2" in args
 
 
 @pytest.mark.e2e

@@ -10,6 +10,41 @@ from app.shared.config.models import Auth, Gateway, MeshRouting, MeshSharing
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_tauri_managed_sidecar_enables_its_loopback_gateway(monkeypatch) -> None:
+    class FakeConfigAPI:
+        async def aget(self, key, model=None, config_timeout=None, default=None):
+            if key == ConfigKeys.services.gateway:
+                return Gateway(enabled=False, api={"host": "0.0.0.0", "port": 8000})
+            if key == ConfigKeys.services.gateway.enabled:
+                return False
+            if key == ConfigKeys.services.auth:
+                return Auth(enabled=True)
+            if key == ConfigKeys.services:
+                return _raw_services()
+            return default
+
+    monkeypatch.setattr("app.shared.config.interface.ConfigAPI", FakeConfigAPI)
+    monkeypatch.setenv("AURORA_TAURI_MANAGED_SIDECAR", "1")
+    monkeypatch.setenv("AURORA_TAURI_DISABLE_GATEWAY_AUTH", "1")
+    monkeypatch.setenv("AURORA_GATEWAY_HOST", "127.0.0.1")
+    monkeypatch.setenv("AURORA_GATEWAY_PORT", "8123")
+
+    service = GatewayService()
+    assert await service._is_runtime_enabled() is True
+    config = await service._get_gateway_config()
+
+    assert config.api.enabled is True
+    assert config.api.host == "127.0.0.1"
+    assert config.api.port == 8123
+    assert config.api.auth_enabled is False
+
+    monkeypatch.delenv("AURORA_TAURI_MANAGED_SIDECAR")
+    assert await GatewayService()._is_runtime_enabled() is False
+    assert (await GatewayService()._get_gateway_config()).api.enabled is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_gateway_config_preserves_require_explicit_selector(monkeypatch) -> None:
     services = _raw_services()
     services["db"]["mesh_routing"] = {"require_explicit_selector": True}
