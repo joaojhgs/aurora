@@ -174,7 +174,7 @@ function summarizeChild({
     (key) => protocol[key] === true,
   )
   const behaviorEvidencePassed =
-    Number(assertions.authorizedPeerCount) > 0 &&
+    assertions.authorizedPeerCountAfterRevocation === 0 &&
     requiredPositiveAssertions.every(
       (key) => assertions[key] === true,
     ) &&

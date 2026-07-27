@@ -27,7 +27,7 @@ function completeReport(
     },
     assertions: {
       rtcStarted: true,
-      authorizedPeerCount: 1,
+      authorizedPeerCountAfterRevocation: 0,
       registryReadOverDataChannel: true,
       negotiationDirection: true,
       manifestExchange: true,
@@ -160,6 +160,13 @@ describe('Android mobile-to-Python WebRTC aggregate', () => {
       'missing behavior proof',
       (value: ReturnType<typeof input>) => {
         value.webview.report.assertions.reconnectWithoutSas = false
+      },
+    ],
+    [
+      'peer remains authorized after revocation',
+      (value: ReturnType<typeof input>) => {
+        value.webview.report.assertions.authorizedPeerCountAfterRevocation =
+          1
       },
     ],
     [

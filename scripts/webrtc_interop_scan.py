@@ -182,6 +182,7 @@ def build_interop_report(
         python_report.get("gatewayHttpApiEnabled") is False
         and python_report.get("gatewayHttpReachable") is False
     )
+    authorized_peer_count_after_revocation = python_report.get("authenticatedPeerCount")
     required_ok = (
         browser_report.get("status") == "passed"
         and scan["passed"]
@@ -200,6 +201,7 @@ def build_interop_report(
         is True
         and revocation.get("routeAuthorizedAfterRevocation") is False
         and revocation.get("pendingPairingPrompts", 0) >= 1
+        and authorized_peer_count_after_revocation == 0
         and scoped.get("wrongCorrelationDelivered") is False
         and scoped.get("wildcardDelivered") is False
         and (python_report.get("scopedEventEvidence") or {}).get("wildcardInterested") is False
@@ -271,7 +273,7 @@ def build_interop_report(
         },
         "assertions": {
             "rtcStarted": python_report.get("rtcStarted"),
-            "authorizedPeerCount": python_report.get("authenticatedPeerCount"),
+            "authorizedPeerCountAfterRevocation": authorized_peer_count_after_revocation,
             "registryReadOverDataChannel": (browser_report.get("browserResult") or {}).get(
                 "registryModuleCount", 0
             )

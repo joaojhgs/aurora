@@ -173,6 +173,7 @@ def _passing_reports() -> tuple[dict[str, object], dict[str, object]]:
     request_sha256 = "request-sha256"
     result_sha256 = "result-sha256"
     python_report: dict[str, object] = {
+        "authenticatedPeerCount": 0,
         "gatewayHttpApiEnabled": False,
         "gatewayHttpReachable": False,
         "scopedEventEvidence": {"wildcardInterested": False},
@@ -288,6 +289,7 @@ def test_aggregate_accepts_complete_http_disabled_proof(tmp_path: Path) -> None:
     assert report["protocolInteropEvidence"]["errorPassed"] is True
     assert report["protocolInteropEvidence"]["largeRpcPassed"] is True
     assert report["protocolInteropEvidence"]["rpcStreamPassed"] is True
+    assert report["assertions"]["authorizedPeerCountAfterRevocation"] == 0
 
 
 @pytest.mark.parametrize(
@@ -327,6 +329,7 @@ def test_aggregate_rejects_incomplete_http_disabled_proof(
     [
         ("browser_result", "negotiationRole", "answerer"),
         ("python", "manifestSent", False),
+        ("python", "authenticatedPeerCount", 1),
         ("browser_manifest", "peerId", "unexpected-peer"),
         ("browser_manifest", "serviceCount", 0),
         ("browser_error", "rejected", False),
