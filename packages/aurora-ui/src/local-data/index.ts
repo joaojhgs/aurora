@@ -1,4 +1,5 @@
 export * from './browser-envelope-crypto.js'
+export * from './browser-backend-transfer.js'
 export * from './browser-indexeddb.js'
 export * from './browser-sqlite-opfs.js'
 export * from './browser-sqlite-worker-client.js'
