@@ -32,6 +32,7 @@ import { ToggleGroup, ToggleGroupItem } from '#components/ui/toggle-group'
 import { Spinner } from '#components/ui/spinner'
 import { cn } from '#lib/utils'
 import { ToneBadge } from '../status-badges'
+import { safeErrorCopy } from '../product-copy'
 
 const SELECTED_SEGMENT_STYLE: CSSProperties = {
   backgroundColor: 'color-mix(in oklab, var(--primary) 22%, var(--muted))',
@@ -121,9 +122,9 @@ export function ToolSharingRowControl({
       <div className="py-2.5" role="group" aria-label={`Mesh sharing for ${tool.name}`}>
         <div className="flex flex-wrap items-center gap-2">
           <strong className="text-xs">Tool sharing</strong>
-          <ToneBadge tone="neutral">Remote tool · not re-shareable</ToneBadge>
+          <ToneBadge tone="neutral">Shared from another device</ToneBadge>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">Change sharing on {tool.providerLabel || 'the provider device'}.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Change sharing on {tool.providerLabel || 'that device'}.</p>
       </div>
     )
   }
@@ -246,7 +247,7 @@ function ToolSharingPolicyControl({
 
       {decision && compact ? <EffectiveDecision decision={decision} /> : null}
       {loading ? <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground" role="status"><Spinner /> Loading sharing state…</p> : null}
-      {error ? <p className="mt-2 text-xs text-destructive" role="alert">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs text-destructive" role="alert">{safeErrorCopy(error).title}</p> : null}
       {message ? <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">{message}</p> : null}
       {!policy ? <p className="mt-2 text-xs text-muted-foreground">Sharing policy unavailable.</p> : null}
     </div>
@@ -375,7 +376,7 @@ function PeerMultiSelect({
       <PopoverContent align="start" className="w-72 p-0">
         <PopoverHeader className="px-3 pt-3">
           <PopoverTitle>Share with peers</PopoverTitle>
-          <PopoverDescription>Select one or more recipients. Stable peer IDs remain the policy keys.</PopoverDescription>
+          <PopoverDescription>Select one or more approved Aurora devices.</PopoverDescription>
         </PopoverHeader>
         <Command>
           <CommandInput placeholder="Search peers…" />
@@ -450,13 +451,13 @@ export function PrerequisiteChecklist({ rows, reasonCode }: { rows: ToolExportPr
             {row.state === 'satisfied' ? <Check aria-hidden /> : row.state === 'blocked' ? <X aria-hidden /> : <CircleHelp aria-hidden />}
             <span className="min-w-0">
               <strong>{row.state === 'satisfied' ? 'Satisfied' : row.state === 'blocked' ? 'Blocked' : row.state === 'not_applicable' ? 'Not applicable' : 'Unknown'}:</strong> {row.label}
-              <span className="block break-words text-[11px] opacity-80">Evidence: {row.source ?? 'not reported'} · {row.reasonCode ?? 'no reason code'}</span>
-              {row.requiredPermissions.length > 0 ? <span className="block break-words text-[11px] opacity-80">Required: {row.requiredPermissions.join(', ')} · Observed: {row.observedPermissions.join(', ') || 'none'}</span> : null}
+              <span className="block break-words text-[11px] opacity-80">{row.state === 'blocked' ? 'Needs attention before sharing.' : 'Ready for this device.'}</span>
+              {row.requiredPermissions.length > 0 ? <span className="block break-words text-[11px] opacity-80">Access needed: {row.requiredPermissions.join(', ')}</span> : null}
             </span>
           </li>
         ))}
       </ul>
-      {reasonCode ? <details className="mt-2"><summary>Decision reason</summary><code>{reasonCode}</code></details> : null}
+      {reasonCode ? <p className="mt-2 text-xs text-muted-foreground">Review access before sharing.</p> : null}
     </div>
   )
 }

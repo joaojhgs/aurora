@@ -279,7 +279,7 @@ export function buildToolingPolicySummary(tools: ToolApprovalCardModel[], source
   else if (dryRunOnly) mode = 'dry_run_only'
   return {
     mode,
-    defaultBehavior: dryRunOnly ? 'Dry-run external mutations until Tooling confirms approval.' : 'Ask for runtime approval when catalog policy requires it.',
+    defaultBehavior: dryRunOnly ? 'Preview outside changes until Aurora confirms approval.' : 'Ask for approval when the tool policy requires it.',
     activeGrantCount: tools.filter((tool) => tool.state === 'approved' || tool.state === 'executed').length,
     pendingApprovalCount,
     blockedCount,
@@ -288,8 +288,8 @@ export function buildToolingPolicySummary(tools: ToolApprovalCardModel[], source
     dryRunOnly,
     denyAll,
     lastChanged: 'Tooling.GetPolicySummary unavailable',
-    actor: 'Tooling fallback model',
-    evidence: 'Fallback derived from SDK-normalized Tooling.GetToolCatalog because management read models were unavailable.'
+    actor: 'Aurora',
+    evidence: 'Derived from the current Aurora tool list because management data was unavailable.'
   }
 }
 
@@ -305,7 +305,7 @@ export function buildGrantRows(sources: ToolingSourceModel[]): ToolingGrantRow[]
       status: grantStatusForTool(tool),
       principal: tool.providerPeerId ?? 'local-principal',
       expires: formatExpiry(tool.expiresAt),
-      evidence: tool.policyDecisionId ?? tool.auditDestination ?? 'catalog policy evidence pending'
+      evidence: tool.policyDecisionId ?? tool.auditDestination ?? 'policy details pending'
     })))
 }
 
@@ -393,7 +393,7 @@ function sourceFromTools(id: string, tools: ToolApprovalCardModel[]): ToolingSou
     mutatingToolCount: tools.filter((tool) => tool.mutating).length,
     externalToolCount: tools.filter((tool) => tool.dataEgress || tool.riskClass === 'external').length,
     adminToolCount: tools.filter((tool) => tool.requiresAdminAction || `${tool.riskClass}`.includes('admin')).length,
-    lastSeenLabel: type === 'mesh' ? 'cached negotiated catalog' : 'latest local catalog snapshot',
+    lastSeenLabel: type === 'mesh' ? 'last shared tool list' : 'latest local tool list',
     catalogState: catalogState(type, blockedToolCount, pendingApprovalCount),
     catalogEvidence: catalogEvidence(type, first),
     routePath: first?.routePath ?? [],
@@ -457,14 +457,14 @@ function effectiveTrust(tools: ToolApprovalCardModel[], blockedCount: number, pe
 function catalogState(type: Exclude<ToolingSourceType, 'blocked'>, blockedCount: number, pendingCount: number): string {
   if (blockedCount > 0) return 'needs review'
   if (pendingCount > 0) return 'approval queue active'
-  if (type === 'mesh') return 'reviewed cached catalog'
+  if (type === 'mesh') return 'reviewed shared list'
   return 'ready'
 }
 
 function catalogEvidence(type: Exclude<ToolingSourceType, 'blocked'>, tool: ToolApprovalCardModel | undefined): string {
-  if (type === 'mesh') return `Negotiated cache evidence via ${tool?.auditDestination ?? 'Tooling.GetToolCatalog'}`
-  if (type === 'mcp') return `MCP catalog via ${tool?.serviceInstanceId ?? 'SDK Tooling catalog'}`
-  return tool?.auditDestination ?? 'SDK Tooling catalog'
+  if (type === 'mesh') return tool?.auditDestination ?? 'Aurora shared tools'
+  if (type === 'mcp') return tool?.serviceInstanceId ?? 'MCP tools'
+  return tool?.auditDestination ?? 'Aurora tools'
 }
 
 function sourceSortWeight(type: Exclude<ToolingSourceType, 'blocked'>): number {
@@ -501,7 +501,7 @@ function auditActionForTool(tool: ToolApprovalCardModel): string {
   if (tool.state === 'denied') return 'Tool denied'
   if (tool.state === 'expired') return 'Grant expired'
   if (tool.state === 'replay-rejected') return 'Replay rejected'
-  if (tool.state === 'unavailable') return 'Provider unavailable'
+  if (tool.state === 'unavailable') return 'Device unavailable'
   if (tool.approvalRequired) return 'Approval requested'
   return 'Catalog reviewed'
 }

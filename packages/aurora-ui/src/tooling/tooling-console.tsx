@@ -29,7 +29,8 @@ import {
 import type { AuroraClient, AvailabilityState, JsonValue, McpSourceWizardDraft, NormalizedSchedulerJob, PluginSourceWizardDraft, ToolApprovalCardModel, ToolApprovalGrantModel, ToolApprovalScope, ToolExportDecisionModel, ToolExportPolicyModel, ToolExportScopeModel, ToolOnboardingValidationResult, ToolPolicyAuditEventModel, ToolPendingApprovalModel, ToolSourceDetailModel, ToolSourceSummaryModel, ToolingPageViewModel } from '@aurora/client'
 import type { RouteAvailability } from '../shell-data'
 import { getAuroraSurfaceProfile } from '../platform-surface'
-import { presentableSignal, ToneBadge, riskTone, trustTone, stateTone, type BadgeTone } from '../status-badges'
+import { safeErrorCopy } from '../product-copy'
+import { ToneBadge, riskTone, trustTone, stateTone, type BadgeTone } from '../status-badges'
 import { PageHeader } from '../state-surface'
 import { Button, Card, DataTable, MetaGrid, StatStrip, Switch, type DataColumn } from '../primitives'
 import { PageTabs } from '../shared-components'
@@ -215,7 +216,7 @@ export function ToolingConsole({
         eyebrow={null}
         id="tool-approval-title"
         title="Tools & Plugins"
-        description="Core tools, MCP servers, plugins and mesh peer tools, grouped by source with policy and approvals."
+        description="Review tool sources, choose what needs approval, and add MCP servers or plugins."
         actions={
           <div className="flex flex-wrap items-center gap-2" aria-label="Tools policy summary">
             {managementLoading ? (
@@ -224,7 +225,7 @@ export function ToolingConsole({
                 <Badge variant="outline">Sources loading…</Badge>
               </>
             ) : (
-              <Badge variant="outline">Policy: <strong className="ml-1 font-semibold">{policy.mode}</strong></Badge>
+              <Badge variant="outline">Policy: <strong className="ml-1 font-semibold">{policyModeLabel(policy.mode)}</strong></Badge>
             )}
             <Button variant="primary" icon={<Plug size={15} aria-hidden />} onClick={() => showWizard('mcp')} disabled={managementLoading}>Add MCP source</Button>
           </div>
@@ -234,25 +235,25 @@ export function ToolingConsole({
       {route.disabled ? (
         <Alert variant="destructive" role="alert">
           <ShieldAlert />
-          <AlertDescription>Tooling is capability-gated: {presentableSignal(route.blockers.join(', ') || 'no executable Tooling catalog entry')}. Route state needs attention.</AlertDescription>
+          <AlertDescription>Tools are unavailable. Review access and try again.</AlertDescription>
         </Alert>
       ) : null}
       {error ? (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{toolingSafeMessage(error)}</AlertDescription>
         </Alert>
       ) : null}
       {managementError ? (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
-          <AlertDescription>Tooling management read models need attention: {managementError}</AlertDescription>
+          <AlertDescription>{toolingSafeMessage(managementError)}</AlertDescription>
         </Alert>
       ) : null}
       {managementLoading ? (
         <Alert role="status">
           <RefreshCw />
-          <AlertDescription>Loading Tooling.GetPolicySummary and Tooling.ListToolSources...</AlertDescription>
+          <AlertDescription>Loading tools and approval settings...</AlertDescription>
         </Alert>
       ) : null}
 
@@ -353,21 +354,21 @@ export function ToolingConsole({
                   })
                 }}
                 onTestSource={async (draft) => {
-                  setWizardResult(`Testing plugin source through ${sourceActionContractName('plugin', 'test')}...`)
+                  setWizardResult('Checking plugin...')
                   try {
                     const result = await onTestSource?.('plugin', draft)
                     setWizardResult(onboardingResultMessage('plugin', 'test', result))
                   } catch (error) {
-                    setWizardResult(`Plugin source test failed: ${errorText(error)}`)
+                    setWizardResult(toolingSafeMessage(error))
                   }
                 }}
                 onCreateSource={async (draft) => {
-                  setWizardResult(`Creating plugin source through ${sourceActionContractName('plugin', 'create')}...`)
+                  setWizardResult('Saving plugin...')
                   try {
                     const result = await onCreateSource?.('plugin', draft)
                     setWizardResult(onboardingResultMessage('plugin', 'create', result))
                   } catch (error) {
-                    setWizardResult(`Plugin source create failed: ${errorText(error)}`)
+                    setWizardResult(toolingSafeMessage(error))
                   }
                 }}
               />
@@ -391,7 +392,7 @@ export function ToolingConsole({
               const result = await onTestSource?.('mcp', draft)
               setWizardResult(onboardingResultMessage('mcp', 'test', result))
             } catch (error) {
-              setWizardResult(`MCP source test failed: ${errorText(error)}`)
+              setWizardResult(toolingSafeMessage(error))
             }
           }}
           onCreateSource={async (draft) => {
@@ -400,7 +401,7 @@ export function ToolingConsole({
               const result = await onCreateSource?.('mcp', draft)
               setWizardResult(onboardingResultMessage('mcp', 'create', result))
             } catch (error) {
-              setWizardResult(`MCP source create failed: ${errorText(error)}`)
+              setWizardResult(toolingSafeMessage(error))
             }
           }}
         />
@@ -494,7 +495,7 @@ function PolicyCommandBar({
       ariaLabel="Tooling policy"
       icon={<ShieldCheck size={18} aria-hidden />}
       title="Tooling policy"
-      description="Global policy console. Backend Tooling policy is authoritative; this page reads SDK management state first and routes durable mutations through typed Tooling contracts."
+      description="Global tool policy. Aurora reads saved management state first and sends changes through the approved admin flow."
       actions={
         <>
           <Button variant="primary" icon={<Plug size={15} aria-hidden />} onClick={onAddMcp}>Add MCP server</Button>
@@ -508,7 +509,7 @@ function PolicyCommandBar({
           { label: 'Global policy mode', value: policy.mode, caption: policy.defaultBehavior, tone: dangerous ? 'warning' : 'default' },
           { label: 'Sources', value: policy.sourceCount, caption: `${policy.blockedCount} blocked tools`, tone: policy.blockedCount > 0 ? 'warning' : 'default' },
           { label: 'Pending approvals', value: policy.pendingApprovalCount, caption: 'assistant approvals stay inline; this is the management queue' },
-          { label: 'Transport', value: transportKind, caption: surfaceLabel }
+          { label: 'Connection', value: policyConnectionLabel(transportKind), caption: surfaceLabel }
         ]}
       />
       {dangerous ? (
@@ -537,12 +538,12 @@ function PolicyCommandBar({
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Management workspaces">
         <Badge variant="outline" className="gap-1"><KeyRound size={14} aria-hidden />Durable grants</Badge>
         <Badge variant="outline" className="gap-1"><Clock size={14} aria-hidden />Pending approvals</Badge>
-        <Badge variant="outline">Approve in Assistant for one exact runtime call</Badge>
+        <Badge variant="outline">Approve in Assistant for one exact tool use</Badge>
         <Badge variant="outline" className="gap-1"><History size={14} aria-hidden />Activity and audit with correlation ID</Badge>
       </div>
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Platform surfaces">
         <Badge variant="outline">Desktop local</Badge>
-        <Badge variant="outline">Web thin</Badge>
+        <Badge variant="outline">Web</Badge>
         <Badge variant="outline">Android</Badge>
         <Badge variant="outline">iOS</Badge>
       </div>
@@ -664,7 +665,7 @@ function SourceOverview({
       ariaLabel="Selected source overview"
       title="Execution approval"
       description={`Controls the approval or grant required after sharing, service policy, and peer permissions have already allowed a request. ${source.name} · ${sourceSectionLabel(source.type)} · ${source.toolCount} tools.`}
-      actions={<><TrustPill trust={source.effectiveTrust} />{policyBypass ? <ToneBadge tone="danger">Bypassed</ToneBadge> : null}</>}
+      actions={<><TrustPill trust={source.effectiveTrust} />{policyBypass ? <ToneBadge tone="danger">Wide access</ToneBadge> : null}</>}
     >
       <div className="flex flex-col gap-1 bg-muted/10 px-3">
         <div className="flex flex-col gap-2.5 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -761,8 +762,8 @@ function PluginsWorkspace({
   const plugins = pluginSources.map((source) => ({ source, status: pluginStatus(source) }))
   return (
     <main className="flex flex-col gap-4 py-4" aria-label="Plugins">
-      {loading ? <LoadingState title="Loading plugins" detail="Loading plugin configuration and Tooling source metadata." /> : null}
-      {resultMessage ? <Alert><AlertDescription>{resultMessage}</AlertDescription></Alert> : null}
+      {loading ? <LoadingState title="Loading plugins" detail="Loading plugins and saved settings." /> : null}
+      {resultMessage ? <Alert><AlertDescription>{toolingSafeMessage(resultMessage)}</AlertDescription></Alert> : null}
       {!loading && builtinPlugins.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
           {builtinPlugins.map((plugin) => {
@@ -811,7 +812,7 @@ function PluginsWorkspace({
         </>
       ) : null}
       {!loading && builtinPlugins.length === 0 && plugins.length === 0 ? (
-        <Card title="Plugins" icon={<Package size={18} aria-hidden />} description="Plugin definitions come from Config (services.tooling.plugins). None were reported by this node." actions={<Button variant="primary" icon={<Package size={15} aria-hidden />} onClick={() => onConfigure(newPluginSourceDraft())}>Add plugin source</Button>} />
+        <Card title="Plugins" icon={<Package size={18} aria-hidden />} description="No plugins are available on this Aurora device yet." actions={<Button variant="primary" icon={<Package size={15} aria-hidden />} onClick={() => onConfigure(newPluginSourceDraft())}>Add plugin source</Button>} />
       ) : null}
       {configPlugin ? (
         <BuiltinPluginConfigModal
@@ -858,7 +859,7 @@ function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: Builtin
         className="w-full max-w-md"
         title={`Configure ${plugin.label}`}
         icon={<KeyRound size={18} aria-hidden />}
-        description="Credentials are stored through the Config service (preview and apply with AdminAction confirmation); secrets are never shown again."
+        description="Credentials are saved securely; secrets are never shown again."
         actions={<Button variant="ghost" onClick={onClose} ariaLabel={`Close configure ${plugin.label}`}>Close</Button>}
       >
         <div className="flex flex-col gap-3">
@@ -917,7 +918,7 @@ function McpSourceModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
-      <Card className="w-full max-w-lg" title="Add MCP source" icon={<Plug size={18} aria-hidden />} description="Register a new MCP server. It starts quarantined until reviewed and approved." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close Add MCP source">Close</Button>}>
+      <Card className="w-full max-w-lg" title="Add MCP source" icon={<Plug size={18} aria-hidden />} description="Connect a new MCP server. New tools need review before Aurora uses them." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close Add MCP source">Close</Button>}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="MCP source steps">{['Details', 'Authenticate', 'Discover', 'Trust'].map((label, index) => <Button key={label} variant={wizardStep === index + 1 ? 'primary' : 'outline'} ariaPressed={wizardStep === index + 1} onClick={() => onStep(index + 1)}>{index + 1}. {label}</Button>)}</div>
           <WizardStep wizard="mcp" step={wizardStep} canLaunchLocalCommands={canLaunchLocalCommands} mcpDraft={mcpDraft} pluginDraft={{ packageName: '', pluginId: '', version: '', sourceUrl: '', trustTier: 'untrusted', includeFutureTools: false }} resultMessage={resultMessage} onMcpDraft={onMcpDraft} onPluginDraft={() => undefined} onTestSource={(_, draft) => onTestSource?.(draft as McpSourceWizardDraft)} onCreateSource={(_, draft) => onCreateSource?.(draft as McpSourceWizardDraft)} />
@@ -950,7 +951,7 @@ function PluginConfigModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
-      <Card className="w-full max-w-lg" title={`Configure ${pluginName}`} icon={<ServerCog size={18} aria-hidden />} description="Configuration is read from Config on save; the plugin then appears as an active source." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close plugin configuration">Close</Button>}>
+      <Card className="w-full max-w-lg" title={`Configure ${pluginName}`} icon={<ServerCog size={18} aria-hidden />} description="Save the plugin details, then review its tools before Aurora uses them." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close plugin configuration">Close</Button>}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Plugin configure steps">{['Details', 'Authenticate', 'Discover', 'Trust'].map((label, index) => <Button key={label} variant={wizardStep === index + 1 ? 'primary' : 'outline'} ariaPressed={wizardStep === index + 1} onClick={() => onStep(index + 1)}>{index + 1}. {label}</Button>)}</div>
           <WizardStep wizard="plugin" step={wizardStep} canLaunchLocalCommands={false} mcpDraft={{ name: '', transport: 'streamable_http', trustTier: 'untrusted', includeFutureTools: false }} pluginDraft={pluginDraft} resultMessage={resultMessage} onMcpDraft={() => undefined} onPluginDraft={onPluginDraft} onTestSource={(_, draft) => onTestSource?.(draft as PluginSourceWizardDraft)} onCreateSource={(_, draft) => onCreateSource?.(draft as PluginSourceWizardDraft)} />
@@ -1055,7 +1056,7 @@ function ToolDetailTable({
 }) {
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null)
   return (
-    <Card title="Tools" icon={<Wrench size={18} aria-hidden />} description="Selected source tool inventory. Expand a tool for the full description and its policy override.">
+    <Card title="Tools" icon={<Wrench size={18} aria-hidden />} description="Expand a tool to review what it can do and choose whether it needs approval.">
       {tools.length === 0 ? (
         <p className="text-sm text-muted-foreground">No tools match the current source/search filter.</p>
       ) : (
@@ -1154,7 +1155,7 @@ function ToolDetailRow({
             <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', expanded ? '' : '-rotate-90')} aria-hidden />
             <span className="flex min-w-0 flex-col" style={{ maxWidth: 360 }}>
               <strong className="truncate font-mono text-[12.5px] font-medium">{tool.name}</strong>
-              {!expanded ? <small className={cn('truncate text-xs', tool.disabledReason ? 'text-destructive' : 'text-muted-foreground')}>{tool.disabledReason ?? tool.description}</small> : null}
+              {!expanded ? <small className={cn('truncate text-xs', tool.disabledReason ? 'text-destructive' : 'text-muted-foreground')}>{tool.disabledReason ? toolDisabledCopy(tool) : tool.description}</small> : null}
             </span>
           </button>
         </TableCell>
@@ -1166,14 +1167,14 @@ function ToolDetailRow({
         <TableRow className="border-0 hover:bg-transparent">
           <TableCell colSpan={4} className="rounded-md bg-muted/20" style={{ whiteSpace: 'normal' }}>
             <div className="flex flex-col gap-3 py-1.5">
-              <p className="text-sm text-muted-foreground">{tool.description || 'No description provided by the catalog.'}</p>
+              <p className="text-sm text-muted-foreground">{tool.description || 'No description provided.'}</p>
               {tool.disabledReason ? (
                 <p className="text-sm text-destructive" role="status">
-                  {tool.disabledReason} This management record is visible for review but is not callable.
+                  {toolDisabledCopy(tool)}
                 </p>
               ) : null}
               <p className="text-xs text-muted-foreground">
-                {tool.routePath.at(-1) ?? 'catalog'}
+                {tool.mutating ? 'Changes data' : 'Reads data'}
                 {tool.mutating ? ' · mutating' : ''}
                 {tool.dataEgress ? ' · data egress' : ''}
                 {tool.providerLabel ? ` · ${tool.providerLabel}` : ''}
@@ -1236,7 +1237,10 @@ function ToolDetailRow({
 function prototypeStateLabel(tool: ToolApprovalCardModel): string {
   if (tool.blockReasonCode === 'permission_denied' || tool.blockReasonCode === 'recipient_missing_tool_permissions') return 'not callable'
   if (/unavailable|unsupported/i.test(tool.state)) return 'needs repair'
-  return tool.state
+  if (tool.state === 'provider-selector-required') return 'choose source'
+  if (tool.state === 'dry-run-only') return 'preview only'
+  if (tool.state === 'replay-rejected') return 'needs review'
+  return tool.state.replace(/_/g, ' ')
 }
 
 function ToolInventory(props: {
@@ -1317,36 +1321,34 @@ function ToolRow({
       </summary>
       <div className="mt-3 flex flex-col gap-3">
         <MetaGrid columns={2} items={[
-          { label: 'Effective policy', value: effectivePolicyCopy(tool, source) },
-          { label: 'Provider', value: selectedProvider?.label ?? tool.providerLabel },
+          { label: 'Current access', value: effectivePolicyCopy(tool, source) },
+          { label: 'Device or source', value: selectedProvider?.label ?? tool.providerLabel },
           { label: 'Permissions', value: tool.requiredPermissions.join(', ') || 'No explicit permissions reported' },
-          { label: 'Capability', value: capabilityCopy(tool) },
-          { label: 'Args hash', value: tool.argsHash ?? 'not reported', mono: true },
-          { label: 'Audit', value: tool.auditDestination ?? 'audit pending' },
-          { label: 'Correlation', value: tool.correlationId ?? 'pending', mono: true },
-          { label: 'LLM/scheduler binding', value: `${tool.approvalRequired ? 'LLM approval-gated' : 'LLM-bindable'} · ${tool.requiresAdminAction ? 'AdminAction for scheduling' : 'scheduler review required'}` }
+          { label: 'What it can do', value: capabilityCopy(tool) },
+          { label: 'Reference ID', value: tool.correlationId ?? 'pending', mono: true },
+          { label: 'Scheduling', value: tool.requiresAdminAction ? 'Needs administrator confirmation' : 'Review before scheduling' }
         ]} />
         {tool.providers.length > 1 || tool.providerSelectorRequired ? (
           <label className="flex flex-col gap-1 text-sm">
-            <span>Provider selector</span>
+            <span>Choose source</span>
             <select
               className="h-9 rounded-lg border border-border bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               value={selectedProviderId ?? ''}
               onChange={(event) => onSelectProvider(event.currentTarget.value)}
             >
-              <option value="">Select provider</option>
+              <option value="">Select source</option>
               {tool.providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.selectable}>{provider.label}</option>)}
             </select>
-            <small className="text-xs text-muted-foreground">{selectorMissing ? 'Backend requires an explicit provider selector before approval.' : selectedProvider?.reason ?? 'Provider selected from catalog.'}</small>
+            <small className="text-xs text-muted-foreground">{selectorMissing ? 'Choose a source before approving.' : 'Source selected.'}</small>
           </label>
         ) : null}
         <details className="rounded-lg border border-border p-2.5">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm"><FileDiff size={15} aria-hidden /> Advanced details and redacted payloads</summary>
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm"><FileDiff size={15} aria-hidden /> Advanced details</summary>
           <div className="mt-2.5 flex flex-col gap-2.5">
-            <RedactedPreview label="Redacted arguments" value={tool.argsPreview} fallback="No argument preview reported." />
-            <RedactedPreview label="Dry-run preview" value={tool.dryRunPreview} fallback="No dry-run preview reported." />
-            <div className="flex flex-col gap-1.5" aria-label="Arguments schema summary">
-              <strong className="text-sm font-medium">Arguments schema summary</strong>
+            <RedactedPreview label="Inputs" value={tool.argsPreview} fallback="No input preview available." />
+            <RedactedPreview label="Preview" value={tool.dryRunPreview} fallback="No preview available." />
+            <div className="flex flex-col gap-1.5" aria-label="Input summary">
+              <strong className="text-sm font-medium">Input summary</strong>
               {fields.length > 0 ? fields.map((field) => (
                 <label key={field.name} className="flex flex-col gap-0.5 text-xs">
                   <span>{field.name}{field.required ? ' *' : ''}</span>
@@ -1362,7 +1364,7 @@ function ToolRow({
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" icon={<FlaskConical size={15} aria-hidden />} disabled={dryRunDisabled} onClick={() => onApprove('once', true)}>Dry run</Button>
           <Button variant="outline" icon={<X size={15} aria-hidden />} disabled={blocked || selectorMissing} onClick={onDeny}>Deny</Button>
-          {executeSafeEnabled ? <Button variant="primary" icon={<Play size={15} aria-hidden />} ariaLabel="Execute safe local through Tooling.ExecuteTool" onClick={onExecuteSafe}>Execute safe local</Button> : null}
+          {executeSafeEnabled ? <Button variant="primary" icon={<Play size={15} aria-hidden />} ariaLabel="Run safe local tool" onClick={onExecuteSafe}>Run safe local</Button> : null}
           {tool.approvalRequired ? tool.approvalScopes.map((scope) => (
             <Button key={scope} variant="primary" icon={<Check size={15} aria-hidden />} disabled={approveDisabled} onClick={() => onApprove(scope)}>{scopeLabel(scope)}</Button>
           )) : null}
@@ -1386,7 +1388,7 @@ function PolicyWorkspace({
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card title="Source trust" icon={<SlidersHorizontal size={18} aria-hidden />} description="Trust is displayed from backend Tooling source policy evidence; durable mutations route through Tooling.UpsertSourcePolicy.">
+      <Card title="Source trust" icon={<SlidersHorizontal size={18} aria-hidden />} description="Trust shows the saved source policy. Changes use the approved admin flow.">
         <MetaGrid columns={1} items={[
           { label: 'Effective trust', value: source.effectiveTrust },
           { label: 'Future child tools', value: source.type === 'core' ? 'trusted core catalog' : 'approval required by default unless backend policy explicitly enables inheritance' },
@@ -1420,7 +1422,7 @@ function PolicyWorkspace({
 
 function GrantsPanel({ grants, onRevokeGrant }: { grants: ReturnType<typeof buildGrantRows>; onRevokeGrant?: ((grant: ReturnType<typeof buildGrantRows>[number]) => void) | undefined }) {
   return (
-    <Card title="Durable grants" icon={<KeyRound size={18} aria-hidden />} description="Grant rows come from Tooling.ListApprovalGrants when available and fall back to catalog evidence only while offline.">
+    <Card title="Durable grants" icon={<KeyRound size={18} aria-hidden />} description="Grant rows show saved approvals when available and current tool-list details while offline.">
       {grants.length === 0 ? <p className="text-sm text-muted-foreground">No active, expired, revoked, stale, or needs-review grants reported for this source.</p> : null}
       <div className="flex flex-col gap-2">
         {grants.map((grant) => (
@@ -1565,7 +1567,7 @@ function OnboardingPanel({
 }) {
   const title = wizard === 'plugin' ? 'Plugin source wizard' : 'MCP server wizard'
   return (
-    <Card title="Onboarding wizard UI" icon={<ServerCog size={18} aria-hidden />} description="Connect MCP servers and plugin sources through SDK-backed contracts without logging secrets.">
+    <Card title="Onboarding wizard UI" icon={<ServerCog size={18} aria-hidden />} description="Connect MCP servers and plugin sources without logging secrets.">
       <div className="flex items-center gap-2">
         <Button variant={wizard === 'mcp' ? 'primary' : 'outline'} icon={<Plug size={15} aria-hidden />} onClick={() => onWizard('mcp')}>Add MCP server</Button>
         <Button variant={wizard === 'plugin' ? 'primary' : 'outline'} icon={<Package size={15} aria-hidden />} onClick={() => onWizard('plugin')}>Add plugin source</Button>
@@ -1657,7 +1659,7 @@ function WizardStep({
         <span>{wizard === 'mcp' ? 'Server URL or command profile' : 'Package source or install path'}</span>
         <input className={inputClassName} value={endpointValue} onChange={(event) => updateEndpoint(event.currentTarget.value)} placeholder={canLaunchLocalCommands ? 'stdio command or https://server' : 'https://server'} />
       </label>
-      <p className="text-sm text-muted-foreground">Validation and saving route through {sourceActionContractName(wizard, 'test')} and {sourceActionContractName(wizard, 'create')}.</p>
+      <p className="text-sm text-muted-foreground">Aurora checks the connection before saving.</p>
     </div>
   )
   if (step === 2) return (
@@ -1677,38 +1679,28 @@ function WizardStep({
   )
   if (step === 3) return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">Run a backend validation before creating the source. Results stay redacted and appear in the status preview below.</p>
-      <Button variant="outline" onClick={() => { void onTestSource?.(wizard, draft) }} disabled={!onTestSource} disabledReason={!onTestSource ? 'Testing requires Tooling.TestMCPSource or Tooling.TestPluginSource.' : undefined}>Test connection</Button>
-      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{resultMessage}</p> : null}
+      <p className="text-sm text-muted-foreground">Check the connection before saving. Secrets are never shown again.</p>
+      <Button variant="outline" onClick={() => { void onTestSource?.(wizard, draft) }} disabled={!onTestSource} disabledReason={!onTestSource ? 'Connection check is unavailable right now.' : undefined}>Test connection</Button>
+      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{toolingSafeMessage(resultMessage)}</p> : null}
     </div>
   )
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">Default trust: approval required. Future-tool inheritance remains off unless explicitly enabled by backend source policy.</p>
-      <Button variant="primary" onClick={() => { void onCreateSource?.(wizard, draft) }} disabled={!onCreateSource} disabledReason={!onCreateSource ? 'Create source requires Tooling.CreateMCPSource or Tooling.CreatePluginSource.' : undefined}>Create source</Button>
-      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{resultMessage}</p> : null}
+      <p className="text-sm text-muted-foreground">New tools require approval unless you choose to trust this source.</p>
+      <Button variant="primary" onClick={() => { void onCreateSource?.(wizard, draft) }} disabled={!onCreateSource} disabledReason={!onCreateSource ? 'Saving is unavailable right now.' : undefined}>Create source</Button>
+      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{toolingSafeMessage(resultMessage)}</p> : null}
     </div>
   )
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function onboardingResultMessage(kind: 'mcp' | 'plugin', action: 'test' | 'create', result: ToolOnboardingValidationResult | undefined): string {
-  const prefix = `${kind.toUpperCase()} source ${action}`
-  if (!result) return `${prefix} not connected: ${sourceActionContractName(kind, action)} is not connected.`
-  const detail = result.errors.join(', ') || (result.supported ? 'secrets redacted' : 'backend declined this runtime')
-  if (result.status === 'unsupported') return `${prefix} not enabled: ${detail}`
-  if (result.ok) return `${prefix} valid. Review the redacted backend status and audit activity before trusting this source.`
-  return `${prefix} failed: ${detail}`
-}
-
-function sourceActionContractName(kind: 'mcp' | 'plugin', action: 'test' | 'create'): string {
-  if (kind === 'mcp') {
-    return action === 'test' ? 'Tooling.TestMCPSource' : 'Tooling.CreateMCPSource'
-  }
-  return action === 'test' ? 'Tooling.TestPluginSource' : 'Tooling.CreatePluginSource'
+  const label = kind === 'mcp' ? 'MCP source' : 'Plugin source'
+  if (!result) return `${label} is not available right now.`
+  if (result.status === 'unsupported') return `${label} is not available in this Aurora version yet.`
+  if (result.ok) return action === 'test'
+    ? `${label} connection looks ready.`
+    : `${label} saved. Review its tools before use.`
+  return `${label} could not be saved. Check the details and try again.`
 }
 
 function LoadingState({
@@ -1726,7 +1718,7 @@ function EmptyCatalog({ onAddMcp }: { onAddMcp: () => void }) {
 }
 
 function TrustPill({ trust }: { trust: ToolingTrustState }) {
-  return <ToneBadge tone={trustTone(trust)}>{trust}</ToneBadge>
+  return <ToneBadge tone={trustTone(trust)}>{trustLabel(trust)}</ToneBadge>
 }
 
 function sourceIcon(type: Exclude<ToolingSourceType, 'blocked'>) {
@@ -1742,16 +1734,14 @@ function ToolResultCard({ result }: { result: NonNullable<ToolApprovalCardModel[
     <section className="flex flex-col gap-2 rounded-lg border border-border p-2.5" aria-label="Tool result">
       <h3 className="text-sm font-semibold">Result</h3>
       <MetaGrid items={[
-        { label: 'Status', value: result.status },
-        { label: 'Provider', value: result.providerPeerId ?? 'local' },
-        { label: 'Correlation', value: result.correlationId ?? 'pending', mono: true },
-        { label: 'Audit receipt', value: result.auditReceipt ?? 'pending', mono: true },
-        { label: 'Route path', value: result.routePath.join(' -> ') || 'not reported' },
+        { label: 'Status', value: resultStatusCopy(result.status) },
+        { label: 'Device', value: result.providerPeerId ? 'Selected Aurora device' : 'This device' },
+        { label: 'Reference ID', value: result.correlationId ?? 'pending', mono: true },
+        { label: 'Activity record', value: result.auditReceipt ? 'Recorded' : 'Pending' },
         { label: 'Duration', value: result.durationMs === null ? 'not reported' : `${result.durationMs}ms` },
-        { label: 'Redaction', value: result.redactionStatus ?? 'not reported' },
-        { label: 'Retry/fallback', value: `${result.retryEligible ? 'retry' : 'no retry'} / ${result.fallbackEligible ? 'fallback' : 'no fallback'}` }
+        { label: 'Retry', value: result.retryEligible ? 'Available' : 'Not available' }
       ]} />
-      <RedactedPreview label="Redacted output" value={result.outputPreview} fallback={result.error ?? 'No output preview reported.'} />
+      <RedactedPreview label="Output" value={result.outputPreview} fallback={result.error ? safeErrorCopy({ code: 'connection_lost' }).title : 'No output preview available.'} />
     </section>
   )
 }
@@ -1813,16 +1803,16 @@ function schedulerAvailability(job: NormalizedSchedulerJob) {
   return 'available-local' as const
 }
 function stateCopy(tool: ToolApprovalCardModel): string {
-  if (tool.state === 'provider-selector-required') return 'Provider selector required before approval.'
-  if (tool.state === 'dry-run-only') return 'Dry-run only until backend policy permits execution.'
-  if (tool.state === 'denied') return `Denied: ${tool.denialReason ?? 'backend policy denied approval'}.`
-  if (tool.state === 'expired') return 'Approval expired; request a fresh backend approval.'
-  if (tool.state === 'replay-rejected') return `Replay rejected: ${tool.denialReason ?? 'backend replay protection blocked it'}.`
-  if (tool.state === 'unavailable') return `${tool.disabledReason ?? 'Service needs attention'}. Disabled until provider/service repair completes.`
-  if (tool.state === 'executed') return 'Tool result includes audit and correlation status.'
-  if (tool.requiresAdminAction) return 'AdminAction confirmation required before approval or execution.'
+  if (tool.state === 'provider-selector-required') return 'Choose a source before approving.'
+  if (tool.state === 'dry-run-only') return 'Preview only until approval changes.'
+  if (tool.state === 'denied') return 'Approval was denied.'
+  if (tool.state === 'expired') return 'Approval expired; request a fresh approval.'
+  if (tool.state === 'replay-rejected') return 'This request needs a fresh approval.'
+  if (tool.state === 'unavailable') return toolDisabledCopy(tool)
+  if (tool.state === 'executed') return 'Tool completed and an activity record is available.'
+  if (tool.requiresAdminAction) return 'Administrator confirmation is required before approval or use.'
   if (tool.approvalRequired) return 'Approval required before execution.'
-  return 'No approval required by current backend policy.'
+  return 'No approval required by current policy.'
 }
 function toolStateIcon(tool: ToolApprovalCardModel) {
   if (tool.state === 'ready' || tool.state === 'approved' || tool.state === 'executed') return <Check size={16} aria-hidden />
@@ -1839,10 +1829,55 @@ function scopeLabel(scope: ToolApprovalScope): string {
   return `Approve ${scope}`
 }
 function effectivePolicyCopy(tool: ToolApprovalCardModel, source: ToolingSourceModel): string {
-  if (isBlockedTool(tool)) return 'Blocked override or provider error wins over parent source trust.'
-  if (source.effectiveTrust === 'trusted' && !tool.approvalRequired) return 'Inherited trusted from reviewed source.'
+  if (isBlockedTool(tool)) return 'Blocked until this source is reviewed.'
+  if (source.effectiveTrust === 'trusted' && !tool.approvalRequired) return 'Trusted from reviewed source.'
   if (tool.approvalRequired) return 'Approval required for this exact tool scope.'
-  return `Inherited ${source.effectiveTrust} from ${source.name}.`
+  return `${trustLabel(source.effectiveTrust)} from ${source.name}.`
+}
+
+function toolDisabledCopy(tool: ToolApprovalCardModel): string {
+  if (tool.blockReasonCode === 'permission_denied' || tool.blockReasonCode === 'recipient_missing_tool_permissions') {
+    return 'Permission is needed to use this tool.'
+  }
+  if (/unsupported/i.test(tool.state) || /unsupported/i.test(tool.disabledReason ?? '')) {
+    return 'This Aurora version cannot use that feature yet.'
+  }
+  return 'This tool needs attention before Aurora can use it.'
+}
+
+function resultStatusCopy(status: string): string {
+  if (/success|ok|completed/i.test(status)) return 'Completed'
+  if (/pending|running/i.test(status)) return 'In progress'
+  if (/denied|blocked|failed|error/i.test(status)) return 'Needs attention'
+  return 'Received'
+}
+
+function trustLabel(trust: ToolingTrustState): string {
+  if (trust === 'approval-required') return 'Approval required'
+  if (trust === 'quarantined') return 'Needs review'
+  return trust
+}
+
+function policyModeLabel(mode: string): string {
+  if (mode === 'dry_run_only') return 'Preview only'
+  if (mode === 'deny_all') return 'All blocked'
+  if (mode === 'unrestricted_except_blocked') return 'Wide access'
+  return 'Enforced'
+}
+
+function policyConnectionLabel(kind: string): string {
+  if (/native-mobile/i.test(kind)) return 'Mobile app'
+  if (/tauri-local/i.test(kind)) return 'This computer'
+  if (/http/i.test(kind)) return 'Aurora address'
+  return 'Aurora connection'
+}
+
+function toolingSafeMessage(message: unknown): string {
+  if (typeof message !== 'string') return safeErrorCopy(message).title
+  if (/permission|denied/i.test(message)) return safeErrorCopy({ code: 'permission_denied' }).title
+  if (/unsupported/i.test(message)) return safeErrorCopy({ code: 'unsupported' }).title
+  if (/connect|offline|transport|route|runtime|gateway|network/i.test(message)) return safeErrorCopy({ code: 'connection_lost' }).title
+  return safeErrorCopy({ code: 'connection_lost' }).title
 }
 function capabilityCopy(tool: ToolApprovalCardModel): string {
   const flags = [tool.mutating ? 'write/execute' : 'read', tool.dataEgress ? 'network/data egress' : 'local data', tool.requiresAdminAction ? 'admin' : null].filter(Boolean)

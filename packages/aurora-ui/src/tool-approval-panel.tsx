@@ -24,6 +24,7 @@ import type {
 } from '@aurora/client'
 import { TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
+import { safeErrorCopy } from './product-copy'
 import { buildBuiltinPlugins, ToolingConsole, type BuiltinPluginModel, type ToolSharingMutation } from './tooling'
 
 export interface ToolApprovalPanelManagementState {
@@ -197,7 +198,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
           ...current,
           managementLoading: false,
           managementError: detailErrors.length > 0
-            ? `Tooling.GetToolSourceDetail failed for ${detailErrors.map((result) => `${result.sourceId}: ${result.error}`).join('; ')}`
+            ? 'Some tool sources could not be loaded. Try again.'
             : null,
           policySummary,
           sourceSummaries,
@@ -573,31 +574,31 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
   }
 
   async function testSource(kind: 'mcp' | 'plugin', draft: McpSourceWizardDraft | PluginSourceWizardDraft): Promise<ToolOnboardingValidationResult> {
-    setDecisionMessage('__policy__', `Testing ${kind.toUpperCase()} source through ${sourceActionContractName(kind, 'test')}...`)
+    setDecisionMessage('__policy__', `Checking ${kind.toUpperCase()} source...`)
     try {
       const result = kind === 'mcp'
         ? await client.tools.testMcpSource(draft as McpSourceWizardDraft)
         : await client.tools.testPluginSource(draft as PluginSourceWizardDraft)
-      setDecisionMessage('__policy__', `${kind.toUpperCase()} test ${result.status}: ${result.errors.join(', ') || 'secrets redacted'}`)
+      setDecisionMessage('__policy__', sourceResultMessage(kind, result))
       return result
     } catch (error) {
       const message = errorMessage(error)
-      setDecisionMessage('__policy__', `${kind.toUpperCase()} test failed: ${message}`)
+      setDecisionMessage('__policy__', message)
       throw error
     }
   }
 
   async function createSource(kind: 'mcp' | 'plugin', draft: McpSourceWizardDraft | PluginSourceWizardDraft): Promise<ToolOnboardingValidationResult> {
-    setDecisionMessage('__policy__', `Creating ${kind.toUpperCase()} source through ${sourceActionContractName(kind, 'create')}...`)
+    setDecisionMessage('__policy__', `Saving ${kind.toUpperCase()} source...`)
     try {
       const result = kind === 'mcp'
         ? await client.tools.createMcpSource(draft as McpSourceWizardDraft)
         : await client.tools.createPluginSource(draft as PluginSourceWizardDraft)
-      setDecisionMessage('__policy__', `${kind.toUpperCase()} create ${result.status}: ${result.errors.join(', ') || 'secrets redacted'}`)
+      setDecisionMessage('__policy__', sourceResultMessage(kind, result))
       return result
     } catch (error) {
       const message = errorMessage(error)
-      setDecisionMessage('__policy__', `${kind.toUpperCase()} create failed: ${message}`)
+      setDecisionMessage('__policy__', message)
       throw error
     }
   }
@@ -790,7 +791,7 @@ function toolErrorMessage(result: AuroraResponse<unknown>): string {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Tool approval action failed.'
+  return safeErrorCopy(error).title
 }
 
 function denialResultMessage(result: ToolApprovalDecisionResult): string {
@@ -799,9 +800,9 @@ function denialResultMessage(result: ToolApprovalDecisionResult): string {
   return `Denied with correlation ${correlation}${policy}`
 }
 
-function sourceActionContractName(kind: 'mcp' | 'plugin', action: 'test' | 'create'): string {
-  if (kind === 'mcp') {
-    return action === 'test' ? 'Tooling.TestMCPSource' : 'Tooling.CreateMCPSource'
-  }
-  return action === 'test' ? 'Tooling.TestPluginSource' : 'Tooling.CreatePluginSource'
+function sourceResultMessage(kind: 'mcp' | 'plugin', result: ToolOnboardingValidationResult): string {
+  const label = kind === 'mcp' ? 'MCP source' : 'Plugin source'
+  if (result.status === 'unsupported') return `${label} is not available in this Aurora version yet.`
+  if (result.ok) return `${label} is ready to review.`
+  return `${label} needs attention. Check the details and try again.`
 }

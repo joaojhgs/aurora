@@ -34,6 +34,7 @@ import { Input } from "#components/ui/input";
 import { Label } from "#components/ui/label";
 import { Separator } from "#components/ui/separator";
 import { cn } from "#lib/utils";
+import { safeErrorCopy } from "../../product-copy";
 
 export namespace McpConfigDialog {
   export type Props = {
@@ -71,8 +72,7 @@ export const McpConfigDialog: FC<McpConfigDialog.Props> = ({ children }) => {
         <DialogHeader>
           <DialogTitle>MCP servers</DialogTitle>
           <DialogDescription>
-            Connect to Model Context Protocol servers to expose their tools to
-            this assistant.
+            Connect MCP servers so Aurora can use their tools.
           </DialogDescription>
         </DialogHeader>
         <McpManagerPrimitive.Root>
@@ -183,7 +183,7 @@ const STATUS_LABEL: Record<MCPConnectionState, string> = {
   connecting: "Connecting…",
   authRequired: "Auth required",
   authPending: "Authorizing…",
-  error: "Error",
+  error: "Needs attention",
   disconnected: "Disconnected",
 };
 
@@ -204,12 +204,12 @@ const StatusLine: FC = () => {
 };
 
 const ServerError: FC = () => {
-  const message = useAuiState((s) => s.mcpServer.lastError?.message ?? null);
-  if (!message) return null;
+  const hasError = useAuiState((s) => Boolean(s.mcpServer.lastError));
+  if (!hasError) return null;
   return (
     <div className="border-destructive/40 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs">
       <ShieldAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-      <span className="break-words">{message}</span>
+      <span className="break-words">{safeErrorCopy({ code: "connection_lost" }).title}</span>
     </div>
   );
 };
@@ -260,7 +260,9 @@ const AddServerForm: FC<{ onClose: () => void }> = ({ onClose }) => {
             <McpAddFormPrimitive.AuthFields />
           </div>
         </FormRow>
-        <McpAddFormPrimitive.Error className="text-destructive text-xs" />
+        <McpAddFormPrimitive.Error className="text-destructive text-xs">
+          Could not add this server. Check the address and try again.
+        </McpAddFormPrimitive.Error>
         <div className="flex justify-end gap-2">
           <McpAddFormPrimitive.Cancel render={<Button type="button" variant="ghost" size="sm" />}>Cancel
                               </McpAddFormPrimitive.Cancel>
