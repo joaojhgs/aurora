@@ -25,11 +25,13 @@ import {
   isThinConnectionProfileConfigured,
   migrateThinProfileDocumentToRuntime,
   migrateThinProfileToRuntimeProfile,
+  parseRuntimeProfileDocument,
   parseThinProfileDocument as parseSharedThinProfileDocument,
   parseWebRtcInvite,
   runtimeProfileToThinConnectionProfile,
   sanitizeThinConnectionProfile,
   sanitizeRuntimeProfileDocument,
+  serializeRuntimeProfileDocument,
   serializeThinProfileDocument as serializeSharedThinProfileDocument,
   surfaceSupportsRuntimeTier,
   type AuroraNodeMode,
@@ -146,9 +148,17 @@ export interface AuroraThinProfileStore {
   save: (document: AuroraThinProfileDocument) => Promise<void>;
 }
 
+export interface AuroraRuntimeProfileStore {
+  kind: "runtime-profile";
+  evidence: string;
+  load: () => Promise<AuroraRuntimeProfileDocument>;
+  save: (document: AuroraRuntimeProfileDocument) => Promise<void>;
+}
+
 export interface AuroraThinProfileController {
   evidence: string;
   document: AuroraThinProfileDocument;
+  runtimeDocument?: AuroraRuntimeProfileDocument | undefined;
   saveProfile: (
     profile: AuroraThinConnectionProfile,
     roomSecret?: {
@@ -240,24 +250,29 @@ export const ANDROID_NATIVE_PLUGIN_NAME = "aurora-native";
 export const ANDROID_LIFECYCLE_EVENT = "aurora://android-lifecycle";
 
 export async function bootstrapAuroraTauriRuntime(
-  profileStore?: AuroraThinProfileStore,
+  profileStore?: AuroraRuntimeProfileStore | AuroraThinProfileStore,
+  packageCapabilities = resolveTauriPackageCapabilities(),
 ): Promise<AuroraTauriRuntime> {
   if (!requiresAsyncAuroraTauriBootstrap()) return createAuroraTauriRuntime();
   const thinInviteText = consumeFragmentInviteFromRuntime();
   const preferredStore =
     profileStore ??
-    secureThinProfileStore(new TauriLocalTransport({ invoke, listen }));
-  let store = preferredStore;
-  let document: AuroraThinProfileDocument;
+    secureRuntimeProfileStore(new TauriLocalTransport({ invoke, listen }), packageCapabilities);
+  let store: AuroraRuntimeProfileStore | AuroraThinProfileStore = preferredStore;
+  let document: AuroraRuntimeProfileDocument;
   try {
-    document = await preferredStore.load();
+    document = toRuntimeProfileDocument(await preferredStore.load());
   } catch {
-    store = createMemoryThinProfileStore();
+    store = createMemoryRuntimeProfileStore();
     document = await store.load();
   }
+  const runtimeStore = isRuntimeProfileStore(store)
+    ? store
+    : runtimeStoreFromThinStore(store);
   return createAuroraTauriRuntime({
-    thinProfileStore: store,
-    thinProfileDocument: document,
+    runtimeProfileStore: runtimeStore,
+    runtimeProfileDocument: document,
+    packageCapabilities,
     thinInviteText,
     consumeThinInvite: false,
   });
@@ -265,6 +280,7 @@ export async function bootstrapAuroraTauriRuntime(
 
 export function createInitialAuroraTauriRuntime(): AuroraTauriRuntime {
   return createAuroraTauriRuntime({
+    packageCapabilities: resolveTauriPackageCapabilities(),
     consumeThinInvite: !requiresAsyncAuroraTauriBootstrap(),
   });
 }
@@ -276,13 +292,15 @@ export function requiresAsyncAuroraTauriBootstrap(): boolean {
 export function createAuroraTauriRuntime({
   thinProfileStore,
   thinProfileDocument,
+  runtimeProfileStore,
   runtimeProfileDocument,
-  packageCapabilities = noPythonRuntimePackageCapabilities(),
+  packageCapabilities = resolveTauriPackageCapabilities(),
   thinInviteText: explicitThinInviteText,
   consumeThinInvite = true,
 }: {
   thinProfileStore?: AuroraThinProfileStore;
   thinProfileDocument?: AuroraThinProfileDocument;
+  runtimeProfileStore?: AuroraRuntimeProfileStore;
   runtimeProfileDocument?: AuroraRuntimeProfileDocument;
   packageCapabilities?: AuroraTauriPackageCapabilities;
   thinInviteText?: string | null;
@@ -307,8 +325,10 @@ export function createAuroraTauriRuntime({
     explicitThinInviteText ??
     (consumeThinInvite ? consumeFragmentInviteFromRuntime() : null);
   const thinProfileController =
-    thinProfileStore && thinProfileDocument
-      ? createThinProfileController(thinProfileStore, thinProfileDocument)
+    runtimeProfileStore
+      ? createRuntimeBackedThinProfileController(runtimeProfileStore, runtimeDocument, packageCapabilities)
+      : thinProfileStore && thinProfileDocument
+        ? createThinProfileController(thinProfileStore, thinProfileDocument)
       : undefined;
   const thinProfileConfigured = isThinProfileConfigured(configuredProfile);
   const runtimeProfileConfigured = configuredRuntimeProfile
@@ -444,10 +464,14 @@ export function createAuroraTauriRuntime({
     }
 
     if (
-      isPackagedDesktopThinRuntime() ||
-      configuredProfile ||
-      configuredGatewayUrl ||
-      thinConnectionMode !== "http-only"
+      runtimeTier !== "python-full" &&
+      (
+        isPackagedDesktopThinRuntime() ||
+        configuredRuntimeProfile ||
+        configuredProfile ||
+        configuredGatewayUrl ||
+        thinConnectionMode !== "http-only"
+      )
     ) {
       const thinRuntime = createTauriWebThinRuntime({
         mode: thinConnectionMode,
@@ -1021,6 +1045,60 @@ function secureThinProfileStore(
   };
 }
 
+function secureRuntimeProfileStore(
+  _transport: TauriLocalTransport,
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): AuroraRuntimeProfileStore {
+  const fallback = defaultRuntimeProfileDocument();
+  return {
+    kind: "runtime-profile",
+    evidence:
+      "Tauri narrow nonsecret runtime profile storage",
+    load: async () => {
+      const result = await invoke<{ value?: string | null }>(
+        "aurora_thin_profile_get",
+      );
+      return parseRuntimeProfileDocument(result.value) ?? fallback;
+    },
+    save: async (document) => {
+      const result = await invoke<{ ok?: boolean }>("aurora_thin_profile_set", {
+        value: serializeRuntimeProfileDocument(document, {
+          allowPythonFull: packageCapabilities.pythonFullRuntime,
+        }),
+      });
+      if (!result.ok)
+        throw new Error("Runtime profile save failed");
+    },
+  };
+}
+
+function isRuntimeProfileStore(
+  store: AuroraRuntimeProfileStore | AuroraThinProfileStore,
+): store is AuroraRuntimeProfileStore {
+  return (store as Partial<AuroraRuntimeProfileStore>).kind === "runtime-profile";
+}
+
+function toRuntimeProfileDocument(
+  document: AuroraRuntimeProfileDocument | AuroraThinProfileDocument,
+): AuroraRuntimeProfileDocument {
+  return document.version === 2
+    ? document
+    : migrateThinProfileDocumentToRuntime(document);
+}
+
+function runtimeStoreFromThinStore(
+  store: AuroraThinProfileStore,
+): AuroraRuntimeProfileStore {
+  return {
+    kind: "runtime-profile",
+    evidence: `${store.evidence} · v1 compatibility migrated to runtime profile`,
+    load: async () => toRuntimeProfileDocument(await store.load()),
+    save: async (document) => {
+      await store.save(projectRemoteConsoleRuntimeDocumentToThinDocument(document));
+    },
+  };
+}
+
 export function createMemoryThinProfileStore(
   initial = defaultThinProfileDocument(),
 ): AuroraThinProfileStore {
@@ -1031,6 +1109,27 @@ export function createMemoryThinProfileStore(
     load: async () => parseThinProfileDocument(serialized) ?? initial,
     save: async (document) => {
       serialized = serializeThinProfileDocument(document);
+    },
+  };
+}
+
+export function createMemoryRuntimeProfileStore(
+  initial = defaultRuntimeProfileDocument(),
+): AuroraRuntimeProfileStore {
+  let serialized = serializeRuntimeProfileDocument(initial, {
+    allowPythonFull: true,
+  });
+  return {
+    kind: "runtime-profile",
+    evidence:
+      "browser preview runtime profiles are memory-only; no web storage persistence",
+    load: async () => parseRuntimeProfileDocument(serialized, {
+      allowPythonFull: true,
+    }) ?? initial,
+    save: async (document) => {
+      serialized = serializeRuntimeProfileDocument(document, {
+        allowPythonFull: true,
+      });
     },
   };
 }
@@ -1083,6 +1182,68 @@ function createThinProfileController(
   };
 }
 
+function createRuntimeBackedThinProfileController(
+  store: AuroraRuntimeProfileStore,
+  runtimeDocument: AuroraRuntimeProfileDocument,
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): AuroraThinProfileController {
+  let currentRuntimeDocument = runtimeDocument;
+  let currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+  const controller: AuroraThinProfileController = {
+    evidence: store.evidence,
+    document: currentThinDocument,
+    runtimeDocument: currentRuntimeDocument,
+    saveProfile: async (profile, roomSecret) => {
+      const runtimeProfile = migrateThinProfileToRuntimeProfile(profile);
+      if (roomSecret) {
+        if (
+          runtimeProfile.homeConnection?.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef
+        ) {
+          throw new Error(
+            "Runtime profile room secret does not match the saved WebRTC profile",
+          );
+        }
+        await persistTauriRoomSecret(
+          roomSecret.roomSecretRef,
+          roomSecret.roomSecret,
+        );
+      }
+      const profiles = currentRuntimeDocument.profiles.filter(
+        (candidate) => candidate.id !== runtimeProfile.id,
+      );
+      const next: AuroraRuntimeProfileDocument = {
+        version: 2,
+        activeProfileId: runtimeProfile.id,
+        profiles: [...profiles, runtimeProfile],
+      };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
+    selectProfile: async (profileId) => {
+      if (!currentRuntimeDocument.profiles.some((profile) => profile.id === profileId))
+        throw new Error("Runtime profile does not exist");
+      const next = { ...currentRuntimeDocument, activeProfileId: profileId };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
+    createRuntime: () =>
+      createAuroraTauriRuntime({
+        runtimeProfileStore: store,
+        runtimeProfileDocument: currentRuntimeDocument,
+        packageCapabilities,
+      }),
+  };
+  return controller;
+}
+
 export function serializeThinProfileDocument(
   document: AuroraThinProfileDocument,
 ): string {
@@ -1112,12 +1273,52 @@ function thinProfileFromRuntimeProfile(
   }
 }
 
-function noPythonRuntimePackageCapabilities(): AuroraTauriPackageCapabilities {
-  return { pythonFullRuntime: false };
+function thinDocumentFromRuntimeDocument(
+  document: AuroraRuntimeProfileDocument,
+): AuroraThinProfileDocument {
+  const profiles = document.profiles.flatMap((profile) => {
+    const projected = thinProfileFromRuntimeProfile(profile);
+    return projected ? [projected] : [];
+  });
+  const activeProfileId = profiles.some((profile) => profile.id === document.activeProfileId)
+    ? document.activeProfileId
+    : null;
+  return { version: 1, activeProfileId, profiles };
+}
+
+function projectRemoteConsoleRuntimeDocumentToThinDocument(
+  document: AuroraRuntimeProfileDocument,
+): AuroraThinProfileDocument {
+  const profiles = document.profiles.map((profile) => {
+    if (profile.nodeMode !== "remote-console" || profile.runtimeTier !== "none") {
+      throw new Error("Runtime profile cannot be saved through a v1 thin-profile store");
+    }
+    const projected = thinProfileFromRuntimeProfile(profile);
+    if (!projected) {
+      throw new Error("Runtime profile cannot be projected to a v1 thin-profile store");
+    }
+    return projected;
+  });
+  const activeProfileId = profiles.some((profile) => profile.id === document.activeProfileId)
+    ? document.activeProfileId
+    : null;
+  return { version: 1, activeProfileId, profiles };
+}
+
+function resolveTauriPackageCapabilities(): AuroraTauriPackageCapabilities {
+  return {
+    pythonFullRuntime: truthy(
+      import.meta.env.VITE_AURORA_PACKAGE_INCLUDES_PYTHON,
+    ),
+  };
 }
 
 function defaultThinProfileDocument(): AuroraThinProfileDocument {
   return emptyThinProfileDocument();
+}
+
+function defaultRuntimeProfileDocument(): AuroraRuntimeProfileDocument {
+  return emptyRuntimeProfileDocument();
 }
 
 function thinSurfaceDefaults(): {

@@ -51,15 +51,20 @@ vi.mock('next/navigation', () => ({
 vi.mock('./aurora-client', () => ({
   auroraBrowserRequiresOnboarding: () =>
     mockedBrowserRuntime.requiresOnboarding,
+  auroraBrowserRuntimeProfile: () =>
+    mockedBrowserRuntime.runtimeDocument.profiles.find(
+      (profile) => profile.id === mockedBrowserRuntime.runtimeDocument.activeProfileId,
+    ),
   auroraBrowserRuntimeProfileDocument: () => mockedBrowserRuntime.runtimeDocument,
   createAuroraBrowserRuntime: () => {
     mockedBrowserRuntime.createRuntime()
     return mockedBrowserRuntime.runtime
   },
-  saveAuroraBrowserThinProfile: mockedBrowserRuntime.save,
+  saveAuroraBrowserOnboardingProfile: mockedBrowserRuntime.save,
 }))
 
 import { PathAwareShell } from './path-aware-shell'
+import { useBrowserRuntimeProfile } from './browser-shell-runtime'
 
 const roots: Root[] = []
 
@@ -212,6 +217,7 @@ describe('hosted web thin first-run shell', () => {
           roomSecretRef: parsedInvite!.profile.roomSecretRef,
         }),
       }),
+      'remote-console',
       {
         roomSecretRef: parsedInvite!.profile.roomSecretRef,
         roomSecret: 'fragment-secret',
@@ -282,6 +288,22 @@ describe('hosted web thin first-run shell', () => {
   it('keeps configured shell navigation inside the persistent browser runtime', async () => {
     const transport = new MockAuroraTransport()
     mockedBrowserRuntime.requiresOnboarding = false
+    mockedBrowserRuntime.runtimeDocument = {
+      version: 2,
+      activeProfileId: 'mesh',
+      profiles: [{
+        version: 2,
+        id: 'mesh',
+        label: 'This device',
+        nodeMode: 'mesh-node',
+        runtimeTier: 'lightweight-ts',
+        localNode: {
+          nodeName: 'Hosted browser',
+          stablePeerId: 'browser-peer',
+          enabledCapabilityPacks: [],
+        },
+      }],
+    }
     mockedBrowserRuntime.runtime = {
       client: new AuroraClient({ transport }),
       peer: fakePeer(),
@@ -301,6 +323,7 @@ describe('hosted web thin first-run shell', () => {
           }}
         >
           <p>configured shell content</p>
+          <RuntimeProfileProbe />
         </PathAwareShell>,
       )
       await Promise.resolve()
@@ -319,8 +342,14 @@ describe('hosted web thin first-run shell', () => {
 
     expect(mockedBrowserRuntime.routerPush).toHaveBeenCalledWith('/tools')
     expect(mockedBrowserRuntime.createRuntime).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('runtime-profile:mesh-node')
   })
 })
+
+function RuntimeProfileProbe() {
+  const profile = useBrowserRuntimeProfile()
+  return <p>runtime-profile:{profile?.nodeMode ?? 'none'}</p>
+}
 
 function fakePeer(importedProfile?: NonNullable<ReturnType<typeof parseWebRtcInvite>>['profile']) {
   const snapshot: BrowserWebRtcSnapshot = {

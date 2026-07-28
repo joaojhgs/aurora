@@ -117,6 +117,20 @@ describe('thin connection profiles', () => {
     ).toThrow(/credentials|fragments|must use/i)
   })
 
+  it.each([
+    'turn:user:password@turn.example.test:3478',
+    'turn:turn.example.test:3478?credential=secret',
+  ])('rejects credential-bearing ICE metadata: %s', (turnServer) => {
+    expect(() =>
+      sanitizeThinConnectionProfile(webRtcProfile({
+        webrtcProfile: {
+          ...webRtcProfile().webrtcProfile!,
+          turnServers: [turnServer],
+        },
+      })),
+    ).toThrow(/credentials|query parameters/i)
+  })
+
   it('serializes only the nonsecret profile schema and rejects an invalid active profile', () => {
     const unsafe = {
       ...webRtcProfile(),

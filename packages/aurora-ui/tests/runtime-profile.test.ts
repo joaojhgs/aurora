@@ -6,6 +6,7 @@ import {
   parseRuntimeProfileDocument,
   runtimeProfileDocumentToThinDocument,
   sanitizeRuntimeProfile,
+  sanitizeRuntimeProfileDocument,
   serializeRuntimeProfileDocument,
   type AuroraRuntimeProfileV2,
   type AuroraSurfaceKind,
@@ -74,6 +75,49 @@ describe('runtime profile document', () => {
     expect(isRuntimeProfileConfigured(migrated.profiles[0])).toBe(true)
   })
 
+  it('preserves inactive saved profiles while rejecting unbounded or duplicate corpora', () => {
+    const migrated = migrateThinProfileDocumentToRuntime(v1Document)
+    const inactive = {
+      ...migrated,
+      activeProfileId: null,
+      profiles: [
+        migrated.profiles[0]!,
+        {
+          ...migrated.profiles[0]!,
+          id: 'backup-home',
+          label: 'Backup home',
+        },
+      ],
+    }
+
+    expect(sanitizeRuntimeProfileDocument(inactive)).toEqual(inactive)
+    expect(runtimeProfileDocumentToThinDocument(inactive)).toEqual({
+      version: 1,
+      activeProfileId: null,
+      profiles: [
+        v1Document.profiles[0],
+        {
+          ...v1Document.profiles[0]!,
+          id: 'backup-home',
+          label: 'Backup home',
+        },
+      ],
+    })
+    expect(parseRuntimeProfileDocument(JSON.stringify(inactive))).toEqual(inactive)
+    expect(() => sanitizeRuntimeProfileDocument({
+      ...inactive,
+      profiles: [inactive.profiles[0]!, { ...inactive.profiles[0]! }],
+    })).toThrow(/unique/u)
+    expect(() => sanitizeRuntimeProfileDocument({
+      version: 2,
+      activeProfileId: null,
+      profiles: Array.from({ length: 65 }, (_, index) => ({
+        ...migrated.profiles[0]!,
+        id: `profile-${index}`,
+      })),
+    })).toThrow(/too many/u)
+  })
+
   it('keeps surface, node role, connection, and runtime tier independent', () => {
     const hostedWebSurface = getAuroraSurfaceProfile({
       runtimeMode: 'web-thin',
@@ -92,7 +136,7 @@ describe('runtime profile document', () => {
       localNode: {
         nodeName: 'Hosted browser',
         stablePeerId: 'browser-peer',
-        enabledCapabilityPacks: ['local-tools', 'native-actions'],
+        enabledCapabilityPacks: ['native-actions', 'local-tools'],
         meshMembership: {
           signalingUrl: 'wss://signal.example.test/mqtt',
           webrtcProfile: {
@@ -109,8 +153,21 @@ describe('runtime profile document', () => {
     expect(hostedWebSurface.kind).toBe('web')
     expect(hostedWebSurface.legacyKind).toBe('web')
     expect(hostedWebSurface.prefersWebRtcTransport).toBe(true)
-    expect(sanitizeRuntimeProfile(meshNode)).toEqual(meshNode)
+    expect(sanitizeRuntimeProfile(meshNode)).toEqual({
+      ...meshNode,
+      localNode: {
+        ...meshNode.localNode,
+        enabledCapabilityPacks: ['local-tools', 'native-actions'],
+      },
+    })
     expect(isRuntimeProfileConfigured(meshNode)).toBe(true)
+  })
+
+  it('uses product-safe physical surface labels', () => {
+    expect(getAuroraSurfaceProfile({ runtimeMode: 'desktop-thin' }).label).toBe('Desktop app')
+    expect(getAuroraSurfaceProfile({ runtimeMode: 'web-thin' }).label).toBe('Web app')
+    expect(getAuroraSurfaceProfile({ runtimeMode: 'android' }).label).toBe('Android app')
+    expect(getAuroraSurfaceProfile({ runtimeMode: 'ios' }).label).toBe('iOS app')
   })
 
   it('fails closed for corrupt data and rejects secrets in nonsecret profile documents', () => {
@@ -157,6 +214,32 @@ describe('runtime profile document', () => {
         },
       }],
     })).toThrow(/credentials/u)
+    expect(() => serializeRuntimeProfileDocument({
+      ...migrateThinProfileDocumentToRuntime(v1Document),
+      profiles: [{
+        ...migrateThinProfileDocumentToRuntime(v1Document).profiles[0]!,
+        homeConnection: {
+          ...migrateThinProfileDocumentToRuntime(v1Document).profiles[0]!.homeConnection!,
+          webrtcProfile: {
+            ...webrtcProfile,
+            turnServers: ['turn:user:password@turn.example.test:3478'],
+          },
+        },
+      }],
+    })).toThrow(/embedded credentials/u)
+    expect(() => serializeRuntimeProfileDocument({
+      ...migrateThinProfileDocumentToRuntime(v1Document),
+      profiles: [{
+        ...migrateThinProfileDocumentToRuntime(v1Document).profiles[0]!,
+        homeConnection: {
+          ...migrateThinProfileDocumentToRuntime(v1Document).profiles[0]!.homeConnection!,
+          webrtcProfile: {
+            ...webrtcProfile,
+            turnServers: ['turn:turn.example.test:3478?credential=secret'],
+          },
+        },
+      }],
+    })).toThrow(/query parameters/u)
   })
 
   it('validates home and mesh membership boundaries', () => {

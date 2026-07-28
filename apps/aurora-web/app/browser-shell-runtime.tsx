@@ -1,22 +1,31 @@
 'use client'
 
 import { createContext, useContext, type ReactNode } from 'react'
-import type { AuroraShellSnapshot, RouteAvailability } from '@aurora/ui'
+import type { AuroraRuntimeProfileV2, AuroraShellSnapshot, RouteAvailability } from '@aurora/ui'
 
 const BrowserShellSnapshotContext = createContext<AuroraShellSnapshot | null>(null)
+const BrowserRuntimeProfileContext = createContext<AuroraRuntimeProfileV2 | null>(null)
 
 export function BrowserShellRuntimeProvider({
   snapshot,
+  runtimeProfile = null,
   children,
 }: {
   snapshot: AuroraShellSnapshot
+  runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
   children: ReactNode
 }) {
   return (
     <BrowserShellSnapshotContext.Provider value={snapshot}>
-      {children}
+      <BrowserRuntimeProfileContext.Provider value={runtimeProfile}>
+        {children}
+      </BrowserRuntimeProfileContext.Provider>
     </BrowserShellSnapshotContext.Provider>
   )
+}
+
+export function useBrowserRuntimeProfile(): AuroraRuntimeProfileV2 | null {
+  return useContext(BrowserRuntimeProfileContext)
 }
 
 export function useBrowserRoute(

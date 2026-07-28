@@ -214,7 +214,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
-        detail: 'Thin web capture uses browser getUserMedia only while the page is focused; audio is sent through SDK/Gateway contracts.'
+        detail: 'Browser capture is available only while the page is focused.'
       }
     case 'android':
       return {
@@ -223,7 +223,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
-        detail: 'Android thin uses focused foreground WebView microphone capture only; no durable background wakeword is claimed.'
+        detail: 'Android capture is available while Aurora is open in the foreground.'
       }
     case 'ios':
     case 'mobile':
@@ -255,17 +255,16 @@ function normalize(value: string | null | undefined): string {
 function surfaceLabel(kind: LegacyAuroraSurfaceKind): string {
   switch (kind) {
     case 'desktop-local':
-      return 'Desktop local'
     case 'desktop-thin':
-      return 'Desktop thin'
+      return 'Desktop app'
     case 'web':
-      return 'Web thin'
+      return 'Web app'
     case 'android':
-      return 'Android thin'
+      return 'Android app'
     case 'ios':
-      return 'iOS thin'
+      return 'iOS app'
     case 'mobile':
-      return 'Mobile thin'
+      return 'Mobile app'
     case 'mock':
       return 'Local mode'
     case 'unknown':

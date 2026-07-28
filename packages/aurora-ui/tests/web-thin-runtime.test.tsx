@@ -68,8 +68,8 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(androidHttp.canManageLocalServiceConfiguration).toBe(false)
     expect(androidHttp.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
     expect(androidHttp.voiceCapture.wakewordOwner).toBe('webview-focused')
-    expect(androidHttp.voiceCapture.detail).toContain('focused foreground WebView microphone')
-    expect(androidHttp.voiceCapture.detail).toContain('no durable background wakeword')
+    expect(androidHttp.voiceCapture.detail).toContain('Android capture')
+    expect(androidHttp.voiceCapture.detail).toContain('foreground')
 
     const androidWebRtc = getAuroraSurfaceProfile({ runtimeMode: 'mobile-native', transportKind: 'webrtc-preferred', nativePlatform: 'android' })
     expect(androidWebRtc.kind).toBe('android')

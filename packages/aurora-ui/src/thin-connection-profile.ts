@@ -1,5 +1,5 @@
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
-import type { AuroraThinConnectionMode } from './web-thin-runtime'
+import type { AuroraThinConnectionMode } from './connection-mode'
 export * from './runtime-profile'
 
 export interface ThinConnectionProfile {
@@ -207,12 +207,31 @@ function sanitizeIceServers(
   if (values === undefined) return undefined
   if (values.length > 16) throw new Error('Thin-client ICE server list is too large')
   return values.map((value) => {
-    const protocol = value.slice(0, value.indexOf(':') + 1).toLowerCase()
-    if (!protocols.has(protocol) || value.length > 2048) {
+    if (typeof value !== 'string') throw new Error('Thin-client ICE server URL is invalid')
+    const trimmed = value.trim()
+    const protocol = trimmed.slice(0, trimmed.indexOf(':') + 1).toLowerCase()
+    if (!protocols.has(protocol) || trimmed.length > 2048 || trimmed !== value) {
       throw new Error('Thin-client ICE server URL is invalid')
     }
-    return value
+    validateIceServerUrl(trimmed, protocol)
+    return trimmed
   })
+}
+
+function validateIceServerUrl(value: string, protocol: string): void {
+  const rest = value.slice(protocol.length)
+  const queryIndex = rest.indexOf('?')
+  const authority = queryIndex >= 0 ? rest.slice(0, queryIndex) : rest
+  const query = queryIndex >= 0 ? rest.slice(queryIndex + 1) : ''
+  if (authority.includes('@')) {
+    throw new Error('Thin-client ICE server URL must not contain embedded credentials')
+  }
+  const params = new URLSearchParams(query)
+  for (const key of params.keys()) {
+    if (/(?:^|[_-])(?:access|refresh|api)?[_-]?(?:token|secret|password|credential|authorization|key)(?:$|[_-])/iu.test(key)) {
+      throw new Error('Thin-client ICE server URL must not store credentials in query parameters')
+    }
+  }
 }
 
 function requiredText(value: string, label: string, maxLength: number): string {

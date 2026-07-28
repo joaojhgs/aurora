@@ -24,6 +24,7 @@ import {
   sanitizeRuntimeProfileDocument,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
+  type AuroraNodeMode,
   type ThinConnectionProfile,
   type ThinProfileDocument,
   type AuroraWebRtcRolloutFlags,
@@ -132,7 +133,12 @@ export function resetAuroraBrowserClientForTests(): void {
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
   createAuroraBrowserRuntime()
   const runtimeDocument = browserCredentialStore?.loadRuntimeProfileDocument()
-  return runtimeDocument ? runtimeProfileDocumentToThinDocument(runtimeDocument) : emptyThinProfileDocument()
+  if (!runtimeDocument) return emptyThinProfileDocument()
+  try {
+    return runtimeProfileDocumentToThinDocument(runtimeDocument)
+  } catch {
+    return thinDocumentFromRuntimeDocument(runtimeDocument)
+  }
 }
 
 export function auroraBrowserThinProfile(): ThinConnectionProfile | undefined {
@@ -189,6 +195,62 @@ export async function saveAuroraBrowserThinProfile(
   await runtime?.close()
 }
 
+export async function saveAuroraBrowserOnboardingProfile(
+  profile: ThinConnectionProfile,
+  nodeMode: AuroraNodeMode | 'connect-to-aurora' | 'make-this-device-available' | 'run-aurora-on-this-computer',
+  roomSecret?: {
+    roomSecretRef: string
+    roomSecret: string
+  },
+): Promise<void> {
+  const sanitized = sanitizeThinConnectionProfile(profile)
+  const selectedNodeMode = normalizeOnboardingNodeMode(nodeMode)
+  if (selectedNodeMode === 'mesh-node' && !sanitized.webrtcProfile) {
+    throw new Error('Browser mesh-node onboarding requires an Aurora WebRTC invite')
+  }
+  const homeConnection = selectedNodeMode === 'remote-console'
+    ? {
+      mode: sanitized.mode,
+      ...(sanitized.gatewayUrl ? { gatewayUrl: sanitized.gatewayUrl } : {}),
+      ...(sanitized.signalingUrl ? { signalingUrl: sanitized.signalingUrl } : {}),
+      ...(sanitized.webrtcProfile?.expectedStablePeerId
+        ? { homePeerId: sanitized.webrtcProfile.expectedStablePeerId }
+        : {}),
+      ...(sanitized.webrtcProfile ? { webrtcProfile: sanitized.webrtcProfile } : {}),
+    }
+    : sanitized.gatewayUrl
+      ? {
+        mode: 'http-only' as const,
+        gatewayUrl: sanitized.gatewayUrl,
+      }
+      : undefined
+  const runtimeProfile: AuroraRuntimeProfileV2 = {
+    version: 2,
+    id: sanitized.id,
+    label: sanitized.label,
+    nodeMode: selectedNodeMode,
+    runtimeTier: selectedNodeMode === 'mesh-node' ? 'lightweight-ts' : 'none',
+    ...(homeConnection ? { homeConnection } : {}),
+    localNode: {
+      nodeName: sanitized.nodeName,
+      stablePeerId: sanitized.localStablePeerId,
+      enabledCapabilityPacks: [],
+      ...(selectedNodeMode === 'mesh-node' && sanitized.webrtcProfile
+        ? {
+          meshMembership: {
+            signalingUrl: sanitized.signalingUrl || sanitized.webrtcProfile.signalingBrokers[0] || '',
+            webrtcProfile: {
+              ...sanitized.webrtcProfile,
+              mode: 'webrtc-only',
+            },
+          },
+        }
+        : {}),
+    },
+  }
+  await saveAuroraBrowserRuntimeProfile(runtimeProfile, roomSecret)
+}
+
 export async function saveAuroraBrowserRuntimeProfile(
   profile: AuroraRuntimeProfileV2,
   roomSecret?: {
@@ -201,7 +263,11 @@ export async function saveAuroraBrowserRuntimeProfile(
   const store = browserCredentialStore
   if (!store) throw new Error('Browser runtime profile persistence is unavailable')
   if (roomSecret) {
-    if (sanitized.homeConnection?.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef) {
+    const allowedRefs = new Set([
+      sanitized.homeConnection?.webrtcProfile?.roomSecretRef,
+      sanitized.localNode.meshMembership?.webrtcProfile.roomSecretRef,
+    ].filter((value): value is string => typeof value === 'string' && value.length > 0))
+    if (!allowedRefs.has(roomSecret.roomSecretRef)) {
       throw new Error('Browser runtime profile room secret does not match the saved WebRTC profile')
     }
     store.setRoomSecret(roomSecret.roomSecretRef, roomSecret.roomSecret)
@@ -217,6 +283,9 @@ export async function saveAuroraBrowserRuntimeProfile(
   }))
   if (sanitized.homeConnection?.webrtcProfile) {
     store.saveConnectionProfile(sanitized.homeConnection.webrtcProfile)
+  }
+  if (sanitized.localNode.meshMembership?.webrtcProfile) {
+    store.saveConnectionProfile(sanitized.localNode.meshMembership.webrtcProfile)
   }
   const runtime = browserRuntimeCache?.runtime
   browserRuntimeCache = null
@@ -277,6 +346,27 @@ function thinProfileFromRuntimeProfile(
   } catch {
     return undefined
   }
+}
+
+function thinDocumentFromRuntimeDocument(document: AuroraRuntimeProfileDocumentV2): ThinProfileDocument {
+  const profiles = document.profiles.flatMap((profile) => {
+    const projected = thinProfileFromRuntimeProfile(profile)
+    return projected ? [projected] : []
+  })
+  const activeProfileId = profiles.some((profile) => profile.id === document.activeProfileId)
+    ? document.activeProfileId
+    : null
+  return { version: 1, activeProfileId, profiles }
+}
+
+function normalizeOnboardingNodeMode(
+  value: AuroraNodeMode | 'connect-to-aurora' | 'make-this-device-available' | 'run-aurora-on-this-computer',
+): AuroraNodeMode {
+  if (value === 'mesh-node' || value === 'make-this-device-available') return 'mesh-node'
+  if (value === 'run-aurora-on-this-computer') {
+    throw new Error('Hosted web cannot select the full local runtime')
+  }
+  return 'remote-console'
 }
 
 function browserWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {

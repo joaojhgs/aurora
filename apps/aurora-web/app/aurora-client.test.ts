@@ -6,10 +6,12 @@ import {
   auroraBrowserRequiresOnboarding,
   auroraBrowserRuntimeProfile,
   auroraBrowserRuntimeProfileDocument,
+  auroraBrowserThinProfileDocument,
   createAuroraBrowserClient,
   createAuroraBrowserRuntime,
   createAuroraWebClient,
   resetAuroraBrowserClientForTests,
+  saveAuroraBrowserOnboardingProfile,
   saveAuroraBrowserRuntimeProfile,
   saveAuroraBrowserThinProfile,
 } from './aurora-client'
@@ -232,6 +234,95 @@ describe('createAuroraBrowserClient', () => {
     expectStorageHasNoSecrets(storage, ['room-secret', 'rawBearerToken'])
     expect(JSON.stringify(storage.dump())).toContain('aurora.runtimeProfiles.v2')
     expect(JSON.stringify(storage.dump())).not.toContain('aurora.webThin.connectionProfiles.v1')
+  })
+
+  it('persists mesh-node onboarding selection as v2 and restores it after restart', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT', '0')
+    const storage = installBrowserStorage()
+    await saveAuroraBrowserOnboardingProfile({
+      id: 'mesh-onboarding',
+      label: 'Mesh onboarding',
+      mode: 'webrtc-only',
+      gatewayUrl: '',
+      signalingUrl: 'wss://signaling.example.invalid',
+      nodeName: 'Hosted browser',
+      localStablePeerId: 'aurora-web-mesh-peer',
+      webrtcProfile: {
+        mode: 'webrtc-only',
+        appId: 'aurora',
+        room: 'mesh-office',
+        roomSecretRef: 'ref:browser:mesh-office',
+        signalingBrokers: ['wss://signaling.example.invalid'],
+      },
+    }, 'make-this-device-available', {
+      roomSecretRef: 'ref:browser:mesh-office',
+      roomSecret: 'mesh-room-secret',
+    })
+
+    resetAuroraBrowserClientForTests()
+    const runtime = createAuroraBrowserRuntime()
+
+    expect(runtime.mode).toBe('http-only')
+    expect(auroraBrowserRequiresOnboarding()).toBe(false)
+    const restoredProfile = auroraBrowserRuntimeProfile()
+    expect(restoredProfile?.homeConnection).toBeUndefined()
+    expect(restoredProfile).toMatchObject({
+      id: 'mesh-onboarding',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      localNode: {
+        stablePeerId: 'aurora-web-mesh-peer',
+        meshMembership: {
+          signalingUrl: 'wss://signaling.example.invalid',
+        },
+      },
+    })
+    const serialized = JSON.stringify(storage.dump())
+    expect(serialized).toContain('aurora.runtimeProfiles.v2')
+    expect(serialized).not.toContain('mesh-room-secret')
+    expect(serialized).not.toContain('aurora.webThin.connectionProfiles.v1')
+  })
+
+  it('returns an empty v1 compatibility document for a valid mesh-only v2 profile', () => {
+    const storage = installBrowserStorage()
+    storage.setItem('aurora.runtimeProfiles.v2', JSON.stringify({
+      version: 2,
+      activeProfileId: 'mesh-only',
+      profiles: [{
+        version: 2,
+        id: 'mesh-only',
+        label: 'Mesh only',
+        nodeMode: 'mesh-node',
+        runtimeTier: 'lightweight-ts',
+        localNode: {
+          nodeName: 'Hosted browser',
+          stablePeerId: 'aurora-web-mesh-peer',
+          enabledCapabilityPacks: [],
+          meshMembership: {
+            signalingUrl: 'wss://signaling.example.invalid',
+            webrtcProfile: {
+              mode: 'webrtc-only',
+              appId: 'aurora',
+              room: 'mesh-only',
+              roomSecretRef: 'ref:browser:mesh-only',
+              signalingBrokers: ['wss://signaling.example.invalid'],
+            },
+          },
+        },
+      }],
+    }))
+
+    expect(() => createAuroraBrowserRuntime()).not.toThrow()
+    expect(auroraBrowserThinProfileDocument()).toEqual({
+      version: 1,
+      activeProfileId: null,
+      profiles: [],
+    })
+    expect(auroraBrowserRuntimeProfile()).toMatchObject({
+      id: 'mesh-only',
+      nodeMode: 'mesh-node',
+    })
   })
 
   it('rejects a room secret that does not belong to the saved WebRTC profile', async () => {

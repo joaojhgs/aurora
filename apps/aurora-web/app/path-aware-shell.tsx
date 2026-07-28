@@ -17,9 +17,10 @@ import {
 } from '@aurora/ui'
 import {
   auroraBrowserRequiresOnboarding,
+  auroraBrowserRuntimeProfile,
   auroraBrowserRuntimeProfileDocument,
   createAuroraBrowserRuntime,
-  saveAuroraBrowserThinProfile,
+  saveAuroraBrowserOnboardingProfile,
 } from './aurora-client'
 import { BrowserShellRuntimeProvider } from './browser-shell-runtime'
 
@@ -54,6 +55,15 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
   const [initialInvite] = useState(() => initialInviteFromHash())
   const runtime = useMemo(() => createAuroraBrowserRuntime(), [refreshKey])
   const requiresOnboarding = auroraBrowserRequiresOnboarding()
+  const configuredRuntimeProfile = requiresOnboarding ? undefined : auroraBrowserRuntimeProfile()
+  const initialRuntimeProfile = requiresOnboarding
+    ? activeRuntimeProfile(auroraBrowserRuntimeProfileDocument())
+    : undefined
+  const [runtimeNodeMode, setRuntimeNodeMode] = useState<AuroraNodeMode>(() => initialRuntimeProfile?.nodeMode ?? 'remote-console')
+  const modePreferenceStore = useMemo(
+    () => runtimeNodeModePreference(runtimeNodeMode, setRuntimeNodeMode),
+    [runtimeNodeMode],
+  )
   const [activeSnapshot, setActiveSnapshot] = useState<AuroraShellSnapshot>(
     () => browserLoadingSnapshot(runtime.client.transport.kind),
   )
@@ -78,7 +88,7 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
       ...current,
       loadState: 'loading',
       transportKind: runtime.client.transport.kind,
-      evidenceSource: 'loading capability graph from the configured browser runtime',
+      evidenceSource: 'preparing Aurora for this browser',
     }))
     void buildShellSnapshot(runtime.client).then(async (nextSnapshot) => {
       await runtime.client.authApi.whoAmI().catch(() => null)
@@ -95,7 +105,6 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
 
   if (requiresOnboarding) {
     const runtimeDocument = auroraBrowserRuntimeProfileDocument()
-    const runtimeProfile = activeRuntimeProfile(runtimeDocument)
     const document = thinDocumentFromRuntimeDocument(runtimeDocument)
     const profile = document.profiles.find((candidate) => candidate.id === document.activeProfileId)
     return (
@@ -105,10 +114,10 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
           ...snapshot,
           loadState: 'ready',
           transportKind: runtime.client.transport.kind,
-          evidenceSource: 'browser runtime profile required before network requests are enabled',
+          evidenceSource: 'finish device setup before Aurora connects',
         }}
         setupRequired
-        modePreferenceStore={runtimeNodeModePreference(runtimeProfile?.nodeMode)}
+        modePreferenceStore={modePreferenceStore}
         thinConnectionPanel={
           <WebThinConnectionPanel
             key={refreshKey}
@@ -118,10 +127,10 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
             initialInviteText={initialInvite}
             profile={profile}
             profiles={document.profiles}
-            profileStoreEvidence="Hosted web thin profile metadata is stored in browser storage; WebRTC room secrets are encrypted in IndexedDB when WebCrypto is available."
+            profileStoreEvidence="Connection settings stay in this browser. Room keys are protected when secure storage is available."
             configureOnly
             onSaveProfile={async (nextProfile, roomSecret) => {
-              await saveAuroraBrowserThinProfile(nextProfile, roomSecret)
+              await saveAuroraBrowserOnboardingProfile(nextProfile, runtimeNodeMode, roomSecret)
               setActiveSnapshot(browserLoadingSnapshot(runtime.client.transport.kind))
               setRefreshKey((value) => value + 1)
               router.replace('/mesh')
@@ -132,7 +141,7 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
     )
   }
   return (
-    <BrowserShellRuntimeProvider snapshot={activeSnapshot}>
+    <BrowserShellRuntimeProvider snapshot={activeSnapshot} runtimeProfile={configuredRuntimeProfile}>
       <AppShell
         snapshot={activeSnapshot}
         currentPath={pathname ?? '/'}
@@ -162,16 +171,27 @@ function thinDocumentFromRuntimeDocument(
   return { version: 1, activeProfileId, profiles }
 }
 
-function runtimeNodeModePreference(nodeMode: AuroraNodeMode | undefined) {
-  let selected = nodeMode ?? 'remote-console'
+function runtimeNodeModePreference(
+  nodeMode: AuroraNodeMode,
+  setNodeMode: (nodeMode: AuroraNodeMode) => void,
+) {
   return {
-    evidence: 'browser runtime profile node-mode context',
-    readSelectedMode: async () => selected,
+    evidence: 'browser setup mode selection',
+    readSelectedMode: async () => productModeIdFromNodeMode(nodeMode),
     writeSelectedMode: async (modeId: string) => {
-      selected = modeId === 'mesh-node' ? 'mesh-node' : 'remote-console'
+      setNodeMode(nodeModeFromProductModeId(modeId))
       return true
     },
   }
+}
+
+function nodeModeFromProductModeId(modeId: string): AuroraNodeMode {
+  if (modeId === 'mesh-node' || modeId === 'make-this-device-available') return 'mesh-node'
+  return 'remote-console'
+}
+
+function productModeIdFromNodeMode(nodeMode: AuroraNodeMode): string {
+  return nodeMode === 'mesh-node' ? 'make-this-device-available' : 'connect-to-aurora'
 }
 
 function BrowserShellBootScreen() {
@@ -197,7 +217,7 @@ function browserLoadingSnapshot(transportKind: string): AuroraShellSnapshot {
   return {
     ...loadingShellSnapshot,
     transportKind,
-    evidenceSource: 'loading capability graph from the configured browser runtime',
+    evidenceSource: 'preparing Aurora for this browser',
   }
 }
 

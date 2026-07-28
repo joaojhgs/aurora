@@ -23,8 +23,9 @@ import {
 import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
 import type { BrowserPeerPersistenceStatus, BrowserWebRtcCredentialStore } from './browser-peer-persistence'
+export type { AuroraThinConnectionMode } from './connection-mode'
+import type { AuroraThinConnectionMode } from './connection-mode'
 
-export type AuroraThinConnectionMode = 'http-only' | 'webrtc-only' | 'webrtc-preferred'
 export type BrowserWebRtcStatus =
   | 'idle'
   | 'disabled'

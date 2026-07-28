@@ -108,7 +108,7 @@ describe('AppShell side-panel toggles', () => {
     expect(container.querySelector('a[href="/admin/tokens"]')).toBeNull()
     expect(container.querySelector('a[href="/settings"]')).not.toBeNull()
     expect(container.querySelector('[data-mobile-tab="settings"]')).not.toBeNull()
-    expect(container.textContent).toContain('Web Thin')
+    expect(container.textContent).toContain('Web app')
     expect(container.textContent).toContain('member')
     expect(container.textContent).toContain('Scoped access')
     expect(container.textContent).not.toContain('Full access')

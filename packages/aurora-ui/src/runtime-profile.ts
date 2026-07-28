@@ -1,5 +1,17 @@
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
-import type { AuroraThinConnectionMode } from './web-thin-runtime'
+import type { AuroraThinConnectionMode } from './connection-mode'
+
+const MAX_RUNTIME_PROFILE_COUNT = 64
+const MAX_RUNTIME_PROFILE_DOCUMENT_BYTES = 128 * 1024
+const CAPABILITY_PACK_ORDER: AuroraCapabilityPack[] = [
+  'local-tools',
+  'native-actions',
+  'local-conversations',
+  'lightweight-memory',
+  'lightweight-orchestrator',
+  'foreground-voice',
+  'local-inference',
+]
 
 export type AuroraSurfaceKind =
   | 'hosted-web'
@@ -176,9 +188,6 @@ export function runtimeProfileDocumentToThinDocument(
   document: AuroraRuntimeProfileDocumentV2,
 ): ThinProfileDocumentV1 {
   const sanitized = sanitizeRuntimeProfileDocument(document)
-  if (sanitized.activeProfileId === null) {
-    return { version: 1, activeProfileId: null, profiles: [] }
-  }
   return {
     version: 1,
     activeProfileId: sanitized.activeProfileId,
@@ -193,16 +202,24 @@ export function sanitizeRuntimeProfileDocument(
   if (!isRecord(document) || document.version !== 2 || !Array.isArray(document.profiles)) {
     throw new Error('Runtime profile document is invalid')
   }
+  if (document.profiles.length > MAX_RUNTIME_PROFILE_COUNT) {
+    throw new Error('Runtime profile document has too many profiles')
+  }
   const profiles = document.profiles.map((profile) => sanitizeRuntimeProfile(profile, options))
+  const ids = new Set<string>()
+  for (const profile of profiles) {
+    if (ids.has(profile.id)) throw new Error('Runtime profile IDs must be unique')
+    ids.add(profile.id)
+  }
   const activeProfileId = document.activeProfileId
-  if (activeProfileId === null) {
-    if (profiles.length !== 0) {
-      throw new Error('An unconfigured runtime profile document must not contain profiles')
-    }
-  } else if (typeof activeProfileId !== 'string' || !profiles.some((profile) => profile.id === activeProfileId)) {
+  if (activeProfileId !== null && (typeof activeProfileId !== 'string' || !profiles.some((profile) => profile.id === activeProfileId))) {
     throw new Error('Runtime profile active profile must exist')
   }
-  return { version: 2, activeProfileId, profiles }
+  const sanitized = { version: 2 as const, activeProfileId, profiles }
+  if (JSON.stringify(sanitized).length > MAX_RUNTIME_PROFILE_DOCUMENT_BYTES) {
+    throw new Error('Runtime profile document is too large')
+  }
+  return sanitized
 }
 
 export function sanitizeRuntimeProfile(
@@ -359,7 +376,7 @@ function sanitizeCapabilityPacks(value: unknown): AuroraCapabilityPack[] {
     if (!isCapabilityPack(item)) throw new Error('Runtime profile capability pack is invalid')
     seen.add(item)
   }
-  return [...seen]
+  return CAPABILITY_PACK_ORDER.filter((pack) => seen.has(pack))
 }
 
 function isCapabilityPack(value: unknown): value is AuroraCapabilityPack {
@@ -469,12 +486,31 @@ function sanitizeIceServers(
   if (values === undefined) return undefined
   if (!Array.isArray(values) || values.length > 16) throw new Error('Runtime profile ICE server list is invalid')
   return values.map((value) => {
-    const protocol = value.slice(0, value.indexOf(':') + 1).toLowerCase()
-    if (!protocols.has(protocol) || value.length > 2048) {
+    if (typeof value !== 'string') throw new Error('Runtime profile ICE server URL is invalid')
+    const trimmed = value.trim()
+    const protocol = trimmed.slice(0, trimmed.indexOf(':') + 1).toLowerCase()
+    if (!protocols.has(protocol) || trimmed.length > 2048 || trimmed !== value) {
       throw new Error('Runtime profile ICE server URL is invalid')
     }
-    return value
+    validateIceServerUrl(trimmed, protocol)
+    return trimmed
   })
+}
+
+function validateIceServerUrl(value: string, protocol: string): void {
+  const rest = value.slice(protocol.length)
+  const queryIndex = rest.indexOf('?')
+  const authority = queryIndex >= 0 ? rest.slice(0, queryIndex) : rest
+  const query = queryIndex >= 0 ? rest.slice(queryIndex + 1) : ''
+  if (authority.includes('@')) {
+    throw new Error('Runtime profile ICE server URL must not contain embedded credentials')
+  }
+  const params = new URLSearchParams(query)
+  for (const key of params.keys()) {
+    if (isSecretFieldName(key)) {
+      throw new Error('Runtime profile ICE server URL must not store credentials in query parameters')
+    }
+  }
 }
 
 function requiredText(value: unknown, label: string, maxLength: number): string {
