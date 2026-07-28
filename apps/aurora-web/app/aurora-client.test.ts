@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AuroraError } from '@aurora/client'
 import {
   auroraBrowserRequiresOnboarding,
   auroraBrowserRuntimeProfile,
@@ -39,7 +40,30 @@ describe('createAuroraWebClient', () => {
     const client = createAuroraWebClient()
 
     expect(client.transport.kind).toBe('http')
-    await expect(client.capabilities.getGraph()).rejects.toThrow(/not been configured/)
+    await expect(client.capabilities.getGraph()).rejects.toThrow('Aurora is not set up on this device. Finish setup or turn on sample data.')
+  })
+
+  it('keeps missing setup errors product-safe while preserving structured detail', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('AURORA_GATEWAY_URL', '')
+    vi.stubEnv('AURORA_WEB_DEMO_MODE', '')
+
+    const client = createAuroraWebClient()
+
+    try {
+      await client.capabilities.getGraph()
+      throw new Error('expected request to fail')
+    } catch (error) {
+      expect(error).toBeInstanceOf(AuroraError)
+      expect((error as Error).message).toBe('Aurora is not set up on this device. Finish setup or turn on sample data.')
+      expect((error as Error).message).not.toMatch(/thin client|HTTP Gateway|WebRTC invite/i)
+      expect((error as AuroraError).detail).toEqual(expect.objectContaining({
+        demo_mode: false,
+        missing_connection_options: ['http_gateway', 'webrtc_invite'],
+        secrets_redacted: true,
+        repair_action: 'finish_setup_or_enable_sample_data',
+      }))
+    }
   })
 
   it('requires explicit demo opt-in for fixture-backed web mode outside tests', () => {

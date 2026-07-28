@@ -47,13 +47,14 @@ class MissingGatewayTransport implements AuroraTransport {
   ): Promise<AuroraTransportResponse<TData>> {
     throw new AuroraError({
       code: 'transport_loss',
-      message: 'This Aurora thin client has not been configured. Complete first-run onboarding with an HTTP Gateway or Aurora WebRTC invite, or explicitly enable demo mode for labeled offline data.',
+      message: 'Aurora is not set up on this device. Finish setup or turn on sample data.',
       method: request.method,
       busTopic: request.busTopic,
       detail: {
         demo_mode: false,
+        missing_connection_options: ['http_gateway', 'webrtc_invite'],
         secrets_redacted: true,
-        repair_action: 'Configure a real Gateway URL, connect through a WebRTC invite, or opt into demo mode explicitly.'
+        repair_action: 'finish_setup_or_enable_sample_data'
       }
     })
   }

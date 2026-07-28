@@ -185,18 +185,29 @@ describe('hosted web thin first-run shell', () => {
     })
 
     expect(container.textContent).toContain('Connect to Aurora')
-    expect(container.textContent).toContain('Node name')
-    expect(container.textContent).toContain('Paste mesh invite')
-    expect(container.textContent).toContain('Open invite file')
+    expect(container.textContent).toContain('Continue')
+    expect(container.textContent).not.toContain('Device name')
+    expect(container.textContent).not.toContain('Paste invite')
+    expect(container.textContent).not.toContain('Open invite file')
     expect(container.textContent).not.toContain('Scan QR invite')
     expect(container.textContent).not.toContain('HTTP Gateway endpoint')
     expect(container.textContent).not.toContain('WebSocket signaling endpoint')
     expect(container.textContent).not.toContain('Connection mode')
     expect(container.textContent).not.toContain('Stable peer ID')
     expect(container.textContent).not.toContain('configured shell content')
-    expect(
-      container.querySelector('[data-onboarding-scroll-viewport="true"]'),
-    ).not.toBeNull()
+
+    const roleContinueButton = [...container.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === 'Continue')
+    expect(roleContinueButton).toBeDefined()
+    await act(async () => {
+      roleContinueButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Device name')
+    expect(container.textContent).toContain('Paste invite')
+    expect(container.textContent).toContain('Open invite file')
+    expect(container.textContent).not.toContain('Scan QR invite')
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
       .toBe(invite)
     expect(window.location.hash).not.toContain('invite=')
