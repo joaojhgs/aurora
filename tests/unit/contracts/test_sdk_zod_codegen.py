@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import Field, ValidationError, field_validator
 
 from scripts import generate_backend_inventory
 from scripts.sdk_zod_codegen import (
@@ -302,6 +302,135 @@ def test_sdk_contract_outputs_do_not_overwrite_on_render_failure(
         generate_backend_inventory.write_sdk_contract_outputs(**paths)
 
     assert {path.read_text(encoding="utf-8") for path in paths.values()} == {"old"}
+
+
+def test_validator_extension_audit_rejects_unmapped_nested_validator() -> None:
+    from app.shared.contracts.registry import IOModel
+
+    class NestedModel(IOModel):
+        value: str
+
+        @field_validator("value")
+        @classmethod
+        def _future_validator(cls, value: str) -> str:
+            return value
+
+    class RootModel(IOModel):
+        nested: NestedModel
+
+    schema = generate_backend_inventory._model_wire_schema(RootModel, mode="validation")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Example.Method input NestedModel #/\$defs/NestedModel/properties/value: "
+            r"Pydantic validator _future_validator has no SDK schema extension mapping"
+        ),
+    ):
+        generate_backend_inventory._assert_validator_extension_coverage(
+            method_id="Example.Method",
+            direction="input",
+            root_model=RootModel,
+            schema=schema,
+        )
+
+
+def test_validator_extension_audit_accepts_schema_native_constraints() -> None:
+    from app.shared.contracts.registry import IOModel
+
+    class NestedNativeModel(IOModel):
+        value: str = Field(min_length=1, max_length=5)
+
+    class RootNativeModel(IOModel):
+        nested: NestedNativeModel
+
+    schema = generate_backend_inventory._model_wire_schema(RootNativeModel, mode="validation")
+
+    generate_backend_inventory._assert_validator_extension_coverage(
+        method_id="Example.Method",
+        direction="input",
+        root_model=RootNativeModel,
+        schema=schema,
+    )
+
+
+def test_validator_extension_audit_catches_future_validator_mapping_regression(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(
+        generate_backend_inventory.VALIDATOR_EXTENSION_VERIFIERS,
+        ("ToolingToolInfo", "_bounded_unique_legacy_ids"),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Tooling.GetTools output ToolingToolInfo "
+            r"#/\$defs/ToolingToolInfo/properties/legacy_global_tool_ids: "
+            r"Pydantic validator _bounded_unique_legacy_ids has no SDK schema extension mapping"
+        ),
+    ):
+        generate_backend_inventory.build_sdk_contract_schema()
+
+
+def test_staged_output_promotion_success_removes_temporary_files(tmp_path: Path) -> None:
+    staged = []
+    for index in range(4):
+        target = tmp_path / f"artifact-{index}.txt"
+        tmp = tmp_path / f".artifact-{index}.txt.tmp"
+        target.write_text("old", encoding="utf-8")
+        tmp.write_text("new", encoding="utf-8")
+        staged.append((target, tmp, generate_backend_inventory.sha256_text("new")))
+
+    generate_backend_inventory._verify_staged_outputs(staged)
+    generate_backend_inventory._promote_staged_outputs(staged)
+
+    assert [target.read_text(encoding="utf-8") for target, _tmp, _hash in staged] == ["new"] * 4
+    for target, tmp, _hash in staged:
+        assert not tmp.exists()
+        assert not generate_backend_inventory._promotion_backup_path(target).exists()
+
+
+def test_staged_output_promotion_failure_rolls_back_every_replace_position(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    replace_call_count = 8
+    for fail_on_call in range(1, replace_call_count + 1):
+        case_dir = tmp_path / f"fail-{fail_on_call}"
+        case_dir.mkdir()
+        staged = []
+        for index in range(4):
+            target = case_dir / f"artifact-{index}.txt"
+            tmp = case_dir / f".artifact-{index}.txt.tmp"
+            target.write_text(f"old-{index}", encoding="utf-8")
+            tmp.write_text(f"new-{index}", encoding="utf-8")
+            staged.append((target, tmp, generate_backend_inventory.sha256_text(f"new-{index}")))
+
+        calls = {"count": 0}
+
+        def fail_replace(
+            source: Path,
+            target: Path,
+            *,
+            calls: dict[str, int] = calls,
+            fail_on_call: int = fail_on_call,
+        ) -> None:
+            calls["count"] += 1
+            if calls["count"] == fail_on_call:
+                raise RuntimeError(f"fail replace {fail_on_call}")
+            source.replace(target)
+
+        monkeypatch.setattr(generate_backend_inventory, "_replace_path", fail_replace)
+
+        with pytest.raises(RuntimeError, match=f"fail replace {fail_on_call}"):
+            generate_backend_inventory._promote_staged_outputs(staged)
+
+        assert [target.read_text(encoding="utf-8") for target, _tmp, _hash in staged] == [
+            f"old-{index}" for index in range(4)
+        ]
+        for target, tmp, _hash in staged:
+            assert not tmp.exists()
+            assert not generate_backend_inventory._promotion_backup_path(target).exists()
 
 
 def test_generated_vectors_capture_strip_and_reject_semantics() -> None:

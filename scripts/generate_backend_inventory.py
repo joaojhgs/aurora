@@ -13,13 +13,14 @@ import json
 import pkgutil
 import re
 import sys
+import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args, get_origin
 from urllib.parse import quote
 
 from fastapi import FastAPI
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from pydantic.version import VERSION as PYDANTIC_VERSION
 
 from app.shared.contracts.models.gateway import MethodInfo
@@ -104,16 +105,6 @@ SERVICE_SOURCES: tuple[Path, ...] = tuple(
 
 STATIC_ONLY_SERVICES = {"Config"}
 SKIP_FIXTURE_COVERAGE = {"planned", "missing_contract", "internal_only", "mock_only"}
-VALIDATOR_EXTENSION_COVERAGE: dict[str, set[str]] = {
-    "MeshAddressSelector": {"_non_blank"},
-    "ToolingToolInfo": {"_bounded_unique_legacy_ids"},
-    "ToolingGetExportCatalogResponse": {
-        "_lowercase_digest",
-        "_trimmed_cursor",
-        "_final_checksum_only_on_complete",
-        "_validate_page_termination",
-    },
-}
 
 
 @dataclass(frozen=True)
@@ -139,6 +130,28 @@ def _model_name(model: Any) -> str | None:
     return getattr(model, "__name__", None) if model is not None else None
 
 
+@dataclass(frozen=True)
+class ValidatorDiscovery:
+    method_id: str
+    direction: str
+    model: type[BaseModel]
+    validator_name: str
+    validator_kind: str
+    fields: tuple[str, ...]
+    model_pointer: str
+    pointer: str
+
+    @property
+    def model_name(self) -> str:
+        return self.model.__name__
+
+    def error_context(self) -> str:
+        return (
+            f"{self.method_id} {self.direction} {self.model_name} "
+            f"{self.pointer}: Pydantic validator {self.validator_name}"
+        )
+
+
 def _validator_names(model: Any) -> set[str]:
     decorators = getattr(model, "__pydantic_decorators__", None)
     if decorators is None:
@@ -150,20 +163,239 @@ def _validator_names(model: Any) -> set[str]:
     return names
 
 
-def _assert_validator_extension_coverage(models: list[Any]) -> None:
-    by_name = {_model_name(model): model for model in models if _model_name(model)}
-    for model_name, expected in VALIDATOR_EXTENSION_COVERAGE.items():
-        model = by_name.get(model_name)
-        if model is None:
-            raise ValueError(
-                f"Validator extension coverage model is not in SDK graph: {model_name}"
+def _field_validator_fields(decorator: Any) -> tuple[str, ...]:
+    fields = getattr(getattr(decorator, "info", None), "fields", ()) or ()
+    return tuple(str(field) for field in fields)
+
+
+def _model_pointer(
+    model: type[BaseModel], root_model: type[BaseModel], schema: dict[str, Any]
+) -> str:
+    if model is root_model:
+        return "#"
+    defs = schema.get("$defs")
+    if isinstance(defs, dict) and model.__name__ in defs:
+        return f"#/$defs/{model.__name__}"
+    return f"#/$defs/{model.__name__}"
+
+
+def _walk_annotation_models(annotation: Any, collected: set[type[BaseModel]]) -> None:
+    if annotation is Any:
+        return
+    if isinstance(annotation, str):
+        return
+    if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
+        _collect_transitive_models(annotation, collected)
+        return
+    origin = get_origin(annotation)
+    if origin is None:
+        return
+    if (
+        origin in {types.UnionType, list, tuple, set, frozenset, dict}
+        or str(origin) == "typing.Union"
+    ):
+        for arg in get_args(annotation):
+            _walk_annotation_models(arg, collected)
+        return
+    for arg in get_args(annotation):
+        _walk_annotation_models(arg, collected)
+
+
+def _collect_transitive_models(
+    model: type[BaseModel], collected: set[type[BaseModel]] | None = None
+) -> set[type[BaseModel]]:
+    if collected is None:
+        collected = set()
+    if model in collected:
+        return collected
+    collected.add(model)
+    with contextlib.suppress(Exception):
+        model.model_rebuild()
+    for field in getattr(model, "model_fields", {}).values():
+        _walk_annotation_models(field.annotation, collected)
+    return collected
+
+
+def _discover_validator_entries(
+    *,
+    method_id: str,
+    direction: str,
+    root_model: type[BaseModel],
+    schema: dict[str, Any],
+) -> list[ValidatorDiscovery]:
+    entries: list[ValidatorDiscovery] = []
+    for model in sorted(_collect_transitive_models(root_model), key=lambda item: item.__name__):
+        decorators = getattr(model, "__pydantic_decorators__", None)
+        if decorators is None:
+            continue
+        model_pointer = _model_pointer(model, root_model, schema)
+        for name, decorator in (getattr(decorators, "field_validators", {}) or {}).items():
+            fields = _field_validator_fields(decorator)
+            pointer = f"{model_pointer}/properties/{fields[0]}" if fields else model_pointer
+            entries.append(
+                ValidatorDiscovery(
+                    method_id=method_id,
+                    direction=direction,
+                    model=model,
+                    validator_name=str(name),
+                    validator_kind="field",
+                    fields=fields,
+                    model_pointer=model_pointer,
+                    pointer=pointer,
+                )
             )
-        actual = _validator_names(model)
-        if actual != expected:
-            raise ValueError(
-                f"{model_name}: Pydantic validators {sorted(actual)} do not match "
-                f"declared SDK validator extensions {sorted(expected)}"
+        for name in getattr(decorators, "model_validators", {}) or {}:
+            entries.append(
+                ValidatorDiscovery(
+                    method_id=method_id,
+                    direction=direction,
+                    model=model,
+                    validator_name=str(name),
+                    validator_kind="model",
+                    fields=(),
+                    model_pointer=model_pointer,
+                    pointer=model_pointer,
+                )
             )
+        for name in getattr(decorators, "root_validators", {}) or {}:
+            entries.append(
+                ValidatorDiscovery(
+                    method_id=method_id,
+                    direction=direction,
+                    model=model,
+                    validator_name=str(name),
+                    validator_kind="root",
+                    fields=(),
+                    model_pointer=model_pointer,
+                    pointer=model_pointer,
+                )
+            )
+    return entries
+
+
+def _resolve_schema_pointer(schema: dict[str, Any], pointer: str) -> Any:
+    if pointer == "#":
+        return schema
+    current: Any = schema
+    for raw_token in pointer.removeprefix("#/").split("/"):
+        token = raw_token.replace("~1", "/").replace("~0", "~")
+        if not isinstance(current, dict) or token not in current:
+            return None
+        current = current[token]
+    return current
+
+
+def _string_options(schema: Any) -> list[dict[str, Any]]:
+    if not isinstance(schema, dict):
+        return []
+    if schema.get("type") == "string":
+        return [schema]
+    options = schema.get("anyOf") or schema.get("oneOf") or []
+    return [
+        option for option in options if isinstance(option, dict) and option.get("type") == "string"
+    ]
+
+
+def _validator_field_schemas(
+    entry: ValidatorDiscovery, schema: dict[str, Any]
+) -> list[dict[str, Any]]:
+    model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+    if not isinstance(model_schema, dict):
+        raise ValueError(f"{entry.error_context()}: missing model schema")
+    properties = model_schema.get("properties")
+    if not isinstance(properties, dict):
+        raise ValueError(f"{entry.error_context()}: missing model properties")
+    field_schemas: list[dict[str, Any]] = []
+    for field in entry.fields:
+        field_schema = properties.get(field)
+        if not isinstance(field_schema, dict):
+            raise ValueError(f"{entry.error_context()}: missing schema for field {field}")
+        field_schemas.append(field_schema)
+    return field_schemas
+
+
+def _assert_mesh_non_blank(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            option.get(STRING_NON_BLANK_MARKER) is True for option in _string_options(field_schema)
+        ):
+            raise ValueError(f"{entry.error_context()}: missing {STRING_NON_BLANK_MARKER}")
+
+
+def _assert_tooling_legacy_ids(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    field_schemas = _validator_field_schemas(entry, schema)
+    if len(field_schemas) != 1:
+        raise ValueError(f"{entry.error_context()}: expected one legacy ID array field")
+    field_schema = field_schemas[0]
+    items = field_schema.get("items") if isinstance(field_schema, dict) else None
+    if (
+        not isinstance(field_schema, dict)
+        or field_schema.get(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER) is not True
+        or not isinstance(items, dict)
+        or items.get("minLength") != 1
+        or items.get("maxLength") != 512
+    ):
+        raise ValueError(f"{entry.error_context()}: missing legacy ID normalization extension")
+
+
+def _assert_lowercase_digest(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            option.get("pattern") == "^[0-9a-f]{64}$" for option in _string_options(field_schema)
+        ):
+            raise ValueError(f"{entry.error_context()}: missing lowercase digest pattern")
+
+
+def _assert_trimmed_cursor(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(
+            option.get(STRING_TRIMMED_MARKER) is True for option in _string_options(field_schema)
+        ):
+            raise ValueError(f"{entry.error_context()}: missing {STRING_TRIMMED_MARKER}")
+
+
+def _assert_projection_page_termination(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+    if (
+        not isinstance(model_schema, dict)
+        or model_schema.get(PROJECTION_PAGE_TERMINATION_MARKER) is not True
+    ):
+        raise ValueError(f"{entry.error_context()}: missing {PROJECTION_PAGE_TERMINATION_MARKER}")
+
+
+VALIDATOR_EXTENSION_VERIFIERS = {
+    ("MeshAddressSelector", "_non_blank"): _assert_mesh_non_blank,
+    ("ToolingToolInfo", "_bounded_unique_legacy_ids"): _assert_tooling_legacy_ids,
+    ("ToolingGetExportCatalogResponse", "_lowercase_digest"): _assert_lowercase_digest,
+    ("ToolingGetExportCatalogResponse", "_trimmed_cursor"): _assert_trimmed_cursor,
+    ("ToolingGetExportCatalogResponse", "_final_checksum_only_on_complete"): (
+        _assert_projection_page_termination
+    ),
+    ("ToolingGetExportCatalogResponse", "_validate_page_termination"): (
+        _assert_projection_page_termination
+    ),
+}
+
+
+def _assert_validator_extension_coverage(
+    *,
+    method_id: str,
+    direction: str,
+    root_model: type[BaseModel],
+    schema: dict[str, Any],
+) -> None:
+    discovered = _discover_validator_entries(
+        method_id=method_id,
+        direction=direction,
+        root_model=root_model,
+        schema=schema,
+    )
+    for entry in discovered:
+        key = (entry.model_name, entry.validator_name)
+        verifier = VALIDATOR_EXTENSION_VERIFIERS.get(key)
+        if verifier is None:
+            raise ValueError(f"{entry.error_context()} has no SDK schema extension mapping")
+        verifier(entry, schema)
 
 
 def _assert_no_unbounded_integer_schema(schema: Any, *, context: str, pointer: str = "#") -> None:
@@ -864,7 +1096,6 @@ def build_sdk_contract_schema() -> dict[str, Any]:
     method_inventory = {method["bus_topic"]: method for method in methods}
     contracts = all_contracts()
     schemas: list[dict[str, Any]] = []
-    from app.shared.contracts.models.mesh import MeshAddressSelector
     from app.shared.contracts.models.tooling import (
         ToolingExecuteToolRequest,
         ToolingExecuteToolResponse,
@@ -874,11 +1105,6 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         ToolingGetToolsResponse,
         ToolingPrepareExecutionRequest,
         ToolingPrepareExecutionResponse,
-        ToolingToolInfo,
-    )
-
-    _assert_validator_extension_coverage(
-        [MeshAddressSelector, ToolingToolInfo, ToolingGetExportCatalogResponse]
     )
 
     static_models = {
@@ -917,6 +1143,12 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             model_name = _model_name(model) or str(model)
             schema = _model_wire_schema(model, mode=mode)
             schema_id = _contract_schema_id(method_id, direction, model_name)
+            _assert_validator_extension_coverage(
+                method_id=method_id,
+                direction=direction,
+                root_model=model,
+                schema=schema,
+            )
             _assert_no_unbounded_integer_schema(schema, context=schema_id)
             schemas.append(
                 {
@@ -1197,6 +1429,64 @@ def build_sdk_manifest(
     }
 
 
+def _replace_path(source: Path, target: Path) -> None:
+    source.replace(target)
+
+
+def _promotion_backup_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.bak")
+
+
+def _promotion_tmp_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.tmp")
+
+
+def _verify_staged_outputs(staged_outputs: list[tuple[Path, Path, str]]) -> None:
+    for _target, tmp_path, expected_hash in staged_outputs:
+        if sha256_text(tmp_path.read_text(encoding="utf-8")) != expected_hash:
+            raise ValueError(f"staged output hash mismatch: {_rel(tmp_path)}")
+
+
+def _promote_staged_outputs(staged_outputs: list[tuple[Path, Path, str]]) -> None:
+    backups: list[tuple[Path, Path]] = []
+    promoted: list[Path] = []
+    cleanup_backups = False
+    try:
+        for target_path, tmp_path, _expected_hash in staged_outputs:
+            backup_path = _promotion_backup_path(target_path)
+            if backup_path.exists():
+                raise FileExistsError(f"stale SDK generation backup exists: {_rel(backup_path)}")
+            if target_path.exists():
+                _replace_path(target_path, backup_path)
+                backups.append((target_path, backup_path))
+            _replace_path(tmp_path, target_path)
+            promoted.append(target_path)
+        for _target_path, backup_path in backups:
+            with contextlib.suppress(FileNotFoundError):
+                backup_path.unlink()
+        cleanup_backups = True
+    except Exception:
+        rollback_complete = False
+        for target_path in reversed(promoted):
+            with contextlib.suppress(FileNotFoundError):
+                target_path.unlink()
+        for target_path, backup_path in reversed(backups):
+            if backup_path.exists():
+                _replace_path(backup_path, target_path)
+        rollback_complete = True
+        cleanup_backups = rollback_complete
+        raise
+    finally:
+        for target_path, tmp_path, _expected_hash in staged_outputs:
+            with contextlib.suppress(FileNotFoundError):
+                tmp_path.unlink()
+            if not cleanup_backups:
+                continue
+            backup_path = _promotion_backup_path(target_path)
+            with contextlib.suppress(FileNotFoundError):
+                backup_path.unlink()
+
+
 def write_sdk_contract_outputs(
     *,
     schema_output: Path,
@@ -1212,31 +1502,36 @@ def write_sdk_contract_outputs(
         zod_source=zod_source,
         provider_inventory=provider_inventory,
     )
-    json_outputs = (
-        (schema_output, contract_schema),
-        (manifest_output, manifest),
-        (tooling_provider_output, provider_inventory),
+    outputs = (
+        (
+            schema_output,
+            json.dumps(contract_schema, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        ),
+        (zod_output, zod_source),
+        (
+            manifest_output,
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        ),
+        (
+            tooling_provider_output,
+            json.dumps(provider_inventory, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        ),
     )
-    tmp_paths: list[Path] = []
+    staged_outputs: list[tuple[Path, Path, str]] = []
     try:
-        for path, payload in json_outputs:
+        for path, source in outputs:
             path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_name(f".{path.name}.tmp")
-            tmp_path.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-            )
-            tmp_paths.append(tmp_path)
-        zod_output.parent.mkdir(parents=True, exist_ok=True)
-        zod_tmp = zod_output.with_name(f".{zod_output.name}.tmp")
-        zod_tmp.write_text(zod_source, encoding="utf-8")
-        tmp_paths.append(zod_tmp)
-        for path, _payload in json_outputs:
-            path.with_name(f".{path.name}.tmp").replace(path)
-        zod_tmp.replace(zod_output)
+            tmp_path = _promotion_tmp_path(path)
+            tmp_path.write_text(source, encoding="utf-8")
+            staged_outputs.append((path, tmp_path, sha256_text(source)))
+        _verify_staged_outputs(staged_outputs)
+        _promote_staged_outputs(staged_outputs)
     finally:
-        for tmp_path in tmp_paths:
+        for target_path, tmp_path, _expected_hash in staged_outputs:
             with contextlib.suppress(FileNotFoundError):
                 tmp_path.unlink()
+            with contextlib.suppress(FileNotFoundError):
+                _promotion_backup_path(target_path).unlink()
 
 
 def build_inventory() -> dict[str, Any]:

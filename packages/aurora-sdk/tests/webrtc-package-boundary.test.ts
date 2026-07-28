@@ -38,7 +38,8 @@ describe('WebRTC package boundary', () => {
     })
     expect(pkg.dependencies).toEqual({
       '@noble/hashes': '2.2.0',
-      mqtt: '5.15.2'
+      mqtt: '5.15.2',
+      zod: '4.4.3'
     })
   })
 
