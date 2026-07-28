@@ -43,21 +43,21 @@ describe('AdminSchedulerView', () => {
       nextRun: '2026-06-26T08:00:00Z',
       runHistory: expect.stringContaining('last 2026-06-25T08:00:00Z')
     })
-    expect(snapshot.jobs[1]?.toolIntegration).toContain('Tooling.ExecuteTool -> rag:studio')
+    expect(snapshot.jobs[1]?.toolIntegration).toContain('Execute Tool -> rag:studio')
     expect(snapshot.jobs[0]?.operationControls.find((control) => control.action === 'edit')).toEqual(
       expect.objectContaining({
         available: false,
-        reason: expect.stringContaining('Scheduler.Update or Scheduler.Edit is not advertised')
+        reason: expect.stringContaining('Editing is not ready in this version')
       })
     )
 
     expect(markup).toContain('Ownership-scoped job table')
     expect(markup).toContain('0 8 * * *')
     expect(markup).toContain('next 2026-06-26T08:00:00Z')
-    expect(markup).toContain('source admin')
-    expect(markup).toContain('Tooling.ExecuteTool -&gt; rag:studio')
-    expect(markup).toContain('Scheduler.Update or Scheduler.Edit is not advertised')
-    expect(markup).toContain('Create via AdminAction')
+    expect(markup).toContain('this device')
+    expect(markup).toContain('Execute Tool -&gt; rag:studio')
+    expect(markup).toContain('Editing is not ready in this version')
+    expect(markup).toContain('Create schedule')
   })
 
   it('executes scheduler mutations through AdminAction draft, confirm, and audited backend submit', async () => {
@@ -170,13 +170,13 @@ describe('AdminSchedulerView', () => {
     expect(snapshot.createControl).toMatchObject({
       available: false,
       state: 'denied',
-      reason: expect.stringContaining('does not advertise Scheduler.manage')
+      reason: expect.stringContaining('Permission is needed')
     })
     expect(snapshot.jobs[0]?.operationControls.find((control) => control.action === 'cancel')).toEqual(
       expect.objectContaining({ available: false, state: 'denied' })
     )
-    expect(markup).toContain('mutation is permission-gated')
-    expect(markup).toContain('Create via AdminAction')
+    expect(markup).toContain('Permission is needed')
+    expect(markup).toContain('Create schedule')
   })
 })
 

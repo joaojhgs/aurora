@@ -1149,9 +1149,9 @@ describe('Aurora production shell', () => {
   })
 
   it('maps backup SDK error codes to user-facing messages', () => {
-    expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('denied')
-    expect(backupErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'missing' }))).toContain('unavailable')
-    expect(backupErrorMessage(new AuroraError({ code: 'transport_loss', message: 'lost' }))).toContain('retry')
+    expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('Permission is needed')
+    expect(backupErrorMessage(new AuroraError({ code: 'unavailable_service', message: 'missing' }))).toContain('cannot use that feature yet')
+    expect(backupErrorMessage(new AuroraError({ code: 'transport_loss', message: 'lost' }))).toContain('Connection lost')
   })
 
   it('builds assistant voice routes from capability graph and native manifest status', async () => {
@@ -1531,7 +1531,7 @@ describe('Aurora production shell', () => {
       new Aurora({ transport: MockAuroraTransport.empty().lose('Gateway.GetServices').lose('Gateway.GetRegistry').lose('Gateway.GetCapabilityCatalog') })
     )
     expect(unavailableSnapshot.loadState).toBe('service-unavailable')
-    expect(unavailableSnapshot.evidenceSource).toBe('Aurora request error')
+    expect(unavailableSnapshot.evidenceSource).toBe('Aurora needs attention')
   })
 
   it('preserves denied, degraded, stale, privacy-blocked, and unsupported contract status', async () => {
@@ -1658,7 +1658,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.principals.map((principal) => principal.id)).toContain('principal-owner')
     expect(snapshot.roles.map((role) => role.label)).toEqual(expect.arrayContaining(['Owner', 'Admin', 'Automation', 'Member']))
-    expect(snapshot.roles.every((role) => role.description.includes('derived from current principal permissions'))).toBe(true)
+    expect(snapshot.roles.every((role) => role.description.includes('current principal permissions'))).toBe(true)
     expect(snapshot.permissions.map((permission) => permission.id)).toContain('Auth.manage')
     expect(snapshot.audit.map((entry) => entry.correlationId)).toContain('corr-rbac-001')
     expect(snapshot.principals.some((principal) => principal.patchPreview.requiresAdminAction)).toBe(true)
@@ -1671,7 +1671,7 @@ describe('Aurora production shell', () => {
     const snapshot = await buildAdminRbacSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const principal = snapshot.principals.find((row) => row.id === 'principal-assistant')
     expect(principal).toBeTruthy()
-    expect(principal?.patchPreview.cascade.join(' ')).toContain('effective-permission')
+    expect(principal?.patchPreview.cascade.join(' ')).toContain('updated permissions')
 
     const action = buildRbacPermissionPatchAction(principal!, {
       grant: ['Auth.manage'],
@@ -1747,7 +1747,7 @@ describe('Aurora production shell', () => {
     })
     expect(schedulerSnapshot.rows).toHaveLength(1)
     expect(schedulerSnapshot.rows[0]?.event).toBe('mesh.audit.executed')
-    expect(schedulerSnapshot.warnings.join(' ')).toContain('Data namespace is filtered')
+    expect(schedulerSnapshot.warnings.join(' ')).toContain('Data area is filtered')
 
     const deniedSnapshot = await buildAdminAuditSnapshot(client, {
       toolId: 'tool:studio:shell.exec',
@@ -1809,7 +1809,7 @@ describe('Aurora production shell', () => {
     deniedTransport.fail('Auth.ListTokens', 'permission', 'token access denied')
     const deniedSnapshot = await buildAdminTokensSnapshot(new Aurora({ transport: deniedTransport }))
     expect(deniedSnapshot.loadState).toBe('denied')
-    expect(deniedSnapshot.error).toContain('token access denied')
+    expect(deniedSnapshot.error).toContain('Permission is needed')
 
     const degradedTransport = new MockAuroraTransport()
     degradedTransport.lose('Gateway.GetCapabilityCatalog', 'token capability catalog unavailable')
@@ -1824,7 +1824,7 @@ describe('Aurora production shell', () => {
       })
     )
     expect(unavailableSnapshot.loadState).toBe('service-unavailable')
-    expect(unavailableSnapshot.error).toContain('Auth token SDK resources are unavailable')
+    expect(unavailableSnapshot.error).toContain('Aurora token resources are unavailable')
   })
 
   it('wires device/session management from Aurora Auth resources', async () => {

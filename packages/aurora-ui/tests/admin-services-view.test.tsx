@@ -23,16 +23,16 @@ describe('AdminServicesView', () => {
       ['stop', 'Supervisor.StopService', false]
     ])
     expect(config?.controls.find((control) => control.verb === 'reload')?.action).toMatchObject({
-      title: 'Reload Config',
+      title: 'Reload Settings',
       methodId: 'Config.ReloadService',
       requiresReason: true
     })
 
     const markup = renderToStaticMarkup(<AdminServicesView snapshot={snapshot} />)
     expect(markup).toContain('Services')
-    expect(markup).toContain('Backend service health and restart control. Admins only.')
-    expect(markup).toContain('Config')
-    expect(markup).toContain('Config service with reload control')
+    expect(markup).toContain('Service health and restart controls. Admins only.')
+    expect(markup).toContain('Settings')
+    expect(markup).toContain('Settings service with reload control')
     expect(markup).toContain('1 methods')
     expect(markup).toContain('Restart')
     expect(markup).not.toContain('Details')

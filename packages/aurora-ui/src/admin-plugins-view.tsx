@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '#components/ui/input'
 import { Badge } from '#components/ui/badge'
 import { cn } from '#lib/utils'
+import { adminErrorTitle, adminReasonText, adminRouteCopy, sanitizeAdminText } from './admin-product-copy'
 import {
   buildToolingPolicySummaryFromBackend,
   buildToolingSourcesFromBackend,
@@ -102,8 +103,8 @@ export async function buildAdminPluginsSnapshot(client: AuroraClient, route?: Ro
     return {
       ...loadingPluginsSnapshot,
       loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
-      warnings: route.blockers.map(presentableSignal),
-      error: presentableSignal(route.blockers.join(', ') || route.explanation),
+      warnings: route.blockers.map((blocker) => adminReasonText(blocker)),
+      error: adminRouteCopy(route),
       evidenceSource: route.providerLabel
     }
   }
@@ -306,7 +307,7 @@ function RouteNotice({ snapshot, route, mutationError }: { snapshot: AdminPlugin
   if (route.disabled || snapshot.error) {
     return (
       <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
-        <AlertTriangle size={14} aria-hidden /> {snapshot.error ?? presentableSignal(route.blockers.join(', ') || route.explanation)}
+        <AlertTriangle size={14} aria-hidden /> {snapshot.error ?? adminRouteCopy(route)}
       </p>
     )
   }
@@ -318,7 +319,7 @@ function RouteNotice({ snapshot, route, mutationError }: { snapshot: AdminPlugin
     )
   }
   if (snapshot.loadState === 'empty') {
-    return <p className="text-sm text-muted-foreground">No Tooling catalog entries were returned.</p>
+    return <p className="text-sm text-muted-foreground">No tools are available from Aurora yet.</p>
   }
   return null
 }
@@ -659,10 +660,10 @@ function PluginConfigDialog({
 function sourceDescription(source: ToolingSourceModel): string {
   if (source.type === 'core') return 'Built-in tools shipped with Aurora services, always present, no install step.'
   if (source.type === 'mcp') return `MCP server (${source.transport ?? 'connection method not reported'}) exposing ${source.toolCount} tool(s).`
-  if (source.type === 'mesh') return `Tools announced by mesh peer ${source.name}'s Tooling catalog (cached, negotiated).`
+  if (source.type === 'mesh') return `Tools announced by connected device ${source.name}.`
   if (source.type === 'unknown') return 'Announced tools from an unverified source. Quarantined until reviewed.'
   if (source.type === 'plugin') return `Plugin source exposing ${source.toolCount} tool(s).`
-  return source.catalogEvidence
+  return sanitizeAdminText(source.catalogEvidence)
 }
 
 function toolStateLabel(tool: ToolApprovalCardModel): string {
@@ -678,5 +679,5 @@ function isPermissionError(error: unknown): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return adminErrorTitle(error)
 }

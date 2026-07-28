@@ -95,9 +95,9 @@ describe('BackupRestoreView', () => {
   })
 
   it('maps backup SDK errors to operator-safe recovery copy', () => {
-    expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('denied')
-    expect(backupErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unavailable')
-    expect(backupErrorMessage(new AuroraError({ code: 'transport_loss', message: 'lost' }))).toContain('retry')
+    expect(backupErrorMessage(new AuroraError({ code: 'permission', message: 'denied' }))).toContain('Permission is needed')
+    expect(backupErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('cannot use that feature yet')
+    expect(backupErrorMessage(new AuroraError({ code: 'transport_loss', message: 'lost' }))).toContain('Reconnecting')
   })
 })
 

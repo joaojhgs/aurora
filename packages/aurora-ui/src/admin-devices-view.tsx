@@ -26,6 +26,7 @@ import { Textarea } from '#components/ui/textarea'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
+import { adminCapabilityReason, adminErrorTitle, adminModuleLabel, adminReasonText, sanitizeAdminText } from './admin-product-copy'
 
 export type AdminDevicesLoadState =
   | 'loading'
@@ -317,15 +318,15 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
     devices,
     pendingPairings,
     listState: listCapability?.availability ?? (denied ? 'denied' : 'unsupported'),
-    listReason: listCapability ? capabilityReason(listCapability) : 'Auth.ListDevices is not advertised by the capability catalog.',
+    listReason: listCapability ? capabilityReason(listCapability) : 'Device listing is not ready yet.',
     tokenState: tokenCapability?.availability ?? (tokensResponse ? 'available-local' : denied ? 'denied' : 'unsupported'),
-    tokenReason: tokenCapability ? capabilityReason(tokenCapability) : 'Auth.ListTokens token/session status is not advertised by the capability catalog.',
+    tokenReason: tokenCapability ? capabilityReason(tokenCapability) : 'Token and session status is not ready yet.',
     pairingState: pairingCapability?.availability ?? (pairingsResponse ? 'available-local' : denied ? 'denied' : 'unsupported'),
-    pairingReason: pairingCapability ? capabilityReason(pairingCapability) : 'Auth.ListPendingPairings is not advertised by the capability catalog.',
+    pairingReason: pairingCapability ? capabilityReason(pairingCapability) : 'Pending pairing status is not ready yet.',
     deleteState: deleteCapability?.availability ?? (denied ? 'denied' : 'unsupported'),
-    deleteReason: deleteCapability ? capabilityReason(deleteCapability) : 'Auth.DeleteDevice is not advertised by the capability catalog.',
+    deleteReason: deleteCapability ? capabilityReason(deleteCapability) : 'Device removal is not ready yet.',
     meshPeerState: meshPeersResponse ? (meshListCapability?.availability ?? 'available-local') : denied ? 'denied' : 'unsupported',
-    meshPeerReason: meshListCapability ? capabilityReason(meshListCapability) : 'Auth.MeshListPeers is not advertised by the capability catalog; device mesh linkage may be incomplete.',
+    meshPeerReason: meshListCapability ? capabilityReason(meshListCapability) : 'Connected device links are not ready yet.',
     meshPeerActionState,
     meshPeerActionReason: meshPeerActionCapability ? capabilityReason(meshPeerActionCapability) : 'Device trust actions are not ready yet.',
     nativePlatform: nativeManifest?.platform ?? null,
@@ -488,7 +489,7 @@ function DevicesDataTable({
                   <li key={token.id} className="flex items-center gap-1.5">
                     <StatusBadge state={token.state} />
                     <span>{token.prefix || token.id}</span>
-                    <small className="text-muted-foreground">{token.scopes.join(', ') || 'no scopes'}</small>
+                    <small className="text-muted-foreground">{token.scopes.map(permissionLabel).join(', ') || 'no scopes'}</small>
                   </li>
                 ))}
               </ul>
@@ -570,7 +571,7 @@ function DevicesDataTable({
       columns={columns}
       rows={devices}
       getRowKey={(device) => device.id}
-      empty={loadState === 'loading' ? null : <p className="p-6 text-sm text-muted-foreground">No registered devices were returned by Auth.ListDevices.</p>}
+      empty={loadState === 'loading' ? null : <p className="p-6 text-sm text-muted-foreground">No registered devices were returned by Aurora.</p>}
     />
   )
 }
@@ -594,7 +595,7 @@ function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminActi
           <div className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold">Pending pairing requests</h3>
             {snapshot.pendingPairings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No pending pairings were returned by Auth.ListPendingPairings.</p>
+              <p className="text-sm text-muted-foreground">No pending pairings were returned by Aurora.</p>
             ) : (
               <ul className="flex flex-col gap-3">
                 {snapshot.pendingPairings.map((pairing) => (
@@ -635,11 +636,11 @@ function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminActi
             <dl className="flex flex-col gap-1.5 text-sm">
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Platform</dt>
-                <dd>{snapshot.nativePlatform ?? 'platform features unavailable'}</dd>
+                <dd>{platformNameLabel(snapshot.nativePlatform)}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Capabilities</dt>
-                <dd className="text-right">{snapshot.nativeCapabilities.length > 0 ? snapshot.nativeCapabilities.join(', ') : 'no native capabilities advertised'}</dd>
+                <dd className="text-right">{snapshot.nativeCapabilities.length > 0 ? `${snapshot.nativeCapabilities.length} platform feature(s) available` : 'no platform features reported'}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Boundary</dt>
@@ -746,7 +747,7 @@ function buildDeviceRow(
   const activeTokens = deviceTokens.map(tokenRow)
   const activeSessionCount = activeTokens.filter((token) => token.state !== 'stale' && token.state !== 'denied').length
   const deleteState = deleteCapability?.availability ?? 'unsupported'
-  const deleteReason = deleteCapability ? capabilityReason(deleteCapability) : 'Auth.DeleteDevice is not advertised by the capability catalog.'
+  const deleteReason = deleteCapability ? capabilityReason(deleteCapability) : 'Device removal is not ready yet.'
   const linkedMeshPeer = findLinkedMeshPeer(device.name, meshPeers)
   const pendingPairing = findLinkedPairing(device.name, pendingPairings)
   const linkedState = linkedMeshPeer
@@ -760,7 +761,7 @@ function buildDeviceRow(
     name: device.name,
     principalId: device.user_id ?? null,
     trustState: device.is_trusted ? 'available-local' : 'pending',
-    trustLabel: device.is_trusted ? 'trusted by Auth device record' : 'not trusted by Auth device record',
+    trustLabel: device.is_trusted ? 'Trusted by Aurora' : 'Not trusted yet',
     createdAt: device.created_at ?? null,
     lastSeen: device.last_seen ?? null,
     platformLabel: inferPlatformLabel(device.name, nativeManifest),
@@ -782,7 +783,7 @@ function buildDeviceRow(
         : 'no linked mesh peer reported',
     meshPeerState: linkedState,
     meshPeerEvidence: linkedMeshPeer
-      ? `Auth.MeshListPeers peer ${linkedMeshPeer.peer_id}; inbound=${linkedMeshPeer.inbound_status}; outbound=${linkedMeshPeer.outbound_status}`
+      ? `Connected device ${linkedMeshPeer.node_name}; ${adminReasonText(linkedMeshPeer.connection_status, 'Status needs attention')}`
       : pendingPairing
         ? `Waiting for approval on ${pendingPairing.remote_node_name || pendingPairing.remote_peer_id}`
         : 'No connected device or pending pairing matched this device label.'
@@ -915,7 +916,7 @@ function DeviceStatusPanel({
     return (
       <Alert role="status">
         <Laptop />
-        <AlertDescription>No registered devices were returned by Auth.ListDevices.</AlertDescription>
+        <AlertDescription>No registered devices were returned by Aurora.</AlertDescription>
       </Alert>
     )
   }
@@ -957,12 +958,16 @@ function capabilityFor(methodId: string, summaries: CapabilitySummary[]): Capabi
 }
 
 function capabilityReason(capability: CapabilitySummary): string {
-  if (capability.availability === 'offline' || capability.availability === 'stale') return 'This device is offline'
-  if (capability.availability === 'denied' || capability.availability === 'privacy-blocked') return 'Permission is needed to use this feature'
-  if (capability.availability === 'unsupported') return 'This Aurora version cannot use that feature yet'
-  if (capability.routeBlockers.length > 0) return 'This action needs attention before it can run.'
-  if (capability.raw.policy.approval_required) return 'Admin approval is required before this action can run.'
-  return 'Ready'
+  return adminCapabilityReason(capability)
+}
+
+function permissionLabel(permission: string): string {
+  if (permission === '*') return 'All access'
+  const [module, action] = permission.split('.')
+  if (!module || !action) return sanitizeAdminText(permission)
+  if (action === 'manage') return `${adminModuleLabel(module)} management`
+  if (action === 'use') return `${adminModuleLabel(module)} use`
+  return `${adminModuleLabel(module)} ${sanitizeAdminText(action)}`
 }
 
 function responseDataOrNull<T>(result: PromiseSettledResult<{ ok: boolean; data?: T }>): T | null {
@@ -975,7 +980,7 @@ function valueOrNull<T>(result: PromiseSettledResult<T>): T | null {
 
 function failureMessage(label: string, result: PromiseSettledResult<unknown>, optional = false): string | null {
   if (result.status === 'fulfilled') {
-    if (isAuroraResponseFailure(result.value)) return `${label}: ${result.value.error.message}`
+    if (isAuroraResponseFailure(result.value)) return `${label}: ${adminErrorTitle(result.value.error)}`
     return null
   }
   if (optional && result.reason instanceof AuroraError && result.reason.code === 'unsupported_feature') return `${label}: This Aurora version cannot use that feature yet`
@@ -1002,9 +1007,7 @@ function errorState(error: unknown): AvailabilityState {
 }
 
 function deviceMutationErrorMessage(error: unknown): string {
-  if (error instanceof AuroraError) return error.message
-  if (error instanceof Error) return error.message
-  return 'Unknown Aurora unavailable'
+  return adminErrorTitle(error, 'Aurora could not update this device')
 }
 
 function isAvailabilityState(value: string): value is AvailabilityState {
@@ -1029,17 +1032,25 @@ function tokenExpired(expiresAt: string | null): boolean {
 
 function inferPlatformLabel(name: string, nativeManifest: NativeCapabilityManifest | null): string {
   const lower = name.toLowerCase()
-  if (lower.includes('android')) return 'android'
-  if (lower.includes('iphone') || lower.includes('ios')) return 'ios'
-  if (lower.includes('tablet')) return 'tablet'
-  if (lower.includes('mac') || lower.includes('desktop')) return nativeManifest?.platform ?? 'desktop'
-  return nativeManifest?.platform ?? 'not advertised'
+  if (lower.includes('android')) return 'Android'
+  if (lower.includes('iphone') || lower.includes('ios')) return 'iOS'
+  if (lower.includes('tablet')) return 'Tablet'
+  if (lower.includes('mac') || lower.includes('desktop')) return platformNameLabel(nativeManifest?.platform ?? 'desktop')
+  return platformNameLabel(nativeManifest?.platform)
 }
 
 function platformEvidence(name: string, nativeManifest: NativeCapabilityManifest | null): string {
   if (!nativeManifest) return 'platform features unavailable'
   const capabilityCount = Object.values(nativeManifest.capabilities).filter(Boolean).length
-  return `${nativeManifest.platform}; ${capabilityCount} enabled native capabilities; inferred from device label "${name}"`
+  return `${capabilityCount} platform feature(s) available; inferred from device label "${name}"`
+}
+
+function platformNameLabel(platform: string | null | undefined): string {
+  if (!platform) return 'platform features unavailable'
+  if (/android/iu.test(platform)) return 'Android'
+  if (/ios|iphone|ipad/iu.test(platform)) return 'iOS'
+  if (/tauri|desktop|darwin|mac|windows|linux/iu.test(platform)) return 'Desktop'
+  return sanitizeAdminText(platform)
 }
 
 function formatDate(value: string | null): string {

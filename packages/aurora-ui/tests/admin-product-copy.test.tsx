@@ -5,6 +5,11 @@ import { AdminServicesView, AdminContractsView, type AdminServicesSnapshot } fro
 import { ConfigEditorView, type ConfigEditorModel } from '../src/config-editor-view'
 import { BackupRestoreView } from '../src/backup-restore-view'
 import { AdminTokensView, type AdminTokensSnapshot } from '../src/admin-tokens-view'
+import { AdminDevicesView, type AdminDevicesSnapshot } from '../src/admin-devices-view'
+import { AdminPluginsView, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
+import { AdminRbacView, type AdminRbacSnapshot } from '../src/admin-rbac-view'
+import { AdminSchedulerView, type AdminSchedulerSnapshot } from '../src/admin-scheduler-view'
+import { AdminAuditView, type AdminAuditSnapshot } from '../src/admin-audit-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -34,15 +39,36 @@ describe('admin product copy', () => {
     expect(markup).toContain('Admin approval is required before this action can run')
     expectSafeProductCopy(markup)
   })
+
+  it('keeps devices, tools, access, scheduler, and audit copy product-facing', () => {
+    const markup = [
+      renderToStaticMarkup(<AdminDevicesView snapshot={devicesSnapshot()} reauthConfirmed={false} />),
+      renderToStaticMarkup(<AdminPluginsView client={client()} route={route()} initialSnapshot={pluginsSnapshot()} />),
+      renderToStaticMarkup(<AdminRbacView snapshot={rbacSnapshot()} />),
+      renderToStaticMarkup(<AdminSchedulerView client={client()} route={route()} initialSnapshot={schedulerSnapshot()} />),
+      renderToStaticMarkup(<AdminAuditView snapshot={auditSnapshot()} />),
+    ].join(' ')
+
+    expect(markup).toContain('No registered devices were returned by Aurora')
+    expect(markup).toContain('No tools are available from Aurora yet')
+    expect(markup).toContain('Access &amp; RBAC')
+    expect(markup).toContain('Create schedule')
+    expect(markup).toContain('Protected detail preview')
+    expectSafeProductCopy(markup)
+  })
 })
 
 function expectSafeProductCopy(markup: string): void {
-  const text = visibleText(markup)
+  const text = copySurface(markup)
   const shared = findForbiddenProductionCopyTerms(text).map((term) => term.id)
   const extra = EXTRA_FORBIDDEN_PRODUCT_TERMS
     .filter((term) => term.pattern.test(text))
     .map((term) => term.id)
   expect([...shared, ...extra], text).toEqual([])
+}
+
+function copySurface(markup: string): string {
+  return `${visibleText(markup)} ${attributeText(markup)}`
 }
 
 function visibleText(markup: string): string {
@@ -58,6 +84,16 @@ function visibleText(markup: string): string {
     .replace(/&#x27;|&apos;/g, "'")
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function attributeText(markup: string): string {
+  const values: string[] = []
+  const pattern = /\b(?:aria-label|title|alt|placeholder|disabledreason|disabledReason)=["']([^"']*)["']/giu
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(markup)) !== null) {
+    values.push(match[1] ?? '')
+  }
+  return values.join(' ')
 }
 
 const EXTRA_FORBIDDEN_PRODUCT_TERMS = [
@@ -218,10 +254,165 @@ function tokensSnapshot(): AdminTokensSnapshot {
   }
 }
 
+function devicesSnapshot(): AdminDevicesSnapshot {
+  return {
+    loadState: 'empty',
+    generatedAt: '2026-07-28T00:00:00Z',
+    secretsRedacted: true,
+    devices: [],
+    pendingPairings: [],
+    listState: 'available-local',
+    listReason: 'Ready',
+    tokenState: 'available-local',
+    tokenReason: 'Ready',
+    pairingState: 'available-local',
+    pairingReason: 'Ready',
+    deleteState: 'unsupported',
+    deleteReason: 'Device removal is not ready yet.',
+    meshPeerState: 'unsupported',
+    meshPeerReason: 'Connected device links are not ready yet.',
+    meshPeerActionState: 'unsupported',
+    meshPeerActionReason: 'Trust actions are not ready yet.',
+    nativePlatform: null,
+    nativeCapabilities: [],
+    warnings: [],
+    error: null,
+    evidenceSource: 'Aurora service response',
+  }
+}
+
+function pluginsSnapshot(): AdminPluginsSnapshot {
+  return {
+    loadState: 'empty',
+    policy: {
+      mode: 'enforce',
+      defaultBehavior: 'No tools are available from Aurora yet.',
+      activeGrantCount: 0,
+      pendingApprovalCount: 0,
+      blockedCount: 0,
+      sourceCount: 0,
+      bypassEnabled: false,
+      dryRunOnly: false,
+      denyAll: false,
+      lastChanged: 'not reported',
+      actor: 'not reported',
+      evidence: 'This device',
+    },
+    sourceSummaries: [],
+    sourceDetails: {},
+    fallbackTools: [],
+    warnings: [],
+    error: null,
+    evidenceSource: 'Aurora service response',
+  }
+}
+
+function rbacSnapshot(): AdminRbacSnapshot {
+  return {
+    loadState: 'empty',
+    generatedAt: '2026-07-28T00:00:00Z',
+    secretsRedacted: true,
+    principals: [],
+    roles: [],
+    permissions: [],
+    permissionCatalog: [],
+    audit: [],
+    mutationState: 'unsupported',
+    mutationReason: 'Permission changes are not ready yet.',
+    warnings: [],
+    error: null,
+    evidenceSource: 'Aurora service response',
+  }
+}
+
+function schedulerSnapshot(): AdminSchedulerSnapshot {
+  return {
+    loadState: 'empty',
+    jobs: [],
+    createControl: {
+      available: false,
+      state: 'unsupported',
+      reason: 'Schedule creation is not ready in this version.',
+      requiresAdminAction: true,
+      targetOptions: [{ id: 'local-peer', label: 'Local scheduler', disabled: true, reason: 'No scheduler target was returned by Aurora.' }],
+    },
+    totals: { local: 0, delegatedOwned: 0, remoteRunning: 0, foreignDenied: 0 },
+    warnings: [],
+    error: null,
+    evidenceSource: 'Aurora service response',
+    secretsRedacted: true,
+    toolOptions: [],
+  }
+}
+
+function auditSnapshot(): AdminAuditSnapshot {
+  return {
+    loadState: 'ready',
+    generatedAt: '2026-07-28T00:00:00Z',
+    secretsRedacted: true,
+    backendFilter: { limit: 100, offset: 0 },
+    filters: {
+      query: '',
+      event: 'all',
+      actor: '',
+      action: '',
+      resource: '',
+      createdAfter: '',
+      createdBefore: '',
+      principalId: '',
+      peerOrProvider: '',
+      routePath: '',
+      approvalMode: 'all',
+      status: 'all',
+      toolId: '',
+      dataNamespace: '',
+      audioSessionId: '',
+      schedulerJobId: '',
+      correlationId: '',
+      denialReason: '',
+    },
+    rows: [{
+      id: 'audit-1',
+      event: 'admin_action.confirmed',
+      principalId: 'admin',
+      action: 'Gateway.GetSupportBundle',
+      status: 'approved',
+      createdAt: '2026-07-28T00:00:00Z',
+      correlationId: 'corr-admin-001',
+      peerId: 'local',
+      providerId: 'local service',
+      routePath: 'Gateway.GetSupportBundle',
+      approvalMode: 'single',
+      toolId: 'not applicable',
+      dataNamespace: 'not applicable',
+      audioSessionId: 'not applicable',
+      schedulerJobId: 'not applicable',
+      denialReason: 'none',
+      receipt: 'receipt-admin-001',
+      payloadHash: 'sha256:safe',
+      supportBundleCorrelationIds: ['corr-admin-001'],
+      details: {},
+      redactedPreview: '{}',
+      lifecycleLabel: 'approved',
+      rawEvent: {} as never,
+    }],
+    total: 1,
+    warnings: [],
+    error: null,
+    evidenceSource: 'Aurora service response',
+    exportState: 'available-local',
+    exportReason: 'Export includes protected activity rows, receipts, and support references.',
+  }
+}
+
 function client() {
   return {
     transport: { kind: 'http' },
     config: {},
     backups: {},
+    tools: {},
+    scheduler: {},
+    registry: {},
+    capabilities: {},
   } as never
 }

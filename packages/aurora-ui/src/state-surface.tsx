@@ -84,7 +84,7 @@ export function PageHeader({ title, description, eyebrow = 'Route surface', id, 
         <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
       </div>
       {badges ? (
-        <div className="flex flex-wrap items-center gap-1.5" aria-label={badgesLabel ?? `${title} route badges`}>
+        <div className="flex flex-wrap items-center gap-1.5" aria-label={badgesLabel ?? `${title} status badges`}>
           {badges}
         </div>
       ) : null}

@@ -16,6 +16,7 @@ import type {
 import { SCHEDULER_METHODS, routePath } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, ToneBadge, presentableSignal, type BadgeTone } from './status-badges'
+import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, adminRouteCopy, sanitizeAdminText } from './admin-product-copy'
 import {
   BadgeCluster,
   Button,
@@ -132,8 +133,8 @@ export async function buildAdminSchedulerSnapshot(
     return {
       ...loadingSchedulerSnapshot,
       loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
-      error: presentableSignal(route.blockers.join(', ') || route.explanation),
-      warnings: route.blockers.map(presentableSignal),
+      error: adminRouteCopy(route),
+      warnings: route.blockers.map((blocker) => adminReasonText(blocker)),
       evidenceSource: route.providerLabel,
       toolOptions: []
     }
@@ -395,10 +396,10 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
           <MetaGrid
             columns={1}
             items={[
-              { label: 'Connection', value: presentableSignal(route.explanation) },
+              { label: 'Connection', value: adminRouteCopy(route) },
               { label: 'Admin approval', value: route.requiresAdminAction ? 'required for schedule, cancel, pause, and resume' : 'not required' },
-              { label: 'Target selector', value: selectedTarget ? selectedTarget.reason : 'no selector status' },
-              { label: 'Blockers', value: presentableSignal(route.blockers.join(', ') || snapshot.error || 'none') }
+              { label: 'Target selector', value: selectedTarget ? adminReasonText(selectedTarget.reason, 'Ready') : 'no selector status' },
+              { label: 'Blockers', value: adminReasonText(route.blockers.join(', ') || snapshot.error || 'none', 'none') }
             ]}
           />
         </Card>
@@ -408,20 +409,20 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
       <DetailSheet
         open={Boolean(selectedJob)}
         onClose={() => setSelectedJobId(null)}
-        title={selectedJob?.name ?? 'Scheduler job'}
-        description={selectedJob?.action}
+        title={selectedJob ? sanitizeAdminText(selectedJob.name) : 'Scheduler job'}
+        description={selectedJob ? adminActionLabel(selectedJob.action) : undefined}
         badge={selectedJob ? <StatusBadge state={stateForJob(selectedJob)} /> : undefined}
       >
         {selectedJob ? (
           <MetaGrid
             columns={1}
             items={[
-              { label: 'Job ID', value: selectedJob.id, mono: true },
-              { label: 'Namespace', value: selectedJob.namespace },
-              { label: 'Ownership', value: `${ownershipLabel(selectedJob.ownership)} (${selectedJob.ownerLabel})` },
+              { label: 'Job', value: sanitizeAdminText(selectedJob.id) },
+              { label: 'Area', value: sanitizeAdminText(selectedJob.namespace) },
+              { label: 'Ownership', value: ownershipLabel(selectedJob.ownership) },
               { label: 'Target and approval', value: `${selectedJob.targetLabel}; ${selectedJob.approvalLabel}` },
-              { label: 'Policy decision', value: selectedJob.policyDecisionId, mono: true },
-              { label: 'Audit', value: selectedJob.auditReceipt, mono: true },
+              { label: 'Approval record', value: sanitizeAdminText(selectedJob.policyDecisionId) },
+              { label: 'Support reference', value: selectedJob.auditReceipt, mono: true },
               { label: 'Tool integration', value: selectedJob.toolIntegration },
               { label: 'Run history', value: selectedJob.runHistory },
               { label: 'Blocker', value: selectedJob.blockedReason ?? 'none' }
@@ -445,7 +446,7 @@ function SchedulerStatusPanel({
   const noticeClass = 'flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground'
   const warningClass = 'flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning'
   if (snapshot.loadState === 'loading') return <div className={noticeClass} aria-live="polite"><CalendarClock size={16} aria-hidden />Loading scheduler jobs through Aurora.</div>
-  if (route.disabled) return <div className={warningClass} role="alert"><AlertTriangle size={16} aria-hidden />{presentableSignal(route.blockers.join(', ') || route.explanation)}</div>
+  if (route.disabled) return <div className={warningClass} role="alert"><AlertTriangle size={16} aria-hidden />{adminRouteCopy(route)}</div>
   if (snapshot.loadState === 'empty') return <div className={noticeClass} role="status"><CalendarClock size={16} aria-hidden />No scheduler jobs were returned for this namespace.</div>
   if (snapshot.error) return <div className={warningClass} role="alert"><AlertTriangle size={16} aria-hidden />{snapshot.error}</div>
   if (operation) {
@@ -671,9 +672,9 @@ function createControl(
       const peerId = provider.peer_id ?? localPeerId
       return {
         id: peerId,
-        label: peerId === localPeerId ? 'Local scheduler' : `${provider.node_name} (${peerId})`,
+        label: peerId === localPeerId ? 'Local scheduler' : sanitizeAdminText(provider.node_name || 'Connected scheduler'),
         disabled: !provider.eligible,
-        reason: provider.reason
+        reason: adminReasonText(provider.reason, 'Ready')
       }
     })
     : [{ id: localPeerId, label: 'Local scheduler', disabled: !available, reason: 'No scheduler target was returned by Aurora.' }]
@@ -727,25 +728,25 @@ function ownershipLabel(state: SchedulerOwnershipState): string {
 }
 
 function approvalLabel(job: NormalizedSchedulerJob): string {
-  const token = job.delegated_approval_token_present ? 'approval token present' : 'next approval required'
-  const permissions = job.delegated_permissions.length > 0 ? job.delegated_permissions.join(', ') : 'no delegated permissions'
-  return `${token}; ${permissions}; policy ${job.policy_decision_id ?? 'not reported'}`
+  const token = job.delegated_approval_token_present ? 'approval is saved' : 'next approval required'
+  const permissions = job.delegated_permissions.length > 0 ? `${job.delegated_permissions.length} delegated permission(s)` : 'no delegated permissions'
+  return `${token}; ${permissions}; approval record ${job.policy_decision_id ? 'present' : 'not reported'}`
 }
 
 function runHistoryLabel(job: NormalizedSchedulerJob): string {
   const last = job.last_run ?? 'never run'
   const failures = job.failure_count > 0 ? `${job.failure_count} failure${job.failure_count === 1 ? '' : 's'}` : '0 failures'
-  const error = job.last_error ? `; last error ${job.last_error}` : ''
-  return `last ${last}; ${failures}; source ${job.source}; timezone ${job.timezone ?? 'UTC'}${error}`
+  const error = job.last_error ? `; last issue ${adminReasonText(job.last_error)}` : ''
+  return `last ${last}; ${failures}; ${job.source === 'remote' ? 'connected device' : 'this device'}; timezone ${job.timezone ?? 'UTC'}${error}`
 }
 
 function toolIntegrationLabel(job: NormalizedSchedulerJob): string {
   if (job.action.startsWith('Tooling.')) {
-    const namespace = job.target_resource_namespace ?? 'tool target selected at run time'
-    const permissions = job.delegated_permissions.length > 0 ? job.delegated_permissions.join(', ') : 'Tooling permission not reported'
-    return `${job.action} -> ${namespace}; delegated ${permissions}`
+    const namespace = job.target_resource_namespace ? sanitizeAdminText(job.target_resource_namespace) : 'tool target selected at run time'
+    const permissions = job.delegated_permissions.length > 0 ? `${job.delegated_permissions.length} delegated permission(s)` : `${adminModuleLabel('Tooling')} permission not reported`
+    return `${adminActionLabel(job.action)} -> ${namespace}; delegated ${permissions}`
   }
-  return `${job.action}; delegated ${job.delegated_permissions.join(', ') || 'no delegated permissions'}`
+  return `${adminActionLabel(job.action)}; delegated ${job.delegated_permissions.length > 0 ? `${job.delegated_permissions.length} permission(s)` : 'no delegated permissions'}`
 }
 
 function schedulerTotals(rows: SchedulerJobRow[]) {
@@ -781,7 +782,7 @@ function privacyForJob(job: Pick<SchedulerJobRow, 'privacyClass'>): PrivacyClass
 function schedulerToolOptions(tools: ToolApprovalCardModel[]): SchedulerToolCreateOption[] {
   return tools.map((tool) => ({
     id: tool.id,
-    label: `${tool.name} (${tool.providerLabel})`,
+    label: `${tool.name} (${tool.providerPeerId && tool.providerPeerId !== 'local' ? 'connected device' : 'this device'})`,
     localName: tool.name,
     globalToolId: tool.id,
     providerPeerId: tool.providerPeerId,
@@ -880,7 +881,7 @@ function loadStateTone(state: SchedulerLoadState): BadgeTone {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return adminErrorTitle(error)
 }
 
 const loadingSchedulerSnapshot: AdminSchedulerSnapshot = {

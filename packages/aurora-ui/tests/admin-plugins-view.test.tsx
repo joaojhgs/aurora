@@ -120,14 +120,14 @@ describe('AdminPluginsView', () => {
     expect(emptySnapshot.loadState).toBe('empty')
     expect(
       renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={emptySnapshot} />)
-    ).toContain('No Tooling catalog entries')
+    ).toContain('No tools are available from Aurora yet')
 
     const deniedTransport = MockAuroraTransport.empty().fail('Tooling.GetToolCatalog', 'permission', 'tool catalog denied')
     const deniedSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: deniedTransport }), pluginsRoute())
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(
       renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={deniedSnapshot} />)
-    ).toContain('tool catalog denied')
+    ).toContain('Permission is needed to use this feature')
 
     const unavailableTransport = MockAuroraTransport.empty().lose('Tooling.GetToolCatalog')
     const unavailableSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: unavailableTransport }), pluginsRoute())
@@ -138,7 +138,7 @@ describe('AdminPluginsView', () => {
     expect(disabledSnapshot.loadState).toBe('denied')
     expect(
       renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)
-    ).toContain('missing:Tooling.manage')
+    ).toContain('Permission is needed to use this feature')
   })
 })
 

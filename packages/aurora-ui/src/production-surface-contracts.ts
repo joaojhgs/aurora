@@ -126,9 +126,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-overview',
     label: 'Admin overview',
     navItemIds: ['admin'],
-    routeOracles: [routeOracle('admin', ['Admin overview'], ['AdminAction controller'])],
+    routeOracles: [routeOracle('admin', ['Admin overview'], ['Protected admin changes'])],
     mockReferenceFiles: ['components/aurora/admin/overview.tsx'],
-    mockUxAnchors: ['AdminAction controller', 'Runtime topology', 'Deployment posture'],
+    mockUxAnchors: ['Protected admin changes', 'Service layout', 'Deployment posture'],
     componentFiles: ['admin-overview-view.tsx', 'shell-data.ts'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
@@ -148,7 +148,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['services'],
     routeOracles: [routeOracle('services', ['Services'], ['Services table with health'])],
     mockReferenceFiles: ['components/aurora/admin/services-view.tsx'],
-    mockUxAnchors: ['Services', 'Backend service health', 'Restart control is not available for this service.'],
+    mockUxAnchors: ['Services', 'Service health', 'Restart control is not available for this service.'],
     componentFiles: ['admin-services-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -159,16 +159,16 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'manage',
     adminActionRequired: true,
     fixturePolicy: 'test-only',
-    degradedState: 'Internal-only or unadvertised lifecycle controls render disabled with backend-derived reasons.',
+    degradedState: 'Aurora-only or unavailable lifecycle controls render disabled with product-facing reasons.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
   },
   {
     id: 'admin-contracts',
-    label: 'Admin contracts registry',
+    label: 'Admin service actions',
     navItemIds: ['contracts'],
-    routeOracles: [routeOracle('contracts', ['Contracts registry'], ['Search contracts'])],
+    routeOracles: [routeOracle('contracts', ['Service actions'], ['Search actions'])],
     mockReferenceFiles: ['components/aurora/admin/services-view.tsx'],
-    mockUxAnchors: ['Contracts registry', 'Contract registry browser', 'Search contracts', 'Method detail'],
+    mockUxAnchors: ['Service actions', 'Service action browser', 'Search actions', 'Action detail'],
     componentFiles: ['admin-services-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [
@@ -211,7 +211,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['audit'],
     routeOracles: [routeOracle('audit', ['Audit log'], ['Filters'])],
     mockReferenceFiles: ['components/aurora/admin/audit-view.tsx'],
-    mockUxAnchors: ['Audit log', 'Filters', 'Redacted event details', 'Redacted payload preview'],
+    mockUxAnchors: ['Audit log', 'Filters', 'Redacted event details', 'Protected detail preview'],
     componentFiles: ['admin-audit-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported'],
     truthSources: [source('sdk-method', 'redacted audit records', ['Auth.AuditLog'])],
@@ -272,7 +272,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['scheduler'],
     routeOracles: [routeOracle('scheduler', ['Scheduler'], ['Jobs'])],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
-    mockUxAnchors: ['Scheduler jobs', 'Ownership-scoped job table', 'Running on remote peer', 'Scheduler admin change'],
+    mockUxAnchors: ['Scheduler jobs', 'Ownership-scoped job table', 'Running on connected device', 'Scheduler admin change'],
     componentFiles: ['admin-scheduler-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
@@ -292,12 +292,12 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['config'],
     routeOracles: [routeOracle('config', ['Configuration'], ['Preview diff'])],
     mockReferenceFiles: ['components/aurora/admin/config-view.tsx'],
-    mockUxAnchors: ['Configuration', 'Schema-backed config accordion', 'diff preview', 'rollback'],
+    mockUxAnchors: ['Configuration', 'Configuration sections', 'Pending changes', 'rollback'],
     componentFiles: ['config-editor-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
-      source('sdk-method', 'config schema, diff, history, and reload impact', ['Config.GetSchemaMetadata', 'Config.PreviewDiff', 'Config.GetVersionHistory', 'Config.PreviewReloadImpact']),
-      source('admin-action', 'config set and rollback', ['Config.Set', 'Config.Rollback', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
+      source('sdk-method', 'settings metadata, pending changes, history, and reload impact', ['Config.GetSchemaMetadata', 'Config.PreviewDiff', 'Config.GetVersionHistory', 'Config.PreviewReloadImpact']),
+      source('admin-action', 'settings apply and rollback', ['Config.Set', 'Config.Rollback', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
     ],
     highestPrivacyClass: 'secret',
     mutatingMethodType: 'manage',
@@ -499,7 +499,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['onboarding', 'pairing'],
     routeOracles: [routeOracle('onboarding', ['Connect Aurora'], ['Validate endpoint'])],
     mockReferenceFiles: ['components/aurora/onboarding/onboarding-view.tsx', 'components/aurora/admin/devices-view.tsx'],
-    mockUxAnchors: ['Welcome to Aurora', 'setup modes', 'Guided setup', 'Pairing queue'],
+    mockUxAnchors: ['First-run setup', 'Aurora setup choice', 'Guided setup', 'Pairing queue'],
     componentFiles: ['onboarding-view.tsx', 'pairing-queue-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'native-permission'],
     truthSources: [

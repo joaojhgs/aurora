@@ -29,6 +29,7 @@ import {
 import { HealthBadge, ToneBadge, type BadgeTone } from './status-badges'
 import { ConfirmDialog } from './shared-components'
 import { Button, Card, StatStrip, FilterBar } from './primitives'
+import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, sanitizeAdminText } from './admin-product-copy'
 
 export type AdminServicesLoadState =
   | 'loading'
@@ -288,7 +289,7 @@ function availabilityTone(state: AvailabilityState): BadgeTone {
 
 function AvailabilityBadge({ state }: { state: AvailabilityState | AdminServicesLoadState }) {
   const normalized: AvailabilityState = isAvailabilityState(state) ? state : 'pending'
-  return <ToneBadge tone={availabilityTone(normalized)}>{state}</ToneBadge>
+  return <ToneBadge tone={availabilityTone(normalized)}>{availabilityLabel(state)}</ToneBadge>
 }
 
 function isAvailabilityState(value: string): value is AvailabilityState {
@@ -347,12 +348,12 @@ function ServiceCardGrid({
           <ShadCard key={service.module} className="p-4">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-[13.5px] font-semibold">{service.module}</p>
-                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{service.instanceId ?? service.version}</p>
+                <p className="text-[13.5px] font-semibold">{adminModuleLabel(service.module)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{service.version ?? 'Current service'}</p>
               </div>
               <HealthBadge health={service.status} />
             </div>
-            <p className="my-2.5 text-xs leading-relaxed text-muted-foreground">{service.summary || `${service.module} service`}</p>
+            <p className="my-2.5 text-xs leading-relaxed text-muted-foreground">{service.summary ? sanitizeAdminText(service.summary) : `${adminModuleLabel(service.module)} service`}</p>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] text-muted-foreground">{service.methodCount} methods · {service.lastSeen}</span>
               <Button
@@ -415,7 +416,7 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
             controls={
               <>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  <span>Service/module</span>
+                  <span>Service</span>
                   <select
                     className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
                     value={moduleFilter}
@@ -426,21 +427,21 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  <span>Exposure</span>
+                  <span>Availability</span>
                   <select
                     className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
                     value={exposureFilter}
                     onChange={(event) => setExposureFilter(event.currentTarget.value as ContractExposure | 'all')}
                   >
-                    <option value="all">All exposures</option>
-                    <option value="external">external</option>
-                    <option value="internal">internal</option>
-                    <option value="both">both</option>
-                    <option value="gateway_builtin">gateway_builtin</option>
+                    <option value="all">All locations</option>
+                    <option value="external">This screen</option>
+                    <option value="internal">Inside Aurora</option>
+                    <option value="both">Both places</option>
+                    <option value="gateway_builtin">Built in</option>
                   </select>
                 </label>
                 <label className="sr-only">
-                  <span>Method detail</span>
+                  <span>Action detail</span>
                   <select
                     value={selectedContract?.busTopic ?? ''}
                     onChange={(event) => setSelectedTopic(event.currentTarget.value)}
@@ -458,7 +459,7 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
           <StatStrip
             ariaLabel="Action browser summary"
             items={[
-              { label: 'Filtered methods', value: String(filteredContracts.length), caption: `${modules.length} service modules` },
+              { label: 'Filtered actions', value: String(filteredContracts.length), caption: `${modules.length} service groups` },
               { label: 'Ready actions', value: String(filteredContracts.filter((contract) => contract.availableOverHttp).length), caption: 'available from this screen' },
               { label: 'Confirmed by Aurora', value: String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length), caption: 'currently available' },
               { label: 'Payload details', value: String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length), caption: 'request or response shape' }
@@ -478,7 +479,7 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
                     <TableHead>Service</TableHead>
                     <TableHead>Action</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Exposure</TableHead>
+          <TableHead>Location</TableHead>
                     <TableHead>Access</TableHead>
                     <TableHead>Availability</TableHead>
                     <TableHead>Readiness</TableHead>
@@ -532,7 +533,7 @@ function ContractModuleGroup({
             <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => onSelect(contract.busTopic)}>
               {actionDisplayName(contract)}
             </button>
-            <p className="text-xs text-muted-foreground">{contract.summary || 'No summary provided.'}</p>
+            <p className="text-xs text-muted-foreground">{contract.summary ? sanitizeAdminText(contract.summary) : 'No summary provided.'}</p>
           </TableCell>
           <TableCell><MethodTypeBadge type={contract.methodType} /></TableCell>
           <TableCell><ExposureBadge exposure={contract.exposure} /></TableCell>
@@ -557,11 +558,11 @@ function ContractModuleGroup({
 }
 
 function MethodTypeBadge({ type }: { type: ContractMethodType }) {
-  return <Badge variant="outline" className="capitalize">{type}</Badge>
+  return <Badge variant="outline">{methodTypeLabel(type)}</Badge>
 }
 
 function ExposureBadge({ exposure }: { exposure: ContractExposure }) {
-  return <Badge variant="outline" className="capitalize">{exposure}</Badge>
+  return <Badge variant="outline">{exposureLabel(exposure)}</Badge>
 }
 
 function BackendCoverageBadge({ coverage }: { coverage: AdminContractRow['backendCoverage'] }) {
@@ -575,20 +576,45 @@ function coverageLabel(coverage: AdminContractRow['backendCoverage']): string {
   return 'Needs attention'
 }
 
+function availabilityLabel(state: AvailabilityState | AdminServicesLoadState): string {
+  if (state === 'available-local' || state === 'available-remote' || state === 'ready') return 'Ready'
+  if (state === 'pending' || state === 'loading') return 'Checking'
+  if (state === 'offline' || state === 'stale') return 'Offline'
+  if (state === 'denied' || state === 'privacy-blocked') return 'Needs permission'
+  if (state === 'degraded') return 'Needs attention'
+  if (state === 'service-unavailable' || state === 'unsupported') return 'Not ready'
+  return 'Needs attention'
+}
+
+function methodTypeLabel(type: ContractMethodType): string {
+  if (type === 'manage' || type === 'admin-critical') return 'Protected'
+  if (type === 'query') return 'Read'
+  if (type === 'command') return 'Action'
+  if (type === 'event') return 'Event'
+  return 'Action'
+}
+
+function exposureLabel(exposure: ContractExposure): string {
+  if (exposure === 'external') return 'This screen'
+  if (exposure === 'gateway_builtin') return 'Built in'
+  if (exposure === 'internal') return 'Inside Aurora'
+  return 'This screen'
+}
+
 function ContractDetail({ contract }: { contract: AdminContractRow }) {
   return (
     <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4" aria-labelledby="contract-detail-title">
       <div>
         <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Action detail</p>
         <h3 id="contract-detail-title" className="text-sm font-semibold">{actionDisplayName(contract)}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{contract.summary || 'No summary provided by Aurora.'}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{contract.summary ? sanitizeAdminText(contract.summary) : 'No summary provided by Aurora.'}</p>
       </div>
       <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Service</dt><dd className="font-medium">{moduleDisplayName(contract.module)}</dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Action</dt><dd className="font-medium">{humanizeToken(contract.name)}</dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Request</dt><dd className="font-medium">{contract.inputModel ? 'Has details' : 'none'}</dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Response</dt><dd className="font-medium">{contract.outputModel ? 'Has details' : 'none'}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Exposure</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Location</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Action permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Access</dt><dd className="font-medium">{actionAccessLabel(contract)}</dd></div>
@@ -610,7 +636,7 @@ function PermissionChips({ permissions }: { permissions: string[] }) {
   return (
     <div className="flex flex-wrap gap-1">
       {permissions.map((permission) => (
-        <code key={permission} className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[10.5px]">{permission}</code>
+        <span key={permission} className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10.5px]">{permissionDisplayName(permission)}</span>
       ))}
       {permissions.length === 0 ? <span className="text-xs text-muted-foreground">none</span> : null}
     </div>
@@ -622,7 +648,7 @@ function SchemaBlock({ title, schema }: { title: string; schema: MethodDescripto
     <section className="flex flex-col gap-1.5">
       <h4 className="text-xs font-semibold text-foreground">{title}</h4>
       {schema ? (
-        <code className="block max-h-48 overflow-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-[11px] whitespace-pre-wrap">{JSON.stringify(schema, null, 2)}</code>
+        <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">Payload details are available for this action.</p>
       ) : (
         <p className="text-xs text-muted-foreground">No payload details were returned by Aurora.</p>
       )}
@@ -648,7 +674,7 @@ function buildServiceRows(
       status: service.status,
       healthState: healthState(service),
       instanceId: service.instance_id,
-      providerLabel: primary ? providerLabel(primary) : `${service.module} target pending`,
+      providerLabel: primary ? providerLabel(primary) : `${adminModuleLabel(service.module)} target pending`,
       routeState: primary?.availability ?? 'unsupported',
       routeReason: primary ? routeReason(primary) : 'Capability catalog does not advertise this service as executable.',
       privacyClass: primary?.privacyClass ?? 'public',
@@ -670,7 +696,7 @@ function buildContractRows(
       return {
         ...method,
         availability: capability?.availability ?? methodAvailability(method),
-        providerLabel: capability ? providerLabel(capability) : `${method.module} target pending`,
+        providerLabel: capability ? providerLabel(capability) : `${adminModuleLabel(method.module)} target pending`,
         backendCoverage: backendCoverage(method, capability),
         privacyClass: capability?.privacyClass ?? privacyForMethod(method),
         routeReason: capability ? routeReason(capability) : 'No capability catalog action exists for this method.',
@@ -709,10 +735,8 @@ function openApiEvidence(method: MethodDescriptor): string {
   return 'Available from this screen.'
 }
 
-function exportEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
-  const registryEvidence = `${method.busTopic} is listed by Aurora`
-  const capabilityEvidence = capability ? `; current action ${capability.id}` : '; no matching action is ready'
-  return `${registryEvidence}${capabilityEvidence}.`
+function exportEvidence(_method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
+  return capability ? 'Aurora lists this action as ready.' : 'Aurora has not marked this action ready yet.'
 }
 
 function schemaEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
@@ -753,8 +777,8 @@ function serviceControl(
     reason,
     action: available
       ? {
-          title: `${serviceControlLabel(verb)} ${service.module}`,
-          description: `Aurora will ${verb} ${service.module} only after admin confirmation and audit logging.`,
+          title: `${serviceControlLabel(verb)} ${adminModuleLabel(service.module)}`,
+          description: `Aurora will ${serviceControlLabel(verb).toLowerCase()} ${adminModuleLabel(service.module)} only after admin confirmation and audit logging.`,
           methodId,
           severity: verb === 'stop' ? 'critical' : 'high',
           serviceModule: service.module,
@@ -840,13 +864,12 @@ function healthState(service: ServiceInfo): AvailabilityState {
 }
 
 function providerLabel(capability: CapabilitySummary): string {
-  const location = capability.peerId && capability.peerId !== 'local-peer' ? `remote:${capability.peerId}` : capability.providerId
-  return `${location} / ${capability.serviceInstanceId}`
+  return capability.peerId && capability.peerId !== 'local-peer' ? 'Connected device' : 'This device'
 }
 
 function routeReason(capability: CapabilitySummary): string {
-  if (capability.routeBlockers.length > 0) return capability.routeBlockers.join(', ')
-  return `${capability.module}.${capability.method} is ${capability.availability}`
+  if (capability.routeBlockers.length > 0) return adminReasonText(capability.routeBlockers.join(', '))
+  return adminReasonText(capability.availability, 'Ready')
 }
 
 function controlReason(
@@ -855,8 +878,8 @@ function controlReason(
   requiresAdminAction: boolean
 ): string {
   if (!descriptor) return 'This control is not available yet.'
-  if (!descriptor.availableOverHttp) return `${descriptor.busTopic} is only available inside Aurora.`
-  if (!requiresAdminAction) return `${descriptor.busTopic} is not approved for this screen.`
+  if (!descriptor.availableOverHttp) return 'This control is only available inside Aurora.'
+  if (!requiresAdminAction) return 'This control is not ready for this screen.'
   if (!capability) return 'Aurora does not list this control as ready.'
   if (!['available-local', 'available-remote', 'degraded'].includes(capability.availability)) {
     return routeReason(capability)
@@ -880,11 +903,7 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>
-  if (maybe.code === 'auth' || maybe.code === 'permission') return 'Permission is needed to use this feature'
-  if (maybe.code === 'unsupported_feature' || maybe.code === 'unavailable_service') return 'This Aurora version cannot use that feature yet'
-  if (maybe.code === 'timeout' || maybe.code === 'transport_loss') return 'Connection lost. Reconnecting...'
-  return 'Aurora could not read this item'
+  return adminErrorTitle(error)
 }
 
 function actionAccessLabel(contract: AdminContractRow): string {
@@ -917,22 +936,26 @@ function fitLabel(status: AdminContractRow['conformanceStatus']): string {
 }
 
 function actionDisplayName(contract: Pick<AdminContractRow, 'module' | 'name' | 'busTopic'>): string {
-  return `${moduleDisplayName(contract.module)} ${humanizeToken(contract.name || contract.busTopic)}`
+  return adminActionLabel(contract)
 }
 
 function moduleDisplayName(module: string): string {
-  if (/gateway/i.test(module)) return 'Connection'
-  if (/auth/i.test(module)) return 'Access'
-  if (/orchestrator/i.test(module)) return 'Assistant'
-  if (/tooling/i.test(module)) return 'Tools'
-  if (/config/i.test(module)) return 'Settings'
-  return humanizeToken(module)
+  return adminModuleLabel(module)
 }
 
 function humanizeToken(value: string): string {
-  return value
+  return sanitizeAdminText(value)
     .replace(/([a-z0-9])([A-Z])/gu, '$1 $2')
     .replace(/[._:-]+/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim()
+}
+
+function permissionDisplayName(permission: string): string {
+  if (permission === '*') return 'All access'
+  const [module, action] = permission.split('.')
+  if (!module || !action) return sanitizeAdminText(permission)
+  if (action === 'manage') return `${adminModuleLabel(module)} management`
+  if (action === 'use') return `${adminModuleLabel(module)} use`
+  return `${adminModuleLabel(module)} ${sanitizeAdminText(action)}`
 }

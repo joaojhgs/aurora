@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '#components/ui/alert'
 import { Input } from '#components/ui/input'
 import { EvidenceBadge, StatusBadge } from './status-badges'
 import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
+import { adminActionLabel, adminErrorTitle, adminReasonText, sanitizeAdminText } from './admin-product-copy'
 
 const filterLabelClass = 'flex flex-col gap-1 text-xs text-muted-foreground'
 const selectControlClass = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
@@ -134,7 +135,7 @@ const loadingSnapshot: AdminAuditSnapshot = {
   error: null,
   evidenceSource: 'pending Aurora service calls',
   exportState: 'pending',
-  exportReason: 'Audit export waits for redacted Auth.AuditLog status.'
+  exportReason: 'Audit export is waiting for protected activity details.'
 }
 
 const approvalLifecycleEvents = [
@@ -196,7 +197,7 @@ export async function buildAdminAuditSnapshot(
         error: errorMessage(auditResult.error),
         warnings: [errorMessage(auditResult.error)],
         exportState: 'unsupported',
-        exportReason: 'Export is disabled until Auth.AuditLog returns redacted audit status.',
+        exportReason: 'Export is disabled until protected activity details are available.',
         evidenceSource: 'Aurora request error'
       }
     }
@@ -218,7 +219,7 @@ export async function buildAdminAuditSnapshot(
       evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora audit response',
       exportState: rows.length > 0 ? 'available-local' : 'unsupported',
       exportReason: rows.length > 0
-        ? 'Export includes the redacted normalized rows, payload hashes, receipts, and support-bundle correlation IDs.'
+        ? 'Export includes protected activity rows, receipts, and support references.'
         : 'Export is disabled because no audit rows match the current filters.'
     }
   } catch (error) {
@@ -231,7 +232,7 @@ export async function buildAdminAuditSnapshot(
       error: errorMessage(error),
       warnings: [errorMessage(error)],
       exportState: 'unsupported',
-      exportReason: 'Export is disabled until Auth.AuditLog is available.',
+      exportReason: 'Export is disabled until protected activity details are available.',
       evidenceSource: 'Aurora connection error'
     }
   }
@@ -268,7 +269,7 @@ export function AdminAuditView({
       render: (row) => (
         <span className="flex min-w-0 flex-col gap-0.5">
           <strong className="text-sm font-medium">{row.createdAt}</strong>
-          <small className="text-xs text-muted-foreground">{row.lifecycleLabel}</small>
+          <small className="text-xs text-muted-foreground">{sanitizeAdminText(row.lifecycleLabel)}</small>
         </span>
       )
     },
@@ -277,20 +278,20 @@ export function AdminAuditView({
       header: 'Event / action',
       render: (row) => (
         <span className="flex min-w-0 flex-col gap-0.5">
-          <strong className="text-sm font-medium">{row.event}</strong>
-          <small className="text-xs text-muted-foreground">{row.action}</small>
+          <strong className="text-sm font-medium">{auditEventLabel(row.event)}</strong>
+          <small className="text-xs text-muted-foreground">{auditActionLabel(row.action)}</small>
         </span>
       )
     },
     { key: 'principal', header: 'Principal', render: (row) => <span className="block min-w-0 text-sm break-words">{row.principalId}</span> },
     {
       key: 'resource',
-      header: 'Route / resource',
+      header: 'Path / resource',
       hideAt: 'lg',
       render: (row) => (
         <span className="flex min-w-0 flex-col gap-0.5">
-          <strong className="text-sm font-medium">{row.routePath}</strong>
-          <small className="text-xs text-muted-foreground">{row.peerId} / {row.providerId}</small>
+          <strong className="text-sm font-medium">{auditRouteLabel(row.routePath)}</strong>
+          <small className="text-xs text-muted-foreground">{auditDeviceLabel(row)}</small>
         </span>
       )
     },
@@ -321,7 +322,7 @@ export function AdminAuditView({
     <div className="flex h-full flex-col" aria-labelledby="admin-audit-title">
       <div className="border-b border-border px-6 py-5">
         <h1 id="admin-audit-title" className="text-xl font-semibold tracking-tight">Audit log</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Audit search, mesh trace filters, event receipts, redacted payload previews, and export are loaded through Aurora.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Audit search, connected-device filters, event receipts, protected activity previews, and export are loaded through Aurora.</p>
       </div>
 
       <div className="flex flex-col gap-4 px-6 py-5">
@@ -471,8 +472,8 @@ function AuditFilters({
               <option value="dry_run">Dry-run</option>
             </select>
           </label>
-          <FilterInput label="Tool ID" value={filters.toolId} onChange={(value) => update('toolId', value)} />
-          <FilterInput label="Data namespace" value={filters.dataNamespace} onChange={(value) => update('dataNamespace', value)} />
+          <FilterInput label="Tool" value={filters.toolId} onChange={(value) => update('toolId', value)} />
+          <FilterInput label="Data area" value={filters.dataNamespace} onChange={(value) => update('dataNamespace', value)} />
           <FilterInput label="Audio session" value={filters.audioSessionId} onChange={(value) => update('audioSessionId', value)} />
           <FilterInput label="Scheduler job" value={filters.schedulerJobId} onChange={(value) => update('schedulerJobId', value)} />
           <FilterInput label="Correlation ID" value={filters.correlationId} onChange={(value) => update('correlationId', value)} />
@@ -497,31 +498,31 @@ function AuditDetailDrawer({ row }: { row: AdminAuditRow }) {
     <Card
       ariaLabel="Selected detail"
       icon={<ShieldCheck size={18} aria-hidden />}
-      title={<span id="audit-selected-detail-title">Selected detail: {row.event}</span>}
-      description="Redacted payload preview, receipts, and correlation ids for the selected event."
-      actions={<EvidenceBadge label={`correlation ${row.correlationId}`} />}
+      title={<span id="audit-selected-detail-title">Selected detail: {auditEventLabel(row.event)}</span>}
+      description="Protected activity details, receipts, and support references for the selected event."
+      actions={<EvidenceBadge label={`Support reference ${row.correlationId}`} />}
     >
       <MetaGrid
         items={[
           { label: 'Actor', value: row.principalId },
-          { label: 'Action', value: row.action },
-          { label: 'Resource', value: resourceSummary(row) },
+          { label: 'Action', value: auditActionLabel(row.action) },
+          { label: 'Resource', value: auditResourceLabel(row) },
           { label: 'Created at', value: row.createdAt },
           { label: 'Correlation ID', value: row.correlationId, mono: true },
           { label: 'Audit receipt', value: row.receipt, mono: true },
           { label: 'Payload hash', value: row.payloadHash, mono: true },
-          { label: 'Approval mode', value: row.approvalMode },
-          { label: 'Denial reason', value: row.denialReason },
-          { label: 'Tool ID', value: row.toolId },
-          { label: 'Data namespace', value: row.dataNamespace },
-          { label: 'Audio session', value: row.audioSessionId },
-          { label: 'Scheduler job', value: row.schedulerJobId },
-          { label: 'Support-bundle correlations', value: row.supportBundleCorrelationIds.join(', ') || 'none' }
+          { label: 'Approval mode', value: auditValueLabel(row.approvalMode) },
+          { label: 'Denial reason', value: adminReasonText(row.denialReason, 'None') },
+          { label: 'Tool', value: auditValueLabel(row.toolId) },
+          { label: 'Data area', value: auditValueLabel(row.dataNamespace) },
+          { label: 'Audio session', value: auditValueLabel(row.audioSessionId) },
+          { label: 'Scheduled job', value: auditValueLabel(row.schedulerJobId) },
+          { label: 'Support references', value: row.supportBundleCorrelationIds.join(', ') || 'none' }
         ]}
       />
       <div className="mt-3 flex flex-col gap-1.5">
-        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Redacted payload preview</h3>
-        <code className="block overflow-x-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs whitespace-pre">{row.redactedPreview}</code>
+        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Protected detail preview</h3>
+        <code className="block overflow-x-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs whitespace-pre">{protectedDetailPreview(row)}</code>
       </div>
     </Card>
   )
@@ -655,13 +656,13 @@ function rowMatchesFilters(row: AdminAuditRow, filters: AdminAuditFilters): bool
 function unsupportedFilterWarnings(filters: AdminAuditFilters, backendFilter: AuditLogRequest): string[] {
   const warnings: string[] = []
   if ((filters.resource ?? '').trim()) warnings.push('Resource is filtered from returned event details.')
-  if ((filters.createdAfter ?? '').trim() || (filters.createdBefore ?? '').trim()) warnings.push('Time range is filtered from returned audit rows after Auth.AuditLog returns.')
-  if (filters.approvalMode !== 'all') warnings.push('Approval mode is filtered from redacted audit detail fields after Auth.AuditLog returns.')
-  if (filters.dataNamespace.trim()) warnings.push('Data namespace is filtered from redacted audit detail fields after Auth.AuditLog returns.')
-  if (filters.audioSessionId.trim()) warnings.push('Audio session is filtered from redacted audit detail fields after Auth.AuditLog returns.')
-  if (filters.schedulerJobId.trim()) warnings.push('Scheduler job is filtered from redacted audit detail fields after Auth.AuditLog returns.')
-  if (filters.denialReason.trim()) warnings.push('Denial reason is filtered from redacted audit detail fields after Auth.AuditLog returns.')
-  if (filters.status !== 'all') warnings.push('Result is filtered from normalized audit status after Auth.AuditLog returns.')
+  if ((filters.createdAfter ?? '').trim() || (filters.createdBefore ?? '').trim()) warnings.push('Time range is filtered from returned activity rows.')
+  if (filters.approvalMode !== 'all') warnings.push('Approval mode is filtered from protected activity details.')
+  if (filters.dataNamespace.trim()) warnings.push('Data area is filtered from protected activity details.')
+  if (filters.audioSessionId.trim()) warnings.push('Audio session is filtered from protected activity details.')
+  if (filters.schedulerJobId.trim()) warnings.push('Scheduled job is filtered from protected activity details.')
+  if (filters.denialReason.trim()) warnings.push('Denial reason is filtered from protected activity details.')
+  if (filters.status !== 'all') warnings.push('Result is filtered from activity status.')
   if (filters.peerOrProvider.trim()) warnings.push('Device or service is filtered from returned audit rows.')
   return warnings
 }
@@ -771,6 +772,48 @@ function resourceSummary(row: AdminAuditRow): string {
   ].join(' ')
 }
 
+function auditEventLabel(event: string): string {
+  return sanitizeAdminText(event.replace(/[_-]+/gu, ' '))
+}
+
+function auditActionLabel(action: string): string {
+  return adminActionLabel(action)
+}
+
+function auditRouteLabel(routePath: string): string {
+  if (!routePath || routePath === 'not reported') return 'Not reported'
+  if (/^\/api\/admin\//iu.test(routePath)) return sanitizeAdminText(routePath.replace(/^\/api\/admin\//iu, '').replace(/[/-]+/gu, ' '))
+  return sanitizeAdminText(routePath)
+}
+
+function auditDeviceLabel(row: AdminAuditRow): string {
+  if (row.peerId !== 'local' || row.providerId !== 'local service') return 'Connected device or service'
+  return 'This device'
+}
+
+function auditResourceLabel(row: AdminAuditRow): string {
+  return [
+    auditRouteLabel(row.routePath),
+    row.toolId !== 'not applicable' ? auditValueLabel(row.toolId) : null,
+    row.dataNamespace !== 'not applicable' ? auditValueLabel(row.dataNamespace) : null,
+    auditDeviceLabel(row)
+  ].filter(Boolean).join(' / ')
+}
+
+function auditValueLabel(value: string): string {
+  if (!value || value === 'not applicable' || value === 'not reported') return 'Not reported'
+  return sanitizeAdminText(value)
+}
+
+function protectedDetailPreview(row: AdminAuditRow): string {
+  return [
+    `Event: ${auditEventLabel(row.event)}`,
+    `Action: ${auditActionLabel(row.action)}`,
+    `Result: ${row.status}`,
+    `Support reference: ${row.correlationId}`
+  ].join('\n')
+}
+
 function matchesTimeRange(createdAt: string, createdAfter: string, createdBefore: string): boolean {
   const createdTime = Date.parse(createdAt)
   if (Number.isNaN(createdTime)) return !createdAfter.trim() && !createdBefore.trim()
@@ -823,11 +866,7 @@ function sortedUnique(values: string[]): string[] {
 }
 
 function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>
-  if (maybe.code === 'auth' || maybe.code === 'permission') return 'Permission is needed to use this feature'
-  if (maybe.code === 'unsupported_feature' || maybe.code === 'unavailable_service') return 'This Aurora version cannot use that feature yet'
-  if (maybe.code === 'timeout' || maybe.code === 'transport_loss') return 'Connection lost. Reconnecting...'
-  return 'Aurora could not read this item'
+  return adminErrorTitle(error)
 }
 
 function isDeniedError(error: unknown): boolean {

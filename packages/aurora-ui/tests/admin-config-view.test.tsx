@@ -34,14 +34,14 @@ describe('AdminConfigView', () => {
     const markup = renderToStaticMarkup(<AdminConfigView client={client} route={configRoute()} initialModel={model} />)
 
     expect(model.state).toBe('ready')
-    expect(markup).toContain('Schema-backed config accordion')
-    expect(markup).toContain('Config section: services.gateway')
+    expect(markup).toContain('Configuration sections')
+    expect(markup).toContain('Settings section: services.connection')
     expect(markup).toContain('type="number"')
     expect(markup).toContain('min="1024"')
     expect(markup).toContain('<select')
-    expect(markup).toContain('Reload impact')
+    expect(markup).toContain('Refresh impact')
     expect(markup).toContain('restart required')
-    expect(markup).toContain('Review Apply through AdminAction')
+    expect(markup).toContain('Review and apply')
     expect(markup).toContain('secret redacted')
     expect(markup).toContain('[REDACTED]')
     expect(markup).not.toContain('secret-token')
@@ -73,7 +73,7 @@ describe('AdminConfigView', () => {
     expect(calls).toEqual(['Config.PreviewDiff', 'Config.PreviewReloadImpact'])
     expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
 
-    const reviewButton = findButtonByText(container, 'Review Apply through AdminAction')
+    const reviewButton = findButtonByText(container, 'Review and apply')
     expect(reviewButton).not.toBeNull()
     await act(async () => {
       reviewButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
@@ -87,7 +87,7 @@ describe('AdminConfigView', () => {
     expect(dialog!.textContent).toContain('Apply staged config changes')
     expect(calls).not.toContain('Config.Set')
 
-    const confirmButton = findButtonByText(document.body, 'Confirm Apply through AdminAction')
+    const confirmButton = findButtonByText(document.body, 'Confirm apply')
     expect(confirmButton).not.toBeNull()
     expect(confirmButton!.hasAttribute('disabled')).toBe(true)
 
@@ -97,7 +97,7 @@ describe('AdminConfigView', () => {
       unlock!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
 
-    const armedConfirmButton = findButtonByText(document.body, 'Confirm Apply through AdminAction')
+    const armedConfirmButton = findButtonByText(document.body, 'Confirm apply')
     expect(armedConfirmButton!.hasAttribute('disabled')).toBe(false)
     await act(async () => {
       armedConfirmButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))

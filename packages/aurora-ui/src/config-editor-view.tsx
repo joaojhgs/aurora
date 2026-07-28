@@ -319,7 +319,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                               onChange={(value) => setEdits((current) => ({ ...current, [field.key_path]: value }))}
                             />
                             <em className="text-[11px] not-italic text-muted-foreground">
-                              {field.source_layer}; {fieldModeLabel(field)}
+                              {configKeyLabel(field.source_layer)}; {fieldModeLabel(field)}
                               {field.secret ? '; secret redacted' : ''}
                               {field.affected_services.length > 0 ? `; affects ${field.affected_services.map(configKeyLabel).join(', ')}` : ''}
                             </em>
@@ -635,6 +635,8 @@ function configFieldTitle(field: ConfigFieldMetadata): string {
 function configKeyLabel(value: string): string {
   return value
     .replace(/\bgateway\b/giu, 'connection')
+    .replace(/\bconfig\.json\b/giu, 'saved settings')
+    .replace(/\bconfig\b/giu, 'settings')
     .replace(/\bschema\b/giu, 'setting')
     .replace(/\bmetadata\b/giu, 'details')
 }

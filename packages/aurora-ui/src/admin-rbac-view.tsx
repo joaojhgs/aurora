@@ -21,6 +21,7 @@ import {
 import { PageHeader } from './state-surface'
 import { Card, DataTable, Button, type DataColumn } from './primitives'
 import { ConfirmDialog, PermissionEditorTable, ROLE_TEMPLATES, matchRoleTemplate } from './shared-components'
+import { adminCapabilityReason, adminErrorTitle } from './admin-product-copy'
 import { Badge } from '#components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
 import {
@@ -237,7 +238,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
     permissionCatalog,
     audit,
     mutationState,
-    mutationReason: mutationCapability ? capabilityReason(mutationCapability) : 'Auth.PatchPermissions is not advertised by the capability catalog.',
+    mutationReason: mutationCapability ? capabilityReason(mutationCapability) : 'Permission changes are not ready yet.',
     warnings: failures,
     error: failures[0] ?? null,
     evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
@@ -382,7 +383,7 @@ function PrincipalsTable({
       render: (principal) => (
         <div className="flex flex-col">
           <span className="font-medium">{principal.username}</span>
-          <span className="text-xs text-muted-foreground">{principal.id}</span>
+          <span className="text-xs text-muted-foreground">{principal.isAdmin ? 'Admin account' : 'User account'}</span>
         </div>
       )
     },
@@ -562,7 +563,7 @@ function buildPrincipalRows(
       createdAt: principal.created_at ?? null,
       accessState: mutationCapability?.availability ?? 'unsupported',
       accessReason: mutationCapability ? capabilityReason(mutationCapability) : 'Permission changes are not ready yet.',
-      providerLabel: mutationCapability ? providerLabel(mutationCapability) : 'Auth target pending',
+      providerLabel: mutationCapability ? providerLabel(mutationCapability) : 'Access target pending',
       patchPreview: preview
     }
   })
@@ -673,17 +674,11 @@ function roleLabel(principal: PrincipalResponse): string {
 }
 
 function capabilityReason(capability: CapabilitySummary): string {
-  if (capability.availability === 'offline' || capability.availability === 'stale') return 'This device is offline'
-  if (capability.availability === 'denied' || capability.availability === 'privacy-blocked') return 'Permission is needed to use this feature'
-  if (capability.availability === 'unsupported') return 'This Aurora version cannot use that feature yet'
-  if (capability.routeBlockers.length > 0) return 'This action needs attention before it can run.'
-  if (capability.raw.policy.approval_required) return 'Admin approval is required before this action can run.'
-  return 'Ready'
+  return adminCapabilityReason(capability)
 }
 
 function providerLabel(capability: CapabilitySummary): string {
-  const location = capability.peerId && capability.peerId !== 'local-peer' ? `remote:${capability.peerId}` : capability.providerId
-  return `${location} / ${capability.serviceInstanceId}`
+  return capability.peerId && capability.peerId !== 'local-peer' ? 'Connected device' : 'This device'
 }
 
 function rbacTotals(snapshot: AdminRbacSnapshot) {
@@ -718,11 +713,7 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>
-  if (maybe.code === 'auth' || maybe.code === 'permission') return 'Permission is needed to use this feature'
-  if (maybe.code === 'unsupported_feature' || maybe.code === 'unavailable_service') return 'This Aurora version cannot use that feature yet'
-  if (maybe.code === 'timeout' || maybe.code === 'transport_loss') return 'Connection lost. Reconnecting...'
-  return 'Aurora could not read this item'
+  return adminErrorTitle(error)
 }
 
 function stringValue(value: unknown): string {

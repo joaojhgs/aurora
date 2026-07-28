@@ -14,6 +14,7 @@ import {
 import { ToneBadge, type BadgeTone } from "./status-badges";
 import { ConfirmDialog } from "./shared-components";
 import { Card, DataTable, type DataColumn } from "./primitives";
+import { adminCapabilityReason, adminErrorTitle, adminModuleLabel, sanitizeAdminText } from "./admin-product-copy";
 
 export type AdminTokensLoadState =
   | "loading"
@@ -94,10 +95,10 @@ const loadingSnapshot: AdminTokensSnapshot = {
   tokens: [],
   listState: "pending",
   listReason:
-    "Loading Auth.ListTokens and token capability status through Aurora.",
+    "Loading tokens through Aurora.",
   revokeState: "pending",
   revokeReason:
-    "Loading Auth.RevokeToken capability status through Aurora.",
+    "Loading token revocation status through Aurora.",
   createState: "unsupported",
   createReason:
     "Token creation is not ready in this Aurora version.",
@@ -271,14 +272,14 @@ function TokensTable({
     {
       key: "principal",
       header: "Principal",
-      render: (token) => <code>{token.owner}</code>,
+      render: (token) => <span>{sanitizeAdminText(token.owner)}</span>,
     },
     {
       key: "scopes",
       header: "Scopes",
       render: (token) => (
         <span className="text-[11.5px] text-muted-foreground">
-          {token.scopes.length > 0 ? token.scopes.join(", ") : "no scopes"}
+          {token.scopes.length > 0 ? token.scopes.map(tokenScopeLabel).join(", ") : "no scopes"}
         </span>
       ),
     },
@@ -327,6 +328,15 @@ function TokensTable({
       />
     </Card>
   );
+}
+
+function tokenScopeLabel(scope: string): string {
+  if (scope === "*") return "All access";
+  const [module, action] = scope.split(".");
+  if (!module || !action) return sanitizeAdminText(scope);
+  if (action === "manage") return `${adminModuleLabel(module)} management`;
+  if (action === "use") return `${adminModuleLabel(module)} use`;
+  return `${adminModuleLabel(module)} ${sanitizeAdminText(action)}`;
 }
 
 function tokenStatusTone(status: AdminTokenStatus): BadgeTone {
@@ -418,7 +428,7 @@ function tokenRow(
     revokeState: revokeCapability?.availability ?? "unsupported",
     revokeReason: revokeCapability
       ? capabilityReason(revokeCapability)
-      : "Auth.RevokeToken is not advertised by the capability catalog.",
+      : "Token revocation is not ready yet.",
     revokeAction: revokeAvailable
       ? buildTokenRevokeAdminAction(baseActionInput)
       : null,
@@ -446,17 +456,7 @@ function capabilityFor(
 }
 
 function capabilityReason(capability: CapabilitySummary): string {
-  if (capability.routeBlockers.length > 0)
-    return capability.routeBlockers.join(", ");
-  if (capability.raw.policy.approval_required)
-    return "Admin approval is required before this action can run.";
-  if (capability.availability === "offline" || capability.availability === "stale")
-    return "This device is offline";
-  if (capability.availability === "denied" || capability.availability === "privacy-blocked")
-    return "Permission is needed to use this feature";
-  if (capability.availability === "unsupported")
-    return "This Aurora version cannot use that feature yet";
-  return "Ready";
+  return adminCapabilityReason(capability);
 }
 
 function responseDataOrNull<T>(
@@ -496,12 +496,5 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>;
-  if (maybe.code === "auth" || maybe.code === "permission")
-    return "Permission is needed to use this feature";
-  if (maybe.code === "unsupported_feature" || maybe.code === "unavailable_service")
-    return "This Aurora version cannot use that feature yet";
-  if (maybe.code === "timeout" || maybe.code === "transport_loss")
-    return "Connection lost. Reconnecting...";
-  return "Aurora could not read this item";
+  return adminErrorTitle(error);
 }

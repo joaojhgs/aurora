@@ -15,9 +15,10 @@ import type {
   BackupVerifyResponse
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { presentableSignal, ToneBadge, type BadgeTone } from './status-badges'
+import { ToneBadge, type BadgeTone } from './status-badges'
 import { ConfirmDialog } from './shared-components'
 import { Button, Card, DataTable, useToast, type DataColumn } from './primitives'
+import { adminErrorTitle, adminRouteCopy } from './admin-product-copy'
 
 export interface BackupRestoreViewProps {
   client: AuroraClient
@@ -247,7 +248,7 @@ function BackupStatusNotice({ loadState, route, loadError }: { loadState: Backup
     return (
       <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" role="alert">
         Backup operations are disabled until Aurora reports backup actions are ready.
-        {route.blockers.length > 0 ? ` ${presentableSignal(route.blockers.join(', '))}` : null}
+        {route.blockers.length > 0 ? ` ${adminRouteCopy(route)}` : null}
       </div>
     )
   }
@@ -263,11 +264,7 @@ function BackupStatusNotice({ loadState, route, loadError }: { loadState: Backup
 }
 
 export function backupErrorMessage(error: AuroraError): string {
-  if (error.code === 'auth' || error.code === 'permission') return 'Backup request denied by authentication or permissions.'
-  if (error.code === 'privacy_blocked') return 'Backup request is blocked by privacy policy until required approval exists.'
-  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'This Aurora version cannot use backup actions yet.'
-  if (error.code === 'timeout' || error.code === 'transport_loss') return 'Backup request could not reach Aurora reliably; retry after service health recovers.'
-  return error.message || 'Backup request failed.'
+  return adminErrorTitle(error, 'Backup request failed.')
 }
 
 function statusTone(status: BackupManifestSummary['status']): BadgeTone {
@@ -325,7 +322,7 @@ function loadStateFromError(error: AuroraError): BackupLoadState {
 
 function backupDisabledReason(route: RouteAvailability, loadError: string | null): string {
   if (loadError) return loadError
-  if (route.blockers.length > 0) return presentableSignal(route.blockers.join(', '))
+  if (route.blockers.length > 0) return adminRouteCopy(route)
   if (!route.routeable) return 'Backup actions are not ready from the current connection.'
   if (route.disabled) return 'Aurora does not list backup actions as ready.'
   return 'Backup actions need admin confirmation before they can run.'

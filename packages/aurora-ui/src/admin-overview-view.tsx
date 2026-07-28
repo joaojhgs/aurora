@@ -14,7 +14,7 @@ import { buttonVariants } from '#components/ui/button'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
-import { safeErrorCopy } from './product-copy'
+import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, sanitizeAdminText } from './admin-product-copy'
 
 export interface AdminOverviewViewProps {
   client: AuroraClient
@@ -138,7 +138,7 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
                 disabled
                 disabledReason="Admin confirmation is required before this action can run."
               >
-                {methodLabel(method)}
+                {adminActionLabel(method)}
               </Button>
             ))}
           </div>
@@ -166,7 +166,7 @@ function PosturePanel({ manifest, posture }: { manifest: AdminOverviewManifest; 
           { label: 'Connection', value: topology ? deploymentModeLabel(topology) : 'Service layout unavailable' },
           { label: 'Refresh ID', value: manifest.registryDigest || 'not reported', mono: Boolean(manifest.registryDigest) },
           { label: 'Services', value: String(manifest.totals.services) },
-          { label: 'Methods', value: `${manifest.totals.externalMethods} external / ${manifest.totals.internalMethods} internal` },
+          { label: 'Actions', value: `${manifest.totals.externalMethods} available / ${manifest.totals.internalMethods} Aurora-only` },
           { label: 'Peers', value: String(manifest.totals.peers) },
           { label: 'Device features', value: deviceFeatureLabel(manifest.native.availability) }
         ]}
@@ -192,7 +192,7 @@ function DeploymentTopologyPanel({
   ])
   const controlsSupported = supportsProcessControls(manifest)
   const topologyColumns: Array<DataColumn<(typeof visibleServices)[number]>> = [
-    { key: 'service', header: 'Service', render: (service) => service.module },
+    { key: 'service', header: 'Service', render: (service) => adminModuleLabel(service.module) },
     { key: 'topology', header: 'Placement', render: (service) => servicePlacementLabel(service.topology) },
     { key: 'status', header: 'Status', render: (service) => (service.stale ? 'stale' : service.status) },
     { key: 'hint', header: 'Location', render: (service) => serviceLocationLabel(service.container_hint ?? service.process_hint), hideAt: 'md' }
@@ -226,7 +226,7 @@ function DeploymentTopologyPanel({
               {degradedReasons.map((reason) => (
                 <li key={reason} className={gapListItemClass}>
                   <div className="flex min-w-0 flex-col gap-0.5">
-                    <strong className="text-sm font-medium">{reason}</strong>
+                    <strong className="text-sm font-medium">{adminReasonText(reason)}</strong>
                     <small className="text-xs text-muted-foreground">{degradedReasonCopy(reason)}</small>
                   </div>
                   <StatusBadge state="degraded" />
@@ -283,10 +283,10 @@ function DeploymentTopologyPanel({
 function ServiceHealthPanel({ services }: { services: AdminOverviewServiceSummary[] }) {
   const visible = services.slice(0, 10)
   const columns: Array<DataColumn<AdminOverviewServiceSummary>> = [
-    { key: 'service', header: 'Service', render: (service) => service.module },
-    { key: 'status', header: 'Status', render: (service) => service.status },
-    { key: 'methods', header: 'Methods', render: (service) => `${service.externalMethodCount} external / ${service.internalMethodCount} internal` },
-    { key: 'permissions', header: 'Permissions', render: (service) => service.requiredPermissions.join(', ') || 'none' }
+    { key: 'service', header: 'Service', render: (service) => adminModuleLabel(service.module) },
+    { key: 'status', header: 'Status', render: (service) => sanitizeAdminText(service.status) },
+    { key: 'methods', header: 'Actions', render: (service) => `${service.externalMethodCount} available / ${service.internalMethodCount} Aurora-only` },
+    { key: 'permissions', header: 'Permissions', render: (service) => service.requiredPermissions.length > 0 ? `${service.requiredPermissions.length} needed` : 'none' }
   ]
   return (
     <Card
@@ -327,7 +327,7 @@ function CapabilityGapPanel({
           {gaps.slice(0, 8).map((gap) => (
             <li key={gap.id} className={gapListItemClass}>
               <div className="flex min-w-0 flex-col gap-0.5">
-                <strong className="text-sm font-medium">{gap.module}.{gap.method}</strong>
+                <strong className="text-sm font-medium">{adminCapabilityLabel(gap)}</strong>
                 <small className="text-xs text-muted-foreground">{serviceTargetLabel(gap)}</small>
                 <span className="text-xs text-muted-foreground">{availabilityReason(gap)}</span>
               </div>
@@ -347,7 +347,7 @@ function CapabilityGapPanel({
           <summary className="cursor-pointer text-sm font-medium text-primary">Actions only Aurora can use</summary>
           <ul className="mt-2 flex flex-col gap-1 pl-4 text-xs text-muted-foreground">
             {internalOnly.slice(0, 10).map((method) => (
-              <li key={`${method.module}.${method.name}`}>{method.module}.{method.name}</li>
+              <li key={`${method.module}.${method.name}`}>{adminActionLabel(method)}</li>
             ))}
           </ul>
         </details>
@@ -501,7 +501,7 @@ function activityItems(manifest: AdminOverviewManifest, gaps: CapabilitySummary[
       id: 'registry',
       state: manifest.totals.methods > 0 ? 'available-local' : 'unsupported',
       label: 'Service list loaded',
-      detail: `${manifest.totals.methods} methods across ${manifest.totals.services} services`
+      detail: `${manifest.totals.methods} actions across ${manifest.totals.services} services`
     },
     {
       id: 'catalog',
@@ -512,7 +512,7 @@ function activityItems(manifest: AdminOverviewManifest, gaps: CapabilitySummary[
     {
       id: 'gap',
       state: newestGap?.availability ?? 'available-local',
-      label: newestGap ? `${newestGap.module}.${newestGap.method}` : 'No active gap',
+      label: newestGap ? adminCapabilityLabel(newestGap) : 'No active gap',
       detail: newestGap ? availabilityReason(newestGap) : 'No blocked action in the current view'
     },
     {
@@ -524,29 +524,16 @@ function activityItems(manifest: AdminOverviewManifest, gaps: CapabilitySummary[
   ]
 }
 
+function adminCapabilityLabel(capability: CapabilitySummary): string {
+  return adminActionLabel({
+    module: capability.module,
+    name: capability.method,
+    busTopic: capability.busTopic ?? capability.method,
+  })
+}
+
 function errorMessage(error: unknown): string {
-  return safeErrorCopy(error).title
-}
-
-function methodLabel(method: MethodDescriptor): string {
-  return `${moduleLabel(method.module)} ${humanizeToken(method.name)}`
-}
-
-function moduleLabel(module: string): string {
-  if (/gateway/i.test(module)) return 'Connection'
-  if (/auth/i.test(module)) return 'Access'
-  if (/orchestrator/i.test(module)) return 'Assistant'
-  if (/tooling/i.test(module)) return 'Tools'
-  if (/config/i.test(module)) return 'Settings'
-  return humanizeToken(module)
-}
-
-function humanizeToken(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/gu, '$1 $2')
-    .replace(/[._:-]+/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim()
+  return adminErrorTitle(error)
 }
 
 function deviceFeatureLabel(state: AvailabilityState): string {
