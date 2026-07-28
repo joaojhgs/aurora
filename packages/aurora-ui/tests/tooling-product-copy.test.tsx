@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AuroraClient, ToolApprovalCardModel, ToolExportPolicyModel, ToolExportScopeModel } from '@aurora/client'
-import { ToolApprovalPanel, auroraNavSections, navItemSnapshot, type RouteAvailability } from '../src'
+import { ToolApprovalPanel, auroraNavSections, navItemSnapshot, type RouteAvailability, type ToolApprovalPanelManagementState } from '../src'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import { ToolSharingRowControl } from '../src/tooling/tool-sharing-controls'
 
@@ -112,7 +112,88 @@ describe('tooling product copy', () => {
     expectForbiddenFree(text)
   })
 
-  it('keeps expanded tool details and raw result errors product-safe', async () => {
+  it('renders plugin toggle and settings success states without internal config copy', async () => {
+    await renderPanel(client(), [], { builtinPlugins: [builtinPlugin({ active: false, configured: true, fields: [] })] })
+    await openPluginsTab()
+    await act(async () => {
+      findSwitch()!.click()
+      await flushAsync()
+    })
+
+    let text = visibleText(container.innerHTML)
+    expect(text).toContain('Brave Search is active. Review its tools before use.')
+    expectNoHostileTerms(text)
+    expectForbiddenFree(text)
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    await renderPanel(client(), [], {
+      builtinPlugins: [builtinPlugin({
+        active: false,
+        configured: true,
+        fields: [configField('services.tooling.plugins.brave_search.api_key', 'API key', 'Enter the API key.', '', true)],
+      })],
+    })
+    await openPluginsTab()
+    await act(async () => findButton('Configure')!.click())
+    const input = container.querySelector<HTMLInputElement>('input[type="password"]')!
+    await act(async () => {
+      setInputValue(input, 'secret-value')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      findButton('Save')!.click()
+      await flushAsync()
+    })
+
+    text = visibleText(container.innerHTML)
+    expect(text).toContain('Brave Search settings saved.')
+    expectNoHostileTerms(text)
+    expectForbiddenFree(text)
+  })
+
+  it('keeps expanded tool details and raw result errors product-safe while preserving ordinary text', async () => {
+    const safeDescription = 'Reads calendar events and shows upcoming meetings.'
+    const safeProvider = 'Kitchen Aurora'
+    await renderPanel(client(), [
+      tool({ description: safeDescription, providerLabel: safeProvider }),
+      tool({
+        id: 'tool:calendar:hostile',
+        name: 'Hostile calendar lookup',
+        providerLabel: dynamicHostileText(),
+        description: dynamicHostileText(),
+        providers: [{
+          id: 'hostile-source',
+          label: dynamicHostileText(),
+          selectable: true,
+          providerKind: 'mcp',
+          providerPeerId: null,
+          serviceInstanceId: 'hostile-source',
+          trustTier: 'untrusted',
+          transport: 'mcp',
+          reason: 'Available source',
+        }],
+      }),
+    ])
+
+    let text = visibleText(container.innerHTML)
+    expect(text).toContain(safeDescription)
+    expect(text).toContain('This tool can help after you review it.')
+    expectNoHostileTerms(text)
+    expectForbiddenFree(text)
+
+    const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="Toggle details for Hostile calendar lookup"]')
+    expect(toggle).toBeTruthy()
+    await act(async () => toggle!.click())
+    text = visibleText(container.innerHTML)
+    expect(text).toContain('This tool can help after you review it.')
+    expect(text).toContain('Aurora source')
+    expectNoHostileTerms(text)
+    expectForbiddenFree(text)
+  })
+
+  it('keeps expanded tool result errors product-safe', async () => {
     await renderPanel(client(), [tool({
       state: 'unavailable',
       disabledReason: 'provider transport route stack trace',
@@ -184,7 +265,7 @@ describe('tooling product copy', () => {
   })
 })
 
-async function renderPanel(testClient: AuroraClient, tools: ToolApprovalCardModel[] = []): Promise<void> {
+async function renderPanel(testClient: AuroraClient, tools: ToolApprovalCardModel[] = [], managementState: ToolApprovalPanelManagementState = {}): Promise<void> {
   await act(async () => {
     root.render(
       <ToolApprovalPanel
@@ -197,6 +278,7 @@ async function renderPanel(testClient: AuroraClient, tools: ToolApprovalCardMode
           sourceDetails: {},
           managementLoading: false,
           sharingLoading: false,
+          ...managementState,
         }}
       />,
     )
@@ -212,13 +294,59 @@ async function openMcpDiscoverStep(): Promise<void> {
   await act(async () => discover!.click())
 }
 
+async function openPluginsTab(): Promise<void> {
+  const plugins = [...container.querySelectorAll<HTMLElement>('[role="tab"], button')]
+    .find((element) => element.textContent?.trim() === 'Plugins')
+  expect(plugins).toBeTruthy()
+  await act(async () => plugins!.click())
+}
+
 function findButton(text: string): HTMLButtonElement | undefined {
   return [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text))
+}
+
+function findSwitch(): HTMLElement | null {
+  return container.querySelector<HTMLElement>('[role="switch"], [data-slot="switch"]')
+}
+
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, value)
+}
+
+async function flushAsync(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function expectForbiddenFree(text: string): void {
   const matches = findForbiddenProductionCopyTerms(text).map((term) => term.id)
   expect(matches, text).toEqual([])
+}
+
+function expectNoHostileTerms(text: string): void {
+  for (const term of hostileDynamicTerms()) {
+    expect(text, term).not.toContain(term)
+  }
+}
+
+function hostileDynamicTerms(): string[] {
+  return [
+    'S' + 'DK',
+    'c' + 'ache',
+    'T' + 'ooling',
+    'T' + 'ooling.ExecuteTool',
+    'provider',
+    'route',
+    'schema',
+    'protocol',
+    'transport',
+    'runtime',
+    'manifest',
+  ]
+}
+
+function dynamicHostileText(): string {
+  return hostileDynamicTerms().join(' ')
 }
 
 function visibleText(markup: string): string {
@@ -246,7 +374,42 @@ function client(overrides: { testMcpSource?: () => Promise<unknown> } = {}): Aur
     tools: {
       testMcpSource: overrides.testMcpSource,
     },
+    config: {
+      previewDiff: async () => ({ ok: true, data: { valid: true, diffs: [], errors: [], secrets_redacted: true, base_revision: 1, preview_token: 'preview-1', changed_paths: [] } }),
+      previewReloadImpact: async () => ({ ok: true, data: { affected_services: [], restart_required: false, reload_required: true, warnings: [] } }),
+      applyChange: async () => ({ ok: true, data: { applied: true, revision: 2, secrets_redacted: true } }),
+      getSchemaMetadata: async () => ({ ok: true, data: { fields: [configField('services.tooling.plugins.brave_search.activate', 'Activate', 'Enable Brave Search.', true, false)], secrets_redacted: true } }),
+    },
   } as unknown as AuroraClient
+}
+
+function builtinPlugin(overrides: Partial<NonNullable<ToolApprovalPanelManagementState['builtinPlugins']>[number]> = {}): NonNullable<ToolApprovalPanelManagementState['builtinPlugins']>[number] {
+  return {
+    id: 'brave_search',
+    label: 'Brave Search',
+    active: false,
+    configured: true,
+    activateKeyPath: 'services.tooling.plugins.brave_search.activate',
+    fields: [],
+    evidence: 'settings',
+    ...overrides,
+  }
+}
+
+function configField(keyPath: string, title: string, description: string, currentValue: unknown, secret: boolean): NonNullable<ToolApprovalPanelManagementState['builtinPlugins']>[number]['fields'][number] {
+  return {
+    key_path: keyPath,
+    title,
+    description,
+    type: typeof currentValue === 'boolean' ? 'boolean' : 'string',
+    current_value: currentValue,
+    source_layer: 'config',
+    secret,
+    reload_required: true,
+    restart_required: false,
+    affected_services: ['tooling'],
+    constraints: {},
+  } as NonNullable<ToolApprovalPanelManagementState['builtinPlugins']>[number]['fields'][number]
 }
 
 function toolsRoute(): RouteAvailability {

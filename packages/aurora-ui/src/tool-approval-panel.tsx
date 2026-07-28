@@ -34,6 +34,7 @@ export interface ToolApprovalPanelManagementState {
   grants?: ToolApprovalGrantModel[]
   pendingApprovals?: ToolPendingApprovalModel[]
   auditEvents?: ToolPolicyAuditEventModel[]
+  builtinPlugins?: BuiltinPluginModel[]
   managementLoading?: boolean
   managementError?: string | null
   sharingPolicy?: ToolExportPolicyModel | null
@@ -104,7 +105,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     grants: initialManagementState?.grants ?? [],
     pendingApprovals: initialManagementState?.pendingApprovals ?? [],
     auditEvents: initialManagementState?.auditEvents ?? [],
-    builtinPlugins: [],
+    builtinPlugins: initialManagementState?.builtinPlugins ?? [],
     managementLoading: initialManagementState?.managementLoading ?? !initialManagementState,
     managementError: initialManagementState?.managementError ?? null,
     sharingPolicy: initialManagementState?.sharingPolicy ?? null,
@@ -552,7 +553,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     try {
       await applyPluginConfigChanges(
         [{ key_path: plugin.activateKeyPath, value: active }],
-        `${plugin.label} ${active ? 'activated' : 'deactivated'}. Tooling reloads its tool catalog to pick this up.`
+        active ? `${plugin.label} is active. Review its tools before use.` : `${plugin.label} is inactive.`
       )
     } catch (error) {
       setDecisionMessage('__plugins__', errorMessage(error))
@@ -567,7 +568,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     }
     setDecisionMessage('__plugins__', `Saving ${plugin.label} configuration...`)
     try {
-      await applyPluginConfigChanges(changes, `${plugin.label} configuration saved through config preview/apply.`)
+      await applyPluginConfigChanges(changes, `${plugin.label} settings saved.`)
     } catch (error) {
       setDecisionMessage('__plugins__', errorMessage(error))
     }

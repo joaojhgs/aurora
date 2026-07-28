@@ -802,7 +802,7 @@ function PluginsWorkspace({
           <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
             {plugins.map(({ source, status }) => (
               <Card key={source.id} title={source.name} icon={<Package size={18} aria-hidden />} description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`} actions={<ToneBadge tone={pluginStatusTone(status)}>{status}</ToneBadge>}>
-                <p className="text-sm text-muted-foreground">{source.providerLabel}</p>
+                <p className="text-sm text-muted-foreground">{productSafeSourceLabel(source.providerLabel)}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Button variant="outline" onClick={() => onConfigure(source)}>Configure source</Button>
                 </div>
@@ -1155,7 +1155,7 @@ function ToolDetailRow({
             <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', expanded ? '' : '-rotate-90')} aria-hidden />
             <span className="flex min-w-0 flex-col" style={{ maxWidth: 360 }}>
               <strong className="truncate font-mono text-[12.5px] font-medium">{tool.name}</strong>
-              {!expanded ? <small className={cn('truncate text-xs', tool.disabledReason ? 'text-destructive' : 'text-muted-foreground')}>{tool.disabledReason ? toolDisabledCopy(tool) : tool.description}</small> : null}
+              {!expanded ? <small className={cn('truncate text-xs', tool.disabledReason ? 'text-destructive' : 'text-muted-foreground')}>{tool.disabledReason ? toolDisabledCopy(tool) : productSafeToolDescription(tool)}</small> : null}
             </span>
           </button>
         </TableCell>
@@ -1167,7 +1167,7 @@ function ToolDetailRow({
         <TableRow className="border-0 hover:bg-transparent">
           <TableCell colSpan={4} className="rounded-md bg-muted/20" style={{ whiteSpace: 'normal' }}>
             <div className="flex flex-col gap-3 py-1.5">
-              <p className="text-sm text-muted-foreground">{tool.description || 'No description provided.'}</p>
+              <p className="text-sm text-muted-foreground">{productSafeToolDescription(tool)}</p>
               {tool.disabledReason ? (
                 <p className="text-sm text-destructive" role="status">
                   {toolDisabledCopy(tool)}
@@ -1177,7 +1177,7 @@ function ToolDetailRow({
                 {tool.mutating ? 'Changes data' : 'Reads data'}
                 {tool.mutating ? ' · mutating' : ''}
                 {tool.dataEgress ? ' · data egress' : ''}
-                {tool.providerLabel ? ` · ${tool.providerLabel}` : ''}
+                {tool.providerLabel ? ` · ${productSafeSourceLabel(tool.providerLabel)}` : ''}
               </p>
               {tool.result ? <ToolResultCard result={tool.result} /> : null}
               <div className="flex flex-col gap-1 bg-background/25 px-3">
@@ -1312,7 +1312,7 @@ function ToolRow({
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
         <span className="flex items-center gap-2">
           {toolStateIcon(tool)}
-          <span className="flex flex-col"><strong className="font-medium">{tool.name}</strong><small className="text-xs text-muted-foreground">{tool.description}</small></span>
+          <span className="flex flex-col"><strong className="font-medium">{tool.name}</strong><small className="text-xs text-muted-foreground">{productSafeToolDescription(tool)}</small></span>
         </span>
         <span className="flex items-center gap-2">
           <ToneBadge tone={riskTone(tool.riskClass)}>{tool.riskClass}</ToneBadge>
@@ -1323,7 +1323,7 @@ function ToolRow({
       <div className="mt-3 flex flex-col gap-3">
         <MetaGrid columns={2} items={[
           { label: 'Current access', value: effectivePolicyCopy(tool, source) },
-          { label: 'Device or source', value: selectedProvider?.label ?? tool.providerLabel },
+          { label: 'Device or source', value: productSafeSourceLabel(selectedProvider?.label ?? tool.providerLabel) },
           { label: 'Permissions', value: tool.requiredPermissions.join(', ') || 'No explicit permissions reported' },
           { label: 'What it can do', value: capabilityCopy(tool) },
           { label: 'Reference ID', value: tool.correlationId ?? 'pending', mono: true },
@@ -1338,7 +1338,7 @@ function ToolRow({
               onChange={(event) => onSelectProvider(event.currentTarget.value)}
             >
               <option value="">Select source</option>
-              {tool.providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.selectable}>{provider.label}</option>)}
+              {tool.providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.selectable}>{productSafeSourceLabel(provider.label)}</option>)}
             </select>
             <small className="text-xs text-muted-foreground">{selectorMissing ? 'Choose a source before approving.' : 'Source selected.'}</small>
           </label>
@@ -1851,6 +1851,26 @@ function resultStatusCopy(status: string): string {
   if (/pending|running/i.test(status)) return 'In progress'
   if (/denied|blocked|failed|error/i.test(status)) return 'Needs attention'
   return 'Received'
+}
+
+function productSafeToolDescription(tool: ToolApprovalCardModel): string {
+  const description = tool.description.trim()
+  if (!description) return 'No description provided.'
+  if (!containsInternalToolCopy(description)) return description
+  if (tool.mutating) return 'This tool can make changes after you review it.'
+  if (tool.dataEgress) return 'This tool can use connected information after you review it.'
+  return 'This tool can help after you review it.'
+}
+
+function productSafeSourceLabel(label: string | null | undefined): string {
+  const trimmed = label?.trim()
+  if (!trimmed) return 'Aurora source'
+  return containsInternalToolCopy(trimmed) ? 'Aurora source' : trimmed
+}
+
+function containsInternalToolCopy(value: string): boolean {
+  return /\b(?:Tooling|Scheduler|AdminAction|SDK|cache|route|provider|schema|protocol|transport|runtime|manifest|contract|fallback|sidecar|SQLite|IndexedDB|OPFS|stack trace|debug|fixture|assertion|implementation|tested|evidence)\b/i.test(value)
+    || /\b[A-Z][A-Za-z0-9]*(?:\.[A-Za-z0-9_-]+)+\b/.test(value)
 }
 
 function approvalStatusLabel(status: string): string {
