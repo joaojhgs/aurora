@@ -96,6 +96,11 @@ type SubscribeAck = {
   ttlSeconds: number
 }
 
+type AsyncDispatchFailure = {
+  operation: 'inbound_call' | 'inbound_subscribe' | 'manifest_response'
+  reason: 'bridge_closed' | 'send_failed' | 'handler_failed'
+}
+
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_STREAM_QUEUE_LIMIT = 128
 const DEFAULT_FRAGMENT_THRESHOLD = 16 * 1024
@@ -131,6 +136,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private remoteLease: ProviderLeaseFrame | null = null
   private remoteLeaseTimer: unknown | null = null
   private remoteAvailability: 'unknown' | 'active' | 'unavailable' = 'unknown'
+  private asyncDispatchFailureCount = 0
+  private lastAsyncDispatchFailure: AsyncDispatchFailure | null = null
   private unsubscribeFrames: (() => void) | undefined
   private unsubscribeSession: (() => void) | undefined
 
@@ -297,6 +304,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     sentFragmentCount: number
     receivedFragmentCount: number
     remoteProtocolCapabilities: string[]
+    asyncDispatchFailureCount: number
+    lastAsyncDispatchFailure: AsyncDispatchFailure | null
   } {
     return {
       pendingCallCount: this.pending.size,
@@ -306,7 +315,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       bufferPressureHighWaterBytes: 0,
       sentFragmentCount: this.sentFragmentCount,
       receivedFragmentCount: this.receivedFragmentCount,
-      remoteProtocolCapabilities: [...(this.remoteProtocol?.capabilities ?? [])]
+      remoteProtocolCapabilities: [...(this.remoteProtocol?.capabilities ?? [])],
+      asyncDispatchFailureCount: this.asyncDispatchFailureCount,
+      lastAsyncDispatchFailure: this.lastAsyncDispatchFailure
     }
   }
 
@@ -553,7 +564,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.resolveSubscribe(frame as unknown as { id: string; subscription_id: string; accepted_topics: string[]; correlation_ids: string[]; ttl_seconds: number })
         return
       case 'subscribe':
-        void this.handleInboundSubscribe(frame as unknown as import('./protocol.js').SubscribeFrame)
+        this.observeAsyncDispatch('inbound_subscribe', this.handleInboundSubscribe(frame as unknown as import('./protocol.js').SubscribeFrame))
         return
       case 'subscribe_rejected':
         this.rejectSubscribe(String(frame.id), new Error(String(frame.reason)))
@@ -562,13 +573,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.eventSubscriptions.unsubscribe(this.remotePeerId, String(frame.subscription_id ?? frame.id))
         return
       case 'call':
-        void this.handleInboundCall(frame as unknown as import('./protocol.js').CallFrame)
+        this.observeAsyncDispatch('inbound_call', this.handleInboundCall(frame as unknown as import('./protocol.js').CallFrame))
         return
       case 'manifest':
         this.handleManifest(frame)
         return
       case 'manifest_request':
-        void this.sendLocalManifest()
+        this.observeAsyncDispatch('manifest_response', this.sendLocalManifest())
         return
       case 'manifest_ack':
         this.peerHost?.markManifestAcknowledged(frame as unknown as Record<string, unknown> & ManifestAckFrame)
@@ -815,6 +826,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     await this.sendLogicalFrame(frame)
   }
 
+  private observeAsyncDispatch(operation: AsyncDispatchFailure['operation'], promise: Promise<void>): void {
+    void promise.catch((error) => {
+      this.asyncDispatchFailureCount += 1
+      this.lastAsyncDispatchFailure = { operation, reason: classifyAsyncDispatchFailure(error) }
+    })
+  }
+
   private rearmRemoteLease(expiresAtMs: number): void {
     if (this.remoteLeaseTimer !== null) this.clearTimer(this.remoteLeaseTimer)
     this.remoteLeaseTimer = this.armTimer(Math.max(1, expiresAtMs - Date.now()), () => {
@@ -918,6 +936,13 @@ function normalizeRemoteError(error: unknown): Error {
   if (isRecord(error)) return new Error(typeof error.message === 'string' ? error.message : 'Remote WebRTC mesh error')
   if (typeof error === 'string') return new Error(error)
   return new Error('Remote WebRTC mesh error')
+}
+
+function classifyAsyncDispatchFailure(error: unknown): AsyncDispatchFailure['reason'] {
+  if (error instanceof TransportClosedError) return 'bridge_closed'
+  if (error instanceof Error && error.message === 'WebRTC mesh peer bridge is not connected') return 'bridge_closed'
+  if (error instanceof Error && error.message.includes('send')) return 'send_failed'
+  return 'handler_failed'
 }
 
 function normalizeTopics(topics: unknown): string[] {

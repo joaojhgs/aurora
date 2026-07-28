@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod/v4'
 
 import { AuroraClient } from '../src/client.js'
 import { MeshP2PTransport } from '../src/mesh.js'
@@ -8,6 +9,7 @@ import {
   CAP_FRAGMENTATION_V1,
   CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  PeerHostContractRegistry,
   PeerProtocolLimits,
   SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
@@ -22,13 +24,17 @@ import {
 
 class FakeSession {
   sent: unknown[] = []
+  sendFailure: Error | null = null
   frameListeners = new Set<(frame: unknown) => void>()
   snapshotListeners = new Set<(snapshot: PeerSessionSnapshot) => void>()
   snapshot: PeerSessionSnapshot = {
     state: 'authorized', role: 'answerer', closed: false, failed: false, authorized: true,
     localSignalingId: 'local', remoteSignalingId: 'sig-peer-a', expectedRemoteStableId: 'peer-a', icePath: 'host', reconnectAttempts: 0
   }
-  async sendFrame(frame: unknown): Promise<void> { this.sent.push(frame) }
+  async sendFrame(frame: unknown): Promise<void> {
+    if (this.sendFailure) throw this.sendFailure
+    this.sent.push(frame)
+  }
   subscribeFrames(listener: (frame: unknown) => void): () => void { this.frameListeners.add(listener); return () => this.frameListeners.delete(listener) }
   subscribe(listener: (snapshot: PeerSessionSnapshot) => void): () => void { this.snapshotListeners.add(listener); listener(this.snapshot); return () => this.snapshotListeners.delete(listener) }
   getSnapshot(): PeerSessionSnapshot { return this.snapshot }
@@ -54,7 +60,7 @@ function hello(): unknown {
   })
 }
 
-function localGrant(): LocalPeerGrantV1 {
+function localGrant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
   return {
     version: 1,
     grantId: 'grant-1',
@@ -65,7 +71,8 @@ function localGrant(): LocalPeerGrantV1 {
     capabilityPackIds: [],
     resourceScopes: [],
     createdAtMs: 1,
-    grantRevision: 1
+    grantRevision: 1,
+    ...patch
   }
 }
 
@@ -423,6 +430,166 @@ describe('WebRtcMeshPeerBridge', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps consumer availability active for real peer-host renewals until TTL and clears tombstones immediately', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1000)
+      const host = new WebRtcPeerHost({
+        localPeerId: 'peer-a',
+        nodeName: 'Peer A',
+        registry: createToolingPeerHostRegistry({
+          getTools: async () => ({ count: 0, tools: [] }),
+          getExportCatalog: async () => { throw new Error('not implemented') },
+          prepareExecution: async () => { throw new Error('not implemented') },
+          executeTool: async () => { throw new Error('not implemented') }
+        }),
+        authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+        clock: () => Date.now(),
+        randomId: () => 'epoch-real'
+      })
+      const session = new FakeSession()
+      const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'real-lease' })
+      session.emit(hello())
+      const manifestPromise = bridge.getManifest('peer-a')
+      await flush()
+      session.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
+      await expect(manifestPromise).resolves.toMatchObject({ peerId: 'peer-a' })
+
+      const renewal = host.renewLease()
+      expect(renewal).toMatchObject({ type: 'provider_lease', available: true })
+      session.emit(renewal)
+      vi.advanceTimersByTime(59_999)
+      await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({ peerId: 'peer-a' })
+      vi.advanceTimersByTime(1)
+      await expect(bridge.getManifest('peer-a')).resolves.toBeNull()
+
+      const tombstoneSession = new FakeSession()
+      const tombstoneBridge = new WebRtcMeshPeerBridge({ session: tombstoneSession, remotePeerId: 'peer-a', randomId: () => 'real-tombstone' })
+      tombstoneSession.emit(hello())
+      const tombstoneManifest = tombstoneBridge.getManifest('peer-a')
+      await flush()
+      tombstoneSession.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
+      await expect(tombstoneManifest).resolves.toMatchObject({ peerId: 'peer-a' })
+      const tombstone = host.suspend('manual_pause')
+      expect(tombstone).toMatchObject({ type: 'provider_unavailable', available: false, reason_code: 'manual_pause' })
+      tombstoneSession.emit(tombstone)
+      await expect(tombstoneBridge.getManifest('peer-a')).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds async inbound dispatch rejections and keeps handler errors redacted', async () => {
+    const sendFailure = new Error('send failed: raw socket secret')
+    const session = new FakeSession()
+    session.sendFailure = sendFailure
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a' })
+    session.emit({ type: 'call', id: 'send-call', method: 'Tooling.GetTools', params: {} })
+    session.emit({ type: 'subscribe', id: 'send-sub', topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 10 })
+    await flush()
+    expect(bridge.getDiagnostics()).toMatchObject({
+      asyncDispatchFailureCount: 2,
+      lastAsyncDispatchFailure: { operation: 'inbound_subscribe', reason: 'send_failed' }
+    })
+    expect(JSON.stringify(bridge.getDiagnostics())).not.toContain('raw socket secret')
+
+    const manifestSession = new FakeSession()
+    const manifestHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: async () => ({ count: 0, tools: [] }),
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: () => 'epoch-manifest-reject'
+    })
+    const manifestBridge = new WebRtcMeshPeerBridge({
+      session: manifestSession,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost: manifestHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    manifestSession.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    manifestSession.sent = []
+    manifestSession.sendFailure = sendFailure
+    manifestSession.emit({ type: 'manifest_request' })
+    await flush()
+    expect(manifestBridge.getDiagnostics()).toMatchObject({
+      asyncDispatchFailureCount: 1,
+      lastAsyncDispatchFailure: { operation: 'manifest_response', reason: 'send_failed' }
+    })
+    expect(JSON.stringify(manifestBridge.getDiagnostics())).not.toContain('raw socket secret')
+
+    const rawHandler = new Error('raw handler secret should stay local')
+    const providerSession = new FakeSession()
+    const providerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: async () => { throw rawHandler },
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: () => 'redacted-ref'
+    })
+    new WebRtcMeshPeerBridge({
+      session: providerSession,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost: providerHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    providerSession.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    providerSession.emit(ackFromSentManifest(providerSession))
+    providerSession.emit({ type: 'call', id: 'raw-error-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
+    await flush(); await flush()
+    const errorFrame = providerSession.sent.find((frame) => (frame as any).type === 'error' && (frame as any).id === 'raw-error-call')
+    expect(errorFrame).toMatchObject({ error: { code: 500, message: 'handler failed', reason_code: 'handler_failed', error_ref: 'redacted-ref' } })
+    expect(JSON.stringify(errorFrame)).not.toContain('raw handler secret')
+
+    const subscriptionRegistry = new PeerHostContractRegistry().registerEvent({
+      topic: 'Tooling.ProjectionInvalidated',
+      outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+      outputSchema: z.object({ ok: z.boolean() }),
+      requiredPermissions: [],
+      handler: async () => { throw new Error('raw subscription secret should stay local') }
+    })
+    const subscriptionSession = new FakeSession()
+    const subscriptionHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: subscriptionRegistry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'] })]),
+      clock: () => 1000,
+      randomId: () => 'sub-ref'
+    })
+    new WebRtcMeshPeerBridge({
+      session: subscriptionSession,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost: subscriptionHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    subscriptionSession.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    subscriptionSession.emit(ackFromSentManifest(subscriptionSession))
+    subscriptionSession.emit({ type: 'subscribe', id: 'raw-subscribe', topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 10 })
+    await flush(); await flush()
+    const rejected = subscriptionSession.sent.find((frame) => (frame as any).type === 'subscribe_rejected' && (frame as any).id === 'raw-subscribe')
+    expect(rejected).toMatchObject({ reason: 'handler_failed' })
+    expect(JSON.stringify(rejected)).not.toContain('raw subscription secret')
   })
 
   it('enforces stable identity, abort cancellation, and negotiated fragmentation only', async () => {
