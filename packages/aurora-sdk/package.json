@@ -28,6 +28,11 @@
       "types": "./dist/webrtc/index.d.ts",
       "import": "./dist/webrtc/index.js",
       "default": "./dist/webrtc/index.js"
+    },
+    "./local-data": {
+      "types": "./dist/local-data/index.d.ts",
+      "import": "./dist/local-data/index.js",
+      "default": "./dist/local-data/index.js"
     }
   },
   "files": [
