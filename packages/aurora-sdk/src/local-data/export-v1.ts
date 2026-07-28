@@ -1,43 +1,48 @@
 import { sha256 } from '@noble/hashes/sha2.js'
+import { z } from 'zod/v4'
 
 import type { LocalDataBackendKind } from './backend.js'
 import {
+  localDataRecordCollectionsSchema,
   parseLocalDataRecordCollections,
   type LocalDataRecordCollections
 } from './records.zod.js'
 
 export type LocalDataTransferState = 'not_started' | 'copying' | 'verifying' | 'committed' | 'failed'
 
-export interface LocalDataCollectionHashes {
-  conversations: string
-  messages: string
-  memoryItems: string
-  localToolStates: string
-  peerGrantMetadata: string
-  localAudit: string
-}
+export const localDataBackendKindSchema = z.enum(['sqlite-wasm-opfs', 'sqlite-tauri', 'indexeddb', 'memory'])
+export const localDataRecordCountsSchema = z.object({
+  conversations: z.number().int().safe().nonnegative(),
+  messages: z.number().int().safe().nonnegative(),
+  memoryItems: z.number().int().safe().nonnegative(),
+  localToolStates: z.number().int().safe().nonnegative(),
+  peerGrantMetadata: z.number().int().safe().nonnegative(),
+  localAudit: z.number().int().safe().nonnegative()
+}).strict()
+export const localDataCollectionHashesSchema = z.object({
+  conversations: z.string().regex(/^[a-f0-9]{64}$/u),
+  messages: z.string().regex(/^[a-f0-9]{64}$/u),
+  memoryItems: z.string().regex(/^[a-f0-9]{64}$/u),
+  localToolStates: z.string().regex(/^[a-f0-9]{64}$/u),
+  peerGrantMetadata: z.string().regex(/^[a-f0-9]{64}$/u),
+  localAudit: z.string().regex(/^[a-f0-9]{64}$/u)
+}).strict()
+export const localDataExportV1Schema = z.object({
+  version: z.literal(1),
+  sourceBackend: localDataBackendKindSchema,
+  schemaVersion: z.number().int().safe().nonnegative(),
+  profileId: z.string().min(1),
+  localNodeId: z.string().min(1),
+  exportedAtMs: z.number().int().safe().nonnegative(),
+  encryptionEnvelopeVersions: z.tuple([z.literal(1)]),
+  recordCounts: localDataRecordCountsSchema,
+  collectionHashes: localDataCollectionHashesSchema,
+  records: localDataRecordCollectionsSchema
+}).strict()
 
-export interface LocalDataRecordCounts {
-  conversations: number
-  messages: number
-  memoryItems: number
-  localToolStates: number
-  peerGrantMetadata: number
-  localAudit: number
-}
-
-export interface LocalDataExportV1 {
-  version: 1
-  sourceBackend: LocalDataBackendKind
-  schemaVersion: number
-  profileId: string
-  localNodeId: string
-  exportedAtMs: number
-  encryptionEnvelopeVersions: [1]
-  recordCounts: LocalDataRecordCounts
-  collectionHashes: LocalDataCollectionHashes
-  records: LocalDataRecordCollections
-}
+export type LocalDataCollectionHashes = z.infer<typeof localDataCollectionHashesSchema>
+export type LocalDataRecordCounts = z.infer<typeof localDataRecordCountsSchema>
+export type LocalDataExportV1 = z.infer<typeof localDataExportV1Schema>
 
 export interface LocalDataImportResult {
   imported: true
@@ -54,7 +59,7 @@ export function buildLocalDataExportV1(input: {
   records: LocalDataRecordCollections
 }): LocalDataExportV1 {
   const records = parseLocalDataRecordCollections(input.records)
-  return {
+  return localDataExportV1Schema.parse({
     version: 1,
     sourceBackend: input.sourceBackend,
     schemaVersion: input.schemaVersion,
@@ -65,27 +70,13 @@ export function buildLocalDataExportV1(input: {
     recordCounts: countLocalDataRecords(records),
     collectionHashes: hashLocalDataCollections(records),
     records: sortLocalDataRecords(records)
-  }
+  })
 }
 
 export function parseLocalDataExportV1(value: unknown): LocalDataExportV1 {
-  const record = requireRecord(value, 'local data export')
-  if (record.version !== 1) throw new TypeError('local data export version must be 1')
-  const records = parseLocalDataRecordCollections(record.records)
-  const parsed: LocalDataExportV1 = {
-    version: 1,
-    sourceBackend: requireBackendKind(record.sourceBackend),
-    schemaVersion: requireNonNegativeInt(record.schemaVersion, 'schemaVersion'),
-    profileId: requireString(record.profileId, 'profileId'),
-    localNodeId: requireString(record.localNodeId, 'localNodeId'),
-    exportedAtMs: requireNonNegativeInt(record.exportedAtMs, 'exportedAtMs'),
-    encryptionEnvelopeVersions: parseEnvelopeVersions(record.encryptionEnvelopeVersions),
-    recordCounts: parseCounts(record.recordCounts),
-    collectionHashes: parseHashes(record.collectionHashes),
-    records
-  }
-  const counts = countLocalDataRecords(records)
-  const hashes = hashLocalDataCollections(records)
+  const parsed = localDataExportV1Schema.parse(value)
+  const counts = countLocalDataRecords(parsed.records)
+  const hashes = hashLocalDataCollections(parsed.records)
   if (JSON.stringify(counts) !== JSON.stringify(parsed.recordCounts)) {
     throw new TypeError('local data export record counts do not match records')
   }
@@ -129,25 +120,7 @@ export function sortLocalDataRecords(records: LocalDataRecordCollections): Local
   }
 }
 
-export const localDataExportV1JsonSchema = Object.freeze({
-  $schema: 'https://json-schema.org/draft/2020-12/schema',
-  title: 'LocalDataExportV1',
-  type: 'object',
-  additionalProperties: false,
-  required: ['version', 'sourceBackend', 'schemaVersion', 'profileId', 'localNodeId', 'exportedAtMs', 'encryptionEnvelopeVersions', 'recordCounts', 'collectionHashes', 'records'],
-  properties: {
-    version: { const: 1 },
-    sourceBackend: { enum: ['sqlite-wasm-opfs', 'sqlite-tauri', 'indexeddb', 'memory'] },
-    schemaVersion: { type: 'integer', minimum: 0 },
-    profileId: { type: 'string', minLength: 1 },
-    localNodeId: { type: 'string', minLength: 1 },
-    exportedAtMs: { type: 'integer', minimum: 0 },
-    encryptionEnvelopeVersions: { type: 'array', items: { const: 1 }, minItems: 1, maxItems: 1 },
-    recordCounts: { type: 'object' },
-    collectionHashes: { type: 'object' },
-    records: { type: 'object' }
-  }
-} as const)
+export const localDataExportV1JsonSchema = z.toJSONSchema(localDataExportV1Schema)
 
 function hashJson(value: unknown): string {
   return Array.from(sha256(new TextEncoder().encode(canonicalJson(value))), (byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -171,60 +144,4 @@ function canonicalize(value: unknown): unknown {
 
 function byId<T extends { id: string }>(a: T, b: T): number {
   return a.id.localeCompare(b.id)
-}
-
-function requireRecord(value: unknown, label: string): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
-    throw new TypeError(`${label} must be a plain object`)
-  }
-  return value as Record<string, unknown>
-}
-
-function requireString(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length < 1) throw new TypeError(`${label} must be a string`)
-  return value
-}
-
-function requireNonNegativeInt(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new TypeError(`${label} must be a non-negative integer`)
-  return value
-}
-
-function requireBackendKind(value: unknown): LocalDataBackendKind {
-  if (value === 'sqlite-wasm-opfs' || value === 'sqlite-tauri' || value === 'indexeddb' || value === 'memory') return value
-  throw new TypeError('sourceBackend must be a supported local data backend kind')
-}
-
-function parseEnvelopeVersions(value: unknown): [1] {
-  if (!Array.isArray(value) || value.length !== 1 || value[0] !== 1) throw new TypeError('encryptionEnvelopeVersions must be [1]')
-  return [1]
-}
-
-function parseCounts(value: unknown): LocalDataRecordCounts {
-  const record = requireRecord(value, 'recordCounts')
-  return {
-    conversations: requireNonNegativeInt(record.conversations, 'conversations'),
-    messages: requireNonNegativeInt(record.messages, 'messages'),
-    memoryItems: requireNonNegativeInt(record.memoryItems, 'memoryItems'),
-    localToolStates: requireNonNegativeInt(record.localToolStates, 'localToolStates'),
-    peerGrantMetadata: requireNonNegativeInt(record.peerGrantMetadata, 'peerGrantMetadata'),
-    localAudit: requireNonNegativeInt(record.localAudit, 'localAudit')
-  }
-}
-
-function parseHashes(value: unknown): LocalDataCollectionHashes {
-  const record = requireRecord(value, 'collectionHashes')
-  return {
-    conversations: requireHash(record.conversations, 'conversations'),
-    messages: requireHash(record.messages, 'messages'),
-    memoryItems: requireHash(record.memoryItems, 'memoryItems'),
-    localToolStates: requireHash(record.localToolStates, 'localToolStates'),
-    peerGrantMetadata: requireHash(record.peerGrantMetadata, 'peerGrantMetadata'),
-    localAudit: requireHash(record.localAudit, 'localAudit')
-  }
-}
-
-function requireHash(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/u.test(value)) throw new TypeError(`${label} must be a SHA-256 hash`)
-  return value
 }

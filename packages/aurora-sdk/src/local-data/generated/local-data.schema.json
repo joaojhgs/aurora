@@ -1,29 +1,295 @@
 {
   "$defs": {
+    "ConversationMessageRecord": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "contentEnvelope": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "algorithm": {
+                  "const": "AES-GCM-256",
+                  "type": "string"
+                },
+                "ciphertextAndTagB64Url": {
+                  "minLength": 22,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "createdAtMs": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "keyId": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "nonceB64Url": {
+                  "maxLength": 256,
+                  "minLength": 12,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "version": {
+                  "const": 1,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "version",
+                "algorithm",
+                "keyId",
+                "nonceB64Url",
+                "ciphertextAndTagB64Url",
+                "createdAtMs"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conversationId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "createdAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "system",
+            "user",
+            "assistant",
+            "tool"
+          ],
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "complete",
+            "failed",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "toolEnvelope": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "algorithm": {
+                  "const": "AES-GCM-256",
+                  "type": "string"
+                },
+                "ciphertextAndTagB64Url": {
+                  "minLength": 22,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "createdAtMs": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "keyId": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "nonceB64Url": {
+                  "maxLength": 256,
+                  "minLength": 12,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "version": {
+                  "const": 1,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "version",
+                "algorithm",
+                "keyId",
+                "nonceB64Url",
+                "ciphertextAndTagB64Url",
+                "createdAtMs"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "conversationId",
+        "sequence",
+        "role",
+        "contentEnvelope",
+        "toolEnvelope",
+        "status",
+        "createdAtMs"
+      ],
+      "type": "object"
+    },
+    "ConversationRecord": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "archivedAtMs": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "localNodeId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "profileId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "titleEnvelope": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "algorithm": {
+                  "const": "AES-GCM-256",
+                  "type": "string"
+                },
+                "ciphertextAndTagB64Url": {
+                  "minLength": 22,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "createdAtMs": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "keyId": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "nonceB64Url": {
+                  "maxLength": 256,
+                  "minLength": 12,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "version": {
+                  "const": 1,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "version",
+                "algorithm",
+                "keyId",
+                "nonceB64Url",
+                "ciphertextAndTagB64Url",
+                "createdAtMs"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "profileId",
+        "localNodeId",
+        "titleEnvelope",
+        "createdAtMs",
+        "updatedAtMs",
+        "archivedAtMs"
+      ],
+      "type": "object"
+    },
     "EncryptedDataEnvelopeV1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
         "algorithm": {
-          "const": "AES-GCM-256"
+          "const": "AES-GCM-256",
+          "type": "string"
         },
         "ciphertextAndTagB64Url": {
+          "minLength": 22,
           "pattern": "^[A-Za-z0-9_-]+$",
           "type": "string"
         },
         "createdAtMs": {
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
         "keyId": {
+          "maxLength": 256,
           "minLength": 1,
           "type": "string"
         },
         "nonceB64Url": {
+          "maxLength": 256,
+          "minLength": 12,
           "pattern": "^[A-Za-z0-9_-]+$",
           "type": "string"
         },
         "version": {
-          "const": 1
+          "const": 1,
+          "type": "number"
         }
       },
       "required": [
@@ -36,10 +302,343 @@
       ],
       "type": "object"
     },
-    "LocalDataExportV1": {
+    "LightweightMemoryRecord": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "createdAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expiresAtMs": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "localNodeId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "namespace": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "payloadEnvelope": {
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": {
+              "const": "AES-GCM-256",
+              "type": "string"
+            },
+            "ciphertextAndTagB64Url": {
+              "minLength": 22,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "createdAtMs": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "keyId": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "nonceB64Url": {
+              "maxLength": 256,
+              "minLength": 12,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "version": {
+              "const": 1,
+              "type": "number"
+            }
+          },
+          "required": [
+            "version",
+            "algorithm",
+            "keyId",
+            "nonceB64Url",
+            "ciphertextAndTagB64Url",
+            "createdAtMs"
+          ],
+          "type": "object"
+        },
+        "profileId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "sourceId": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceType": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "profileId",
+        "localNodeId",
+        "namespace",
+        "payloadEnvelope",
+        "sourceType",
+        "sourceId",
+        "createdAtMs",
+        "updatedAtMs",
+        "expiresAtMs"
+      ],
+      "type": "object"
+    },
+    "LocalAuditRecord": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlationId": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "decision": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "localNodeId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "methodId": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "peerId": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profileId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "redactedDetailJson": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "resultStatus": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "toolContractId": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "profileId",
+        "localNodeId",
+        "peerId",
+        "action",
+        "decision",
+        "resultStatus",
+        "connectionEpoch",
+        "methodId",
+        "toolContractId",
+        "correlationId",
+        "redactedDetailJson",
+        "createdAtMs"
+      ],
+      "type": "object"
+    },
+    "LocalDataCollectionHashes": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "conversations": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "localAudit": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "localToolStates": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "memoryItems": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "messages": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "peerGrantMetadata": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversations",
+        "messages",
+        "memoryItems",
+        "localToolStates",
+        "peerGrantMetadata",
+        "localAudit"
+      ],
+      "type": "object"
+    },
+    "LocalDataExportV1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "collectionHashes": {
+          "additionalProperties": false,
+          "properties": {
+            "conversations": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "localAudit": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "localToolStates": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "memoryItems": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "messages": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "peerGrantMetadata": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "conversations",
+            "messages",
+            "memoryItems",
+            "localToolStates",
+            "peerGrantMetadata",
+            "localAudit"
+          ],
+          "type": "object"
+        },
+        "encryptionEnvelopeVersions": {
+          "prefixItems": [
+            {
+              "const": 1,
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
         "exportedAtMs": {
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
@@ -51,7 +650,809 @@
           "minLength": 1,
           "type": "string"
         },
+        "recordCounts": {
+          "additionalProperties": false,
+          "properties": {
+            "conversations": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "localAudit": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "localToolStates": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "memoryItems": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "messages": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "peerGrantMetadata": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "conversations",
+            "messages",
+            "memoryItems",
+            "localToolStates",
+            "peerGrantMetadata",
+            "localAudit"
+          ],
+          "type": "object"
+        },
+        "records": {
+          "additionalProperties": false,
+          "properties": {
+            "conversations": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "archivedAtMs": {
+                    "anyOf": [
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "localNodeId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "profileId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "titleEnvelope": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "algorithm": {
+                            "const": "AES-GCM-256",
+                            "type": "string"
+                          },
+                          "ciphertextAndTagB64Url": {
+                            "minLength": 22,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "createdAtMs": {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "keyId": {
+                            "maxLength": 256,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "nonceB64Url": {
+                            "maxLength": 256,
+                            "minLength": 12,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "version": {
+                            "const": 1,
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "algorithm",
+                          "keyId",
+                          "nonceB64Url",
+                          "ciphertextAndTagB64Url",
+                          "createdAtMs"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "updatedAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "profileId",
+                  "localNodeId",
+                  "titleEnvelope",
+                  "createdAtMs",
+                  "updatedAtMs",
+                  "archivedAtMs"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "localAudit": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "connectionEpoch": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "correlationId": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "decision": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "localNodeId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "methodId": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "peerId": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "profileId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "redactedDetailJson": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "resultStatus": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "toolContractId": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "profileId",
+                  "localNodeId",
+                  "peerId",
+                  "action",
+                  "decision",
+                  "resultStatus",
+                  "connectionEpoch",
+                  "methodId",
+                  "toolContractId",
+                  "correlationId",
+                  "redactedDetailJson",
+                  "createdAtMs"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "localToolStates": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "descriptorHash": {
+                    "pattern": "^[a-f0-9]{64}$",
+                    "type": "string"
+                  },
+                  "descriptorJson": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "localNodeId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "profileId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "revision": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "settingsEnvelope": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "algorithm": {
+                            "const": "AES-GCM-256",
+                            "type": "string"
+                          },
+                          "ciphertextAndTagB64Url": {
+                            "minLength": 22,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "createdAtMs": {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "keyId": {
+                            "maxLength": 256,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "nonceB64Url": {
+                            "maxLength": 256,
+                            "minLength": 12,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "version": {
+                            "const": 1,
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "algorithm",
+                          "keyId",
+                          "nonceB64Url",
+                          "ciphertextAndTagB64Url",
+                          "createdAtMs"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "toolContractId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "updatedAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "profileId",
+                  "localNodeId",
+                  "toolContractId",
+                  "descriptorJson",
+                  "descriptorHash",
+                  "enabled",
+                  "settingsEnvelope",
+                  "revision",
+                  "updatedAtMs"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "memoryItems": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "expiresAtMs": {
+                    "anyOf": [
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "localNodeId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "namespace": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "payloadEnvelope": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "AES-GCM-256",
+                        "type": "string"
+                      },
+                      "ciphertextAndTagB64Url": {
+                        "minLength": 22,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "createdAtMs": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "keyId": {
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "nonceB64Url": {
+                        "maxLength": 256,
+                        "minLength": 12,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "version": {
+                        "const": 1,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "algorithm",
+                      "keyId",
+                      "nonceB64Url",
+                      "ciphertextAndTagB64Url",
+                      "createdAtMs"
+                    ],
+                    "type": "object"
+                  },
+                  "profileId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "sourceId": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sourceType": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "updatedAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "profileId",
+                  "localNodeId",
+                  "namespace",
+                  "payloadEnvelope",
+                  "sourceType",
+                  "sourceId",
+                  "createdAtMs",
+                  "updatedAtMs",
+                  "expiresAtMs"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "messages": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "contentEnvelope": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "algorithm": {
+                            "const": "AES-GCM-256",
+                            "type": "string"
+                          },
+                          "ciphertextAndTagB64Url": {
+                            "minLength": 22,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "createdAtMs": {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "keyId": {
+                            "maxLength": 256,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "nonceB64Url": {
+                            "maxLength": 256,
+                            "minLength": 12,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "version": {
+                            "const": 1,
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "algorithm",
+                          "keyId",
+                          "nonceB64Url",
+                          "ciphertextAndTagB64Url",
+                          "createdAtMs"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "conversationId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "role": {
+                    "enum": [
+                      "system",
+                      "user",
+                      "assistant",
+                      "tool"
+                    ],
+                    "type": "string"
+                  },
+                  "sequence": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "complete",
+                      "failed",
+                      "cancelled"
+                    ],
+                    "type": "string"
+                  },
+                  "toolEnvelope": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "algorithm": {
+                            "const": "AES-GCM-256",
+                            "type": "string"
+                          },
+                          "ciphertextAndTagB64Url": {
+                            "minLength": 22,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "createdAtMs": {
+                            "maximum": 9007199254740991,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "keyId": {
+                            "maxLength": 256,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "nonceB64Url": {
+                            "maxLength": 256,
+                            "minLength": 12,
+                            "pattern": "^[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "version": {
+                            "const": 1,
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "algorithm",
+                          "keyId",
+                          "nonceB64Url",
+                          "ciphertextAndTagB64Url",
+                          "createdAtMs"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "conversationId",
+                  "sequence",
+                  "role",
+                  "contentEnvelope",
+                  "toolEnvelope",
+                  "status",
+                  "createdAtMs"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "peerGrantMetadata": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "claimantPeerId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "expiresAtMs": {
+                    "anyOf": [
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "grantId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "localNodeId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "profileId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "revision": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "revokedAtMs": {
+                    "anyOf": [
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "scopeEnvelope": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "AES-GCM-256",
+                        "type": "string"
+                      },
+                      "ciphertextAndTagB64Url": {
+                        "minLength": 22,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "createdAtMs": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "keyId": {
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "nonceB64Url": {
+                        "maxLength": 256,
+                        "minLength": 12,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "version": {
+                        "const": 1,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "algorithm",
+                      "keyId",
+                      "nonceB64Url",
+                      "ciphertextAndTagB64Url",
+                      "createdAtMs"
+                    ],
+                    "type": "object"
+                  },
+                  "tokenId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "grantId",
+                  "profileId",
+                  "localNodeId",
+                  "claimantPeerId",
+                  "tokenId",
+                  "scopeEnvelope",
+                  "revision",
+                  "createdAtMs",
+                  "expiresAtMs",
+                  "revokedAtMs"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "conversations",
+            "messages",
+            "memoryItems",
+            "localToolStates",
+            "peerGrantMetadata",
+            "localAudit"
+          ],
+          "type": "object"
+        },
         "schemaVersion": {
+          "maximum": 9007199254740991,
           "minimum": 0,
           "type": "integer"
         },
@@ -61,10 +1462,12 @@
             "sqlite-tauri",
             "indexeddb",
             "memory"
-          ]
+          ],
+          "type": "string"
         },
         "version": {
-          "const": 1
+          "const": 1,
+          "type": "number"
         }
       },
       "required": [
@@ -80,16 +1483,1074 @@
         "records"
       ],
       "type": "object"
+    },
+    "LocalDataRecordCollections": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "conversations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "archivedAtMs": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "createdAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "localNodeId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "profileId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "titleEnvelope": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "AES-GCM-256",
+                        "type": "string"
+                      },
+                      "ciphertextAndTagB64Url": {
+                        "minLength": 22,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "createdAtMs": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "keyId": {
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "nonceB64Url": {
+                        "maxLength": 256,
+                        "minLength": 12,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "version": {
+                        "const": 1,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "algorithm",
+                      "keyId",
+                      "nonceB64Url",
+                      "ciphertextAndTagB64Url",
+                      "createdAtMs"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "updatedAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "profileId",
+              "localNodeId",
+              "titleEnvelope",
+              "createdAtMs",
+              "updatedAtMs",
+              "archivedAtMs"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "localAudit": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "connectionEpoch": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "correlationId": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "createdAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "decision": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "id": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "localNodeId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "methodId": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "peerId": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "profileId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "redactedDetailJson": {
+                "additionalProperties": {},
+                "propertyNames": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "resultStatus": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "toolContractId": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "profileId",
+              "localNodeId",
+              "peerId",
+              "action",
+              "decision",
+              "resultStatus",
+              "connectionEpoch",
+              "methodId",
+              "toolContractId",
+              "correlationId",
+              "redactedDetailJson",
+              "createdAtMs"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "localToolStates": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "descriptorHash": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "descriptorJson": {
+                "additionalProperties": {},
+                "propertyNames": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "localNodeId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "profileId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "revision": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "settingsEnvelope": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "AES-GCM-256",
+                        "type": "string"
+                      },
+                      "ciphertextAndTagB64Url": {
+                        "minLength": 22,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "createdAtMs": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "keyId": {
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "nonceB64Url": {
+                        "maxLength": 256,
+                        "minLength": 12,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "version": {
+                        "const": 1,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "algorithm",
+                      "keyId",
+                      "nonceB64Url",
+                      "ciphertextAndTagB64Url",
+                      "createdAtMs"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolContractId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "updatedAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "profileId",
+              "localNodeId",
+              "toolContractId",
+              "descriptorJson",
+              "descriptorHash",
+              "enabled",
+              "settingsEnvelope",
+              "revision",
+              "updatedAtMs"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "memoryItems": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "createdAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "expiresAtMs": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "localNodeId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "namespace": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "payloadEnvelope": {
+                "additionalProperties": false,
+                "properties": {
+                  "algorithm": {
+                    "const": "AES-GCM-256",
+                    "type": "string"
+                  },
+                  "ciphertextAndTagB64Url": {
+                    "minLength": 22,
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "type": "string"
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "keyId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "nonceB64Url": {
+                    "maxLength": 256,
+                    "minLength": 12,
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "type": "string"
+                  },
+                  "version": {
+                    "const": 1,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "version",
+                  "algorithm",
+                  "keyId",
+                  "nonceB64Url",
+                  "ciphertextAndTagB64Url",
+                  "createdAtMs"
+                ],
+                "type": "object"
+              },
+              "profileId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "sourceId": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sourceType": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "updatedAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "profileId",
+              "localNodeId",
+              "namespace",
+              "payloadEnvelope",
+              "sourceType",
+              "sourceId",
+              "createdAtMs",
+              "updatedAtMs",
+              "expiresAtMs"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "messages": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "contentEnvelope": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "AES-GCM-256",
+                        "type": "string"
+                      },
+                      "ciphertextAndTagB64Url": {
+                        "minLength": 22,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "createdAtMs": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "keyId": {
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "nonceB64Url": {
+                        "maxLength": 256,
+                        "minLength": 12,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "version": {
+                        "const": 1,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "algorithm",
+                      "keyId",
+                      "nonceB64Url",
+                      "ciphertextAndTagB64Url",
+                      "createdAtMs"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "conversationId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "createdAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "system",
+                  "user",
+                  "assistant",
+                  "tool"
+                ],
+                "type": "string"
+              },
+              "sequence": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "complete",
+                  "failed",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              "toolEnvelope": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "AES-GCM-256",
+                        "type": "string"
+                      },
+                      "ciphertextAndTagB64Url": {
+                        "minLength": 22,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "createdAtMs": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "keyId": {
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "nonceB64Url": {
+                        "maxLength": 256,
+                        "minLength": 12,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "version": {
+                        "const": 1,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "algorithm",
+                      "keyId",
+                      "nonceB64Url",
+                      "ciphertextAndTagB64Url",
+                      "createdAtMs"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "conversationId",
+              "sequence",
+              "role",
+              "contentEnvelope",
+              "toolEnvelope",
+              "status",
+              "createdAtMs"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "peerGrantMetadata": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "claimantPeerId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "createdAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "expiresAtMs": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "grantId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "localNodeId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "profileId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "revision": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "revokedAtMs": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "scopeEnvelope": {
+                "additionalProperties": false,
+                "properties": {
+                  "algorithm": {
+                    "const": "AES-GCM-256",
+                    "type": "string"
+                  },
+                  "ciphertextAndTagB64Url": {
+                    "minLength": 22,
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "type": "string"
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "keyId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "nonceB64Url": {
+                    "maxLength": 256,
+                    "minLength": 12,
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "type": "string"
+                  },
+                  "version": {
+                    "const": 1,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "version",
+                  "algorithm",
+                  "keyId",
+                  "nonceB64Url",
+                  "ciphertextAndTagB64Url",
+                  "createdAtMs"
+                ],
+                "type": "object"
+              },
+              "tokenId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "grantId",
+              "profileId",
+              "localNodeId",
+              "claimantPeerId",
+              "tokenId",
+              "scopeEnvelope",
+              "revision",
+              "createdAtMs",
+              "expiresAtMs",
+              "revokedAtMs"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "conversations",
+        "messages",
+        "memoryItems",
+        "localToolStates",
+        "peerGrantMetadata",
+        "localAudit"
+      ],
+      "type": "object"
+    },
+    "LocalDataRecordCounts": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "conversations": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "localAudit": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "localToolStates": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memoryItems": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messages": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "peerGrantMetadata": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversations",
+        "messages",
+        "memoryItems",
+        "localToolStates",
+        "peerGrantMetadata",
+        "localAudit"
+      ],
+      "type": "object"
+    },
+    "LocalToolStateRecord": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "descriptorHash": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "descriptorJson": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "localNodeId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "profileId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settingsEnvelope": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "algorithm": {
+                  "const": "AES-GCM-256",
+                  "type": "string"
+                },
+                "ciphertextAndTagB64Url": {
+                  "minLength": 22,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "createdAtMs": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "keyId": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "nonceB64Url": {
+                  "maxLength": 256,
+                  "minLength": 12,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                "version": {
+                  "const": 1,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "version",
+                "algorithm",
+                "keyId",
+                "nonceB64Url",
+                "ciphertextAndTagB64Url",
+                "createdAtMs"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolContractId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "updatedAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "profileId",
+        "localNodeId",
+        "toolContractId",
+        "descriptorJson",
+        "descriptorHash",
+        "enabled",
+        "settingsEnvelope",
+        "revision",
+        "updatedAtMs"
+      ],
+      "type": "object"
+    },
+    "PeerGrantMetadataRecord": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "claimantPeerId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "createdAtMs": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expiresAtMs": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grantId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "localNodeId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "profileId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revokedAtMs": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scopeEnvelope": {
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": {
+              "const": "AES-GCM-256",
+              "type": "string"
+            },
+            "ciphertextAndTagB64Url": {
+              "minLength": 22,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "createdAtMs": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "keyId": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "nonceB64Url": {
+              "maxLength": 256,
+              "minLength": 12,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            "version": {
+              "const": 1,
+              "type": "number"
+            }
+          },
+          "required": [
+            "version",
+            "algorithm",
+            "keyId",
+            "nonceB64Url",
+            "ciphertextAndTagB64Url",
+            "createdAtMs"
+          ],
+          "type": "object"
+        },
+        "tokenId": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "grantId",
+        "profileId",
+        "localNodeId",
+        "claimantPeerId",
+        "tokenId",
+        "scopeEnvelope",
+        "revision",
+        "createdAtMs",
+        "expiresAtMs",
+        "revokedAtMs"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "ConversationMessageRecord": {
+      "$ref": "#/$defs/ConversationMessageRecord"
+    },
+    "ConversationRecord": {
+      "$ref": "#/$defs/ConversationRecord"
+    },
     "EncryptedDataEnvelopeV1": {
       "$ref": "#/$defs/EncryptedDataEnvelopeV1"
     },
+    "LightweightMemoryRecord": {
+      "$ref": "#/$defs/LightweightMemoryRecord"
+    },
+    "LocalAuditRecord": {
+      "$ref": "#/$defs/LocalAuditRecord"
+    },
+    "LocalDataCollectionHashes": {
+      "$ref": "#/$defs/LocalDataCollectionHashes"
+    },
     "LocalDataExportV1": {
       "$ref": "#/$defs/LocalDataExportV1"
+    },
+    "LocalDataRecordCollections": {
+      "$ref": "#/$defs/LocalDataRecordCollections"
+    },
+    "LocalDataRecordCounts": {
+      "$ref": "#/$defs/LocalDataRecordCounts"
+    },
+    "LocalToolStateRecord": {
+      "$ref": "#/$defs/LocalToolStateRecord"
+    },
+    "PeerGrantMetadataRecord": {
+      "$ref": "#/$defs/PeerGrantMetadataRecord"
     }
   },
   "title": "AuroraLocalDataContracts",

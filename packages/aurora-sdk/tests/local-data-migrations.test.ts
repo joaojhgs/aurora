@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   assertStoredMigrationChecksums,
+  buildLocalDataJsonSchemaArtifact,
   localDataMigrationManifest,
   validateLocalDataMigrationManifest
 } from '../src/local-data/index.js'
@@ -41,5 +42,10 @@ describe('local-data SQLite migration manifest', () => {
     expect(() => assertStoredMigrationChecksums(localDataMigrationManifest, [
       { version: 1, checksum: 'f'.repeat(64) }
     ])).toThrow(/checksum/u)
+  })
+
+  it('keeps the checked JSON Schema artifact generated from the Zod schemas', () => {
+    const generated = JSON.parse(readFileSync(resolve(process.cwd(), 'src/local-data/generated/local-data.schema.json'), 'utf8'))
+    expect(generated).toEqual(JSON.parse(JSON.stringify(buildLocalDataJsonSchemaArtifact())))
   })
 })

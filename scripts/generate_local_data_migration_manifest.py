@@ -7,6 +7,8 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -47,7 +49,7 @@ def main() -> None:
     write_json(args.manifest_output, manifest)
     write_json(args.rust_output, rust_manifest(migrations))
     write_ts(args.ts_output, manifest)
-    write_json(args.schema_output, local_data_schema())
+    write_json(args.schema_output, build_zod_schema_artifact())
 
 
 def read_migrations(directory: Path) -> list[Migration]:
@@ -120,45 +122,42 @@ def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def local_data_schema() -> dict[str, object]:
-    return {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "title": "AuroraLocalDataContracts",
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "EncryptedDataEnvelopeV1": {"$ref": "#/$defs/EncryptedDataEnvelopeV1"},
-            "LocalDataExportV1": {"$ref": "#/$defs/LocalDataExportV1"},
-        },
-        "$defs": {
-            "EncryptedDataEnvelopeV1": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["version", "algorithm", "keyId", "nonceB64Url", "ciphertextAndTagB64Url", "createdAtMs"],
-                "properties": {
-                    "version": {"const": 1},
-                    "algorithm": {"const": "AES-GCM-256"},
-                    "keyId": {"type": "string", "minLength": 1},
-                    "nonceB64Url": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
-                    "ciphertextAndTagB64Url": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
-                    "createdAtMs": {"type": "integer", "minimum": 0},
-                },
-            },
-            "LocalDataExportV1": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["version", "sourceBackend", "schemaVersion", "profileId", "localNodeId", "exportedAtMs", "encryptionEnvelopeVersions", "recordCounts", "collectionHashes", "records"],
-                "properties": {
-                    "version": {"const": 1},
-                    "sourceBackend": {"enum": ["sqlite-wasm-opfs", "sqlite-tauri", "indexeddb", "memory"]},
-                    "schemaVersion": {"type": "integer", "minimum": 0},
-                    "profileId": {"type": "string", "minLength": 1},
-                    "localNodeId": {"type": "string", "minLength": 1},
-                    "exportedAtMs": {"type": "integer", "minimum": 0},
-                },
-            },
-        },
-    }
+def build_zod_schema_artifact() -> dict[str, object]:
+    schema_source = ROOT / "packages/aurora-sdk/src/local-data/schema-artifact.ts"
+    with tempfile.TemporaryDirectory(prefix="aurora-local-data-schema-") as tmp:
+        tmp_path = Path(tmp)
+        entry = tmp_path / "entry.ts"
+        bundle = tmp_path / "entry.mjs"
+        entry.write_text(
+            "import { buildLocalDataJsonSchemaArtifact } from "
+            f"{json.dumps(schema_source.as_posix())}\n"
+            "console.log(JSON.stringify(buildLocalDataJsonSchemaArtifact()))\n",
+            encoding="utf-8",
+        )
+        subprocess.run(
+            [
+                "pnpm",
+                "exec",
+                "esbuild",
+                str(entry),
+                "--bundle",
+                "--platform=node",
+                "--format=esm",
+                "--log-level=silent",
+                f"--outfile={bundle}",
+            ],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        completed = subprocess.run(
+            ["node", str(bundle)],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        )
+    return json.loads(completed.stdout)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ describe('local-data encrypted envelope contract', () => {
   it('validates AES-GCM envelope boundaries and rejects plaintext-shaped records', () => {
     expect(parseEncryptedDataEnvelopeV1(envelopeFixture)).toEqual(envelopeFixture)
     expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, algorithm: 'plaintext' })).toThrow(/algorithm/u)
-    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertext: 'secret text' })).toThrow(/unsupported field ciphertext/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertext: 'secret text' })).toThrow(/ciphertext/u)
     expect(JSON.stringify(envelopeFixture).toLowerCase()).not.toContain('bearer')
     expect(JSON.stringify(envelopeFixture).toLowerCase()).not.toContain('verifier')
   })
