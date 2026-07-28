@@ -65,15 +65,38 @@ export function assertStoredMigrationChecksums(
 
 function parseEntry(value: unknown): LocalDataMigrationManifestEntry {
   const record = requireRecord(value, 'migration')
+  const version = requirePositiveInt(record.version, 'version')
+  const name = requireName(record.name, 'name')
+  const checksum = requireChecksum(record.checksum, 'checksum')
   return {
-    version: requirePositiveInt(record.version, 'version'),
-    name: requireName(record.name, 'name'),
+    version,
+    name,
     file: requireFile(record.file, 'file'),
-    checksum: requireChecksum(record.checksum, 'checksum'),
+    checksum,
     min_app_version: requireString(record.min_app_version, 'min_app_version'),
     requires_pre_migration_export: requireBoolean(record.requires_pre_migration_export, 'requires_pre_migration_export'),
-    ledger_sql: requireString(record.ledger_sql, 'ledger_sql')
+    ledger_sql: requireCanonicalLedgerSql(record.ledger_sql, version, name, checksum)
   }
+}
+
+export function canonicalLocalDataMigrationLedgerSql(version: number, name: string, checksum: string): string {
+  if (!Number.isSafeInteger(version) || version < 1) throw new LocalDataError('migration_integrity', 'version must be a positive integer')
+  if (!/^[a-z0-9_]+$/u.test(name)) throw new LocalDataError('migration_integrity', 'name must be immutable snake case')
+  if (!/^[a-f0-9]{64}$/u.test(checksum)) throw new LocalDataError('migration_integrity', 'checksum must be a lowercase SHA-256 checksum')
+  return (
+    'INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) '
+    + `VALUES (${version}, '${name}', '${checksum}', CAST(strftime('%s','now') AS INTEGER) * 1000);\n`
+    + `PRAGMA user_version = ${version};`
+  )
+}
+
+function requireCanonicalLedgerSql(value: unknown, version: number, name: string, checksum: string): string {
+  const parsed = requireString(value, 'ledger_sql')
+  const canonical = canonicalLocalDataMigrationLedgerSql(version, name, checksum)
+  if (parsed !== canonical) {
+    throw new LocalDataError('migration_integrity', 'Migration ledger SQL must match the canonical validated statement')
+  }
+  return parsed
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {

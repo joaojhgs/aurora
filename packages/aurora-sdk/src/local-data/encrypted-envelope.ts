@@ -26,7 +26,7 @@ export const encryptedDataEnvelopeV1Schema = z.object({
 export type EncryptedDataEnvelopeV1 = z.infer<typeof encryptedDataEnvelopeV1Schema>
 
 export function parseEncryptedDataEnvelopeV1(value: unknown): EncryptedDataEnvelopeV1 {
-  return parseLocalDataBoundary(encryptedDataEnvelopeV1Schema, value, 'encrypted data envelope')
+  return parseLocalDataBoundary(encryptedDataEnvelopeV1Schema, value, 'envelope.v1')
 }
 
 export function buildEnvelopeAad(input: {

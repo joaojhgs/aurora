@@ -21,6 +21,7 @@ export type LocalDataErrorCode =
   | 'memory_session_only'
 
 export interface LocalDataErrorMetadata {
+  readonly boundaryId?: string
   readonly validation?: 'redacted'
   readonly issues?: Array<{ readonly code: string; readonly path: string }>
   readonly reason?: string

@@ -1,18 +1,31 @@
 import { z } from 'zod/v4'
 
 import { encryptedDataEnvelopeV1Schema } from './encrypted-envelope.js'
-import { isJsonRoundTripStable, parseLocalDataBoundary } from './validation.js'
+import { assertJsonSafety, isJsonRoundTripStable, parseLocalDataBoundary } from './validation.js'
 
-export const localDataIdSchema = z.string().min(1).max(256)
-export const nonNegativeSafeIntSchema = z.number().int().safe().nonnegative()
+export const localDataIdSchema = z.string().min(1).max(256).regex(/^[A-Za-z0-9_.:@/-]+$/u)
+export const nonNegativeSafeIntSchema = z.number().int().safe().nonnegative().refine((value) => !Object.is(value, -0), {
+  message: 'negative zero is not valid JSON state'
+})
 export const epochMsSchema = nonNegativeSafeIntSchema
 export const sha256HexSchema = z.string().regex(/^[a-f0-9]{64}$/u)
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
+export const localDataCollectionLimits = Object.freeze({
+  conversations: 10_000,
+  messages: 100_000,
+  memoryItems: 50_000,
+  localToolStates: 10_000,
+  peerGrantMetadata: 50_000,
+  localAudit: 100_000
+})
+
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
   z.null(),
   z.boolean(),
-  z.number().finite().safe(),
+  z.number().finite().safe().refine((value) => !Object.is(value, -0), {
+    message: 'negative zero is not valid JSON state'
+  }),
   z.string().max(64 * 1024),
   z.array(jsonValueSchema).max(1024),
   z.record(z.string().min(1).max(256), jsonValueSchema).refine((value) => Object.keys(value).length <= 256, {
@@ -25,6 +38,15 @@ export const jsonObjectSchema = z.record(z.string().min(1).max(256), jsonValueSc
   message: 'JSON object has too many keys'
 }).refine(isJsonRoundTripStable, {
   message: 'object must JSON round-trip exactly'
+}).refine((value) => {
+  try {
+    assertJsonSafety(value, 'json.object')
+    return true
+  } catch {
+    return false
+  }
+}, {
+  message: 'object exceeds local data JSON safety bounds'
 })
 export const conversationMessageRoleSchema = z.enum(['system', 'user', 'assistant', 'tool'])
 export const conversationMessageStatusSchema = z.enum(['pending', 'complete', 'failed', 'cancelled'])
@@ -114,12 +136,12 @@ export const localAuditRecordSchema = z.object({
 }).strict()
 
 export const localDataRecordCollectionsSchema = z.object({
-  conversations: z.array(conversationRecordSchema),
-  messages: z.array(conversationMessageRecordSchema),
-  memoryItems: z.array(lightweightMemoryRecordSchema),
-  localToolStates: z.array(localToolStateRecordSchema),
-  peerGrantMetadata: z.array(peerGrantMetadataRecordSchema),
-  localAudit: z.array(localAuditRecordSchema)
+  conversations: z.array(conversationRecordSchema).max(localDataCollectionLimits.conversations),
+  messages: z.array(conversationMessageRecordSchema).max(localDataCollectionLimits.messages),
+  memoryItems: z.array(lightweightMemoryRecordSchema).max(localDataCollectionLimits.memoryItems),
+  localToolStates: z.array(localToolStateRecordSchema).max(localDataCollectionLimits.localToolStates),
+  peerGrantMetadata: z.array(peerGrantMetadataRecordSchema).max(localDataCollectionLimits.peerGrantMetadata),
+  localAudit: z.array(localAuditRecordSchema).max(localDataCollectionLimits.localAudit)
 }).strict()
 
 export type ConversationRecord = z.infer<typeof conversationRecordSchema>
@@ -131,29 +153,29 @@ export type LocalAuditRecord = z.infer<typeof localAuditRecordSchema>
 export type LocalDataRecordCollections = z.infer<typeof localDataRecordCollectionsSchema>
 
 export function parseConversationRecord(value: unknown): ConversationRecord {
-  return parseLocalDataBoundary(conversationRecordSchema, value, 'conversation record')
+  return parseLocalDataBoundary(conversationRecordSchema, value, 'record.conversation')
 }
 
 export function parseConversationMessageRecord(value: unknown): ConversationMessageRecord {
-  return parseLocalDataBoundary(conversationMessageRecordSchema, value, 'conversation message record')
+  return parseLocalDataBoundary(conversationMessageRecordSchema, value, 'record.conversation_message')
 }
 
 export function parseLightweightMemoryRecord(value: unknown): LightweightMemoryRecord {
-  return parseLocalDataBoundary(lightweightMemoryRecordSchema, value, 'lightweight memory record')
+  return parseLocalDataBoundary(lightweightMemoryRecordSchema, value, 'record.lightweight_memory')
 }
 
 export function parseLocalToolStateRecord(value: unknown): LocalToolStateRecord {
-  return parseLocalDataBoundary(localToolStateRecordSchema, value, 'local tool state record')
+  return parseLocalDataBoundary(localToolStateRecordSchema, value, 'record.local_tool_state')
 }
 
 export function parsePeerGrantMetadataRecord(value: unknown): PeerGrantMetadataRecord {
-  return parseLocalDataBoundary(peerGrantMetadataRecordSchema, value, 'peer grant metadata record')
+  return parseLocalDataBoundary(peerGrantMetadataRecordSchema, value, 'record.peer_grant_metadata')
 }
 
 export function parseLocalAuditRecord(value: unknown): LocalAuditRecord {
-  return parseLocalDataBoundary(localAuditRecordSchema, value, 'local audit record')
+  return parseLocalDataBoundary(localAuditRecordSchema, value, 'record.local_audit')
 }
 
 export function parseLocalDataRecordCollections(value: unknown): LocalDataRecordCollections {
-  return parseLocalDataBoundary(localDataRecordCollectionsSchema, value, 'local data record collections')
+  return parseLocalDataBoundary(localDataRecordCollectionsSchema, value, 'records.collections')
 }

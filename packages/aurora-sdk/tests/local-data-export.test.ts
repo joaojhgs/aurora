@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { hashLocalDataCollections, MemoryLocalDataBackend, parseLocalDataExportV1 } from '../src/local-data/index.js'
+import { hashLocalDataCollections, localDataCollectionLimits, MemoryLocalDataBackend, parseLocalDataExportV1 } from '../src/local-data/index.js'
 import {
   auditFixture,
   conversationFixture,
@@ -49,10 +49,109 @@ describe('local-data export contract', () => {
 
     await expect(session.localTools.upsertLocalToolState(localToolStateFixture({
       descriptorJson: { ok: true, nested: [1, 'two', null], missing: undefined } as never
-    }))).rejects.toThrow(/descriptorJson|missing/u)
+    }))).rejects.toThrow(/record\.local_tool_state/u)
     await expect(session.localAudit.appendAudit(auditFixture({
       redactedDetailJson: { fn: () => 'not-json' } as never
-    }))).rejects.toThrow(/redactedDetailJson|fn/u)
+    }))).rejects.toThrow(/record\.local_audit/u)
+    await expect(session.localAudit.appendAudit(auditFixture({
+      id: 'audit-negative-zero',
+      redactedDetailJson: { unsafe: -0 } as never
+    }))).rejects.toThrow(/Invalid local data boundary/u)
+  })
+
+  it('redacts attacker-controlled keys from validation errors', async () => {
+    const attackerKey = 'secret-token-raw-fragment'
+
+    try {
+      parseLocalDataExportV1({
+        version: 1,
+        sourceBackend: 'memory',
+        schemaVersion: 3,
+        profileId: 'profile-1',
+        localNodeId: 'node-1',
+        exportedAtMs: 1,
+        encryptionEnvelopeVersions: [1],
+        recordCounts: {
+          conversations: 0,
+          messages: 0,
+          memoryItems: 0,
+          localToolStates: 0,
+          peerGrantMetadata: 0,
+          localAudit: 0
+        },
+        collectionHashes: {
+          conversations: '0'.repeat(64),
+          messages: '0'.repeat(64),
+          memoryItems: '0'.repeat(64),
+          localToolStates: '0'.repeat(64),
+          peerGrantMetadata: '0'.repeat(64),
+          localAudit: '0'.repeat(64)
+        },
+        records: {
+          conversations: [],
+          messages: [],
+          memoryItems: [],
+          localToolStates: [],
+          peerGrantMetadata: [],
+          localAudit: []
+        },
+        [attackerKey]: 'do-not-leak'
+      })
+      throw new Error('expected parse to fail')
+    } catch (error) {
+      expect(JSON.stringify(error)).not.toContain(attackerKey)
+      expect(error).toMatchObject({
+        code: 'invalid_record',
+        metadata: {
+          boundaryId: 'export.v1',
+          validation: 'redacted'
+        }
+      })
+    }
+  })
+
+  it('bounds hostile export documents before recursive parsing can exhaust resources', () => {
+    const nested = {} as Record<string, unknown>
+    let current = nested
+    for (let depth = 0; depth < 48; depth += 1) {
+      current.child = {}
+      current = current.child as Record<string, unknown>
+    }
+    expect(() => parseLocalDataExportV1(nested)).toThrow(/Invalid local data boundary/u)
+
+    expect(() => parseLocalDataExportV1({
+      version: 1,
+      sourceBackend: 'memory',
+      schemaVersion: 3,
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+      exportedAtMs: 1,
+      encryptionEnvelopeVersions: [1],
+      recordCounts: {
+        conversations: localDataCollectionLimits.conversations + 1,
+        messages: 0,
+        memoryItems: 0,
+        localToolStates: 0,
+        peerGrantMetadata: 0,
+        localAudit: 0
+      },
+      collectionHashes: {
+        conversations: '0'.repeat(64),
+        messages: '0'.repeat(64),
+        memoryItems: '0'.repeat(64),
+        localToolStates: '0'.repeat(64),
+        peerGrantMetadata: '0'.repeat(64),
+        localAudit: '0'.repeat(64)
+      },
+      records: {
+        conversations: [],
+        messages: [],
+        memoryItems: [],
+        localToolStates: [],
+        peerGrantMetadata: [],
+        localAudit: []
+      }
+    })).toThrow(/Invalid local data boundary/u)
   })
 
   it('uses deterministic UTF-8 ordering for canonical collection hashes', () => {

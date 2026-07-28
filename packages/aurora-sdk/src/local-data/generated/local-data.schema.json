@@ -56,6 +56,7 @@
         "conversationId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "createdAtMs": {
@@ -66,6 +67,7 @@
         "id": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "role": {
@@ -177,16 +179,19 @@
         "id": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "localNodeId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "profileId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "titleEnvelope": {
@@ -322,16 +327,19 @@
         "id": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "localNodeId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "namespace": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "payloadEnvelope": {
@@ -379,6 +387,7 @@
         "profileId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "sourceId": {
@@ -469,6 +478,7 @@
         "action": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "connectionEpoch": {
@@ -501,16 +511,19 @@
         "decision": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "id": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "localNodeId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "methodId": {
@@ -538,6 +551,7 @@
         "profileId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "redactedDetailJson": {
@@ -554,6 +568,7 @@
         "resultStatus": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "toolContractId": {
@@ -720,43 +735,47 @@
           "type": "integer"
         },
         "localNodeId": {
+          "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "profileId": {
+          "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "recordCounts": {
           "additionalProperties": false,
           "properties": {
             "conversations": {
-              "maximum": 9007199254740991,
+              "maximum": 10000,
               "minimum": 0,
               "type": "integer"
             },
             "localAudit": {
-              "maximum": 9007199254740991,
+              "maximum": 100000,
               "minimum": 0,
               "type": "integer"
             },
             "localToolStates": {
-              "maximum": 9007199254740991,
+              "maximum": 10000,
               "minimum": 0,
               "type": "integer"
             },
             "memoryItems": {
-              "maximum": 9007199254740991,
+              "maximum": 50000,
               "minimum": 0,
               "type": "integer"
             },
             "messages": {
-              "maximum": 9007199254740991,
+              "maximum": 100000,
               "minimum": 0,
               "type": "integer"
             },
             "peerGrantMetadata": {
-              "maximum": 9007199254740991,
+              "maximum": 50000,
               "minimum": 0,
               "type": "integer"
             }
@@ -798,16 +817,19 @@
                   "id": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "localNodeId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "profileId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "titleEnvelope": {
@@ -876,6 +898,7 @@
                 ],
                 "type": "object"
               },
+              "maxItems": 10000,
               "type": "array"
             },
             "localAudit": {
@@ -885,6 +908,7 @@
                   "action": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "connectionEpoch": {
@@ -917,16 +941,19 @@
                   "decision": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "id": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "localNodeId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "methodId": {
@@ -954,6 +981,7 @@
                   "profileId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "redactedDetailJson": {
@@ -970,6 +998,7 @@
                   "resultStatus": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "toolContractId": {
@@ -1001,6 +1030,7 @@
                 ],
                 "type": "object"
               },
+              "maxItems": 100000,
               "type": "array"
             },
             "localToolStates": {
@@ -1028,11 +1058,13 @@
                   "localNodeId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "profileId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "revision": {
@@ -1092,6 +1124,7 @@
                   "toolContractId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "updatedAtMs": {
@@ -1113,6 +1146,7 @@
                 ],
                 "type": "object"
               },
+              "maxItems": 10000,
               "type": "array"
             },
             "memoryItems": {
@@ -1139,16 +1173,19 @@
                   "id": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "localNodeId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "namespace": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "payloadEnvelope": {
@@ -1196,6 +1233,7 @@
                   "profileId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "sourceId": {
@@ -1240,6 +1278,7 @@
                 ],
                 "type": "object"
               },
+              "maxItems": 50000,
               "type": "array"
             },
             "messages": {
@@ -1298,6 +1337,7 @@
                   "conversationId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "createdAtMs": {
@@ -1308,6 +1348,7 @@
                   "id": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "role": {
@@ -1395,6 +1436,7 @@
                 ],
                 "type": "object"
               },
+              "maxItems": 100000,
               "type": "array"
             },
             "peerGrantMetadata": {
@@ -1404,6 +1446,7 @@
                   "claimantPeerId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "createdAtMs": {
@@ -1426,16 +1469,19 @@
                   "grantId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "localNodeId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "profileId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   },
                   "revision": {
@@ -1500,6 +1546,7 @@
                   "tokenId": {
                     "maxLength": 256,
                     "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
                     "type": "string"
                   }
                 },
@@ -1517,6 +1564,7 @@
                 ],
                 "type": "object"
               },
+              "maxItems": 50000,
               "type": "array"
             }
           },
@@ -1630,16 +1678,19 @@
               "id": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "localNodeId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "profileId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "titleEnvelope": {
@@ -1708,6 +1759,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 10000,
           "type": "array"
         },
         "localAudit": {
@@ -1717,6 +1769,7 @@
               "action": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "connectionEpoch": {
@@ -1749,16 +1802,19 @@
               "decision": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "id": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "localNodeId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "methodId": {
@@ -1786,6 +1842,7 @@
               "profileId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "redactedDetailJson": {
@@ -1802,6 +1859,7 @@
               "resultStatus": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "toolContractId": {
@@ -1833,6 +1891,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 100000,
           "type": "array"
         },
         "localToolStates": {
@@ -1860,11 +1919,13 @@
               "localNodeId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "profileId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "revision": {
@@ -1924,6 +1985,7 @@
               "toolContractId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "updatedAtMs": {
@@ -1945,6 +2007,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 10000,
           "type": "array"
         },
         "memoryItems": {
@@ -1971,16 +2034,19 @@
               "id": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "localNodeId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "namespace": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "payloadEnvelope": {
@@ -2028,6 +2094,7 @@
               "profileId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "sourceId": {
@@ -2072,6 +2139,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 50000,
           "type": "array"
         },
         "messages": {
@@ -2130,6 +2198,7 @@
               "conversationId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "createdAtMs": {
@@ -2140,6 +2209,7 @@
               "id": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "role": {
@@ -2227,6 +2297,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 100000,
           "type": "array"
         },
         "peerGrantMetadata": {
@@ -2236,6 +2307,7 @@
               "claimantPeerId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "createdAtMs": {
@@ -2258,16 +2330,19 @@
               "grantId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "localNodeId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "profileId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               },
               "revision": {
@@ -2332,6 +2407,7 @@
               "tokenId": {
                 "maxLength": 256,
                 "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
                 "type": "string"
               }
             },
@@ -2349,6 +2425,7 @@
             ],
             "type": "object"
           },
+          "maxItems": 50000,
           "type": "array"
         }
       },
@@ -2367,32 +2444,32 @@
       "additionalProperties": false,
       "properties": {
         "conversations": {
-          "maximum": 9007199254740991,
+          "maximum": 10000,
           "minimum": 0,
           "type": "integer"
         },
         "localAudit": {
-          "maximum": 9007199254740991,
+          "maximum": 100000,
           "minimum": 0,
           "type": "integer"
         },
         "localToolStates": {
-          "maximum": 9007199254740991,
+          "maximum": 10000,
           "minimum": 0,
           "type": "integer"
         },
         "memoryItems": {
-          "maximum": 9007199254740991,
+          "maximum": 50000,
           "minimum": 0,
           "type": "integer"
         },
         "messages": {
-          "maximum": 9007199254740991,
+          "maximum": 100000,
           "minimum": 0,
           "type": "integer"
         },
         "peerGrantMetadata": {
-          "maximum": 9007199254740991,
+          "maximum": 50000,
           "minimum": 0,
           "type": "integer"
         }
@@ -2471,11 +2548,13 @@
         "localNodeId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "profileId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "revision": {
@@ -2535,6 +2614,7 @@
         "toolContractId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "updatedAtMs": {
@@ -2563,6 +2643,7 @@
         "claimantPeerId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "createdAtMs": {
@@ -2585,16 +2666,19 @@
         "grantId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "localNodeId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "profileId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         },
         "revision": {
@@ -2659,6 +2743,7 @@
         "tokenId": {
           "maxLength": 256,
           "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:@/-]+$",
           "type": "string"
         }
       },

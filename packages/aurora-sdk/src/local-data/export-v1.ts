@@ -3,22 +3,24 @@ import { z } from 'zod/v4'
 
 import { LocalDataError, type LocalDataBackendKind } from './backend.js'
 import {
+  localDataCollectionLimits,
+  localDataIdSchema,
   localDataRecordCollectionsSchema,
   parseLocalDataRecordCollections,
   type LocalDataRecordCollections
 } from './records.zod.js'
-import { parseLocalDataBoundary } from './validation.js'
+import { assertJsonSafety, parseLocalDataBoundary } from './validation.js'
 
 export type LocalDataTransferState = 'not_started' | 'copying' | 'verifying' | 'committed' | 'failed'
 
 export const localDataBackendKindSchema = z.enum(['sqlite-wasm-opfs', 'sqlite-tauri', 'indexeddb', 'memory'])
 export const localDataRecordCountsSchema = z.object({
-  conversations: z.number().int().safe().nonnegative(),
-  messages: z.number().int().safe().nonnegative(),
-  memoryItems: z.number().int().safe().nonnegative(),
-  localToolStates: z.number().int().safe().nonnegative(),
-  peerGrantMetadata: z.number().int().safe().nonnegative(),
-  localAudit: z.number().int().safe().nonnegative()
+  conversations: z.number().int().safe().nonnegative().max(localDataCollectionLimits.conversations).refine((value) => !Object.is(value, -0)),
+  messages: z.number().int().safe().nonnegative().max(localDataCollectionLimits.messages).refine((value) => !Object.is(value, -0)),
+  memoryItems: z.number().int().safe().nonnegative().max(localDataCollectionLimits.memoryItems).refine((value) => !Object.is(value, -0)),
+  localToolStates: z.number().int().safe().nonnegative().max(localDataCollectionLimits.localToolStates).refine((value) => !Object.is(value, -0)),
+  peerGrantMetadata: z.number().int().safe().nonnegative().max(localDataCollectionLimits.peerGrantMetadata).refine((value) => !Object.is(value, -0)),
+  localAudit: z.number().int().safe().nonnegative().max(localDataCollectionLimits.localAudit).refine((value) => !Object.is(value, -0))
 }).strict()
 export const localDataCollectionHashesSchema = z.object({
   conversations: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -31,10 +33,10 @@ export const localDataCollectionHashesSchema = z.object({
 export const localDataExportV1Schema = z.object({
   version: z.literal(1),
   sourceBackend: localDataBackendKindSchema,
-  schemaVersion: z.number().int().safe().nonnegative(),
-  profileId: z.string().min(1),
-  localNodeId: z.string().min(1),
-  exportedAtMs: z.number().int().safe().nonnegative(),
+  schemaVersion: z.number().int().safe().nonnegative().refine((value) => !Object.is(value, -0)),
+  profileId: localDataIdSchema,
+  localNodeId: localDataIdSchema,
+  exportedAtMs: z.number().int().safe().nonnegative().refine((value) => !Object.is(value, -0)),
   encryptionEnvelopeVersions: z.tuple([z.literal(1)]),
   recordCounts: localDataRecordCountsSchema,
   collectionHashes: localDataCollectionHashesSchema,
@@ -60,6 +62,7 @@ export function buildLocalDataExportV1(input: {
   records: LocalDataRecordCollections
 }): LocalDataExportV1 {
   const records = parseLocalDataRecordCollections(input.records)
+  assertJsonSafety(records, 'records.collections')
   return parseLocalDataBoundary(localDataExportV1Schema, {
     version: 1,
     sourceBackend: input.sourceBackend,
@@ -71,11 +74,12 @@ export function buildLocalDataExportV1(input: {
     recordCounts: countLocalDataRecords(records),
     collectionHashes: hashLocalDataCollections(records),
     records: sortLocalDataRecords(records)
-  }, 'local data export')
+  }, 'export.v1')
 }
 
 export function parseLocalDataExportV1(value: unknown): LocalDataExportV1 {
-  const parsed = parseLocalDataBoundary(localDataExportV1Schema, value, 'local data export')
+  assertJsonSafety(value, 'export.v1')
+  const parsed = parseLocalDataBoundary(localDataExportV1Schema, value, 'export.v1')
   const counts = countLocalDataRecords(parsed.records)
   const hashes = hashLocalDataCollections(parsed.records)
   if (JSON.stringify(counts) !== JSON.stringify(parsed.recordCounts)) {

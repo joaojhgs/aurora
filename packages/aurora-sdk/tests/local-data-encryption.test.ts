@@ -12,12 +12,12 @@ import { envelopeFixture } from './fixtures/local-data-fixtures.js'
 describe('local-data encrypted envelope contract', () => {
   it('validates AES-GCM envelope boundaries and rejects plaintext-shaped records', () => {
     expect(parseEncryptedDataEnvelopeV1(envelopeFixture)).toEqual(envelopeFixture)
-    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, algorithm: 'plaintext' })).toThrow(/algorithm/u)
-    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertext: 'secret text' })).toThrow(/ciphertext/u)
-    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, nonceB64Url: 'AAAA' })).toThrow(/nonceB64Url/u)
-    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, nonceB64Url: 'AAAAAAAAAAAAAAAA=' })).toThrow(/nonceB64Url/u)
-    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertextAndTagB64Url: 'AAAA' })).toThrow(/ciphertextAndTagB64Url/u)
-    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertextAndTagB64Url: 'A'.repeat(2 * 1024 * 1024 + 1) })).toThrow(/ciphertextAndTagB64Url/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, algorithm: 'plaintext' })).toThrow(/envelope\.v1/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertext: 'secret text' })).toThrow(/envelope\.v1/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, nonceB64Url: 'AAAA' })).toThrow(/envelope\.v1/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, nonceB64Url: 'AAAAAAAAAAAAAAAA=' })).toThrow(/envelope\.v1/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertextAndTagB64Url: 'AAAA' })).toThrow(/envelope\.v1/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertextAndTagB64Url: 'A'.repeat(2 * 1024 * 1024 + 1) })).toThrow(/envelope\.v1/u)
     expect(JSON.stringify(envelopeFixture).toLowerCase()).not.toContain('bearer')
     expect(JSON.stringify(envelopeFixture).toLowerCase()).not.toContain('verifier')
   })

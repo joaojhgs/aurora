@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { LocalDataError, MemoryLocalDataBackend } from '../src/local-data/index.js'
+import { buildLocalDataExportV1, LocalDataError, MemoryLocalDataBackend } from '../src/local-data/index.js'
 import {
   auditFixture,
   conversationFixture,
@@ -77,6 +77,15 @@ describe('local-data memory repository contract', () => {
       await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-first' }))
       await new Promise<void>((resolve) => gates.push(resolve))
     })
+
+    await waitUntil(() => gates.length > 0)
+    let outsideReadSettled = false
+    const outsideRead = session.memory.listMemoryItems().then((records) => {
+      outsideReadSettled = true
+      return records
+    })
+    await Promise.resolve()
+    expect(outsideReadSettled).toBe(false)
     const second = session.transaction(async (repositories) => {
       await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-second' }))
     })
@@ -84,11 +93,9 @@ describe('local-data memory repository contract', () => {
       await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-third' }))
       throw new Error('rollback third')
     })
-
-    await Promise.resolve()
-    await expect(session.memory.listMemoryItems()).resolves.toHaveLength(1)
     gates[0]?.()
     await expect(first).resolves.toBeUndefined()
+    await expect(outsideRead).resolves.toEqual([memoryFixture({ id: 'memory-first' })])
     await expect(second).resolves.toBeUndefined()
     await expect(third).rejects.toThrow(/rollback third/u)
     await expect(session.memory.listMemoryItems()).resolves.toEqual([
@@ -97,10 +104,37 @@ describe('local-data memory repository contract', () => {
     ])
   })
 
+  it('queues outside writes until a long failed transaction rolls back', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    let releaseTransaction: (() => void) | undefined
+    const transaction = session.transaction(async (repositories) => {
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-transaction' }))
+      await new Promise<void>((resolve) => {
+        releaseTransaction = resolve
+      })
+      throw new Error('rollback long transaction')
+    })
+
+    await waitUntil(() => releaseTransaction !== undefined)
+    let outsideWriteSettled = false
+    const outsideWrite = session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-outside' })).then(() => {
+      outsideWriteSettled = true
+    })
+    await Promise.resolve()
+    expect(outsideWriteSettled).toBe(false)
+
+    releaseTransaction?.()
+    await expect(transaction).rejects.toThrow(/rollback long transaction/u)
+    await expect(outsideWrite).resolves.toBeUndefined()
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-outside' })])
+  })
+
   it('validates open identity and rejects future-schema imports before replacing state', async () => {
     const backend = new MemoryLocalDataBackend({ schemaVersion: 3 })
     await expect(backend.open('', 'node-1')).rejects.toMatchObject({ code: 'invalid_record' })
     await expect(backend.open('profile-1', '')).rejects.toMatchObject({ code: 'invalid_record' })
+    await expect(backend.open('profile 1', 'node-1')).rejects.toMatchObject({ code: 'invalid_record' })
     const session = await backend.open('profile-1', 'node-1')
     await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-original' }))
     const exported = await session.exportV1()
@@ -111,4 +145,54 @@ describe('local-data memory repository contract', () => {
     })
     await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-original' })])
   })
+
+  it('validates imported identities and repository invariants before replacing state', async () => {
+    const backend = new MemoryLocalDataBackend({ nowMs: () => 9999 })
+    const session = await backend.open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture())
+    await session.conversations.appendMessage(messageFixture())
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-original' }))
+    const exported = await session.exportV1()
+    const documentWithRecords = (records: typeof exported.records) => buildLocalDataExportV1({
+      sourceBackend: 'memory',
+      schemaVersion: exported.schemaVersion,
+      profileId: exported.profileId,
+      localNodeId: exported.localNodeId,
+      exportedAtMs: exported.exportedAtMs,
+      records
+    })
+
+    await expect(session.importV1(documentWithRecords({
+      ...exported.records,
+      memoryItems: [memoryFixture({ id: 'memory-bad', profileId: 'profile-2' })]
+    }))).rejects.toMatchObject({ code: 'identity_mismatch' })
+
+    await expect(session.importV1(documentWithRecords({
+      ...exported.records,
+      conversations: [conversationFixture({ id: 'dup' }), conversationFixture({ id: 'dup', updatedAtMs: 1200 })]
+    }))).rejects.toMatchObject({ code: 'invalid_record' })
+
+    await expect(session.importV1(documentWithRecords({
+      ...exported.records,
+      messages: [messageFixture({ conversationId: 'missing-conversation' })]
+    }))).rejects.toMatchObject({ code: 'invalid_record' })
+
+    await expect(session.importV1(documentWithRecords({
+      ...exported.records,
+      messages: [
+        messageFixture({ id: 'message-1', sequence: 0 }),
+        messageFixture({ id: 'message-2', sequence: 0 })
+      ]
+    }))).rejects.toMatchObject({ code: 'invalid_record' })
+
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-original' })])
+  })
 })
+
+async function waitUntil(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (condition()) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  throw new Error('condition was not reached')
+}
