@@ -23,16 +23,15 @@ test.beforeAll(async () => {
         <meta charset="utf-8">
         <script type="importmap">
           {"imports":{
-            "@aurora/client/webrtc":"/packages/aurora-sdk/dist/webrtc/index.js",
+            "@aurora/client/webrtc":"/packages/aurora-sdk/dist/webrtc/credentials.js",
             "@noble/hashes/":"/packages/aurora-sdk/node_modules/@noble/hashes/"
           }}
         </script>
         <title>Aurora browser persistence test</title>`)
       return
     }
-    const filePath = resolve(repositoryRoot, `.${pathname}`)
-    const allowedPrefix = `${repositoryRoot}${sep}`
-    if (!filePath.startsWith(allowedPrefix) || !existsSync(filePath) || !statSync(filePath).isFile()) {
+    const filePath = resolveServedFilePath(pathname)
+    if (filePath === null) {
       response.writeHead(404)
       response.end('Not found')
       return
@@ -51,6 +50,25 @@ test.beforeAll(async () => {
   if (address === null || typeof address === 'string') throw new Error('Browser persistence test server did not bind a TCP port')
   origin = `http://127.0.0.1:${address.port}`
 })
+
+function resolveServedFilePath(pathname: string): string | null {
+  const requestedPath = resolve(repositoryRoot, `.${pathname}`)
+  const allowedPrefix = `${repositoryRoot}${sep}`
+  if (!requestedPath.startsWith(allowedPrefix)) return null
+  if (existsSync(requestedPath) && statSync(requestedPath).isFile()) return requestedPath
+
+  const jsModulePath = `${requestedPath}.js`
+  if (
+    extname(requestedPath) === ''
+    && jsModulePath.startsWith(allowedPrefix)
+    && existsSync(jsModulePath)
+    && statSync(jsModulePath).isFile()
+  ) {
+    return jsModulePath
+  }
+
+  return null
+}
 
 test.afterAll(async () => {
   await new Promise<void>((resolveClose, rejectClose) => {
