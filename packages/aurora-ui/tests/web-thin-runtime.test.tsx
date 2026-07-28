@@ -22,6 +22,7 @@ import {
   type ThinConnectionProfile,
   type WebThinRoomSecret,
 } from '../src/index'
+import { LocalNodeLifecycleController } from '../src/local-node-lifecycle'
 
 const roots: Root[] = []
 const createClient = (transport: AuroraTransport) => new AuroraClient({ transport })
@@ -417,6 +418,74 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(controller.snapshot().status).toBe('authorized')
     expect(controller.snapshot().visible).toBe(false)
     expect(controller.snapshot().diagnostic).toMatch(/remains connected.*hidden/i)
+  })
+
+  it('drives local provider leases from page lifecycle while blur does not withdraw', () => {
+    vi.useFakeTimers()
+    try {
+      const documentListeners = new Map<string, Set<() => void>>()
+      const windowListeners = new Map<string, Set<() => void>>()
+      const visibilityDocument = {
+        visibilityState: 'visible' as DocumentVisibilityState,
+        addEventListener: (event: string, listener: () => void) => {
+          const set = documentListeners.get(event) ?? new Set<() => void>()
+          set.add(listener)
+          documentListeners.set(event, set)
+        },
+        removeEventListener: (event: string, listener: () => void) => {
+          documentListeners.get(event)?.delete(listener)
+        },
+      } as unknown as Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>
+      const windowTarget = {
+        addEventListener: (event: string, listener: () => void) => {
+          const set = windowListeners.get(event) ?? new Set<() => void>()
+          set.add(listener)
+          windowListeners.set(event, set)
+        },
+        removeEventListener: (event: string, listener: () => void) => {
+          windowListeners.get(event)?.delete(listener)
+        },
+      } as unknown as Pick<Window, 'addEventListener' | 'removeEventListener'>
+      const calls: string[] = []
+      const sent: unknown[] = []
+      const host = {
+        resume: () => { calls.push('resume'); return { type: 'manifest' } },
+        renewLease: () => { calls.push('renew'); return { type: 'provider_lease' } },
+        suspend: (reason?: string) => { calls.push(`suspend:${reason}`); return { type: 'provider_unavailable', reason_code: reason } },
+      }
+      const controller = new LocalNodeLifecycleController({
+        host,
+        sender: { sendFrame: async (frame) => { sent.push(frame) } },
+        document: visibilityDocument,
+        window: windowTarget,
+      })
+
+      controller.start()
+      expect(calls).toEqual(['resume'])
+      for (const listener of windowListeners.get('blur') ?? []) listener()
+      expect(calls).toEqual(['resume'])
+      vi.advanceTimersByTime(20_000)
+      expect(calls).toEqual(['resume', 'renew'])
+
+      for (const listener of windowListeners.get('pagehide') ?? []) listener()
+      expect(calls.at(-1)).toBe('suspend:page_hidden')
+      vi.advanceTimersByTime(20_000)
+      expect(calls.filter((call) => call === 'renew')).toHaveLength(1)
+
+      for (const listener of windowListeners.get('pageshow') ?? []) listener()
+      expect(calls.at(-1)).toBe('resume')
+      for (const listener of documentListeners.get('freeze') ?? []) listener()
+      expect(calls.at(-1)).toBe('suspend:page_frozen')
+      expect(sent).toEqual(expect.arrayContaining([
+        { type: 'manifest' },
+        { type: 'provider_lease' },
+        { type: 'provider_unavailable', reason_code: 'page_hidden' },
+        { type: 'provider_unavailable', reason_code: 'page_frozen' },
+      ]))
+      controller.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('forwards selected candidate-pair evidence without exposing raw addresses', async () => {

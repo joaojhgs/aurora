@@ -19,8 +19,10 @@ import {
   type PeerConnectionController,
   type PeerConnectionSnapshot,
   type WebRtcPeerConnectionProfile,
+  type WebRtcPeerHost,
 } from '@aurora/client/webrtc'
 import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
+import { LocalNodeLifecycleController } from './local-node-lifecycle'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
 import type { BrowserPeerPersistenceStatus, BrowserWebRtcCredentialStore } from './browser-peer-persistence'
 export type { AuroraThinConnectionMode } from './connection-mode'
@@ -60,6 +62,8 @@ export interface BrowserThinRuntimeConfig {
   inviteText?: string | null | undefined
   profile?: WebRtcPeerConnectionProfile | null | undefined
   runtimeMode?: string | null | undefined
+  nodeRole?: 'remote-console' | 'mesh-node' | null | undefined
+  peerHost?: WebRtcPeerHost | undefined
   nativePlatform?: string | null | undefined
   userAgent?: string | null | undefined
   nodeName?: string | null | undefined
@@ -193,11 +197,14 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   const localStablePeerId = config.localStablePeerId ?? credentialStore.getOrCreateLocalStablePeerId?.()
 
   let sdkRuntime: BrowserWebRtcRuntime<AuroraClient>
+  const nodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
   try {
     sdkRuntime = createBrowserWebRtcAuroraRuntime<AuroraClient>({
       mode,
+      nodeRole,
       ...(http ? { http } : {}),
       ...(activeProfile ? { profile: activeProfile } : {}),
+      ...(config.peerHost ? { peerHost: config.peerHost } : {}),
       credentialStore,
       ...(config.initialCredentials ? { initialCredentials: config.initialCredentials } : {}),
       ...(localStablePeerId ? { localStablePeerId } : {}),
@@ -255,12 +262,20 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     config: securityContext,
     visibilityDocument: config.visibilityDocument,
   })
+  const lifecycle = nodeRole === 'mesh-node' && config.peerHost
+    ? new LocalNodeLifecycleController({
+        host: config.peerHost,
+        ...(config.visibilityDocument ? { document: config.visibilityDocument } : {}),
+      })
+    : null
+  lifecycle?.start()
   return {
     client: sdkRuntime.client,
     peer,
     surface,
     mode,
     async close() {
+      lifecycle?.stop()
       await sdkRuntime.close()
       await credentialStore.close()
     },
