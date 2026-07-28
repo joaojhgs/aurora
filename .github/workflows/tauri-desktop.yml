@@ -91,9 +91,6 @@ jobs:
 
       - name: Prepare Python-free desktop thin overlay
         if: matrix.bundle_mode == 'desktop-thin'
-        env:
-          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: wss://signaling.example.invalid
-          AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only
         run: |
           pnpm --filter @aurora/tauri-ui prepare:bundle:desktop-thin
           pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin -- --allow-missing-bundle
@@ -137,16 +134,10 @@ jobs:
         working-directory: apps/aurora-tauri/src-tauri
 
       - name: Build Linux Tauri bundle
-        env:
-          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: wss://signaling.example.invalid
-          AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only
         run: pnpm --filter @aurora/tauri-ui build:bundle:${{ matrix.bundle_mode }}
 
       - name: Verify Python-free desktop thin artifact contents
         if: matrix.bundle_mode == 'desktop-thin'
-        env:
-          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: wss://signaling.example.invalid
-          AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only
         run: pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
 
       - name: Upload desktop thin artifact proof

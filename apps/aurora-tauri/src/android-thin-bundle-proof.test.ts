@@ -65,15 +65,11 @@ function androidThinEnv(
 
 function prepareAndroidThin(
   context: AndroidThinProofContext,
-  origins = 'https://gateway.example.invalid wss://signaling.example.invalid',
-  connectionMode?: string,
+  extra: NodeJS.ProcessEnv = {},
 ) {
   execFileSync(process.execPath, [prepare], {
     cwd: packageRoot,
-    env: androidThinEnv(context, 'apk', {
-      AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: origins,
-      AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode,
-    }),
+    env: androidThinEnv(context, 'apk', extra),
   })
 }
 
@@ -106,124 +102,44 @@ function runProofAuto(
 const describeIfNode = typeof window === 'undefined' ? describe : describe.skip
 
 describeIfNode('Android-thin bundle artifact proof', () => {
-  it('prepares a Python-free Android thin overlay with exact HTTPS/WSS root origins', () => {
+  it('prepares a Python-free Android thin overlay with runtime-configurable endpoints', () => {
     const context = createAndroidThinProofContext()
-    prepareAndroidThin(
-      context,
-      'https://gateway.example.invalid wss://signaling.example.invalid',
-    )
+    prepareAndroidThin(context, {
+      AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS:
+        'https://gateway.example.invalid wss://signaling.example.invalid',
+      AURORA_TAURI_THIN_CONNECTION_MODE: 'webrtc-only',
+    })
 
     const config = readFileSync(context.configPath, 'utf8')
     const report = readFileSync(context.prepareReportPath, 'utf8')
 
     expect(config).toContain('aurora-android-thin')
-    expect(config).toContain('https://gateway.example.invalid')
-    expect(config).toContain('wss://signaling.example.invalid')
+    expect(config).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(config).not.toContain('https://gateway.example.invalid')
+    expect(config).not.toContain('wss://signaling.example.invalid')
     expect(config).toContain('"externalBin": []')
     expect(config).toContain('"resources": {}')
     expect(config).not.toMatch(/aurora-sidecar|prepare-sidecar|config_defaults\.json|site-packages|\.venv/i)
     expect(report).toContain('"pythonSidecarStaged": false')
+    expect(report).toContain('"runtimeConfiguredEndpoints": true')
   })
 
-  it('prepares a WebRTC-only Android package without an HTTP Gateway origin', () => {
+  it('records no compiled Gateway or signaling origin in the prepare report', () => {
     const context = createAndroidThinProofContext()
-    prepareAndroidThin(
-      context,
-      'https://unused-gateway.example.invalid wss://signaling.example.invalid',
-      'webrtc-only',
-    )
+    prepareAndroidThin(context)
 
     const config = JSON.parse(readFileSync(context.configPath, 'utf8'))
     const report = JSON.parse(readFileSync(context.prepareReportPath, 'utf8'))
-    expect(config.app.security.csp).toContain(
-      "connect-src 'self' wss://signaling.example.invalid",
-    )
-    expect(config.app.security.csp).not.toContain('https://')
+    expect(config.app.security.csp).toContain("connect-src 'self' http: https: ws: wss:")
     expect(report).toMatchObject({
-      connectionMode: 'webrtc-only',
+      connectionMode: 'runtime-configurable',
       gatewayOrigin: null,
-      signalingOrigin: 'wss://signaling.example.invalid',
+      signalingOrigin: null,
+      runtimeConfiguredEndpoints: true,
     })
   })
 
-  it('rejects missing, scheme-wide, wildcard, insecure, credentialed, path, query, and fragment origins', () => {
-    for (const value of [
-      '',
-      'https:',
-      'wss:',
-      'https://*.example.invalid',
-      'http://gateway.example.invalid',
-      'ws://signaling.example.invalid',
-      'https://user:pass@gateway.example.invalid',
-      'https://gateway.example.invalid/api',
-      'https://gateway.example.invalid?token=secret',
-      'wss://signaling.example.invalid#invite'
-    ]) {
-      const result = spawnSync(process.execPath, [prepare], {
-        cwd: packageRoot,
-        encoding: 'utf8',
-        env: androidThinEnv(createAndroidThinProofContext(), 'apk', {
-          AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: value,
-        }),
-      })
-      expect(result.status, value || '<empty>').not.toBe(0)
-    }
-  })
-
-  it.each(['webrtc-only', 'webrtc-preferred'])(
-    'requires WSS signaling for %s even when multiple HTTPS origins are present',
-    (connectionMode) => {
-      const result = spawnSync(process.execPath, [prepare], {
-        cwd: packageRoot,
-        encoding: 'utf8',
-        env: androidThinEnv(createAndroidThinProofContext(), 'apk', {
-          AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS:
-            'https://gateway.example.invalid https://not-signaling.example.invalid',
-          AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode,
-        }),
-      })
-
-      expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain(
-        `${connectionMode} requires an exact WSS signaling origin.`,
-      )
-    },
-  )
-
-  it('applies the same exact-origin validation before Android-thin frontend builds', () => {
-    for (const value of [
-      'https://*.example.invalid',
-      'http://gateway.example.invalid',
-      'https://user:pass@gateway.example.invalid',
-      'https://gateway.example.invalid/api',
-      'https://gateway.example.invalid?token=secret',
-      'wss://signaling.example.invalid#invite'
-    ]) {
-      const result = spawnSync(process.execPath, [buildFrontend], {
-        cwd: packageRoot,
-        encoding: 'utf8',
-        env: { ...process.env, AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: value }
-      })
-      expect(result.status, value).not.toBe(0)
-    }
-
-    for (const connectionMode of ['webrtc-only', 'webrtc-preferred']) {
-      const result = spawnSync(process.execPath, [buildFrontend], {
-        cwd: packageRoot,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS:
-            'https://gateway.example.invalid https://not-signaling.example.invalid',
-          AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode,
-        },
-      })
-      expect(result.status, connectionMode).not.toBe(0)
-      expect(result.stderr).toContain(
-        `${connectionMode} requires an exact WSS signaling origin.`,
-      )
-    }
-
+  it('does not inject endpoint defaults into Android-thin frontend builds', () => {
     const stubDir = mkdtempSync(join(tmpdir(), 'aurora-android-thin-pnpm-'))
     const envPath = join(stubDir, 'frontend-env.json')
     const pnpmStub = join(stubDir, 'pnpm')
@@ -245,9 +161,9 @@ describeIfNode('Android-thin bundle artifact proof', () => {
     const frontendEnv = JSON.parse(readFileSync(envPath, 'utf8'))
     expect(frontendEnv).toMatchObject({
       argv: ['build'],
-      gateway: 'https://gateway.example.invalid',
-      signaling: 'wss://signaling.example.invalid',
-      connectionMode: 'webrtc-preferred',
+      gateway: '',
+      signaling: '',
+      connectionMode: '',
       mode: 'android-thin',
       webviewTarget: 'chrome83',
     })
@@ -268,8 +184,8 @@ describeIfNode('Android-thin bundle artifact proof', () => {
     expect(JSON.parse(readFileSync(envPath, 'utf8'))).toMatchObject({
       argv: ['build'],
       gateway: '',
-      signaling: 'wss://signaling.example.invalid',
-      connectionMode: 'webrtc-only',
+      signaling: '',
+      connectionMode: '',
       mode: 'android-thin',
       webviewTarget: 'chrome83',
     })
@@ -370,7 +286,13 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     expect(existsSync(calls[1].argv.at(-1))).toBe(false)
     expect(existsSync(context.configPath)).toBe(false)
     const provenance = JSON.parse(readFileSync(context.aabProvenancePath, 'utf8'))
-    expect(provenance).toMatchObject({ bundleMode: 'android-thin', kind: 'aab', sourceConfigWritten: false, expectedCapability: 'aurora-android-thin' })
+    expect(provenance).toMatchObject({
+      bundleMode: 'android-thin',
+      kind: 'aab',
+      target: 'universal',
+      sourceConfigWritten: false,
+      expectedCapability: 'aurora-android-thin',
+    })
     expect(provenance.config.app.security.capabilities).toEqual(['aurora-android-thin'])
     expect(provenance.configSha256).toBe(createHash('sha256').update(`${JSON.stringify(provenance.config, null, 2)}\n`).digest('hex'))
   })
@@ -479,15 +401,42 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     expect(packageJson.scripts['android:preflight:ci']).toContain('android:sync-native-plugin')
     expect(packageJson.scripts['android:preflight:strict']).toContain('android:sync-native-plugin')
     expect(packageJson.scripts['android:build:thin:apk']).toBe('node ./scripts/build-android-thin-bundle.mjs --kind apk')
+    expect(packageJson.scripts['android:build:thin:apk:arm64']).toBe(
+      'node ./scripts/build-android-thin-bundle.mjs --kind apk --target aarch64',
+    )
+    expect(packageJson.scripts['android:build:thin:apk:x86_64']).toBe(
+      'node ./scripts/build-android-thin-bundle.mjs --kind apk --target x86_64',
+    )
     expect(packageJson.scripts['android:build:thin:aab']).toBe('node ./scripts/build-android-thin-bundle.mjs --kind aab')
-    expect(readFileSync(buildThin, 'utf8')).toContain('AURORA_TAURI_ANDROID_THIN_CONFIG_PATH')
-    expect(readFileSync(buildThin, 'utf8')).toContain('android-thin-${kind}-build-provenance.json')
+    const buildSource = readFileSync(buildThin, 'utf8')
+    expect(buildSource).toContain('AURORA_TAURI_ANDROID_THIN_CONFIG_PATH')
+    expect(buildSource).toContain('android-thin-${kind}-build-provenance.json')
+    expect(buildSource).toContain("const target = readOption('--target')")
+    expect(buildSource).toContain("target: target ?? 'universal'")
+    expect(buildSource).toContain("if (target) buildArgs.push('--target', target)")
     expect(packageJson.scripts['android:verify:thin:apk']).toContain('assert-android-thin-artifact-clean.mjs --kind apk')
     expect(packageJson.scripts['android:verify:thin:aab']).toContain('assert-android-thin-artifact-clean.mjs --kind aab')
     for (const [name, command] of Object.entries(packageJson.scripts)) {
       if (!name.includes(':thin')) continue
       expect(command, `${name} must be Python-free`).not.toMatch(/prepare-sidecar|\bpython\b|\buv\b/i)
     }
+  })
+
+  it('allows runtime cleartext LAN endpoints in the Android thin application manifest', () => {
+    const manifest = readFileSync(
+      join(
+        packageRoot,
+        'src-tauri',
+        'android',
+        'aurora-native-plugin',
+        'src',
+        'main',
+        'AndroidManifest.xml',
+      ),
+      'utf8',
+    )
+
+    expect(manifest).toContain('android:usesCleartextTraffic="true"')
   })
 })
 

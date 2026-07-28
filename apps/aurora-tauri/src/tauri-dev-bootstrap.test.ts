@@ -23,6 +23,55 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(regressionGate).toContain('test:dev-bootstrap')
   })
 
+  it('exposes distinct local, desktop-thin, hosted-web, and standalone Python dev entrypoints', () => {
+    const rootPackage = JSON.parse(repoText('package.json')) as { scripts: Record<string, string> }
+    const tauriPackage = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
+    const webPackage = JSON.parse(repoText('apps/aurora-web/package.json')) as { scripts: Record<string, string> }
+    const wrapper = repoText('apps/aurora-tauri/scripts/tauri-cli.mjs')
+
+    expect(rootPackage.scripts.tauri).toBe('pnpm --filter @aurora/tauri-ui tauri')
+    expect(rootPackage.scripts['dev:desktop-local']).toBe(
+      'pnpm --filter @aurora/tauri-ui dev:desktop-local',
+    )
+    expect(rootPackage.scripts['dev:desktop-thin']).toBe(
+      'pnpm --filter @aurora/tauri-ui dev:desktop-thin',
+    )
+    expect(rootPackage.scripts['dev:web-thin']).toBe(
+      'pnpm --filter @aurora/web dev:web-thin',
+    )
+    expect(rootPackage.scripts['dev:python']).toBe('pnpm dev:python-service')
+    expect(rootPackage.scripts['dev:python-service']).toContain(
+      'AURORA_ARCHITECTURE_MODE=threads',
+    )
+    expect(rootPackage.scripts['dev:python-service']).toContain(
+      'AURORA_UI_ACTIVATE=false',
+    )
+    expect(rootPackage.scripts['dev:python-service']).toContain(
+      'uv run python main.py',
+    )
+
+    expect(tauriPackage.scripts['dev:desktop-local']).toBe('pnpm tauri dev')
+    expect(tauriPackage.scripts['dev:desktop-thin']).toContain(
+      'AURORA_TAURI_DEV_AUTOSIDECAR=0',
+    )
+    expect(tauriPackage.scripts['dev:desktop-thin']).toContain(
+      'VITE_AURORA_RUNTIME_MODE=desktop-thin',
+    )
+    expect(tauriPackage.scripts['dev:desktop-thin']).toContain(
+      '--config src-tauri/tauri.thin.conf.json',
+    )
+    expect(tauriPackage.scripts['dev:desktop-thin']).not.toMatch(
+      /prepare-sidecar|AURORA_TAURI_SIDECAR_/,
+    )
+    expect(webPackage.scripts['dev:web-thin']).toContain('next dev')
+    expect(wrapper).toContain(
+      "if (env.AURORA_TAURI_DEV_AUTOSIDECAR !== '0') applyDevSidecarDefaults(env)",
+    )
+    expect(wrapper).toContain(
+      'thin stack: enabled (Vite + Tauri shell, no Rust-supervised Python sidecar)',
+    )
+  })
+
   it('auto-configures tauri dev as the local Python sidecar stack', () => {
     const wrapper = repoText('apps/aurora-tauri/scripts/tauri-cli.mjs')
 
@@ -64,7 +113,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(prepare).toContain("sidecarProfile === 'desktop-local-minimal' ? 'thin'")
     expect(readme).toContain('pnpm --filter @aurora/tauri-ui tauri dev')
     expect(readme).toContain('You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.')
-    expect(readme).toContain('Desktop thin: use the packaged connection-profile editor')
+    expect(readme).toContain('Desktop thin: use onboarding/profile storage')
     expect(buildDocs).toContain('Desktop thin')
     expect(buildDocs).toContain('nonsecret connection profile')
   })

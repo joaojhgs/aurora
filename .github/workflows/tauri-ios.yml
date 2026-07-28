@@ -103,8 +103,6 @@ jobs:
           CODE_SIGN_IDENTITY: ""
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
-          AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS: "wss://signaling.example.invalid"
-          AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"
         run: pnpm --filter @aurora/tauri-ui ios:build:thin:simulator
 
       - name: Install, launch, and screenshot the thin app in an iOS simulator

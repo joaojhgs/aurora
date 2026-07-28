@@ -17,6 +17,7 @@ const prepareScript = join(packageRoot, 'scripts', 'prepare-android-thin-bundle.
 
 const args = process.argv.slice(2)
 const kind = readOption('--kind') ?? (args.includes('--aab') ? 'aab' : args.includes('--apk') ? 'apk' : 'apk')
+const target = readOption('--target')
 if (!['apk', 'aab'].includes(kind)) {
   throw new Error(`--kind must be apk or aab, got ${kind}`)
 }
@@ -45,8 +46,9 @@ try {
   run('pnpm', ['android:sync-native-plugin'])
 
   const buildArgs = ['tauri', 'android', 'build', '--debug']
-  if (kind === 'apk') buildArgs.push('--apk', '--target', 'x86_64')
+  if (kind === 'apk') buildArgs.push('--apk')
   else buildArgs.push('--aab')
+  if (target) buildArgs.push('--target', target)
   buildArgs.push('--config', tempConfigPath)
 
   run('pnpm', buildArgs)
@@ -56,6 +58,7 @@ try {
     generatedAt: new Date().toISOString(),
     bundleMode: 'android-thin',
     kind,
+    target: target ?? 'universal',
     configPath: '<temp-android-thin-config>',
     sourceConfigPath: redacted(sourceConfigPath),
     sourceConfigWritten: false,

@@ -32,11 +32,12 @@ interface IosThinPrepareReport {
   connectionMode: string
   gatewayOrigin: string | null
   signalingOrigin: string | null
+  runtimeConfiguredEndpoints: boolean
   pythonSidecarStaged: boolean
   secretsRedacted: boolean
 }
 
-function prepare(origins: string, connectionMode?: string) {
+function prepare(extra: NodeJS.ProcessEnv = {}) {
   const root = mkdtempSync(join(tmpdir(), 'aurora-ios-thin-proof-'))
   const configPath = join(root, 'tauri.ios-thin.conf.json')
   const reportPath = join(root, 'ios-thin-bundle-prepare.json')
@@ -44,10 +45,9 @@ function prepare(origins: string, connectionMode?: string) {
     cwd: packageRoot,
     env: {
       ...process.env,
-      AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS: origins,
       AURORA_TAURI_IOS_THIN_CONFIG_PATH: configPath,
       AURORA_TAURI_IOS_THIN_REPORT_PATH: reportPath,
-      AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode ?? '',
+      ...extra,
     },
   })
   return {
@@ -57,123 +57,50 @@ function prepare(origins: string, connectionMode?: string) {
 }
 
 describe('iOS thin bundle policy', () => {
-  it('generates a Python-free overlay with exact operator origins', () => {
-    const { config, report } = prepare(
-      'https://gateway.operator.example wss://signal.operator.example',
-    )
+  it('generates a Python-free overlay with runtime-configurable endpoints', () => {
+    const { config, report } = prepare({
+      AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS:
+        'https://gateway.operator.example wss://signal.operator.example',
+      AURORA_TAURI_THIN_CONNECTION_MODE: 'webrtc-only',
+    })
 
     expect(config.app.security.capabilities).toEqual([
       'aurora-ios-thin',
       'aurora-mobile-mesh',
     ])
     expect(config.app.security.csp).toContain(
-      "connect-src 'self' https://gateway.operator.example wss://signal.operator.example",
+      "connect-src 'self' http: https: ws: wss:",
     )
-    expect(config.app.security.csp).not.toContain('https://*')
-    expect(config.app.security.csp).not.toContain('wss://*')
+    expect(config.app.security.csp).not.toContain('gateway.operator.example')
+    expect(config.app.security.csp).not.toContain('signal.operator.example')
     expect(config.bundle.externalBin).toEqual([])
     expect(config.bundle.resources).toEqual({})
     expect(config.build.beforeBuildCommand).not.toMatch(/python|prepare-sidecar/i)
     expect(JSON.stringify(config)).not.toMatch(/aurora-sidecar|site-packages/i)
     expect(report).toMatchObject({
       bundleMode: 'ios-thin',
-      connectionMode: 'webrtc-preferred',
-      gatewayOrigin: 'https://gateway.operator.example',
-      signalingOrigin: 'wss://signal.operator.example',
+      connectionMode: 'runtime-configurable',
+      gatewayOrigin: null,
+      signalingOrigin: null,
+      runtimeConfiguredEndpoints: true,
       pythonSidecarStaged: false,
       secretsRedacted: true,
     })
   })
 
-  it('supports a true WebRTC-only package with WSS signaling and no HTTP Gateway', () => {
-    const { config, report } = prepare(
-      'https://unused-gateway.operator.example wss://signal.operator.example',
-      'webrtc-only',
-    )
+  it('does not require endpoint env to generate the iOS thin overlay', () => {
+    const { config, report } = prepare()
 
-    expect(config.app.security.csp).toContain(
-      "connect-src 'self' wss://signal.operator.example",
-    )
-    expect(config.app.security.csp).not.toContain('https://')
+    expect(config.app.security.csp).toContain("connect-src 'self' http: https: ws: wss:")
     expect(report).toMatchObject({
-      connectionMode: 'webrtc-only',
+      connectionMode: 'runtime-configurable',
       gatewayOrigin: null,
-      signalingOrigin: 'wss://signal.operator.example',
+      signalingOrigin: null,
+      runtimeConfiguredEndpoints: true,
     })
   })
 
-  it.each([
-    'https://*.operator.example',
-    'http://gateway.operator.example',
-    'ws://signal.operator.example',
-    'https://user:secret@gateway.operator.example',
-    'https://gateway.operator.example/api',
-    'https://gateway.operator.example?mode=thin',
-    'wss://signal.operator.example/#room',
-  ])('rejects non-exact or insecure origin %s', (origin) => {
-    const root = mkdtempSync(join(tmpdir(), 'aurora-ios-thin-reject-'))
-    const result = spawnSync(process.execPath, [prepareScript], {
-      cwd: packageRoot,
-      env: {
-        ...process.env,
-        AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS: origin,
-        AURORA_TAURI_IOS_THIN_CONFIG_PATH: join(root, 'config.json'),
-        AURORA_TAURI_IOS_THIN_REPORT_PATH: join(root, 'report.json'),
-      },
-      encoding: 'utf8',
-    })
-
-    expect(result.status).not.toBe(0)
-  })
-
-  it.each([
-    ['http-only', 'wss://signal.operator.example'],
-    ['webrtc-only', 'https://gateway.operator.example'],
-    [
-      'webrtc-only',
-      'https://gateway.operator.example https://not-signaling.operator.example',
-    ],
-    ['webrtc-preferred', 'wss://signal.operator.example'],
-    [
-      'webrtc-preferred',
-      'https://gateway.operator.example https://not-signaling.operator.example',
-    ],
-    ['invalid-mode', 'https://gateway.operator.example wss://signal.operator.example'],
-  ])('rejects connection mode %s with incompatible origins', (connectionMode, origins) => {
-    const root = mkdtempSync(join(tmpdir(), 'aurora-ios-thin-mode-reject-'))
-    const result = spawnSync(process.execPath, [prepareScript], {
-      cwd: packageRoot,
-      env: {
-        ...process.env,
-        AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS: origins,
-        AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode,
-        AURORA_TAURI_IOS_THIN_CONFIG_PATH: join(root, 'config.json'),
-        AURORA_TAURI_IOS_THIN_REPORT_PATH: join(root, 'report.json'),
-      },
-      encoding: 'utf8',
-    })
-
-    expect(result.status).not.toBe(0)
-  })
-
-  it('passes a WSS-only WebRTC mode to the iOS frontend build', () => {
-    for (const connectionMode of ['webrtc-only', 'webrtc-preferred']) {
-      const rejected = spawnSync(process.execPath, [frontendScript], {
-        cwd: packageRoot,
-        env: {
-          ...process.env,
-          AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS:
-            'https://gateway.operator.example https://not-signaling.operator.example',
-          AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode,
-        },
-        encoding: 'utf8',
-      })
-      expect(rejected.status, connectionMode).not.toBe(0)
-      expect(rejected.stderr).toContain(
-        `${connectionMode} requires an exact WSS signaling origin.`,
-      )
-    }
-
+  it('does not inject endpoint defaults into the iOS frontend build', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-ios-thin-pnpm-'))
     const envPath = join(root, 'frontend-env.json')
     const pnpmStub = join(root, 'pnpm')
@@ -199,13 +126,13 @@ describe('iOS thin bundle policy', () => {
     expect(JSON.parse(readFileSync(envPath, 'utf8'))).toMatchObject({
       argv: ['build'],
       gateway: '',
-      signaling: 'wss://signal.operator.example',
-      connectionMode: 'webrtc-only',
+      signaling: '',
+      connectionMode: '',
       runtimeMode: 'ios-thin',
     })
   })
 
-  it('routes the simulator build through the generated exact-origin overlay', () => {
+  it('routes the simulator build through the generated runtime-configurable overlay', () => {
     const packageJson = JSON.parse(
       readFileSync(resolve(packageRoot, 'package.json'), 'utf8'),
     ) as { scripts: Record<string, string> }
@@ -218,9 +145,7 @@ describe('iOS thin bundle policy', () => {
       'utf8',
     )
 
-    expect(packageJson.scripts['ios:prepare:thin']).toContain(
-      'prepare-ios-thin-bundle.mjs',
-    )
+    expect(packageJson.scripts['ios:prepare:thin']).toContain('prepare-ios-thin-bundle.mjs')
     expect(packageJson.scripts['ios:build:thin:simulator']).toContain(
       'build-ios-thin-bundle.mjs',
     )
@@ -232,9 +157,18 @@ describe('iOS thin bundle policy', () => {
       'rmSync(appleBuildRoot, { recursive: true, force: true })',
     )
     expect(wrapper).toContain('pythonSidecarStaged: false')
-    expect(frontendBuilder).toContain("'webrtc-only', 'webrtc-preferred'")
-    expect(frontendBuilder).toContain(
-      'requires an exact WSS signaling origin',
+    expect(frontendBuilder).toContain("VITE_AURORA_GATEWAY_URL: ''")
+    expect(frontendBuilder).toContain("VITE_AURORA_SIGNALING_URL: ''")
+  })
+
+  it('allows runtime HTTP/WS endpoints through the iOS WebView transport policy', () => {
+    const plist = readFileSync(
+      resolve(packageRoot, 'src-tauri/Info.ios.plist'),
+      'utf8',
     )
+
+    expect(plist).toContain('<key>NSAppTransportSecurity</key>')
+    expect(plist).toContain('<key>NSAllowsArbitraryLoads</key>')
+    expect(plist).toContain('<key>NSAllowsArbitraryLoadsInWebContent</key>')
   })
 })

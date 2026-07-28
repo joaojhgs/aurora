@@ -8,12 +8,12 @@
         "aurora-ios-thin",
         "aurora-mobile-mesh"
       ],
-      "csp": "default-src 'self'; connect-src 'self' https://gateway.example.invalid wss://signaling.example.invalid; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
+      "csp": "default-src 'self'; connect-src 'self' http: https: ws: wss:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
     }
   },
   "bundle": {
     "externalBin": [],
     "resources": {},
-    "longDescription": "Checked-in iOS thin policy template. The supported ios:build:thin:simulator wrapper generates a temporary overlay with the operator's exact HTTPS/WSS origins, no Python sidecar resources, and no external binaries."
+    "longDescription": "Checked-in iOS thin policy template. The supported ios:build:thin:simulator wrapper generates a temporary runtime-configurable overlay with no operator endpoint origins, no Python sidecar resources, and no external binaries."
   }
 }

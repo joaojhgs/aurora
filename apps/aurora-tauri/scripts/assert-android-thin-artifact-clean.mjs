@@ -139,7 +139,7 @@ function checkAndroidThinConfig() {
     failures.push('Android-thin config must replace base capabilities with aurora-android-thin only')
   }
   const csp = config.app?.security?.csp ?? ''
-  checkExactConnectSrc(csp)
+  checkRuntimeConfigurableConnectSrc(csp)
   proof.configSource = source
   proof.sourceConfigPresent = existsSync(configPath)
   proof.csp = csp
@@ -293,7 +293,7 @@ function isPreferredGeneratedArtifact(path, ext) {
   return false
 }
 
-function checkExactConnectSrc(csp) {
+function checkRuntimeConfigurableConnectSrc(csp) {
   const directive = csp
     .split(';')
     .map((value) => value.trim())
@@ -303,20 +303,15 @@ function checkExactConnectSrc(csp) {
     return
   }
   const sources = directive.split(/\s+/).slice(1)
+  const expected = new Set(["'self'", 'http:', 'https:', 'ws:', 'wss:'])
+  for (const source of expected) {
+    if (!sources.includes(source)) {
+      failures.push(`Android-thin CSP connect-src must include runtime-configurable source ${source}`)
+    }
+  }
   for (const source of sources) {
-    if (source === "'self'") continue
-    if (source.includes('*') || /^(https?|wss?):$/.test(source)) {
-      failures.push(`Android-thin CSP connect-src is not exact: ${source}`)
-      continue
-    }
-    try {
-      const url = new URL(source)
-      if (!['https:', 'wss:'].includes(url.protocol) || url.origin !== source) {
-        failures.push(`Android-thin CSP connect-src must be an exact HTTPS/WSS origin: ${source}`)
-      }
-    } catch {
-      failures.push(`Android-thin CSP connect-src is invalid: ${source}`)
-    }
+    if (expected.has(source)) continue
+    failures.push(`Android-thin CSP connect-src must not compile endpoint-specific source ${source}`)
   }
 }
 

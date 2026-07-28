@@ -97,7 +97,7 @@ function checkThinConfig() {
     failures.push('desktop-thin config contains sidecar/config resource references')
   }
   const csp = config.app?.security?.csp ?? ''
-  checkExactConnectSrc(csp)
+  checkRuntimeConfigurableConnectSrc(csp)
   const capabilities = config.app?.security?.capabilities ?? []
   if (!Array.isArray(capabilities) || capabilities.length !== 1 || capabilities[0] !== 'aurora-thin') {
     failures.push('desktop-thin config must replace base capabilities with aurora-thin only')
@@ -186,7 +186,7 @@ function inspectAppImage(path) {
   }
 }
 
-function checkExactConnectSrc(csp) {
+function checkRuntimeConfigurableConnectSrc(csp) {
   const directive = csp
     .split(';')
     .map((value) => value.trim())
@@ -196,20 +196,15 @@ function checkExactConnectSrc(csp) {
     return
   }
   const sources = directive.split(/\s+/).slice(1)
+  const expected = new Set(["'self'", 'http:', 'https:', 'ws:', 'wss:'])
+  for (const source of expected) {
+    if (!sources.includes(source)) {
+      failures.push(`desktop-thin CSP connect-src must include runtime-configurable source ${source}`)
+    }
+  }
   for (const source of sources) {
-    if (source === "'self'") continue
-    if (source.includes('*') || /^(https?|wss?):$/.test(source)) {
-      failures.push(`desktop-thin CSP connect-src is not exact: ${source}`)
-      continue
-    }
-    try {
-      const url = new URL(source)
-      if (!['https:', 'wss:'].includes(url.protocol) || url.origin !== source) {
-        failures.push(`desktop-thin CSP connect-src must be an exact HTTPS/WSS origin: ${source}`)
-      }
-    } catch {
-      failures.push(`desktop-thin CSP connect-src is invalid: ${source}`)
-    }
+    if (expected.has(source)) continue
+    failures.push(`desktop-thin CSP connect-src must not compile endpoint-specific source ${source}`)
   }
 }
 

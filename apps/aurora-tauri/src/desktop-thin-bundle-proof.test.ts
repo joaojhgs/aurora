@@ -30,17 +30,11 @@ function createThinProofContext(): ThinProofContext {
 
 function prepareThin(
   context: ThinProofContext,
-  origins = 'https://gateway.example.invalid wss://signaling.example.invalid',
-  connectionMode?: string,
+  extra: NodeJS.ProcessEnv = {},
 ) {
   execFileSync(process.execPath, [prepare], {
     cwd: packageRoot,
-    env: thinEnv(context, {
-      AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: origins,
-      ...(connectionMode
-        ? { AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode }
-        : {}),
-    })
+    env: thinEnv(context, extra)
   })
 }
 
@@ -95,24 +89,24 @@ describe('desktop-thin bundle artifact proof', () => {
     expect(result.stderr).toContain('config_defaults')
   })
 
-  it('supports a true desktop WebRTC-only package with WSS signaling', () => {
+  it('generates a runtime-configurable policy without compiled endpoints', () => {
     const context = createThinProofContext()
-    prepareThin(
-      context,
-      'https://unused-gateway.example.invalid wss://signaling.example.invalid',
-      'webrtc-only',
-    )
+    prepareThin(context, {
+      AURORA_TAURI_ALLOWED_REMOTE_ORIGINS:
+        'https://gateway.example.invalid wss://signaling.example.invalid',
+      AURORA_TAURI_THIN_CONNECTION_MODE: 'webrtc-only',
+    })
 
     const config = JSON.parse(readFileSync(context.configPath, 'utf8'))
     const report = JSON.parse(readFileSync(context.prepareReportPath, 'utf8'))
-    expect(config.app.security.csp).toContain(
-      "connect-src 'self' wss://signaling.example.invalid",
-    )
-    expect(config.app.security.csp).not.toContain('https://')
+    expect(config.app.security.csp).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(config.app.security.csp).not.toContain('gateway.example.invalid')
+    expect(config.app.security.csp).not.toContain('signaling.example.invalid')
     expect(report).toMatchObject({
-      connectionMode: 'webrtc-only',
+      connectionMode: 'runtime-configurable',
       gatewayOrigin: null,
-      signalingOrigin: 'wss://signaling.example.invalid',
+      signalingOrigin: null,
+      runtimeConfiguredEndpoints: true,
     })
   })
 
@@ -129,74 +123,7 @@ describe('desktop-thin bundle artifact proof', () => {
     expect(result.stderr).toContain('none were successfully inspected')
   })
 
-  it('rejects missing, scheme-wide, wildcard, and insecure remote CSP origins', () => {
-    const missingContext = createThinProofContext()
-    const missing = spawnSync(process.execPath, [prepare], {
-      cwd: packageRoot,
-      encoding: 'utf8',
-      env: thinEnv(missingContext, { AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: '' })
-    })
-    expect(missing.status).not.toBe(0)
-    expect(missing.stderr).toContain('AURORA_TAURI_ALLOWED_REMOTE_ORIGINS is required')
-
-    for (const value of [
-      'https:',
-      'wss:',
-      'https://*.example.invalid',
-      'http://gateway.example.invalid',
-      'ws://signaling.example.invalid',
-      'https://user:secret@gateway.example.invalid',
-      'https://gateway.example.invalid/api',
-      'https://gateway.example.invalid?token=secret',
-      'wss://signaling.example.invalid#invite',
-    ]) {
-      const result = spawnSync(process.execPath, [prepare], {
-        cwd: packageRoot,
-        encoding: 'utf8',
-        env: thinEnv(createThinProofContext(), { AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: value }),
-      })
-      expect(result.status, value).not.toBe(0)
-    }
-  })
-
-  it.each(['webrtc-only', 'webrtc-preferred'])(
-    'requires WSS signaling for %s even when multiple HTTPS origins are present',
-    (connectionMode) => {
-      const result = spawnSync(process.execPath, [prepare], {
-        cwd: packageRoot,
-        encoding: 'utf8',
-        env: thinEnv(createThinProofContext(), {
-          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS:
-            'https://gateway.example.invalid https://not-signaling.example.invalid',
-          AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode,
-        }),
-      })
-
-      expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain(
-        `${connectionMode} requires an exact WSS signaling origin.`,
-      )
-    },
-  )
-
-  it('passes a WSS-only WebRTC mode to the desktop frontend build', () => {
-    for (const connectionMode of ['webrtc-only', 'webrtc-preferred']) {
-      const rejected = spawnSync(process.execPath, [buildFrontend], {
-        cwd: packageRoot,
-        env: {
-          ...process.env,
-          AURORA_TAURI_ALLOWED_REMOTE_ORIGINS:
-            'https://gateway.example.invalid https://not-signaling.example.invalid',
-          AURORA_TAURI_THIN_CONNECTION_MODE: connectionMode,
-        },
-        encoding: 'utf8',
-      })
-      expect(rejected.status, connectionMode).not.toBe(0)
-      expect(rejected.stderr).toContain(
-        `${connectionMode} requires an exact WSS signaling origin.`,
-      )
-    }
-
+  it('does not inject endpoint defaults into the desktop frontend build', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-desktop-thin-pnpm-'))
     const envPath = join(root, 'frontend-env.json')
     const pnpmStub = join(root, 'pnpm')
@@ -222,10 +149,32 @@ describe('desktop-thin bundle artifact proof', () => {
     expect(JSON.parse(readFileSync(envPath, 'utf8'))).toMatchObject({
       argv: ['build'],
       gateway: '',
-      signaling: 'wss://signaling.example.invalid',
-      connectionMode: 'webrtc-only',
+      signaling: '',
+      connectionMode: '',
       runtimeMode: 'desktop-thin',
     })
+  })
+
+  it('keeps endpoint and connection-mode environment defaults out of the Tauri runtime', () => {
+    const runtimeSource = readFileSync(
+      join(packageRoot, 'src', 'aurora-client.ts'),
+      'utf8',
+    )
+    const envTypes = readFileSync(
+      join(packageRoot, 'src', 'vite-env.d.ts'),
+      'utf8',
+    )
+
+    for (const name of [
+      'VITE_AURORA_GATEWAY_URL',
+      'VITE_AURORA_SIGNALING_URL',
+      'VITE_AURORA_CONNECTION_MODE',
+    ]) {
+      expect(runtimeSource).not.toContain(name)
+      expect(envTypes).not.toContain(name)
+    }
+    expect(runtimeSource).toContain('thinProfileDocument')
+    expect(runtimeSource).toContain('requiresOnboarding: !thinProfileConfigured')
   })
 
 })

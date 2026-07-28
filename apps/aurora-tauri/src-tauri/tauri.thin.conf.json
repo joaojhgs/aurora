@@ -7,10 +7,10 @@
       "capabilities": [
         "aurora-thin"
       ],
-      "csp": "default-src 'self'; connect-src 'self' wss://signaling.example.invalid; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
+      "csp": "default-src 'self'; connect-src 'self' http: https: ws: wss:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
     }
   },
   "bundle": {
-    "longDescription": "Aurora desktop thin packages the official Tauri 2 shell without a Python sidecar. Depending on the selected mode, it connects to an exact operator-managed HTTPS Gateway origin, WSS signaling origin, or both."
+    "longDescription": "Aurora desktop thin packages the official Tauri 2 shell without a Python sidecar. Gateway and signaling endpoints are configured at runtime during onboarding and are not compiled into the artifact."
   }
 }

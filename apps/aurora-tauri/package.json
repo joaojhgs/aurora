@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:desktop-local": "pnpm tauri dev",
+    "dev:desktop-thin": "AURORA_TAURI_DEV_AUTOSIDECAR=0 VITE_AURORA_RUNTIME_MODE=desktop-thin VITE_AURORA_WEBRTC_THIN_CLIENT=1 pnpm tauri dev --config src-tauri/tauri.thin.conf.json",
     "build": "tsc --noEmit --incremental false && vite build",
     "build:bundle": "pnpm build:bundle:desktop-local",
     "build:bundle:thin": "pnpm build:bundle:desktop-thin",
@@ -79,6 +81,8 @@
     "test:desktop-thin-bundle": "vitest run --environment node src/desktop-thin-bundle-proof.test.ts",
     "android:prepare:thin": "node ./scripts/prepare-android-thin-bundle.mjs",
     "android:build:thin:apk": "node ./scripts/build-android-thin-bundle.mjs --kind apk",
+    "android:build:thin:apk:arm64": "node ./scripts/build-android-thin-bundle.mjs --kind apk --target aarch64",
+    "android:build:thin:apk:x86_64": "node ./scripts/build-android-thin-bundle.mjs --kind apk --target x86_64",
     "android:build:thin:aab": "node ./scripts/build-android-thin-bundle.mjs --kind aab",
     "android:verify:thin:apk": "node ./scripts/assert-android-thin-artifact-clean.mjs --kind apk",
     "android:verify:thin:aab": "node ./scripts/assert-android-thin-artifact-clean.mjs --kind aab",

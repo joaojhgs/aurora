@@ -22,8 +22,6 @@ function generatedDesktopThinConfigText() {
     cwd: resolve(repoRoot, 'apps/aurora-tauri'),
     env: {
       ...process.env,
-      AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: 'wss://signaling.example.invalid',
-      AURORA_TAURI_THIN_CONNECTION_MODE: 'webrtc-only',
       AURORA_TAURI_THIN_CONFIG_PATH: configPath,
       AURORA_TAURI_THIN_REPORT_PATH: join(tmpRoot, 'desktop-thin-bundle-prepare.json')
     }
@@ -144,6 +142,9 @@ describe('Tauri CI native evidence contract', () => {
       expect(command, `${name} must sync canonical native plugin before build`).toContain('android:sync-native-plugin')
     }
     expect(packageJson.scripts['android:build:thin:apk']).toBe('node ./scripts/build-android-thin-bundle.mjs --kind apk')
+    expect(packageJson.scripts['android:build:thin:apk:arm64']).toBe(
+      'node ./scripts/build-android-thin-bundle.mjs --kind apk --target aarch64',
+    )
     expect(packageJson.scripts['android:build:thin:aab']).toBe('node ./scripts/build-android-thin-bundle.mjs --kind aab')
     expect(androidThinBuildWrapper).toContain("run('pnpm', ['android:sync-native-plugin'])")
     expect(androidThinBuildWrapper).toContain("buildArgs.push('--config', tempConfigPath)")
@@ -212,9 +213,8 @@ describe('Tauri CI native evidence contract', () => {
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:thin:apk')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:thin:aab')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:thin:aab')
-    expect(androidWorkflow).toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
-    expect(androidWorkflow).toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: "wss://signaling.example.invalid"')
-    expect(androidWorkflow).toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
+    expect(androidWorkflow).not.toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
+    expect(androidWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(androidWorkflow).not.toContain('https://gateway.example.invalid')
     expect(androidWorkflow).toContain('"platforms;android-35"')
     expect(androidWorkflow).toContain('"platforms;android-36"')
@@ -260,9 +260,8 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('runs-on: macos-latest')
     expect(iosBaselineWorkflow).toContain('CODE_SIGNING_ALLOWED: "NO"')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:build:thin:simulator')
-    expect(iosBaselineWorkflow).toContain('AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS')
-    expect(iosBaselineWorkflow).toContain('AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS: "wss://signaling.example.invalid"')
-    expect(iosBaselineWorkflow).toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
+    expect(iosBaselineWorkflow).not.toContain('AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS')
+    expect(iosBaselineWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(iosBaselineWorkflow).not.toContain('https://gateway.example.invalid')
     expect(iosBaselineWorkflow).toContain('ios-thin-simulator-build-provenance.json')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:smoke:simulator')
@@ -346,9 +345,9 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['build:bundle:desktop-thin']).toContain('src-tauri/tauri.thin.conf.json')
     expect(packageJson.scripts['build:bundle:desktop-thin']).toContain('assert-thin-bundle-clean.mjs')
     expect(packageJson.scripts['build:bundle:desktop-thin']).not.toContain('prepare-sidecar')
-    expect(prepareThin).toContain('AURORA_TAURI_ALLOWED_REMOTE_ORIGINS')
+    expect(prepareThin).toContain("const connectSrc = [\"'self'\", 'http:', 'https:', 'ws:', 'wss:']")
     expect(prepareThin).toContain("capabilities: ['aurora-thin']")
-    expect(prepareThin).not.toContain('http: https: ws: wss:')
+    expect(prepareThin).toContain("connectionMode: 'runtime-configurable'")
     expect(assertThin).toContain('forbiddenPathPatterns')
     expect(assertThin).toContain('aurora-sidecar')
     expect(assertThin).toContain('config_defaults')
@@ -364,7 +363,8 @@ describe('Tauri CI native evidence contract', () => {
     expect(thinCapability).not.toContain('aurora-local-file')
     expect(thinCapability).not.toContain('aurora-audio-bridge')
     expect(thinConfig).toContain('aurora-thin')
-    expect(thinConfig).toContain('wss://signaling.example.invalid')
+    expect(thinConfig).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(thinConfig).not.toContain('wss://signaling.example.invalid')
     expect(thinConfig).not.toContain('https://gateway.example.invalid')
     expect(thinConfig).not.toContain('binaries/aurora-sidecar')
     expect(thinConfig).not.toContain('config_defaults.json')
@@ -373,9 +373,8 @@ describe('Tauri CI native evidence contract', () => {
     expect(workflow).toContain('desktop-local')
     expect(workflow).toContain('pnpm --filter @aurora/tauri-ui build:bundle:${{ matrix.bundle_mode }}')
     expect(workflow).toContain('pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin')
-    expect(workflow).toContain('AURORA_TAURI_ALLOWED_REMOTE_ORIGINS')
-    expect(workflow).toContain('AURORA_TAURI_ALLOWED_REMOTE_ORIGINS: wss://signaling.example.invalid')
-    expect(workflow).toContain('AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only')
+    expect(workflow).not.toContain('AURORA_TAURI_ALLOWED_REMOTE_ORIGINS')
+    expect(workflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only')
     expect(workflow).not.toContain('https://gateway.example.invalid')
     expect(workflow).toContain('Install desktop-local Python prerequisites')
     expect(workflow).toContain('if: matrix.needs_python')

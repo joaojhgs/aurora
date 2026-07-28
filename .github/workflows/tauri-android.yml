@@ -27,9 +27,6 @@ jobs:
   android-tauri:
     name: Android thin APK/AAB build and emulator smoke
     runs-on: ubuntu-latest
-    env:
-      AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: "wss://signaling.example.invalid"
-      AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"
 
     steps:
       - uses: actions/checkout@v4

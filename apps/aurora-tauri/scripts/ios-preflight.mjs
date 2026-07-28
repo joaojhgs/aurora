@@ -132,18 +132,15 @@ function validateThinWebRtcContract() {
   assert(overlay.app.security.capabilities.includes('aurora-ios-thin'), 'iOS thin overlay must select aurora-ios-thin')
   assert(Array.isArray(overlay.bundle.externalBin) && overlay.bundle.externalBin.length === 0, 'iOS thin overlay must not bundle external binaries')
   assert(Object.keys(overlay.bundle.resources).length === 0, 'iOS thin overlay must not bundle sidecar resources')
-  assert(packageJson.scripts['ios:prepare:thin'] === 'node ./scripts/prepare-ios-thin-bundle.mjs', 'iOS thin prepare command must generate an exact-origin overlay')
+  assert(packageJson.scripts['ios:prepare:thin'] === 'node ./scripts/prepare-ios-thin-bundle.mjs', 'iOS thin prepare command must generate a runtime-configurable overlay')
   assert(packageJson.scripts['ios:build:thin:simulator'] === 'node ./scripts/build-ios-thin-bundle.mjs', 'iOS thin simulator build must use the generated overlay wrapper')
   for (const invariant of [
-    'AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS',
     "capabilities: ['aurora-ios-thin', 'aurora-mobile-mesh']",
     'externalBin: []',
     'resources: {}',
-    "if (!['https:', 'wss:'].includes(url.protocol))",
-    "url.pathname !== '/'",
-    'url.username || url.password',
-    'url.search',
-    'url.hash'
+    '"\'self\'", \'http:\', \'https:\', \'ws:\', \'wss:\'',
+    "connectionMode: 'runtime-configurable'",
+    'runtimeConfiguredEndpoints: true'
   ]) {
     assert(prepareThinBundle.includes(invariant), `iOS thin overlay generator is missing ${invariant}`)
   }

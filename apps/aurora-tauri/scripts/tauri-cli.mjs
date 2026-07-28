@@ -17,7 +17,7 @@ if (!existsSync(tauriCli)) {
 
 const env = { ...process.env }
 if (args[0] === 'dev') {
-  applyDevSidecarDefaults(env)
+  if (env.AURORA_TAURI_DEV_AUTOSIDECAR !== '0') applyDevSidecarDefaults(env)
   printDevBanner(env)
 }
 
@@ -80,6 +80,11 @@ function applyDevSidecarDefaults(env) {
 
 function printDevBanner(env) {
   console.log('[tauri] dev bootstrap')
+  if (env.AURORA_TAURI_DEV_AUTOSIDECAR === '0') {
+    console.log('[tauri] thin stack: enabled (Vite + Tauri shell, no Rust-supervised Python sidecar)')
+    console.log('[tauri] endpoints: runtime-configured by onboarding/profile storage')
+    return
+  }
   console.log('[tauri] real local stack: enabled (Vite + Tauri + Rust-supervised Python sidecar)')
   console.log(`[tauri] sidecar program: ${env.AURORA_TAURI_SIDECAR_PROGRAM}`)
   console.log(`[tauri] sidecar args: ${env.AURORA_TAURI_SIDECAR_ARGS}`)
