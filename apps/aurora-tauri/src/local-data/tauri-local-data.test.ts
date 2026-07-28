@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildEnvelopeAad,
-  localDataMigrationManifest,
   type ConversationMessageRecord,
   type ConversationRecord,
   type LightweightMemoryRecord,
@@ -14,18 +13,35 @@ import {
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
 
 import { TauriEnvelopeCryptoPort } from './tauri-envelope-crypto.js'
-import { TauriSqliteLocalDataBackend, type TauriSqliteLocalDataBackendOptions } from './tauri-sqlite-backend.js'
+import { TauriSqliteLocalDataBackend } from './tauri-sqlite-backend.js'
+
+type RepositoryOperation =
+  | { readonly kind: 'conversations.upsertConversation'; readonly record: ConversationRecord }
+  | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
+  | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
+  | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
+  | { readonly kind: 'memory.listMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly namespace?: string }
+  | { readonly kind: 'localTools.upsertLocalToolState'; readonly record: LocalToolStateRecord }
+  | { readonly kind: 'localTools.listLocalToolStates'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'peerGrants.upsertPeerGrant'; readonly record: PeerGrantMetadataRecord }
+  | { readonly kind: 'peerGrants.listPeerGrants'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'localAudit.appendAudit'; readonly record: LocalAuditRecord }
+  | { readonly kind: 'localAudit.listAudit'; readonly profileId: string; readonly localNodeId: string }
+
+type FakeTauriLocalDataSnapshot = {
+  readonly conversations: ConversationRecord[]
+  readonly messages: ConversationMessageRecord[]
+  readonly memory: LightweightMemoryRecord[]
+  readonly tools: LocalToolStateRecord[]
+  readonly grants: PeerGrantMetadataRecord[]
+  readonly audit: LocalAuditRecord[]
+}
 
 describe('Tauri local data adapter', () => {
-  it('opens the preloaded SQLite database, validates migrations, and stores scoped records through bound parameters', async () => {
-    const db = new FakeTauriSqlDatabase()
-    const backend = new TauriSqliteLocalDataBackend({
-      loadDatabase: async (url) => {
-        expect(url).toBe('sqlite:aurora-lightweight.db')
-        return db
-      },
-      nowMs: () => 1234
-    } satisfies TauriSqliteLocalDataBackendOptions)
+  it('opens native local storage and stores scoped records through typed repository commands', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    const backend = new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke })
     const session = await backend.open('profile-1', 'node-1')
 
     await session.conversations.upsertConversation(conversationFixture())
@@ -43,15 +59,29 @@ describe('Tauri local data adapter', () => {
     await expect(session.localAudit.listAudit()).resolves.toEqual([auditFixture()])
     await expect(backend.open('profile-2', 'node-1')).rejects.toMatchObject({ code: 'identity_mismatch' })
 
-    expect(db.executions.filter((entry) => entry.sql.includes('INSERT INTO aurora_')).every((entry) => Array.isArray(entry.bind) && entry.bind.length > 0)).toBe(true)
-    expect(JSON.stringify(db.executions)).not.toContain('python')
+    expect(bridge.calls.map((call) => call.command)).toEqual([
+      'aurora_local_data_open',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation'
+    ])
+    expect(JSON.stringify(bridge.calls)).not.toMatch(/"sql"|rawSql|executeSql|sqlite:|python/iu)
     await backend.close()
-    expect(db.closed).toBe(true)
+    expect(bridge.closed).toBe(true)
   })
 
   it('rolls back failed transactions and rejects foreign profile records', async () => {
-    const db = new FakeTauriSqlDatabase()
-    const session = await new TauriSqliteLocalDataBackend({ loadDatabase: async () => db }).open('profile-1', 'node-1')
+    const bridge = new FakeTauriLocalDataBridge()
+    const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
     await expect(session.transaction(async (repositories) => {
       await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'rollback-memory' }))
       throw new Error('rollback')
@@ -62,27 +92,44 @@ describe('Tauri local data adapter', () => {
 
   it('keeps SQL and native crypto private to the local-data adapter', () => {
     const repoRoot = resolve(process.cwd(), '../..')
-    const sourceRoot = resolve(process.cwd(), 'src')
+    const sourceRoot = resolve(process.cwd(), 'src/local-data')
     const offenders: string[] = []
+    const directInvokeOffenders: string[] = []
     for (const file of walk(sourceRoot)) {
       const rel = relative(process.cwd(), file)
       const source = readFileSync(file, 'utf8')
-      if (source.includes('@tauri-apps/plugin-sql') && rel !== 'src/local-data/tauri-sqlite-backend.ts') offenders.push(rel)
+      if (source.includes('@tauri-apps/plugin-sql')) offenders.push(rel)
+      if (source.includes('@tauri-apps/api/core') && rel !== 'src/local-data/tauri-local-data-invoke.ts') directInvokeOffenders.push(rel)
       if (/executeSql|rawSql|python.*db/iu.test(source)) offenders.push(rel)
       for (const match of source.matchAll(/sqlite:[^'"`\s]+/giu)) {
-        if (match[0] !== 'sqlite:aurora-lightweight.db') offenders.push(rel)
+        offenders.push(`${rel}:${match[0]}`)
       }
     }
     expect(offenders).toEqual([])
+    expect(directInvokeOffenders).toEqual([])
     const config = readFileSync(resolve(process.cwd(), 'src-tauri/tauri.conf.json'), 'utf8')
     expect(config).toContain('"sqlite:aurora-lightweight.db"')
     expect(config).not.toContain('sqlite:aurora.db')
-    const capability = readFileSync(resolve(process.cwd(), 'src-tauri/capabilities/aurora-main.json'), 'utf8')
-    expect(capability).toContain('sql:allow-load')
-    expect(capability).toContain('sql:allow-execute')
-    expect(capability).toContain('aurora-local-data-envelope-crypto')
+    for (const capabilityFile of [
+      'aurora-main.json',
+      'aurora-thin.json',
+      'aurora-android-thin.json',
+      'aurora-ios-thin.json',
+      'aurora-ios-baseline.json'
+    ]) {
+      const capability = readFileSync(resolve(process.cwd(), `src-tauri/capabilities/${capabilityFile}`), 'utf8')
+      expect(capability).not.toMatch(/sql:allow-(?:load|select|execute|close)/u)
+      expect(capability).toContain('aurora-local-data-storage')
+      expect(capability).toContain('aurora-local-data-envelope-crypto')
+    }
     const manifestSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
-    expect(manifestSource).toContain('add_migrations(LOCAL_DATA_DB_URL, local_data_sql_migrations())')
+    const nativeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/local_data_native.rs'), 'utf8')
+    expect(manifestSource).not.toContain('add_migrations(LOCAL_DATA_DB_URL, local_data_sql_migrations())')
+    expect(nativeSource).toContain('migration.sql')
+    expect(nativeSource).toContain('migration.ledger_sql')
+    expect(nativeSource).toContain('BEGIN IMMEDIATE;')
+    expect(readFileSync(resolve(process.cwd(), 'src-tauri/permissions/aurora-local-data-storage.toml'), 'utf8')).toContain('Raw SQL strings are never accepted from the WebView')
+    expect(readFileSync(resolve(process.cwd(), 'src-tauri/permissions/aurora-local-data-envelope-crypto.toml'), 'utf8')).toContain('os_protected_opaque_to_webview')
     expect(manifestSource).not.toMatch(/native.*capabilit.*local_data_envelope/iu)
   })
 
@@ -107,7 +154,7 @@ describe('Tauri local data adapter', () => {
     })
 
     await expect(port.encrypt('local-structured-data', new TextEncoder().encode('secret'), aad)).resolves.toEqual(envelopeFixture)
-    await expect(port.decrypt(envelopeFixture, aad)).resolves.toEqual(new TextEncoder().encode('secret'))
+    await expect(port.decrypt(envelopeFixture, aad).then((bytes) => Array.from(bytes))).resolves.toEqual(Array.from(new TextEncoder().encode('secret')))
     await expect(port.rotateKey('local-structured-data')).resolves.toEqual({ previousKeyId: 'old', newKeyId: 'new' })
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_local_data_envelope_encrypt',
@@ -135,74 +182,126 @@ describe('Tauri local data adapter', () => {
     expect(swiftStorage).toContain('AES.GCM.open')
     expect(swiftStorage).toContain('kSecAttrAccessibleWhenUnlockedThisDeviceOnly')
     expect(swiftStorage).toContain('aurora.local-data-envelope.')
+    expect(readFileSync(resolve(process.cwd(), 'src-tauri/permissions/aurora-local-data-envelope-crypto.toml'), 'utf8')).toContain('os_protected_opaque_to_webview')
     expect(`${kotlin}\n${swiftStorage}`).not.toMatch(/rawKey|keyBytes|plaintextKey/u)
   })
 })
 
-class FakeTauriSqlDatabase {
-  executions: Array<{ sql: string; bind: readonly unknown[] }> = []
+class FakeTauriLocalDataBridge {
+  calls: Array<{ command: string; args: Record<string, unknown> }> = []
   closed = false
-  private identity: string | null = null
+  private profileId: string | null = null
+  private localNodeId: string | null = null
   private conversations: ConversationRecord[] = []
   private messages: ConversationMessageRecord[] = []
   private memory: LightweightMemoryRecord[] = []
   private tools: LocalToolStateRecord[] = []
   private grants: PeerGrantMetadataRecord[] = []
   private audit: LocalAuditRecord[] = []
-  private snapshot: Omit<FakeTauriSqlDatabase, 'executions' | 'closed' | 'execute' | 'select' | 'close'> | null = null
+  private snapshot: FakeTauriLocalDataSnapshot | null = null
 
-  async execute(sql: string, bind: readonly unknown[] = []): Promise<void> {
-    this.executions.push({ sql, bind })
-    if (sql === 'BEGIN IMMEDIATE;') {
-      this.snapshot = structuredClone({ identity: this.identity, conversations: this.conversations, messages: this.messages, memory: this.memory, tools: this.tools, grants: this.grants, audit: this.audit, snapshot: null })
-      return
+  readonly invoke = async (command: string, args: Record<string, unknown>): Promise<unknown> => {
+    this.calls.push({ command, args })
+    if (command === 'aurora_local_data_open') {
+      const request = (args.request ?? {}) as { profileId?: string; localNodeId?: string }
+      if (this.profileId !== null && (this.profileId !== request.profileId || this.localNodeId !== request.localNodeId)) {
+        throw { code: 'identity_mismatch' }
+      }
+      this.profileId = request.profileId ?? null
+      this.localNodeId = request.localNodeId ?? null
+      return this.status('applied')
     }
-    if (sql === 'ROLLBACK;' && this.snapshot !== null) {
-      Object.assign(this, this.snapshot)
+    if (command === 'aurora_local_data_close') {
+      this.closed = true
+      return this.status('idle')
+    }
+    if (command === 'aurora_local_data_transaction_begin') {
+      this.snapshot = structuredClone({
+        conversations: this.conversations,
+        messages: this.messages,
+        memory: this.memory,
+        tools: this.tools,
+        grants: this.grants,
+        audit: this.audit
+      })
+      return { begun: true }
+    }
+    if (command === 'aurora_local_data_transaction_commit') {
       this.snapshot = null
-      return
+      return { committed: true }
     }
-    if (sql === 'COMMIT;') {
+    if (command === 'aurora_local_data_transaction_rollback') {
+      if (this.snapshot !== null) Object.assign(this, this.snapshot)
       this.snapshot = null
-      return
+      return { rolledBack: true }
     }
-    if (sql.startsWith('INSERT INTO aurora_database_identity')) this.identity = bind[0] as string
-    if (sql.startsWith('INSERT INTO aurora_conversations')) upsert(this.conversations, conversationFixture({ id: bind[0] as string, profileId: bind[1] as string, localNodeId: bind[2] as string }))
-    if (sql.startsWith('INSERT INTO aurora_messages')) upsert(this.messages, messageFixture({ id: bind[0] as string, conversationId: bind[1] as string }))
-    if (sql.startsWith('INSERT INTO aurora_memory_items')) upsert(this.memory, memoryFixture({ id: bind[0] as string, profileId: bind[1] as string, localNodeId: bind[2] as string, namespace: bind[3] as string }))
-    if (sql.startsWith('INSERT INTO aurora_local_tool_state')) upsert(this.tools, localToolStateFixture({ profileId: bind[0] as string, localNodeId: bind[1] as string, toolContractId: bind[2] as string }))
-    if (sql.startsWith('INSERT INTO aurora_peer_grant_metadata')) upsert(this.grants, peerGrantFixture({ grantId: bind[0] as string, profileId: bind[1] as string, localNodeId: bind[2] as string }))
-    if (sql.startsWith('INSERT INTO aurora_local_audit')) this.audit.unshift(auditFixture({ id: bind[0] as string, profileId: bind[1] as string, localNodeId: bind[2] as string }))
-    if (sql.startsWith('DELETE FROM aurora_')) {
-      this.conversations = []
-      this.messages = []
-      this.memory = []
-      this.tools = []
-      this.grants = []
-      this.audit = []
+    if (command === 'aurora_local_data_repository_operation') {
+      return this.repositoryOperation(((args.request ?? {}) as { operation?: RepositoryOperation }).operation)
+    }
+    return this.status('applied')
+  }
+
+  private status(migrationState: 'idle' | 'applied') {
+    return {
+      kind: 'sqlite-tauri',
+      persistent: true,
+      sqlite: true,
+      profileId: this.profileId,
+      localNodeId: this.localNodeId,
+      schemaVersion: 3,
+      migrationState
     }
   }
 
-  async select<T>(sql: string, bind: readonly unknown[] = []): Promise<T[]> {
-    this.executions.push({ sql, bind })
-    if (sql === 'PRAGMA user_version;') return [{ user_version: localDataMigrationManifest.latestVersion }] as T[]
-    if (sql.startsWith('SELECT version, checksum FROM aurora_schema_migrations')) {
-      return localDataMigrationManifest.migrations.map(({ version, checksum }) => ({ version, checksum })) as T[]
+  private repositoryOperation(operation: RepositoryOperation | undefined): unknown {
+    if (operation === undefined) throw new Error('missing operation')
+    switch (operation.kind) {
+      case 'conversations.upsertConversation':
+        this.assertScope(operation.record)
+        upsert(this.conversations, operation.record)
+        return null
+      case 'conversations.appendMessage':
+        upsert(this.messages, operation.record)
+        return null
+      case 'conversations.listConversations':
+        this.assertScope(operation)
+        return this.conversations
+      case 'conversations.listMessages':
+        this.assertScope(operation)
+        return this.messages.filter((record) => record.conversationId === operation.conversationId)
+      case 'memory.upsertMemoryItem':
+        this.assertScope(operation.record)
+        upsert(this.memory, operation.record)
+        return null
+      case 'memory.listMemoryItems':
+        this.assertScope(operation)
+        return this.memory.filter((record) => operation.namespace === undefined || record.namespace === operation.namespace)
+      case 'localTools.upsertLocalToolState':
+        this.assertScope(operation.record)
+        upsert(this.tools, operation.record)
+        return null
+      case 'localTools.listLocalToolStates':
+        this.assertScope(operation)
+        return this.tools
+      case 'peerGrants.upsertPeerGrant':
+        this.assertScope(operation.record)
+        upsert(this.grants, operation.record)
+        return null
+      case 'peerGrants.listPeerGrants':
+        this.assertScope(operation)
+        return this.grants
+      case 'localAudit.appendAudit':
+        this.assertScope(operation.record)
+        this.audit.unshift(operation.record)
+        return null
+      case 'localAudit.listAudit':
+        this.assertScope(operation)
+        return this.audit
     }
-    if (sql.startsWith('SELECT singleton_id')) return this.identity === null ? [] : [{ singleton_id: 1, local_node_id: this.identity }] as T[]
-    if (sql === 'PRAGMA foreign_key_check;') return []
-    if (sql.startsWith('SELECT id FROM aurora_conversations')) return this.conversations.some((record) => record.id === bind[0] && record.profileId === bind[1] && record.localNodeId === bind[2]) ? [{ id: bind[0] }] as T[] : []
-    if (sql.includes('FROM aurora_conversations')) return this.conversations.filter((record) => record.profileId === bind[0] && record.localNodeId === bind[1]).map(conversationRow) as T[]
-    if (sql.includes('FROM aurora_messages')) return this.messages.map(messageRow) as T[]
-    if (sql.includes('FROM aurora_memory_items')) return this.memory.filter((record) => record.profileId === bind[0] && record.localNodeId === bind[1] && (bind[2] === undefined || record.namespace === bind[2])).map(memoryRow) as T[]
-    if (sql.includes('FROM aurora_local_tool_state')) return this.tools.map(toolRow) as T[]
-    if (sql.includes('FROM aurora_peer_grant_metadata')) return this.grants.map(grantRow) as T[]
-    if (sql.includes('FROM aurora_local_audit')) return this.audit.map(auditRow) as T[]
-    return []
   }
 
-  async close(): Promise<void> {
-    this.closed = true
+  private assertScope(value: { profileId: string; localNodeId: string }): void {
+    if (value.profileId !== this.profileId || value.localNodeId !== this.localNodeId) throw { code: 'identity_mismatch' }
   }
 }
 
@@ -233,13 +332,6 @@ function peerGrantFixture(overrides: Partial<PeerGrantMetadataRecord> = {}): Pee
 function auditFixture(overrides: Partial<LocalAuditRecord> = {}): LocalAuditRecord {
   return { id: 'audit-1', profileId: 'profile-1', localNodeId: 'node-1', peerId: null, action: 'read', decision: 'allow', resultStatus: 'success', connectionEpoch: null, methodId: null, toolContractId: null, correlationId: null, redactedDetailJson: {}, createdAtMs: 8, ...overrides }
 }
-
-function conversationRow(record: ConversationRecord) { return { id: record.id, profile_id: record.profileId, local_node_id: record.localNodeId, title_envelope_json: null, created_at_ms: record.createdAtMs, updated_at_ms: record.updatedAtMs, archived_at_ms: record.archivedAtMs } }
-function messageRow(record: ConversationMessageRecord) { return { id: record.id, conversation_id: record.conversationId, sequence: record.sequence, role: record.role, content_envelope_json: null, tool_envelope_json: null, status: record.status, created_at_ms: record.createdAtMs } }
-function memoryRow(record: LightweightMemoryRecord) { return { id: record.id, profile_id: record.profileId, local_node_id: record.localNodeId, namespace: record.namespace, payload_envelope_json: JSON.stringify(record.payloadEnvelope), source_type: record.sourceType, source_id: record.sourceId, created_at_ms: record.createdAtMs, updated_at_ms: record.updatedAtMs, expires_at_ms: record.expiresAtMs } }
-function toolRow(record: LocalToolStateRecord) { return { profile_id: record.profileId, local_node_id: record.localNodeId, tool_contract_id: record.toolContractId, descriptor_json: JSON.stringify(record.descriptorJson), descriptor_hash: record.descriptorHash, enabled: record.enabled ? 1 : 0, settings_envelope_json: null, revision: record.revision, updated_at_ms: record.updatedAtMs } }
-function grantRow(record: PeerGrantMetadataRecord) { return { grant_id: record.grantId, profile_id: record.profileId, local_node_id: record.localNodeId, claimant_peer_id: record.claimantPeerId, token_id: record.tokenId, scope_envelope_json: JSON.stringify(record.scopeEnvelope), revision: record.revision, created_at_ms: record.createdAtMs, expires_at_ms: record.expiresAtMs, revoked_at_ms: record.revokedAtMs } }
-function auditRow(record: LocalAuditRecord) { return { id: record.id, profile_id: record.profileId, local_node_id: record.localNodeId, peer_id: record.peerId, action: record.action, decision: record.decision, result_status: record.resultStatus, connection_epoch: record.connectionEpoch, method_id: record.methodId, tool_contract_id: record.toolContractId, correlation_id: record.correlationId, redacted_detail_json: JSON.stringify(record.redactedDetailJson), created_at_ms: record.createdAtMs } }
 
 function upsert<T extends { id?: string; grantId?: string; toolContractId?: string }>(records: T[], next: T): void {
   const id = next.id ?? next.grantId ?? next.toolContractId

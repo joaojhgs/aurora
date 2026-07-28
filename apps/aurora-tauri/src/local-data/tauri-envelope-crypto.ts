@@ -1,10 +1,10 @@
-import { invoke } from '@tauri-apps/api/core'
 import {
   parseEncryptedDataEnvelopeV1,
   type EncryptedDataEnvelopeV1,
   type EnvelopeCryptoPort,
   type LocalDataKeyPurpose
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
+import { invokeAuroraLocalDataCommand } from './tauri-local-data-invoke.js'
 
 export interface TauriEnvelopeCryptoPortOptions {
   readonly profileId: string
@@ -20,7 +20,7 @@ export class TauriEnvelopeCryptoPort implements EnvelopeCryptoPort {
   constructor(options: TauriEnvelopeCryptoPortOptions) {
     this.profileId = options.profileId
     this.localNodeId = options.localNodeId
-    this.invokeCommand = options.invokeCommand ?? ((command, args) => invoke(command, args))
+    this.invokeCommand = options.invokeCommand ?? invokeAuroraLocalDataCommand
   }
 
   async encrypt(

@@ -237,6 +237,162 @@
           "markdownDescription": "Enables the aurora_ios_native_plugin_manifest command without any pre-configured scope."
         },
         {
+          "description": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned.",
+          "type": "string",
+          "const": "aurora-local-data-envelope-crypto",
+          "markdownDescription": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned."
+        },
+        {
+          "description": "Enables the aurora_local_data_envelope_encrypt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-envelope-encrypt",
+          "markdownDescription": "Enables the aurora_local_data_envelope_encrypt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_envelope_encrypt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-envelope-encrypt",
+          "markdownDescription": "Denies the aurora_local_data_envelope_encrypt command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_envelope_decrypt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-envelope-decrypt",
+          "markdownDescription": "Enables the aurora_local_data_envelope_decrypt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_envelope_decrypt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-envelope-decrypt",
+          "markdownDescription": "Denies the aurora_local_data_envelope_decrypt command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_envelope_rotate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-envelope-rotate",
+          "markdownDescription": "Enables the aurora_local_data_envelope_rotate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_envelope_rotate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-envelope-rotate",
+          "markdownDescription": "Denies the aurora_local_data_envelope_rotate command without any pre-configured scope."
+        },
+        {
+          "description": "Allow the private local-data adapter to open Aurora-owned structured storage and run typed repository, transaction, export, and import commands. Raw SQL strings are never accepted from the WebView.",
+          "type": "string",
+          "const": "aurora-local-data-storage",
+          "markdownDescription": "Allow the private local-data adapter to open Aurora-owned structured storage and run typed repository, transaction, export, and import commands. Raw SQL strings are never accepted from the WebView."
+        },
+        {
+          "description": "Enables the aurora_local_data_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-open",
+          "markdownDescription": "Enables the aurora_local_data_open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-open",
+          "markdownDescription": "Denies the aurora_local_data_open command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-status",
+          "markdownDescription": "Enables the aurora_local_data_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-status",
+          "markdownDescription": "Denies the aurora_local_data_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-close",
+          "markdownDescription": "Enables the aurora_local_data_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-close",
+          "markdownDescription": "Denies the aurora_local_data_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_transaction_begin command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-transaction-begin",
+          "markdownDescription": "Enables the aurora_local_data_transaction_begin command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_transaction_begin command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-transaction-begin",
+          "markdownDescription": "Denies the aurora_local_data_transaction_begin command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_transaction_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-transaction-commit",
+          "markdownDescription": "Enables the aurora_local_data_transaction_commit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_transaction_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-transaction-commit",
+          "markdownDescription": "Denies the aurora_local_data_transaction_commit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_transaction_rollback command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-transaction-rollback",
+          "markdownDescription": "Enables the aurora_local_data_transaction_rollback command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_transaction_rollback command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-transaction-rollback",
+          "markdownDescription": "Denies the aurora_local_data_transaction_rollback command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_repository_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-repository-operation",
+          "markdownDescription": "Enables the aurora_local_data_repository_operation command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_repository_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-repository-operation",
+          "markdownDescription": "Denies the aurora_local_data_repository_operation command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_export_v1 command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-export-v1",
+          "markdownDescription": "Enables the aurora_local_data_export_v1 command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_export_v1 command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-export-v1",
+          "markdownDescription": "Denies the aurora_local_data_export_v1 command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_import_v1 command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-import-v1",
+          "markdownDescription": "Enables the aurora_local_data_import_v1 command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_import_v1 command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-import-v1",
+          "markdownDescription": "Denies the aurora_local_data_import_v1 command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_local_file_pick command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-local-file-pick",

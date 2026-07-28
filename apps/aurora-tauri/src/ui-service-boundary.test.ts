@@ -29,6 +29,7 @@ const allowedSidecarServiceResource = 'app/services/config/config_defaults.json'
 const approvedClientFactoryFiles = new Set([
   'apps/aurora-tauri/src/aurora-client.ts',
   'apps/aurora-tauri/src/eventstream-smoke.tsx',
+  'apps/aurora-tauri/src/local-data/tauri-local-data-invoke.ts',
   'apps/aurora-tauri/src/native-webrtc.ts',
   'apps/aurora-web/app/aurora-client.ts',
   'packages/aurora-sdk/src/http.ts',

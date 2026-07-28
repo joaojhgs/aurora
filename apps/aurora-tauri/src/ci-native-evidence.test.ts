@@ -381,8 +381,12 @@ describe('Tauri CI native evidence contract', () => {
       cargo.match(
         /\[target\.'cfg\(target_os = "linux"\)'\.dependencies\]([\s\S]*?)(?=\n\[|$)/,
       )?.[1] ?? ''
+    const commonDependencies =
+      cargo.match(/\[dependencies\]([\s\S]*?)(?=\n\[|$)/)?.[1] ?? ''
     expect(linuxDependencies).toContain('webrtc = "0.11.0"')
-    expect(linuxDependencies).toContain('base64 = "0.22"')
+    expect(`${commonDependencies}\n${linuxDependencies}`).toContain(
+      'base64 = "=0.22.1"',
+    )
     expect(linuxDependencies).toContain('bytes = "1"')
     expect(cargo).not.toContain('webkit2gtk =')
     expect(thinCapability).toContain('"aurora-native-webrtc"')

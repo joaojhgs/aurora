@@ -32,13 +32,19 @@ use thiserror::Error;
 use tokio::sync::watch;
 use url::Url;
 
+mod local_data_native;
 mod native_webrtc;
 mod generated {
     pub mod local_data_migrations;
 }
+use local_data_native::{
+    aurora_local_data_close, aurora_local_data_export_v1, aurora_local_data_import_v1,
+    aurora_local_data_open, aurora_local_data_repository_operation, aurora_local_data_status,
+    aurora_local_data_transaction_begin, aurora_local_data_transaction_commit,
+    aurora_local_data_transaction_rollback, LocalDataCommandState,
+};
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
-const LOCAL_DATA_DB_URL: &str = "sqlite:aurora-lightweight.db";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
 const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
@@ -859,6 +865,8 @@ enum AuroraCommandError {
     PeerCredentialExpired,
     #[error("Secure storage operation failed: {0}")]
     SecureStorage(String),
+    #[error("Local data operation failed: {0}")]
+    LocalData(String),
 }
 
 impl Serialize for AuroraCommandError {
@@ -3253,35 +3261,13 @@ impl AuroraCommandError {
             Self::SecureStorageKeyInvalid(_) => "validation_error",
             Self::PeerCredentialExpired => "credential_expired",
             Self::SecureStorage(_) => "secure_storage_error",
+            Self::LocalData(_) => "local_data_error",
         }
     }
 }
 
 fn native_permission_missing(permission: &'static str) -> AuroraCommandError {
     AuroraCommandError::NativePermissionMissing(permission.to_string())
-}
-
-fn local_data_sql_migrations() -> Vec<tauri_plugin_sql::Migration> {
-    debug_assert_eq!(
-        LOCAL_DATA_DB_URL.strip_prefix("sqlite:"),
-        Some(generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME)
-    );
-    debug_assert_eq!(
-        generated::local_data_migrations::LOCAL_DATA_LATEST_VERSION,
-        generated::local_data_migrations::LOCAL_DATA_MIGRATIONS
-            .last()
-            .map(|migration| migration.version)
-            .unwrap_or(0)
-    );
-    generated::local_data_migrations::LOCAL_DATA_MIGRATIONS
-        .iter()
-        .map(|migration| tauri_plugin_sql::Migration {
-            version: i64::from(migration.version),
-            description: migration.name,
-            sql: migration.sql,
-            kind: tauri_plugin_sql::MigrationKind::Up,
-        })
-        .collect()
 }
 
 fn envelope(method: String, data: Value) -> AuroraEnvelope {
@@ -5560,16 +5546,13 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_deep_link::init());
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
-    let builder = builder.plugin(
-        tauri_plugin_sql::Builder::default()
-            .add_migrations(LOCAL_DATA_DB_URL, local_data_sql_migrations())
-            .build(),
-    );
+    let builder = builder.plugin(tauri_plugin_sql::Builder::default().build());
     builder
         .plugin(aurora_mobile_native_plugin())
         .manage(sidecar_state.clone())
         .manage(subscription_state.clone())
         .manage(overlay_state.clone())
+        .manage(LocalDataCommandState::default())
         .manage(native_webrtc::NativeWebRtcState::default())
         .setup(|app| {
             #[cfg(desktop)]
@@ -5673,6 +5656,15 @@ pub fn run() {
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
+            aurora_local_data_open,
+            aurora_local_data_status,
+            aurora_local_data_close,
+            aurora_local_data_transaction_begin,
+            aurora_local_data_transaction_commit,
+            aurora_local_data_transaction_rollback,
+            aurora_local_data_repository_operation,
+            aurora_local_data_export_v1,
+            aurora_local_data_import_v1,
             aurora_local_data_envelope_encrypt,
             aurora_local_data_envelope_decrypt,
             aurora_local_data_envelope_rotate,
@@ -7333,12 +7325,7 @@ mod tests {
     }
 
     #[test]
-    fn local_data_sql_migrations_follow_generated_manifest_order() {
-        let migrations = local_data_sql_migrations();
-        assert_eq!(
-            migrations.len(),
-            generated::local_data_migrations::LOCAL_DATA_MIGRATIONS.len()
-        );
+    fn local_data_migrations_include_atomic_ledger_sql() {
         assert_eq!(
             generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME,
             "aurora-lightweight.db"
@@ -7347,12 +7334,16 @@ mod tests {
             generated::local_data_migrations::LOCAL_DATA_LATEST_VERSION,
             3
         );
-        for (index, migration) in migrations.iter().enumerate() {
-            let generated = generated::local_data_migrations::LOCAL_DATA_MIGRATIONS[index];
-            assert_eq!(migration.version, i64::from(generated.version));
-            assert_eq!(migration.description, generated.name);
-            assert_eq!(migration.sql, generated.sql);
+        for (index, generated) in generated::local_data_migrations::LOCAL_DATA_MIGRATIONS
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(generated.version, u32::try_from(index + 1).unwrap());
+            assert!(generated.sql.contains("PRAGMA foreign_keys = ON;"));
             assert!(generated.ledger_sql.contains("aurora_schema_migrations"));
+            assert!(generated
+                .ledger_sql
+                .contains(&format!("PRAGMA user_version = {}", generated.version)));
         }
     }
 
