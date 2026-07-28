@@ -271,7 +271,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
         ) : null}
         {model.denialReason ? (
           <p className="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
-            {model.denialReason}
+            {productMemoryErrorCopy(model.denialReason)}
           </p>
         ) : null}
 
@@ -301,7 +301,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
                   </p>
                 </div>
                 <PrivacyBadge privacy={message.privacyClass} />
-                <Button variant="ghost" disabled={model.actions.delete.disabled} disabledReason={model.actions.delete.reason} ariaLabel="Delete conversation" icon={<Trash2 size={15} />}>
+                <Button variant="ghost" disabled={model.actions.delete.disabled} disabledReason={productMemoryActionReasonCopy(model.actions.delete.reason)} ariaLabel="Delete conversation" icon={<Trash2 size={15} />}>
                   <span className="sr-only">Delete</span>
                 </Button>
               </article>
@@ -320,13 +320,13 @@ function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; name
   return (
     <article className="flex flex-col gap-2 px-4 py-3">
       <header className="flex items-center gap-2">
-        <strong className="text-[13px] font-medium">{item.key}</strong>
+        <strong className="text-[13px] font-medium">Saved result</strong>
         {item.redacted ? <Badge variant="destructive">Redacted</Badge> : null}
       </header>
       <p className="text-sm">{text}</p>
       <MetaGrid
         items={[
-          { label: 'Namespace', value: item.namespace },
+          { label: 'Collection', value: productMemoryCollectionCopy(item.namespace) },
           { label: 'Source', value: productMemorySourceCopy(item.provenance.source_peer_id) },
           {
             label: 'Saved through',
@@ -334,14 +334,14 @@ function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; name
               ? 'owning device'
               : 'shared device'
           },
-          { label: 'Privacy class', value: namespace?.info.policy.privacy_class ?? 'not reported for this collection' },
+          { label: 'Privacy class', value: productMemoryPrivacyCopy(namespace?.info.policy.privacy_class) },
           { label: 'Citation', value: productReferenceCopy(item.provenance.record_id) },
           { label: 'Policy', value: productReferenceCopy(item.provenance.policy_decision_id) },
           { label: 'History', value: productReferenceCopy(item.provenance.correlation_id) },
-          { label: 'Tombstone', value: item.provenance.tombstone ? item.provenance.delete_reason ?? 'deleted' : 'active' }
+          { label: 'Saved state', value: item.provenance.tombstone ? 'Deleted' : 'Active' }
         ]}
       />
-      {item.redaction_reasons.length > 0 ? <small className="text-xs text-muted-foreground">{item.redaction_reasons.join(', ')}</small> : null}
+      {item.redaction_reasons.length > 0 ? <small className="text-xs text-muted-foreground">Sensitive details hidden</small> : null}
     </article>
   )
 }
@@ -493,4 +493,21 @@ function productMemorySourceCopy(value: string | null | undefined): string {
 
 function productReferenceCopy(value: string | null | undefined): string {
   return value ? 'Available in account history' : 'Not reported'
+}
+
+function productMemoryCollectionCopy(value: string | null | undefined): string {
+  return value ? 'Selected collection' : 'Not reported'
+}
+
+function productMemoryPrivacyCopy(value: string | null | undefined): string {
+  if (value === 'raw-audio') return 'Audio'
+  if (value === 'personal') return 'Personal'
+  if (value === 'sensitive') return 'Sensitive'
+  return 'Not reported for this collection'
+}
+
+function productMemoryActionReasonCopy(value: string): string {
+  if (/permission|denied|blocked|auth/i.test(value)) return 'Review access before continuing.'
+  if (/unsupported|unavailable|offline|missing/i.test(value)) return 'This action is unavailable right now.'
+  return value ? 'This action is unavailable right now.' : value
 }

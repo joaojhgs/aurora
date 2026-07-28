@@ -116,7 +116,7 @@ describe('Assistant inline tool approval', () => {
       }
     ])
     expect(container.textContent).toContain('The approved tool completed successfully.')
-    expect(container.textContent).toContain('Approved inline and executed by Aurora.')
+    expect(container.textContent).toContain('Aurora finished this action.')
   })
 
   it('binds a fresh streamed turn and its approval resume to the same session', async () => {

@@ -699,15 +699,15 @@ export function PairingQueueSurface({
           <AlertDescription>{productPairingOperationCopy(operation.message)}</AlertDescription>
         </Alert>
       ) : null}
-      {operation.auditReceipt ? <p className="text-sm text-muted-foreground">AdminAction audit receipt: {operation.auditReceipt}</p> : null}
+      {operation.auditReceipt ? <p className="text-sm text-muted-foreground">Account history updated.</p> : null}
       {mutationError ? (
         <Alert variant="destructive" role="alert">
-          <AlertDescription>{mutationError}</AlertDescription>
+          <AlertDescription>{productPairingErrorCopy(mutationError)}</AlertDescription>
         </Alert>
       ) : null}
       {copyError ? (
         <Alert variant="destructive" role="alert">
-          <AlertDescription>{copyError}</AlertDescription>
+          <AlertDescription>{productPairingErrorCopy(copyError)}</AlertDescription>
         </Alert>
       ) : null}
       {copiedRequestId ? (
@@ -754,9 +754,9 @@ export function PairingQueueSurface({
               {model.state === 'loading'
                 ? <p aria-live="polite">Loading pairing queue from Aurora.</p>
                 : model.disabledReason
-                  ? <p>{model.disabledReason}</p>
+                  ? <p>{productPairingNoticeCopy(model.disabledReason)}</p>
                   : model.error
-                    ? <p>{model.error}</p>
+                    ? <p>{productPairingNoticeCopy(model.error)}</p>
                     : model.outgoingPeers.length > 0
                       ? <p>Outgoing pairing is active; Aurora is negotiating the matching incoming request.</p>
                     : <p>No pending device or peer pairing requests were reported by Auth.</p>}

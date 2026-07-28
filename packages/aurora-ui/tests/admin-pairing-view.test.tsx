@@ -54,7 +54,7 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(markup).toContain('Pending pairing revoke is unavailable in this Aurora setup.')
     expect(markup).toContain('audit-create-001')
     expect(markup).toContain('audit-exchange-001')
-    expect(markup).toContain('AdminAction audit receipt: audit-latest-001')
+    expect(markup).toContain('Account history updated.')
     expect(markup).not.toContain('secret-token')
     expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
   })
@@ -140,7 +140,7 @@ describe('PairingQueueView admin pairing surface', () => {
     const markup = renderToStaticMarkup(<PairingQueueSurface model={model} route={route} />)
 
     expect(model.disabledReason).toContain('permission denied')
-    expect(markup).toContain('Capability unavailable')
+    expect(markup).toContain('Pairing is unavailable for this Aurora setup.')
     expect(markup).toContain('disabled=""')
   })
 

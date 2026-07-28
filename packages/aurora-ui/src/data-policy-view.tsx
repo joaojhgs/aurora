@@ -220,14 +220,14 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
 
       {snapshot.error ? (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
-          <span>{snapshot.error}</span>
+          <span>{productDataPolicyErrorCopy(snapshot.error)}</span>
         </div>
       ) : null}
       {snapshot.loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading data policy from Aurora.</p> : null}
       {snapshot.loadState === 'empty' ? <p className="text-sm text-muted-foreground">No collections or transcript records were returned by Aurora.</p> : null}
       {snapshot.warnings.length > 0 ? (
         <ul className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning" aria-label="Data policy warnings">
-          {snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          {snapshot.warnings.map((warning) => <li key={warning}>{productDataPolicyErrorCopy(warning)}</li>)}
         </ul>
       ) : null}
 
@@ -304,8 +304,8 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
               <p className="text-xs text-muted-foreground">{check.description}</p>
               {check.error ? <p className="text-xs text-destructive" role="alert">{productDataPolicyErrorCopy(check.error)}</p> : null}
               <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-                <PolicyFact label="Privacy class" value={check.evaluation?.privacyClass ?? check.privacyClass} />
-                <PolicyFact label="Decision" value={check.evaluation ? `${check.evaluation.decision}: ${check.evaluation.reasonCode}` : 'pending'} />
+                <PolicyFact label="Privacy class" value={productDataPolicyPrivacyCopy(check.evaluation?.privacyClass ?? check.privacyClass)} />
+                <PolicyFact label="Decision" value={productDataPolicyDecisionCopy(check.evaluation)} />
                 <PolicyFact label="Sharing behavior" value={productSharingBehaviorCopy(check.evaluation?.preview.fallbackBehavior ?? 'not evaluated')} />
                 <PolicyFact label="Account history" value={productDataPolicyHistoryCopy(check.evaluation?.preview.auditReceiptTarget ?? check.auditReceiptTarget)} />
               </dl>
@@ -421,14 +421,36 @@ function productDataPolicyErrorCopy(error: unknown): string {
 }
 
 function productSharingBehaviorCopy(value: string): string {
-  if (/none|not evaluated/i.test(value)) return value
-  if (/block|deny/i.test(value)) return 'Blocked until policy allows it'
-  if (/fallback|remote|mesh|peer|cloud/i.test(value)) return 'Can use another approved device'
-  return 'Uses the selected destination'
+  const normalized = normalizePolicyCopyToken(value)
+  if (!normalized || normalized === 'not_evaluated') return 'Not evaluated yet'
+  if (normalized === 'none' || normalized === 'no_fallback' || normalized === 'local_only') return 'Uses this device only'
+  if (normalized === 'blocked' || normalized === 'denied' || normalized === 'error') return 'Blocked until policy allows it'
+  if (normalized === 'fallback' || normalized === 'remote' || normalized === 'mesh' || normalized === 'peer' || normalized === 'cloud' || normalized === 'network') return 'Can use another approved device'
+  if (normalized === 'selected' || normalized === 'selected_destination' || normalized === 'allowed') return 'Uses the selected destination'
+  return 'Sharing status is unavailable.'
 }
 
 function productDataPolicyHistoryCopy(value: string): string {
   return value ? 'Account history enabled' : 'Not reported'
+}
+
+function productDataPolicyPrivacyCopy(value: PrivacyClass): string {
+  if (value === 'raw-audio') return 'Audio'
+  if (value === 'personal') return 'Personal'
+  if (value === 'sensitive') return 'Sensitive'
+  return 'Standard'
+}
+
+function productDataPolicyDecisionCopy(evaluation: RoutePolicyEvaluation | null): string {
+  if (!evaluation) return 'Pending'
+  if (evaluation.allowed) return 'Allowed'
+  const reason = normalizePolicyCopyToken(evaluation.reasonCode)
+  if (reason.includes('selector')) return 'Selection needed'
+  if (reason.includes('consent')) return 'Consent needed'
+  if (reason.includes('privacy')) return 'Privacy choice needed'
+  if (reason.includes('permission')) return 'Permission needed'
+  if (reason.includes('block') || reason.includes('deny')) return 'Blocked'
+  return 'Needs review'
 }
 
 function PolicyFact({ label, value }: { label: string; value: string }) {
@@ -475,9 +497,9 @@ function settledOkData<T extends { ok: boolean; data?: unknown; error?: unknown 
 }
 
 function settledWarning(label: string, result: PromiseSettledResult<unknown>): string | null {
-  if (result.status === 'rejected') return `${label}: ${policyErrorText(result.reason)}`
+  if (result.status === 'rejected') return `${label}: ${productDataPolicyErrorCopy(result.reason)}`
   const value = result.value
-  if (isAuroraResponseFailure(value)) return `${label}: ${policyErrorText(value.error)}`
+  if (isAuroraResponseFailure(value)) return `${label}: ${productDataPolicyErrorCopy(value.error)}`
   return null
 }
 
@@ -499,4 +521,8 @@ function policyErrorText(error: unknown): string {
     if (typeof message === 'string' && message.trim()) return message
   }
   return String(error)
+}
+
+function normalizePolicyCopyToken(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }

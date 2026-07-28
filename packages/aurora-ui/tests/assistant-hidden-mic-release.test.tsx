@@ -6,6 +6,7 @@ import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS } from '@aurora
 import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT } from '../src/platform-surface'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
@@ -104,6 +105,43 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(stopped).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('Microphone listening stopped because Aurora was no longer the active window.')
   })
+
+  it('maps hostile microphone errors to product copy', async () => {
+    const hostile = 'NotReadableError: WebRTC transport runtime fallback failed'
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(async () => { throw new DOMException(hostile, 'NotReadableError') }) }
+    })
+    vi.stubGlobal('AudioContext', FakeAudioContext)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      await Promise.resolve()
+    })
+
+    const mic = findButton(container, 'Push to talk')
+    await act(async () => {
+      mic.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const rendered = renderedElementCopy(container)
+    expect(rendered).toContain('Microphone capture failed. Try again.')
+    expect(rendered).not.toContain(hostile)
+    expect(rendered).not.toMatch(/\b(WebRTC|transport|fallback|runtime)\b/i)
+    expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), rendered).toEqual([])
+  })
 })
 
 class FakeAudioContext {
@@ -141,4 +179,13 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.getAttribute('aria-label') === label)
   if (!button) throw new Error(`button ${label} not found`)
   return button
+}
+
+function renderedElementCopy(root: HTMLElement): string {
+  const attributes = Array.from(root.querySelectorAll('*')).flatMap((element) => (
+    ['aria-label', 'title', 'placeholder', 'disabledreason']
+      .map((name) => element.getAttribute(name))
+      .filter((value): value is string => Boolean(value))
+  ))
+  return [root.textContent ?? '', ...attributes].join(' ').replace(/\s+/g, ' ').trim()
 }

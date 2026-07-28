@@ -284,26 +284,26 @@ export function RoutePolicyView({
     <section className="aui-route-policy-view" aria-labelledby="route-policy-title">
       <header className="aui-route-policy-header">
         <div>
-          <p className="aui-kicker">Mesh route policy</p>
+          <p className="aui-kicker">Shared-device policy</p>
           <h1 id="route-policy-title">Route policy decisions</h1>
           <p>Review how Aurora handles shared devices, privacy, and selection before configuration changes are applied.</p>
         </div>
         <div className="aui-mesh-badges" aria-label="Route policy status">
           <StatusBadge state={snapshot.loadState === 'loading' ? 'pending' : snapshot.routeState} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-          <EvidenceBadge label={snapshot.evidenceSource} />
+          <EvidenceBadge label={snapshot.secretsRedacted ? 'sensitive values hidden' : 'status pending'} />
+          <EvidenceBadge label="Aurora status" />
         </div>
       </header>
 
       <dl className="aui-route-policy-summary">
-        <PolicyFact label="Route policy" value={`${snapshot.policyCapabilityState}: ${snapshot.policyCapabilityReason}`} />
+        <PolicyFact label="Route policy" value={`${snapshot.policyCapabilityState}: ${productRouteReasonCopy(snapshot.policyCapabilityReason)}`} />
         <PolicyFact label="Selected scenario" value={selected ? `${selected.scenario.label}: ${selected.state}` : 'not loaded'} />
       </dl>
 
       {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{productRoutePolicyErrorCopy(snapshot.error)}</p> : null}
       {snapshot.warnings.length > 0 ? (
         <ul className="aui-mesh-warnings" aria-label="Route policy warnings">
-          {snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          {snapshot.warnings.map((warning) => <li key={warning}>{productRoutePolicyErrorCopy(warning)}</li>)}
         </ul>
       ) : null}
 
@@ -311,7 +311,7 @@ export function RoutePolicyView({
         <section className="aui-route-policy-panel" aria-labelledby="route-dry-run-title">
           <div className="aui-panel-heading">
             <div>
-              <h2 id="route-dry-run-title">Backend decision matrix</h2>
+              <h2 id="route-dry-run-title">Decision matrix</h2>
             </div>
             <button className="aui-button" type="button" onClick={onRefresh} disabled={snapshot.loadState === 'loading'}>
               <RefreshCw size={16} aria-hidden="true" /> Refresh
@@ -358,12 +358,12 @@ function RouteScenarioDetails({ result }: { result: RoutePolicyScenarioResult })
       {evaluation ? (
         <>
           <dl className="aui-route-policy-summary">
-            <PolicyFact label="Decision" value={`${evaluation.decision}: ${evaluation.reasonCode}`} />
+            <PolicyFact label="Decision" value={productRouteReasonCopy(evaluation.allowed ? 'allowed' : evaluation.reasonCode)} />
             <PolicyFact label="Selected destination" value={previewTarget(evaluation)} />
             <PolicyFact label="Sharing behavior" value={productRoutePolicySharingCopy(evaluation.preview.fallbackBehavior)} />
-            <PolicyFact label="Repair path" value={evaluation.repairPath ?? 'none required'} />
+            <PolicyFact label="Repair path" value={productRouteReasonCopy(evaluation.repairPath ?? 'allowed')} />
             <PolicyFact label="Selector" value={evaluation.explicitSelectorRequired ? 'explicit selector required' : 'selector accepted or not required'} />
-            <PolicyFact label="Audit" value={evaluation.preview.auditReceiptTarget ?? 'not reported'} />
+            <PolicyFact label="Account history" value={evaluation.preview.auditReceiptTarget ? 'Will be updated' : 'Not reported'} />
           </dl>
           <div className="aui-route-candidates">
             {evaluation.route.candidates.map((candidate) => (
@@ -502,10 +502,13 @@ function previewTarget(evaluation: RoutePolicyEvaluation): string {
 }
 
 function productRoutePolicySharingCopy(value: string): string {
-  if (/block|deny/i.test(value)) return 'Blocked until policy allows it'
-  if (/fallback|remote|mesh|peer|cloud/i.test(value)) return 'Can use another approved device'
-  if (/none|not/i.test(value)) return 'No alternate destination'
-  return 'Uses selected destination'
+  const normalized = normalizeRoutePolicyCopyToken(value)
+  if (!normalized || normalized === 'not_evaluated') return 'Not evaluated yet'
+  if (normalized === 'blocked' || normalized === 'denied' || normalized === 'error') return 'Blocked until policy allows it'
+  if (normalized === 'fallback' || normalized === 'remote' || normalized === 'mesh' || normalized === 'peer' || normalized === 'cloud' || normalized === 'network') return 'Can use another approved device'
+  if (normalized === 'none' || normalized === 'no_fallback' || normalized === 'local_only') return 'No alternate destination'
+  if (normalized === 'selected' || normalized === 'selected_destination' || normalized === 'allowed') return 'Uses selected destination'
+  return 'Sharing status is unavailable.'
 }
 
 function productCandidateTitle(candidate: RoutePolicyEvaluation['route']['candidates'][number]): string {
@@ -513,10 +516,17 @@ function productCandidateTitle(candidate: RoutePolicyEvaluation['route']['candid
 }
 
 function productRouteReasonCopy(value: string): string {
-  const copy = presentableSignal(value)
-  if (/permission|denied|blocked|selector|consent|privacy/i.test(copy)) return copy
-  if (/timeout|offline|unavailable|stale/i.test(copy)) return copy
-  return copy ? 'Aurora reported this destination state.' : 'No issue reported.'
+  const normalized = normalizeRoutePolicyCopyToken(value)
+  if (!normalized || normalized === 'none' || normalized === 'ok' || normalized === 'allowed') return 'No issue reported.'
+  if (normalized === 'permission' || normalized === 'permission_denied' || normalized === 'local_permission_missing') return 'Permission is needed before continuing.'
+  if (normalized === 'denied' || normalized === 'blocked' || normalized === 'privacy_blocked') return 'Policy blocks this destination.'
+  if (normalized === 'selector_required' || normalized === 'explicit_selector_required') return 'Choose the device or resource before continuing.'
+  if (normalized === 'consent_required') return 'Consent is required before continuing.'
+  if (normalized === 'privacy_indicator_required') return 'Show the privacy indicator before continuing.'
+  if (normalized === 'native_permission_required') return 'A device permission is missing.'
+  if (normalized === 'timeout') return 'Aurora timed out while checking this destination.'
+  if (normalized === 'offline' || normalized === 'unavailable' || normalized === 'stale') return 'This destination is unavailable right now.'
+  return 'Aurora reported this destination needs review.'
 }
 
 function PolicyFact({ label, value }: { label: string; value: string }) {
@@ -531,6 +541,10 @@ function PolicyFact({ label, value }: { label: string; value: string }) {
 function csvList(value: string): string[] | null {
   const items = value.split(',').map((item) => item.trim()).filter(Boolean)
   return items.length > 0 ? items : null
+}
+
+function normalizeRoutePolicyCopyToken(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 
 function configModuleKey(module: string): string {

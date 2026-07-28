@@ -2556,14 +2556,14 @@ export function AssistantView({
             </button>
           </div>
           <dl>
-	            <div><dt>Device or service</dt><dd>{presentableSignal(route.providerLabel)}</dd></div>
+	            <div><dt>Device or service</dt><dd>{assistantRouteProviderCopy(route)}</dd></div>
             <div><dt>Availability</dt><dd>{route.state}</dd></div>
             <div><dt>Privacy</dt><dd>{route.item.privacyClass}</dd></div>
             <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Cancellation</dt><dd>{controls.canCancel ? 'supported' : controls.cancelReason}</dd></div>
             <div><dt>Last stream event</dt><dd>{streamState.lastEventId ?? 'none'}</dd></div>
-            <div><dt>Model</dt><dd>{modelLabel ?? (lastResult ? 'not reported' : 'pending backend response')}</dd></div>
+            <div><dt>Model</dt><dd>{safeAssistantRuntimeValue(modelLabel, lastResult ? 'not reported' : 'model response pending')}</dd></div>
             <div><dt>Context</dt><dd>{contextSummary.ready} ready, {contextSummary.blocked} blocked</dd></div>
           </dl>
           <p>{presentableSignal(route.explanation)}</p>
@@ -2609,7 +2609,7 @@ function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
       </p>
       <dl>
         <div><dt>Selected model</dt><dd>{health.selectedModel ?? 'model pending'}</dd></div>
-        <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'no model configured / awaiting backend model status'}</dd></div>
+        <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'model status pending'}</dd></div>
         <div><dt>Route</dt><dd>{health.routeLabel}</dd></div>
         <div><dt>Local service</dt><dd>{health.sidecarHealth}</dd></div>
         <div><dt>Gateway</dt><dd>{health.gatewayHealth}</dd></div>
@@ -2625,10 +2625,10 @@ export function buildAssistantRuntimeStrip(
   transportKind: string
 ): AssistantRuntimeHealth {
   return {
-    selectedModel: runtimeHealth?.selectedModel ?? modelLabel,
-    routeLabel: runtimeHealth?.routeLabel ?? `${route.providerLabel} / ${route.state}`,
-    sidecarHealth: runtimeHealth?.sidecarHealth ?? (transportKind === 'mock' ? 'local preview only' : 'not reported by this app'),
-    gatewayHealth: runtimeHealth?.gatewayHealth ?? `${transportKind} transport`
+    selectedModel: safeAssistantRuntimeValue(runtimeHealth?.selectedModel ?? modelLabel, null),
+    routeLabel: safeAssistantRuntimeValue(runtimeHealth?.routeLabel, route.state === 'available-remote' ? 'Connected Aurora device' : 'This device') ?? 'This device',
+    sidecarHealth: safeAssistantRuntimeValue(runtimeHealth?.sidecarHealth, transportKind === 'mock' ? 'Preview ready' : 'Status pending') ?? 'Status pending',
+    gatewayHealth: safeAssistantRuntimeValue(runtimeHealth?.gatewayHealth, productConnectionCopy(transportKind)) ?? 'Connection status ready'
   }
 }
 
@@ -2639,17 +2639,17 @@ function assistantRouteChips(route: RouteAvailability): Array<{ id: string; labe
   return [
     {
       id: 'local',
-      label: localCandidate ? `Local ${localCandidate.label}` : `Local ${route.providerLabel}`,
+      label: localCandidate ? `Local ${safeAssistantRuntimeValue(localCandidate.label, 'destination')}` : `Local ${assistantRouteProviderCopy(route)}`,
       state: localCandidate?.state ?? (route.providerLabel.toLowerCase().includes('local') ? route.state : 'pending')
     },
     {
       id: 'remote',
-      label: remoteCandidate ? `Remote ${remoteCandidate.label}` : 'Remote route pending',
+      label: remoteCandidate ? `Remote ${safeAssistantRuntimeValue(remoteCandidate.label, 'destination')}` : 'Remote route pending',
       state: remoteCandidate?.state ?? 'pending'
     },
     {
       id: 'mesh',
-      label: meshCandidate ? `Mesh ${meshCandidate.label}` : 'Mesh route pending',
+      label: meshCandidate ? `Mesh ${safeAssistantRuntimeValue(meshCandidate.label, 'destination')}` : 'Mesh route pending',
       state: meshCandidate?.state ?? 'pending'
     }
   ]
@@ -2797,7 +2797,7 @@ function VoiceModePanel({
         </div>
         <div className="aui-assistant-badges" aria-label="Voice status">
           <PrivacyBadge privacy={model.privacyClass} />
-          <EvidenceBadge label={model.transport} />
+          <EvidenceBadge label={productConnectionCopy(model.transport)} />
           <EvidenceBadge label={model.consentGranted ? 'consent granted' : 'consent required'} />
           <EvidenceBadge label={model.targetLabel} />
         </div>
@@ -2866,7 +2866,7 @@ function VoiceModePanel({
           <dl>
             <div><dt>Privacy class</dt><dd>{model.privacyClass}</dd></div>
             <div><dt>Destination</dt><dd>{presentableSignal(model.targetLabel)}</dd></div>
-            <div><dt>Connection</dt><dd>{presentableSignal(model.transport)}</dd></div>
+            <div><dt>Connection</dt><dd>{productConnectionCopy(model.transport)}</dd></div>
             <div><dt>Retention</dt><dd>{model.retentionPolicy}</dd></div>
             <div><dt>Session TTL</dt><dd>{model.sessionTtl}</dd></div>
           </dl>
@@ -3639,20 +3639,20 @@ export function assistantControlsForRoute(
     return {
       canSend,
       canCancel: false,
-      cancelReason: 'unsupported: missing Orchestrator.Interrupt capability status'
+      cancelReason: 'Stop is unavailable for this response.'
     }
   }
   if (cancellationRoute.disabled) {
     return {
       canSend,
       canCancel: false,
-      cancelReason: presentableSignal(cancellationRoute.blockers.join(', ') || 'unsupported by backend capability state')
+      cancelReason: 'Stop is unavailable for this response.'
     }
   }
   return {
     canSend,
     canCancel: true,
-    cancelReason: 'supported by Orchestrator.Interrupt'
+    cancelReason: 'Stop is available for this response.'
   }
 }
 
@@ -4415,14 +4415,14 @@ function waveformBarsFromTimeDomain(samples: Uint8Array, barCount: number): numb
 function productAudioCaptureErrorCopy(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-      return 'Microphone permission was denied by the OS or WebView.'
+      return 'Microphone permission was denied.'
     }
     if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-      return 'No microphone device was exposed to the Aurora UI.'
+      return 'No microphone was found on this device.'
     }
-    return `${error.name}: ${error.message}`
+    return 'Microphone capture failed. Try again.'
   }
-  return error instanceof Error ? error.message : 'Microphone capture failed.'
+  return 'Microphone capture failed. Try again.'
 }
 
 function resampleFloat32(input: Float32Array, sourceRate: number, targetRate: number): Float32Array {
@@ -4525,7 +4525,7 @@ function ConversationRail({
     .filter((row) => normalizedSearch.length === 0 || `${row.title} ${row.route}`.toLowerCase().includes(normalizedSearch))
   return (
     <aside className="aui-conversation-rail" aria-labelledby="assistant-recent-chats-title">
-      <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2><span className="aui-sr-only">Conversation rail</span><div className="aui-sr-only" aria-label="Assistant local remote mesh route chips"><span>Search recent conversations</span><span>Local {route.providerLabel}</span><span>Remote route pending</span><span>Mesh route pending</span></div>
+      <h2 id="assistant-recent-chats-title" className="aui-sr-only">Recent chats</h2><span className="aui-sr-only">Conversation rail</span><div className="aui-sr-only" aria-label="Assistant local remote mesh route chips"><span>Search recent conversations</span><span>Local {assistantRouteProviderCopy(route)}</span><span>Remote route pending</span><span>Mesh route pending</span></div>
       <header>
         <Button type="button" variant="ghost" size="sm" onClick={onNewConversation} disabled={disabled || loading || transportKind === 'mesh'} aria-label="New conversation" className="aui-thread-new-button">
           <MessageSquarePlus aria-hidden />
@@ -4692,11 +4692,32 @@ export function assistantMessageRuntimeLabel(
   message: AssistantUiMessage,
   executionPeerLabels: ReadonlyMap<string, string> = new Map()
 ): string {
-  const execution = message.routeLabel
-    || (message.executionPeerId ? executionPeerLabels.get(message.executionPeerId) ?? message.executionPeerId : null)
-    || 'Local'
-  const model = message.modelLabel || null
+  const execution = safeAssistantRuntimeValue(
+    message.routeLabel || (message.executionPeerId ? executionPeerLabels.get(message.executionPeerId) ?? null : null),
+    message.executionPeerId ? 'Connected Aurora device' : 'Local'
+  ) ?? 'Local'
+  const model = safeAssistantRuntimeValue(message.modelLabel, null)
   return model && execution !== model ? `${execution} · ${model}` : execution
+}
+
+function safeAssistantRuntimeValue(value: string | null | undefined, fallback: string | null): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return fallback
+  if (isInternalAssistantLabel(trimmed)) return fallback
+  return trimmed
+}
+
+function isInternalAssistantLabel(value: string): boolean {
+  return /\b(?:transport|fallback|runtime|provider|consumer|hybrid|manifest|schema|protocol|sidecar|thin|signaling|datachannel|gateway|orchestrator|tooling|stt|tts|db)\b/i.test(value)
+    || /[a-z]+:\/\/|[A-Z][A-Za-z]+\.[A-Z][A-Za-z]+|[{"]|secret|token/i.test(value)
+}
+
+function productConnectionCopy(value: string | null | undefined): string {
+  const normalized = (value ?? '').trim().toLowerCase()
+  if (!normalized) return 'Connection status pending'
+  if (normalized.includes('tauri') || normalized.includes('native') || normalized.includes('local') || normalized.includes('mock')) return 'Connected on this device'
+  if (normalized.includes('web') || normalized.includes('http') || normalized.includes('remote')) return 'Connected to Aurora'
+  return 'Connection status ready'
 }
 
 function assistantRouteModeLabel(route: RouteAvailability): string {
@@ -4705,6 +4726,11 @@ function assistantRouteModeLabel(route: RouteAvailability): string {
   if (/mesh|peer/i.test(route.providerLabel)) return 'Mesh'
   if (/openai|cloud|remote/i.test(route.providerLabel)) return 'Remote'
   return route.providerLabel
+}
+
+function assistantRouteProviderCopy(route: RouteAvailability): string {
+  if (route.state === 'available-remote' || /mesh|peer|remote|cloud/i.test(route.providerLabel)) return 'Connected Aurora device'
+  return 'This device'
 }
 
 function selectedRuntimeProvider(
@@ -4724,53 +4750,47 @@ function AssistantToolCallCardView({
   const statusLabel = toolStatusLabel(tool.status)
   const StatusIcon = toolStatusIcon(tool.status)
   const previewText = toolInlinePreview(tool)
-  const argsText = tool.payloadPreview ? JSON.stringify(tool.payloadPreview, null, 2) : undefined
-  const detailResult = tool.errorDetails ?? tool.resultPreview ?? undefined
-  const resultText = detailResult === undefined || detailResult === null ? undefined : detailResult
-  const triggerLabel = `${statusLabel}: ${tool.name}`
+  const triggerLabel = `${statusLabel}: Aurora action`
   return (
     <ToolFallbackRoot
       className={`aui-assistant-tool-inline aui-tool-call-${tool.status}`}
       defaultOpen={tool.status === 'requires_action'}
-      aria-label={`${tool.name} tool call`}
+      aria-label="Assistant action status"
     >
       <CollapsibleTrigger className="aui-assistant-tool-trigger" aria-label={triggerLabel}>
         <StatusIcon aria-hidden />
         <span className="aui-assistant-tool-title">
           <span className="aui-assistant-tool-status">{statusLabel}</span>
-          <strong>{tool.name}</strong>
+          <strong>{toolTitleCopy(tool)}</strong>
         </span>
         {previewText ? <span className="aui-assistant-tool-preview">{previewText}</span> : null}
         <ChevronDown aria-hidden className="aui-assistant-tool-chevron" />
       </CollapsibleTrigger>
-      <span className="aui-sr-only">Payload preview</span>
+      <span className="aui-sr-only">Action details</span>
       <dl className="aui-sr-only">
         <div><dt>Status</dt><dd>{statusLabel}</dd></div>
-        <div><dt>Audit</dt><dd>{tool.auditId ?? 'pending backend receipt'}</dd></div>
+        <div><dt>Account history</dt><dd>{tool.auditId ? 'Will be updated' : 'Pending'}</dd></div>
       </dl>
-      {tool.errorDetails ? <code className="aui-sr-only">{JSON.stringify(tool.errorDetails, null, 2)}</code> : null}
-      {tool.payloadPreview ? <code className="aui-sr-only">{JSON.stringify(tool.payloadPreview, null, 2)}</code> : null}
-      {tool.resultPreview ? <code className="aui-sr-only">{JSON.stringify(tool.resultPreview, null, 2)}</code> : null}
       <ToolFallbackContent className="aui-assistant-tool-details">
         <dl className="aui-assistant-tool-metadata">
           <div><dt>Status</dt><dd>{statusLabel}</dd></div>
-          <div><dt>Policy</dt><dd>{tool.riskClass}</dd></div>
-          <div><dt>Target</dt><dd>{tool.target}</dd></div>
+          <div><dt>Review</dt><dd>{toolReviewCopy(tool)}</dd></div>
+          <div><dt>Destination</dt><dd>{toolDestinationCopy(tool)}</dd></div>
           <div><dt>Data leaves device</dt><dd>{tool.dataLeavesDevice ? 'Yes' : 'No'}</dd></div>
-          <div><dt>Audit</dt><dd>{tool.auditId ?? 'pending backend receipt'}</dd></div>
+          <div><dt>Account history</dt><dd>{tool.auditId ? 'Will be updated' : 'Pending'}</dd></div>
         </dl>
-        {tool.summary ? <p className="aui-assistant-tool-summary">{tool.summary}</p> : null}
+        <p className="aui-assistant-tool-summary">{toolSummaryCopy(tool)}</p>
         {tool.error ? (
           <div className="aui-tool-fallback-error">
-            <p className="aui-tool-fallback-error-header">Error:</p>
-            <p className="aui-tool-fallback-error-reason">{tool.error}</p>
+            <p className="aui-tool-fallback-error-header">Action could not finish.</p>
+            <p className="aui-tool-fallback-error-reason">{toolErrorCopy(tool)}</p>
           </div>
         ) : null}
-        {argsText ? <ToolFallbackArgs argsText={argsText} /> : null}
-        {resultText !== undefined ? <ToolFallbackResult result={resultText} /> : null}
+        {tool.payloadPreview ? <ToolFallbackArgs argsText="Request details hidden before review." /> : null}
+        {tool.resultPreview !== null && tool.resultPreview !== undefined ? <ToolFallbackResult result="Result details saved with the conversation." /> : null}
       </ToolFallbackContent>
       {tool.status === 'requires_action' ? (
-        <div className="aui-assistant-tool-actions" aria-label={`${tool.name} approval actions`}>
+        <div className="aui-assistant-tool-actions" aria-label="Assistant action approval choices">
           <Button
             type="button"
             size="xs"
@@ -4934,12 +4954,42 @@ function toolStatusIcon(status: AssistantToolCallCard['status']) {
 }
 
 function toolInlinePreview(tool: AssistantToolCallCard): string | null {
-  const resultPreview = compactToolPreviewValue(tool.resultPreview)
-  const errorDetails = compactToolPreviewValue(tool.errorDetails)
-  const payloadPreview = compactToolPreviewValue(tool.payloadPreview)
-  if (tool.status === 'failed') return tool.error || errorDetails || tool.summary || null
-  if (tool.status === 'completed') return resultPreview || tool.summary || null
-  return tool.summary || payloadPreview
+  if (tool.status === 'failed') return 'Action could not finish.'
+  if (tool.status === 'completed') return 'Action finished.'
+  if (tool.status === 'requires_action') return 'Review before continuing.'
+  if (tool.status === 'running') return 'Action is running.'
+  return 'Action requested.'
+}
+
+function toolTitleCopy(tool: AssistantToolCallCard): string {
+  if (tool.status === 'requires_action') return 'Action needs approval'
+  if (tool.status === 'completed') return 'Action finished'
+  if (tool.status === 'failed') return 'Action needs attention'
+  if (tool.status === 'running') return 'Action in progress'
+  return 'Assistant action'
+}
+
+function toolReviewCopy(tool: AssistantToolCallCard): string {
+  if (tool.status === 'requires_action') return 'Review required'
+  if (tool.status === 'failed') return 'Needs attention'
+  if (tool.riskClass === 'low') return 'Standard review'
+  return 'Reviewed by Aurora'
+}
+
+function toolDestinationCopy(tool: AssistantToolCallCard): string {
+  return tool.dataLeavesDevice ? 'Approved destination' : 'This device'
+}
+
+function toolSummaryCopy(tool: AssistantToolCallCard): string {
+  if (tool.status === 'requires_action') return 'Aurora paused this action until you approve or deny it.'
+  if (tool.status === 'failed') return 'Aurora could not finish this action.'
+  if (tool.status === 'completed') return 'Aurora finished this action.'
+  if (tool.status === 'running') return 'Aurora is working on this action.'
+  return 'Aurora requested this action.'
+}
+
+function toolErrorCopy(_tool: AssistantToolCallCard): string {
+  return 'Review the conversation or account history for details.'
 }
 
 function compactToolPreviewValue(value: unknown): string | null {

@@ -227,7 +227,7 @@ export function RouteSheet({
 
       {model.loadState === 'loading' ? <RouteSheetNotice icon="loading" message="Loading policy from Aurora." /> : null}
       {model.loadState === 'error' ? (
-        <RouteSheetNotice icon="error" message={model.error ?? 'Aurora route policy evaluation failed.'} role="alert" />
+        <RouteSheetNotice icon="error" message={routeSheetErrorMessage(model.error)} role="alert" />
       ) : null}
 
       {model.evaluation ? (
@@ -290,9 +290,8 @@ export function routeSheetErrorMessage(error: unknown): string {
   const auroraError = error as Partial<AuroraError>
   if (auroraError.code === 'timeout') return 'Aurora timed out while loading route policy.'
   if (auroraError.code === 'auth' || auroraError.code === 'permission') return 'Route policy is unavailable because authentication or permissions failed.'
-  if (auroraError.code === 'privacy_blocked') return 'Route policy is unavailable because backend privacy policy blocked the request.'
-  if (error instanceof Error && error.message) return error.message
-  return 'Aurora route policy evaluation failed.'
+  if (auroraError.code === 'privacy_blocked') return 'Route policy is unavailable until the required privacy choice is made.'
+  return safeErrorCopy(error).title
 }
 
 function RouteSheetDecision({ model }: { model: RouteSheetViewModel }) {
@@ -303,7 +302,7 @@ function RouteSheetDecision({ model }: { model: RouteSheetViewModel }) {
     <div className="aui-route-sheet-decision">
       <StatusBadge state={model.evaluation.availability} />
       <PrivacyBadge privacy={model.evaluation.privacyClass} />
-      <EvidenceBadge label={model.evaluation.allowed ? 'allowed' : model.evaluation.reasonCode} />
+      <EvidenceBadge label={routeSheetDecisionLabel(model.evaluation)} />
     </div>
   )
 }
@@ -313,11 +312,11 @@ function RoutePreviewGrid({ evaluation, primaryReason }: { evaluation: RoutePoli
   return (
     <dl className="aui-route-preview">
       <div><dt>Target</dt><dd>{previewTarget(preview)}</dd></div>
-      <div><dt>Privacy class</dt><dd>{preview.privacyClass}</dd></div>
-      <div><dt>Payload</dt><dd><code>{stringifyPreview(preview.payloadPreview)}</code></dd></div>
+      <div><dt>Privacy class</dt><dd>{privacyClassLabel(preview.privacyClass)}</dd></div>
+      <div><dt>Request details</dt><dd>{payloadPreviewCopy(preview.payloadPreview)}</dd></div>
       <div><dt>Policy reason</dt><dd>{primaryReason}</dd></div>
-      <div><dt>Audit</dt><dd>{preview.auditReceiptTarget ?? 'audit receipt pending service status'}</dd></div>
-      <div><dt>Secrets</dt><dd>{preview.secretsRedacted ? 'redacted by backend/Aurora status' : 'redaction not reported'}</dd></div>
+      <div><dt>Account history</dt><dd>{accountHistoryCopy(preview.auditReceiptTarget)}</dd></div>
+      <div><dt>Sensitive values</dt><dd>{preview.secretsRedacted ? 'Hidden before review' : 'No hidden-value status reported'}</dd></div>
     </dl>
   )
 }
@@ -328,7 +327,7 @@ function RouteCandidateList({ evaluation }: { evaluation: RoutePolicyEvaluation 
     return (
       <div className="aui-route-empty">
         <X size={16} aria-hidden />
-        <span>No route candidates were returned by the backend route policy surface.</span>
+        <span>No destinations are available right now.</span>
       </div>
     )
   }
@@ -337,11 +336,11 @@ function RouteCandidateList({ evaluation }: { evaluation: RoutePolicyEvaluation 
       {candidates.map((candidate) => (
         <li key={`${candidate.provider_id}:${candidate.service_instance_id}`}>
           <div>
-            <strong>{candidate.provider_id}</strong>
-            <span>{candidate.provider_kind} / {candidate.module}</span>
+            <strong>{candidateTitle(candidate)}</strong>
+            <span>{candidateKindCopy(candidate)}</span>
           </div>
-          <EvidenceBadge label={candidate.selected ? 'selected' : candidate.included ? 'eligible' : candidate.reason_code} />
-          <small>{candidate.reason || 'backend did not provide a reason'}</small>
+          <EvidenceBadge label={candidateStateCopy(candidate)} />
+          <small>{routeSheetReasonCopy(candidate.reason || candidate.reason_code)}</small>
         </li>
       ))}
     </ul>
@@ -503,35 +502,96 @@ function routeSheetPrimaryReason(
   if (adminActionState === 'required') return 'Administrator confirmation is required before this sensitive route can run.'
   if (adminActionState === 'drafted') return 'Administrator review is started but confirmation is still pending.'
   if (adminActionState === 'error') return 'Administrator review failed; retry or choose a different route.'
-  if (evaluation.allowed) return evaluation.repairPath ?? 'Policy allows this route.'
-  return evaluation.repairPath ?? evaluation.blockers[0]?.message ?? evaluation.reasonCode
+  if (evaluation.allowed) return 'Policy allows this route.'
+  return routeSheetReasonCopy(evaluation.repairPath || evaluation.blockers[0]?.message || evaluation.blockers[0]?.code || evaluation.reasonCode)
 }
 
 function adminActionLabel(state: AdminActionRouteState): string {
   if (state === 'not-required') return 'not required'
   if (state === 'confirmed') return 'confirmed by Aurora'
   if (state === 'drafted') return 'drafted; waiting for confirmation'
-  if (state === 'error') return 'error; route remains blocked'
+  if (state === 'error') return 'review failed; route remains blocked'
   return 'required before continuing'
 }
 
 function previewTarget(preview: RoutePolicyEvaluation['preview']): string {
-  return [
-    preview.egressDestination,
-    preview.peerId ? 'shared device' : null,
-    preview.providerId ? 'selected service' : null,
-    preview.serviceInstanceId ? 'service ready' : null
-  ].filter(Boolean).join(' / ') || 'none'
+  if (preview.peerId) return 'Connected Aurora device'
+  if (preview.providerId || preview.serviceInstanceId) return 'Selected service'
+  const normalized = normalizeRouteCopyToken(preview.egressDestination)
+  if (normalized === 'local' || normalized === 'device' || normalized === 'this_device') return 'This device'
+  if (normalized === 'cloud' || normalized === 'remote') return 'Approved external service'
+  return 'Destination pending'
 }
 
-function stringifyPreview(value: unknown): string {
-  if (value === null || value === undefined) return 'null'
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return '[unserializable preview]'
-  }
+function payloadPreviewCopy(value: unknown): string {
+  if (value === null || value === undefined) return 'No request details reported'
+  return 'Request details hidden before review'
+}
+
+function accountHistoryCopy(value: string | null | undefined): string {
+  return value ? 'Account history will be updated' : 'Account history pending'
+}
+
+function privacyClassLabel(value: PrivacyClass): string {
+  if (value === 'raw-audio') return 'Audio'
+  if (value === 'personal') return 'Personal'
+  if (value === 'sensitive') return 'Sensitive'
+  return 'Standard'
+}
+
+function routeSheetDecisionLabel(evaluation: RoutePolicyEvaluation): string {
+  return evaluation.allowed ? 'allowed' : routeSheetReasonCodeCopy(evaluation.reasonCode)
+}
+
+function candidateTitle(candidate: RoutePolicyEvaluation['route']['candidates'][number]): string {
+  return candidate.selected ? 'Selected destination' : candidate.included ? 'Available destination' : 'Unavailable destination'
+}
+
+function candidateKindCopy(candidate: RoutePolicyEvaluation['route']['candidates'][number]): string {
+  const kind = normalizeRouteCopyToken(candidate.provider_kind)
+  const module = normalizeRouteCopyToken(candidate.module)
+  if (kind === 'local' || module === 'local') return 'This device'
+  if (kind === 'peer' || kind === 'mesh' || module === 'mesh') return 'Connected Aurora device'
+  if (kind === 'cloud' || kind === 'external') return 'Approved external service'
+  return 'Aurora destination'
+}
+
+function candidateStateCopy(candidate: RoutePolicyEvaluation['route']['candidates'][number]): string {
+  if (candidate.selected) return 'selected'
+  if (candidate.included) return 'available'
+  return routeSheetReasonCodeCopy(candidate.reason_code)
+}
+
+function routeSheetReasonCodeCopy(value: string | null | undefined): string {
+  const normalized = normalizeRouteCopyToken(value)
+  if (!normalized) return 'pending'
+  if (normalized === 'allowed' || normalized === 'ok') return 'allowed'
+  if (normalized.includes('selector')) return 'selection needed'
+  if (normalized.includes('consent')) return 'consent needed'
+  if (normalized.includes('privacy')) return 'privacy choice needed'
+  if (normalized.includes('permission')) return 'permission needed'
+  if (normalized.includes('admin')) return 'admin approval needed'
+  if (normalized.includes('unavailable') || normalized.includes('offline') || normalized.includes('timeout')) return 'unavailable'
+  if (normalized.includes('block') || normalized.includes('deny')) return 'blocked'
+  return 'needs review'
+}
+
+function routeSheetReasonCopy(value: string | null | undefined): string {
+  const state = routeSheetReasonCodeCopy(value)
+  if (state === 'allowed') return 'Policy allows this route.'
+  if (state === 'selection needed') return 'Choose the device or resource before continuing.'
+  if (state === 'consent needed') return 'Consent is required before this request can continue.'
+  if (state === 'privacy choice needed') return 'Make the required privacy choice before continuing.'
+  if (state === 'permission needed') return 'A device permission is missing.'
+  if (state === 'admin approval needed') return 'Administrator confirmation is required before continuing.'
+  if (state === 'unavailable') return 'This destination is unavailable right now.'
+  if (state === 'blocked') return 'Policy blocks this route until requirements are met.'
+  if (state === 'pending') return 'Aurora has not returned policy status yet.'
+  return 'Aurora reported this destination needs review.'
+}
+
+function normalizeRouteCopyToken(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 
 function stableKey(value: unknown): string {
