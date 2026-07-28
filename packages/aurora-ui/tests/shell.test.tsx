@@ -2231,6 +2231,7 @@ describe('Aurora production shell', () => {
       expect(container.textContent).not.toContain('Thin-shell transport')
       expect(container.textContent).not.toContain('Mesh settings')
       expect(container.textContent).not.toContain('Connect peer')
+      expect(container.querySelectorAll('[data-slot="card"]').length).toBeGreaterThan(1)
       expect(
         container.querySelector('[data-slot="switch"]')?.hasAttribute('data-disabled'),
       ).toBe(true)

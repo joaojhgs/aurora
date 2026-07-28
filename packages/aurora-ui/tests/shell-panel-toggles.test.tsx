@@ -104,6 +104,8 @@ describe('AppShell side-panel toggles', () => {
     expect(container.textContent).not.toContain('Operate · admin only')
     expect(container.querySelector('a[href="/admin"]')).toBeNull()
     expect(container.querySelector('[data-mobile-tab="admin"]')).toBeNull()
+    expect(container.querySelector('a[href="/admin/services"]')).toBeNull()
+    expect(container.querySelector('a[href="/admin/tokens"]')).toBeNull()
     expect(container.querySelector('a[href="/settings"]')).not.toBeNull()
     expect(container.querySelector('[data-mobile-tab="settings"]')).not.toBeNull()
     expect(container.textContent).toContain('Web Thin')
@@ -122,6 +124,8 @@ describe('AppShell side-panel toggles', () => {
     expect(container.textContent).toContain('Operate · admin only')
     expect(container.querySelector('a[href="/admin"]')).not.toBeNull()
     expect(container.querySelector('[data-mobile-tab="admin"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/admin/services"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/admin/tokens"]')).not.toBeNull()
     expect(container.textContent).toContain('admin')
     expect(container.textContent).toContain('Full access')
 

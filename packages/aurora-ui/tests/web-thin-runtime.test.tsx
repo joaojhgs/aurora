@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  CAP_CONSUMER_ONLY_V1,
   MemoryPeerCredentialStore,
   type PeerConnectionSnapshot,
   type WebRtcPeerConnectionProfile,
@@ -174,6 +175,24 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(preferred.peer.snapshot().hasHttpFallback).toBe(true)
     await httpOnly.close()
     await preferred.close()
+  })
+
+  it('keeps WebRTC remote-console runtime consumer-only with no local provider capabilities', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+
+    expect(runtime.mode).toBe('webrtc-only')
+    expect(runtime.client.transport.kind).toBe('mesh')
+    expect(runtime.peer.snapshot().protocolCapabilities).toEqual([])
+    expect(runtime.peer.snapshot().protocolCapabilities).not.toContain(
+      CAP_CONSUMER_ONLY_V1,
+    )
+    await runtime.close()
   })
 
   it('rolls WebRTC-preferred back to HTTP without consuming or rewriting peer credentials', async () => {

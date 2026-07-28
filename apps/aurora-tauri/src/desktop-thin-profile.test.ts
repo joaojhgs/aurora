@@ -439,6 +439,47 @@ describe('desktop-thin live connection profiles', () => {
     await initial.dispose()
   })
 
+  it('uses runtime-configured desktop-thin endpoints without enabling sidecar ownership', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (X11; Linux x86_64) Aurora Desktop',
+      configurable: true,
+    })
+    const runtimeProfile: AuroraThinConnectionProfile = {
+      ...profile,
+      mode: 'webrtc-preferred',
+      gatewayUrl: 'https://gateway.operator.example/api?site=studio',
+      signalingUrl: 'wss://signal.operator.example/mqtt?site=studio',
+      webrtcProfile: {
+        ...profile.webrtcProfile!,
+        mode: 'webrtc-preferred',
+        signalingBrokers: ['wss://signal.operator.example/mqtt?site=studio'],
+      },
+    }
+
+    const runtime = createAuroraTauriRuntime({
+      thinProfileDocument: {
+        version: 1,
+        activeProfileId: runtimeProfile.id,
+        profiles: [runtimeProfile],
+      },
+    })
+
+    expect(runtime.mode).toBe('desktop-thin')
+    expect(runtime.thinConnectionMode).toBe('webrtc-preferred')
+    expect(runtime.thinProfile).toMatchObject({
+      gatewayUrl: 'https://gateway.operator.example/api?site=studio',
+      signalingUrl: 'wss://signal.operator.example/mqtt?site=studio',
+    })
+    expect(runtime.client.transport.kind).toBe('mesh')
+    expect(runtime.thinPeer?.snapshot().hasHttpFallback).toBe(true)
+    await expect(runtime.sidecarStatus()).resolves.toBeNull()
+    await expect(runtime.startSidecar()).resolves.toBeNull()
+    await expect(runtime.stopSidecar()).resolves.toBeNull()
+    await runtime.dispose()
+  })
+
   it('classifies a packaged iOS-thin build without relying on the WebView user agent', async () => {
     vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'ios-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })

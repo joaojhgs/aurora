@@ -142,4 +142,25 @@ describe('thin connection profiles', () => {
       profiles: [httpProfile()],
     }))).toBeNull()
   })
+
+  it('keeps the v1 profile shape limited to runtime home-node connection metadata', () => {
+    const encoded = serializeThinProfileDocument({
+      version: 1,
+      activeProfileId: 'direct',
+      profiles: [webRtcProfile()],
+    })
+    const parsed = JSON.parse(encoded)
+
+    expect(parsed.version).toBe(1)
+    expect(parsed.profiles[0]).toMatchObject({
+      id: 'direct',
+      mode: 'webrtc-only',
+      gatewayUrl: '',
+      signalingUrl: 'wss://signal.example.test/mqtt?tenant=home',
+    })
+    expect(parsed.profiles[0]).not.toHaveProperty('nodeMode')
+    expect(parsed.profiles[0]).not.toHaveProperty('runtimeTier')
+    expect(parsed.profiles[0]).not.toHaveProperty('localCapabilities')
+    expect(parsed.profiles[0]).not.toHaveProperty('homeConnection')
+  })
 })
