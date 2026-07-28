@@ -1,6 +1,8 @@
 import {
   AuroraClient,
   AuroraError,
+  type AuroraEventSubscription,
+  type AuroraStreamRequest,
   type AuroraTransport,
   type HttpTransportOptions,
   type JsonObject,
@@ -172,7 +174,6 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
           mode: 'http-only',
           http: rollbackHttp,
           ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
-          ...(config.createClient ? { createClient: config.createClient } : {}),
         })
       : null
     const peer = new BrowserWebRtcPeerController(null, mode, {
@@ -183,7 +184,9 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       visibilityDocument: config.visibilityDocument,
     })
     return {
-      client: rollbackRuntime?.client ?? clientFromFactory(config, new FailingTransport(disabled, mode)),
+      client: rollbackRuntime
+        ? clientFromRuntimeTransport(config, new ProductSafeTransport(rollbackRuntime.transport))
+        : clientFromFactory(config, new FailingTransport(disabled, mode)),
       peer,
       surface,
       mode,
@@ -233,7 +236,6 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       appLayerE2eeAllowed: rolloutFlags.webrtc_app_layer_e2ee,
       ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
       ...(config.windowLocation ? { windowLocation: config.windowLocation } : {}),
-      ...(config.createClient ? { createClient: config.createClient } : {}),
     })
   } catch (error) {
     if (mode === 'http-only' && config.demoMode) {
@@ -284,8 +286,8 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     mode,
     async close() {
       lifecycle?.stop()
+      await peer.disconnect('runtime closed')
       await sdkRuntime.close()
-      await credentialStore.close()
     },
   }
 }
@@ -441,7 +443,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     } catch (error) {
       this.connectionDiagnostic = productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY
       this.emit()
-      throw error
+      throw productSafeAuroraError(error)
     }
   }
 
@@ -571,19 +573,79 @@ class ProductSafeTransport implements AuroraTransport {
     }
   }
 
-  subscribe<TEventPayload = unknown, TPayload = unknown>(request: unknown): unknown {
+  subscribe<TEventPayload = unknown, TPayload = unknown>(
+    request: AuroraStreamRequest<TPayload>,
+  ): AuroraEventSubscription<TEventPayload> | Promise<AuroraEventSubscription<TEventPayload>> {
     const source = this.source as AuroraTransport & {
-      subscribe?: <TNextEventPayload = TEventPayload, TNextPayload = TPayload>(request: unknown) => unknown
+      subscribe?: <TNextEventPayload = TEventPayload, TNextPayload = TPayload>(
+        request: AuroraStreamRequest<TNextPayload>,
+      ) => AuroraEventSubscription<TNextEventPayload> | Promise<AuroraEventSubscription<TNextEventPayload>>
     }
     if (!source.subscribe) {
       throw new AuroraError({ code: 'unsupported_feature', message: CONNECTION_UNAVAILABLE_COPY })
     }
     try {
-      return source.subscribe<TEventPayload, TPayload>(request)
+      const subscription = source.subscribe<TEventPayload, TPayload>(request)
+      return isPromiseLike(subscription)
+        ? subscription.then(wrapProductSafeSubscription, (error) => {
+            throw productSafeAuroraError(error)
+          })
+        : wrapProductSafeSubscription(subscription)
     } catch (error) {
       throw productSafeAuroraError(error)
     }
   }
+}
+
+function wrapProductSafeSubscription<TPayload>(
+  subscription: AuroraEventSubscription<TPayload>,
+): AuroraEventSubscription<TPayload> {
+  return {
+    get closed() {
+      return subscription.closed.catch((error) => {
+        throw productSafeAuroraError(error)
+      })
+    },
+    close(reason?: unknown) {
+      subscription.close(reason)
+    },
+    [Symbol.asyncIterator]() {
+      const iterator = subscription[Symbol.asyncIterator]()
+      return {
+        async next(): Promise<IteratorResult<Awaited<ReturnType<typeof iterator.next>> extends IteratorResult<infer TValue> ? TValue : never>> {
+          try {
+            return await iterator.next()
+          } catch (error) {
+            throw productSafeAuroraError(error)
+          }
+        },
+        async return(): Promise<IteratorResult<Awaited<ReturnType<typeof iterator.next>> extends IteratorResult<infer TValue> ? TValue : never>> {
+          try {
+            return iterator.return
+              ? await iterator.return()
+              : { done: true, value: undefined as never }
+          } catch (error) {
+            throw productSafeAuroraError(error)
+          }
+        },
+        async throw(error?: unknown): Promise<IteratorResult<Awaited<ReturnType<typeof iterator.next>> extends IteratorResult<infer TValue> ? TValue : never>> {
+          try {
+            if (iterator.throw) return await iterator.throw(error)
+            throw error
+          } catch (nextError) {
+            throw productSafeAuroraError(nextError)
+          }
+        },
+      }
+    },
+  }
+}
+
+function isPromiseLike<TValue>(value: TValue | PromiseLike<TValue>): value is PromiseLike<TValue> {
+  return typeof value === 'object'
+    && value !== null
+    && 'then' in value
+    && typeof (value as { then?: unknown }).then === 'function'
 }
 
 function demoClientFromFactory(config: BrowserThinRuntimeConfig): AuroraClient {
@@ -800,8 +862,14 @@ function productDiagnosticFromValue(value: string | undefined): string | undefin
 function productSafeAuroraError(error: unknown): AuroraError {
   if (error instanceof AuroraError) {
     return new AuroraError({
-      ...error,
+      code: error.code,
       message: productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY,
+      status: error.status,
+      method: error.method,
+      busTopic: error.busTopic,
+      correlationId: error.correlationId,
+      detail: error.detail,
+      cause: error.cause,
     })
   }
   return new AuroraError({

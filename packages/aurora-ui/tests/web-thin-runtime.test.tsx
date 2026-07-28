@@ -8,7 +8,15 @@ import {
   type PeerConnectionSnapshot,
   type WebRtcPeerConnectionProfile,
 } from '@aurora/client/webrtc'
-import { AuroraClient, AuroraError, MockAuroraTransport, type AuroraTransport, type JsonObject } from '@aurora/client'
+import {
+  AuroraClient,
+  AuroraError,
+  MockAuroraTransport,
+  type AuroraEventSubscription,
+  type AuroraStreamRequest,
+  type AuroraTransport,
+  type JsonObject,
+} from '@aurora/client'
 import {
   BrowserWebRtcPeerController,
   WebThinConnectionPanel,
@@ -565,6 +573,163 @@ describe('browser WebRTC thin-shell runtime', () => {
     )
   })
 
+  it('maps async stream setup failures through fixed copy while preserving metadata', async () => {
+    let safeTransport: (AuroraTransport & {
+      source?: AuroraTransport
+      subscribe?: (request: AuroraStreamRequest) => unknown
+    }) | null = null
+    const createClientOnce = vi.fn((transport: AuroraTransport) => {
+      safeTransport = transport
+      return new AuroraClient({ transport })
+    })
+    const runtime = createBrowserWebThinRuntime({
+      createClient: createClientOnce,
+      createDemoClient,
+      mode: 'http-only',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+    const hostile = hostileAuroraError()
+    safeTransport!.source = {
+      kind: 'mesh',
+      request: async () => ({ data: {} }),
+      subscribe: async () => {
+        throw hostile
+      },
+    } as AuroraTransport & { subscribe: () => Promise<never> }
+
+    await expect(safeTransport!.subscribe!(streamRequest())).rejects.toMatchObject({
+      code: hostile.code,
+      status: hostile.status,
+      method: hostile.method,
+      busTopic: hostile.busTopic,
+      correlationId: hostile.correlationId,
+      detail: hostile.detail,
+      message: 'Could not connect to this Aurora device. Try again from Connection settings.',
+    })
+    await expect(safeTransport!.subscribe!(streamRequest())).rejects.not.toThrow(
+      /WebRTC|runtime|transport|provider|manifest|protocol|token=secret/i,
+    )
+    await runtime.close()
+  })
+
+  it('maps later stream iterator and subscription failures through fixed copy', async () => {
+    let safeTransport: (AuroraTransport & {
+      source?: AuroraTransport
+      subscribe?: (request: AuroraStreamRequest) => Promise<AuroraEventSubscription>
+    }) | null = null
+    const createClientOnce = vi.fn((transport: AuroraTransport) => {
+      safeTransport = transport
+      return new AuroraClient({ transport })
+    })
+    const runtime = createBrowserWebThinRuntime({
+      createClient: createClientOnce,
+      createDemoClient,
+      mode: 'http-only',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+    const iteratorError = hostileAuroraError('corr-iterator')
+    const closedError = hostileAuroraError('corr-closed')
+    safeTransport!.source = {
+      kind: 'mesh',
+      request: async () => ({ data: {} }),
+      subscribe: async () => ({
+        closed: Promise.reject(closedError),
+        close: vi.fn(),
+        [Symbol.asyncIterator]() {
+          return {
+            async next() {
+              throw iteratorError
+            },
+          }
+        },
+      }),
+    } as AuroraTransport & { subscribe: () => Promise<AuroraEventSubscription> }
+
+    const subscription = await safeTransport!.subscribe!(streamRequest())
+
+    await expect(subscription[Symbol.asyncIterator]().next()).rejects.toMatchObject({
+      code: iteratorError.code,
+      status: iteratorError.status,
+      method: iteratorError.method,
+      busTopic: iteratorError.busTopic,
+      correlationId: iteratorError.correlationId,
+      detail: iteratorError.detail,
+      message: 'Could not connect to this Aurora device. Try again from Connection settings.',
+    })
+    await expect(subscription.closed).rejects.toMatchObject({
+      code: closedError.code,
+      correlationId: closedError.correlationId,
+      message: 'Could not connect to this Aurora device. Try again from Connection settings.',
+    })
+    await expect(subscription[Symbol.asyncIterator]().next()).rejects.not.toThrow(
+      /WebRTC|runtime|transport|provider|manifest|protocol|token=secret/i,
+    )
+    await runtime.close()
+  })
+
+  it('throws fixed-copy connect failures while preserving structured fields', async () => {
+    const hostile = hostileAuroraError()
+    const peer = new FakeBrowserPeer({ status: 'idle' }, hostile)
+    const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false })
+
+    await expect(controller.connect(webRtcProfileFromInvite(inviteText())!)).rejects.toMatchObject({
+      code: hostile.code,
+      status: hostile.status,
+      method: hostile.method,
+      busTopic: hostile.busTopic,
+      correlationId: hostile.correlationId,
+      detail: hostile.detail,
+      message: 'Could not connect to this Aurora device. Try again from Connection settings.',
+    })
+    await expect(controller.connect(webRtcProfileFromInvite(inviteText())!)).rejects.not.toThrow(
+      /WebRTC|runtime|transport|provider|manifest|protocol|token=secret/i,
+    )
+    expect(controller.snapshot().diagnostic).toBe(
+      'Could not connect to this Aurora device. Try again from Connection settings.',
+    )
+  })
+
+  it('constructs one caller client for successful runtimes and releases listeners on close', async () => {
+    const documentListeners = new Map<string, Set<() => void>>()
+    const visibilityDocument = {
+      visibilityState: 'visible' as DocumentVisibilityState,
+      addEventListener: (event: string, listener: () => void) => {
+        const listeners = documentListeners.get(event) ?? new Set<() => void>()
+        listeners.add(listener)
+        documentListeners.set(event, listeners)
+      },
+      removeEventListener: (event: string, listener: () => void) => {
+        documentListeners.get(event)?.delete(listener)
+      },
+    } as unknown as Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>
+    const transports: AuroraTransport[] = []
+    const createClientOnce = vi.fn((transport: AuroraTransport) => {
+      transports.push(transport)
+      return new AuroraClient({ transport })
+    })
+
+    const runtime = createBrowserWebThinRuntime({
+      createClient: createClientOnce,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      visibilityDocument,
+    })
+
+    expect(createClientOnce).toHaveBeenCalledTimes(1)
+    expect(runtime.client.transport).toBe(transports[0])
+    expect(runtime.client.transport.kind).toBe('mesh')
+    expect(documentListeners.get('visibilitychange')?.size).toBe(2)
+
+    await runtime.close()
+
+    expect(createClientOnce).toHaveBeenCalledTimes(1)
+    expect(documentListeners.get('visibilitychange')?.size ?? 0).toBe(0)
+  })
+
   it('maps hostile structured peer status into safe presentation copy', async () => {
     const hostileDiagnostic = 'WebRTC runtime transport provider manifest protocol fallback token=secret'
     const peer = new FakeBrowserPeer({
@@ -1014,7 +1179,7 @@ class FakeBrowserPeer {
   disconnectedReasons: string[] = []
   selectedCandidatePairEvidenceCalls = 0
   private snapshotValue: BrowserWebRtcSnapshot
-  constructor(partial: Partial<BrowserWebRtcSnapshot> = {}) {
+  constructor(partial: Partial<BrowserWebRtcSnapshot> = {}, private readonly connectError: unknown = null) {
     this.snapshotValue = {
       state: 'awaiting-sas-confirmation',
       connectionMode: 'webrtc-only',
@@ -1041,7 +1206,11 @@ class FakeBrowserPeer {
   snapshot() { return this.snapshotValue }
   subscribe(listener: (snapshot: BrowserWebRtcSnapshot) => void) { listener(this.snapshotValue); return () => undefined }
   importInvite(invite: string) { return webRtcProfileFromInvite(invite)! }
-  async connect(profile?: WebRtcPeerConnectionProfile) { if (profile) this.connectedProfiles.push(profile); return undefined }
+  async connect(profile?: WebRtcPeerConnectionProfile) {
+    if (this.connectError) throw this.connectError
+    if (profile) this.connectedProfiles.push(profile)
+    return undefined
+  }
   async confirmPairing(sessionId: string) { this.confirmed.push(sessionId) }
   async rejectPairing(_sessionId: string) { return undefined }
   async getSelectedCandidatePairEvidence() {
@@ -1089,6 +1258,29 @@ function inviteText(
     webrtc: { app_layer_e2ee: true, stun_servers: ['stun:stun.example:19302'], turn_servers: [] },
   }
   return encodeMeshInviteToken(invite)
+}
+
+function hostileAuroraError(correlationId = 'corr-hostile'): AuroraError {
+  return new AuroraError({
+    code: 'transport_loss',
+    status: 502,
+    method: 'Gateway.Events',
+    busTopic: 'TTS.AudioChunk',
+    correlationId,
+    detail: {
+      reason: 'WebRTC runtime transport provider manifest protocol token=secret',
+    },
+    message: 'WebRTC runtime transport provider manifest protocol token=secret',
+  })
+}
+
+function streamRequest(): AuroraStreamRequest {
+  return {
+    stream: 'generic',
+    topics: ['TTS.AudioChunk'],
+    kinds: ['tts.audio_chunk'],
+    reconnect: { maxAttempts: 0 },
+  }
 }
 
 function findButton(container: HTMLElement, text: string): HTMLButtonElement {
