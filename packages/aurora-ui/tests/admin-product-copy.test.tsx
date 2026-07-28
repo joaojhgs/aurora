@@ -120,12 +120,20 @@ describe('admin product copy', () => {
       'room password services.orchestrator.llm.provider',
       'Gateway.GetSchemaMetadata backend provider schema route manifest transport proof',
       'mixed source uses services.gateway.webrtc.room_password with fallback transport debug details',
+      'sk-abc123 provider schema',
+      'services-orchestrator-llm-provider fallback protocol',
+      'room_password',
+      '/api/admin/Config/GetSchemaMetadata',
+      'PrOvIdEr...sChEmA///fallback',
     ]
 
     for (const hostile of hostileValues) {
       const reason = productAdminReasonCopy(hostile, 'Admin status needs attention.')
       const directReason = adminReasonText(hostile, 'Admin status needs attention.')
       const sanitized = sanitizeAdminText(hostile, 'Admin status needs attention.')
+      expect(reason).toBe('Admin status needs attention.')
+      expect(directReason).toBe('Admin status needs attention.')
+      expect(sanitized).toBe('Admin status needs attention.')
       expectSafeProductCopy(reason)
       expectSafeProductCopy(directReason)
       expectSafeProductCopy(sanitized)
@@ -133,8 +141,7 @@ describe('admin product copy', () => {
 
     expect(productAdminReasonCopy('services.gateway.webrtc.room_password', 'Admin status needs attention.')).toBe('Admin status needs attention.')
     expect(productAdminReasonCopy('Gateway.GetSchemaMetadata', 'Admin status needs attention.')).toBe('Admin status needs attention.')
-    expect(productAdminReasonCopy('provider is unavailable', 'Admin status needs attention.')).toBe('source is unavailable')
-    expect(sanitizeAdminText('Gateway registry transport provider')).toBe('Connection service list connection source')
+    expect(productAdminReasonCopy('This action needs attention before it can run.', 'Admin status needs attention.')).toBe('This action needs attention before it can run.')
   })
 })
 

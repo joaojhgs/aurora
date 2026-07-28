@@ -305,6 +305,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                     {fields.map((field) => {
                       const editedValue = edits[field.key_path] ?? stringifyValue(field.current_value)
                       const changed = changes.some((change) => change.key_path === field.key_path)
+                      const sensitive = isSensitiveConfigField(field)
                       return (
                         <label key={field.key_path} className="grid grid-cols-1 gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_minmax(0,260px)] sm:items-start">
                           <span className="flex flex-col gap-1">
@@ -315,15 +316,15 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                           <span className="flex flex-col gap-1">
                             <ConfigFieldControl
                               field={field}
-                              value={field.secret ? '[REDACTED]' : editedValue}
-                              disabled={!canMutate || field.secret || busy}
+                              value={sensitive ? '[REDACTED]' : editedValue}
+                              disabled={!canMutate || sensitive || busy}
                               invalid={fieldHasValidationError(field.key_path, model.validationErrors, localValidationErrors, displayLabels)}
                               changed={changed}
                               onChange={(value) => setEdits((current) => ({ ...current, [field.key_path]: value }))}
                             />
                             <em className="text-[11px] not-italic text-muted-foreground">
                               {configSourceLayerLabel(field.source_layer)}; {fieldModeLabel(field)}
-                              {field.secret ? '; secret redacted' : ''}
+                              {sensitive ? '; secret redacted' : ''}
                               {field.affected_services.length > 0 ? `; affects ${field.affected_services.map(configServiceLabel).join(', ')}` : ''}
                             </em>
                           </span>
@@ -426,6 +427,9 @@ function ConfigFieldControl({
     'data-changed': changed ? 'true' : undefined
   } as const
   const changedRing = 'data-changed:border-primary data-changed:ring-1 data-changed:ring-primary/40'
+  if (isSensitiveConfigField(field)) {
+    return <Input className={changedRing} type="password" value="[REDACTED]" {...common} />
+  }
   if (field.choices && field.choices.length > 0 && !field.secret) {
     return (
       <select className={cn(SELECT_CLASSNAME, changedRing)} value={value} onChange={(event) => onChange(event.target.value)} {...common}>
@@ -542,8 +546,9 @@ function displayValue(value: JsonValue | undefined): string {
 }
 
 function displayDiffValue(row: ConfigDiffEntry, side: 'old' | 'new' = 'old'): string {
-  if (row.secret) return '[REDACTED]'
-  return displayValue(side === 'old' ? row.old_value : row.new_value)
+  const value = side === 'old' ? row.old_value : row.new_value
+  if (row.secret || isSensitiveConfigPath(row.key_path) || isSensitiveConfigValue(value)) return '[REDACTED]'
+  return displayValue(value)
 }
 
 interface ConfigDisplayLabels {
@@ -677,7 +682,7 @@ function configFieldTitle(field: ConfigFieldMetadata): string {
 }
 
 function safeConfigFieldTitle(field: ConfigFieldMetadata): string {
-  if (isProtectedConfigPath(field.key_path) || isProtectedConfigText(field.title ?? undefined)) return 'Protected setting'
+  if (isSensitiveConfigField(field) || isProtectedConfigText(field.title ?? undefined)) return 'Protected setting'
   const title = field.title?.trim()
   if (title) {
     const softened = productAdminReasonCopy(title, '')
@@ -720,11 +725,44 @@ function configAreaLabel(value: string): string {
 }
 
 function isProtectedConfigPath(value: string): boolean {
-  return /(?:password|token|secret|credential|room[_ -]?password)/iu.test(value)
+  return isSensitiveConfigPath(value)
 }
 
 function isProtectedConfigText(value: string | undefined): boolean {
   return /(?:room[_ -]?password)/iu.test(value ?? '')
+}
+
+function isSensitiveConfigField(field: ConfigFieldMetadata): boolean {
+  return field.secret ||
+    isSensitiveConfigPath(field.key_path) ||
+    isSensitiveConfigPath(field.title ?? '') ||
+    isSensitiveConfigPath(field.description ?? '') ||
+    isSensitiveConfigValue(field.current_value)
+}
+
+function isSensitiveConfigPath(value: string): boolean {
+  return /(?:password|passphrase|secret|credential|api[_ -]?key|apikey|access[_ -]?key|private[_ -]?key|room[_ -]?password|auth[_ -]?token|refresh[_ -]?token|token\b)/iu.test(value)
+}
+
+function isSensitiveConfigValue(value: JsonValue | undefined): boolean {
+  if (typeof value === 'string') return isSensitiveConfigString(value)
+  if (Array.isArray(value)) return value.some((item) => isSensitiveConfigValue(item))
+  if (value && typeof value === 'object') {
+    return Object.entries(value).some(([key, entry]) => isSensitiveConfigPath(key) || isSensitiveConfigValue(entry as JsonValue))
+  }
+  return false
+}
+
+function isSensitiveConfigString(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (/\b(?:sk-[A-Za-z0-9_-]{6,}|(?:AKIA|ghp_|github_pat_|xox[baprs]-|eyJ)[A-Za-z0-9._-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/u.test(trimmed)) return true
+  if (/\b(?:api[_ -]?key|token|secret|credential|password|room[_ -]?password)\b\s*[:=]\s*\S+/iu.test(trimmed)) return true
+  if (trimmed.length < 24 || /\s/u.test(trimmed)) return false
+  const hasLetter = /[A-Za-z]/u.test(trimmed)
+  const hasDigit = /\d/u.test(trimmed)
+  const hasSymbol = /[^A-Za-z0-9]/u.test(trimmed)
+  return hasLetter && hasDigit && hasSymbol
 }
 
 function configFieldDescription(value: string | undefined): string {

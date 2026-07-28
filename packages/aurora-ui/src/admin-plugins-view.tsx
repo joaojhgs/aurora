@@ -53,6 +53,7 @@ export const AVAILABLE_PLUGIN_TEMPLATES: AvailablePluginTemplate[] = [
 ]
 
 const TOOL_SOURCE_SECTION_ORDER: Array<Exclude<ToolingSourceType, 'blocked' | 'plugin'> | 'blocked'> = ['core', 'mcp', 'mesh', 'unknown', 'blocked']
+const PLUGIN_WIZARD_ERROR_REMEDY = 'Check the source details and try again.'
 
 export interface AdminPluginsSnapshot {
   loadState: AdminPluginsLoadState
@@ -547,7 +548,11 @@ function AddMcpSourceDialog({
           <FormField label="Command or URL" htmlFor="mcp-source-command">
             <Input id="mcp-source-command" value={commandOrUrl} placeholder="npx @scope/mcp-server" onChange={(event) => setCommandOrUrl(event.target.value)} />
           </FormField>
-          {errors.length > 0 ? <p className="text-sm text-destructive">{errors.join(', ')}</p> : null}
+          {errors.length > 0 ? (
+            <p className="text-sm text-destructive" role="alert">
+              {errors.join(', ')}
+            </p>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
@@ -562,7 +567,7 @@ function AddMcpSourceDialog({
               setErrors([])
               try {
                 const result = await onSubmit(draft)
-                if (result.errors.length > 0) setErrors(result.errors)
+                if (result.errors.length > 0) setErrors(productPluginWizardErrorsCopy(result.errors))
               } finally {
                 setBusy(false)
               }
@@ -630,7 +635,11 @@ function PluginConfigDialog({
           <FormField label="Scope / workspace (optional)" htmlFor="plugin-config-scope">
             <Input id="plugin-config-scope" value={workspace} placeholder="e.g. default workspace" onChange={(event) => setWorkspace(event.target.value)} />
           </FormField>
-          {errors.length > 0 ? <p className="text-sm text-destructive">{errors.join(', ')}</p> : null}
+          {errors.length > 0 ? (
+            <p className="text-sm text-destructive" role="alert">
+              {errors.join(', ')}
+            </p>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
@@ -645,7 +654,7 @@ function PluginConfigDialog({
               setErrors([])
               try {
                 const result = await onSubmit(draft)
-                if (result.errors.length > 0) setErrors(result.errors)
+                if (result.errors.length > 0) setErrors(productPluginWizardErrorsCopy(result.errors))
               } finally {
                 setBusy(false)
               }
@@ -670,6 +679,10 @@ function sourceDescription(source: ToolingSourceModel): string {
 
 function productPluginUpdateErrorCopy(sourceLabel: string, detail: string): { tone: 'error'; title: string; detail: string } {
   return { tone: 'error', title: `Could not update ${sourceLabel}`, detail }
+}
+
+function productPluginWizardErrorsCopy(errors: readonly string[]): string[] {
+  return errors.map((error) => productAdminReasonCopy(error, PLUGIN_WIZARD_ERROR_REMEDY))
 }
 
 function toolStateLabel(tool: ToolApprovalCardModel): string {

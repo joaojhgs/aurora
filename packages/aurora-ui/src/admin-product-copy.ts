@@ -86,9 +86,9 @@ export function adminRouteCopy(route: Pick<RouteAvailability, 'state' | 'disable
 export function adminReasonText(value: string | null | undefined, fallback = 'This action needs attention before it can run.'): string {
   const text = value?.trim()
   if (!text) return fallback
-  if (ADMIN_METHOD_PATTERN.test(text) || ADMIN_KEY_PATH_PATTERN.test(text)) return fallback
+  if (hasUnsafeAdminCopy(text)) return fallback
   const softened = sanitizeAdminText(text, fallback)
-  return hasUnsafeAdminCopy(softened) ? fallback : softened
+  return isAllowedAdminReasonCopy(softened) ? softened : fallback
 }
 
 export function adminActionLabel(input: string | Pick<MethodDescriptor, 'module' | 'name' | 'busTopic'>): string {
@@ -108,6 +108,7 @@ export function adminModuleLabel(module: string): string {
 }
 
 export function sanitizeAdminText(value: string, fallback = 'This item needs attention.'): string {
+  if (hasUnsafeAdminCopy(value)) return fallback
   const softened = value
     .replace(/(Auth|Gateway|Scheduler|Config|Tooling|Orchestrator|Backup)\.([A-Za-z0-9_.-]+)/gu, (_match, module, action) => `${adminModuleLabel(String(module))} ${humanizeAction(String(action))}`)
     .replace(/\bAdminAction\b/giu, 'admin approval')
@@ -151,9 +152,73 @@ export function sanitizeAdminText(value: string, fallback = 'This item needs att
 
 const ADMIN_METHOD_PATTERN = /\b(?:Auth|Gateway|Scheduler|Config|Tooling|Orchestrator|Backup)\.[A-Za-z0-9_.-]+\b/u
 const ADMIN_KEY_PATH_PATTERN = /\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\.[a-z0-9_.]+\b/iu
+const ADMIN_SLASH_PATH_PATTERN = /(?:^|\s)\/(?:api|admin|services|gateway|auth|config|orchestrator|tooling|scheduler)\b/iu
+const ADMIN_SECRET_LIKE_PATTERN = /\b(?:sk-[A-Za-z0-9_-]{6,}|(?:api[_ -]?key|token|secret|credential|password|room[_ -]?password)\b\s*[:=]\s*\S+|(?:AKIA|ghp_|xox[baprs]-|eyJ)[A-Za-z0-9._-]{8,})/iu
+const ADMIN_NORMALIZED_INTERNAL_TERMS = [
+  'adminaction',
+  'backend',
+  'capability',
+  'catalog',
+  'contract',
+  'datachannel',
+  'debug',
+  'fallback',
+  'fixture',
+  'implementation',
+  'indexeddb',
+  'manifest',
+  'migration',
+  'opfs',
+  'protocol',
+  'provider',
+  'roompassword',
+  'runtime',
+  'schema',
+  'sidecar',
+  'signaling',
+  'sqlite',
+  'tested',
+  'transport',
+] as const
+const ADMIN_NORMALIZED_INTERNAL_PREFIXES = [
+  'services',
+  'gateway',
+  'auth',
+  'config',
+  'orchestrator',
+  'tooling',
+  'scheduler',
+] as const
 
 function hasUnsafeAdminCopy(value: string): boolean {
-  return findForbiddenProductionCopyTerms(value).length > 0 || ADMIN_METHOD_PATTERN.test(value) || ADMIN_KEY_PATH_PATTERN.test(value)
+  return findForbiddenProductionCopyTerms(value).length > 0 ||
+    ADMIN_METHOD_PATTERN.test(value) ||
+    ADMIN_KEY_PATH_PATTERN.test(value) ||
+    ADMIN_SLASH_PATH_PATTERN.test(value) ||
+    ADMIN_SECRET_LIKE_PATTERN.test(value) ||
+    hasNormalizedInternalAdminCopy(value)
+}
+
+function isAllowedAdminReasonCopy(value: string): boolean {
+  if (hasUnsafeAdminCopy(value)) return false
+  if (
+    /^(?:devices|tokens|pending pairings|mesh peers|capability catalog|platform features): (?:Connection lost\. Reconnecting\.\.\.|This Aurora version cannot use that feature yet|Permission is needed to use this feature)$/iu.test(
+      value
+    )
+  ) {
+    return true
+  }
+  return /^(?:Ready|none)$/iu.test(value) ||
+    /^(?:This action|This device|This Aurora version|Permission is needed|Admin approval is required|Connection lost|Checking Aurora|Status needs attention|Available after admin confirmation)\b[\w\s.,'/-]*$/iu.test(value) ||
+    /^(?:Source|Tool source|Backup list|Backup action|Device update|Settings update|Review|Rollback|Audit status|Device\/session status|RBAC status|Configuration editor)\b[\w\s.,'/-]*$/iu.test(value)
+}
+
+function hasNormalizedInternalAdminCopy(value: string): boolean {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/gu, '')
+  if (ADMIN_NORMALIZED_INTERNAL_TERMS.some((term) => normalized.includes(term))) return true
+  return ADMIN_NORMALIZED_INTERNAL_PREFIXES.some((prefix) =>
+    ADMIN_NORMALIZED_INTERNAL_TERMS.some((term) => normalized.includes(`${prefix}${term}`))
+  )
 }
 
 function humanizeAction(value: string): string {

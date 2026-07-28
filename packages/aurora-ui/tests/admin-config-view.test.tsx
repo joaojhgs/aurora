@@ -63,9 +63,12 @@ describe('AdminConfigView', () => {
     })
 
     expectUnsafeConfigCopyAbsent(container.innerHTML)
-    expect(container.textContent).toContain('LLM source')
+    expect(container.textContent).toContain('Assistant setting')
     expect(container.textContent).toContain('Protected setting')
     expect(container.textContent).toContain('Setting 1')
+    expect(container.innerHTML).toContain('value="openai"')
+    expect(container.innerHTML).toContain('[REDACTED]')
+    expect(container.innerHTML).not.toContain('sk-abc123')
 
     const rollbackButton = findButtonByText(container, 'Rollback')
     expect(rollbackButton).not.toBeNull()
@@ -91,8 +94,10 @@ describe('AdminConfigView', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('LLM source')
+    expect(container.textContent).toContain('Assistant setting')
     expect(container.textContent).toContain('Assistant')
+    expect(container.textContent).toContain('openai')
+    expect(container.textContent).toContain('local')
     expectUnsafeConfigCopyAbsent(container.innerHTML)
 
     const reviewButton = findButtonByText(container, 'Review and apply')
@@ -103,7 +108,7 @@ describe('AdminConfigView', () => {
     })
 
     expect(document.body.textContent).toContain('Apply staged config changes')
-    expect(document.body.textContent).toContain('LLM source')
+    expect(document.body.textContent).toContain('Assistant setting')
     expectUnsafeConfigCopyAbsent(document.body.innerHTML)
   })
 
@@ -403,10 +408,10 @@ function hostileSchemaFixture(): ConfigSchemaMetadataResponse {
         title: 'room_password',
         description: 'room password protocol',
         type: 'string',
-        current_value: 'secret',
+        current_value: 'sk-abc123',
         source_layer: 'config.json',
         affected_services: ['gateway'],
-        secret: true
+        secret: false
       })
     ]
   }

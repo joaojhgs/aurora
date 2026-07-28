@@ -1,9 +1,24 @@
+// @vitest-environment jsdom
+import { act, type ReactElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { AuroraClient as Aurora, MockAuroraTransport, type ToolCatalogResponse } from '@aurora/client'
 import { AdminPluginsView, buildAdminPluginsSnapshot, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
 import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
+
+const roots: Root[] = []
+
+beforeAll(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+})
+
+afterEach(() => {
+  act(() => {
+    for (const root of roots.splice(0)) root.unmount()
+  })
+})
 
 describe('AdminPluginsView', () => {
   it('wires Tooling sources, policy, and fallback tools from Aurora for the Tools & Plugins screen', async () => {
@@ -140,7 +155,82 @@ describe('AdminPluginsView', () => {
       renderToStaticMarkup(<AdminPluginsView client={client} route={disabledRoute} initialSnapshot={disabledSnapshot} />)
     ).toContain('Permission is needed to use this feature')
   })
+
+  it('maps hostile MCP wizard backend errors before rendering', async () => {
+    const hostile = 'Tooling.TestMCPSource services.orchestrator.llm.provider sk-abc123 proof fallback protocol room_password /api/admin/schema'
+    const client = new Aurora({ transport: wizardErrorTransport('Tooling.TestMCPSource', hostile) })
+    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())
+    const container = mount(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={snapshot} />)
+
+    await clickButton(container, 'Add MCP source')
+    await setInputValue(document.body.querySelector('#mcp-source-name') as HTMLInputElement, 'local-mcp')
+    await setInputValue(document.body.querySelector('#mcp-source-command') as HTMLInputElement, 'npx safe-mcp')
+    await clickButton(document.body, 'Test & add source')
+
+    const alert = document.body.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('Check the source details and try again.')
+    expectUnsafeWizardCopyAbsent(alert?.outerHTML ?? '')
+  })
+
+  it('maps hostile plugin wizard backend errors before rendering', async () => {
+    const hostile = 'Tooling.TestPluginSource services-orchestrator-llm-provider api_key=sk-abc123 schema fallback protocol room_password /api/admin/plugin'
+    const client = new Aurora({ transport: wizardErrorTransport('Tooling.TestPluginSource', hostile) })
+    const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())
+    const container = mount(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={snapshot} initialTab="plugins" />)
+
+    await clickButton(container, 'Configure')
+    await setInputValue(document.body.querySelector('#plugin-config-key') as HTMLInputElement, 'safe-local-test-key')
+    await setInputValue(document.body.querySelector('#plugin-config-scope') as HTMLInputElement, 'default')
+    await clickButton(document.body, 'Save & activate')
+
+    const alert = document.body.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('Check the source details and try again.')
+    expectUnsafeWizardCopyAbsent(alert?.outerHTML ?? '')
+  })
 })
+
+function mount(node: ReactElement): HTMLElement {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  roots.push(root)
+  act(() => {
+    root.render(node)
+  })
+  return container
+}
+
+async function clickButton(container: ParentNode, text: string): Promise<void> {
+  const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.textContent?.includes(text))
+  expect(button).not.toBeNull()
+  await act(async () => {
+    button!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
+}
+
+async function setInputValue(input: HTMLInputElement | null, value: string): Promise<void> {
+  expect(input).not.toBeNull()
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+  await act(async () => {
+    setter?.call(input, value)
+    input!.dispatchEvent(new Event('input', { bubbles: true }))
+    await Promise.resolve()
+  })
+}
+
+function wizardErrorTransport(method: 'Tooling.TestMCPSource' | 'Tooling.TestPluginSource', error: string): MockAuroraTransport {
+  return new MockAuroraTransport().register(method, () => ({
+    ok: false,
+    source_id: 'local:test',
+    error,
+    secrets_redacted: true
+  }))
+}
+
+function expectUnsafeWizardCopyAbsent(markup: string): void {
+  expect(markup).not.toMatch(/Tooling\.Test|services[._/-]?orchestrator|sk-abc123|api[_ -]?key|proof|fallback|protocol|room[_ -]?password|schema|\/api\/admin/iu)
+}
 
 function loadingSnapshot(): AdminPluginsSnapshot {
   return {
