@@ -22,7 +22,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '#components/ui/input'
 import { Badge } from '#components/ui/badge'
 import { cn } from '#lib/utils'
-import { adminErrorTitle, adminReasonText, adminRouteCopy, sanitizeAdminText } from './admin-product-copy'
+import { adminErrorTitle, adminReasonText, adminRouteCopy, productAdminErrorCopy, productAdminReasonCopy, sanitizeAdminText } from './admin-product-copy'
 import {
   buildToolingPolicySummaryFromBackend,
   buildToolingSourcesFromBackend,
@@ -193,8 +193,10 @@ export function AdminPluginsView({ client, route, initialSnapshot, initialTab }:
       await refresh()
       toast({ tone: 'success', title: `${source.name} ${nextActive ? 'enabled' : 'disabled'}` })
     } catch (error) {
-      setMutationError(errorMessage(error))
-      toast({ tone: 'error', title: `Could not update ${source.name}`, detail: errorMessage(error) })
+      const sourceLabel = productAdminReasonCopy(source.name, 'tool source')
+      const detail = productAdminErrorCopy(error, 'Tool source could not be updated. Try again.')
+      setMutationError(detail)
+      toast(productPluginUpdateErrorCopy(sourceLabel, detail))
     }
   }
 
@@ -307,7 +309,7 @@ function RouteNotice({ snapshot, route, mutationError }: { snapshot: AdminPlugin
   if (route.disabled || snapshot.error) {
     return (
       <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
-        <AlertTriangle size={14} aria-hidden /> {snapshot.error ?? adminRouteCopy(route)}
+        <AlertTriangle size={14} aria-hidden /> {productAdminReasonCopy(snapshot.error, adminRouteCopy(route))}
       </p>
     )
   }
@@ -540,7 +542,7 @@ function AddMcpSourceDialog({
             <Input id="mcp-source-name" value={name} placeholder="e.g. notion-mcp" onChange={(event) => setName(event.target.value)} />
           </FormField>
           <FormField label="Connection method" htmlFor="mcp-source-transport">
-            <Input id="mcp-source-transport" value={transport} placeholder="stdio, sse, or streamable-http" onChange={(event) => setTransport(event.target.value)} />
+            <Input id="mcp-source-transport" value={transport} placeholder="Local command or server address" onChange={(event) => setTransport(event.target.value)} />
           </FormField>
           <FormField label="Command or URL" htmlFor="mcp-source-command">
             <Input id="mcp-source-command" value={commandOrUrl} placeholder="npx @scope/mcp-server" onChange={(event) => setCommandOrUrl(event.target.value)} />
@@ -659,11 +661,15 @@ function PluginConfigDialog({
 
 function sourceDescription(source: ToolingSourceModel): string {
   if (source.type === 'core') return 'Built-in tools shipped with Aurora services, always present, no install step.'
-  if (source.type === 'mcp') return `MCP server (${source.transport ?? 'connection method not reported'}) exposing ${source.toolCount} tool(s).`
+  if (source.type === 'mcp') return `MCP source with ${source.toolCount} tool(s).`
   if (source.type === 'mesh') return `Tools announced by connected device ${source.name}.`
   if (source.type === 'unknown') return 'Announced tools from an unverified source. Quarantined until reviewed.'
   if (source.type === 'plugin') return `Plugin source exposing ${source.toolCount} tool(s).`
   return sanitizeAdminText(source.catalogEvidence)
+}
+
+function productPluginUpdateErrorCopy(sourceLabel: string, detail: string): { tone: 'error'; title: string; detail: string } {
+  return { tone: 'error', title: `Could not update ${sourceLabel}`, detail }
 }
 
 function toolStateLabel(tool: ToolApprovalCardModel): string {

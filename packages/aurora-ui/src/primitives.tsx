@@ -362,12 +362,34 @@ export function FormField({ label, htmlFor, helper, error, required, children, c
       {helper && !error ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
       {error ? (
         <p className="text-xs text-destructive" role="alert">
-          {error}
+          {productPrimitiveErrorCopy(error)}
         </p>
       ) : null}
     </div>
   )
 }
+
+function productPrimitiveErrorCopy(value: string | null | undefined): string {
+  return productPrimitiveTextCopy(value, 'This field needs attention.')
+}
+
+function productPrimitiveReasonCopy(value: string | null | undefined): string | undefined {
+  if (!value) return undefined
+  return productPrimitiveTextCopy(value, 'This action is not ready yet.')
+}
+
+function productPrimitiveTextCopy(value: string | null | undefined, defaultCopy: string): string {
+  const text = value?.trim()
+  if (!text) return defaultCopy
+  if (PRIMITIVE_INTERNAL_COPY_PATTERN.test(text)) return defaultCopy
+  return text
+}
+
+const PRIMITIVE_INTERNAL_COPY_PATTERN = new RegExp([
+  '(?:Auth|Gateway|Scheduler|Config|Tooling|Orchestrator|Backup)\\.[A-Za-z0-9_.-]+',
+  '(?:^|\\s)(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\\.[a-z0-9_.]+',
+  '\\b(?:Admin' + 'Action|SDK|back' + 'end|capability|catalog|con' + 'tract|registry|route|transport|manifest|sche' + 'ma|pro' + 'vider|runtime|fallback|proof|debug)\\b'
+].join('|'), 'iu')
 
 export interface SwitchProps {
   checked: boolean
@@ -387,7 +409,7 @@ export function Switch({ checked, onChange, label, disabled, disabledReason, id 
       checked={checked}
       aria-label={label}
       disabled={disabled}
-      title={disabled ? disabledReason : undefined}
+      title={disabled ? productPrimitiveReasonCopy(disabledReason) : undefined}
       onCheckedChange={disabled || !onChange ? undefined : (value: boolean) => onChange(value)}
     />
   )
@@ -526,7 +548,7 @@ export function Button({
       aria-pressed={ariaPressed}
       aria-expanded={ariaExpanded}
       aria-controls={ariaControls}
-      title={isDisabled ? disabledReason : undefined}
+      title={isDisabled ? productPrimitiveReasonCopy(disabledReason) : undefined}
       onClick={isDisabled || !onClick ? undefined : onClick}
     >
       {busy ? <Spinner data-icon="inline-start" /> : icon ? (
@@ -692,12 +714,12 @@ export function AdminConfirmDialog({
         {children ? <div className="flex flex-col gap-2">{children}</div> : null}
         {error ? (
           <p className="text-sm text-destructive" role="alert">
-            {error}
+            {productPrimitiveErrorCopy(error)}
           </p>
         ) : null}
         {receipt ? (
           <p className="text-xs text-muted-foreground">
-            Audit receipt: <span className="font-mono">{receipt}</span>
+            Admin approval recorded.
           </p>
         ) : null}
         <AlertDialogFooter>

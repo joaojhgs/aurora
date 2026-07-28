@@ -21,7 +21,7 @@ import {
 import { PageHeader } from './state-surface'
 import { Card, DataTable, Button, type DataColumn } from './primitives'
 import { ConfirmDialog, PermissionEditorTable, ROLE_TEMPLATES, matchRoleTemplate } from './shared-components'
-import { adminCapabilityReason, adminErrorTitle } from './admin-product-copy'
+import { adminCapabilityReason, adminErrorTitle, productAdminReasonCopy } from './admin-product-copy'
 import { Badge } from '#components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
 import {
@@ -302,7 +302,7 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
 
       {snapshot.loadState !== 'ready' && snapshot.loadState !== 'empty' ? (
         <p role="alert" className="text-sm text-destructive">
-          {snapshot.error ?? 'RBAC status needs attention. Controls remain disabled until Aurora marks them ready.'}
+          {productAdminReasonCopy(snapshot.error, 'RBAC status needs attention. Controls remain disabled until Aurora marks them ready.')}
         </p>
       ) : null}
 

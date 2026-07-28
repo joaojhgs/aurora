@@ -31,6 +31,31 @@ export function adminErrorTitle(error: unknown, fallback?: string): string {
   return copy.ref ? `${copy.title} Ref ${copy.ref}.` : copy.title
 }
 
+export function productAdminErrorCopy(error: unknown, fallback?: string): string {
+  return adminErrorTitle(error, fallback)
+}
+
+export function productAdminReasonCopy(value: string | null | undefined, fallback?: string): string {
+  return adminReasonText(value, fallback)
+}
+
+export function productAdminCountCopy(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count.toLocaleString('en-US')} ${count === 1 ? singular : plural}`
+}
+
+export function productAdminPairCountCopy(
+  firstCount: number,
+  firstSingular: string,
+  secondCount: number,
+  secondSingular: string
+): string {
+  return `${productAdminCountCopy(firstCount, firstSingular)} across ${productAdminCountCopy(secondCount, secondSingular)}`
+}
+
+export function productAdminDeviceFeatureCopy(platform: string, featureCount: number): string {
+  return `${sanitizeAdminText(platform)}; ${productAdminCountCopy(featureCount, 'feature')}`
+}
+
 export function adminAvailabilityReason(state: AvailabilityState, input: { approvalRequired?: boolean; blockers?: readonly string[] } = {}): string {
   if (state === 'available-local' || state === 'available-remote') {
     return input.approvalRequired ? 'Admin approval is required before this action can run.' : 'Ready'

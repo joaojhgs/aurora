@@ -22,7 +22,7 @@ import { Badge } from '#components/ui/badge'
 import { Input } from '#components/ui/input'
 import { Textarea } from '#components/ui/textarea'
 import { safeErrorCopy } from './product-copy'
-import { adminRouteCopy } from './admin-product-copy'
+import { adminRouteCopy, productAdminErrorCopy, productAdminReasonCopy } from './admin-product-copy'
 
 export interface ConfigEditorViewProps {
   client: AuroraClient
@@ -132,7 +132,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       if (!diffResult.ok) setMessage(`Review failed: ${safeErrorCopy(diffResult.error).title}`)
       else if (!impactResult.ok) setMessage(`Refresh review failed: ${safeErrorCopy(impactResult.error).title}`)
     }).catch((error) => {
-      if (!cancelled) setMessage(`Review failed: ${errorMessage(error)}`)
+      if (!cancelled) setMessage(`Review failed: ${productAdminErrorCopy(error, 'Review failed. Try again.')}`)
     })
     return () => {
       cancelled = true
@@ -159,18 +159,16 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
     setBusy(true)
     setMessage(null)
     try {
-      const receipts: string[] = []
       for (const change of changes) {
         const result = await client.config.applyChange({ change, reason, reauthConfirmed: true })
-        receipts.push(result.confirmation.audit_receipt)
         if (!result.data.success) throw new Error(result.data.error ?? `Configuration update failed for ${change.key_path}`)
       }
       setEdits({})
       closeDialog()
-      setMessage(`Applied ${changes.length} change(s). Reference: ${receipts.join(', ')}`)
+      setMessage(`Applied ${changes.length} change(s).`)
       await refresh()
     } catch (error) {
-      setMessage(`Apply failed: ${errorMessage(error)}`)
+      setMessage(`Apply failed: ${productAdminErrorCopy(error, 'Settings update failed. Try again.')}`)
     } finally {
       setBusy(false)
     }
@@ -187,11 +185,11 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         reauthConfirmed: true
       })
       if (!result.data.success) throw new Error(result.data.error ?? 'Configuration rollback failed')
-      setMessage(`Rolled back ${rollbackTarget.key_path}. Reference: ${result.confirmation.audit_receipt}`)
+      setMessage('Rolled back selected setting.')
       closeDialog()
       await refresh()
     } catch (error) {
-      setMessage(`Rollback failed: ${errorMessage(error)}`)
+      setMessage(`Rollback failed: ${productAdminErrorCopy(error, 'Rollback failed. Try again.')}`)
     } finally {
       setBusy(false)
     }
@@ -259,7 +257,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       {model.state === 'loading' ? <p className="text-sm text-muted-foreground">Loading config from Aurora.</p> : null}
       {model.state === 'empty' ? <EmptyState title="No settings" message="Aurora returned no editable settings." /> : null}
       {model.state === 'denied' || model.state === 'unavailable' || model.state === 'error'
-        ? <EmptyState title="Configuration editor is unavailable" message={presentableSignal(model.error ?? route.explanation)} />
+        ? <EmptyState title="Configuration editor is unavailable" message={productAdminReasonCopy(model.error ?? route.explanation, 'Configuration editor is unavailable.')} />
         : null}
       {model.validationErrors.length > 0 ? (
         <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">

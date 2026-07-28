@@ -239,7 +239,7 @@ export function ModelsView({
       const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
       setCatalog(nextCatalog)
       setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
-      setSelectionMessage(`Model source selection applied. Audit receipt: ${result.confirmation.audit_receipt}`)
+      setSelectionMessage('Model source selection applied.')
       setPendingProvider(null)
       setReason('')
       setReauthConfirmed(false)
@@ -326,7 +326,7 @@ export function ModelsView({
       setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
       setSelectionMessage(
         receipts.length > 0
-          ? `Model source settings applied. Audit receipt: ${receipts.join(', ')}`
+          ? 'Model source settings applied.'
           : 'No configuration changes were made.'
       )
       closeConfigureProvider()
@@ -865,7 +865,7 @@ function ConfigureProviderDialog({
         {loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading settings details.</p> : null}
         {loadState === 'error' ? (
           <p className="text-sm text-destructive" role="alert">
-            {error}
+            {productModelStatusCopy(error, 'Model settings need attention.')}
           </p>
         ) : null}
         {loadState === 'ready' ? (
@@ -882,7 +882,7 @@ function ConfigureProviderDialog({
             ))}
             {error ? (
               <p className="text-sm text-destructive" role="alert">
-                {error}
+                {productModelStatusCopy(error, 'Model settings need attention.')}
               </p>
             ) : null}
           </div>
@@ -1201,38 +1201,42 @@ function connectedSourceRouteLabel(providerType: string): string {
   return 'Connected source'
 }
 
-function modelStatusCopy(value: string | null | undefined, fallback: string): string {
-  return modelStrictProductCopy(value, fallback)
+function productModelStatusCopy(value: string | null | undefined, defaultCopy: string): string {
+  return modelStrictProductCopy(value, defaultCopy)
 }
 
-function modelErrorCopy(error: unknown, fallback = 'Aurora could not complete the model source request.'): string {
+function modelStatusCopy(value: string | null | undefined, defaultCopy: string): string {
+  return productModelStatusCopy(value, defaultCopy)
+}
+
+function modelErrorCopy(error: unknown, defaultCopy = 'Aurora could not complete the model source request.'): string {
   const raw = error instanceof Error && error.message ? error.message : null
-  return modelStrictProductCopy(raw, fallback, { includeReference: Boolean(raw) })
+  return modelStrictProductCopy(raw, defaultCopy, { includeReference: Boolean(raw) })
 }
 
 function modelStrictProductCopy(
   value: string | null | undefined,
-  fallback: string,
+  defaultCopy: string,
   options: { includeReference?: boolean } = {}
 ): string {
   const raw = value?.trim()
-  if (!raw) return fallback
+  if (!raw) return defaultCopy
   if (hasInternalModelCopy(raw)) {
-    return options.includeReference ? `${fallback} Reference ${modelCopyReference(raw)}.` : fallback
+    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(raw)}.` : defaultCopy
   }
-  return modelProductCopy(raw, fallback, options)
+  return modelProductCopy(raw, defaultCopy, options)
 }
 
 function modelProductCopy(
   value: string | null | undefined,
-  fallback: string,
+  defaultCopy: string,
   options: { includeReference?: boolean } = {}
 ): string {
   const raw = value?.trim()
-  if (!raw) return fallback
+  if (!raw) return defaultCopy
   const softened = softenInternalModelCopy(raw)
   if (hasInternalModelCopy(softened)) {
-    return options.includeReference ? `${fallback} Reference ${modelCopyReference(raw)}.` : fallback
+    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(raw)}.` : defaultCopy
   }
   return softened
 }
@@ -1327,10 +1331,22 @@ function benchmarkLabel(provider: ModelRuntimeProviderInfo): string {
 }
 
 function latencyContextLabel(provider: ModelRuntimeProviderInfo): string {
-  const latency = provider.benchmark.latency_ms === null ? 'latency not measured' : `${provider.benchmark.latency_ms} ms latency`
-  const context = provider.context_window === null ? 'context unknown' : `${provider.context_window} token context`
-  const limit = provider.generation_limit === null ? 'generation limit unknown' : `${provider.generation_limit} token generation limit`
+  const latency = productModelLatencyCopy(provider.benchmark.latency_ms)
+  const context = productModelContextCopy(provider.context_window)
+  const limit = productModelGenerationLimitCopy(provider.generation_limit)
   return `${latency}; ${context}; ${limit}`
+}
+
+function productModelLatencyCopy(latencyMs: number | null): string {
+  return latencyMs === null ? 'latency not measured' : `${latencyMs} ms latency`
+}
+
+function productModelContextCopy(contextWindow: number | null): string {
+  return contextWindow === null ? 'context unknown' : `${contextWindow} token context`
+}
+
+function productModelGenerationLimitCopy(generationLimit: number | null): string {
+  return generationLimit === null ? 'generation limit unknown' : `${generationLimit} token generation limit`
 }
 
 function filesLabel(provider: ModelRuntimeProviderInfo): string {

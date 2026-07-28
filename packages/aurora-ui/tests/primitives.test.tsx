@@ -12,9 +12,11 @@ import {
 } from '../src/assistant-view'
 import {
   AdminConfirmDialog,
+  Button,
   Card,
   DataTable,
   DetailSheet,
+  FormField,
   MetaGrid,
   StatStrip,
   Switch,
@@ -44,6 +46,38 @@ function mount(node: React.ReactElement): HTMLElement {
 }
 
 describe('foundation primitives', () => {
+  it('maps hostile primitive errors, disabled reasons, and receipts before rendering', () => {
+    const hostile = 'Config.GetSchemaMetadata backend provider schema route manifest transport proof'
+    const markup = renderToStaticMarkup(
+      <div>
+        <FormField label="Setting" error={hostile}>
+          <input aria-label="setting" />
+        </FormField>
+        <Switch checked={false} label="Toggle setting" disabled disabledReason={hostile} />
+        <Button disabled disabledReason={hostile}>Run action</Button>
+      </div>
+    )
+
+    expect(markup).toContain('This field needs attention.')
+    expect(markup).toContain('This action is not ready yet.')
+    expect(markup).not.toMatch(/Config\.GetSchemaMetadata|backend|provider|schema|route|manifest|transport|proof|receipt-123/iu)
+
+    mount(
+      <AdminConfirmDialog
+        open
+        title="Confirm action"
+        description="Review action"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+        error={hostile}
+        receipt="Config.Set:receipt-123"
+      />
+    )
+    expect(document.body.textContent).toContain('This field needs attention.')
+    expect(document.body.textContent).toContain('Admin approval recorded.')
+    expect(document.body.textContent).not.toMatch(/Config\.GetSchemaMetadata|backend|provider|schema|route|manifest|transport|proof|receipt-123/iu)
+  })
+
   it('Card renders header, actions, and body', () => {
     const markup = renderToStaticMarkup(
       <Card title="Backups" actions={<button type="button">New</button>}>

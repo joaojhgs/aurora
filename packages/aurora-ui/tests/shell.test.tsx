@@ -3619,6 +3619,7 @@ function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: str
 
 function productionAnchorAliasPresent(sourceText: string, anchor: string): boolean {
   if (anchor === 'Welcome to Aurora') return sourceText.includes('PRODUCT_COPY.onboarding.title')
+  if (anchor === 'First-run setup') return sourceText.includes('First step')
   if (anchor === 'setup modes') return sourceText.includes('Aurora setup choice')
   return false
 }

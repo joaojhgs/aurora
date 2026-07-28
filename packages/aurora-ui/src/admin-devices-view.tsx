@@ -26,7 +26,7 @@ import { Textarea } from '#components/ui/textarea'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
-import { adminCapabilityReason, adminErrorTitle, adminModuleLabel, adminReasonText, sanitizeAdminText } from './admin-product-copy'
+import { adminCapabilityReason, adminErrorTitle, adminModuleLabel, adminReasonText, productAdminErrorCopy, productAdminReasonCopy, sanitizeAdminText } from './admin-product-copy'
 
 export type AdminDevicesLoadState =
   | 'loading'
@@ -203,7 +203,7 @@ export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
         await client.admin.execute({ ...action, reason, reauthConfirmed })
         await loadDevices()
       } catch (error) {
-        setMutationError(deviceMutationErrorMessage(error))
+        setMutationError(productAdminErrorCopy(error, 'Device update failed. Try again.'))
       } finally {
         setPendingDeviceId(null)
         setOptimisticDeviceId(null)
@@ -923,7 +923,7 @@ function DeviceStatusPanel({
   return (
     <Alert variant="destructive" role="alert">
       <Lock />
-      <AlertDescription>{snapshot.error ?? 'Device/session status is degraded. Not ready or denied controls remain disabled.'}</AlertDescription>
+      <AlertDescription>{productAdminReasonCopy(snapshot.error, 'Device/session status is degraded. Not ready or denied controls remain disabled.')}</AlertDescription>
     </Alert>
   )
 }

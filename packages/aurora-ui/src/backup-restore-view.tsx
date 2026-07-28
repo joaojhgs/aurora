@@ -18,7 +18,7 @@ import type { RouteAvailability } from './shell-data'
 import { ToneBadge, type BadgeTone } from './status-badges'
 import { ConfirmDialog } from './shared-components'
 import { Button, Card, DataTable, useToast, type DataColumn } from './primitives'
-import { adminErrorTitle, adminRouteCopy } from './admin-product-copy'
+import { adminErrorTitle, adminRouteCopy, productAdminErrorCopy, productAdminReasonCopy } from './admin-product-copy'
 
 export interface BackupRestoreViewProps {
   client: AuroraClient
@@ -74,7 +74,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
       if (!active) return
       if (!result.ok) {
         setLoadState(loadStateFromError(result.error))
-        setLoadError(backupErrorMessage(result.error))
+        setLoadError(productAdminErrorCopy(result.error, 'Backup list could not be loaded.'))
         return
       }
       setList(result.data)
@@ -144,7 +144,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
     onOk: (data: T) => string
   ) {
     if (!result.ok) {
-      toast({ tone: 'error', title: 'Backup action failed', detail: backupErrorMessage(result.error) })
+      toast({ tone: 'error', title: 'Backup action failed', detail: productAdminErrorCopy(result.error, 'Backup action failed. Try again.') })
       return
     }
     toast({ tone: 'success', title: onOk(result.data) })
@@ -170,7 +170,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           <Button
             variant="outline"
             disabled={!mutationRouteReady}
-            disabledReason={disabledReason}
+            disabledReason={productAdminReasonCopy(disabledReason)}
             onClick={() => setPending({ kind: 'verify', backup })}
           >
             Verify
@@ -178,7 +178,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           <Button
             variant="danger"
             disabled={!mutationRouteReady}
-            disabledReason={disabledReason}
+            disabledReason={productAdminReasonCopy(disabledReason)}
             onClick={() => setPending({ kind: 'restore', backup })}
           >
             Restore
@@ -201,7 +201,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           variant="primary"
           icon={<Archive size={14} aria-hidden />}
           disabled={!mutationRouteReady}
-          disabledReason={disabledReason}
+          disabledReason={productAdminReasonCopy(disabledReason)}
           onClick={() => setPending({ kind: 'create', backup: null })}
         >
           Create backup now

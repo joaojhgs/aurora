@@ -1,8 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
+  buildAdminOverviewManifest,
   buildCapabilityGraph,
+  capabilityCatalogFixture,
   capabilityGraphCatalogFixture,
+  deploymentTopologyFixture,
   gatewayRegistryFixture,
   modelRuntimeCatalogFixture,
 } from '@aurora/client'
@@ -80,6 +83,33 @@ describe('admin product copy', () => {
     expect(markup).toContain('Models &amp; Sources')
     expect(markup).toContain('aria-label="Selected source and preferred connected device"')
     expectModelsCopy(markup)
+  })
+
+  it('maps hostile admin source errors and dynamic counts before rendering', () => {
+    const hostile = 'Config.GetSchemaMetadata backend provider schema route manifest transport proof'
+    const overviewMarkup = renderToStaticMarkup(
+      <AdminOverviewContent
+        manifest={buildAdminOverviewManifest({
+          capabilityCatalog: capabilityCatalogFixture,
+          registry: gatewayRegistryFixture,
+          deploymentTopology: deploymentTopologyFixture,
+          generatedAt: '2026-07-28T00:00:00Z',
+        })}
+        transportKind="mock"
+      />
+    )
+    const hostileMarkup = [
+      renderToStaticMarkup(<AdminDevicesView snapshot={{ ...devicesSnapshot(), loadState: 'error', error: hostile }} reauthConfirmed={false} />),
+      renderToStaticMarkup(<AdminPluginsView client={client()} route={route()} initialSnapshot={{ ...pluginsSnapshot(), loadState: 'service-unavailable', error: hostile }} />),
+      renderToStaticMarkup(<AdminRbacView snapshot={{ ...rbacSnapshot(), loadState: 'error', error: hostile }} />),
+      renderToStaticMarkup(<AdminAuditView snapshot={{ ...auditSnapshot(), loadState: 'error', error: hostile }} />),
+      renderToStaticMarkup(<BackupRestoreView client={client()} route={{ ...route(), disabled: true, explanation: hostile }} initialList={null} />),
+      renderToStaticMarkup(<ConfigEditorView client={client()} route={route()} initialModel={{ ...configModel(), state: 'error', error: hostile }} />),
+    ].join(' ')
+
+    expect(overviewMarkup).toContain('actions across')
+    expect(overviewMarkup).toContain('feature')
+    expectSafeProductCopy(hostileMarkup)
   })
 })
 

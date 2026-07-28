@@ -14,7 +14,7 @@ import { buttonVariants } from '#components/ui/button'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
-import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, sanitizeAdminText } from './admin-product-copy'
+import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, productAdminCountCopy, productAdminDeviceFeatureCopy, productAdminPairCountCopy, sanitizeAdminText } from './admin-product-copy'
 
 export interface AdminOverviewViewProps {
   client: AuroraClient
@@ -462,7 +462,7 @@ function containerHintLabel(topology: DeploymentTopologyResponse): string {
     hints.gateway_service,
     hints.config_service
   ].filter(Boolean)
-  return services.length > 0 ? `${services.length} location hint(s)` : 'not reported'
+  return services.length > 0 ? productAdminCountCopy(services.length, 'location hint') : 'not reported'
 }
 
 function degradedReasonCopy(reason: string): string {
@@ -501,7 +501,7 @@ function activityItems(manifest: AdminOverviewManifest, gaps: CapabilitySummary[
       id: 'registry',
       state: manifest.totals.methods > 0 ? 'available-local' : 'unsupported',
       label: 'Service list loaded',
-      detail: `${manifest.totals.methods} actions across ${manifest.totals.services} services`
+      detail: productAdminPairCountCopy(manifest.totals.methods, 'action', manifest.totals.services, 'service')
     },
     {
       id: 'catalog',
@@ -519,7 +519,7 @@ function activityItems(manifest: AdminOverviewManifest, gaps: CapabilitySummary[
       id: 'native',
       state: manifest.native.availability,
       label: 'Device features',
-      detail: `${devicePlatformLabel(manifest.native.platform)}; ${manifest.native.capabilityKeys.length} feature(s)`
+      detail: productAdminDeviceFeatureCopy(devicePlatformLabel(manifest.native.platform), manifest.native.capabilityKeys.length)
     }
   ]
 }

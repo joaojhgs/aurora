@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from '#components/ui/alert'
 import { Input } from '#components/ui/input'
 import { EvidenceBadge, StatusBadge } from './status-badges'
 import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
-import { adminActionLabel, adminErrorTitle, adminReasonText, sanitizeAdminText } from './admin-product-copy'
+import { adminActionLabel, adminErrorTitle, adminReasonText, productAdminReasonCopy, sanitizeAdminText } from './admin-product-copy'
 
 const filterLabelClass = 'flex flex-col gap-1 text-xs text-muted-foreground'
 const selectControlClass = 'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
@@ -549,7 +549,7 @@ function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   return (
     <Alert variant="destructive">
       <Lock size={18} aria-hidden />
-      <AlertDescription>{snapshot.error ?? 'Audit status needs attention. Export remains disabled until protected data is present.'}</AlertDescription>
+      <AlertDescription>{productAdminReasonCopy(snapshot.error, 'Audit status needs attention. Export remains disabled until protected data is present.')}</AlertDescription>
     </Alert>
   )
 }
