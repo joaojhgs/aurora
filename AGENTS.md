@@ -179,9 +179,19 @@ make unit    # Run unit tests
 ### Commit Discipline
 
 - During substantial multi-step work, commit each coherent, verified slice as soon as it is complete; do not leave an entire session as one unrelated dirty tree.
+- When multiple agents work in parallel, every agent owns its declared files/modules, coordinates before touching shared files, and commits its own coherent verified slice before handing off.
 - Inspect `git status` and the staged diff before every commit. Never absorb, rewrite, or discard unrelated work from another agent or an earlier session.
 - Keep commits purpose-based and reviewable (for example: Python protocol/backend, SDK, UI, packaging, tests/docs) and include the verification evidence in the commit message.
 - Defer pushing until the user requests it and all intended local commits are complete and verified. When a push is requested, push once from a clean tree.
+
+### Parallel Agent Commit Discipline
+
+- Concurrent write agents must use isolated branches/worktrees so they never share a Git index or race a commit. Assign each agent an explicit write scope before it starts.
+- Reserve shared integration files—workspace/package lockfiles, root manifests, generated inventories, central registries, cross-platform Tauri bootstrap files, and CI workflows—for one named integration owner unless the leader explicitly transfers ownership.
+- Every sub-agent must commit each coherent, verified slice before handoff using the Lore Commit Protocol. Do not hand back a large uncommitted working tree unless a genuine blocker prevents a safe commit.
+- Before committing, sub-agents must inspect `git status`, stage only their owned paths, review the staged diff, and run the smallest verification that proves the slice. Never use broad staging that can absorb another lane's edits.
+- Every handoff must report the commit SHA, owned files, verification run, failures or untested gaps, and any follow-up dependency. The integration owner alone rebases/cherry-picks concurrent lane commits and resolves shared-file conflicts.
+- Sub-agents must not push. The leader/integration owner pushes once only when the user requests it and the integrated branch is clean and verified.
 
 ### Testing
 
@@ -572,5 +582,17 @@ RETURN caller.name, caller.filePath
 
 - All Aurora UI fixes must preserve the multi-surface contract unless the change is explicitly platform-specific: desktop Tauri local, desktop Tauri thin, web thin, Android, and iOS must route through centralized surface detection rather than ad hoc transport checks.
 - Use `packages/aurora-ui/src/platform-surface.ts` (`getAuroraSurfaceProfile`) as the single source for desktop-local vs desktop-thin vs web vs Android/iOS/mobile behavior. Add new platform capability flags there first, then consume them from pages/components.
+- Production UI is for end users only. Never show implementation/process wording such as proof, evidence, fixture, assertion, implementation, tested, debug, fallback, provider/consumer/hybrid, route counts, manifest, contract, protocol, transport, runtime, schema, migration, SQLite, IndexedDB, OPFS, sidecar, thin, or similar engineering terms in user-facing labels, empty states, toasts, dialogs, menus, setup text, or errors. Show useful user state, impact, action, remedy, and optional non-sensitive error IDs instead; keep implementation terms in logs, tests, developer docs, and non-rendered redacted support exports only.
 - Voice ownership is split intentionally: desktop-local daemon wakeword/background capture remains owned by `STTCoordinator`; focused push-to-talk and visual waveform capture use WebView/browser microphone capture when available. Thin web wakeword may use focused WebView/Gateway streaming only while the page is focused. Mobile push-to-talk may use focused WebView capture, while durable wake/background behavior requires platform-native adapters.
 - Any new bus method or event must follow the typed contract process: add constants and IO models under `app/shared/contracts/models/`, implement with `@method_contract` and correct `exposure`/`method_type`/permissions, route only via bus/SDK/Gateway boundaries, update SDK descriptors/types, and add tests proving redaction plus route/event behavior. Never introduce literal bus topics.
+
+## Aurora Production UI Copy Contract
+
+- Aurora's production UI is an end-user product surface, not an implementation report, developer console, test harness, or agent handoff.
+- User-facing copy must never use internal verification/process language such as **proof**, **evidence**, **fixture**, **assertion**, **implementation**, **tested**, **debug**, or “what this test proves.”
+- User-facing copy must not expose implementation vocabulary such as **manifest**, **contract**, **schema**, **migration**, **fallback**, **provider/consumer/hybrid role**, **runtime tier**, **sidecar**, **thin shell**, storage-engine names, route counts, internal transport state machines, source-code component names, or WebRTC/HTTP/WSS terminology outside the exact advanced connection fields a user must configure.
+- Present only information useful to the user's current task: what happened, what is affected, whether their data/action is safe, and the next action they can take. A non-sensitive error/reference ID is allowed when it helps support.
+- Translate internal states into product language. Examples: “peer lease expired” becomes “Device offline”; “SQLite/IndexedDB fallback” becomes “Saved on this device” or “Temporary session”; “migration failed” becomes “Local data needs attention”; “provider unavailable” becomes “This device is unavailable.”
+- Advanced settings may show a standardized connection method or endpoint URL only when the user must configure it; even there, avoid implementation diagnostics and explain the practical effect in plain language.
+- Keep technical details in structured logs, non-rendered redacted support exports, developer documentation, and tests—not in the production UI. Do not add a developer-console or implementation-diagnostics screen to the production navigation.
+- Add rendered-copy tests or a production-string lint for new UI work. Tests must fail when forbidden implementation/proof wording reaches onboarding, navigation, status cards, errors, empty states, settings, or dialogs.
