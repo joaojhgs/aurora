@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "dev:web-thin": "NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT=1 next dev",
+    "dev:web-thin": "NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT=1 NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 next dev",
     "build": "next build",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run --environment node"

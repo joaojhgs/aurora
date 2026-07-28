@@ -5,6 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AuroraClient, MockAuroraTransport, ORCHESTRATOR_METHODS } from '@aurora/client'
 import { AssistantView } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
+import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT } from '../src/platform-surface'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
@@ -56,6 +57,47 @@ describe('Assistant focused WebView microphone policy', () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
     await act(async () => {
       document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+    })
+
+    expect(stopped).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('Focused WebView microphone capture stopped')
+  })
+
+  it('stops focused media on a native lifecycle release without requiring the WebRTC peer to disconnect', async () => {
+    const stopped = vi.fn()
+    const stream = { getTracks: () => [{ stop: stopped }] } as unknown as MediaStream
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(async () => stream) }
+    })
+    vi.stubGlobal('AudioContext', FakeAudioContext)
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
+
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+      await Promise.resolve()
+    })
+
+    const mic = findButton(container, 'Push to talk')
+    await act(async () => {
+      mic.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(stopped).not.toHaveBeenCalled()
+
+    await act(async () => {
+      window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT))
       await Promise.resolve()
     })
 

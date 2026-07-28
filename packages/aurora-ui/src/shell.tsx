@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from "./nav";
 import type { AuroraNavItem } from "./nav";
+import type { AuroraNavSection } from "./nav";
+import { getAuroraSurfaceProfile } from "./platform-surface";
 import type { AuroraShellSnapshot, RouteAvailability } from "./shell-data";
 import { CapabilityDrawer } from "./state-surface";
 import {
@@ -35,6 +37,10 @@ export interface AppShellProps {
   currentPath?: string;
   children: ReactNode;
   onNavigate?: (href: string) => void;
+  /** Admin navigation is hidden unless the current authenticated session proves it. */
+  sessionIsAdmin?: boolean;
+  /** Runtime mode feeds the centralized platform-surface classifier. */
+  runtimeMode?: string;
 }
 
 export function AppShell({
@@ -42,6 +48,8 @@ export function AppShell({
   currentPath = "/",
   children,
   onNavigate,
+  sessionIsAdmin = false,
+  runtimeMode,
 }: AppShellProps) {
   const activePath = normalizePath(currentPath);
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -103,15 +111,18 @@ export function AppShell({
           <ShellNavigation
             activePath={activePath}
             routes={snapshot.routes}
+            sessionIsAdmin={sessionIsAdmin}
             {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
           />
           <div className="flex items-center gap-2 border-t border-border p-2.5">
             <Avatar className="size-[26px]">
-              <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">AD</AvatarFallback>
+              <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">
+                {shellAvatarLabel(sessionIsAdmin)}
+              </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium">{shellIdentityLabel(snapshot)}</p>
-              <p className="truncate text-[10.5px] text-muted-foreground">{shellAccessLabel(snapshot)}</p>
+              <p className="truncate text-xs font-medium">{shellIdentityLabel(sessionIsAdmin)}</p>
+              <p className="truncate text-[10.5px] text-muted-foreground">{shellAccessLabel(sessionIsAdmin)}</p>
             </div>
           </div>
         </div>
@@ -140,20 +151,24 @@ export function AppShell({
                 snapshot={snapshot}
                 activePath={activePath}
                 routes={snapshot.routes}
+                sessionIsAdmin={sessionIsAdmin}
                 {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
               />
             </div>
           </div>
           <div className="aui-status-row flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
-            <ModeBadge mode={shellSurfaceLabel(snapshot)} className="aui-shell-status" />
+            <ModeBadge mode={shellSurfaceLabel(snapshot, runtimeMode)} className="aui-shell-status" />
             <HealthBadge health={shellHealthLabel(snapshot)} className="aui-shell-status" />
-            <IdentityBadge identity={shellIdentityBadgeLabel(snapshot)} className="aui-shell-status" />
+            <IdentityBadge identity={shellIdentityBadgeLabel(sessionIsAdmin)} className="aui-shell-status" />
           </div>
           <span
             className="aui-runtime-chip shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
-            aria-label="Aurora version and uptime"
+            aria-label="Aurora version and runtime state"
           >
-            v0.9.2 <strong className="text-success">· 4h 12m</strong>
+            v0.9.2{" "}
+            <strong className={snapshot.loadState === "error" ? "text-destructive" : "text-success"}>
+              · {shellRuntimeStateLabel(snapshot)}
+            </strong>
           </span>
           <span className="sr-only" aria-label="Routes">
             Routes {snapshot.availableCount}/{snapshot.routeCount} ready
@@ -189,7 +204,7 @@ export function AppShell({
             inert={activityRailCollapsed}
           >
             <div className="h-full w-[280px] overflow-y-auto">
-              <ActivityRail snapshot={snapshot} />
+              <ActivityRail snapshot={snapshot} runtimeMode={runtimeMode} />
             </div>
           </aside>
         </div>
@@ -197,6 +212,7 @@ export function AppShell({
       <MobileBottomTabs
         activePath={activePath}
         routes={snapshot.routes}
+        sessionIsAdmin={sessionIsAdmin}
         {...(onNavigate ? { onNavigate } : {})}
       />
     </div>
@@ -207,11 +223,13 @@ function MobileNavigationSheet({
   snapshot,
   activePath,
   routes,
+  sessionIsAdmin,
   onNavigate,
 }: {
   snapshot: AuroraShellSnapshot;
   activePath: string;
   routes: RouteAvailability[];
+  sessionIsAdmin: boolean;
   onNavigate?: (href: string) => void;
 }) {
   const activeRoute = routes.find((route) => route.item.href === activePath);
@@ -227,16 +245,19 @@ function MobileNavigationSheet({
           activePath={activePath}
           routes={routes}
           compact
+          sessionIsAdmin={sessionIsAdmin}
           {...(onNavigate ? { onNavigate } : {})}
         />
       </div>
       <div className="aui-mobile-sheet-footer flex items-center gap-2 border-t border-border p-3" aria-label="Mobile identity">
         <Avatar className="aui-avatar size-[26px]">
-          <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">AD</AvatarFallback>
+          <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">
+            {shellAvatarLabel(sessionIsAdmin)}
+          </AvatarFallback>
         </Avatar>
         <div>
-          <p className="text-xs font-medium">{shellIdentityLabel(snapshot)}</p>
-          <p className="text-[10.5px] text-muted-foreground">{shellAccessLabel(snapshot)}</p>
+          <p className="text-xs font-medium">{shellIdentityLabel(sessionIsAdmin)}</p>
+          <p className="text-[10.5px] text-muted-foreground">{shellAccessLabel(sessionIsAdmin)}</p>
         </div>
       </div>
     </div>
@@ -270,16 +291,21 @@ function MobileSheetRouteSummary({
 function MobileBottomTabs({
   activePath,
   routes,
+  sessionIsAdmin,
   onNavigate,
 }: {
   activePath: string;
   routes: RouteAvailability[];
+  sessionIsAdmin: boolean;
   onNavigate?: (href: string) => void;
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]));
+  const tabs = auroraMobileTabs.filter(
+    (tab) => sessionIsAdmin || !tab.adminGated || tab.id === "settings",
+  );
   return (
     <nav className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-border bg-background py-1.5 md:hidden" aria-label="Mobile navigation">
-      {auroraMobileTabs.map((tab) => (
+      {tabs.map((tab) => (
         <MobileBottomTab
           key={tab.id}
           tab={tab}
@@ -325,20 +351,23 @@ export function ShellNavigation({
   activePath,
   routes,
   compact = false,
+  sessionIsAdmin = false,
   onNavigate,
 }: {
   activePath: string;
   routes: RouteAvailability[];
   compact?: boolean;
+  sessionIsAdmin?: boolean;
   onNavigate?: (href: string) => void;
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]));
+  const navigationSections = shellNavigationSections(sessionIsAdmin);
   return (
     <nav
       className={cn("aui-nav flex flex-1 flex-col gap-4", compact ? "p-0" : "p-2.5")}
       aria-label={compact ? "Mobile sheet route navigation" : "Primary route navigation"}
     >
-      {auroraNavSections.map((section) => (
+      {navigationSections.map((section) => (
         <section key={section.label} className="flex flex-col gap-0.5">
           <h2 className="mb-1 px-2 text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">{section.label}</h2>
           {section.items.map((item) => {
@@ -371,6 +400,18 @@ export function ShellNavigation({
       ))}
     </nav>
   );
+}
+
+function shellNavigationSections(sessionIsAdmin: boolean): AuroraNavSection[] {
+  if (sessionIsAdmin) return auroraNavSections;
+  const settings = auroraNavSections
+    .flatMap((section) => section.items)
+    .find((item) => item.id === "settings");
+  return auroraNavSections.flatMap((section) => {
+    if (section.label === "Operate · admin only") return [];
+    if (section.label !== "Runtime" || !settings) return [section];
+    return [{ ...section, items: [settings, ...section.items] }];
+  });
 }
 
 export function RouteMatrix({ routes }: { routes: RouteAvailability[] }) {
@@ -453,8 +494,14 @@ function BrandHeader({ snapshot }: { snapshot: AuroraShellSnapshot }) {
   );
 }
 
-function ActivityRail({ snapshot }: { snapshot: AuroraShellSnapshot }) {
-  const events = shellActivityEvents(snapshot);
+function ActivityRail({
+  snapshot,
+  runtimeMode,
+}: {
+  snapshot: AuroraShellSnapshot;
+  runtimeMode?: string | undefined;
+}) {
+  const events = shellActivityEvents(snapshot, runtimeMode);
   return (
     <aside className="flex h-full flex-col" aria-label="Aurora activity">
       <header className="flex items-center justify-between border-b border-border px-3.5 py-3">
@@ -491,8 +538,9 @@ function activityRailBadgeLabel(snapshot: AuroraShellSnapshot): string {
   return "Live";
 }
 
-function shellActivityEvents(snapshot: AuroraShellSnapshot) {
+function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string) {
   const healthy = snapshot.loadState !== "error";
+  const surface = shellSurfaceProfile(snapshot, runtimeMode);
   return [
     {
       id: "routes",
@@ -504,7 +552,7 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot) {
     },
     {
       id: "mode",
-      title: shellModeLabel(snapshot.transportKind),
+      title: shellModeLabel(snapshot, runtimeMode),
       detail: "Operator cockpit connected to the Aurora route map",
       when: "live",
       icon: Network,
@@ -533,7 +581,9 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot) {
       title: "Platform surface",
       detail: snapshot.nativeAvailable
         ? `Native ${snapshot.nativePlatform}`
-        : "Desktop local controls active",
+        : surface.usesNativeShell
+          ? `${surface.label} shell active`
+          : `${surface.label}; native controls unavailable`,
       when: "policy",
       icon: snapshot.nativeAvailable ? CheckCircle2 : Clock3,
       tone: snapshot.nativeAvailable ? "good" : "info",
@@ -541,34 +591,41 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot) {
   ] as const;
 }
 
-function shellSurfaceLabel(snapshot: AuroraShellSnapshot): string {
-  if (snapshot.transportKind === "tauri-thin") return "Desktop Thin";
-  if (snapshot.transportKind === "native-mobile") return "Mobile";
-  if (snapshot.transportKind === "http") return "Web Thin";
-  return "Desktop Local";
+function shellSurfaceLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
+  const label = shellSurfaceProfile(snapshot, runtimeMode).label;
+  return label.replace(/\b(local|thin)\b/g, (word) => word[0]!.toUpperCase() + word.slice(1));
 }
 
 function shellHealthLabel(snapshot: AuroraShellSnapshot): string {
   if (snapshot.loadState === "error") return "Offline";
+  if (snapshot.loadState === "loading") return "Connecting";
   return "Healthy";
 }
 
 function shellNodeLabel(snapshot: AuroraShellSnapshot): string {
-  const nodeName = snapshot.nodeName.trim();
-  if (/^aurora-/i.test(nodeName)) return nodeName;
-  return "aurora-prod-01";
+  return snapshot.nodeName.trim() || "Aurora node";
 }
 
-function shellIdentityLabel(_snapshot: AuroraShellSnapshot): string {
-  return "admin";
+function shellAvatarLabel(sessionIsAdmin: boolean): string {
+  return sessionIsAdmin ? "AD" : "ME";
 }
 
-function shellIdentityBadgeLabel(_snapshot: AuroraShellSnapshot): string {
-  return "Admin";
+function shellIdentityLabel(sessionIsAdmin: boolean): string {
+  return sessionIsAdmin ? "admin" : "member";
 }
 
-function shellAccessLabel(_snapshot: AuroraShellSnapshot): string {
-  return "Full access";
+function shellIdentityBadgeLabel(sessionIsAdmin: boolean): string {
+  return sessionIsAdmin ? "Admin" : "Member";
+}
+
+function shellAccessLabel(sessionIsAdmin: boolean): string {
+  return sessionIsAdmin ? "Full access" : "Scoped access";
+}
+
+function shellRuntimeStateLabel(snapshot: AuroraShellSnapshot): string {
+  if (snapshot.loadState === "error") return "offline";
+  if (snapshot.loadState === "loading") return "syncing";
+  return "connected";
 }
 
 function shellRouteSummaryLabel(route: RouteAvailability): string {
@@ -584,11 +641,16 @@ function shellRouteBadgeLabel(route: RouteAvailability): string {
   return "Ready";
 }
 
-function shellModeLabel(transportKind: string): string {
-  if (transportKind === "tauri-thin") return "Desktop thin";
-  if (transportKind === "native-mobile") return "Mobile thin";
-  if (transportKind === "http") return "Web thin";
-  return "Desktop local";
+function shellModeLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
+  return shellSurfaceProfile(snapshot, runtimeMode).label;
+}
+
+function shellSurfaceProfile(snapshot: AuroraShellSnapshot, runtimeMode?: string) {
+  return getAuroraSurfaceProfile({
+    runtimeMode,
+    transportKind: snapshot.transportKind,
+    nativePlatform: snapshot.nativePlatform,
+  });
 }
 
 function normalizePath(path: string): string {

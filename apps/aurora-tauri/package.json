@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "dev:desktop-local": "pnpm tauri dev",
-    "dev:desktop-thin": "AURORA_TAURI_DEV_AUTOSIDECAR=0 VITE_AURORA_RUNTIME_MODE=desktop-thin VITE_AURORA_WEBRTC_THIN_CLIENT=1 pnpm tauri dev --config src-tauri/tauri.thin.conf.json",
+    "dev:desktop-thin": "AURORA_TAURI_DEV_AUTOSIDECAR=0 VITE_AURORA_RUNTIME_MODE=desktop-thin VITE_AURORA_WEBRTC_THIN_CLIENT=1 VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 pnpm tauri dev --config src-tauri/tauri.thin.conf.json",
     "build": "tsc --noEmit --incremental false && vite build",
     "build:bundle": "pnpm build:bundle:desktop-local",
     "build:bundle:thin": "pnpm build:bundle:desktop-thin",

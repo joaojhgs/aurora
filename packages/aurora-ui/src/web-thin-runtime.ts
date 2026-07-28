@@ -126,6 +126,10 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     nativePlatform: config.nativePlatform,
     userAgent: config.userAgent ?? browserUserAgent(),
   })
+  const securityContext: BrowserRuntimeSecurityContext = {
+    ...config,
+    trustsNativeWebViewOrigin: surface.trustsNativeWebViewOrigin,
+  }
   if (webrtcDisabled) {
     const disabled = new AuroraError({
       code: 'unsupported_feature',
@@ -143,7 +147,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       httpFallback: Boolean(rollbackHttp),
       disabledReason: disabled.message,
       credentialStore: config.credentialStore,
-      config,
+      config: securityContext,
       visibilityDocument: config.visibilityDocument,
     })
     return {
@@ -178,7 +182,12 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ...(config.initialCredentials ? { initialCredentials: config.initialCredentials } : {}),
       ...(localStablePeerId ? { localStablePeerId } : {}),
       localNodeName: config.nodeName ?? activeProfile?.nodeName ?? 'Aurora Web thin client',
-      allowInsecureLoopback: config.allowInsecureLoopback ?? config.allowInsecureLoopbackSignaling,
+      allowInsecureLoopback: Boolean(
+        config.allowInsecureLoopback
+        || config.allowInsecureLoopbackSignaling
+        || surface.trustsNativeWebViewOrigin
+        || isSecureBrowserContext(config.windowLocation)
+      ),
       ...(config.peerConnectionFactory ?? config.createPeerConnection ? { createPeerConnection: config.peerConnectionFactory ?? config.createPeerConnection } : {}),
       ...(config.signalingFactory ? { signalingFactory: config.signalingFactory } : {}),
       ...(config.randomId ? { randomId: config.randomId } : {}),
@@ -193,10 +202,21 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     })
   } catch (error) {
     if (mode === 'http-only' && config.demoMode) {
-      const unavailable = new BrowserWebRtcPeerController(null, mode, { httpFallback: false, creationError: error, visibilityDocument: config.visibilityDocument })
+      const unavailable = new BrowserWebRtcPeerController(null, mode, {
+        httpFallback: false,
+        creationError: error,
+        config: securityContext,
+        visibilityDocument: config.visibilityDocument,
+      })
       return { client: demoClientFromFactory(config), peer: unavailable, surface, mode, close: () => unavailable.disconnect('runtime closed') }
     }
-    const unavailable = new BrowserWebRtcPeerController(null, mode, { httpFallback: false, creationError: error, credentialStore, config, visibilityDocument: config.visibilityDocument })
+    const unavailable = new BrowserWebRtcPeerController(null, mode, {
+      httpFallback: false,
+      creationError: error,
+      credentialStore,
+      config: securityContext,
+      visibilityDocument: config.visibilityDocument,
+    })
     return {
       client: clientFromFactory(config, new FailingTransport(error, mode)),
       peer: unavailable,
@@ -209,7 +229,12 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     }
   }
 
-  const peer = new BrowserWebRtcPeerController(sdkRuntime.peer, mode, { httpFallback: Boolean(http), credentialStore, config, visibilityDocument: config.visibilityDocument })
+  const peer = new BrowserWebRtcPeerController(sdkRuntime.peer, mode, {
+    httpFallback: Boolean(http),
+    credentialStore,
+    config: securityContext,
+    visibilityDocument: config.visibilityDocument,
+  })
   return {
     client: sdkRuntime.client,
     peer,
@@ -232,6 +257,12 @@ export function webRtcProfileFromInvite(
 export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {}): string[] {
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
+  const surface = getAuroraSurfaceProfile({
+    runtimeMode: config.runtimeMode ?? (mode === 'http-only' ? 'web' : 'web-thin'),
+    transportKind: mode === 'http-only' ? 'http' : 'mesh',
+    nativePlatform: config.nativePlatform,
+    userAgent: config.userAgent ?? browserUserAgent(),
+  })
   const invite = config.inviteText ? decodeMeshInvite(config.inviteText) : null
   const summary = invite ? meshInviteSummary(invite) : null
   const notes = [`mode=${mode}`]
@@ -242,7 +273,16 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   if (mode !== 'http-only' && !rolloutFlags.webrtc_fragmentation) notes.push('WebRTC fragmentation/backpressure disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_app_layer_e2ee) notes.push('application-layer WebRTC E2EE disabled by rollout flag; profiles requiring it fail closed')
   if (summary) notes.push(`invite room=${summary.room}; brokers=${summary.brokerCount}; secret=${summary.includesPassword ? 'provided' : 'missing'}`)
-  if (mode !== 'http-only' && typeof window !== 'undefined' && !isSecureBrowserContext(config.windowLocation)) notes.push('blocked: secure context required')
+  if (
+    mode !== 'http-only'
+    && typeof window !== 'undefined'
+    && !isSecureBrowserContext(
+      config.windowLocation,
+      surface.trustsNativeWebViewOrigin,
+    )
+  ) {
+    notes.push('blocked: secure context required')
+  }
   if (mode === 'webrtc-only' && !summary && !config.profile) notes.push('blocked: invite/profile required')
   return notes
 }
@@ -255,7 +295,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private readonly creationError: unknown
   private readonly disabledReason: string | undefined
   private readonly credentialStore: BrowserThinRuntimeConfig['credentialStore']
-  private readonly config: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl' | 'windowLocation'>
+  private readonly config: BrowserRuntimeSecurityContext
   private sdkSnapshot: PeerConnectionSnapshot | null = null
   private fallbackReason: string | undefined
   private visibilityDiagnostic: string | undefined
@@ -265,8 +305,9 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private disconnected = false
   private unsubscribe: (() => void) | undefined
   private removeVisibilityListeners: (() => void) | undefined
+  private readonly visibilityDocument: BrowserThinRuntimeConfig['visibilityDocument']
 
-  constructor(peer: PeerConnectionController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl' | 'windowLocation'>; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument'] }) {
+  constructor(peer: PeerConnectionController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: BrowserRuntimeSecurityContext; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument'] }) {
     this.peer = peer
     this.mode = mode
     this.httpFallback = options.httpFallback
@@ -274,6 +315,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.disabledReason = options.disabledReason
     this.credentialStore = options.credentialStore
     this.config = options.config ?? {}
+    this.visibilityDocument = options.visibilityDocument
     if (peer) this.unsubscribe = peer.subscribe((snapshot) => {
       this.sdkSnapshot = snapshot
       if (snapshot.state === 'authorized') this.authorizedRouteSeen = true
@@ -284,7 +326,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
 
   snapshot(): BrowserWebRtcSnapshot {
     const sdk = this.sdkSnapshot ?? this.peer?.snapshot() ?? null
-    const diagnostic = this.visibilityDiagnostic ?? this.connectionDiagnostic ?? this.disabledReason ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
+    const diagnostic = this.connectionDiagnostic ?? this.visibilityDiagnostic ?? this.disabledReason ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
     const pendingPairing = pendingPairingFromSnapshot(sdk)
     const persistence = this.credentialStore?.persistenceStatus?.()
     const out: BrowserWebRtcSnapshot = {
@@ -302,8 +344,13 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       receivedFragmentCount: sdk?.receivedFragmentCount ?? 0,
       updatedAt: sdk?.updatedAt ?? new Date().toISOString(),
       status: statusFromSnapshot(sdk, this.mode, this.creationError, this.disabledReason, this.fallbackReason, this.disconnected, this.attemptedConnect),
-      secureContext: isSecureBrowserContext(this.config.windowLocation),
-      visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
+      secureContext: isSecureBrowserContext(
+        this.config.windowLocation,
+        this.config.trustsNativeWebViewOrigin,
+      ),
+      visible: this.visibilityDocument
+        ? this.visibilityDocument.visibilityState !== 'hidden'
+        : typeof document === 'undefined' || document.visibilityState !== 'hidden',
       focused: typeof document === 'undefined' || document.hasFocus(),
       hasHttpFallback: this.httpFallback,
       secretsPersisted: persistence?.secretsPersisted ?? false,
@@ -379,7 +426,6 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
 
   async disconnect(reason = 'disconnect'): Promise<void> {
     this.disconnected = true
-    if (reason.includes('hidden') || reason.includes('blurred')) this.visibilityDiagnostic = 'WebRTC disconnected because the thin shell lost visibility or focus.'
     if (reason === 'runtime closed') {
       this.unsubscribe?.()
       this.unsubscribe = undefined
@@ -399,17 +445,27 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private installVisibilityPolicy(visibilityDocument: BrowserThinRuntimeConfig['visibilityDocument']): void {
     if (this.mode === 'http-only' || !this.peer) return
     const doc = visibilityDocument ?? (typeof document === 'undefined' ? undefined : document)
-    const release = () => {
+    const updateVisibility = () => {
       const hidden = doc?.visibilityState === 'hidden'
       const blurred = typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus()
-      if (!hidden && !blurred) return
-      void this.disconnect(hidden ? 'hidden document' : 'window blurred')
+      this.visibilityDiagnostic = hidden
+        ? 'WebRTC remains connected while the thin shell is hidden; browser throttling may delay signaling or media callbacks. Focused microphone capture is released separately.'
+        : blurred
+          ? 'WebRTC remains connected while the thin shell is unfocused. Focused microphone capture is released separately.'
+          : undefined
+      this.emit()
     }
-    doc?.addEventListener('visibilitychange', release)
-    if (typeof window !== 'undefined') window.addEventListener('blur', release)
+    doc?.addEventListener('visibilitychange', updateVisibility)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('blur', updateVisibility)
+      window.addEventListener('focus', updateVisibility)
+    }
     this.removeVisibilityListeners = () => {
-      doc?.removeEventListener('visibilitychange', release)
-      if (typeof window !== 'undefined') window.removeEventListener('blur', release)
+      doc?.removeEventListener('visibilitychange', updateVisibility)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('blur', updateVisibility)
+        window.removeEventListener('focus', updateVisibility)
+      }
     }
   }
 
@@ -532,15 +588,25 @@ export function parseWebRtcInvite(
     room,
     roomSecretRef: memoryRoomSecretRef(room),
     signalingBrokers: brokers,
-    nodeName: config.nodeName ?? 'Aurora Web thin client',
     stunServers: stringArray(webrtc.stun_servers),
     turnServers: stringArray(webrtc.turn_servers),
     requireAppLayerE2ee: booleanValue(webrtc.app_layer_e2ee, true),
   }
   const expectedStablePeerId = stringValue(node.peer_id)
   if (expectedStablePeerId) profile.expectedStablePeerId = expectedStablePeerId
+  const expectedNodeName = stringValue(node.node_name)
+  if (expectedNodeName) profile.nodeName = expectedNodeName
   if (config.production !== undefined) profile.production = config.production
-  if (config.allowInsecureLoopbackSignaling !== undefined) profile.allowInsecureLoopbackSignaling = config.allowInsecureLoopbackSignaling
+  if (config.allowInsecureLoopbackSignaling !== undefined) {
+    profile.allowInsecureLoopbackSignaling = config.allowInsecureLoopbackSignaling
+    // The signaling SDK defaults an unspecified profile to production policy.
+    // An explicit loopback-development override therefore also has to mark the
+    // imported profile non-production; the broker validator still restricts
+    // cleartext WebSockets to loopback hosts.
+    if (config.production === undefined && config.allowInsecureLoopbackSignaling) {
+      profile.production = false
+    }
+  }
   return { profile, roomSecret: roomPassword }
 }
 
@@ -548,12 +614,44 @@ function memoryRoomSecretRef(room: string): string {
   return `ref:memory:${room}`
 }
 
-function isSecureBrowserContext(locationOverride?: BrowserThinRuntimeConfig['windowLocation']): boolean {
+type BrowserRuntimeSecurityContext = Pick<
+  BrowserThinRuntimeConfig,
+  | 'production'
+  | 'allowInsecureLoopbackSignaling'
+  | 'nodeName'
+  | 'signalingUrl'
+  | 'windowLocation'
+> & {
+  trustsNativeWebViewOrigin?: boolean
+}
+
+function isSecureBrowserContext(
+  locationOverride?: BrowserThinRuntimeConfig['windowLocation'],
+  trustsNativeWebViewOrigin = false,
+): boolean {
   if (typeof window === 'undefined' && !locationOverride) return true
   if (typeof window !== 'undefined' && window.isSecureContext) return true
   const location = locationOverride ?? (typeof window === 'undefined' ? undefined : window.location)
   if (!location) return true
-  return location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  if (location.protocol === 'https:') return true
+  if (isBrowserLoopbackHost(location.hostname)) return true
+  return trustsNativeWebViewOrigin && isTrustedNativeWebViewHost(location.hostname)
+}
+
+function isTrustedNativeWebViewHost(hostname: string): boolean {
+  return (
+    hostname === 'tauri.localhost'
+    || isBrowserLoopbackHost(hostname)
+  )
+}
+
+function isBrowserLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '::1'
+    || hostname === '[::1]'
+  )
 }
 
 function statusFromSnapshot(

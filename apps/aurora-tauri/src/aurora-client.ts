@@ -13,6 +13,7 @@ import {
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
   activeThinConnectionProfile,
   createBrowserWebThinRuntime,
   emptyThinProfileDocument,
@@ -163,7 +164,6 @@ export function thinProfileFromParsedWebRtcInvite(
       "",
     nodeName:
       baseProfile?.nodeName ||
-      parsed.profile.nodeName ||
       surfaceDefaults.nodeName,
     localStablePeerId:
       baseProfile?.localStablePeerId || surfaceDefaults.localStablePeerId,
@@ -1202,23 +1202,10 @@ async function optionalInvoke<T>(command: string, args?: Record<string, unknown>
 }
 
 export function installAndroidLifecyclePolicy(
-  runtime: BrowserWebThinRuntime,
-  fixedProfile?: WebRtcPeerConnectionProfile | null,
+  _runtime: BrowserWebThinRuntime,
 ): () => Promise<void> {
   if (!isTauriRuntime() || !isAndroidTauriRuntime()) return async () => undefined;
   let closed = false;
-  let reconnecting: Promise<void> | null = null;
-  let lastAuthorizedProfile: WebRtcPeerConnectionProfile | null = fixedProfile ?? null;
-  const originalConnect = runtime.peer.connect.bind(runtime.peer);
-  runtime.peer.connect = async (profile?: WebRtcPeerConnectionProfile) => {
-    await originalConnect(profile);
-    if (closed) return;
-    if (profile) {
-      lastAuthorizedProfile = profile;
-    } else if (fixedProfile) {
-      lastAuthorizedProfile = fixedProfile;
-    }
-  };
   const listener = addPluginListener<AndroidLifecyclePluginPayload>(
     ANDROID_NATIVE_PLUGIN_NAME,
     ANDROID_LIFECYCLE_EVENT,
@@ -1226,19 +1213,8 @@ export function installAndroidLifecyclePolicy(
       if (closed) return;
       const mustRelease = payload.mustReleaseMicrophone === true || payload.foreground === false || payload.focused === false;
       if (mustRelease) {
-        void runtime.peer.disconnect("android lifecycle released focused microphone");
-        return;
+        window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT));
       }
-      const reconnectProfile = lastAuthorizedProfile ?? fixedProfile ?? null;
-      if (runtime.mode === "http-only" || reconnecting || !reconnectProfile) return;
-      const pending = runtime.peer.connect(reconnectProfile)
-        .catch((error) => {
-          if (!closed) console.warn("Android thin WebRTC reconnect after lifecycle resume failed", error);
-        })
-        .finally(() => {
-          if (reconnecting === pending) reconnecting = null;
-        });
-      reconnecting = pending;
     },
   ).catch((error) => {
     if (!closed && !isUnavailableOverlayCommandError(error)) {
@@ -1248,16 +1224,10 @@ export function installAndroidLifecyclePolicy(
   });
   return async () => {
     closed = true;
-    runtime.peer.connect = originalConnect;
     try {
       await (await listener)?.unregister();
     } catch {
       // Native lifecycle listener support is optional in browser/test shells.
-    }
-    try {
-      await reconnecting;
-    } catch {
-      // Reconnect errors are already handled by the reconnect task.
     }
   };
 }

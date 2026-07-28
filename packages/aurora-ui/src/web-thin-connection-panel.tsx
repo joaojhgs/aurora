@@ -125,7 +125,6 @@ export function WebThinConnectionPanel({
         webrtcProfile: {
           ...webRtcProfile,
           mode: nextMode,
-          nodeName: currentProfile.nodeName,
           signalingBrokers: currentProfile.signalingUrl.trim()
             ? [currentProfile.signalingUrl.trim()]
             : webRtcProfile.signalingBrokers,

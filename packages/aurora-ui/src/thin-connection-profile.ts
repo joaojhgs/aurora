@@ -64,7 +64,7 @@ export function sanitizeThinConnectionProfile(
     new Set(['ws:', 'wss:']),
   )
   const webrtcProfile = profile.webrtcProfile
-    ? sanitizeWebRtcProfile(profile.webrtcProfile, signalingUrl, nodeName, mode)
+    ? sanitizeWebRtcProfile(profile.webrtcProfile, signalingUrl, mode)
     : undefined
 
   if (mode !== 'webrtc-only' && !gatewayUrl) {
@@ -139,7 +139,6 @@ export function parseThinProfileDocument(
 function sanitizeWebRtcProfile(
   value: WebRtcPeerConnectionProfile,
   signalingOverride: string,
-  nodeName: string,
   mode: AuroraThinConnectionMode,
 ): WebRtcPeerConnectionProfile {
   const appId = requiredText(value.appId, 'WebRTC app id', 256)
@@ -160,10 +159,10 @@ function sanitizeWebRtcProfile(
     room,
     roomSecretRef,
     signalingBrokers,
-    nodeName,
   }
   copyOptionalText(value.expectedStablePeerId, out, 'expectedStablePeerId', 256)
   copyOptionalText(value.expectedSignalingPeerId, out, 'expectedSignalingPeerId', 256)
+  copyOptionalText(value.nodeName, out, 'nodeName', 160)
   copyOptionalBoolean(value.production, out, 'production')
   copyOptionalBoolean(
     value.allowInsecureLoopbackSignaling,
@@ -226,7 +225,7 @@ function requiredText(value: string, label: string, maxLength: number): string {
 function copyOptionalText(
   value: string | undefined,
   target: WebRtcPeerConnectionProfile,
-  key: 'expectedStablePeerId' | 'expectedSignalingPeerId',
+  key: 'expectedStablePeerId' | 'expectedSignalingPeerId' | 'nodeName',
   maxLength: number,
 ): void {
   if (value === undefined) return

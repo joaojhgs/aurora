@@ -87,4 +87,44 @@ describe('AppShell side-panel toggles', () => {
       root.unmount()
     })
   })
+
+  it('hides admin navigation from non-admin peer sessions while retaining ordinary settings', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={snapshot} sessionIsAdmin={false} runtimeMode="web-thin">
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    expect(container.textContent).not.toContain('Operate · admin only')
+    expect(container.querySelector('a[href="/admin"]')).toBeNull()
+    expect(container.querySelector('[data-mobile-tab="admin"]')).toBeNull()
+    expect(container.querySelector('a[href="/settings"]')).not.toBeNull()
+    expect(container.querySelector('[data-mobile-tab="settings"]')).not.toBeNull()
+    expect(container.textContent).toContain('Web Thin')
+    expect(container.textContent).toContain('member')
+    expect(container.textContent).toContain('Scoped access')
+    expect(container.textContent).not.toContain('Full access')
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={snapshot} sessionIsAdmin runtimeMode="web-thin">
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    expect(container.textContent).toContain('Operate · admin only')
+    expect(container.querySelector('a[href="/admin"]')).not.toBeNull()
+    expect(container.querySelector('[data-mobile-tab="admin"]')).not.toBeNull()
+    expect(container.textContent).toContain('admin')
+    expect(container.textContent).toContain('Full access')
+
+    await act(async () => root.unmount())
+  })
 })

@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encodeMeshInviteToken, type BrowserWebThinRuntime, type BrowserWebRtcSnapshot } from '@aurora/ui'
+import {
+  AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
+  encodeMeshInviteToken,
+  type BrowserWebThinRuntime,
+  type BrowserWebRtcSnapshot,
+} from '@aurora/ui'
 import { NativePeerCredentialStore, type MeshReconnectChallengeMessage, type WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 
 const tauriCoreMock = vi.hoisted(() => ({
@@ -537,10 +542,12 @@ describe('desktop-thin live connection profiles', () => {
   })
 
 
-  it('registers Android lifecycle through the native plugin listener and disconnects on pause payloads', async () => {
+  it('registers Android lifecycle through the native plugin listener and releases focused media without disconnecting the peer', async () => {
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Linux; Android 15) Aurora', configurable: true })
     const runtime = fakeAndroidThinRuntime('webrtc-only')
+    const releaseFocusedMedia = vi.fn()
+    window.addEventListener(AURORA_RELEASE_FOCUSED_MEDIA_EVENT, releaseFocusedMedia)
 
     const release = installAndroidLifecyclePolicy(runtime)
     await Promise.resolve()
@@ -558,16 +565,15 @@ describe('desktop-thin live connection profiles', () => {
 
     tauriCoreMock.pluginListeners[0]!.callback({ phase: 'pause', foreground: false, focused: false, mustReleaseMicrophone: true, backgroundWakeword: false })
     tauriCoreMock.pluginListeners[0]!.callback({ phase: 'stop', foreground: false, focused: false, mustReleaseMicrophone: true, backgroundWakeword: false })
-    expect(runtime.calls.disconnect).toEqual([
-      'android lifecycle released focused microphone',
-      'android lifecycle released focused microphone',
-    ])
+    expect(releaseFocusedMedia).toHaveBeenCalledTimes(2)
+    expect(runtime.calls.disconnect).toEqual([])
 
     await release()
+    window.removeEventListener(AURORA_RELEASE_FOCUSED_MEDIA_EVENT, releaseFocusedMedia)
     expect(tauriCoreMock.pluginListeners[0]!.unregister).toHaveBeenCalledOnce()
   })
 
-  it('reconnects Android lifecycle resume with the last explicit authorized WebRTC profile', async () => {
+  it('keeps the Android WebRTC peer connected across background and resume lifecycle payloads', async () => {
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Linux; Android 15) Aurora', configurable: true })
     const runtime = fakeAndroidThinRuntime('webrtc-only')
@@ -580,8 +586,8 @@ describe('desktop-thin live connection profiles', () => {
     tauriCoreMock.pluginListeners[0]!.callback({ foreground: true, focused: true, mustReleaseMicrophone: false, backgroundWakeword: false })
     await Promise.resolve()
 
-    expect(runtime.calls.disconnect).toEqual(['android lifecycle released focused microphone'])
-    expect(runtime.calls.connect).toEqual([firstProfile, firstProfile])
+    expect(runtime.calls.disconnect).toEqual([])
+    expect(runtime.calls.connect).toEqual([firstProfile])
     await release()
   })
 
@@ -599,28 +605,20 @@ describe('desktop-thin live connection profiles', () => {
     await release()
   })
 
-  it('settles pending Android reconnects during dispose and removes plugin listeners before later payloads', async () => {
+  it('removes Android lifecycle listeners before later payloads can release focused media', async () => {
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Linux; Android 15) Aurora', configurable: true })
-    const fixedProfile = webRtcProfile('fixed-room')
     const runtime = fakeAndroidThinRuntime('webrtc-only')
-    let settleReconnect!: () => void
-    const pendingConnect = vi.fn(async () => new Promise<void>((resolve) => { settleReconnect = resolve }))
-    runtime.peer.connect = pendingConnect as BrowserWebThinRuntime['peer']['connect']
+    const releaseFocusedMedia = vi.fn()
+    window.addEventListener(AURORA_RELEASE_FOCUSED_MEDIA_EVENT, releaseFocusedMedia)
 
-    const release = installAndroidLifecyclePolicy(runtime, fixedProfile)
+    const release = installAndroidLifecyclePolicy(runtime)
     await Promise.resolve()
-    tauriCoreMock.pluginListeners[0]!.callback({ foreground: true, focused: true, mustReleaseMicrophone: false, backgroundWakeword: false })
-    expect(pendingConnect).toHaveBeenCalledWith(fixedProfile)
-
-    const pendingRelease = release()
-    await Promise.resolve()
+    await release()
     expect(tauriCoreMock.pluginListeners[0]!.unregister).toHaveBeenCalledOnce()
-    tauriCoreMock.pluginListeners[0]!.callback({ foreground: true, focused: true, mustReleaseMicrophone: false, backgroundWakeword: false })
-    expect(pendingConnect).toHaveBeenCalledTimes(1)
-    settleReconnect()
-    await pendingRelease
-    expect(tauriCoreMock.pluginListeners[0]!.unregister).toHaveBeenCalledOnce()
+    tauriCoreMock.pluginListeners[0]!.callback({ foreground: false, focused: false, mustReleaseMicrophone: true, backgroundWakeword: false })
+    expect(releaseFocusedMedia).not.toHaveBeenCalled()
+    window.removeEventListener(AURORA_RELEASE_FOCUSED_MEDIA_EVENT, releaseFocusedMedia)
   })
 
 

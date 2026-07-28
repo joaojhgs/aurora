@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import { createRoot, hydrateRoot, type Root } from 'react-dom/client'
+import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuroraClient, MockAuroraTransport } from '@aurora/client'
 import {
@@ -25,10 +26,17 @@ const mockedBrowserRuntime = vi.hoisted(() => ({
     profiles: [],
   },
   save: vi.fn(),
+  createRuntime: vi.fn(),
+  routerReplace: vi.fn(),
+  routerPush: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
+  useRouter: () => ({
+    replace: mockedBrowserRuntime.routerReplace,
+    push: mockedBrowserRuntime.routerPush,
+  }),
 }))
 
 vi.mock('./aurora-client', () => ({
@@ -36,7 +44,10 @@ vi.mock('./aurora-client', () => ({
     mockedBrowserRuntime.requiresOnboarding,
   auroraBrowserThinProfile: () => mockedBrowserRuntime.profile,
   auroraBrowserThinProfileDocument: () => mockedBrowserRuntime.document,
-  createAuroraBrowserRuntime: () => mockedBrowserRuntime.runtime,
+  createAuroraBrowserRuntime: () => {
+    mockedBrowserRuntime.createRuntime()
+    return mockedBrowserRuntime.runtime
+  },
   saveAuroraBrowserThinProfile: mockedBrowserRuntime.save,
 }))
 
@@ -48,10 +59,58 @@ afterEach(() => {
   for (const root of roots.splice(0)) root.unmount()
   document.body.innerHTML = ''
   window.history.replaceState({}, '', '/')
+  mockedBrowserRuntime.requiresOnboarding = true
   mockedBrowserRuntime.save.mockReset()
+  mockedBrowserRuntime.createRuntime.mockReset()
+  mockedBrowserRuntime.routerReplace.mockReset()
+  mockedBrowserRuntime.routerPush.mockReset()
 })
 
 describe('hosted web thin first-run shell', () => {
+  it('hydrates through a deterministic boot shell before reading browser persistence', async () => {
+    const transport = new MockAuroraTransport()
+    mockedBrowserRuntime.runtime = {
+      client: new AuroraClient({ transport }),
+      peer: fakePeer(),
+      mode: 'http-only',
+    }
+    const element = (
+      <PathAwareShell
+        snapshot={{
+          ...loadingShellSnapshot,
+          loadState: 'ready',
+        }}
+      >
+        <p>configured shell content</p>
+      </PathAwareShell>
+    )
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    container.innerHTML = renderToString(element)
+
+    expect(container.querySelector('[data-browser-shell-boot="true"]')).not.toBeNull()
+    expect(mockedBrowserRuntime.createRuntime).not.toHaveBeenCalled()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    let root: Root | null = null
+    try {
+      await act(async () => {
+        root = hydrateRoot(container, element)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      if (root) roots.push(root)
+      expect(container.textContent).toContain('Connect to Aurora')
+      expect(mockedBrowserRuntime.createRuntime).toHaveBeenCalled()
+      expect(
+        consoleError.mock.calls.some((call) =>
+          call.some((value) => String(value).includes('Hydration failed')),
+        ),
+      ).toBe(false)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it('renders connection onboarding, consumes a fragment invite, and makes no transport requests', async () => {
     const transport = new MockAuroraTransport()
     const request = vi.spyOn(transport, 'request')
@@ -145,7 +204,50 @@ describe('hosted web thin first-run shell', () => {
         roomSecret: 'fragment-secret',
       },
     )
+    expect(mockedBrowserRuntime.routerReplace).toHaveBeenCalledWith('/mesh')
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it('keeps configured shell navigation inside the persistent browser runtime', async () => {
+    const transport = new MockAuroraTransport()
+    mockedBrowserRuntime.requiresOnboarding = false
+    mockedBrowserRuntime.runtime = {
+      client: new AuroraClient({ transport }),
+      peer: fakePeer(),
+      mode: 'http-only',
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <PathAwareShell
+          snapshot={{
+            ...loadingShellSnapshot,
+            loadState: 'ready',
+          }}
+        >
+          <p>configured shell content</p>
+        </PathAwareShell>,
+      )
+      await Promise.resolve()
+    })
+
+    const toolsLink = [...container.querySelectorAll<HTMLAnchorElement>('a')]
+      .find((link) => link.textContent?.includes('Tools & Plugins'))
+    expect(toolsLink).toBeDefined()
+
+    await act(async () => {
+      toolsLink?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true }),
+      )
+      await Promise.resolve()
+    })
+
+    expect(mockedBrowserRuntime.routerPush).toHaveBeenCalledWith('/tools')
+    expect(mockedBrowserRuntime.createRuntime).toHaveBeenCalledTimes(1)
   })
 })
 

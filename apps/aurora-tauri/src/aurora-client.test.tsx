@@ -26,6 +26,7 @@ import {
   getProductionRouteOracle,
   loadingShellSnapshot,
   encodeMeshInviteToken,
+  webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
 } from "@aurora/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -250,14 +251,7 @@ function fakeThinPeer(
       listener(base);
       return () => undefined;
     },
-    importInvite: () => ({
-      mode: "webrtc-only",
-      appId: "aurora",
-      room: "test-room",
-      roomSecretRef: "ref:memory:test-room",
-      signalingBrokers: ["wss://broker.example/mqtt"],
-      nodeName: "test-peer",
-    }),
+    importInvite: (inviteText: string) => webRtcProfileFromInvite(inviteText)!,
     connect: async () => undefined,
     confirmPairing: async () => undefined,
     rejectPairing: async () => undefined,
@@ -870,19 +864,33 @@ async function submitAssistantPrompt(container: HTMLElement, prompt: string) {
 function renderTauriRoute(href: string) {
   vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
   window.history.replaceState({}, "", href);
+  const runtime = adminTestRuntime();
   return renderToStaticMarkup(
     <AuroraTauriApp
+      runtimeOverride={runtime}
       initialSnapshotOverride={{ ...loadingShellSnapshot, loadState: "ready" }}
     />,
   );
 }
 
 function renderReadyTauriApp(): string {
+  const runtime = adminTestRuntime();
   return renderToStaticMarkup(
     <AuroraTauriApp
+      runtimeOverride={runtime}
       initialSnapshotOverride={{ ...loadingShellSnapshot, loadState: "ready" }}
     />,
   );
+}
+
+function adminTestRuntime(): AuroraTauriRuntime {
+  const client = new Aurora({ transport: new MockAuroraTransport() });
+  client.auth.setAdmin({
+    principalId: "test-admin",
+    principalName: "Test admin",
+    permissions: ["*"],
+  });
+  return testRuntime(client);
 }
 
 function expectNoPlaceholderOrDebugUi(markup: string, routeId: string) {
@@ -1269,6 +1277,47 @@ describe("Aurora Tauri runtime wrapper", () => {
       expect(transport.requests).toHaveLength(0);
     },
   );
+
+  it("opens the Mesh page after thin invite onboarding is saved", async () => {
+    const runtime = unconfiguredThinRuntime(
+      "desktop-thin",
+      new Aurora({ transport: new RecordingMockAuroraTransport() }),
+    );
+    window.history.replaceState({}, "", "/");
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      const invite = mounted.container.querySelector<HTMLTextAreaElement>(
+        "#webthin-invite",
+      );
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )?.set;
+      expect(invite).not.toBeNull();
+      await act(async () => {
+        valueSetter?.call(invite, testMeshInviteText());
+        invite?.dispatchEvent(new Event("input", { bubbles: true }));
+        invite?.dispatchEvent(new Event("change", { bubbles: true }));
+        await flushReactWork();
+      });
+      const continueButton = Array.from(
+        mounted.container.querySelectorAll<HTMLButtonElement>("button"),
+      ).find((button) =>
+        button.textContent?.includes("Save invite and continue"),
+      );
+      expect(continueButton?.disabled).toBe(false);
+      await act(async () => {
+        continueButton?.dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true }),
+        );
+        await flushReactWork();
+      });
+      await waitUntil(() => expect(window.location.pathname).toBe("/mesh"));
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
 
   it("keeps desktop-local startup outside the thin-client onboarding gate", () => {
     const runtime: AuroraTauriRuntime = {
@@ -2670,9 +2719,11 @@ describe("Tauri CI/E2E route gates", () => {
       const shellStatusText = container.querySelector(
         '[aria-label="Aurora shell status"]',
       )?.textContent;
-      expect(shellStatusText).toContain("Desktop Local");
+      expect(shellStatusText).toContain("Local mode");
       expect(shellStatusText).toContain("Healthy");
-      expect(shellStatusText).toContain("Admin");
+      expect(shellStatusText).toContain("Member");
+      expect(shellStatusText).not.toContain("Desktop Local");
+      expect(shellStatusText).not.toContain("Admin");
       expect(container.textContent).toContain("Routes");
       writeOutcomeArtifact("assistant-loaded", container.innerHTML);
 

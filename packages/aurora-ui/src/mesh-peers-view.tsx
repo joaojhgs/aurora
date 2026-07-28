@@ -22,8 +22,16 @@ import { Textarea } from '#components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '#components/ui/toggle-group'
 import { PermissionEditorTable, ROLE_TEMPLATES, matchRoleTemplate } from './shared-components'
 import { decodeMeshInvite, encodeMeshInviteUrl, meshInviteSummary } from './mesh-invite'
+import {
+  getAuroraSurfaceProfile,
+  type AuroraSurfaceProfile,
+} from './platform-surface'
 import { presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
+import type {
+  BrowserWebRtcPeerController,
+  BrowserWebRtcSnapshot,
+} from './web-thin-runtime'
 
 export type MeshPeersLoadState = 'loading' | 'ready' | 'empty' | 'degraded' | 'denied' | 'service-unavailable' | 'error'
 
@@ -151,6 +159,10 @@ export interface MeshPeersSnapshot {
 export interface MeshPeersResourceProps {
   client: AuroraClient
   route: RouteAvailability
+  /** Centralized surface policy for local-vs-remote configuration ownership. */
+  surfaceProfile?: AuroraSurfaceProfile
+  /** Thin WebRTC peer state used by the normal Mesh pairing workflow. */
+  thinPeer?: BrowserWebRtcPeerController
   /** Invite text handed off through a scrubbed fragment/deep-link handoff; never read from query params. */
   initialInviteText?: string | null
   /** Native QR scanner (mobile shells); resolves to the scanned text or null when cancelled. */
@@ -178,6 +190,12 @@ export interface MeshPeersViewProps {
   onScanQr?: () => Promise<string | null>
   onApplyInvite?: (invite: JsonObject) => void
   inviteImport?: MeshInviteImportOperation
+  canManageLocalServiceConfiguration?: boolean
+  thinPeerSnapshot?: BrowserWebRtcSnapshot | null
+  thinPeerMutationError?: string | null
+  onConfirmThinPairing?: (sessionId: string) => void
+  onRejectThinPairing?: (sessionId: string) => void
+  onReconnectThinPeer?: () => void
   /** Invite text handed off by a deep link (`aurora://mesh/invite`); opens the connect dialog pre-filled. */
   initialInviteText?: string | null
 }
@@ -243,7 +261,14 @@ const loadingSnapshot: MeshPeersSnapshot = {
   fixtureOnly: false,
 }
 
-export function MeshPeersResource({ client, route, initialInviteText: initialInviteTextProp = null, onScanQr }: MeshPeersResourceProps) {
+export function MeshPeersResource({
+  client,
+  route,
+  surfaceProfile,
+  thinPeer,
+  initialInviteText: initialInviteTextProp = null,
+  onScanQr,
+}: MeshPeersResourceProps) {
   const [snapshot, setSnapshot] = useState<MeshPeersSnapshot>(loadingSnapshot)
   const [permissions, setPermissions] = useState('Gateway.use')
   const [revokeToken, setRevokeToken] = useState(true)
@@ -254,6 +279,38 @@ export function MeshPeersResource({ client, route, initialInviteText: initialInv
   const [configMutationError, setConfigMutationError] = useState<string | null>(null)
   const [inviteImport, setInviteImport] = useState<MeshInviteImportOperation>(idleInviteImport)
   const [initialInviteText] = useState<string | null>(() => initialInviteTextProp)
+  const [thinPeerSnapshot, setThinPeerSnapshot] =
+    useState<BrowserWebRtcSnapshot | null>(() => thinPeer?.snapshot() ?? null)
+  const [thinPeerMutationError, setThinPeerMutationError] =
+    useState<string | null>(null)
+  const resolvedSurface = useMemo(
+    () =>
+      surfaceProfile
+      ?? getAuroraSurfaceProfile({
+        runtimeMode:
+          client.transport.kind === 'tauri-local'
+            ? 'desktop-local'
+            : client.transport.kind === 'native-mobile'
+              ? 'mobile-native'
+              : client.transport.kind === 'mock'
+                ? 'mock'
+                : 'web-thin',
+        transportKind: client.transport.kind,
+        userAgent:
+          typeof navigator === 'undefined' ? undefined : navigator.userAgent,
+      }),
+    [client.transport.kind, surfaceProfile],
+  )
+  const canManageLocalServiceConfiguration =
+    resolvedSurface.canManageLocalServiceConfiguration
+
+  useEffect(() => {
+    if (!thinPeer) {
+      setThinPeerSnapshot(null)
+      return
+    }
+    return thinPeer.subscribe(setThinPeerSnapshot)
+  }, [thinPeer])
 
   const loadPeers = useCallback(async () => {
     setSnapshot(loadingSnapshot)
@@ -428,7 +485,77 @@ export function MeshPeersResource({ client, route, initialInviteText: initialInv
     [client.admin, loadPeers],
   )
 
-  return <MeshPeersView snapshot={snapshot} route={route} permissions={permissions} revokeToken={revokeToken} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationError={mutationError} configPendingKey={configPendingKey} configMutationError={configMutationError} onPermissionsChange={setPermissions} onRevokeTokenChange={setRevokeToken} onRefresh={loadPeers} onApprovePeer={(peer) => runAction(peer, 'approve')} onDenyPeer={(peer) => runAction(peer, 'deny')} onRemovePeer={(peer) => runAction(peer, 'remove')} onConfigChange={runConfigChange} onSaveScopes={saveScopes} {...(onScanQr ? { onScanQr } : {})} onApplyInvite={applyInvite} inviteImport={inviteImport} initialInviteText={initialInviteText} />
+  const confirmThinPairing = useCallback(
+    async (sessionId: string) => {
+      if (!thinPeer) return
+      setThinPeerMutationError(null)
+      try {
+        await thinPeer.confirmPairing(sessionId)
+      } catch (error) {
+        setThinPeerMutationError(meshPeerErrorMessage(error))
+      }
+    },
+    [thinPeer],
+  )
+
+  const rejectThinPairing = useCallback(
+    async (sessionId: string) => {
+      if (!thinPeer) return
+      setThinPeerMutationError(null)
+      try {
+        await thinPeer.rejectPairing(sessionId)
+      } catch (error) {
+        setThinPeerMutationError(meshPeerErrorMessage(error))
+      }
+    },
+    [thinPeer],
+  )
+
+  const reconnectThinPeer = useCallback(async () => {
+    if (!thinPeer) return
+    setThinPeerMutationError(null)
+    try {
+      await thinPeer.connect()
+    } catch (error) {
+      setThinPeerMutationError(meshPeerErrorMessage(error))
+    }
+  }, [thinPeer])
+
+  return (
+    <MeshPeersView
+      snapshot={snapshot}
+      route={route}
+      permissions={permissions}
+      revokeToken={revokeToken}
+      pendingPeerId={pendingPeerId}
+      optimisticPeerId={optimisticPeerId}
+      mutationError={mutationError}
+      configPendingKey={configPendingKey}
+      configMutationError={configMutationError}
+      onPermissionsChange={setPermissions}
+      onRevokeTokenChange={setRevokeToken}
+      onRefresh={loadPeers}
+      onApprovePeer={(peer) => runAction(peer, 'approve')}
+      onDenyPeer={(peer) => runAction(peer, 'deny')}
+      onRemovePeer={(peer) => runAction(peer, 'remove')}
+      onSaveScopes={saveScopes}
+      canManageLocalServiceConfiguration={canManageLocalServiceConfiguration}
+      thinPeerSnapshot={thinPeerSnapshot}
+      thinPeerMutationError={thinPeerMutationError}
+      onConfirmThinPairing={(sessionId) => void confirmThinPairing(sessionId)}
+      onRejectThinPairing={(sessionId) => void rejectThinPairing(sessionId)}
+      onReconnectThinPeer={() => void reconnectThinPeer()}
+      {...(canManageLocalServiceConfiguration
+        ? {
+            onConfigChange: runConfigChange,
+            onApplyInvite: applyInvite,
+          }
+        : {})}
+      {...(onScanQr ? { onScanQr } : {})}
+      inviteImport={inviteImport}
+      initialInviteText={initialInviteText}
+    />
+  )
 }
 
 /** Config changes a joining device applies from a mesh invite so it lands in the same signaling room. */
@@ -674,6 +801,9 @@ export function MeshPeersView({
   configPendingKey = null,
   configMutationError = null,
   inviteImport = idleInviteImport,
+  canManageLocalServiceConfiguration = true,
+  thinPeerSnapshot = null,
+  thinPeerMutationError = null,
   initialInviteText = null,
   onPermissionsChange,
   onRevokeTokenChange,
@@ -685,11 +815,18 @@ export function MeshPeersView({
   onSaveScopes,
   onScanQr,
   onApplyInvite,
+  onConfirmThinPairing,
+  onRejectThinPairing,
+  onReconnectThinPeer,
 }: MeshPeersViewProps) {
   const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
   const [connectOpen, setConnectOpen] = useState<boolean>(() => Boolean(initialInviteText))
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [scopesPeerId, setScopesPeerId] = useState<string | null>(null)
+  const [thinPairingOpen, setThinPairingOpen] = useState(false)
+  useEffect(() => {
+    if (!thinPeerSnapshot?.pairingSessionId) setThinPairingOpen(false)
+  }, [thinPeerSnapshot?.pairingSessionId])
   const connectedPeers = snapshot.peers.filter((peer) => peer.lifecycleState === 'available-remote' || peer.connectionStatus === 'connected')
   const pendingRequests = snapshot.pendingRequests
   const outgoingPairingSessions = pendingRequests.length === 0
@@ -709,11 +846,30 @@ export function MeshPeersView({
   const inviteUrl = useMemo(() => (invitePayload ? encodeMeshInviteUrl(invitePayload) : null), [invitePayload])
   const meshEnabledField = configField(snapshot.config.fields, 'services.gateway.mesh_network.enabled')
   const meshEnabledChecked = configBoolean(snapshot.config.fields, 'services.gateway.mesh_network.enabled', snapshot.meshEnabled)
-  const masterSwitchUnavailable = !meshEnabledField ? 'services.gateway.mesh_network.enabled was not reported by config metadata or runtime status.' : !snapshot.config.editable ? 'Config preview/apply metadata is unavailable; showing the last reported mesh state read-only.' : !onConfigChange ? 'Config mutation handler is unavailable in this surface.' : null
-  const masterSwitchDisabled = controlsDisabled || Boolean(configPendingKey) || Boolean(masterSwitchUnavailable)
+  const masterSwitchUnavailable = !canManageLocalServiceConfiguration
+    ? 'This thin client observes mesh state from its connected Aurora node; only a desktop-local node can change the mesh service switch.'
+    : !meshEnabledField
+      ? 'services.gateway.mesh_network.enabled was not reported by config metadata or runtime status.'
+      : !snapshot.config.editable
+        ? 'Config preview/apply metadata is unavailable; showing the last reported mesh state read-only.'
+        : !onConfigChange
+          ? 'Config mutation handler is unavailable in this surface.'
+          : null
+  const masterSwitchDisabled =
+    !canManageLocalServiceConfiguration
+    || controlsDisabled
+    || Boolean(configPendingKey)
+    || Boolean(masterSwitchUnavailable)
 
   return (
-    <div className="flex flex-col gap-5" aria-labelledby="mesh-peers-title">
+    <div
+      className="flex flex-col gap-5"
+      aria-labelledby="mesh-peers-title"
+      data-thin-peer-status={thinPeerSnapshot?.status}
+      data-thin-peer-state={thinPeerSnapshot?.state}
+      data-thin-peer-broker={thinPeerSnapshot?.selectedSignalingBrokerOrigin}
+      data-thin-peer-error={thinPeerSnapshot?.lastRedactedError?.code}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 id="mesh-peers-title" className="text-xl font-semibold tracking-tight">
@@ -725,12 +881,16 @@ export function MeshPeersView({
           <Button type="button" variant="outline" onClick={onRefresh} disabled={controlsDisabled}>
             <RefreshCw data-icon="inline-start" /> Refresh
           </Button>
-          <Button type="button" variant="outline" onClick={() => setSettingsOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
-            <Settings2 data-icon="inline-start" /> Mesh settings
-          </Button>
-          <Button type="button" onClick={() => setConnectOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
-            <RadioTower data-icon="inline-start" /> Connect peer
-          </Button>
+          {canManageLocalServiceConfiguration ? (
+            <>
+              <Button type="button" variant="outline" onClick={() => setSettingsOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
+                <Settings2 data-icon="inline-start" /> Mesh settings
+              </Button>
+              <Button type="button" onClick={() => setConnectOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
+                <RadioTower data-icon="inline-start" /> Connect peer
+              </Button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -738,7 +898,14 @@ export function MeshPeersView({
         {mutationError ? <p className="text-sm text-destructive">Peer action failed: {mutationError}</p> : null}
         {configMutationError ? <p className="text-sm text-destructive">Configuration update failed: {configMutationError}</p> : null}
         {inviteImport.error ? <p className="text-sm text-destructive">Invite import failed: {inviteImport.error}</p> : null}
+        {thinPeerMutationError ? <p className="text-sm text-destructive">Thin peer action failed: {thinPeerMutationError}</p> : null}
       </div>
+
+      <ThinPeerConnectionStatus
+        snapshot={thinPeerSnapshot}
+        onReview={() => setThinPairingOpen(true)}
+        onReconnect={onReconnectThinPeer}
+      />
 
       <MeshSummaryCards snapshot={snapshot} connectedPeers={connectedPeers.length} pendingPeers={pendingRequests.length} />
 
@@ -748,7 +915,9 @@ export function MeshPeersView({
             <Network /> Network · Mesh networking
           </CardTitle>
           <CardDescription>
-            Master switch for P2P mesh (<code>gateway.mesh_network.enabled</code>). Turning this off disconnects all peers.
+            {canManageLocalServiceConfiguration
+              ? <>Master switch for P2P mesh (<code>gateway.mesh_network.enabled</code>). Turning this off disconnects all peers.</>
+              : <>Mesh state reported by the connected Aurora node. Thin clients cannot start or stop the remote mesh service.</>}
           </CardDescription>
           <CardAction>
             <Switch
@@ -801,10 +970,171 @@ export function MeshPeersView({
 
       <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenScopes={setScopesPeerId} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
       <RequestReviewDialog peer={reviewPeer} open={Boolean(reviewPeer)} disabled={mutationDisabled} pending={reviewPeer ? pendingPeerId === meshPeerActionIdentity(reviewPeer) : false} permissions={permissions} onOpenChange={(open) => !open && setReviewRequestId(null)} onPermissionsChange={onPermissionsChange} onApprovePeer={onApprovePeer} onDenyPeer={onDenyPeer} />
-      <ConnectPeerDialog open={connectOpen} inviteUrl={inviteUrl} inviteReadiness={inviteReadiness} inviteImport={inviteImport} initialInviteText={initialInviteText} onScanQr={onScanQr} onApplyInvite={onApplyInvite} onOpenChange={setConnectOpen} />
-      <MeshSettingsDialog open={settingsOpen} snapshot={snapshot} disabled={controlsDisabled} pendingKey={configPendingKey} mutationError={configMutationError} onConfigChange={onConfigChange} onOpenChange={setSettingsOpen} />
+      {canManageLocalServiceConfiguration ? (
+        <>
+          <ConnectPeerDialog open={connectOpen} inviteUrl={inviteUrl} inviteReadiness={inviteReadiness} inviteImport={inviteImport} initialInviteText={initialInviteText} onScanQr={onScanQr} onApplyInvite={onApplyInvite} onOpenChange={setConnectOpen} />
+          <MeshSettingsDialog open={settingsOpen} snapshot={snapshot} disabled={controlsDisabled} pendingKey={configPendingKey} mutationError={configMutationError} onConfigChange={onConfigChange} onOpenChange={setSettingsOpen} />
+        </>
+      ) : null}
+      <ThinPeerPairingDialog
+        snapshot={thinPeerSnapshot}
+        open={thinPairingOpen}
+        onOpenChange={setThinPairingOpen}
+        onConfirm={onConfirmThinPairing}
+        onReject={onRejectThinPairing}
+      />
       <ScopesDialog peer={scopesPeer} open={Boolean(scopesPeer)} disabled={mutationDisabled} pending={scopesPeer ? pendingPeerId === scopesPeer.peerId : false} onOpenChange={(open) => !open && setScopesPeerId(null)} onSave={onSaveScopes} />
     </div>
+  )
+}
+
+function ThinPeerConnectionStatus({
+  snapshot,
+  onReview,
+  onReconnect,
+}: {
+  snapshot: BrowserWebRtcSnapshot | null
+  onReview: () => void
+  onReconnect: (() => void) | undefined
+}) {
+  if (!snapshot || snapshot.status === 'authorized' || snapshot.status === 'fallback-http') {
+    return null
+  }
+
+  if (snapshot.pairingSessionId && snapshot.pairingVerificationCode) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-warning/35 bg-warning/5">
+        <div className="flex items-center gap-1.5 border-b border-warning/25 px-4 py-3 text-sm font-semibold text-warning">
+          <Network className="size-3.5" /> Pending pairing requests
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">
+              {snapshot.nodeName || 'Invited Aurora node'}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Direct WebRTC peer · compare this code on both Auroras
+            </p>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+              Verification code
+            </span>
+            <MeshVerificationCode value={snapshot.pairingVerificationCode} />
+          </div>
+          <Button type="button" size="sm" onClick={onReview}>
+            Review &amp; approve
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (
+    snapshot.status === 'connecting'
+    || snapshot.status === 'pairing'
+    || snapshot.status === 'idle'
+  ) {
+    return (
+      <Alert role="status">
+        <RadioTower />
+        <AlertTitle>Connecting to the invited Aurora node</AlertTitle>
+        <AlertDescription>
+          WebRTC signaling is active. The bilateral verification request will
+          appear here when the peer DataChannel is ready.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <Alert variant="destructive" role="alert">
+      <AlertTriangle />
+      <AlertTitle>Peer connection needs attention</AlertTitle>
+      <AlertDescription className="flex flex-col items-start gap-2">
+        <span>
+          {snapshot.diagnostic
+            ?? (snapshot.status === 'needs-invite'
+              ? 'The saved Aurora invite is unavailable.'
+              : 'The direct peer connection is not active.')}
+        </span>
+        {onReconnect && snapshot.status !== 'disabled' ? (
+          <Button type="button" size="sm" variant="outline" onClick={onReconnect}>
+            Reconnect
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
+function ThinPeerPairingDialog({
+  snapshot,
+  open,
+  onOpenChange,
+  onConfirm,
+  onReject,
+}: {
+  snapshot: BrowserWebRtcSnapshot | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: ((sessionId: string) => void) | undefined
+  onReject: ((sessionId: string) => void) | undefined
+}) {
+  const sessionId = snapshot?.pairingSessionId ?? null
+  const verificationCode = snapshot?.pairingVerificationCode ?? null
+  return (
+    <Dialog open={open && Boolean(sessionId)} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            Approve {snapshot?.nodeName || 'Aurora peer'}
+          </DialogTitle>
+          <DialogDescription>
+            Confirm that the verification code matches on both Auroras. Each
+            device must approve independently before the peer session is
+            authorized.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-lg bg-muted/40 px-3.5 py-2.5 text-center text-xl">
+          <p className="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+            Verification code
+          </p>
+          <MeshVerificationCode value={verificationCode} />
+        </div>
+        {!verificationCode ? (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription>
+              This pairing session did not report a verification code. Do not
+              approve it.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={!sessionId || !onReject}
+            onClick={() => {
+              if (sessionId) onReject?.(sessionId)
+              onOpenChange(false)
+            }}
+          >
+            Refuse
+          </Button>
+          <Button
+            type="button"
+            disabled={!sessionId || !verificationCode || !onConfirm}
+            onClick={() => {
+              if (sessionId) onConfirm?.(sessionId)
+              onOpenChange(false)
+            }}
+          >
+            Approve &amp; pair
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

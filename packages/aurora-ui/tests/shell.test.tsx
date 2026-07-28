@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   AuroraClient as Aurora,
   AuroraError,
@@ -110,7 +110,8 @@ import {
   auroraEmbeddedNavItems,
   getAuroraNavItem,
   navItemSnapshot,
-  getAuroraSurfaceProfile
+  getAuroraSurfaceProfile,
+  type BrowserWebRtcSnapshot
 } from '../src/index'
 
 
@@ -2166,6 +2167,84 @@ describe('Aurora production shell', () => {
       const dialog = document.body.querySelector('[role="dialog"]')
       expect(dialog?.textContent).toContain('2222 2222')
       expect(dialog?.textContent).not.toContain('1111 1111')
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('uses the existing Mesh pairing UI for thin peers and keeps remote service configuration read-only', async () => {
+    const snapshot = await buildMeshPeersSnapshot(
+      new Aurora({ transport: new MockAuroraTransport() }),
+      meshRoute(),
+    )
+    const thinPeerSnapshot: BrowserWebRtcSnapshot = {
+      state: 'awaiting-sas-confirmation',
+      connectionMode: 'webrtc-only',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-07-28T00:00:00Z',
+      status: 'pairing',
+      pairingSessionId: 'thin-pairing-session',
+      pairingVerificationCode: '48271935',
+      nodeName: 'Aurora host',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    }
+    const onConfirmThinPairing = vi.fn()
+    const onRejectThinPairing = vi.fn()
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={snapshot}
+          route={meshRoute()}
+          canManageLocalServiceConfiguration={false}
+          thinPeerSnapshot={thinPeerSnapshot}
+          onConfirmThinPairing={onConfirmThinPairing}
+          onRejectThinPairing={onRejectThinPairing}
+        />
+      ))
+
+      expect(container.textContent).toContain('Mesh & Peers')
+      expect(container.textContent).toContain('Pending pairing requests')
+      expect(container.textContent).toContain('4827 1935')
+      expect(container.textContent).not.toContain('Thin-shell transport')
+      expect(container.textContent).not.toContain('Mesh settings')
+      expect(container.textContent).not.toContain('Connect peer')
+      expect(
+        container.querySelector('[data-slot="switch"]')?.hasAttribute('data-disabled'),
+      ).toBe(true)
+
+      const review = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.includes('Review & approve'),
+      )
+      await act(async () => review?.click())
+      const dialog = document.body.querySelector('[role="dialog"]')
+      expect(dialog?.textContent).toContain('Approve Aurora host')
+      expect(dialog?.textContent).toContain('4827 1935')
+
+      const approve = Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('button'),
+      ).find((button) => button.textContent?.includes('Approve & pair'))
+      await act(async () => approve?.click())
+      expect(onConfirmThinPairing).toHaveBeenCalledWith('thin-pairing-session')
+      expect(onRejectThinPairing).not.toHaveBeenCalled()
     } finally {
       await act(async () => root.unmount())
       container.remove()

@@ -58,23 +58,23 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Baselines regenerated after the shell gained explicit legacy-WebView CSS
-  // hooks and removed its duplicate hidden navigation control. The responsive
-  // sheet remains aria-hidden and inert while closed.
+  // Baselines regenerated after runtime surface and authorization state became
+  // evidence-driven: thin shells no longer claim Desktop Local/admin status or
+  // render a synthetic uptime value.
   assistant: {
-    desktop: 'db5b518d73ed',
-    tablet: 'd3662b3537b0',
-    mobile: '923459f08f1e'
+    desktop: '4a44e1a306f0',
+    tablet: 'a6d5101f66c2',
+    mobile: 'aa4f0ee6ad59'
   },
   admin: {
-    desktop: 'bf4fbc7a06bd',
-    tablet: 'fabe48dc9eb4',
-    mobile: '28143624e776'
+    desktop: '947ae1a185af',
+    tablet: 'a36b8c71df45',
+    mobile: 'c8bfc8120962'
   },
   'mobile-settings': {
-    desktop: '56e919aee3b8',
-    tablet: 'b0368cf86146',
-    mobile: 'f83a94812b99'
+    desktop: '2d7903ca811a',
+    tablet: '510d5a1a77a8',
+    mobile: '4a8f463abd01'
   }
 }
 
@@ -197,10 +197,11 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(stateCoverage).toContain('secrets protected')
     expect(stateCoverage).toContain('aurora-prod-01')
     expect(stateCoverage).toContain('AD admin Full access')
-    expect(stateCoverage).toContain('Desktop Local')
+    expect(stateCoverage).toContain('Local mode')
     expect(stateCoverage).toContain('Healthy')
     expect(stateCoverage).toContain('v0.9.2')
-    expect(stateCoverage).toContain('4h 12m')
+    expect(stateCoverage).toContain('· connected')
+    expect(stateCoverage).not.toContain('4h 12m')
     expect(stateCoverage).not.toContain('v0.9.4')
     expect(stateCoverage).not.toContain('18d 4h')
 
@@ -281,7 +282,12 @@ function renderShell(snapshot: AuroraShellSnapshot, surface: SurfaceId, viewport
       data-qa-viewport={viewport.id}
       style={{ width: `${viewport.width}px`, minHeight: `${viewport.height}px` }}
     >
-      <AppShell snapshot={snapshot} currentPath={path}>
+      <AppShell
+        snapshot={snapshot}
+        currentPath={path}
+        runtimeMode="mock"
+        sessionIsAdmin={surface === 'admin'}
+      >
         {content}
       </AppShell>
     </div>

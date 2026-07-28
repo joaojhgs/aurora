@@ -167,33 +167,16 @@ export const tauriRouteRegistry = {
       <ToolApprovalPanel client={client} route={route} />
     </div>
   ),
-  mesh: ({ route, snapshot, nativeContext, client }) => {
+  mesh: ({ route, nativeContext, client }) => {
     const inviteParam = initialThinInviteFromUrl();
     return (
       <div className="ata-page-stack">
-        {nativeContext.thinPeer ? (
-          <WebThinConnectionPanel
-            peer={nativeContext.thinPeer}
-            mode={nativeContext.thinConnectionMode}
-            transportKind={client.transport.kind}
-            nativePlatform={snapshot.nativePlatform}
-            initialInviteText={inviteParam}
-            profile={nativeContext.thinProfile}
-            profiles={nativeContext.thinProfileController?.document.profiles}
-            profileStoreEvidence={nativeContext.thinProfileController?.evidence}
-            {...(nativeContext.thinProfileController
-              ? {
-                  onSaveProfile: nativeContext.saveThinProfile,
-                  onSelectProfile: nativeContext.selectThinProfile,
-                }
-              : {})}
-            {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
-          />
-        ) : null}
         <MeshPeersResource
           key={inviteParam ?? "mesh-peers"}
           client={client}
           route={route}
+          surfaceProfile={nativeContext.surfaceProfile}
+          thinPeer={nativeContext.thinPeer}
           initialInviteText={inviteParam}
           {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
         />
@@ -308,6 +291,7 @@ export function AuroraTauriApp({
     [runtimeOverride],
   );
   const [runtime, setRuntime] = useState(initialRuntime);
+  const [thinPeerReadyRevision, setThinPeerReadyRevision] = useState(0);
   const [profileBootstrapReady, setProfileBootstrapReady] = useState(
     () => Boolean(runtimeOverride) || !requiresAsyncAuroraTauriBootstrap(),
   );
@@ -396,6 +380,21 @@ export function AuroraTauriApp({
       ),
     [rebuildThinRuntime],
   );
+
+  useEffect(() => {
+    const peer = runtime.thinPeer;
+    if (!peer) return;
+    let ready = false;
+    return peer.subscribe((peerSnapshot) => {
+      const nextReady =
+        peerSnapshot.status === "authorized" ||
+        peerSnapshot.status === "fallback-http";
+      if (nextReady && !ready) {
+        setThinPeerReadyRevision((revision) => revision + 1);
+      }
+      ready = nextReady;
+    });
+  }, [runtime]);
 
   useEffect(() => {
     let cancelled = false;
@@ -507,6 +506,7 @@ export function AuroraTauriApp({
         ]);
         modelsPhaseActive = false;
         reportStage("assistant");
+        await runtime.client.authApi.whoAmI().catch(() => null);
         if (!cancelled) {
           reportStage("workspace");
           setSnapshot(nextSnapshot);
@@ -541,7 +541,7 @@ export function AuroraTauriApp({
     return () => {
       cancelled = true;
     };
-  }, [runtime]);
+  }, [runtime, thinPeerReadyRevision]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -658,7 +658,10 @@ export function AuroraTauriApp({
             profile={runtime.thinProfile}
             profiles={runtime.thinProfileController.document.profiles}
             profileStoreEvidence={runtime.thinProfileController.evidence}
-            onSaveProfile={saveThinProfile}
+            onSaveProfile={async (profile, roomSecret) => {
+              await saveThinProfile(profile, roomSecret);
+              navigate("/mesh");
+            }}
             onSelectProfile={selectThinProfile}
             configureOnly
             {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
@@ -684,6 +687,8 @@ export function AuroraTauriApp({
       snapshot={snapshot}
       currentPath={currentPath}
       onNavigate={navigate}
+      sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
+      runtimeMode={runtime.mode}
     >
       <TauriRouteContent
         path={currentPath}

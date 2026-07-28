@@ -1,14 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MeshPeersResource, RoutePolicyResource, WebThinConnectionPanel, type RouteAvailability } from '@aurora/ui'
-import {
-  auroraBrowserThinProfile,
-  auroraBrowserThinProfileDocument,
-  createAuroraBrowserRuntime,
-  saveAuroraBrowserThinProfile,
-  selectAuroraBrowserThinProfile,
-} from '../aurora-client'
+import { MeshPeersResource, RoutePolicyResource, type RouteAvailability } from '@aurora/ui'
+import { createAuroraBrowserRuntime } from '../aurora-client'
 import { useBrowserRoute } from '../browser-shell-runtime'
 
 export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
@@ -16,8 +10,6 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
   const runtime = createAuroraBrowserRuntime()
   const client = runtime.client
   const activeRoute = useBrowserRoute(route)
-  const profile = auroraBrowserThinProfile()
-  const document = auroraBrowserThinProfileDocument()
 
   useEffect(() => {
     const invite = consumeFragmentInviteFromUrl(window.location.href, (nextUrl) => {
@@ -28,24 +20,13 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
 
   return (
     <>
-      <WebThinConnectionPanel
-        peer={runtime.peer}
-        mode={runtime.mode}
-        transportKind={client.transport.kind}
+      <MeshPeersResource
+        client={client}
+        route={activeRoute}
+        surfaceProfile={runtime.surface}
+        thinPeer={runtime.peer}
         initialInviteText={incomingInvite}
-        profile={profile}
-        profiles={document.profiles}
-        profileStoreEvidence="Hosted web keeps nonsecret runtime profile metadata in browser storage and encrypts WebRTC secrets in IndexedDB when available."
-        onSaveProfile={async (nextProfile, roomSecret) => {
-          await saveAuroraBrowserThinProfile(nextProfile, roomSecret)
-          window.location.reload()
-        }}
-        onSelectProfile={async (profileId) => {
-          await selectAuroraBrowserThinProfile(profileId)
-          window.location.reload()
-        }}
       />
-      <MeshPeersResource client={client} route={activeRoute} />
       <RoutePolicyResource client={client} route={activeRoute} />
     </>
   )

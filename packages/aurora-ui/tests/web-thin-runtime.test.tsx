@@ -41,19 +41,30 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(web.prefersWebRtcTransport).toBe(true)
     expect(web.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
 
+    const bootingWeb = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'pending',
+    })
+    expect(bootingWeb.kind).toBe('web')
+
     const desktop = getAuroraSurfaceProfile({ runtimeMode: 'desktop-thin', transportKind: 'webrtc-preferred' })
     expect(desktop.kind).toBe('desktop-thin')
     expect(desktop.supportsWebRtcThin).toBe(true)
     expect(desktop.usesLocalSidecar).toBe(false)
+    expect(desktop.trustsNativeWebViewOrigin).toBe(true)
+    expect(desktop.canManageLocalServiceConfiguration).toBe(false)
 
     const local = getAuroraSurfaceProfile({ runtimeMode: 'desktop-local', transportKind: 'tauri-local' })
     expect(local.voiceCapture.wakewordOwner).toBe('coordinator-daemon')
+    expect(local.canManageLocalServiceConfiguration).toBe(true)
 
     const androidHttp = getAuroraSurfaceProfile({ runtimeMode: 'mobile-native', transportKind: 'http', nativePlatform: 'android' })
     expect(androidHttp.kind).toBe('android')
     expect(androidHttp.isWebThin).toBe(true)
     expect(androidHttp.supportsAndroidOnly).toBe(true)
     expect(androidHttp.supportsWebRtcThin).toBe(true)
+    expect(androidHttp.trustsNativeWebViewOrigin).toBe(true)
+    expect(androidHttp.canManageLocalServiceConfiguration).toBe(false)
     expect(androidHttp.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
     expect(androidHttp.voiceCapture.wakewordOwner).toBe('webview-focused')
     expect(androidHttp.voiceCapture.detail).toContain('focused foreground WebView microphone')
@@ -89,7 +100,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       appId: 'aurora',
       room: 'studio-room',
       expectedStablePeerId: 'peer-host',
-      nodeName: 'Browser shell',
+      nodeName: 'Host node',
       signalingBrokers: ['wss://broker.example/mqtt'],
       requireAppLayerE2ee: true,
     })
@@ -120,6 +131,21 @@ describe('browser WebRTC thin-shell runtime', () => {
       'wss://profile-signaling.example/mqtt',
     ])
     expect(profile?.expectedStablePeerId).toBe('peer-host')
+  })
+
+  it('marks an explicitly allowed loopback signaling invite as development-only', () => {
+    const profile = webRtcProfileFromInvite(
+      inviteText('ws://127.0.0.1:9001/mqtt'),
+      {
+        allowInsecureLoopbackSignaling: true,
+      },
+    )
+
+    expect(profile).toMatchObject({
+      signalingBrokers: ['ws://127.0.0.1:9001/mqtt'],
+      allowInsecureLoopbackSignaling: true,
+      production: false,
+    })
   })
 
   it('selects explicit http-only and webrtc-preferred fallback modes', async () => {
@@ -200,6 +226,69 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
     await expect(runtime.peer.connect()).rejects.toThrow(/rollout flag/i)
     await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/rollout flag/i)
+    await runtime.close()
+  })
+
+  it.each([
+    ['desktop Tauri dev', 'desktop-thin', 'desktop', '127.0.0.1'],
+    ['packaged Android Tauri', 'mobile-native', 'android', 'tauri.localhost'],
+    ['packaged iOS Tauri', 'mobile-native', 'ios', 'tauri.localhost'],
+  ])(
+    'trusts the allowlisted local origin for %s without weakening hosted HTTP',
+    async (_label, runtimeMode, nativePlatform, hostname) => {
+      const runtime = createBrowserWebThinRuntime({
+        createClient,
+        createDemoClient,
+        mode: 'webrtc-only',
+        inviteText: inviteText(),
+        runtimeMode,
+        nativePlatform,
+        windowLocation: { protocol: 'http:', hostname },
+      })
+
+      expect(runtime.surface.trustsNativeWebViewOrigin).toBe(true)
+      expect(runtime.peer.snapshot()).toMatchObject({
+        secureContext: true,
+        status: expect.not.stringMatching(/needs-secure-context/),
+      })
+      await runtime.close()
+    },
+  )
+
+  it('accepts a hosted web thin shell on the browser-trusted localhost origin', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      runtimeMode: 'web-thin',
+      windowLocation: { protocol: 'http:', hostname: '127.0.0.1' },
+    })
+
+    expect(runtime.surface.trustsNativeWebViewOrigin).toBe(false)
+    expect(runtime.peer.snapshot()).toMatchObject({
+      secureContext: true,
+      status: expect.not.stringMatching(/needs-secure-context/),
+    })
+    await runtime.close()
+  })
+
+  it('does not trust an arbitrary HTTP host even when native runtime metadata is present', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      runtimeMode: 'mobile-native',
+      nativePlatform: 'android',
+      windowLocation: { protocol: 'http:', hostname: 'public.example' },
+    })
+
+    expect(runtime.surface.trustsNativeWebViewOrigin).toBe(true)
+    expect(runtime.peer.snapshot()).toMatchObject({
+      secureContext: false,
+      status: 'needs-secure-context',
+    })
     await runtime.close()
   })
 
@@ -285,7 +374,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(controller.isFallbackEligibleAfterWebRtcRoute(new AuroraError({ code: 'transport_loss', message: 'ICE transport lost' }))).toBe(true)
   })
 
-  it('disconnects WebRTC peer sessions when the thin-shell document is hidden', async () => {
+  it('keeps WebRTC peer sessions connected when the thin-shell document is hidden', async () => {
     const peer = new FakeBrowserPeer({ status: 'authorized', state: 'authorized' })
     const listeners = new Map<string, Set<() => void>>()
     const visibilityDocument = {
@@ -300,14 +389,15 @@ describe('browser WebRTC thin-shell runtime', () => {
       },
     } as unknown as Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>
     const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false, visibilityDocument })
+    await controller.connect(webRtcProfileFromInvite(inviteText())!)
 
     Object.defineProperty(visibilityDocument, 'visibilityState', { configurable: true, value: 'hidden' as DocumentVisibilityState })
     for (const listener of listeners.get('visibilitychange') ?? []) listener()
-    await waitUntil(() => peer.disconnectedReasons.includes('hidden document'))
 
-    expect(peer.disconnectedReasons).toContain('hidden document')
-    expect(controller.snapshot().status).toBe('closed')
-    expect(controller.snapshot().diagnostic).toMatch(/lost visibility/i)
+    expect(peer.disconnectedReasons).toEqual([])
+    expect(controller.snapshot().status).toBe('authorized')
+    expect(controller.snapshot().visible).toBe(false)
+    expect(controller.snapshot().diagnostic).toMatch(/remains connected.*hidden/i)
   })
 
   it('forwards selected candidate-pair evidence without exposing raw addresses', async () => {
@@ -526,7 +616,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       webrtcProfile: {
         room: 'studio-room',
         roomSecretRef: 'ref:memory:studio-room',
-        nodeName: 'Kitchen tablet',
+        nodeName: 'Host node',
       },
     })
     expect(onSaveProfile.mock.calls[0]?.[1]).toEqual({
@@ -793,7 +883,9 @@ class FakeBrowserPeer {
   async disconnect(reason?: string) { this.disconnectedReasons.push(reason ?? 'disconnect'); return undefined }
 }
 
-function inviteText(): string {
+function inviteText(
+  broker = 'wss://broker.example/mqtt',
+): string {
   const invite: JsonObject = {
     kind: 'aurora.mesh.invite',
     version: 1,
@@ -804,7 +896,7 @@ function inviteText(): string {
       app_id: 'aurora',
       room: 'studio-room',
       room_password: 'secret-room-password',
-      mqtt_brokers: ['wss://broker.example/mqtt'],
+      mqtt_brokers: [broker],
     },
     webrtc: { app_layer_e2ee: true, stun_servers: ['stun:stun.example:19302'], turn_servers: [] },
   }

@@ -51,7 +51,7 @@ import {
 import { ToolFallbackArgs, ToolFallbackContent, ToolFallbackResult, ToolFallbackRoot } from '#components/assistant-ui/tool-fallback'
 import { ModelSelector, type ModelOption } from '#components/assistant-ui/model-selector'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
-import { getAuroraSurfaceProfile } from './platform-surface'
+import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
 
 
@@ -733,10 +733,11 @@ export function AssistantView({
   useEffect(() => {
     if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) return
     if (typeof document === 'undefined' || typeof window === 'undefined') return
-    const releaseFocusedCapture = () => {
+    const releaseFocusedCapture = (event?: Event) => {
       const hidden = document.visibilityState === 'hidden'
       const blurred = typeof document.hasFocus === 'function' && !document.hasFocus()
-      if (!hidden && !blurred) return
+      const nativeRelease = event?.type === AURORA_RELEASE_FOCUSED_MEDIA_EVENT
+      if (!hidden && !blurred && !nativeRelease) return
       if (!voiceStreamRef.current) return
       stopLocalCapture({ finalizeTranscription: false })
       if (voiceCaptureStatusRef.current === 'listening') {
@@ -754,9 +755,11 @@ export function AssistantView({
     }
     document.addEventListener('visibilitychange', releaseFocusedCapture)
     window.addEventListener('blur', releaseFocusedCapture)
+    window.addEventListener(AURORA_RELEASE_FOCUSED_MEDIA_EVENT, releaseFocusedCapture)
     return () => {
       document.removeEventListener('visibilitychange', releaseFocusedCapture)
       window.removeEventListener('blur', releaseFocusedCapture)
+      window.removeEventListener(AURORA_RELEASE_FOCUSED_MEDIA_EVENT, releaseFocusedCapture)
     }
   }, [surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk])
 

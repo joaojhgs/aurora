@@ -8,6 +8,12 @@ export type AuroraSurfaceKind =
   | 'mock'
   | 'unknown'
 
+/**
+ * Native shells dispatch this event when foreground media must be released
+ * without tearing down the control-plane WebRTC peer.
+ */
+export const AURORA_RELEASE_FOCUSED_MEDIA_EVENT = 'aurora:release-focused-media'
+
 export type AuroraSurfaceFeature =
   | 'desktopCommands'
   | 'sidecar'
@@ -41,6 +47,17 @@ export interface AuroraSurfaceProfile {
   isWebThin: boolean
   supportsWebRtcThin: boolean
   prefersWebRtcTransport: boolean
+  /**
+   * The shell owns a trusted local WebView origin (for example
+   * `tauri.localhost` or the loopback Vite origin used by Tauri dev).
+   *
+   * Callers must still restrict the accepted hostname to Aurora's local
+   * WebView/loopback allowlist. This flag never makes arbitrary HTTP origins
+   * secure.
+   */
+  trustsNativeWebViewOrigin: boolean
+  /** Local service configuration is owned by this client, not a remote peer. */
+  canManageLocalServiceConfiguration: boolean
   voiceCapture: AuroraVoiceCapturePolicy
 }
 
@@ -97,7 +114,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
           ? 'desktop-thin'
           : runtimeMode === 'mock' || transportKind === 'mock'
             ? 'mock'
-            : transportKind === 'http' || (usesWebRtcTransport && explicitWebThin)
+            : explicitWebThin || transportKind === 'http'
               ? 'web'
               : isMobile
                 ? 'mobile'
@@ -107,6 +124,8 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const isWebThin = kind === 'web' || kind === 'desktop-thin' || (isMobile && (transportKind === 'http' || usesWebRtcTransport))
   const supportsWebRtcThin = isWebThin || isMobile
   const prefersWebRtcTransport = usesWebRtcTransport
+  const trustsNativeWebViewOrigin = usesNativeShell
+  const canManageLocalServiceConfiguration = usesLocalSidecar || kind === 'mock'
   const voiceCapture = getAuroraVoiceCapturePolicy(kind)
   return {
     kind,
@@ -124,6 +143,8 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     isWebThin,
     supportsWebRtcThin,
     prefersWebRtcTransport,
+    trustsNativeWebViewOrigin,
+    canManageLocalServiceConfiguration,
     voiceCapture,
   }
 }

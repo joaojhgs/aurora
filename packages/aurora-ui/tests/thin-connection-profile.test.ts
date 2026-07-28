@@ -41,7 +41,7 @@ function webRtcProfile(
       room: 'family-room',
       roomSecretRef: 'ref:memory:family-room',
       signalingBrokers: ['wss://invite.example.test/mqtt'],
-      nodeName: 'Aurora phone',
+      nodeName: 'Aurora host',
       expectedStablePeerId: 'host-peer',
       stunServers: ['stun:stun.example.test:3478'],
       turnServers: ['turns:turn.example.test:5349'],
@@ -74,6 +74,8 @@ describe('thin connection profiles', () => {
     expect(direct.webrtcProfile?.signalingBrokers).toEqual([
       'wss://signal.example.test/mqtt?tenant=home',
     ])
+    expect(direct.nodeName).toBe('Aurora phone')
+    expect(direct.webrtcProfile?.nodeName).toBe('Aurora host')
     expect(isThinConnectionProfileConfigured(http)).toBe(true)
     expect(isThinConnectionProfileConfigured(direct)).toBe(true)
   })
