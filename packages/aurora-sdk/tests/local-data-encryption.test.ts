@@ -18,6 +18,7 @@ describe('local-data encrypted envelope contract', () => {
     expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, nonceB64Url: 'AAAAAAAAAAAAAAAA=' })).toThrow(/envelope\.v1/u)
     expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertextAndTagB64Url: 'AAAA' })).toThrow(/envelope\.v1/u)
     expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, ciphertextAndTagB64Url: 'A'.repeat(2 * 1024 * 1024 + 1) })).toThrow(/envelope\.v1/u)
+    expect(() => parseEncryptedDataEnvelopeV1({ ...envelopeFixture, createdAtMs: -0 })).toThrow(/envelope\.v1/u)
     expect(JSON.stringify(envelopeFixture).toLowerCase()).not.toContain('bearer')
     expect(JSON.stringify(envelopeFixture).toLowerCase()).not.toContain('verifier')
   })

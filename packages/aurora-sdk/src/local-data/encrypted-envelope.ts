@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
 
-import { parseLocalDataBoundary } from './validation.js'
+import { nonNegativeSafeIntSchema, parseLocalDataBoundary } from './validation.js'
 
 export type EncryptedDataEnvelopeAlgorithm = 'AES-GCM-256'
 
@@ -20,7 +20,7 @@ export const encryptedDataEnvelopeV1Schema = z.object({
   }, {
     message: 'ciphertextAndTagB64Url must be canonical unpadded base64url with a 16-byte tag'
   }),
-  createdAtMs: z.number().int().safe().nonnegative()
+  createdAtMs: nonNegativeSafeIntSchema
 }).strict()
 
 export type EncryptedDataEnvelopeV1 = z.infer<typeof encryptedDataEnvelopeV1Schema>

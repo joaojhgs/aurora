@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { hashLocalDataCollections, localDataCollectionLimits, MemoryLocalDataBackend, parseLocalDataExportV1 } from '../src/local-data/index.js'
+import { hashLocalDataCollections, LocalDataError, localDataCollectionLimits, MemoryLocalDataBackend, parseLocalDataExportV1 } from '../src/local-data/index.js'
 import {
   auditFixture,
   conversationFixture,
@@ -154,6 +154,63 @@ describe('local-data export contract', () => {
     })).toThrow(/Invalid local data boundary/u)
   })
 
+  it('preflights JSON-bearing record and export fields before recursive schema parsing', async () => {
+    const backend = new MemoryLocalDataBackend({ nowMs: () => 9999 })
+    const session = await backend.open('profile-1', 'node-1')
+    const hostileValues = [
+      makeDeepObject(48, 'raw-secret-deep'),
+      makeWideObject(2_049, 'raw-secret-wide'),
+      { payload: 'raw-secret-bytes'.repeat(180_000) }
+    ]
+
+    for (const hostile of hostileValues) {
+      await expectRedactedLocalDataError(
+        () => session.localTools.upsertLocalToolState(localToolStateFixture({ descriptorJson: hostile as never })),
+        'raw-secret'
+      )
+      await expectRedactedLocalDataError(
+        () => session.localAudit.appendAudit(auditFixture({ redactedDetailJson: hostile as never })),
+        'raw-secret'
+      )
+      await expectRedactedLocalDataError(
+        () => parseLocalDataExportV1({
+          version: 1,
+          sourceBackend: 'memory',
+          schemaVersion: 3,
+          profileId: 'profile-1',
+          localNodeId: 'node-1',
+          exportedAtMs: 1,
+          encryptionEnvelopeVersions: [1],
+          recordCounts: {
+            conversations: 0,
+            messages: 0,
+            memoryItems: 0,
+            localToolStates: 0,
+            peerGrantMetadata: 0,
+            localAudit: 0
+          },
+          collectionHashes: {
+            conversations: '0'.repeat(64),
+            messages: '0'.repeat(64),
+            memoryItems: '0'.repeat(64),
+            localToolStates: '0'.repeat(64),
+            peerGrantMetadata: '0'.repeat(64),
+            localAudit: '0'.repeat(64)
+          },
+          records: {
+            conversations: [],
+            messages: [],
+            memoryItems: [],
+            localToolStates: [localToolStateFixture({ descriptorJson: hostile as never })],
+            peerGrantMetadata: [],
+            localAudit: []
+          }
+        }),
+        'raw-secret'
+      )
+    }
+  })
+
   it('uses deterministic UTF-8 ordering for canonical collection hashes', () => {
     const recordsA = {
       conversations: [
@@ -175,3 +232,35 @@ describe('local-data export contract', () => {
     expect(hashLocalDataCollections(recordsA).conversations).toBe('d1f7bc470603d71fbb7cbb37d547a279ebd075b81d577cd648ef5e12868b4a49')
   })
 })
+
+function makeDeepObject(depth: number, leaf: string): Record<string, unknown> {
+  const root: Record<string, unknown> = {}
+  let current = root
+  for (let index = 0; index < depth; index += 1) {
+    current.child = {}
+    current = current.child as Record<string, unknown>
+  }
+  current.value = leaf
+  return root
+}
+
+function makeWideObject(keys: number, value: string): Record<string, unknown> {
+  const record: Record<string, unknown> = {}
+  for (let index = 0; index < keys; index += 1) record[`key${index}`] = value
+  return record
+}
+
+async function expectRedactedLocalDataError(run: () => unknown | Promise<unknown>, forbidden: string): Promise<void> {
+  try {
+    await run()
+    throw new Error('expected local-data validation error')
+  } catch (error) {
+    expect(error).toBeInstanceOf(LocalDataError)
+    expect(error).not.toBeInstanceOf(RangeError)
+    expect(error).toMatchObject({
+      code: 'invalid_record',
+      metadata: { validation: 'redacted' }
+    })
+    expect(JSON.stringify(error)).not.toContain(forbidden)
+  }
+}

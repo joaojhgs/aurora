@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildLocalDataExportV1, LocalDataError, MemoryLocalDataBackend } from '../src/local-data/index.js'
+import { buildLocalDataExportV1, LocalDataError, MemoryLocalDataBackend, type LocalDataRepositories } from '../src/local-data/index.js'
 import {
   auditFixture,
   conversationFixture,
@@ -77,15 +77,6 @@ describe('local-data memory repository contract', () => {
       await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-first' }))
       await new Promise<void>((resolve) => gates.push(resolve))
     })
-
-    await waitUntil(() => gates.length > 0)
-    let outsideReadSettled = false
-    const outsideRead = session.memory.listMemoryItems().then((records) => {
-      outsideReadSettled = true
-      return records
-    })
-    await Promise.resolve()
-    expect(outsideReadSettled).toBe(false)
     const second = session.transaction(async (repositories) => {
       await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-second' }))
     })
@@ -93,15 +84,41 @@ describe('local-data memory repository contract', () => {
       await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-third' }))
       throw new Error('rollback third')
     })
+
+    await waitUntil(() => gates.length > 0)
     gates[0]?.()
     await expect(first).resolves.toBeUndefined()
-    await expect(outsideRead).resolves.toEqual([memoryFixture({ id: 'memory-first' })])
     await expect(second).resolves.toBeUndefined()
     await expect(third).rejects.toThrow(/rollback third/u)
     await expect(session.memory.listMemoryItems()).resolves.toEqual([
       memoryFixture({ id: 'memory-first' }),
       memoryFixture({ id: 'memory-second' })
     ])
+  })
+
+  it('queues ordinary reads during a long transaction without exposing uncommitted state', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    let releaseTransaction: (() => void) | undefined
+    const transaction = session.transaction(async (repositories) => {
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-transaction' }))
+      await new Promise<void>((resolve) => {
+        releaseTransaction = resolve
+      })
+    })
+
+    await waitUntil(() => releaseTransaction !== undefined)
+    let outsideReadSettled = false
+    const outsideRead = session.memory.listMemoryItems().then((records) => {
+      outsideReadSettled = true
+      return records
+    })
+    await Promise.resolve()
+    expect(outsideReadSettled).toBe(false)
+
+    releaseTransaction?.()
+    await expect(transaction).resolves.toBeUndefined()
+    await expect(outsideRead).resolves.toEqual([memoryFixture({ id: 'memory-transaction' })])
   })
 
   it('queues outside writes until a long failed transaction rolls back', async () => {
@@ -128,6 +145,64 @@ describe('local-data memory repository contract', () => {
     await expect(transaction).rejects.toThrow(/rollback long transaction/u)
     await expect(outsideWrite).resolves.toBeUndefined()
     await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-outside' })])
+  })
+
+  it('invalidates leaked transaction repositories after commit and rollback', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    let committedLeak: LocalDataRepositories | undefined
+    await session.transaction(async (repositories) => {
+      committedLeak = repositories
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-committed' }))
+    })
+
+    await expect(committedLeak?.memory.upsertMemoryItem(memoryFixture({ id: 'memory-leaked-commit' }))).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: {
+        boundaryId: 'transaction.scope',
+        validation: 'redacted'
+      }
+    })
+
+    let rolledBackLeak: LocalDataRepositories | undefined
+    await expect(session.transaction(async (repositories) => {
+      rolledBackLeak = repositories
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-rollback-leak' }))
+      throw new Error('rollback with leaked repository')
+    })).rejects.toThrow(/rollback with leaked repository/u)
+
+    await expect(rolledBackLeak?.memory.listMemoryItems()).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: {
+        boundaryId: 'transaction.scope',
+        validation: 'redacted'
+      }
+    })
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-committed' })])
+  })
+
+  it('rejects nested transactions without waiting on the outer queue', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+
+    await expect(session.transaction(async () => {
+      const nested = session.transaction(async (repositories) => {
+        await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-nested' }))
+      })
+      const nestedOutcome = await Promise.race([
+        nested.then(() => 'resolved' as const, (error: unknown) => error),
+        delay(25).then(() => 'timeout' as const)
+      ])
+      expect(nestedOutcome).not.toBe('timeout')
+      expect(nestedOutcome).toMatchObject({
+        code: 'invalid_record',
+        metadata: {
+          boundaryId: 'transaction.scope',
+          validation: 'redacted'
+        }
+      })
+    })).resolves.toBeUndefined()
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([])
   })
 
   it('validates open identity and rejects future-schema imports before replacing state', async () => {
@@ -195,4 +270,8 @@ async function waitUntil(condition: () => boolean): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
   throw new Error('condition was not reached')
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
 }

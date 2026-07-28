@@ -1,12 +1,10 @@
 import { z } from 'zod/v4'
 
 import { encryptedDataEnvelopeV1Schema } from './encrypted-envelope.js'
-import { assertJsonSafety, isJsonRoundTripStable, parseLocalDataBoundary } from './validation.js'
+import { assertJsonSafety, isJsonRoundTripStable, nonNegativeSafeIntSchema, parseLocalDataBoundary } from './validation.js'
 
 export const localDataIdSchema = z.string().min(1).max(256).regex(/^[A-Za-z0-9_.:@/-]+$/u)
-export const nonNegativeSafeIntSchema = z.number().int().safe().nonnegative().refine((value) => !Object.is(value, -0), {
-  message: 'negative zero is not valid JSON state'
-})
+export { nonNegativeSafeIntSchema }
 export const epochMsSchema = nonNegativeSafeIntSchema
 export const sha256HexSchema = z.string().regex(/^[a-f0-9]{64}$/u)
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }

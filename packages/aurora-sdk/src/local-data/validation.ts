@@ -20,11 +20,16 @@ export const localDataJsonSafetyLimits: JsonSafetyLimits = Object.freeze({
   maxBytes: 16 * 1024 * 1024,
   maxArrayItems: 100_000,
   maxObjectKeys: 2_048,
-  maxStringBytes: 1024 * 1024
+  maxStringBytes: 2 * 1024 * 1024
+})
+
+export const nonNegativeSafeIntSchema = z.number().int().safe().nonnegative().refine((value) => !Object.is(value, -0), {
+  message: 'negative zero is not valid JSON state'
 })
 
 export function parseLocalDataBoundary<T>(schema: ZodType<T>, value: unknown, boundaryId: string): T {
   const safeBoundaryId = normalizeBoundaryId(boundaryId)
+  assertJsonSafety(value, safeBoundaryId)
   const result = schema.safeParse(value)
   if (result.success) return result.data
   throw new LocalDataError('invalid_record', `Invalid local data boundary: ${safeBoundaryId}`, {
@@ -55,12 +60,16 @@ export function assertJsonSafety(
   const safeBoundaryId = normalizeBoundaryId(boundaryId)
   let nodes = 0
   let bytes = 0
-  const seen = new Set<object>()
-  const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }]
+  const active = new Set<object>()
+  const stack: Array<{ value: unknown; depth: number; leaving?: boolean }> = [{ value, depth: 0 }]
   while (stack.length > 0) {
     const item = stack.pop()
     if (item === undefined) break
     const current = item.value
+    if (item.leaving) {
+      if (current !== null && typeof current === 'object') active.delete(current)
+      continue
+    }
     nodes += 1
     if (nodes > limits.maxNodes) throwJsonSafetyError(safeBoundaryId, 'max_nodes')
     if (item.depth > limits.maxDepth) throwJsonSafetyError(safeBoundaryId, 'max_depth')
@@ -76,18 +85,22 @@ export function assertJsonSafety(
       if (encoded > limits.maxStringBytes) throwJsonSafetyError(safeBoundaryId, 'max_string_bytes')
       bytes += encoded + 2
     } else if (Array.isArray(current)) {
+      if (active.has(current)) throwJsonSafetyError(safeBoundaryId, 'cycle')
+      active.add(current)
       if (current.length > limits.maxArrayItems) throwJsonSafetyError(safeBoundaryId, 'max_array_items')
       bytes += current.length + 2
+      stack.push({ value: current, depth: item.depth, leaving: true })
       for (let index = current.length - 1; index >= 0; index -= 1) {
         stack.push({ value: current[index], depth: item.depth + 1 })
       }
     } else if (typeof current === 'object') {
-      if (seen.has(current)) throwJsonSafetyError(safeBoundaryId, 'cycle')
+      if (active.has(current)) throwJsonSafetyError(safeBoundaryId, 'cycle')
       if (Object.getPrototypeOf(current) !== Object.prototype) throwJsonSafetyError(safeBoundaryId, 'non_plain_object')
-      seen.add(current)
+      active.add(current)
       const entries = Object.entries(current as Record<string, unknown>)
       if (entries.length > limits.maxObjectKeys) throwJsonSafetyError(safeBoundaryId, 'max_object_keys')
       bytes += entries.length + 2
+      stack.push({ value: current, depth: item.depth, leaving: true })
       for (let index = entries.length - 1; index >= 0; index -= 1) {
         const [key, child] = entries[index] ?? ['', undefined]
         const keyBytes = new TextEncoder().encode(key).byteLength

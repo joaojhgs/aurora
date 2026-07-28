@@ -100,11 +100,11 @@ class MemoryLocalDataSession implements LocalDataSession {
   readonly localTools: MemoryLocalToolStateRepository
   readonly peerGrants: MemoryPeerGrantMetadataRepository
   readonly localAudit: MemoryLocalAuditRepository
-  private readonly transactionRepositories: LocalDataRepositories
   private readonly nowMs: () => number
   private readonly closeBackendSession: () => void
   private collections: MutableLocalDataCollections
   private operationQueue: Promise<unknown> = Promise.resolve()
+  private activeTransactionToken: TransactionToken | null = null
   private closed = false
 
   constructor(options: MemoryLocalDataSessionOptions) {
@@ -114,29 +114,28 @@ class MemoryLocalDataSession implements LocalDataSession {
     this.nowMs = options.nowMs
     this.closeBackendSession = options.closeBackendSession
     this.collections = emptyLocalDataCollections()
-    this.conversations = new MemoryConversationRepository(this, 'queued')
-    this.memory = new MemoryLightweightMemoryRepository(this, 'queued')
-    this.localTools = new MemoryLocalToolStateRepository(this, 'queued')
-    this.peerGrants = new MemoryPeerGrantMetadataRepository(this, 'queued')
-    this.localAudit = new MemoryLocalAuditRepository(this, 'queued')
-    this.transactionRepositories = {
-      conversations: new MemoryConversationRepository(this, 'direct'),
-      memory: new MemoryLightweightMemoryRepository(this, 'direct'),
-      localTools: new MemoryLocalToolStateRepository(this, 'direct'),
-      peerGrants: new MemoryPeerGrantMetadataRepository(this, 'direct'),
-      localAudit: new MemoryLocalAuditRepository(this, 'direct')
-    }
+    this.conversations = new MemoryConversationRepository(this, { kind: 'queued' })
+    this.memory = new MemoryLightweightMemoryRepository(this, { kind: 'queued' })
+    this.localTools = new MemoryLocalToolStateRepository(this, { kind: 'queued' })
+    this.peerGrants = new MemoryPeerGrantMetadataRepository(this, { kind: 'queued' })
+    this.localAudit = new MemoryLocalAuditRepository(this, { kind: 'queued' })
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
+    if (this.activeTransactionToken !== null) throw transactionScopeError('nested_transaction')
     return this.enqueueOperation(async () => {
       this.assertOpen()
       const snapshot = cloneLocalDataCollections(this.collections)
+      const token: TransactionToken = { active: true }
+      this.activeTransactionToken = token
       try {
-        return await work(this.transactionRepositories)
+        return await work(this.createTransactionRepositories(token))
       } catch (error) {
         this.collections = snapshot
         throw error
+      } finally {
+        token.active = false
+        if (this.activeTransactionToken === token) this.activeTransactionToken = null
       }
     })
   }
@@ -199,7 +198,8 @@ class MemoryLocalDataSession implements LocalDataSession {
   }
 
   withRepositoryAccess<T>(access: RepositoryAccess, work: () => T | Promise<T>): Promise<T> {
-    if (access === 'direct') {
+    if (access.kind === 'transaction') {
+      this.assertTransactionToken(access.token)
       this.assertOpen()
       return Promise.resolve(work())
     }
@@ -215,9 +215,32 @@ class MemoryLocalDataSession implements LocalDataSession {
     this.operationQueue = result.then(() => undefined, () => undefined)
     return result
   }
+
+  private createTransactionRepositories(token: TransactionToken): LocalDataRepositories {
+    const access: RepositoryAccess = { kind: 'transaction', token }
+    return {
+      conversations: new MemoryConversationRepository(this, access),
+      memory: new MemoryLightweightMemoryRepository(this, access),
+      localTools: new MemoryLocalToolStateRepository(this, access),
+      peerGrants: new MemoryPeerGrantMetadataRepository(this, access),
+      localAudit: new MemoryLocalAuditRepository(this, access)
+    }
+  }
+
+  private assertTransactionToken(token: TransactionToken): void {
+    if (!token.active || this.activeTransactionToken !== token) {
+      throw transactionScopeError('expired_transaction_repository')
+    }
+  }
 }
 
-type RepositoryAccess = 'queued' | 'direct'
+interface TransactionToken {
+  active: boolean
+}
+
+type RepositoryAccess =
+  | { kind: 'queued' }
+  | { kind: 'transaction'; token: TransactionToken }
 
 class MemoryConversationRepository {
   constructor(
@@ -394,4 +417,12 @@ function requireUnique(values: string[], reason: string): Set<string> {
     seen.add(value)
   }
   return seen
+}
+
+function transactionScopeError(reason: string): LocalDataError {
+  return new LocalDataError('invalid_record', 'Invalid local data boundary: transaction.scope', {
+    boundaryId: 'transaction.scope',
+    validation: 'redacted',
+    issues: [{ code: reason, path: '' }]
+  })
 }
