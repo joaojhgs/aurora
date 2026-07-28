@@ -14,6 +14,7 @@ import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
 import { getAuroraSurfaceProfile } from './platform-surface'
 import type { ThinConnectionProfile } from './thin-connection-profile'
 import { scanQrInviteWithBrowserCamera } from './browser-qr-scanner'
+import { PRODUCT_COPY, productStatusCopy, safeErrorCopy } from './product-copy'
 import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Badge } from '#components/ui/badge'
 import { Button } from '#components/ui/button'
@@ -48,7 +49,9 @@ export interface WebThinConnectionPanelProps {
   onSelectProfile?: (profileId: string) => Promise<void>
 }
 
-export function WebThinConnectionPanel({
+export type HomeNodeConnectionPanelProps = WebThinConnectionPanelProps
+
+export function HomeNodeConnectionPanel({
   peer,
   mode,
   transportKind,
@@ -114,7 +117,7 @@ export function WebThinConnectionPanel({
 
   const connectInvite = async () => {
     if (!invite) {
-      setError('Paste a valid Aurora mesh invite before connecting WebRTC thin mode.')
+      setError('Paste a valid Aurora invite before continuing.')
       return
     }
     setError(null)
@@ -126,7 +129,7 @@ export function WebThinConnectionPanel({
         !parsedInvite
         || parsedInvite.profile.roomSecretRef !== webRtcProfile.roomSecretRef
       ) {
-        throw new Error('Aurora invite room-secret metadata is invalid.')
+        throw new Error('invalid_invite')
       }
       const currentProfile = draftProfile ?? defaultProfileForSurface(surface)
       const nextMode = currentProfile.mode === 'http-only'
@@ -151,7 +154,7 @@ export function WebThinConnectionPanel({
       await onInviteAccepted?.(webRtcProfile, inviteText)
       if (!configureOnly) await peer.connect(nextProfile.webrtcProfile)
     } catch (nextError) {
-      setError(redactUiDiagnostic(nextError instanceof Error ? nextError.message : String(nextError)))
+      setError(uiErrorMessage(nextError))
     } finally {
       setInvitePending(false)
     }
@@ -165,11 +168,11 @@ export function WebThinConnectionPanel({
     try {
       const text = await file.text()
       if (!decodeMeshInvite(text)) {
-        throw new Error('The selected file does not contain a valid Aurora invite.')
+        throw new Error('invalid_invite')
       }
       setInviteText(text)
     } catch (nextError) {
-      setError(redactUiDiagnostic(nextError instanceof Error ? nextError.message : String(nextError)))
+      setError(uiErrorMessage(nextError))
     }
   }
 
@@ -181,7 +184,7 @@ export function WebThinConnectionPanel({
       const scanned = await (onScanQr ?? scanQrInviteWithBrowserCamera)()
       if (scanned) setInviteText(scanned)
     } catch (nextError) {
-      setError(redactUiDiagnostic(nextError instanceof Error ? nextError.message : String(nextError)))
+      setError(uiErrorMessage(nextError))
     } finally {
       setInvitePending(false)
     }
@@ -197,7 +200,7 @@ export function WebThinConnectionPanel({
         await peer.connect()
       }
     } catch (nextError) {
-      setError(redactUiDiagnostic(nextError instanceof Error ? nextError.message : String(nextError)))
+      setError(uiErrorMessage(nextError))
     }
   }
 
@@ -208,7 +211,7 @@ export function WebThinConnectionPanel({
     try {
       await onSaveProfile(draftProfile)
     } catch (nextError) {
-      setProfileError(redactUiDiagnostic(nextError instanceof Error ? nextError.message : String(nextError)))
+      setProfileError(uiErrorMessage(nextError))
     } finally {
       setProfilePending(false)
     }
@@ -221,7 +224,7 @@ export function WebThinConnectionPanel({
     try {
       await onSelectProfile(profileId)
     } catch (nextError) {
-      setProfileError(redactUiDiagnostic(nextError instanceof Error ? nextError.message : String(nextError)))
+      setProfileError(uiErrorMessage(nextError))
     } finally {
       setProfilePending(false)
     }
@@ -247,12 +250,9 @@ export function WebThinConnectionPanel({
               <Network size={19} aria-hidden />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold tracking-tight">
-                Join an Aurora node
-              </h2>
+              <h2 className="text-base font-semibold tracking-tight">{PRODUCT_COPY.onboarding.choices.connect.label}</h2>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Your invite supplies signaling and connection details
-                automatically.
+                {PRODUCT_COPY.onboarding.choices.connect.description}
               </p>
             </div>
           </div>
@@ -260,7 +260,7 @@ export function WebThinConnectionPanel({
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="webthin-profile-node-name">
-                Node name
+                {PRODUCT_COPY.onboarding.invite.deviceName}
               </FieldLabel>
               <Input
                 id="webthin-profile-node-name"
@@ -274,12 +274,12 @@ export function WebThinConnectionPanel({
                 placeholder="Kitchen tablet"
               />
               <FieldDescription>
-                The name other Aurora devices will see for this client.
+                The name other Aurora devices will see.
               </FieldDescription>
             </Field>
 
             <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5">
-              <p className="text-sm font-medium">Add your invite</p>
+              <p className="text-sm font-medium">{PRODUCT_COPY.onboarding.invite.title}</p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 Use the invite created by the Aurora node you want to connect
                 to.
@@ -303,7 +303,7 @@ export function WebThinConnectionPanel({
                     onClick={() => void scanQr()}
                     disabled={invitePending}
                   >
-                    <QrCode size={16} aria-hidden /> Scan QR invite
+                    <QrCode size={16} aria-hidden /> {PRODUCT_COPY.onboarding.invite.scan}
                   </Button>
                 ) : null}
                 <Button
@@ -313,7 +313,7 @@ export function WebThinConnectionPanel({
                   onClick={() => inviteFileRef.current?.click()}
                   disabled={invitePending}
                 >
-                  <FileUp size={16} aria-hidden /> Open invite file
+                  <FileUp size={16} aria-hidden /> {PRODUCT_COPY.onboarding.invite.openFile}
                 </Button>
               </div>
             </div>
@@ -328,7 +328,7 @@ export function WebThinConnectionPanel({
 
             <Field>
               <FieldLabel htmlFor="webthin-invite">
-                Paste mesh invite
+                {PRODUCT_COPY.onboarding.invite.paste}
               </FieldLabel>
               <Textarea
                 id="webthin-invite"
@@ -367,26 +367,24 @@ export function WebThinConnectionPanel({
           {!snapshot.secureContext ? (
             <Alert variant="destructive">
               <AlertTriangle size={16} aria-hidden />
-              <AlertTitle>Secure context required</AlertTitle>
+              <AlertTitle>Secure connection needed</AlertTitle>
               <AlertDescription>
-                Use HTTPS, localhost, or a trusted native WebView to join with
-                WebRTC.
+                Open Aurora from HTTPS, localhost, or the desktop app before joining.
               </AlertDescription>
             </Alert>
           ) : null}
           {snapshot.status === 'disabled' ? (
             <Alert>
               <WifiOff size={16} aria-hidden />
-              <AlertTitle>WebRTC is unavailable</AlertTitle>
+              <AlertTitle>Connection unavailable</AlertTitle>
               <AlertDescription>
-                {snapshot.diagnostic ?? 'This client cannot import a mesh invite right now.'}
+                This device cannot use an invite right now.
               </AlertDescription>
             </Alert>
           ) : null}
           {snapshot.persistenceFallbackReason ? (
             <p role="status" className="text-xs leading-relaxed text-muted-foreground">
-              Secure persistent storage is unavailable; this connection will
-              remain in memory only. {snapshot.persistenceFallbackReason}
+              {PRODUCT_COPY.localData.temporary}
             </p>
           ) : null}
           {error ? (
@@ -401,11 +399,10 @@ export function WebThinConnectionPanel({
             disabled={connectDisabled || invitePending}
             onClick={() => void connectInvite()}
           >
-            {invitePending ? 'Saving…' : 'Save invite and continue'}
+            {invitePending ? PRODUCT_COPY.onboarding.invite.saving : PRODUCT_COPY.onboarding.invite.continue}
           </Button>
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-            Connection details come from the invite. You can edit advanced
-            transport settings later.
+            Connection details come from the invite. You can edit address settings later.
           </p>
         </CardContent>
       </Card>
@@ -413,24 +410,23 @@ export function WebThinConnectionPanel({
   }
 
   return (
-    <Card aria-label="WebRTC thin-shell connection" className="border-dashed">
+    <Card aria-label={PRODUCT_COPY.connection.panelTitle} className="border-dashed">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2 text-base"><Network size={18} aria-hidden /> Peer connection</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Network size={18} aria-hidden /> {PRODUCT_COPY.connection.panelTitle}</CardTitle>
             <CardDescription>
-              {surface.label} · {mode}. Connection details come from the saved
-              Aurora invite and can be changed at runtime.
+              Connection details come from the saved Aurora invite and can be changed later.
             </CardDescription>
           </div>
           <Badge variant={snapshot.status === 'authorized' ? 'default' : 'outline'}>
-            {configuredPeerOffline ? 'offline' : snapshot.status}
+            {configuredPeerOffline ? 'Offline' : connectionStatusLabel(snapshot.status)}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {draftProfile && onSaveProfile ? (
-          <FieldGroup aria-label="Thin connection profile">
+          <FieldGroup aria-label="Saved connection profile">
             {onSelectProfile && profiles.length > 0 ? <Field orientation="horizontal">
               <FieldLabel htmlFor="webthin-profile-select">Saved profile</FieldLabel>
               <Select
@@ -455,7 +451,7 @@ export function WebThinConnectionPanel({
               <Input id="webthin-profile-label" value={draftProfile.label} onChange={(event) => setDraftProfile({ ...draftProfile, label: event.currentTarget.value })} disabled={profilePending} />
             </Field>
             <Field>
-              <FieldLabel htmlFor="webthin-profile-mode">Connection mode</FieldLabel>
+              <FieldLabel htmlFor="webthin-profile-mode">{PRODUCT_COPY.connection.methodLabel}</FieldLabel>
               <Select
                 value={draftProfile.mode}
                 onValueChange={(value) => typeof value === 'string' && setDraftProfile({ ...draftProfile, mode: value as AuroraThinConnectionMode })}
@@ -474,21 +470,21 @@ export function WebThinConnectionPanel({
               </Select>
             </Field>
             <Field data-disabled={draftProfile.mode === 'webrtc-only' || undefined}>
-              <FieldLabel htmlFor="webthin-profile-gateway">HTTP Gateway endpoint</FieldLabel>
+              <FieldLabel htmlFor="webthin-profile-gateway">{PRODUCT_COPY.connection.addressLabel}</FieldLabel>
               <Input id="webthin-profile-gateway" type="url" value={draftProfile.gatewayUrl} onChange={(event) => setDraftProfile({ ...draftProfile, gatewayUrl: event.currentTarget.value })} disabled={profilePending || draftProfile.mode === 'webrtc-only'} autoComplete="off" />
             </Field>
             <Field data-disabled={draftProfile.mode === 'http-only' || undefined}>
-              <FieldLabel htmlFor="webthin-profile-signaling">WebSocket signaling endpoint</FieldLabel>
+              <FieldLabel htmlFor="webthin-profile-signaling">Invite service address</FieldLabel>
               <Input id="webthin-profile-signaling" type="url" value={draftProfile.signalingUrl} onChange={(event) => setDraftProfile({ ...draftProfile, signalingUrl: event.currentTarget.value })} disabled={profilePending || draftProfile.mode === 'http-only'} autoComplete="off" />
             </Field>
             <Field>
-              <FieldLabel htmlFor="webthin-profile-node-name">Node name</FieldLabel>
+              <FieldLabel htmlFor="webthin-profile-node-name">{PRODUCT_COPY.onboarding.invite.deviceName}</FieldLabel>
               <Input id="webthin-profile-node-name" value={draftProfile.nodeName} onChange={(event) => setDraftProfile({ ...draftProfile, nodeName: event.currentTarget.value })} disabled={profilePending} autoComplete="off" />
             </Field>
             <Field>
-              <FieldLabel htmlFor="webthin-profile-stable-peer">Stable peer ID</FieldLabel>
+              <FieldLabel htmlFor="webthin-profile-stable-peer">Device ID</FieldLabel>
               <Input id="webthin-profile-stable-peer" value={draftProfile.localStablePeerId} onChange={(event) => setDraftProfile({ ...draftProfile, localStablePeerId: event.currentTarget.value })} disabled={profilePending} autoComplete="off" />
-              <FieldDescription>{profileStoreEvidence ?? 'Only nonsecret endpoint and stable peer metadata are persisted.'}</FieldDescription>
+              <FieldDescription>Only address and device details are saved here.</FieldDescription>
             </Field>
             <div className="flex flex-wrap gap-2">
               <Button type="button" onClick={() => void saveProfile()} disabled={profilePending}>{profilePending ? 'Saving…' : 'Save and use profile'}</Button>
@@ -500,31 +496,31 @@ export function WebThinConnectionPanel({
         {mixedContentWarning ? (
           <Alert>
             <AlertTriangle size={16} aria-hidden />
-            <AlertTitle>Hosted HTTPS transport restriction</AlertTitle>
+            <AlertTitle>Address blocked</AlertTitle>
             <AlertDescription>{mixedContentWarning}</AlertDescription>
           </Alert>
         ) : null}
-        <div className="grid gap-2 text-sm md:grid-cols-3" aria-label="Thin transport diagnostics">
-          <Diagnostic icon={<ShieldCheck size={15} aria-hidden />} label="Secure context" value={snapshot.secureContext ? 'ready' : 'required'} />
-          <Diagnostic icon={<Link2 size={15} aria-hidden />} label="HTTP fallback" value={mode === 'webrtc-only' ? 'not configured' : snapshot.hasHttpFallback ? 'available' : 'not available'} />
+        <div className="grid gap-2 text-sm md:grid-cols-3" aria-label="Connection status">
+          <Diagnostic icon={<ShieldCheck size={15} aria-hidden />} label="Secure connection" value={snapshot.secureContext ? 'Ready' : 'Needed'} />
+          <Diagnostic icon={<Link2 size={15} aria-hidden />} label="Address backup" value={mode === 'webrtc-only' ? 'Not set' : snapshot.hasHttpFallback ? 'Available' : 'Not set'} />
           <Diagnostic
             icon={<LockKeyhole size={15} aria-hidden />}
-            label="Secrets"
-            value={snapshot.secretsPersisted ? `${snapshot.persistenceBackend ?? 'persistent vault'} (encrypted)` : 'memory-only fallback'}
+            label="Saved info"
+            value={snapshot.secretsPersisted ? PRODUCT_COPY.localData.saved : PRODUCT_COPY.localData.temporary}
           />
         </div>
         {!snapshot.secureContext ? (
           <Alert variant="destructive">
             <AlertTriangle size={16} aria-hidden />
-            <AlertTitle>Secure context required</AlertTitle>
-            <AlertDescription>Use HTTPS, localhost, or a trusted native WebView before enabling browser WebRTC and microphone capture.</AlertDescription>
+            <AlertTitle>Secure connection needed</AlertTitle>
+            <AlertDescription>Open Aurora from HTTPS, localhost, or the desktop app before joining.</AlertDescription>
           </Alert>
         ) : null}
         {snapshot.status === 'disabled' ? (
           <Alert>
             <WifiOff size={16} aria-hidden />
-            <AlertTitle>WebRTC rollout disabled</AlertTitle>
-            <AlertDescription>{snapshot.diagnostic ?? 'HTTP and desktop-local modes remain available.'}</AlertDescription>
+            <AlertTitle>Connection unavailable</AlertTitle>
+            <AlertDescription>This device cannot use an invite right now.</AlertDescription>
           </Alert>
         ) : null}
         {configuredPeerOffline ? (
@@ -532,30 +528,28 @@ export function WebThinConnectionPanel({
             <WifiOff size={16} aria-hidden />
             <AlertTitle>{peerLabel} is offline</AlertTitle>
             <AlertDescription>
-              WebRTC remains enabled. Aurora will retry the saved peer, and
-              other trusted mesh peers can provide capabilities when a route
-              becomes available.
+              Aurora will retry the saved device. Trusted devices stay visible while they reconnect.
             </AlertDescription>
           </Alert>
         ) : null}
         {snapshot.fallbackReason && snapshot.status === 'fallback-http' ? (
           <Alert>
             <WifiOff size={16} aria-hidden />
-            <AlertTitle>HTTP fallback active</AlertTitle>
-            <AlertDescription>{snapshot.fallbackReason}</AlertDescription>
+            <AlertTitle>{PRODUCT_COPY.connection.connected}</AlertTitle>
+            <AlertDescription>Aurora is connected with the saved address.</AlertDescription>
           </Alert>
         ) : null}
         {snapshot.pairingVerificationCode ? (
           <Alert>
             <CheckCircle2 size={16} aria-hidden />
-            <AlertTitle>Compare SAS on both devices</AlertTitle>
+            <AlertTitle>Compare this code on both devices</AlertTitle>
             <AlertDescription>
-              Verification code <strong className="font-mono">{snapshot.pairingVerificationCode}</strong>. Confirm only if the same code is shown on the Aurora host.
+              Verification code <strong className="font-mono">{snapshot.pairingVerificationCode}</strong>. Confirm only if the same code appears on the other device.
             </AlertDescription>
           </Alert>
         ) : null}
         <Field>
-          <FieldLabel htmlFor="webthin-invite">Mesh invite / deep link</FieldLabel>
+          <FieldLabel htmlFor="webthin-invite">{PRODUCT_COPY.onboarding.invite.paste}</FieldLabel>
           <Textarea
             id="webthin-invite"
             value={inviteText}
@@ -565,7 +559,7 @@ export function WebThinConnectionPanel({
             spellCheck={false}
           />
             <FieldDescription>
-            Invite secrets are removed from the URL. Native shells persist them in the platform credential store; hosted web encrypts them in IndexedDB when WebCrypto is available and otherwise reports a memory-only fallback.
+            Sensitive invite details are saved privately when this device supports it.
           </FieldDescription>
         </Field>
         <input
@@ -578,40 +572,42 @@ export function WebThinConnectionPanel({
         />
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={() => void scanQr()} disabled={invitePending}>
-            <QrCode size={15} aria-hidden /> Scan QR invite
+            <QrCode size={15} aria-hidden /> {PRODUCT_COPY.onboarding.invite.scan}
           </Button>
           <Button type="button" variant="outline" onClick={() => inviteFileRef.current?.click()} disabled={invitePending}>
-            <FileUp size={15} aria-hidden /> Open invite file
+            <FileUp size={15} aria-hidden /> {PRODUCT_COPY.onboarding.invite.openFile}
           </Button>
         </div>
         {summary ? (
           <dl className="grid gap-1 rounded-lg border bg-muted/30 p-3 text-sm md:grid-cols-2" aria-label="Invite preview">
-            <div><dt className="text-muted-foreground">Node</dt><dd>{summary.nodeName}</dd></div>
+            <div><dt className="text-muted-foreground">Device</dt><dd>{summary.nodeName}</dd></div>
             <div><dt className="text-muted-foreground">Room</dt><dd>{summary.room}</dd></div>
-            <div><dt className="text-muted-foreground">Signaling</dt><dd>{summary.signalingProvider} · {summary.brokerCount} broker(s)</dd></div>
-            <div><dt className="text-muted-foreground">Secret handling</dt><dd>{summary.includesPassword ? (snapshot.secretsPersisted ? 'encrypted browser vault' : 'memory-only fallback') : 'missing secret'}</dd></div>
+            <div><dt className="text-muted-foreground">Invite service</dt><dd>{summary.signalingProvider} · {summary.brokerCount} address{summary.brokerCount === 1 ? '' : 'es'}</dd></div>
+            <div><dt className="text-muted-foreground">Sensitive details</dt><dd>{summary.includesPassword ? (snapshot.secretsPersisted ? PRODUCT_COPY.localData.saved : PRODUCT_COPY.localData.temporary) : 'Invite is incomplete'}</dd></div>
           </dl>
         ) : null}
         {snapshot.persistenceFallbackReason ? (
           <p role="status" className="text-xs text-muted-foreground">
-            Persistent browser vault unavailable; continuing memory-only. {snapshot.persistenceFallbackReason}
+            {PRODUCT_COPY.localData.temporary}
           </p>
         ) : null}
         {error ?? visibleDiagnostic ? <p role="alert" className="text-sm text-destructive">{error ?? visibleDiagnostic}</p> : null}
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
         <Button type="button" disabled={connectDisabled || invitePending} onClick={() => void connectInvite()}>
-          {invitePending ? 'Saving…' : configureOnly ? 'Save invite and continue' : 'Use invite for WebRTC'}
+          {invitePending ? PRODUCT_COPY.onboarding.invite.saving : configureOnly ? PRODUCT_COPY.onboarding.invite.continue : PRODUCT_COPY.connection.useInvite}
         </Button>
-        {!configureOnly ? <Button type="button" variant="outline" disabled={mode === 'http-only' || !snapshot.secureContext} onClick={() => void reconnect()}>Reconnect WebRTC</Button> : null}
+        {!configureOnly ? <Button type="button" variant="outline" disabled={mode === 'http-only' || !snapshot.secureContext} onClick={() => void reconnect()}>{PRODUCT_COPY.connection.reconnect}</Button> : null}
         {snapshot.pairingSessionId ? (
-          <Button type="button" variant="outline" onClick={() => void peer.confirmPairing(snapshot.pairingSessionId!)}>Confirm SAS</Button>
+          <Button type="button" variant="outline" onClick={() => void peer.confirmPairing(snapshot.pairingSessionId!)}>Approve connection</Button>
         ) : null}
-        {!configureOnly ? <Button type="button" variant="ghost" onClick={() => void peer.disconnect('disconnect')}>Disconnect</Button> : null}
+        {!configureOnly ? <Button type="button" variant="ghost" onClick={() => void peer.disconnect('disconnect')}>{PRODUCT_COPY.connection.disconnect}</Button> : null}
       </CardFooter>
     </Card>
   )
 }
+
+export const WebThinConnectionPanel = HomeNodeConnectionPanel
 
 function defaultProfileForSurface(
   surface: ReturnType<typeof getAuroraSurfaceProfile>,
@@ -666,9 +662,39 @@ export function hostedMixedContentWarning(
   const insecureSignaling =
     profile.mode !== 'http-only' && /^ws:\/\//iu.test(profile.signalingUrl.trim())
   if (!insecureGateway && !insecureSignaling) return null
-  return 'Browsers block HTTP or unencrypted WebSocket endpoints from an HTTPS-hosted page even when CSP permits them. Use HTTPS/WSS for hosted web, or use a native thin shell when the Aurora service is intentionally cleartext.'
+  return 'This page cannot use that address. Use a secure address, localhost, or the desktop app.'
 }
 
+function uiErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message === 'invalid_invite') {
+    return productStatusCopy('item-read-failed').title
+  }
+  return safeErrorCopy(error).title
+}
+
+function connectionStatusLabel(status: BrowserWebRtcSnapshot['status']): string {
+  switch (status) {
+    case 'authorized':
+      return 'Connected'
+    case 'connecting':
+      return 'Connecting'
+    case 'pairing':
+      return 'Waiting for approval'
+    case 'idle':
+      return 'Ready'
+    case 'closed':
+    case 'failed':
+      return 'Offline'
+    case 'disabled':
+      return 'Unavailable'
+    case 'needs-invite':
+      return 'Needs invite'
+    case 'fallback-http':
+      return 'Connected'
+    default:
+      return 'Checking'
+  }
+}
 
 function redactUiDiagnostic(value: string): string {
   return value

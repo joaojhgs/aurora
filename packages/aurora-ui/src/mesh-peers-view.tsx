@@ -1009,13 +1009,13 @@ export function MeshPeersView({
   const meshEnabledField = configField(snapshot.config.fields, 'services.gateway.mesh_network.enabled')
   const meshEnabledChecked = configBoolean(snapshot.config.fields, 'services.gateway.mesh_network.enabled', snapshot.meshEnabled)
   const masterSwitchUnavailable = !canManageLocalServiceConfiguration
-    ? 'This thin client observes mesh state from its connected Aurora node; only a desktop-local node can change the mesh service switch.'
+    ? 'This device can view mesh state from its connected Aurora device, but only the home computer can change this switch.'
     : !meshEnabledField
-      ? 'services.gateway.mesh_network.enabled was not reported by config metadata or runtime status.'
+      ? 'Aurora did not report the switch state.'
       : !snapshot.config.editable
-        ? 'Config preview/apply metadata is unavailable; showing the last reported mesh state read-only.'
+        ? 'Changes are unavailable right now; showing the last reported mesh state.'
         : !onConfigChange
-          ? 'Config mutation handler is unavailable in this surface.'
+          ? 'Changes are unavailable on this screen.'
           : null
   const masterSwitchDisabled =
     !canManageLocalServiceConfiguration
@@ -1060,7 +1060,7 @@ export function MeshPeersView({
         {mutationError ? <p className="text-sm text-destructive">Peer action failed: {mutationError}</p> : null}
         {configMutationError ? <p className="text-sm text-destructive">Configuration update failed: {configMutationError}</p> : null}
         {inviteImport.error ? <p className="text-sm text-destructive">Invite import failed: {inviteImport.error}</p> : null}
-        {thinPeerMutationError ? <p className="text-sm text-destructive">Thin peer action failed: {thinPeerMutationError}</p> : null}
+        {thinPeerMutationError ? <p className="text-sm text-destructive">Connection action failed: {thinPeerMutationError}</p> : null}
       </div>
 
       <ThinPeerConnectionStatus
@@ -1079,7 +1079,7 @@ export function MeshPeersView({
           <CardDescription>
             {canManageLocalServiceConfiguration
               ? <>Master switch for P2P mesh (<code>gateway.mesh_network.enabled</code>). Turning this off disconnects all peers.</>
-              : <>Mesh state reported by the connected Aurora node. Thin clients cannot start or stop the remote mesh service.</>}
+              : <>Mesh state reported by the connected Aurora device. This device cannot start or stop the remote mesh service.</>}
           </CardDescription>
           <CardAction>
             <Switch
@@ -1175,7 +1175,7 @@ function ThinPeerConnectionStatus({
               {snapshot.nodeName || 'Invited Aurora node'}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Direct WebRTC peer · compare this code on both Auroras
+              Direct device connection · compare this code on both Auroras
             </p>
           </div>
           <div className="flex flex-col gap-0.5">
@@ -1202,8 +1202,8 @@ function ThinPeerConnectionStatus({
         <RadioTower />
         <AlertTitle>Connecting to the invited Aurora node</AlertTitle>
         <AlertDescription>
-          WebRTC signaling is active. The bilateral verification request will
-          appear here when the peer DataChannel is ready.
+          Aurora is preparing a direct connection. The verification request
+          will appear here when both devices are ready.
         </AlertDescription>
       </Alert>
     )
@@ -1223,9 +1223,8 @@ function ThinPeerConnectionStatus({
         <AlertTitle>{peerName} is offline</AlertTitle>
         <AlertDescription className="flex flex-col items-start gap-2">
           <span>
-            WebRTC remains enabled with the saved peer identity. Aurora can
-            retry the connection; saved peers and last-known capabilities stay
-            visible as stale until a trusted route reconnects.
+            Aurora can retry the connection. Saved devices and last-known
+            services stay visible until a trusted connection returns.
           </span>
           {onReconnect ? (
             <Button type="button" size="sm" variant="outline" onClick={onReconnect}>
@@ -1369,7 +1368,7 @@ function MeshSummaryCards({ snapshot, connectedPeers, pendingPeers }: { snapshot
     {
       label: 'Connected peers',
       value: String(connectedPeers),
-      detail: `${snapshot.runtimePeerCount} runtime / ${snapshot.liveSessionCount} WebRTC sessions`,
+      detail: `${snapshot.runtimePeerCount} known / ${snapshot.liveSessionCount} active sessions`,
       icon: UsersRound,
     },
     {
@@ -1379,9 +1378,9 @@ function MeshSummaryCards({ snapshot, connectedPeers, pendingPeers }: { snapshot
       icon: ShieldCheck,
     },
     {
-      label: 'Runtime',
+      label: 'Availability',
       value: snapshot.meshEnabled ? 'enabled' : 'disabled',
-      detail: `mesh ${snapshot.meshStarted ? 'started' : 'stopped'} · webrtc ${snapshot.webrtcStarted ? 'started' : 'stopped'}`,
+      detail: `network ${snapshot.meshStarted ? 'online' : 'offline'} · direct connections ${snapshot.webrtcStarted ? 'ready' : 'off'}`,
       icon: Wifi,
     },
   ]
@@ -1646,7 +1645,7 @@ function PeerDetailSheet({ peer, open, onOpenChange }: { peer: MeshPeerRow | nul
       <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>{peer?.nodeName ?? 'Peer details'}</SheetTitle>
-          <SheetDescription>Stable identity, trust grants, transport status, shared service summary, and route compatibility.</SheetDescription>
+          <SheetDescription>Device identity, trust, connection status, shared service summary, and compatibility.</SheetDescription>
         </SheetHeader>
         {peer ? (
           <div className="flex flex-col gap-4 px-4 pb-4">
@@ -1825,8 +1824,9 @@ function MeshSettingsDialog({ open, snapshot, disabled, pendingKey, mutationErro
             <Settings2 /> Mesh settings
           </DialogTitle>
           <DialogDescription>
-            Everything mesh and WebRTC on this node: identity, transport, signaling, encryption, and pairing defaults (<code>gateway.mesh_network</code>, <code>gateway.webrtc</code>,{' '}
-            <code>gateway.signaling_mqtt</code>, <code>auth</code>). Changes go through config preview and apply.
+            Choose this device&apos;s mesh identity, connection behavior,
+            encryption, and pairing defaults. Changes are reviewed before they
+            take effect.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
@@ -2213,17 +2213,17 @@ function MeshRuntimeOverview({ snapshot, route, expanded = false }: { snapshot: 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Router /> Runtime state
+            <Router /> Local mesh state
           </CardTitle>
-          <CardDescription>Local mesh status and route availability.</CardDescription>
+          <CardDescription>Local mesh status and page availability.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <DetailItem label="Mesh" value={snapshot.meshEnabled ? 'enabled' : 'disabled'} />
           <DetailItem label="Started" value={snapshot.meshStarted ? 'yes' : 'no'} />
           <DetailItem label="WebRTC" value={snapshot.webrtcStarted ? 'started' : 'not started'} />
-          <DetailItem label="Route" value={`${route.state}: ${presentableSignal(route.explanation)}`} />
+          <DetailItem label="Page" value={`${route.state}: ${presentableSignal(route.explanation)}`} />
           <DetailItem label="Peer list" value={`${snapshot.listState}: ${snapshot.listReason}`} />
-          <DetailItem label="Mutations" value={`${snapshot.mutationState}: ${snapshot.mutationReason}`} />
+          <DetailItem label="Changes" value={`${snapshot.mutationState}: ${snapshot.mutationReason}`} />
         </CardContent>
       </Card>
       <Card>
@@ -2234,7 +2234,7 @@ function MeshRuntimeOverview({ snapshot, route, expanded = false }: { snapshot: 
           <CardDescription>High-level service summary only; manage services on their dedicated pages.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {snapshot.peers.flatMap((peer) => peer.services).length === 0 ? <p className="text-sm text-muted-foreground">No shared modules reported by peer manifests.</p> : <PermissionBadges permissions={[...new Set(snapshot.peers.flatMap((peer) => peer.services))]} empty="No shared modules" />}
+          {snapshot.peers.flatMap((peer) => peer.services).length === 0 ? <p className="text-sm text-muted-foreground">No shared services reported by peers.</p> : <PermissionBadges permissions={[...new Set(snapshot.peers.flatMap((peer) => peer.services))]} empty="No shared services" />}
           {expanded ? <DetailItem label="Compatibility failures" value={snapshot.compatibilityFailures.join('; ') || 'none reported'} /> : null}
         </CardContent>
       </Card>
@@ -2247,7 +2247,7 @@ function LiveSessionsPanel({ sessions, fixtureOnly }: { sessions: MeshLiveSessio
     <Card>
       <CardHeader>
         <CardTitle>Active WebRTC sessions</CardTitle>
-        <CardDescription>Transport session IDs stay separate from stable Auth peer identity.</CardDescription>
+        <CardDescription>Active connection details are shown separately from saved device trust.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {sessions.length === 0 ? (
@@ -2258,7 +2258,7 @@ function LiveSessionsPanel({ sessions, fixtureOnly }: { sessions: MeshLiveSessio
               <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <DetailItem label="Session" value={session.sessionId} />
                 <DetailItem label="Peer" value={`${session.nodeName} (${session.stablePeerId})`} />
-                <DetailItem label="Transport" value={`${session.connectionState}; ICE ${session.iceState}; channel ${session.dataChannelState}`} />
+                <DetailItem label="Connection" value={`${session.connectionState}; ICE ${session.iceState}; channel ${session.dataChannelState}`} />
                 <DetailItem label="Auth" value={session.authState} />
                 <DetailItem label="Latency" value={session.latencyMs === null ? 'measuring' : formatLatencyMs(session.latencyMs)} />
                 <DetailItem label="Pairing" value={session.pairingState} />
@@ -2278,7 +2278,7 @@ function DevicesPanel({ devices, fixtureOnly }: { devices: MeshDeviceRow[]; fixt
     <Card>
       <CardHeader>
         <CardTitle>Auth device records</CardTitle>
-        <CardDescription>Device trust is shown separately from mesh peer trust and live transport state.</CardDescription>
+        <CardDescription>Device trust is shown separately from live connection state.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {devices.length === 0 ? (
@@ -2309,7 +2309,7 @@ function WarningsPanel({ snapshot }: { snapshot: MeshPeersSnapshot }) {
     <Card>
       <CardHeader>
         <CardTitle>Warnings and compatibility</CardTitle>
-        <CardDescription>Useful runtime details for troubleshooting peer routing.</CardDescription>
+        <CardDescription>Useful details for troubleshooting peer connections.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {warnings.length === 0 ? (

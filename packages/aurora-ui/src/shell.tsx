@@ -15,6 +15,7 @@ import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from "./nav";
 import type { AuroraNavItem } from "./nav";
 import type { AuroraNavSection } from "./nav";
 import { getAuroraSurfaceProfile } from "./platform-surface";
+import { PRODUCT_COPY } from "./product-copy";
 import type { AuroraShellSnapshot, RouteAvailability } from "./shell-data";
 import { CapabilityDrawer } from "./state-surface";
 import {
@@ -122,7 +123,7 @@ export function AppShell({
             </Avatar>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium">{shellIdentityLabel(sessionIsAdmin)}</p>
-              <p className="truncate text-[10.5px] text-muted-foreground">{shellAccessLabel(sessionIsAdmin)}</p>
+              <p className="truncate text-[10.5px] text-muted-foreground">{shellAccessLabel(sessionIsAdmin, snapshot)}</p>
             </div>
           </div>
         </div>
@@ -163,15 +164,15 @@ export function AppShell({
           </div>
           <span
             className="aui-runtime-chip shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
-            aria-label="Aurora version and runtime state"
+            aria-label="Aurora version and connection state"
           >
             v0.9.2{" "}
             <strong className={snapshot.loadState === "error" ? "text-destructive" : "text-success"}>
               · {shellRuntimeStateLabel(snapshot)}
             </strong>
           </span>
-          <span className="sr-only" aria-label="Routes">
-            Routes {snapshot.availableCount}/{snapshot.routeCount} ready
+          <span className="sr-only" aria-label="Aurora readiness">
+            Aurora pages are ready
           </span>
           <Button
             type="button"
@@ -257,7 +258,7 @@ function MobileNavigationSheet({
         </Avatar>
         <div>
           <p className="text-xs font-medium">{shellIdentityLabel(sessionIsAdmin)}</p>
-          <p className="text-[10.5px] text-muted-foreground">{shellAccessLabel(sessionIsAdmin)}</p>
+          <p className="text-[10.5px] text-muted-foreground">{shellAccessLabel(sessionIsAdmin, snapshot)}</p>
         </div>
       </div>
     </div>
@@ -282,7 +283,7 @@ function MobileSheetRouteSummary({
       </div>
       <div className="aui-mobile-sheet-summary-badges mt-2 flex flex-wrap items-center gap-1.5" aria-label="Current mobile route state">
         <EvidenceBadge label={route ? shellRouteBadgeLabel(route) : "Ready"} />
-        <EvidenceBadge label={`${snapshot.availableCount}/${snapshot.routeCount} ready`} />
+        <EvidenceBadge label={snapshot.loadState === "ready" ? "Ready" : "Checking"} />
       </div>
     </Card>
   );
@@ -409,7 +410,7 @@ function shellNavigationSections(sessionIsAdmin: boolean): AuroraNavSection[] {
     .find((item) => item.id === "settings");
   return auroraNavSections.flatMap((section) => {
     if (section.label === "Operate · admin only") return [];
-    if (section.label !== "Runtime" || !settings) return [section];
+    if (section.label !== "Configure" || !settings) return [section];
     return [{ ...section, items: [settings, ...section.items] }];
   });
 }
@@ -437,7 +438,7 @@ function RouteCard({ route }: { route: RouteAvailability }) {
       <p className="mt-2 text-sm text-muted-foreground">{presentableSignal(route.explanation)}</p>
       <dl className="mt-3 flex flex-col gap-1 text-sm">
         <div className="flex justify-between gap-2">
-          <dt className="text-muted-foreground">Provider</dt>
+          <dt className="text-muted-foreground">Source</dt>
           <dd className="text-right">{route.providerLabel}</dd>
         </div>
         <div className="flex justify-between gap-2">
@@ -544,8 +545,8 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
   return [
     {
       id: "routes",
-      title: healthy ? "Routes ready" : "Setup required",
-      detail: `${snapshot.availableCount}/${snapshot.routeCount} routes available`,
+      title: healthy ? "Aurora ready" : "Setup required",
+      detail: healthy ? "Pages and actions are available" : "Check the connected device",
       when: "now",
       icon: healthy ? CheckCircle2 : Clock3,
       tone: healthy ? "good" : "warn",
@@ -553,7 +554,7 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
     {
       id: "mode",
       title: shellModeLabel(snapshot, runtimeMode),
-      detail: "Operator cockpit connected to the Aurora route map",
+      detail: "Connected to Aurora",
       when: "live",
       icon: Network,
       tone: "info",
@@ -562,7 +563,7 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
       id: "privacy",
       title: "Privacy guard active",
       detail: snapshot.secretsRedacted
-        ? "Secrets protected in UI surfaces"
+        ? "Sensitive details stay hidden"
         : "Redaction state pending",
       when: "live",
       icon: ShieldCheck,
@@ -578,12 +579,12 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
     },
     {
       id: "native",
-      title: "Platform surface",
+      title: "Device profile",
       detail: snapshot.nativeAvailable
         ? `Native ${snapshot.nativePlatform}`
         : surface.usesNativeShell
-          ? `${surface.label} shell active`
-          : `${surface.label}; native controls unavailable`,
+          ? productSurfaceLabel(snapshot, runtimeMode)
+          : `${productSurfaceLabel(snapshot, runtimeMode)}; local controls unavailable`,
       when: "policy",
       icon: snapshot.nativeAvailable ? CheckCircle2 : Clock3,
       tone: snapshot.nativeAvailable ? "good" : "info",
@@ -592,8 +593,7 @@ function shellActivityEvents(snapshot: AuroraShellSnapshot, runtimeMode?: string
 }
 
 function shellSurfaceLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
-  const label = shellSurfaceProfile(snapshot, runtimeMode).label;
-  return label.replace(/\b(local|thin)\b/g, (word) => word[0]!.toUpperCase() + word.slice(1));
+  return productSurfaceLabel(snapshot, runtimeMode);
 }
 
 function shellHealthLabel(snapshot: AuroraShellSnapshot): string {
@@ -618,8 +618,8 @@ function shellIdentityBadgeLabel(sessionIsAdmin: boolean): string {
   return sessionIsAdmin ? "Admin" : "Member";
 }
 
-function shellAccessLabel(sessionIsAdmin: boolean): string {
-  return sessionIsAdmin ? "Full access" : "Scoped access";
+function shellAccessLabel(sessionIsAdmin: boolean, snapshot: AuroraShellSnapshot): string {
+  return sessionIsAdmin ? `${PRODUCT_COPY.permissions.administrator} on ${shellNodeLabel(snapshot)}` : PRODUCT_COPY.permissions.limited;
 }
 
 function shellRuntimeStateLabel(snapshot: AuroraShellSnapshot): string {
@@ -642,7 +642,7 @@ function shellRouteBadgeLabel(route: RouteAvailability): string {
 }
 
 function shellModeLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
-  return shellSurfaceProfile(snapshot, runtimeMode).label;
+  return productSurfaceLabel(snapshot, runtimeMode);
 }
 
 function shellSurfaceProfile(snapshot: AuroraShellSnapshot, runtimeMode?: string) {
@@ -651,6 +651,14 @@ function shellSurfaceProfile(snapshot: AuroraShellSnapshot, runtimeMode?: string
     transportKind: snapshot.transportKind,
     nativePlatform: snapshot.nativePlatform,
   });
+}
+
+function productSurfaceLabel(snapshot: AuroraShellSnapshot, runtimeMode?: string): string {
+  const profile = shellSurfaceProfile(snapshot, runtimeMode);
+  if (profile.usesLocalSidecar) return "Aurora is running on this computer";
+  if (snapshot.loadState === "error") return `${shellNodeLabel(snapshot)} is offline`;
+  if (profile.isMobile) return "This device is available";
+  return `Connected to ${shellNodeLabel(snapshot)}`;
 }
 
 function normalizePath(path: string): string {

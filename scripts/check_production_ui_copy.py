@@ -82,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     paths = [repo_root / path for path in (args.paths or DEFAULT_PATHS)]
     findings: list[Finding] = []
     for path in expand_paths(paths):
-      findings.extend(scan_file(path))
+        findings.extend(scan_file(path))
 
     if findings:
         for finding in findings:
@@ -148,11 +148,25 @@ def rendered_literals(text: str) -> list[tuple[int, str]]:
     for match in attr_pattern.finditer(text):
         results.append((line_for(match.start()), next(group for group in match.groups() if group and group not in {"'", '"'})))
 
-    jsx_text_pattern = re.compile(r">([^<>{}][^<>{}]*(?:\n[^<>{}]*)*)<")
-    for match in jsx_text_pattern.finditer(text):
-        value = match.group(1)
-        if value.strip():
-            results.append((line_for(match.start(1)), value))
+    for index, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith((
+            "const ",
+            "let ",
+            "return ",
+            "if ",
+            "?",
+            ":",
+            "}",
+            "{",
+            "case ",
+            "function ",
+        )):
+            continue
+        for match in re.finditer(r">([^<>{}]+)<", line):
+            value = match.group(1)
+            if value.strip():
+                results.append((index, value))
 
     product_copy_pattern = re.compile(r"\b(?:label|title|description|action|saved|temporary|ownedElsewhere|unchanged|lost|panelTitle|addressLabel|methodLabel|deviceName|scan|openFile|paste|continue|saving|advanced|connectedDevice|localFeatures|approvals|approve|deny|remove|needed|limited|administrator)\s*:\s*(['\"])(.*?)\1", re.S)
     for match in product_copy_pattern.finditer(text):

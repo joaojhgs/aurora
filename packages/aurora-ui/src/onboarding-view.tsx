@@ -6,6 +6,7 @@ import type { AuroraClient, AuroraError, AuthSessionSnapshot, AvailabilityState 
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { presentableSignal } from './status-badges'
 import { getAuroraSurfaceProfile } from './platform-surface'
+import { PRODUCT_COPY, productStatusCopy, safeErrorCopy } from './product-copy'
 import { Button, FormField } from './primitives'
 import { buttonVariants } from '#components/ui/button'
 import { Input } from '#components/ui/input'
@@ -82,7 +83,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
   const [selectedModeId, setSelectedModeId] = useState(() => defaultModeId(client.transport.kind, snapshot, userAgent))
   const [modePreferenceReady, setModePreferenceReady] = useState(() => !modePreferenceStore)
-  const [modePreferenceEvidence, setModePreferenceEvidence] = useState(() => modePreferenceStore?.evidence ?? 'mode preference memory only')
+  const [modePreferenceEvidence, setModePreferenceEvidence] = useState(() => modePreferenceStore?.evidence ?? 'Saved for this session')
   const modeSelectionTouchedRef = useRef(false)
   const [endpoint, setEndpoint] = useState('')
   const [username, setUsername] = useState('')
@@ -114,30 +115,30 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     let cancelled = false
     if (!modePreferenceStore) {
       setModePreferenceReady(true)
-      setModePreferenceEvidence('mode preference memory only')
+      setModePreferenceEvidence('Saved for this session')
       return () => {
         cancelled = true
       }
     }
     modeSelectionTouchedRef.current = false
     setModePreferenceReady(false)
-    setModePreferenceEvidence(`${modePreferenceStore.evidence} · checking saved mode`)
+    setModePreferenceEvidence('Checking saved choice')
     void modePreferenceStore.readSelectedMode().then(
       (modeId) => {
         if (cancelled) return
         if (modeId && isSupportedModeId(modeId) && !modeSelectionTouchedRef.current) {
           setSelectedModeId(modeId)
-          setModePreferenceEvidence(`${modePreferenceStore.evidence} · restored ${modeLabel(modeId)}`)
+          setModePreferenceEvidence(`Restored ${modeLabel(modeId)}`)
         } else if (modeId && !isSupportedModeId(modeId)) {
-          setModePreferenceEvidence(`${modePreferenceStore.evidence} · ignored unsupported saved mode`)
+          setModePreferenceEvidence('Choose how to use this device')
         } else {
-          setModePreferenceEvidence(`${modePreferenceStore.evidence} · no saved mode`)
+          setModePreferenceEvidence('Choose how to use this device')
         }
         setModePreferenceReady(true)
       },
       () => {
         if (!cancelled) {
-          setModePreferenceEvidence(`${modePreferenceStore.evidence} · restore unavailable; select a mode to retry save`)
+          setModePreferenceEvidence('Choose how to use this device')
           setModePreferenceReady(true)
         }
       },
@@ -152,12 +153,12 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     modeSelectionTouchedRef.current = true
     setSelectedModeId(modeId)
     if (!modePreferenceStore) return
-    setModePreferenceEvidence(`${modePreferenceStore.evidence} · saving ${modeLabel(modeId)}`)
+    setModePreferenceEvidence(`Saving ${modeLabel(modeId)}`)
     void modePreferenceStore.writeSelectedMode(modeId).then(
       (ok) => {
-        setModePreferenceEvidence(ok ? `${modePreferenceStore.evidence} · saved ${modeLabel(modeId)}` : `${modePreferenceStore.evidence} · save unavailable`)
+        setModePreferenceEvidence(ok ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
       },
-      () => setModePreferenceEvidence(`${modePreferenceStore.evidence} · save unavailable`),
+      () => setModePreferenceEvidence('Choice not saved'),
     )
   }
 
@@ -174,7 +175,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     if (result.ok) {
       setToken(result.data.token)
       setPassword('')
-      setMessage('Signed in. Your token remains in memory for this session and is not persisted in browser storage.')
+      setMessage('Signed in for this session.')
       return
     }
     setMessage(onboardingErrorMessage(result.error))
@@ -224,7 +225,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     setBusy(null)
     if (result.ok) {
       setToken(result.data.token)
-      setMessage('Pairing complete. Your token remains in memory for this session and is not persisted in browser storage.')
+      setMessage('Pairing complete.')
       return
     }
     setMessage(onboardingErrorMessage(result.error))
@@ -250,15 +251,9 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
             <p className="text-[11px] font-semibold tracking-[0.12em] text-primary uppercase">
               First-run setup
             </p>
-            <h1
-              id="onboarding-title"
-              className="mt-1.5 text-2xl font-semibold tracking-tight"
-            >
-              Connect to Aurora
-            </h1>
+            <h1 id="onboarding-title" className="mt-1.5 text-2xl font-semibold tracking-tight">{PRODUCT_COPY.onboarding.title}</h1>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Name this device, then use the invite from the Aurora node you
-              want to join.
+              Name this device, then use an invite from Aurora.
             </p>
           </div>
           <div data-step="thin-connection">{thinConnectionPanel}</div>
@@ -271,10 +266,10 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     <section className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-10" aria-labelledby="onboarding-title">
       <div className="text-center">
         <h1 id="onboarding-title" className="text-xl font-semibold tracking-tight">
-          Welcome to Aurora
+          {PRODUCT_COPY.onboarding.title}
         </h1>
         <p className="mt-1.5 text-[13px] text-muted-foreground">
-          {setupRequired ? 'Configure this thin client before entering Aurora.' : 'We auto-detect how this client is running, then walk through the setup that matches it.'}
+          {setupRequired ? 'Use an invite to connect this device.' : 'Choose how you want to use Aurora on this device.'}
         </p>
       </div>
 
@@ -287,8 +282,8 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
       {wizardStep === 'detect' ? (
         <div className="flex flex-col gap-4" data-step="detect">
           <div>
-            <p className="mb-2.5 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">Detected installation</p>
-            <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="Installation type">
+            <p className="mb-2.5 text-[11.5px] font-semibold tracking-wide text-muted-foreground uppercase">First step</p>
+            <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="Aurora setup choice">
               {model.modes.map((mode) => {
                 const active = mode.id === model.selectedModeId
                 return (
@@ -318,9 +313,9 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
               })}
             </div>
           </div>
-          <p className="text-[11.5px] text-muted-foreground">Not right? Pick the correct installation above, then continue.</p>
+          <p className="text-[11.5px] text-muted-foreground">{modePreferenceEvidence}</p>
           <Button variant="primary" onClick={() => setWizardStep('setup')} disabled={!modePreferenceReady}>
-            Start guided setup
+            Continue
           </Button>
         </div>
       ) : null}
@@ -333,7 +328,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
               <strong className="text-sm font-semibold">{model.selectedMode.label}</strong>
             </div>
             <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setWizardStep('detect')}>
-              Change
+              Change choice
             </button>
           </div>
 
@@ -378,9 +373,9 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
 
           <section aria-labelledby="gateway-title" className="flex flex-col gap-2.5">
             <h2 id="gateway-title" className="text-sm font-semibold">
-              Gateway address
+              {PRODUCT_COPY.connection.addressLabel}
             </h2>
-            <FormField label="Gateway or local node URL" htmlFor="aurora-endpoint">
+            <FormField label={PRODUCT_COPY.connection.addressLabel} htmlFor="aurora-endpoint">
               <Input
                 id="aurora-endpoint"
                 value={endpoint}
@@ -389,7 +384,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
                 inputMode="url"
               />
             </FormField>
-            <Button variant="outline" disabled={!endpoint.trim()} onClick={() => setMessage('Gateway address saved for this setup session.')}>
+            <Button variant="outline" disabled={!endpoint.trim()} onClick={() => setMessage('Address saved for this setup session.')}>
               Use this address
             </Button>
           </section>
@@ -431,7 +426,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
 
           <section aria-labelledby="pairing-title" className="flex flex-col gap-2.5">
             <h2 id="pairing-title" className="text-sm font-semibold">
-              Pair this device
+              Approve this device
             </h2>
             <FormField label="Device name" htmlFor="aurora-device-name">
               <Input id="aurora-device-name" value={pairingDevice} onChange={(event) => setPairingDevice(event.currentTarget.value)} />
@@ -463,14 +458,14 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
       {wizardStep === 'done' ? (
         <div className="flex flex-col items-center gap-3 py-6 text-center" data-step="done">
           <Check size={40} aria-hidden className="text-success" />
-          <h2 className="text-base font-semibold">You're all set</h2>
-          <p className="text-[12.5px] text-muted-foreground">{model.selectedMode.label} is configured. You can revisit any of this from Settings later.</p>
+          <h2 className="text-base font-semibold">{PRODUCT_COPY.onboarding.done.title}</h2>
+          <p className="text-[12.5px] text-muted-foreground">{model.selectedMode.label} is ready. You can revisit this from Settings later.</p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setWizardStep('detect')}>
               Run setup again
             </Button>
             <a className={cn(buttonVariants({ variant: 'default' }))} href={model.cockpitHref}>
-              Go to Assistant
+              {PRODUCT_COPY.onboarding.done.action}
             </a>
           </div>
         </div>
@@ -488,10 +483,10 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
 export function buildOnboardingViewModel({ client, snapshot, selectedModeId, endpoint, userAgent }: { client: AuroraClient; snapshot: AuroraShellSnapshot; selectedModeId?: string; endpoint?: string; userAgent?: string }): OnboardingViewModel {
   const session = client.auth.refreshClock()
   const modes = deploymentModes(client.transport.kind, snapshot, userAgent)
-  const selected = selectedModeId && modes.some((mode) => mode.id === selectedModeId && !mode.disabled) ? selectedModeId : (modes.find((mode) => !mode.disabled)?.id ?? modes[0]?.id ?? 'desktop-web-thin')
+  const selected = selectedModeId && modes.some((mode) => mode.id === selectedModeId && !mode.disabled) ? selectedModeId : (modes.find((mode) => !mode.disabled)?.id ?? modes[0]?.id ?? 'connect-to-aurora')
   const authState = authAvailability(session)
   const pairingState = pairingAvailability(session, routeById(snapshot, 'mesh'))
-  const selectedMode = modes.find((mode) => mode.id === selected) ?? modes[0] ?? mode('desktop-web-thin', 'Desktop Web thin', 'Remote desktop', 'No setup modes are available.', 'unsupported', 'No SDK transport status.', 'Reload the Aurora shell after the SDK initializes.')
+  const selectedMode = modes.find((mode) => mode.id === selected) ?? modes[0] ?? mode('connect-to-aurora', PRODUCT_COPY.onboarding.choices.connect.label, PRODUCT_COPY.mesh.connectedDevice, 'No setup choices are available.', 'unsupported', 'Aurora is not ready.', 'Reload Aurora after it starts.')
   const steps = setupSteps({
     session,
     snapshot,
@@ -525,16 +520,19 @@ function deploymentModes(transportKind: string, snapshot: AuroraShellSnapshot, u
     nativePlatform: snapshot.nativePlatform,
     userAgent,
   })
+  const connectState = desktopThinState(snapshot, transportKind)
+  const makeAvailableState = profile.isMobile
+    ? mobileNativeState(snapshot, transportKind, userAgent)
+    : desktopThinState(snapshot, transportKind)
   const desktopNative = desktopLocalState(snapshot, transportKind)
-  const desktopWeb = desktopThinState(snapshot, transportKind)
-  const mobileNative = mobileNativeState(snapshot, transportKind, userAgent)
-  const mobileWeb = mobileWebThinState(snapshot, transportKind, userAgent)
-  return [
-    mode('desktop-native', 'Desktop Native', 'Desktop local', 'Tauri desktop local mode with the supervised Python sidecar and loopback Gateway when available.', desktopNative.state, `${profile.label}; ${desktopNative.evidence}`, desktopNative.repair),
-    mode('desktop-web-thin', 'Desktop Web thin', 'Remote desktop/web', 'Browser or Tauri thin shell connected to an operator-managed Aurora Gateway; no local Python sidecar is claimed.', desktopWeb.state, `${profile.label}; ${desktopWeb.evidence}`, desktopWeb.repair),
-    mode('mobile-native', 'Mobile Native', 'Native mobile shell', 'Android or iOS native shell using platform manifest evidence for storage, permissions, and app-owned invocation surfaces.', mobileNative.state, `${profile.label}; ${mobileNative.evidence}`, mobileNative.repair),
-    mode('mobile-web-thin', 'Mobile Web thin', 'Mobile browser', 'Mobile browser connected to a remote Gateway with focused WebView/browser capture only; durable background wake requires native adapters.', mobileWeb.state, `${profile.label}; ${mobileWeb.evidence}`, mobileWeb.repair),
+  const modes = [
+    mode('connect-to-aurora', PRODUCT_COPY.onboarding.choices.connect.label, PRODUCT_COPY.mesh.connectedDevice, PRODUCT_COPY.onboarding.choices.connect.description, connectState.state, connectState.evidence, connectState.repair),
+    mode('make-this-device-available', PRODUCT_COPY.onboarding.choices.makeAvailable.label, PRODUCT_COPY.mesh.localFeatures, PRODUCT_COPY.onboarding.choices.makeAvailable.description, makeAvailableState.state, makeAvailableState.evidence, makeAvailableState.repair),
   ]
+  if (transportKind === 'tauri-local') {
+    modes.push(mode('run-aurora-on-this-computer', PRODUCT_COPY.onboarding.choices.runHere.label, PRODUCT_COPY.mesh.localDevice, PRODUCT_COPY.onboarding.choices.runHere.description, desktopNative.state, desktopNative.evidence, desktopNative.repair))
+  }
+  return modes
 }
 
 function desktopLocalState(snapshot: AuroraShellSnapshot, transportKind: string): { state: AvailabilityState; evidence: string; repair: string } {
@@ -542,14 +540,14 @@ function desktopLocalState(snapshot: AuroraShellSnapshot, transportKind: string)
     const nativeEvidence = snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native manifest pending'
     return {
       state: snapshot.loadState === 'ready' ? 'available-local' : 'pending',
-      evidence: `${nativeEvidence}; local Gateway readiness is shown by the Tauri runtime panel`,
-      repair: 'Run `pnpm --filter @aurora/tauri-ui tauri dev`; the Rust sidecar starts Python services in threads mode and reports Gateway health.',
+      evidence: `${nativeEvidence}; Aurora is running on this computer`,
+      repair: 'Start Aurora on this computer, then try again.',
     }
   }
   return {
     state: 'unsupported',
-    evidence: `Current transport is ${transportKind}; no local sidecar status is available.`,
-    repair: 'Switch to Desktop Native from Tauri or use Desktop Web thin for remote Gateway operation.',
+    evidence: 'Aurora is not running on this computer.',
+    repair: 'Connect to Aurora on another device, or open the desktop app that includes Aurora.',
   }
 }
 
@@ -557,21 +555,21 @@ function desktopThinState(snapshot: AuroraShellSnapshot, transportKind: string):
   if (transportKind === 'http') {
     return {
       state: 'available-remote',
-      evidence: 'HTTP Gateway transport; sidecar intentionally not used',
-      repair: 'Validate the remote endpoint and authenticate with Auth.Login, token restore, or pairing before entering the cockpit.',
+      evidence: PRODUCT_COPY.connection.connected,
+      repair: 'Check the Aurora address, then sign in or approve this device.',
     }
   }
   if (transportKind === 'tauri-local') {
     return {
       state: 'pending',
-      evidence: 'Tauri desktop can run thin mode when configured with a remote Gateway URL.',
-      repair: 'Set the desktop-thin Gateway URL and restart without local sidecar startup.',
+      evidence: 'Desktop app can connect to another Aurora device.',
+      repair: 'Use an invite or address for the Aurora device you want to use.',
     }
   }
   return {
     state: transportKind === 'mock' ? 'degraded' : 'unsupported',
-    evidence: transportKind === 'mock' ? 'demo only; no remote Gateway proof' : `Current transport is ${transportKind}.`,
-    repair: 'Open setup and configure or import a runtime HTTP/WebRTC connection profile.',
+    evidence: transportKind === 'mock' ? 'Local preview' : 'Connection is not ready.',
+    repair: 'Open setup and use an invite or address.',
   }
 }
 
@@ -722,42 +720,42 @@ function mode(id: string, label: string, routeLabel: string, description: string
 }
 
 function setupSteps(input: { session: AuthSessionSnapshot; snapshot: AuroraShellSnapshot; selectedMode: DeploymentModeCard; authState: AvailabilityState; pairingState: AvailabilityState }): OnboardingSetupStep[] {
-  const selectedMode = input.selectedMode.id.includes('web-thin') ? 'available-remote' : 'available-local'
+  const selectedMode = input.selectedMode.id === 'connect-to-aurora' ? 'available-remote' : 'available-local'
   return [
     {
       title: 'Select mode',
-      detail: 'Choose exactly one mode: Desktop Native, Desktop Web thin, Mobile Native, or Mobile Web thin.',
+      detail: 'Choose whether to connect to Aurora, make this device available, or run Aurora here when supported.',
       state: selectedMode,
       progress: null,
       repair: input.selectedMode.repair,
     },
     {
       title: 'Authenticate / pair',
-      detail: 'Sign in, restore an in-memory token, enter pairing code, or load local owner identity through Auth SDK calls.',
+      detail: 'Sign in, restore an access key, or approve this device.',
       state: input.authState === 'pending' ? input.pairingState : input.authState,
       progress: input.session.isAuthenticated ? 100 : input.session.state === 'pairing' ? 45 : null,
       repair: input.session.isAuthenticated ? 'Session ready.' : 'If login fails, check endpoint reachability and retry Auth.Login, token restore, or Auth.PairingExchange.',
     },
     {
       title: 'Load capability graph',
-      detail: `${input.snapshot.routeCount} routes, ${input.snapshot.availableCount} selectable routes, and native/peer manifests drive every screen.`,
+      detail: 'Aurora checks which pages and actions are available for this device.',
       state: input.snapshot.loadState === 'ready' ? 'available-local' : input.snapshot.loadState === 'loading' ? 'pending' : 'denied',
       progress: input.snapshot.routeCount ? Math.min(100, Math.round((input.snapshot.availableCount / Math.max(1, input.snapshot.routeCount)) * 100)) : null,
-      repair: input.snapshot.loadState === 'error' ? 'Retry the Gateway request after endpoint/auth recovery.' : 'Continue once Aurora returns capability status.',
+      repair: input.snapshot.loadState === 'error' ? 'Check the address and try again.' : 'Continue once Aurora is ready.',
     },
     {
       title: 'Review privacy defaults',
-      detail: 'Confirm local-first routing, remote fallback, mesh selector policy, and native permission states before enabling sensitive actions.',
+      detail: 'Review which device can use sensitive actions before turning them on.',
       state: input.snapshot.secretsRedacted ? 'available-local' : 'degraded',
       progress: input.snapshot.secretsRedacted ? 100 : 50,
-      repair: input.snapshot.secretsRedacted ? 'Secrets are redacted in snapshot status.' : 'Repair backend redaction before exporting support bundles or logs.',
+      repair: input.snapshot.secretsRedacted ? 'Sensitive details stay hidden.' : 'Sensitive details need attention before sharing support information.',
     },
     {
-      title: 'Land in cockpit',
-      detail: 'Assistant and Admin share the same production shell once route, auth, privacy, and platform status are loaded.',
+      title: 'Open Aurora',
+      detail: 'Assistant and settings open after access and device status are ready.',
       state: input.session.isAuthenticated || input.snapshot.loadState === 'ready' ? 'available-local' : 'pending',
       progress: input.session.isAuthenticated ? 100 : null,
-      repair: 'Enter the cockpit only after route, auth, privacy, and platform status are visible.',
+      repair: 'Open Aurora after access and device status are ready.',
     },
   ]
 }
@@ -815,21 +813,21 @@ function platformBehaviorNotes(snapshot: AuroraShellSnapshot, transportKind: str
       evidence: transportKind === 'tauri-local' ? meshEvidence : `Current transport is ${transportKind}; desktop-local full-node behavior requires Tauri local Gateway status.`,
     },
     {
-      label: 'Web thin',
+      label: 'Connected Aurora device',
       state: webState,
-      behavior: 'Web thin can view and manage remote mesh only through Gateway APIs and AdminAction receipts; it never starts a sidecar or claims local node hosting.',
+      behavior: 'This device can view and manage Aurora through the device it connects to.',
       evidence: transportKind === 'http' ? meshEvidence : `Current transport is ${transportKind}; use HTTP Gateway transport for web-thin mesh management.`,
     },
     {
-      label: 'Android mobile thin',
+      label: 'Android app',
       state: androidState,
-      behavior: 'Android mobile thin can pair and invoke remote or mesh capabilities through Gateway/native manifest status, while assistant-role ownership remains conditional on OS/OEM/user grants.',
+      behavior: 'Android can connect, pair, and use approved features. System assistant access depends on the device and user approval.',
       evidence: androidMobileThinState(snapshot, transportKind).evidence,
     },
     {
-      label: 'iOS mobile thin',
+      label: 'iOS app',
       state: iosState,
-      behavior: 'iOS mobile thin can pair and invoke remote or mesh capabilities from app-owned surfaces only; it must not claim system assistant replacement.',
+      behavior: 'iOS can connect, pair, and use approved features from Aurora surfaces.',
       evidence: iosMobileThinState(snapshot, transportKind).evidence,
     },
   ]
@@ -901,19 +899,23 @@ function defaultModeId(transportKind: string, snapshot?: AuroraShellSnapshot, us
     nativePlatform: snapshot?.nativePlatform,
     userAgent,
   })
-  if (transportKind === 'tauri-local') return 'desktop-native'
-  if (transportKind === 'native-mobile' || profile.isMobile) return transportKind === 'http' ? 'mobile-web-thin' : 'mobile-native'
-  return 'desktop-web-thin'
+  if (transportKind === 'tauri-local') return 'run-aurora-on-this-computer'
+  if (transportKind === 'native-mobile' || profile.isMobile) return 'make-this-device-available'
+  return 'connect-to-aurora'
 }
 
 function isSupportedModeId(modeId: string): boolean {
   return supportedModeIds.has(modeId)
 }
 
-const supportedModeIds = new Set(['desktop-native', 'desktop-web-thin', 'mobile-native', 'mobile-web-thin'])
+const supportedModeIds = new Set(['connect-to-aurora', 'make-this-device-available', 'run-aurora-on-this-computer'])
 
 function modeLabel(modeId: string): string {
-  return modeId.replace(/-/g, ' ')
+  return ({
+    'connect-to-aurora': PRODUCT_COPY.onboarding.choices.connect.label,
+    'make-this-device-available': PRODUCT_COPY.onboarding.choices.makeAvailable.label,
+    'run-aurora-on-this-computer': PRODUCT_COPY.onboarding.choices.runHere.label,
+  } as Record<string, string>)[modeId] ?? modeId
 }
 
 function clientTransportEvidence(transportKind: string): string {
@@ -921,18 +923,18 @@ function clientTransportEvidence(transportKind: string): string {
 }
 
 function onboardingErrorMessage(error: AuroraError): string {
-  if (error.code === 'auth') return 'Auth request was denied or expired. Verify the Gateway endpoint, then retry login, token restore, or pairing exchange.'
-  if (error.code === 'permission') return 'Current principal lacks permission for this Auth action. Pair an owner/admin device or use an account with onboarding access.'
-  if (error.code === 'unsupported_feature') return 'This backend or mock transport does not expose the required Auth method yet.'
-  if (error.code === 'timeout') return 'Auth request timed out before backend confirmation. Check endpoint reachability and retry without changing stored credentials.'
-  return error.message || 'Onboarding request failed.'
+  if (error.code === 'auth') return 'Access was denied or expired. Check the address, then try again.'
+  if (error.code === 'permission') return productStatusCopy('local-permission-missing').title
+  if (error.code === 'unsupported_feature') return productStatusCopy('unsupported-feature').title
+  if (error.code === 'timeout') return 'Aurora did not respond in time. Check the address and try again.'
+  return safeErrorCopy(error).title
 }
 
 function ModeIcon({ id }: { id: string }) {
   const props = { size: 18, 'aria-hidden': true as const }
-  if (id === 'desktop-native') return <Monitor {...props} />
-  if (id === 'desktop-web-thin') return <Server {...props} />
-  if (id === 'mobile-native' || id === 'mobile-web-thin') return <Smartphone {...props} />
+  if (id === 'run-aurora-on-this-computer') return <Monitor {...props} />
+  if (id === 'connect-to-aurora') return <Server {...props} />
+  if (id === 'make-this-device-available') return <Smartphone {...props} />
   if (id === 'auth') return <KeyRound {...props} />
   return <ShieldCheck {...props} />
 }

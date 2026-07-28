@@ -226,7 +226,7 @@ describe('Service sharing and outbound routing', () => {
     const result = await buildServiceRoutingSnapshot(snapshotClient([]), route())
     expect(result.editable).toBe(false)
     expect(result.loadState).toBe('degraded')
-    expect(result.warnings.join(' ')).toContain('legacy or incomplete')
+    expect(result.warnings.join(' ')).toContain('not ready for editing')
   })
 
   it('requires every editable metadata leaf and validates concurrency without coercion', async () => {
@@ -271,23 +271,23 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => root.render(<ServiceRoutingView snapshot={snapshot()} onPreviewRow={async () => previewEvidence()} onSaveRow={() => undefined} />))
     const toggle = container.querySelector<HTMLButtonElement>('button[aria-label*="Toggle service sharing"]')!
     await act(async () => toggle.click())
-    expect(container.textContent).toContain('Service sharing and outbound routing')
+    expect(container.textContent).toContain('Service sharing')
     expect(container.textContent).toContain('Shared from this device')
-    expect(container.textContent).toContain('Route requests through peers')
-    expect(container.textContent).toContain('Any eligible provider')
-    expect(container.textContent).toContain('Selected providers')
-    expect(container.textContent).toContain('None (disable remote providers)')
-    expect(container.textContent).toContain('They grant no inbound access')
+    expect(container.textContent).toContain('Send requests to devices')
+    expect(container.textContent).toContain('Any approved device')
+    expect(container.textContent).toContain('Selected devices')
+    expect(container.textContent).toContain('This device only')
+    expect(container.textContent).toContain('Sharing choices do not grant access')
     expect(container.textContent).not.toContain('Allowed peers')
     expect(container.textContent).not.toContain('Restrict which paired peers may call')
-    expect(container.textContent).toContain('Evidence: test')
+    expect(container.textContent).not.toContain('Evidence: test')
     expect(container.innerHTML).toContain('Mobile service policy cards')
     expect(container.textContent).toContain('Other callable methods')
     expect(container.textContent).toContain('TTS.Ping')
     expect(container.textContent).toContain('Remove exclusion')
     const selectedMode = container.querySelector<HTMLInputElement>('input[type="radio"][value="selected"]')!
     await act(async () => selectedMode.click())
-    expect(container.textContent).toContain('Select at least one provider, or choose Any or None.')
+    expect(container.textContent).toContain('Select at least one device, or choose Any approved device or This device only.')
     const reviewButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).filter((button) => button.textContent?.includes('Review changes'))
     expect(reviewButtons.length).toBeGreaterThan(0)
     expect(reviewButtons.every((button) => button.disabled)).toBe(true)
@@ -306,13 +306,14 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => review.click())
     expect(onPreviewRow).toHaveBeenCalledTimes(1)
     expect(onSaveRow).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('No configuration has been written')
+    expect(container.textContent).toContain('No changes have been saved')
     expect(container.textContent).toContain('services.tts.mesh_sharing.share')
-    expect(container.textContent).toContain('Base revision: 7')
-    expect(container.textContent).toContain('Preview token: present')
-    const confirm = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent === 'Confirm and save atomically')!
+    expect(container.textContent).toContain('Ready to save')
+    expect(container.textContent).not.toContain('Base revision')
+    expect(container.textContent).not.toContain('Preview token')
+    const confirm = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent === 'Save changes')!
     expect(confirm.disabled).toBe(true)
-    const unlock = Array.from(container.querySelectorAll<HTMLElement>('[role="checkbox"]')).find((checkbox) => checkbox.parentElement?.textContent?.includes('I confirm recent in-session admin unlock'))!
+    const unlock = Array.from(container.querySelectorAll<HTMLElement>('[role="checkbox"]')).find((checkbox) => checkbox.parentElement?.textContent?.includes('I approve these changes for this session'))!
     await act(async () => unlock.click())
     expect(confirm.disabled).toBe(false)
     await act(async () => confirm.click())
@@ -331,12 +332,12 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => share.click())
     const review = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent === 'Review changes')!
     await act(async () => review.click())
-    const unlock = Array.from(container.querySelectorAll<HTMLElement>('[role="checkbox"]')).find((checkbox) => checkbox.parentElement?.textContent?.includes('I confirm recent in-session admin unlock'))!
+    const unlock = Array.from(container.querySelectorAll<HTMLElement>('[role="checkbox"]')).find((checkbox) => checkbox.parentElement?.textContent?.includes('I approve these changes for this session'))!
     await act(async () => unlock.click())
-    expect(container.textContent).toContain('Preview token: present')
+    expect(container.textContent).toContain('Ready to save')
     await act(async () => share.click())
-    expect(container.textContent).not.toContain('Preview token: present')
-    expect(container.textContent).not.toContain('I confirm recent in-session admin unlock')
+    expect(container.textContent).not.toContain('Ready to save')
+    expect(container.textContent).not.toContain('I approve these changes for this session')
     expect(onSaveRow).not.toHaveBeenCalled()
     await act(async () => root.unmount())
   })
@@ -353,7 +354,7 @@ describe('Service sharing and outbound routing', () => {
     expect(nativeControls.length).toBeGreaterThan(5)
     expect(nativeControls.every((control) => control.disabled)).toBe(true)
     await act(async () => root.render(<ServiceRoutingView snapshot={{ ...snapshot(), loadState: 'loading', rows: [], editable: false }} onPreviewRow={async () => previewEvidence()} onSaveRow={() => undefined} />))
-    expect(container.querySelector('[aria-label="Mobile service policy cards"]')?.textContent).toContain('Loading service sharing and routing policy through Aurora')
+    expect(container.querySelector('[aria-label="Mobile service policy cards"]')?.textContent).toContain('Loading service sharing through Aurora')
     await act(async () => root.unmount())
   })
 
@@ -370,11 +371,14 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => buttonByText(container, 'Review changes').click())
     await act(async () => buttonByText(container, 'Cancel').click())
     await act(async () => buttonByText(container, 'Review changes').click())
-    await act(async () => second.resolve(previewEvidence({ baseRevision: 22, previewToken: 'preview-22' })))
-    expect(container.textContent).toContain('Base revision: 22')
+    await act(async () => second.resolve(previewEvidence({
+      baseRevision: 22,
+      previewToken: 'preview-22',
+      diffs: [{ ...previewEvidence().diffs[0]!, key_path: 'services.tts.mesh_routing.prefer' }],
+    })))
+    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
     await act(async () => first.resolve(previewEvidence({ baseRevision: 11, previewToken: 'preview-11' })))
-    expect(container.textContent).toContain('Base revision: 22')
-    expect(container.textContent).not.toContain('Base revision: 11')
+    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
     await act(async () => root.unmount())
   })
 
@@ -391,11 +395,15 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => buttonByText(container, 'Review changes').click())
     await act(async () => buttonByText(container, 'Cancel').click())
     await act(async () => buttonByText(container, 'Review changes').click())
-    await act(async () => second.resolve(previewEvidence({ baseRevision: 33, previewToken: 'preview-33' })))
+    await act(async () => second.resolve(previewEvidence({
+      baseRevision: 33,
+      previewToken: 'preview-33',
+      diffs: [{ ...previewEvidence().diffs[0]!, key_path: 'services.tts.mesh_routing.prefer' }],
+    })))
     await act(async () => first.reject(new Error('stale preview failure')))
-    expect(container.textContent).toContain('Base revision: 33')
+    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
     expect(container.textContent).not.toContain('stale preview failure')
-    expect(container.textContent).not.toContain('Preview failed')
+    expect(container.textContent).not.toContain('Review failed')
     await act(async () => root.unmount())
   })
 
@@ -417,11 +425,14 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => buttonByText(container, 'Review changes').click())
 
     await act(async () => first.resolve(previewEvidence({ baseRevision: 11, previewToken: 'preview-11' })))
-    expect(container.textContent).toContain('Loading authoritative Config.PreviewDiff evidence')
-    expect(container.textContent).not.toContain('Base revision: 11')
-    await act(async () => second.resolve(previewEvidence({ baseRevision: 22, previewToken: 'preview-22' })))
-    expect(container.textContent).toContain('Base revision: 22')
-    expect(container.textContent).not.toContain('Base revision: 11')
+    expect(container.textContent).toContain('Checking changes')
+    expect(container.textContent).not.toContain('Ready to save')
+    await act(async () => second.resolve(previewEvidence({
+      baseRevision: 22,
+      previewToken: 'preview-22',
+      diffs: [{ ...previewEvidence().diffs[0]!, key_path: 'services.tts.mesh_routing.prefer' }],
+    })))
+    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
     expect(onSaveRow).not.toHaveBeenCalled()
     await act(async () => root.unmount())
   })

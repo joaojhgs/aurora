@@ -108,10 +108,12 @@ describe('AppShell side-panel toggles', () => {
     expect(container.querySelector('a[href="/admin/tokens"]')).toBeNull()
     expect(container.querySelector('a[href="/settings"]')).not.toBeNull()
     expect(container.querySelector('[data-mobile-tab="settings"]')).not.toBeNull()
-    expect(container.textContent).toContain('Web app')
+    expect(container.textContent).toContain('Connected to Aurora')
     expect(container.textContent).toContain('member')
-    expect(container.textContent).toContain('Scoped access')
+    expect(container.textContent).toContain('Limited access')
+    expect(container.textContent).not.toContain('Scoped access')
     expect(container.textContent).not.toContain('Full access')
+    expect(container.textContent).not.toContain('Web Thin')
 
     await act(async () => {
       root.render(
@@ -127,7 +129,9 @@ describe('AppShell side-panel toggles', () => {
     expect(container.querySelector('a[href="/admin/services"]')).not.toBeNull()
     expect(container.querySelector('a[href="/admin/tokens"]')).not.toBeNull()
     expect(container.textContent).toContain('admin')
-    expect(container.textContent).toContain('Full access')
+    expect(container.textContent).toContain('Administrator on Aurora unavailable')
+    expect(container.textContent).not.toContain('Full access')
+    expect(container.textContent).not.toContain('Web Thin')
 
     await act(async () => root.unmount())
   })
