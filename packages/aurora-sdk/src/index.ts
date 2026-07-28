@@ -251,4 +251,6 @@ export type {
   ValidateTokenLikeResponse,
   WhoAmILikeResponse
 } from './session.js'
+export * as generatedContracts from './generated/index.js'
 export * as localData from './local-data/index.js'
+export * as validation from './validation/index.js'

@@ -6,6 +6,7 @@ on:
       - "app/**"
       - "scripts/generate_backend_inventory.py"
       - "scripts/check_sdk_backend_conformance.py"
+      - "scripts/sdk_zod_codegen.py"
       - "packages/aurora-sdk/**"
       - "modules/ui-mock-reference/lib/aurora/**"
       - "pnpm-lock.yaml"
@@ -40,7 +41,19 @@ jobs:
           mkdir -p .artifacts/sdk-backend-conformance
           python scripts/generate_backend_inventory.py \
             --fail-on-ui-fixture-errors \
+            --sdk-schema-output packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+            --sdk-zod-output packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+            --sdk-manifest-output packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+            --sdk-tooling-provider-output packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
             --output .artifacts/sdk-backend-conformance/backend-inventory.json
+
+      - name: Verify generated SDK contract artifacts are current
+        run: |
+          git diff --exit-code -- \
+            packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+            packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+            packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+            packages/aurora-sdk/src/generated/tooling-local-provider-v1.json
 
       - name: Check SDK/backend contract conformance
         run: |

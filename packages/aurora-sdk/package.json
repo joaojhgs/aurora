@@ -33,6 +33,16 @@
       "types": "./dist/local-data/index.d.ts",
       "import": "./dist/local-data/index.js",
       "default": "./dist/local-data/index.js"
+    },
+    "./generated": {
+      "types": "./dist/generated/index.d.ts",
+      "import": "./dist/generated/index.js",
+      "default": "./dist/generated/index.js"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js",
+      "default": "./dist/validation/index.js"
     }
   },
   "files": [

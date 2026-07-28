@@ -7,7 +7,7 @@ DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker
 AURORA_COMPOSE_PROJECT ?= aurora-process
 DEP_ANALYSIS_DIR ?= .artifacts/dependency-analysis
 
-.PHONY: help setup lint test format check check-docs check-config-generated coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
+.PHONY: help setup lint test format check check-docs check-config-generated check-sdk-backend-contracts coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
 
 # Default target when just running 'make'
 help:
@@ -18,6 +18,7 @@ help:
 	@echo "make format      - Run auto-formatting (ruff)"
 	@echo "make check       - Run all checks (lint + format + docs hygiene)"
 	@echo "make check-config-generated - Verify generated config artifacts are current"
+	@echo "make check-sdk-backend-contracts - Regenerate and verify SDK backend contracts"
 	@echo "make check-docs   - Validate documentation links and hygiene"
 	@echo "make test        - Run all tests"
 	@echo "make unit        - Run unit tests only"
@@ -80,6 +81,7 @@ check:
 	ruff check app tests scripts
 	ruff format --check app tests scripts
 	$(MAKE) check-docs
+	$(MAKE) check-sdk-backend-contracts
 	# mypy --explicit-package-bases app tests scripts
 
 check-docs:
@@ -126,6 +128,27 @@ check-config-generated:
 	@echo "Checking generated config artifacts are current..."
 	@uv run --extra dev python scripts/generate_config_artifacts.py --check
 	@echo "Generated config artifacts are current."
+
+check-sdk-backend-contracts:
+	@echo "Regenerating and checking SDK backend contract artifacts..."
+	@mkdir -p .artifacts/sdk-backend-conformance
+	@uv run --extra gateway --extra service-auth --extra service-db --extra service-scheduler --extra service-tooling --extra service-orchestrator python scripts/generate_backend_inventory.py \
+		--fail-on-ui-fixture-errors \
+		--sdk-schema-output packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+		--sdk-zod-output packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+		--sdk-manifest-output packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+		--sdk-tooling-provider-output packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
+		--output .artifacts/sdk-backend-conformance/backend-inventory.json
+	@uv run python scripts/check_sdk_backend_conformance.py \
+		--inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
+		--sdk-types packages/aurora-sdk/src/types.ts \
+		--evidence-dir .artifacts/sdk-backend-conformance
+	@git diff --exit-code -- \
+		packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+		packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+		packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+		packages/aurora-sdk/src/generated/tooling-local-provider-v1.json
+	@echo "SDK backend contract artifacts are current."
 
 
 # Docker Process Mode Commands
