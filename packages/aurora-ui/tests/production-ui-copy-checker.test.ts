@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -270,14 +270,15 @@ describe('production UI copy checker', () => {
     expect(runChecker('packages/aurora-ui/src/components/assistant-ui/mcp-config.tsx').ok).toBe(true)
 
     const dir = fixtureDir()
-    const file = join(dir, 'generic-url-copy.tsx')
+    const file = join(dir, 'packages/aurora-ui/src/tooling/tooling-console.tsx')
+    mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, `
       export function GenericUrlCopy() {
         return <input placeholder="https://server" />
       }
     `)
 
-    const result = runChecker(file)
+    const result = runCheckerWithRoot(file, dir)
     expect(result.ok).toBe(false)
     expect(result.stderr).toContain('https://server')
     rmSync(dir, { recursive: true, force: true })
@@ -291,6 +292,16 @@ function fixtureDir(): string {
 function runChecker(path: string): { ok: boolean; stderr: string } {
   try {
     execFileSync('python', [checker, path], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    return { ok: true, stderr: '' }
+  } catch (error) {
+    const failure = error as { stderr?: string }
+    return { ok: false, stderr: failure.stderr ?? '' }
+  }
+}
+
+function runCheckerWithRoot(path: string, root: string): { ok: boolean; stderr: string } {
+  try {
+    execFileSync('python', [checker, '--repo-root', root, path], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
     return { ok: true, stderr: '' }
   } catch (error) {
     const failure = error as { stderr?: string }

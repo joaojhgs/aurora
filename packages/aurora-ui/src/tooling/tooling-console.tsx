@@ -844,8 +844,7 @@ function PluginsWorkspace({
 
 function builtinPluginDescription(plugin: BuiltinPluginModel): string {
   if (plugin.fields.length === 0) return 'Built-in plugin; no extra credentials required.'
-  const fieldNames = plugin.fields.map((field) => field.key_path.split('.').at(-1)?.replace(/_/g, ' ')).filter(Boolean)
-  return `Built-in plugin; needs ${fieldNames.join(', ')}.`
+  return `Built-in plugin; needs ${plugin.fields.length} setting${plugin.fields.length === 1 ? '' : 's'}.`
 }
 
 function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: BuiltinPluginModel; onClose: () => void; onSave: (values: Record<string, JsonValue>) => void }) {
@@ -864,20 +863,21 @@ function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: Builtin
         actions={<Button variant="ghost" onClick={onClose} ariaLabel={`Close configure ${plugin.label}`}>Close</Button>}
       >
         <div className="flex flex-col gap-3">
-          {plugin.fields.map((field) => {
-            const leaf = field.key_path.split('.').at(-1) ?? field.key_path
+          {plugin.fields.map((field, index) => {
+            const fieldLabel = productSafePluginFieldLabel(field, index)
+            const fieldDescription = productSafePluginFieldDescription(field)
             const isSet = field.current_value !== null && field.current_value !== undefined && field.current_value !== ''
             return (
               <label key={field.key_path} className="flex flex-col gap-1 text-sm">
                 <span className="text-muted-foreground">
-                  {leaf.replace(/_/g, ' ')}
-                  {field.secret ? ' (secret)' : ''}
+                  {fieldLabel}
+                  {field.secret ? ' (protected)' : ''}
                   {isSet ? ' · currently set' : ' · not set'}
                 </span>
                 <input
                   type={field.secret ? 'password' : 'text'}
                   className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                  placeholder={isSet ? 'Leave blank to keep the current value' : field.description || leaf}
+                  placeholder={isSet ? 'Leave blank to keep the current value' : fieldDescription}
                   value={drafts[field.key_path] ?? ''}
                   onChange={(event) => setDrafts((current) => ({ ...current, [field.key_path]: event.currentTarget.value }))}
                 />
@@ -894,6 +894,23 @@ function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: Builtin
       </Card>
     </div>
   )
+}
+
+function productSafePluginFieldLabel(field: BuiltinPluginModel['fields'][number], index: number): string {
+  const title = productSafeConfigFieldCopy(field.title)
+  if (title) return title
+  return `Setting ${index + 1}`
+}
+
+function productSafePluginFieldDescription(field: BuiltinPluginModel['fields'][number]): string {
+  return productSafeConfigFieldCopy(field.description)
+    ?? (field.secret ? 'Enter protected value' : 'Enter value')
+}
+
+function productSafeConfigFieldCopy(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  return containsInternalToolCopy(trimmed) || containsSensitiveFieldCopy(trimmed) ? null : trimmed
 }
 
 function McpSourceModal({
@@ -1878,6 +1895,10 @@ function productSafeSourceName(name: string | null | undefined): string {
 function containsInternalToolCopy(value: string): boolean {
   return /\b(?:Tooling|Scheduler|AdminAction|SDK|cache|route|provider|schema|protocol|transport|runtime|manifest|contract|fallback|sidecar|SQLite|IndexedDB|OPFS|stack trace|debug|fixture|assertion|implementation|tested|evidence)\b/i.test(value)
     || /\b[A-Z][A-Za-z0-9]*(?:\.[A-Za-z0-9_-]+)+\b/.test(value)
+}
+
+function containsSensitiveFieldCopy(value: string): boolean {
+  return /\b(?:api[-_ ]?key|token|secret|password|credential|bearer|oauth|private[-_ ]?key)\b/i.test(value)
 }
 
 function approvalStatusLabel(status: string): string {

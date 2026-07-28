@@ -76,19 +76,28 @@ INTERNAL_DATA_FIELD_NAMES = {
     "nodeName",
 }
 
-ADVANCED_CONNECTION_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
-    ("packages/aurora-ui/src/product-copy.ts", "Aurora address"),
-    ("packages/aurora-ui/src/product-copy.ts", "Connection method"),
-    ("packages/aurora-ui/src/product-copy.ts", "HTTP only"),
-    ("packages/aurora-ui/src/product-copy.ts", "WebRTC only"),
-    ("packages/aurora-ui/src/product-copy.ts", "WebRTC preferred"),
-    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "HTTP only"),
-    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC only"),
-    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC preferred"),
-    ("packages/aurora-ui/src/tooling/tooling-console.tsx", "stdio command or https://server"),
-    ("packages/aurora-ui/src/tooling/tooling-console.tsx", "https://server"),
-    ("packages/aurora-ui/src/components/assistant-ui/mcp-config.tsx", "https://example.com/mcp"),
-})
+ADVANCED_CONNECTION_ALLOWLIST: tuple[tuple[str, str, re.Pattern[str]], ...] = (
+    ("packages/aurora-ui/src/product-copy.ts", "Aurora address", re.compile(r"\baddressLabel\s*:", re.S)),
+    ("packages/aurora-ui/src/product-copy.ts", "Connection method", re.compile(r"\bmethodLabel\s*:", re.S)),
+    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "HTTP only", re.compile(r"<SelectItem\b[^>]*\bvalue=\"http-only\"", re.S)),
+    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC only", re.compile(r"<SelectItem\b[^>]*\bvalue=\"webrtc-only\"", re.S)),
+    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC preferred", re.compile(r"<SelectItem\b[^>]*\bvalue=\"webrtc-preferred\"", re.S)),
+    (
+        "packages/aurora-ui/src/tooling/tooling-console.tsx",
+        "stdio command or https://server",
+        re.compile(r"\bServer URL or command profile\b[\s\S]{0,900}\bplaceholder=\{canLaunchLocalCommands \?", re.S),
+    ),
+    (
+        "packages/aurora-ui/src/tooling/tooling-console.tsx",
+        "https://server",
+        re.compile(r"\bServer URL or command profile\b[\s\S]{0,900}\bplaceholder=\{canLaunchLocalCommands \?", re.S),
+    ),
+    (
+        "packages/aurora-ui/src/components/assistant-ui/mcp-config.tsx",
+        "https://example.com/mcp",
+        re.compile(r"<McpAddFormPrimitive\.UrlField\b[\s\S]{0,220}\bplaceholder=", re.S),
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -109,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     paths = [repo_root / path for path in (args.paths or DEFAULT_PATHS)]
     findings: list[Finding] = []
     for path in expand_paths(paths):
-        findings.extend(scan_file(path))
+        findings.extend(scan_file(path, repo_root))
 
     if findings:
         for finding in findings:
@@ -141,16 +150,16 @@ def is_scan_target(path: pathlib.Path) -> bool:
     return True
 
 
-def scan_file(path: pathlib.Path) -> list[Finding]:
+def scan_file(path: pathlib.Path, repo_root: pathlib.Path) -> list[Finding]:
     text = path.read_text(encoding="utf-8")
     clean = strip_comments(text)
     findings: list[Finding] = []
-    rel_path = repo_relative_path(path)
-    for line_no, literal in rendered_literals(clean, rel_path):
+    rel_path = repo_relative_path(path, repo_root)
+    for line_no, literal, context in rendered_literals(clean, rel_path):
         stripped = normalize_literal(literal)
         if (
             not stripped
-            or is_allowed_connection_copy(rel_path, stripped)
+            or is_allowed_connection_copy(rel_path, stripped, context)
         ):
             continue
         for term_id, pattern in FORBIDDEN_PATTERNS:
@@ -159,9 +168,9 @@ def scan_file(path: pathlib.Path) -> list[Finding]:
     return findings
 
 
-def repo_relative_path(path: pathlib.Path) -> str:
+def repo_relative_path(path: pathlib.Path, repo_root: pathlib.Path) -> str:
     try:
-        return path.resolve().relative_to(pathlib.Path.cwd().resolve()).as_posix()
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
     except ValueError:
         return path.as_posix()
 
@@ -209,8 +218,8 @@ def strip_comments(text: str) -> str:
     return "".join(out)
 
 
-def rendered_literals(text: str, rel_path: str) -> list[tuple[int, str]]:
-    results: list[tuple[int, str]] = []
+def rendered_literals(text: str, rel_path: str) -> list[tuple[int, str, str]]:
+    results: list[tuple[int, str, str]] = []
     line_starts = [0]
     for match in re.finditer(r"\n", text):
         line_starts.append(match.end())
@@ -229,7 +238,7 @@ def rendered_literals(text: str, rel_path: str) -> list[tuple[int, str]]:
     for match in attr_pattern.finditer(text):
         value = next((group for group in match.groups() if group and group not in {"'", '"'}), "")
         if value.strip():
-            results.append((line_for(match.start()), value))
+            results.append((line_for(match.start()), value, literal_render_context(text, match.start(), match.end())))
 
     for line_no, line in enumerate(text.splitlines(), start=1):
         for match in re.finditer(r">([^<>{}]+)<", line):
@@ -237,12 +246,12 @@ def rendered_literals(text: str, rel_path: str) -> list[tuple[int, str]]:
             if re.search(r"=>|\?\?|\b\w+\.\w+\b|[\[\]=?]", value):
                 continue
             if value.strip():
-                results.append((line_no, value))
+                results.append((line_no, value, line))
 
     for literal in string_literals(text):
         context = literal_context(text, literal.start)
         if is_rendered_literal_context(context, rel_path):
-            results.append((line_for(literal.start), literal.value))
+            results.append((line_for(literal.start), literal.value, literal_render_context(text, literal.start, literal.end)))
 
     results.extend(rendered_dynamic_expressions(text, line_for))
 
@@ -338,8 +347,8 @@ def is_internal_data_literal_context(context: str) -> bool:
     return False
 
 
-def rendered_dynamic_expressions(text: str, line_for) -> list[tuple[int, str]]:
-    results: list[tuple[int, str]] = []
+def rendered_dynamic_expressions(text: str, line_for) -> list[tuple[int, str, str]]:
+    results: list[tuple[int, str, str]] = []
     jsx_sink_patterns = (
         re.compile(r"<(?:AlertTitle|AlertDescription)\b[^>]*>\s*\{([^{}]+)\}", re.S),
         re.compile(r"<[^>]*\brole\s*=\s*(?:\"alert\"|'alert')[^>]*>\s*\{([^{}]+)\}", re.S),
@@ -353,11 +362,11 @@ def rendered_dynamic_expressions(text: str, line_for) -> list[tuple[int, str]]:
         for match in pattern.finditer(text):
             expression = normalize_expression(match.group(1))
             if is_suspicious_render_expression(expression):
-                results.append((line_for(match.start(1)), f"raw-render-expression {expression}"))
+                results.append((line_for(match.start(1)), f"raw-render-expression {expression}", literal_render_context(text, match.start(1), match.end(1))))
     for match in call_sink_pattern.finditer(text):
         expression = normalize_expression(match.group(1))
         if is_suspicious_render_expression(expression):
-            results.append((line_for(match.start(1)), f"raw-render-expression {expression}"))
+            results.append((line_for(match.start(1)), f"raw-render-expression {expression}", literal_render_context(text, match.start(1), match.end(1))))
     return results
 
 
@@ -384,8 +393,17 @@ def normalize_literal(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def is_allowed_connection_copy(path: str, value: str) -> bool:
-    return (path, value) in ADVANCED_CONNECTION_ALLOWLIST
+def literal_render_context(text: str, start: int, end: int, width: int = 900) -> str:
+    return text[max(0, start - width):min(len(text), end + width)]
+
+
+def is_allowed_connection_copy(path: str, value: str, context: str) -> bool:
+    return any(
+        path == allowed_path
+        and value == allowed_value
+        and context_pattern.search(context)
+        for allowed_path, allowed_value, context_pattern in ADVANCED_CONNECTION_ALLOWLIST
+    )
 
 
 

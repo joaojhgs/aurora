@@ -192,6 +192,58 @@ describe('tooling product copy', () => {
     expectForbiddenFree(visibleText(container.innerHTML))
   })
 
+  it('keeps plugin config field keys and hostile metadata out of visible labels and attributes', async () => {
+    const appliedPaths: string[] = []
+    await renderPanel(client({
+      applyChange: async (request) => {
+        appliedPaths.push(request.change.key_path)
+        return { ok: true, data: { applied: true, revision: 2, secrets_redacted: true } }
+      },
+    }), [], {
+      builtinPlugins: [builtinPlugin({
+        active: false,
+        configured: false,
+        fields: [configField(
+          'services.tooling.plugins.brave_search.Tooling.ExecuteTool.api_token',
+          `${dynamicHostileText()} API key token`,
+          `${dynamicHostileText()} secret credential placeholder`,
+          '',
+          true,
+        )],
+      })],
+    })
+    await openPluginsTab()
+    await act(async () => findButton('Configure')!.click())
+
+    let rendered = visibleAriaAndAttributeText()
+    expect(rendered).toContain('Built-in plugin; needs 1 setting.')
+    expect(rendered).toContain('Setting 1 (protected) · not set')
+    expect(rendered).toContain('Enter protected value')
+    expect(rendered).not.toContain('services.tooling.plugins.brave_search.Tooling.ExecuteTool.api_token')
+    expect(rendered).not.toContain('api token')
+    expect(rendered).not.toContain('API key')
+    expect(rendered).not.toContain('secret credential')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+
+    const input = container.querySelector<HTMLInputElement>('input[type="password"]')!
+    await act(async () => {
+      setInputValue(input, 'secret-value')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      findButton('Save')!.click()
+      await flushAsync()
+    })
+
+    expect(appliedPaths).toEqual(['services.tooling.plugins.brave_search.Tooling.ExecuteTool.api_token'])
+    rendered = visibleAriaAndAttributeText()
+    expect(rendered).not.toContain('services.tooling.plugins.brave_search.Tooling.ExecuteTool.api_token')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+  })
+
   it('maps hostile catalog and top-level alert failures before rendering', async () => {
     await renderPanel(client({
       loadApprovalCards: async () => ({
@@ -501,6 +553,17 @@ function visibleAndAriaText(): string {
     visibleText(container.innerHTML),
     ...[...container.querySelectorAll<HTMLElement>('[aria-label]')]
       .map((element) => element.getAttribute('aria-label') ?? ''),
+  ].join(' ')
+}
+
+function visibleAriaAndAttributeText(): string {
+  return [
+    visibleAndAriaText(),
+    ...[...container.querySelectorAll<HTMLElement>('[placeholder], [title]')]
+      .flatMap((element) => [
+        element.getAttribute('placeholder') ?? '',
+        element.getAttribute('title') ?? '',
+      ]),
   ].join(' ')
 }
 
