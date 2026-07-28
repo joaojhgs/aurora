@@ -32,6 +32,8 @@ export class WebRtcPeerHost {
   private manifestRevision = '0'
   private manifestDigest = '0'.repeat(64)
   private pendingManifest: ManifestEvidence = null
+  private timeoutSendFailureCount = 0
+  private lastTimeoutFailureReason: 'timeout_send_failed' | null = null
 
   constructor(options: PeerHostOptions) {
     const randomId = options.randomId ?? (() => `host-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`)
@@ -308,6 +310,14 @@ export class WebRtcPeerHost {
     return this.active.size
   }
 
+  getDiagnostics(): { activeWorkCount: number; timeoutSendFailureCount: number; lastTimeoutFailureReason: 'timeout_send_failed' | null } {
+    return {
+      activeWorkCount: this.active.size,
+      timeoutSendFailureCount: this.timeoutSendFailureCount,
+      lastTimeoutFailureReason: this.lastTimeoutFailureReason
+    }
+  }
+
   private async handleStreamCall(method: PeerHostMethodDescriptor, frame: CallFrame, remotePeerId: string, identity: PeerHostIdentity, nowMs: number, deadlineAtMs: number): Promise<void> {
     const sender = this.requireSender()
     const abort = new AbortController()
@@ -360,12 +370,17 @@ export class WebRtcPeerHost {
   private async timeoutWork(id: string, active: ActiveWork): Promise<void> {
     if (!this.finishActive(id, active)) return
     active.abort.abort('deadline')
-    await this.requireSender().sendFrame({
-      type: 'error',
-      id,
-      correlation_id: id,
-      error: { code: 504, message: 'request timed out', reason_code: 'request_timeout', error_ref: TIMEOUT_ERROR_REF }
-    })
+    try {
+      await this.requireSender().sendFrame({
+        type: 'error',
+        id,
+        correlation_id: id,
+        error: { code: 504, message: 'request timed out', reason_code: 'request_timeout', error_ref: TIMEOUT_ERROR_REF }
+      })
+    } catch {
+      this.timeoutSendFailureCount += 1
+      this.lastTimeoutFailureReason = 'timeout_send_failed'
+    }
   }
 
   private finishActive(id: string, active: ActiveWork): boolean {

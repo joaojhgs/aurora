@@ -75,6 +75,17 @@ function ackFromManifest(manifest: Record<string, unknown>, patch: Record<string
   }
 }
 
+async function flush(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+async function waitForTimeoutWork(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  await flush()
+}
+
 describe('WebRtcPeerHost', () => {
   it('parses generated Tooling schemas before dispatching an authorized handler', async () => {
     const handler = vi.fn(async (_input: unknown, context: PeerHostCallContext) => {
@@ -343,6 +354,108 @@ describe('WebRtcPeerHost', () => {
       expect(boom.sent.at(-1)).toMatchObject({ type: 'error', id: 'boom', error: { code: 500, message: 'handler failed', reason_code: 'handler_failed' } })
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('consumes timeout send rejection for late call and stream work without leaking raw sender text', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const sent: unknown[] = []
+      let callRelease!: () => void
+      const registry = new PeerHostContractRegistry().register({
+        methodId: 'Tooling.GetTools',
+        methodType: 'unary',
+        inputSchemaId: 'Tooling.GetTools.input',
+        outputSchemaId: 'Tooling.GetTools.output',
+        inputSchema: z.any(),
+        outputSchema: z.object({ count: z.number(), tools: z.array(z.unknown()) }),
+        requiredPermissions: ['Tooling.GetTools'],
+        timeoutMs: 1,
+        handler: async () => {
+          await new Promise<void>((resolve) => { callRelease = resolve })
+          return { count: 0, tools: [] }
+        }
+      })
+      const peerHost = new WebRtcPeerHost({
+        localPeerId: 'local-peer',
+        nodeName: 'Local',
+        registry,
+        authorizationStore: new SessionPeerHostAuthorizationStore([grant()]),
+        clock: () => Date.now(),
+        randomId: () => 'timeout-ref'
+      })
+      peerHost.attach({
+        sendFrame: async (frame) => {
+          sent.push(frame)
+          throw new Error('send failed secret')
+        }
+      })
+      const manifest = peerHost.startEpoch()
+      peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+
+      const call = peerHost.handleCall({ type: 'call', id: 'late-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
+      await flush()
+      await waitForTimeoutWork()
+      expect(peerHost.getDiagnostics()).toMatchObject({ activeWorkCount: 0, timeoutSendFailureCount: 1, lastTimeoutFailureReason: 'timeout_send_failed' })
+      expect(JSON.stringify(peerHost.getDiagnostics())).not.toContain('send failed secret')
+      expect(unhandled.map(String).join('\n')).not.toContain('send failed secret')
+      expect(sent).toHaveLength(1)
+      expect(sent.at(-1)).toMatchObject({ type: 'error', id: 'late-call', error: { code: 504, reason_code: 'request_timeout' } })
+      callRelease()
+      await call
+      expect(sent).toHaveLength(1)
+
+      const streamSent: unknown[] = []
+      let streamRelease!: () => void
+      async function* lateStream(): AsyncIterable<unknown> {
+        await new Promise<void>((resolve) => { streamRelease = resolve })
+        yield { count: 0, tools: [] }
+      }
+      const streamRegistry = new PeerHostContractRegistry().register({
+        methodId: 'Tooling.GetTools',
+        methodType: 'stream',
+        inputSchemaId: 'Tooling.GetTools.input',
+        outputSchemaId: 'Tooling.GetTools.output',
+        inputSchema: z.any(),
+        outputSchema: z.object({ count: z.number(), tools: z.array(z.unknown()) }),
+        requiredPermissions: ['Tooling.GetTools'],
+        timeoutMs: 1,
+        handler: async () => ({ count: 0, tools: [] }),
+        streamHandler: lateStream
+      })
+      const streamHost = new WebRtcPeerHost({
+        localPeerId: 'local-peer',
+        nodeName: 'Local',
+        registry: streamRegistry,
+        authorizationStore: new SessionPeerHostAuthorizationStore([grant()]),
+        clock: () => Date.now(),
+        randomId: () => 'stream-timeout-ref'
+      })
+      streamHost.attach({
+        sendFrame: async (frame) => {
+          streamSent.push(frame)
+          throw new Error('send failed secret')
+        }
+      })
+      const streamManifest = streamHost.startEpoch()
+      streamHost.markManifestAcknowledged(ackFromManifest(streamManifest))
+
+      const stream = streamHost.handleCall({ type: 'call', id: 'late-stream', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
+      await flush()
+      await waitForTimeoutWork()
+      expect(streamHost.getDiagnostics()).toMatchObject({ activeWorkCount: 0, timeoutSendFailureCount: 1, lastTimeoutFailureReason: 'timeout_send_failed' })
+      expect(JSON.stringify(streamHost.getDiagnostics())).not.toContain('send failed secret')
+      expect(unhandled.map(String).join('\n')).not.toContain('send failed secret')
+      expect(streamSent).toHaveLength(1)
+      expect(streamSent.at(-1)).toMatchObject({ type: 'error', id: 'late-stream', error: { code: 504, reason_code: 'request_timeout' } })
+      streamRelease()
+      await stream
+      expect(streamSent).toHaveLength(1)
+      expect(unhandled).toHaveLength(0)
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
     }
   })
 })
