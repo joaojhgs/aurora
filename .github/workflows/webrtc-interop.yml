@@ -3,15 +3,19 @@ name: WebRTC live interop
 on:
   pull_request:
     paths:
+      - "app/services/auth/**"
+      - "app/services/config/config_defaults.json"
+      - "app/services/gateway/service.py"
       - "app/services/gateway/webrtc/**"
-      - "packages/aurora-sdk/src/mesh.ts"
-      - "packages/aurora-sdk/src/webrtc/**"
-      - "packages/aurora-ui/src/browser-peer-persistence.ts"
-      - "packages/aurora-ui/src/web-thin-runtime.ts"
-      - "apps/aurora-web/app/aurora-client.ts"
+      - "packages/aurora-sdk/src/**"
+      - "packages/aurora-ui/src/**"
+      - "apps/aurora-web/app/**"
+      - "apps/aurora-web/package.json"
       - "apps/aurora-tauri/src/legacy-webview-polyfills.ts"
       - "tests/e2e/webrtc_interop/**"
+      - "tests/e2e/hosted_thin_shell/**"
       - "tests/e2e/browser_persistence/**"
+      - "scripts/hosted_thin_shell_e2e.sh"
       - "scripts/webrtc_interop*"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -45,6 +49,9 @@ jobs:
       - name: Run encrypted browser persistence E2E tests
         run: pnpm test:web-persistence
 
+      - name: Run the hosted thin-shell UI against the full Python service
+        run: pnpm test:web-thin:live
+
       - name: Run strict direct, STUN, and TURN interoperability matrix
         env:
           WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS: "1"
@@ -53,5 +60,7 @@ jobs:
         if: always()
         with:
           name: webrtc-interop-e2e
-          path: reports/webrtc-interop/
+          path: |
+            reports/webrtc-interop/
+            reports/hosted-thin-shell/
           if-no-files-found: warn

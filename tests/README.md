@@ -23,8 +23,9 @@ Aurora's test suite is divided into several categories:
    - Run with: `pytest tests/performance`
 
 5. **Browser E2E Tests** - Run real browser-engine storage, UI, and WebRTC scenarios
-   - Locations: `tests/e2e/browser_persistence/`, `tests/e2e/webrtc_interop/`
+   - Locations: `tests/e2e/browser_persistence/`, `tests/e2e/hosted_thin_shell/`, `tests/e2e/webrtc_interop/`
    - Run hosted peer persistence with: `pnpm test:web-persistence`
+   - Run the hosted invite/SAS/approval/route/reload product flow against an isolated full Python service with: `pnpm test:web-thin:live`
    - Run live browser/Python WebRTC lanes with the root `test:webrtc:*` scripts
    - Run packaged Android System WebView ↔ Python peer WebRTC E2E with `pnpm --filter @aurora/tauri-ui android:webrtc:interop` while an emulator/device is running
 
@@ -122,7 +123,7 @@ See `docs/TEST_HARNESS_INVENTORY.md` for which executable scripts are product/bu
 3. **Frontend and SDK** - TypeScript SDK/UI/web tests and builds
    - Workflow file: `.github/workflows/frontend-sdk.yml`
 
-4. **Browser persistence and WebRTC interoperability** - One consolidated check for cross-engine encrypted refresh restoration plus live browser/Python direct, STUN, and TURN lanes
+4. **Browser persistence and WebRTC interoperability** - One consolidated check for cross-engine encrypted refresh restoration, the hosted thin-shell UI pairing/reload flow, plus live browser/Python direct, STUN, and TURN lanes
    - Workflow file: `.github/workflows/webrtc-interop.yml`
 
 5. **Platform-specific packaged WebViews** - Existing Android and iOS workflows own emulator-only assertions that cannot run in the general browser lane

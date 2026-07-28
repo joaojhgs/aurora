@@ -167,7 +167,7 @@ claims.
 - Add user-verified WebAuthn PRF/passkey vault unlock and a public-key reconnect challenge so the browser no longer needs a reusable persisted bearer.
 - Preserve Chromium, Firefox, and Playwright-WebKit direct/STUN/TURN behavior; validate page visibility/suspension limits before broader cross-browser release claims.
 
-**Current exit:** achieved for direct Chromium/Firefox/WebKit foreground operation against a Python peer without the Aurora HTTP application server; broader certification remains pending.
+**Current exit:** achieved for direct Chromium/Firefox/WebKit foreground protocol operation against a Python peer without the Aurora HTTP application server. The hosted Chromium product-flow gate also proves invite onboarding, bilateral scoped pairing, real route/Mesh reads, SPA navigation, blur-event survival, encrypted persistence, and reload reconnection with no browser Gateway HTTP fallback. Actual OS page suspension and broader deployment certification remain pending.
 
 ### R4 — Desktop Tauri direct-peer client
 

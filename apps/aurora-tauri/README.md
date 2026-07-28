@@ -280,7 +280,7 @@ Required QA evidence for IOS-008:
 
 | Platform | Local command / CI lane | Capability evidence | Release limits |
 | --- | --- | --- | --- |
-| Web thin | Web app checks in `frontend-sdk.yml`; `pnpm test:webrtc:interop`; `pnpm test:webrtc:turn`; `pnpm test:webrtc:browsers` | HTTP/Gateway SDK transport plus direct, configured-STUN, and forced-TURN WebRTC DataChannel RPC/events live-proven in Chromium, Firefox, and Playwright WebKit. | Packaged WebView, page suspension, physical-device, and production-scale browser/network certification remain separate evidence. |
+| Web thin | Web app checks in `frontend-sdk.yml`; `pnpm test:web-thin:live`; `pnpm test:webrtc:interop`; `pnpm test:webrtc:turn`; `pnpm test:webrtc:browsers` | HTTP/Gateway SDK transport; direct, configured-STUN, and forced-TURN WebRTC DataChannel RPC/events live-proven in Chromium, Firefox, and Playwright WebKit; hosted Chromium invite/SAS/bilateral approval/scoped route/Mesh/navigation/blur/reload flow live-proven against the full Python service with no browser HTTP fallback. | Packaged WebView, actual page suspension, physical-device, and production-scale browser/network certification remain separate evidence. |
 | Desktop local | `pnpm --filter @aurora/tauri-ui tauri dev`; `dev:smoke` in `tauri-desktop.yml` | Rust-supervised Python sidecar, loopback Gateway, secure storage/native command status, unified logs. | Dev path does not use packaged sidecar staging. |
 | Desktop packaged local | `build:bundle:desktop-local`, `build:bundle:desktop-local-minimal`, or another explicit local `build:bundle:<profile>` | Profile-specific sidecar staged into Tauri external binaries. | Local/CI scripts pass `--no-sign`; signing/notarization are release-only. |
 | Desktop packaged thin | `build:bundle:desktop-thin`; `verify:bundle:desktop-thin` | Python-free Tauri shell with no compiled Gateway/signaling endpoint, runtime-configurable HTTP/WebRTC profile storage, and AppImage/deb artifact proof report. | Requires runtime onboarding/profile configuration; no local wakeword/background Python service ownership. |
@@ -301,6 +301,7 @@ pnpm --filter @aurora/tauri-ui ios:webrtc:interop
 pnpm test:webrtc:interop
 pnpm test:webrtc:turn
 pnpm test:webrtc:browsers
+pnpm test:web-thin:live
 cd apps/aurora-tauri/src-tauri && cargo check
 cd apps/aurora-tauri/src-tauri && cargo test
 ```

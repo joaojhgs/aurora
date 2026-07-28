@@ -259,3 +259,4 @@ apps/*/reports/playwright-*/
 # WebRTC interop transient lane artifacts; compact report.json evidence may be committed
 /reports/webrtc-interop/*/*
 !/reports/webrtc-interop/*/report.json
+/reports/hosted-thin-shell/

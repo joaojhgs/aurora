@@ -13,6 +13,7 @@
     "dev:python": "pnpm dev:python-service",
     "dev:python-service": "AURORA_ARCHITECTURE_MODE=threads AURORA_UI_ACTIVATE=false PYTHONUNBUFFERED=1 uv run python main.py",
     "test:web-persistence": "pnpm --filter @aurora/ui build && playwright test --config tests/e2e/browser_persistence/playwright.config.ts",
+    "test:web-thin:live": "scripts/hosted_thin_shell_e2e.sh",
     "test:webrtc:interop": "scripts/webrtc_interop_local.sh direct",
     "test:webrtc:turn": "scripts/webrtc_interop_local.sh turn",
     "test:webrtc:browsers": "scripts/webrtc_interop_browser_matrix.sh"
