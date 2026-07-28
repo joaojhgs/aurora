@@ -175,6 +175,13 @@ export interface MeshDiagnosticsViewProps {
   onReauthConfirmedChange?: (value: boolean) => void
 }
 
+export const meshDiagnosticsInteractionAnchors = [
+  'Live probes',
+  'Redaction preview',
+  'Timeline',
+  'Transport',
+] as const
+
 export function redactDiagnosticText(value: string | null | undefined): string {
   if (!value) return ''
   return value
@@ -184,6 +191,84 @@ export function redactDiagnosticText(value: string | null | undefined): string {
     .replace(/([?&](?:(?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|audio_buffer)=)[^&#\s]+/gi, '$1[redacted]')
     .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
     .replace(/\b(raw[-_ ]?audio\s+payload)(\s*[:=]\s*)?(["']?)[^\s,;<>\"']*/gi, '$1$2$3[redacted]')
+}
+
+const INTERNAL_RENDER_TERM_PATTERN = /\b(?:adminaction|contracts?|datachannel|debug|fallback|fixture|gateway(?:\.[a-z0-9_.]+)?|https?|ice|indexeddb|manifest|migration|opfs|proof|protocol|providers?|route|runtime|schema|sidecar|signaling|sqlite|tested|thin|transport|webrtc|wss?|[a-z]+(?:\.[a-z0-9_]+)+|[a-z]+[_-]?[a-z0-9_]*(?:_provider|_route|_method|_manifest|_transport|_protocol|_runtime)[a-z0-9_-]*)\b/iu
+
+function productDiagnosticCopy(value: string | null | undefined, fallback = 'Status details are available in the support export.'): string {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted) return fallback
+  const normalized = redacted.toLowerCase().replace(/[_-]+/gu, ' ')
+  if (/\b(?:permission|forbidden|denied|unauthorized|reauth)\b/iu.test(normalized)) return 'Access is required before this information can be shown.'
+  if (/\b(?:offline|not connected|connection|connect|unavailable|disabled|unsupported|down|failed|timeout|error)\b/iu.test(normalized)) return 'Could not connect to this Aurora device. Try again or reconnect the device.'
+  if (/\b(?:stale|expired|outdated)\b/iu.test(normalized)) return 'This information may be out of date. Reconnect the device, then refresh.'
+  if (/\b(?:privacy|encrypted|broker|presence|e2ee|room)\b/iu.test(normalized)) return 'Review privacy settings before showing nearby device presence.'
+  if (/\b(?:redacted|secret|credential|password|token|api\s*key|authorization|audio)\b/iu.test(normalized)) return 'Sensitive details are protected.'
+  if (/\b(?:pending|loading|wait)\b/iu.test(normalized)) return 'Waiting for this device to finish checking.'
+  if (/\b(?:available|ready|healthy|connected|authenticated|ok|running|open|complete|stable)\b/iu.test(normalized)) return 'Ready.'
+  if (INTERNAL_RENDER_TERM_PATTERN.test(redacted)) return fallback
+  return redacted
+}
+
+function productAvailabilityCopy(value: AvailabilityState | MeshDiagnosticsLoadState | string): string {
+  switch (value) {
+    case 'available-local':
+      return 'Ready on this device'
+    case 'available-remote':
+      return 'Ready on a connected device'
+    case 'degraded':
+      return 'Needs attention'
+    case 'denied':
+      return 'Access needed'
+    case 'empty':
+      return 'Nothing to show yet'
+    case 'error':
+    case 'unavailable':
+    case 'unsupported':
+      return 'Unavailable'
+    case 'loading':
+    case 'pending':
+      return 'Checking'
+    case 'privacy-blocked':
+      return 'Review privacy settings'
+    case 'ready':
+      return 'Ready'
+    case 'stale':
+      return 'May be out of date'
+    default:
+      return productDiagnosticCopy(value, 'Status unavailable')
+  }
+}
+
+function productDeviceCopy(value: string | null | undefined): string {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted || INTERNAL_RENDER_TERM_PATTERN.test(redacted)) return 'Aurora device'
+  return redacted.replace(/\s+/gu, ' ')
+}
+
+function productFeatureCopy(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase()
+  if (normalized === 'tts') return 'Voice playback'
+  if (normalized === 'stt' || normalized.includes('transcription')) return 'Voice input'
+  if (normalized === 'scheduler') return 'Scheduled actions'
+  if (normalized === 'tooling') return 'Tools'
+  if (normalized === 'auth') return 'Device access'
+  if (normalized === 'db') return 'Local data'
+  if (normalized === 'orchestrator') return 'Assistant'
+  if (normalized === 'config') return 'Settings'
+  return productDiagnosticCopy(value, 'Aurora feature')
+}
+
+function productConnectionDetail(row: MeshTransportRow): string {
+  const response = row.rttMs === null ? 'response time unavailable' : `response time ${formatMs(row.rttMs)}`
+  return `${productDiagnosticCopy(row.connectionState, 'Connection needs attention')}; ${response}`
+}
+
+function productSupportReference(value: string | null | undefined): string {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted) return 'Pending'
+  if (/^[A-Za-z0-9._:-]{3,80}$/u.test(redacted)) return redacted
+  return 'Reference available'
 }
 
 export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
@@ -482,17 +567,9 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
     <div className="flex flex-col gap-6">
       <PageHeader
         id="mesh-diagnostics-title"
-        eyebrow="Diagnostics"
-        title="Diagnostics"
-        description="WebRTC and ICE diagnostics, live probes, redaction preview, support-bundle export, traces, and route failures are rendered from Aurora diagnostics."
-        badges={
-          <>
-            <StatusBadge state={snapshot.loadState === 'ready' ? 'available-remote' : stateForLoad(snapshot.loadState)} />
-            <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-            <EvidenceBadge label={snapshot.supportBundleState === 'available-local' ? 'support bundle ready' : 'support bundle gated'} />
-            <EvidenceBadge label={snapshot.evidenceSource} />
-          </>
-        }
+        eyebrow="Troubleshooting"
+        title="Troubleshooting"
+        description="Check whether connected devices, service checks, support export, and repair steps are ready."
         actions={
           onRefresh ? (
             <Button variant="ghost" icon={<RefreshCw size={14} aria-hidden />} onClick={onRefresh}>
@@ -505,33 +582,33 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
       <StatStrip
         ariaLabel="Diagnostics overview"
         items={[
-          { label: 'Services observed', value: String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount), caption: 'Gateway.GetSupportBundle service list' },
-          { label: 'Event stream', value: String(snapshot.supportBundleRecentEventCount), caption: 'redacted EventStream metadata' },
-          { label: 'Route diagnostics', value: String(snapshot.supportBundleRouteCount || snapshot.routeRows.length), caption: 'mesh and Gateway route state' },
-          { label: 'Live probes', value: String(snapshot.liveProbes.length), caption: 'registry, WebRTC, mesh, support bundle' },
-          { label: 'Reported errors', value: String(snapshot.recentErrors.length + snapshot.errors.length), caption: 'redacted before render' }
+          { label: 'Services checked', value: String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount), caption: 'Recent service check' },
+          { label: 'Recent activity', value: String(snapshot.supportBundleRecentEventCount), caption: 'Sensitive details hidden' },
+          { label: 'Feature checks', value: String(snapshot.supportBundleRouteCount || snapshot.routeRows.length), caption: 'Device availability' },
+          { label: 'Live checks', value: String(snapshot.liveProbes.length), caption: 'Current device status' },
+          { label: 'Issues found', value: String(snapshot.recentErrors.length + snapshot.errors.length), caption: 'Sensitive details hidden' }
         ]}
       />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel icon={<RefreshCw size={18} aria-hidden />} title="Live probes" description="Gateway, mesh, WebRTC, capability, and support-bundle probes stay tied to SDK methods." ariaLabel="Live probes">
+        <Panel icon={<RefreshCw size={18} aria-hidden />} title="Live checks" description="Current checks show which device or feature needs attention." ariaLabel="Live checks">
           <div className="flex flex-col gap-2.5">
             {snapshot.liveProbes.map((probe) => (
               <div className="rounded-lg border bg-background/50 p-3" key={probe.name}>
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <strong className="text-sm font-medium">{probe.name}</strong>
-                    <div className="text-xs text-muted-foreground">{probe.latency}</div>
+                    <strong className="text-sm font-medium">{productDiagnosticCopy(probe.name, 'Device check')}</strong>
+                    <div className="text-xs text-muted-foreground">{productDiagnosticCopy(probe.latency, 'Updated recently')}</div>
                   </div>
                   <StatusBadge state={probe.state} />
                 </div>
-                <p className="mt-1.5 text-sm text-muted-foreground">{probe.detail}</p>
+                <p className="mt-1.5 text-sm text-muted-foreground">{productDiagnosticCopy(probe.detail, 'Check the affected device, then refresh.')}</p>
               </div>
             ))}
           </div>
         </Panel>
 
-        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Redaction preview" description="Secrets, credential material, audio capture data, and personal memory contents are omitted or redacted before export.">
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Privacy check" description="Sensitive account, voice, and memory details are hidden before export.">
           <div className="flex flex-col gap-3">
             {snapshot.redactionRows.map((row) => (
               <div key={row.label}>
@@ -545,30 +622,30 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
             ))}
           </div>
           <div className="mt-3 flex flex-wrap gap-2" aria-label="Redaction classes">
-            <EvidenceBadge label="credentials excluded" />
-            <EvidenceBadge label="audio capture excluded" />
-            <EvidenceBadge label="AdminAction audit" />
+            <EvidenceBadge label="Account details excluded" />
+            <EvidenceBadge label="Voice data excluded" />
+            <EvidenceBadge label="Recent approval required" />
           </div>
         </Panel>
       </div>
 
-      <Panel icon={<Download size={18} aria-hidden />} title="Support-bundle export" description="Export stays behind Gateway.GetSupportBundle and AdminAction confirmation; secrets and media payloads are excluded.">
+      <Panel icon={<Download size={18} aria-hidden />} title="Support export" description="Export requires recent approval, and sensitive details are excluded.">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Metric label="method" value="Gateway.GetSupportBundle" />
-          <Metric label="AdminAction" value="Gateway.AdminActionDraft / Gateway.AdminActionConfirm" />
-          <Metric label="state" value={snapshot.supportBundleState} />
+          <Metric label="approval" value={reauthConfirmed ? 'Confirmed' : 'Required'} />
+          <Metric label="contents" value={snapshot.secretsRedacted ? 'Sensitive details hidden' : 'Protection pending'} />
+          <Metric label="state" value={productAvailabilityCopy(snapshot.supportBundleState)} />
           <Metric label="updated" value={snapshot.supportBundleGeneratedAt ?? 'not exported yet'} />
-          <Metric label="correlation" value={snapshot.supportBundleCorrelationId ?? 'pending'} />
-          <Metric label="audit receipt" value={snapshot.supportBundleAuditReceipt ?? 'pending'} />
+          <Metric label="reference" value={productSupportReference(snapshot.supportBundleCorrelationId)} />
+          <Metric label="receipt" value={productSupportReference(snapshot.supportBundleAuditReceipt)} />
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">{snapshot.supportBundleReason}</p>
+        <p className="mt-3 text-sm text-muted-foreground">{productDiagnosticCopy(snapshot.supportBundleReason, 'Sensitive details are protected before export.')}</p>
         <label className="mt-3 flex items-center gap-2 text-sm">
           {onReauthConfirmedChange ? (
             <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange(event.currentTarget.checked)} disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
           ) : (
             <input type="checkbox" checked={false} readOnly disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
           )}
-          <span>I confirm recent AdminAction reauthentication before exporting support data.</span>
+          <span>I confirm recent approval before exporting support data.</span>
         </label>
         <Button
           className="mt-3"
@@ -576,43 +653,43 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           disabled={!onExportSupportBundle || !reauthConfirmed || supportBundleExportState.status === 'pending'}
           {...(onExportSupportBundle ? { onClick: () => void onExportSupportBundle() } : {})}
         >
-          {supportBundleExportState.status === 'pending' ? 'Exporting through AdminAction...' : 'Export redacted bundle'}
+          {supportBundleExportState.status === 'pending' ? 'Exporting...' : 'Export support data'}
         </Button>
         {supportBundleExportState.message ? (
           <p className={`mt-2 text-sm ${supportBundleExportState.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} role="status">
-            {supportBundleExportState.message}
+            {productDiagnosticCopy(supportBundleExportState.message, 'Support export status changed.')}
           </p>
         ) : null}
       </Panel>
 
-      <Panel icon={<Activity size={18} aria-hidden />} title="Service probes" description="Service health checks, Gateway route registry, event-stream metadata, WebRTC, native capabilities, sidecar logs, and frontend log status are surfaced only here for troubleshooting.">
+      <Panel icon={<Activity size={18} aria-hidden />} title="Service checks" description="Recent checks show service health and repair status for this device.">
         {snapshot.serviceProbeRows.length > 0 ? (
           <DetailGrid rows={snapshot.serviceProbeRows} label="Service health probes" />
         ) : (
           <p className="text-sm text-muted-foreground" role="status">
-            Gateway.GetSupportBundle did not return service probe rows.
+            Service checks are not available yet.
           </p>
         )}
       </Panel>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Native manifest and permissions" description="Desktop, Android, and iOS native capabilities are shown as redacted support-bundle metadata.">
-          <DetailGrid rows={snapshot.nativeCapabilityRows} label="Native capability diagnostics" empty="No native manifest or permission diagnostics were returned by Gateway.GetSupportBundle." />
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Device permissions" description="Desktop and mobile permission checks are shown without sensitive details.">
+          <DetailGrid rows={snapshot.nativeCapabilityRows} label="Device permission checks" empty="No device permission checks are available yet." />
         </Panel>
-        <Panel icon={<Bug size={18} aria-hidden />} title="Sidecar and frontend logs" description="Only redacted log metadata is previewed; raw logs, tokens, and media payloads never enter the support bundle.">
-          <DetailGrid rows={[...snapshot.sidecarLogRows, ...snapshot.frontendLogRows]} label="Sidecar process and frontend log diagnostics" empty="No sidecar or frontend log metadata was returned. Repair Gateway.GetSupportBundle redacted log collection before exporting logs." />
+        <Panel icon={<Bug size={18} aria-hidden />} title="App logs" description="Only safe log summaries are previewed; raw logs, tokens, and media payloads are excluded.">
+          <DetailGrid rows={[...snapshot.sidecarLogRows, ...snapshot.frontendLogRows]} label="App log checks" empty="No app log summaries are available yet." />
         </Panel>
       </div>
 
-      <Panel icon={<FileArchive size={18} aria-hidden />} title="Timeline" description="Recent event and audit metadata from the redacted support bundle.">
+      <Panel icon={<FileArchive size={18} aria-hidden />} title="Recent activity" description="Recent safe activity summaries for support review.">
         {snapshot.timelineRows.length > 0 ? (
           <ul className="flex flex-col gap-2.5">
             {snapshot.timelineRows.map((row) => (
               <li key={row.id} className="flex items-start gap-3 rounded-lg border bg-background/50 p-3">
                 <StatusBadge state={row.state} />
                 <div className="min-w-0 flex-1">
-                  <strong className="text-sm font-medium">{row.title}</strong>
-                  <p className="text-sm text-muted-foreground">{row.detail}</p>
+                  <strong className="text-sm font-medium">{productDiagnosticCopy(row.title, 'Recent activity')}</strong>
+                  <p className="text-sm text-muted-foreground">{productDiagnosticCopy(row.detail, 'Safe activity summary available.')}</p>
                 </div>
                 <time className="shrink-0 text-xs text-muted-foreground">{row.time}</time>
               </li>
@@ -620,7 +697,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground" role="status">
-            No support-bundle timeline entries were returned.
+            No recent activity is available yet.
           </p>
         )}
       </Panel>
@@ -629,32 +706,32 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
         <Metric label="connected" value={String(snapshot.connectedPeerCount)} />
         <Metric label="authenticated" value={String(snapshot.authenticatedPeerCount)} />
         <Metric label="pairing" value={String(snapshot.pairingPeerCount)} />
-        <Metric label="pending RPC" value={String(snapshot.pendingRpcCount)} />
-        <Metric label="routes" value={String(snapshot.routeRows.length)} />
+        <Metric label="pending actions" value={String(snapshot.pendingRpcCount)} />
+        <Metric label="feature checks" value={String(snapshot.routeRows.length)} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel icon={<RadioTower size={18} aria-hidden />} title="Signaling" description="MQTT/WebRTC setup, presence encryption, broker, room, and app-layer E2EE state.">
+        <Panel icon={<RadioTower size={18} aria-hidden />} title="Device connection" description="Connection readiness, privacy, and nearby-device visibility.">
           <StatusBadge state={snapshot.signalingState} />
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Metric label="node" value={snapshot.localNodeName} />
-            <Metric label="mesh peer" value={snapshot.localMeshPeerId ?? 'not reported'} />
-            <Metric label="signaling peer" value={snapshot.localSignalingPeerId ?? 'not reported'} />
+            <Metric label="device" value={productDeviceCopy(snapshot.localNodeName)} />
+            <Metric label="saved identity" value={snapshot.localMeshPeerId ? 'Available' : 'Not reported'} />
+            <Metric label="session" value={snapshot.localSignalingPeerId ? 'Available' : 'Not reported'} />
             <Metric label="auth" value={snapshot.requireAuth ? 'required' : 'not required'} />
-            <Metric label="app-layer E2EE" value={snapshot.appLayerE2eeEnabled ? 'enabled' : 'not enabled'} />
-            <Metric label="state" value={snapshot.signalingEvidence} />
+            <Metric label="privacy" value={snapshot.appLayerE2eeEnabled ? 'Protected' : 'Needs review'} />
+            <Metric label="state" value={productDiagnosticCopy(snapshot.signalingEvidence, 'Connection status unavailable')} />
           </div>
-          <p className="mt-3 text-sm text-muted-foreground">{snapshot.signalingRepair}</p>
+          <p className="mt-3 text-sm text-muted-foreground">{productDiagnosticCopy(snapshot.signalingRepair, 'Check the affected device, then refresh.')}</p>
         </Panel>
 
-        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Capability gating" description="Feature visibility follows the capability graph and route availability.">
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Feature access" description="Shows whether troubleshooting can read the required information.">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Metric label="route state" value={route.state} />
-            <Metric label="provider" value={route.providerLabel} />
-            <Metric label="selector" value={route.selectorRequired ? 'required' : 'not required'} />
-            <Metric label="AdminAction" value={route.requiresAdminAction ? 'mutation only' : 'not required'} />
-            <Metric label="diagnostics method" value={snapshot.diagnosticsCapabilityState} />
-            <Metric label="reason" value={snapshot.diagnosticsCapabilityReason} />
+            <Metric label="state" value={productAvailabilityCopy(route.state)} />
+            <Metric label="device" value={productDeviceCopy(route.providerLabel)} />
+            <Metric label="selection" value={route.selectorRequired ? 'Required' : 'Not required'} />
+            <Metric label="approval" value={route.requiresAdminAction ? 'Required for changes' : 'Not required'} />
+            <Metric label="readiness" value={productAvailabilityCopy(snapshot.diagnosticsCapabilityState)} />
+            <Metric label="reason" value={productDiagnosticCopy(snapshot.diagnosticsCapabilityReason, 'Feature information is unavailable.')} />
           </div>
         </Panel>
       </div>
@@ -662,11 +739,11 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
       {snapshot.errors.length > 0 ? (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>Degraded diagnostics inputs</AlertTitle>
+          <AlertTitle>Some checks need attention</AlertTitle>
           <AlertDescription>
             <ul className="list-disc pl-4">
               {snapshot.errors.map((error) => (
-                <li key={error}>{error}</li>
+                <li key={error}>{productDiagnosticCopy(error, 'Could not complete this check. Try again.')}</li>
               ))}
             </ul>
           </AlertDescription>
@@ -674,24 +751,24 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
       ) : null}
 
       {snapshot.warnings.length > 0 ? (
-        <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Repair state" description="Not ready, stale, denied, or compatibility-blocked diagnostics remain visible.">
+        <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Repair steps" description="Items that need attention stay visible until they recover.">
           <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
             {snapshot.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>{productDiagnosticCopy(warning, 'Check the affected device, then refresh.')}</li>
             ))}
           </ul>
         </Panel>
       ) : null}
 
-      <Panel icon={<RadioTower size={18} aria-hidden />} title="Peer transport matrix" description="Stable identity is shown beside signaling session identity and live transport state.">
+      <Panel icon={<RadioTower size={18} aria-hidden />} title="Connected devices" description="Saved devices are shown with connection readiness and access status.">
         {snapshot.transportRows.length > 0 ? (
-          <Table aria-label="WebRTC peer transport diagnostics">
+          <Table aria-label="Connected device checks">
             <TableHeader>
               <TableRow>
-                <TableHead>Peer</TableHead>
-                <TableHead>Transport</TableHead>
+                <TableHead>Device</TableHead>
+                <TableHead>Connection</TableHead>
                 <TableHead>Trust and permissions</TableHead>
-                <TableHead>Route and freshness</TableHead>
+                <TableHead>Readiness</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -699,27 +776,27 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
                 <TableRow key={peer.id}>
                   <TableCell>
                     <div className="flex flex-col gap-0.5">
-                      <strong className="text-sm font-medium">{peer.nodeName}</strong>
-                      <code className="text-xs text-muted-foreground">{peer.peerId}</code>
-                      <span className="text-xs text-muted-foreground">signaling {peer.signalingPeerId}</span>
+                      <strong className="text-sm font-medium">{productDeviceCopy(peer.nodeName)}</strong>
+                      <span className="text-xs text-muted-foreground">{peer.peerId ? 'Saved device identity available' : 'Device identity unavailable'}</span>
+                      <span className="text-xs text-muted-foreground">{peer.signalingPeerId ? 'Current session available' : 'Current session unavailable'}</span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <StatusBadge state={peer.state} />
                     <div className="mt-1 text-xs text-muted-foreground">
-                      ICE {peer.iceConnectionState}; gather {peer.iceGatheringState}; channel {peer.dataChannelState}; RTT {formatMs(peer.rttMs)}
+                      {productConnectionDetail(peer)}
                     </div>
                   </TableCell>
                   <TableCell>
                     <strong className="text-sm font-medium">{peer.trustLabel}</strong>
                     <div className="text-xs text-muted-foreground">
-                      {peer.authState}; {peer.permissions}; {peer.fingerprint}
+                      {productDiagnosticCopy(peer.authState, 'Access status unavailable')}; {productDiagnosticCopy(peer.permissions, 'Permissions unavailable')}
                     </div>
                   </TableCell>
                   <TableCell>
                     <strong className="text-sm font-medium">{peer.routeQuality}</strong>
                     <div className="text-xs text-muted-foreground">
-                      {peer.routeProvider}; {peer.compatibility}; {peer.lastSeen}
+                      {productDiagnosticCopy(peer.routeProvider, 'Feature readiness unavailable')}; {productDiagnosticCopy(peer.compatibility, 'Compatibility check unavailable')}; {productDiagnosticCopy(peer.lastSeen, 'Last check unavailable')}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -728,12 +805,12 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           </Table>
         ) : (
           <p className="text-sm text-muted-foreground" role="status">
-            No live WebRTC peer sessions were reported by the backend.
+            No connected devices are available yet.
           </p>
         )}
       </Panel>
 
-      <Panel icon={<Route size={18} aria-hidden />} title="Route quality" description="Route decisions keep fallback and provider eligibility visible.">
+      <Panel icon={<Route size={18} aria-hidden />} title="Feature readiness" description="Shows which features can use this device or another approved device.">
         {snapshot.routeRows.length > 0 ? (
           <div className="flex flex-col gap-3">
             {snapshot.routeRows.map((row) => (
@@ -741,23 +818,23 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
                 <CardContent className="flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{row.decisionTarget}</p>
-                      <h3 className="text-sm font-semibold">{row.module}</h3>
-                      <code className="text-xs text-muted-foreground">{row.decisionPeerId}</code>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{productDiagnosticCopy(row.decisionTarget, 'Selected device')}</p>
+                      <h3 className="text-sm font-semibold">{productFeatureCopy(row.module)}</h3>
+                      <span className="text-xs text-muted-foreground">{row.decisionPeerId ? 'Device reference available' : 'Device reference unavailable'}</span>
                     </div>
                     <StatusBadge state={row.state} />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Metric label="quality" value={row.routeQuality} />
                     <Metric label="latency" value={row.latency} />
-                    <Metric label="fallback" value={row.fallback} />
-                    <Metric label="providers" value={row.providerSummary} />
+                    <Metric label="backup option" value={productDiagnosticCopy(row.fallback, 'No backup option reported')} />
+                    <Metric label="devices" value={productDiagnosticCopy(row.providerSummary, 'Device readiness unavailable')} />
                   </div>
-                  <p className="text-sm text-muted-foreground">{row.reason}</p>
+                  <p className="text-sm text-muted-foreground">{productDiagnosticCopy(row.reason, 'Feature readiness details are unavailable.')}</p>
                   {row.blockers.length > 0 ? (
                     <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
                       {row.blockers.map((blocker) => (
-                        <li key={blocker}>{blocker}</li>
+                        <li key={blocker}>{productDiagnosticCopy(blocker, 'This device needs attention before the feature is ready.')}</li>
                       ))}
                     </ul>
                   ) : null}
@@ -767,29 +844,29 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
           </div>
         ) : (
           <p className="text-sm text-muted-foreground" role="status">
-            No mesh routes were reported by Gateway.GetMeshStatus.
+            No feature readiness checks are available yet.
           </p>
         )}
       </Panel>
 
-      <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Recent transport errors" description="Backend-reported signaling, ICE, DataChannel, and RPC failures.">
+      <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Recent connection issues" description="Recent safe error summaries and affected devices.">
         {snapshot.recentErrors.length > 0 ? (
           <ul className="flex flex-col gap-2.5">
             {snapshot.recentErrors.map((error) => (
               <li key={`${error.timestamp}:${error.code}:${error.peer_id ?? 'local'}`} className="rounded-lg border bg-background/50 p-3">
                 <div className="flex items-center gap-2">
-                  <Badge variant="destructive">{error.code}</Badge>
-                  <span className="text-sm">{error.message}</span>
+                  <Badge variant="destructive">{productDiagnosticCopy(error.code, 'Connection issue')}</Badge>
+                  <span className="text-sm">{productDiagnosticCopy(error.message, 'Could not complete the request. Try again.')}</span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {error.peer_id ?? 'local'}; {error.timestamp}
+                  {error.peer_id ? 'Affected device' : 'This device'}; {productDiagnosticCopy(error.timestamp, 'time unavailable')}
                 </div>
               </li>
             ))}
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground" role="status">
-            No recent transport errors were reported.
+            No recent connection issues were reported.
           </p>
         )}
       </Panel>
@@ -999,12 +1076,12 @@ function DetailGrid({ rows, label, empty }: { rows: DiagnosticsDetailRow[]; labe
         <div className="rounded-lg border bg-background/50 p-3" key={row.id}>
           <div className="flex items-center justify-between gap-2">
             <div>
-              <strong className="text-sm font-medium">{row.name}</strong>
-              <div className="text-xs text-muted-foreground">{row.source}</div>
+              <strong className="text-sm font-medium">{productDiagnosticCopy(row.name, 'Device check')}</strong>
+              <div className="text-xs text-muted-foreground">{productDiagnosticCopy(row.source, 'Recent safe summary')}</div>
             </div>
             <StatusBadge state={row.state} />
           </div>
-          <p className="mt-1.5 text-sm text-muted-foreground">{row.detail}</p>
+          <p className="mt-1.5 text-sm text-muted-foreground">{productDiagnosticCopy(row.detail, 'Check the affected device, then refresh.')}</p>
         </div>
       ))}
     </div>

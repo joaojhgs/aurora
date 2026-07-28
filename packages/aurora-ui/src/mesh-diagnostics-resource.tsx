@@ -66,10 +66,10 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
 
   const exportSupportBundle = useCallback(async () => {
     if (!reauthConfirmed) {
-      setExportState({ status: 'error', message: 'Confirm AdminAction reauthentication before exporting a support bundle.' })
+      setExportState({ status: 'error', message: 'Confirm recent approval before exporting support data.' })
       return
     }
-    setExportState({ status: 'pending', message: 'Submitting Gateway.GetSupportBundle through AdminAction...' })
+    setExportState({ status: 'pending', message: 'Preparing support data...' })
     try {
       const result = await client.diagnostics.exportSupportBundle({
         request: { event_limit: 10, audit_limit: 10, include_capability_catalog: true },
@@ -79,7 +79,7 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
       })
       setExportState({
         status: 'success',
-        message: `Exported redacted support bundle ${result.data.correlation_id ?? 'without correlation'} with audit receipt ${result.confirmation.audit_receipt}.`
+        message: `Support data exported. Reference ${result.data.correlation_id ?? 'available'}; receipt ${result.confirmation.audit_receipt}.`
       })
       const next = await buildMeshDiagnosticsSnapshot(client, route)
       setSnapshot((current) =>
@@ -90,7 +90,7 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
         ),
       )
     } catch (error) {
-      setExportState({ status: 'error', message: error instanceof Error ? error.message : 'Support-bundle export failed.' })
+      setExportState({ status: 'error', message: error instanceof Error ? 'Support data export failed. Try again.' : 'Support data export failed.' })
     }
   }, [client, route, reauthConfirmed, thinPeer, thinPeerSnapshot])
 
