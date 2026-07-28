@@ -14,19 +14,26 @@ import { addPluginListener, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
+  activeRuntimeProfile,
   activeThinConnectionProfile,
   createBrowserWebThinRuntime,
   emptyThinProfileDocument,
+  emptyRuntimeProfileDocument,
   explainBrowserThinRuntime,
   getAuroraSurfaceProfile,
+  isRuntimeProfileConfigured,
   isThinConnectionProfileConfigured,
+  migrateThinProfileDocumentToRuntime,
   migrateThinProfileToRuntimeProfile,
   parseThinProfileDocument as parseSharedThinProfileDocument,
   parseWebRtcInvite,
+  runtimeProfileToThinConnectionProfile,
   sanitizeThinConnectionProfile,
+  sanitizeRuntimeProfileDocument,
   serializeThinProfileDocument as serializeSharedThinProfileDocument,
   surfaceSupportsRuntimeTier,
   type AuroraNodeMode,
+  type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
   type AuroraRuntimeTier,
   type ParsedWebRtcInvite,
@@ -127,6 +134,11 @@ export interface AndroidMediaPolicyStatus {
 
 export type AuroraThinConnectionProfile = ThinConnectionProfile;
 export type AuroraThinProfileDocument = ThinProfileDocument;
+export type AuroraRuntimeProfileDocument = AuroraRuntimeProfileDocumentV2;
+
+export interface AuroraTauriPackageCapabilities {
+  pythonFullRuntime: boolean;
+}
 
 export interface AuroraThinProfileStore {
   evidence: string;
@@ -264,21 +276,33 @@ export function requiresAsyncAuroraTauriBootstrap(): boolean {
 export function createAuroraTauriRuntime({
   thinProfileStore,
   thinProfileDocument,
+  runtimeProfileDocument,
+  packageCapabilities = noPythonRuntimePackageCapabilities(),
   thinInviteText: explicitThinInviteText,
   consumeThinInvite = true,
 }: {
   thinProfileStore?: AuroraThinProfileStore;
   thinProfileDocument?: AuroraThinProfileDocument;
+  runtimeProfileDocument?: AuroraRuntimeProfileDocument;
+  packageCapabilities?: AuroraTauriPackageCapabilities;
   thinInviteText?: string | null;
   consumeThinInvite?: boolean;
 } = {}): AuroraTauriRuntime {
-  const configuredProfile = activeThinProfile(thinProfileDocument);
-  const configuredRuntimeProfile = configuredProfile
-    ? migrateThinProfileToRuntimeProfile(configuredProfile)
-    : undefined;
+  const runtimeDocument = runtimeProfileDocument
+    ? sanitizeRuntimeProfileDocument(runtimeProfileDocument, {
+      allowPythonFull: packageCapabilities.pythonFullRuntime,
+    })
+    : thinProfileDocument
+      ? migrateThinProfileDocumentToRuntime(thinProfileDocument)
+      : emptyRuntimeProfileDocument();
+  const configuredRuntimeProfile = activeRuntimeProfile(runtimeDocument);
+  const configuredProfile = activeThinProfile(thinProfileDocument)
+    ?? thinProfileFromRuntimeProfile(configuredRuntimeProfile);
   const configuredGatewayUrl = configuredProfile?.gatewayUrl || undefined;
   const thinConnectionMode =
-    configuredProfile?.mode ?? DEFAULT_THIN_CONNECTION_MODE;
+    configuredRuntimeProfile?.homeConnection?.mode
+    ?? configuredProfile?.mode
+    ?? DEFAULT_THIN_CONNECTION_MODE;
   const thinInviteText =
     explicitThinInviteText ??
     (consumeThinInvite ? consumeFragmentInviteFromRuntime() : null);
@@ -287,6 +311,11 @@ export function createAuroraTauriRuntime({
       ? createThinProfileController(thinProfileStore, thinProfileDocument)
       : undefined;
   const thinProfileConfigured = isThinProfileConfigured(configuredProfile);
+  const runtimeProfileConfigured = configuredRuntimeProfile
+    ? isRuntimeProfileConfigured(configuredRuntimeProfile)
+    : thinProfileConfigured;
+  const runtimeNodeMode = configuredRuntimeProfile?.nodeMode ?? "remote-console";
+  const runtimeTier = configuredRuntimeProfile?.runtimeTier ?? "none";
 
   if (isTauriRuntime()) {
     const nativeTransport = new TauriLocalTransport({ invoke, listen });
@@ -326,10 +355,10 @@ export function createAuroraTauriRuntime({
           ),
           thinProfile: configuredProfile,
           runtimeProfile: configuredRuntimeProfile,
-          nodeMode: configuredRuntimeProfile?.nodeMode ?? "remote-console",
-          runtimeTier: configuredRuntimeProfile?.runtimeTier ?? "none",
-          thinProfileConfigured,
-          requiresOnboarding: !thinProfileConfigured,
+          nodeMode: runtimeNodeMode,
+          runtimeTier,
+          thinProfileConfigured: runtimeProfileConfigured,
+          requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
           thinProfileController,
           modePreferenceStore: memoryOnlyModePreferenceStore(
@@ -380,8 +409,8 @@ export function createAuroraTauriRuntime({
           "Unrecognized mobile Tauri surface uses the platform transport; Android and iOS use the shared WebView thin runtime",
         ],
         thinProfileConfigured: false,
-        nodeMode: "remote-console",
-        runtimeTier: "none",
+        nodeMode: runtimeNodeMode,
+        runtimeTier,
         requiresOnboarding: false,
         pendingThinInviteText: null,
         modePreferenceStore: secureModePreferenceStore(
@@ -446,10 +475,10 @@ export function createAuroraTauriRuntime({
         ),
         thinProfile: configuredProfile,
         runtimeProfile: configuredRuntimeProfile,
-        nodeMode: configuredRuntimeProfile?.nodeMode ?? "remote-console",
-        runtimeTier: configuredRuntimeProfile?.runtimeTier ?? "none",
-        thinProfileConfigured,
-        requiresOnboarding: !thinProfileConfigured,
+        nodeMode: runtimeNodeMode,
+        runtimeTier,
+        thinProfileConfigured: runtimeProfileConfigured,
+        requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
         thinProfileController,
         modePreferenceStore: memoryOnlyModePreferenceStore(
@@ -493,10 +522,12 @@ export function createAuroraTauriRuntime({
         "desktop-local preserves Rust-supervised Python sidecar and STTCoordinator wakeword ownership",
       ],
       thinProfileConfigured: false,
-      nodeMode: "mesh-node",
-      runtimeTier: surfaceSupportsRuntimeTier(currentAuroraSurfaceProfile(), "python-full", {
-        packageIncludesPython: true,
-      }) ? "python-full" : "lightweight-ts",
+      runtimeProfile: configuredRuntimeProfile,
+      nodeMode: configuredRuntimeProfile?.nodeMode ?? "mesh-node",
+      runtimeTier: configuredRuntimeProfile?.runtimeTier
+        ?? (surfaceSupportsRuntimeTier(currentAuroraSurfaceProfile(), "python-full", {
+          packageIncludesPython: packageCapabilities.pythonFullRuntime,
+        }) ? "python-full" : "lightweight-ts"),
       requiresOnboarding: false,
       pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(
@@ -555,10 +586,10 @@ export function createAuroraTauriRuntime({
       ),
       thinProfile: configuredProfile,
       runtimeProfile: configuredRuntimeProfile,
-      nodeMode: configuredRuntimeProfile?.nodeMode ?? "remote-console",
-      runtimeTier: configuredRuntimeProfile?.runtimeTier ?? "none",
-      thinProfileConfigured,
-      requiresOnboarding: !thinProfileConfigured,
+      nodeMode: runtimeNodeMode,
+      runtimeTier,
+      thinProfileConfigured: runtimeProfileConfigured,
+      requiresOnboarding: !runtimeProfileConfigured,
       pendingThinInviteText: thinInviteText,
       thinProfileController,
       modePreferenceStore: memoryOnlyModePreferenceStore(
@@ -1068,6 +1099,21 @@ function activeThinProfile(
   document: AuroraThinProfileDocument | undefined,
 ): AuroraThinConnectionProfile | undefined {
   return activeThinConnectionProfile(document);
+}
+
+function thinProfileFromRuntimeProfile(
+  profile: AuroraRuntimeProfileV2 | undefined,
+): AuroraThinConnectionProfile | undefined {
+  if (!profile?.homeConnection) return undefined;
+  try {
+    return runtimeProfileToThinConnectionProfile(profile);
+  } catch {
+    return undefined;
+  }
+}
+
+function noPythonRuntimePackageCapabilities(): AuroraTauriPackageCapabilities {
+  return { pythonFullRuntime: false };
 }
 
 function defaultThinProfileDocument(): AuroraThinProfileDocument {

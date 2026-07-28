@@ -4,10 +4,13 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   auroraBrowserRequiresOnboarding,
+  auroraBrowserRuntimeProfile,
+  auroraBrowserRuntimeProfileDocument,
   createAuroraBrowserClient,
   createAuroraBrowserRuntime,
   createAuroraWebClient,
   resetAuroraBrowserClientForTests,
+  saveAuroraBrowserRuntimeProfile,
   saveAuroraBrowserThinProfile,
 } from './aurora-client'
 import { consumeFragmentInviteFromUrl } from './mesh/mesh-client'
@@ -169,6 +172,66 @@ describe('createAuroraBrowserClient', () => {
       status: 'disabled',
       hasHttpFallback: true,
     })
+  })
+
+  it('loads and saves v2 runtime profiles as the hosted browser composition source', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT', '0')
+    const storage = installBrowserStorage()
+    await saveAuroraBrowserRuntimeProfile({
+      version: 2,
+      id: 'runtime-home',
+      label: 'Runtime home',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      homeConnection: {
+        mode: 'webrtc-preferred',
+        gatewayUrl: 'https://aurora.example',
+        signalingUrl: 'wss://signaling.example.invalid',
+        homePeerId: 'home-peer',
+        webrtcProfile: {
+          mode: 'webrtc-preferred',
+          appId: 'aurora',
+          room: 'office',
+          roomSecretRef: 'ref:browser:office',
+          signalingBrokers: ['wss://signaling.example.invalid'],
+          expectedStablePeerId: 'home-peer',
+          nodeName: 'Home Aurora',
+        },
+      },
+      localNode: {
+        nodeName: 'Hosted browser',
+        stablePeerId: 'aurora-web-runtime-peer',
+        enabledCapabilityPacks: ['local-tools'],
+        meshMembership: {
+          signalingUrl: 'wss://signaling.example.invalid',
+          webrtcProfile: {
+            mode: 'webrtc-only',
+            appId: 'aurora',
+            room: 'office',
+            roomSecretRef: 'ref:browser:office',
+            signalingBrokers: ['wss://signaling.example.invalid'],
+          },
+        },
+      },
+    })
+
+    const runtime = createAuroraBrowserRuntime()
+
+    expect(runtime.mode).toBe('webrtc-preferred')
+    expect(runtime.client.transport.kind).toBe('http')
+    expect(auroraBrowserRuntimeProfile()).toMatchObject({
+      id: 'runtime-home',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+    })
+    expect(auroraBrowserRuntimeProfileDocument()).toMatchObject({
+      version: 2,
+      activeProfileId: 'runtime-home',
+    })
+    expectStorageHasNoSecrets(storage, ['room-secret', 'rawBearerToken'])
+    expect(JSON.stringify(storage.dump())).toContain('aurora.runtimeProfiles.v2')
+    expect(JSON.stringify(storage.dump())).not.toContain('aurora.webThin.connectionProfiles.v1')
   })
 
   it('rejects a room secret that does not belong to the saved WebRTC profile', async () => {

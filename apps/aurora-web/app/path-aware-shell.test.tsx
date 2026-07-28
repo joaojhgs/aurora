@@ -25,6 +25,15 @@ const mockedBrowserRuntime = vi.hoisted(() => ({
     activeProfileId: null,
     profiles: [],
   },
+  runtimeDocument: {
+    version: 2 as const,
+    activeProfileId: null,
+    profiles: [],
+  } as {
+    version: 2
+    activeProfileId: string | null
+    profiles: Array<Record<string, unknown>>
+  },
   save: vi.fn(),
   createRuntime: vi.fn(),
   routerReplace: vi.fn(),
@@ -42,8 +51,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('./aurora-client', () => ({
   auroraBrowserRequiresOnboarding: () =>
     mockedBrowserRuntime.requiresOnboarding,
-  auroraBrowserThinProfile: () => mockedBrowserRuntime.profile,
-  auroraBrowserThinProfileDocument: () => mockedBrowserRuntime.document,
+  auroraBrowserRuntimeProfileDocument: () => mockedBrowserRuntime.runtimeDocument,
   createAuroraBrowserRuntime: () => {
     mockedBrowserRuntime.createRuntime()
     return mockedBrowserRuntime.runtime
@@ -64,6 +72,11 @@ afterEach(() => {
   mockedBrowserRuntime.createRuntime.mockReset()
   mockedBrowserRuntime.routerReplace.mockReset()
   mockedBrowserRuntime.routerPush.mockReset()
+  mockedBrowserRuntime.runtimeDocument = {
+    version: 2,
+    activeProfileId: null,
+    profiles: [],
+  }
 })
 
 describe('hosted web thin first-run shell', () => {
@@ -206,6 +219,64 @@ describe('hosted web thin first-run shell', () => {
     )
     expect(mockedBrowserRuntime.routerReplace).toHaveBeenCalledWith('/mesh')
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it('loads v2 node-mode context without requiring a v1 connection profile projection', async () => {
+    const transport = new MockAuroraTransport()
+    mockedBrowserRuntime.runtime = {
+      client: new AuroraClient({ transport }),
+      peer: fakePeer(),
+      mode: 'http-only',
+    }
+    mockedBrowserRuntime.runtimeDocument = {
+      version: 2,
+      activeProfileId: 'mesh',
+      profiles: [{
+        version: 2,
+        id: 'mesh',
+        label: 'This device',
+        nodeMode: 'mesh-node',
+        runtimeTier: 'lightweight-ts',
+        localNode: {
+          nodeName: 'Hosted browser',
+          stablePeerId: 'browser-peer',
+          enabledCapabilityPacks: [],
+          meshMembership: {
+            signalingUrl: 'wss://signaling.example.invalid',
+            webrtcProfile: {
+              mode: 'webrtc-only',
+              appId: 'aurora',
+              room: 'mesh-room',
+              roomSecretRef: 'ref:browser:mesh-room',
+              signalingBrokers: ['wss://signaling.example.invalid'],
+            },
+          },
+        },
+      }],
+    }
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    let root: Root | null = null
+    await act(async () => {
+      root = createRoot(container)
+      root.render(
+        <PathAwareShell
+          snapshot={{
+            ...loadingShellSnapshot,
+            loadState: 'ready',
+          }}
+        >
+          <p>configured shell content</p>
+        </PathAwareShell>,
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (root) roots.push(root)
+
+    expect(container.textContent).toContain('Connect to Aurora')
+    expect(mockedBrowserRuntime.createRuntime).toHaveBeenCalled()
+    expect(mockedBrowserRuntime.save).not.toHaveBeenCalled()
   })
 
   it('keeps configured shell navigation inside the persistent browser runtime', async () => {

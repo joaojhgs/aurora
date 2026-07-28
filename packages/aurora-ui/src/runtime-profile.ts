@@ -1,7 +1,7 @@
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import type { AuroraThinConnectionMode } from './web-thin-runtime'
 
-export type AuroraPhysicalSurfaceKind =
+export type AuroraSurfaceKind =
   | 'hosted-web'
   | 'desktop-tauri'
   | 'android'
@@ -9,12 +9,18 @@ export type AuroraPhysicalSurfaceKind =
   | 'test'
   | 'unknown'
 
+/** @deprecated Use AuroraSurfaceKind. */
+export type AuroraPhysicalSurfaceKind = AuroraSurfaceKind
+
 export type LegacyAuroraSurfaceKind =
   | 'desktop-local'
   | 'desktop-thin'
   | 'web'
+  | 'android'
+  | 'ios'
   | 'mobile'
   | 'mock'
+  | 'unknown'
 
 export type AuroraNodeMode = 'remote-console' | 'mesh-node'
 export type AuroraConnectionMode = 'http-only' | 'webrtc-only' | 'webrtc-preferred'

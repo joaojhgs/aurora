@@ -8,6 +8,7 @@ import {
   sanitizeRuntimeProfile,
   serializeRuntimeProfileDocument,
   type AuroraRuntimeProfileV2,
+  type AuroraSurfaceKind,
 } from '../src/thin-connection-profile'
 import type { ThinProfileDocument } from '../src/thin-connection-profile'
 import {
@@ -103,7 +104,10 @@ describe('runtime profile document', () => {
     }
 
     expect(hostedWebSurface.physicalKind).toBe('hosted-web')
+    const surfaceKind: AuroraSurfaceKind = hostedWebSurface.physicalKind
+    expect(surfaceKind).toBe('hosted-web')
     expect(hostedWebSurface.kind).toBe('web')
+    expect(hostedWebSurface.legacyKind).toBe('web')
     expect(hostedWebSurface.prefersWebRtcTransport).toBe(true)
     expect(sanitizeRuntimeProfile(meshNode)).toEqual(meshNode)
     expect(isRuntimeProfileConfigured(meshNode)).toBe(true)

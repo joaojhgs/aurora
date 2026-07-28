@@ -41,6 +41,7 @@ import {
   serializeThinProfileDocument,
   TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS,
   type AuroraTauriRuntime,
+  type AuroraRuntimeProfileDocument,
   type AuroraThinConnectionProfile,
   type AuroraThinProfileDocument,
 } from './aurora-client'
@@ -68,6 +69,44 @@ const document: AuroraThinProfileDocument = {
   version: 1,
   activeProfileId: profile.id,
   profiles: [profile],
+}
+
+const runtimeDocument: AuroraRuntimeProfileDocument = {
+  version: 2,
+  activeProfileId: 'runtime-office',
+  profiles: [{
+    version: 2,
+    id: 'runtime-office',
+    label: 'Runtime office',
+    nodeMode: 'mesh-node',
+    runtimeTier: 'lightweight-ts',
+    homeConnection: {
+      mode: 'webrtc-preferred',
+      gatewayUrl: 'https://gateway.example.invalid',
+      signalingUrl: 'wss://signaling.example.invalid',
+      homePeerId: 'office-home',
+      webrtcProfile: {
+        ...profile.webrtcProfile!,
+        expectedStablePeerId: 'office-home',
+      },
+    },
+    localNode: {
+      nodeName: 'Aurora desktop',
+      stablePeerId: 'desktop-peer-01',
+      enabledCapabilityPacks: ['local-tools'],
+      meshMembership: {
+        signalingUrl: 'wss://signaling.example.invalid',
+        webrtcProfile: {
+          mode: 'webrtc-only',
+          appId: 'aurora',
+          room: 'office-room',
+          roomSecretRef: 'ref:memory:office-room',
+          signalingBrokers: ['wss://signaling.example.invalid'],
+          nodeName: 'Aurora desktop',
+        },
+      },
+    },
+  }],
 }
 
 
@@ -176,6 +215,55 @@ describe('desktop-thin live connection profiles', () => {
     expect(runtime.mode).toBe('desktop-thin')
     expect(runtime.thinProfile).toEqual(profile)
     expect(runtime.thinProfileController?.evidence).toBe('test nonsecret store')
+    await runtime.dispose()
+  })
+
+  it('composes desktop thin runtime from an actual v2 runtime profile document', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileDocument: runtimeDocument,
+      consumeThinInvite: false,
+    })
+
+    expect(runtime.mode).toBe('desktop-thin')
+    expect(runtime.runtimeProfile).toEqual(runtimeDocument.profiles[0])
+    expect(runtime.nodeMode).toBe('mesh-node')
+    expect(runtime.runtimeTier).toBe('lightweight-ts')
+    expect(runtime.thinConnectionMode).toBe('webrtc-preferred')
+    expect(runtime.thinProfile).toMatchObject({
+      id: 'runtime-office',
+      mode: 'webrtc-preferred',
+      gatewayUrl: 'https://gateway.example.invalid',
+      localStablePeerId: 'desktop-peer-01',
+    })
+    expect(runtime.thinProfileConfigured).toBe(true)
+    await runtime.dispose()
+  })
+
+  it('requires explicit package capability proof before accepting python-full runtime profiles', async () => {
+    const pythonFullDocument: AuroraRuntimeProfileDocument = {
+      ...runtimeDocument,
+      profiles: [{
+        ...runtimeDocument.profiles[0]!,
+        runtimeTier: 'python-full',
+      }],
+    }
+
+    expect(() => createAuroraTauriRuntime({
+      runtimeProfileDocument: pythonFullDocument,
+      consumeThinInvite: false,
+    })).toThrow(/bundled Python/)
+
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileDocument: pythonFullDocument,
+      packageCapabilities: { pythonFullRuntime: true },
+      consumeThinInvite: false,
+    })
+
+    expect(runtime.runtimeTier).toBe('python-full')
+    expect(runtime.nodeMode).toBe('mesh-node')
     await runtime.dispose()
   })
 

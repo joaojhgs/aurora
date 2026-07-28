@@ -9,12 +9,21 @@ import {
 } from '@aurora/client'
 import {
   BrowserPersistentPeerCredentialStore,
+  activeRuntimeProfile,
   activeThinConnectionProfile,
   createBrowserWebThinRuntime,
   emptyThinProfileDocument,
+  emptyRuntimeProfileDocument,
   explainBrowserThinRuntime,
+  isRuntimeProfileConfigured,
   isThinConnectionProfileConfigured,
+  runtimeProfileDocumentToThinDocument,
+  runtimeProfileToThinConnectionProfile,
   sanitizeThinConnectionProfile,
+  sanitizeRuntimeProfile,
+  sanitizeRuntimeProfileDocument,
+  type AuroraRuntimeProfileDocumentV2,
+  type AuroraRuntimeProfileV2,
   type ThinConnectionProfile,
   type ThinProfileDocument,
   type AuroraWebRtcRolloutFlags,
@@ -68,8 +77,9 @@ export function createAuroraWebClient(): AuroraClient {
 export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
   const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
   browserCredentialStore = credentialStore
-  const profileDocument = credentialStore.loadThinProfileDocument() ?? emptyThinProfileDocument()
-  const thinProfile = activeThinConnectionProfile(profileDocument)
+  const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  const runtimeProfile = activeRuntimeProfile(profileDocument)
+  const thinProfile = thinProfileFromRuntimeProfile(runtimeProfile)
   const key = browserClientCacheKey()
   const cached = browserRuntimeCache
   if (cached?.key === key) return cached.runtime
@@ -121,14 +131,26 @@ export function resetAuroraBrowserClientForTests(): void {
 
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
   createAuroraBrowserRuntime()
-  return browserCredentialStore?.loadThinProfileDocument() ?? emptyThinProfileDocument()
+  const runtimeDocument = browserCredentialStore?.loadRuntimeProfileDocument()
+  return runtimeDocument ? runtimeProfileDocumentToThinDocument(runtimeDocument) : emptyThinProfileDocument()
 }
 
 export function auroraBrowserThinProfile(): ThinConnectionProfile | undefined {
   return activeThinConnectionProfile(auroraBrowserThinProfileDocument())
 }
 
+export function auroraBrowserRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 {
+  createAuroraBrowserRuntime()
+  return browserCredentialStore?.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+}
+
+export function auroraBrowserRuntimeProfile(): AuroraRuntimeProfileV2 | undefined {
+  return activeRuntimeProfile(auroraBrowserRuntimeProfileDocument())
+}
+
 export function auroraBrowserRequiresOnboarding(): boolean {
+  const runtimeProfile = auroraBrowserRuntimeProfile()
+  if (runtimeProfile) return !isRuntimeProfileConfigured(runtimeProfile)
   return !isThinConnectionProfileConfigured(auroraBrowserThinProfile())
 }
 
@@ -167,17 +189,52 @@ export async function saveAuroraBrowserThinProfile(
   await runtime?.close()
 }
 
+export async function saveAuroraBrowserRuntimeProfile(
+  profile: AuroraRuntimeProfileV2,
+  roomSecret?: {
+    roomSecretRef: string
+    roomSecret: string
+  },
+): Promise<void> {
+  const sanitized = sanitizeRuntimeProfile(profile)
+  createAuroraBrowserRuntime()
+  const store = browserCredentialStore
+  if (!store) throw new Error('Browser runtime profile persistence is unavailable')
+  if (roomSecret) {
+    if (sanitized.homeConnection?.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef) {
+      throw new Error('Browser runtime profile room secret does not match the saved WebRTC profile')
+    }
+    store.setRoomSecret(roomSecret.roomSecretRef, roomSecret.roomSecret)
+  }
+  const current = store.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  store.saveRuntimeProfileDocument(sanitizeRuntimeProfileDocument({
+    version: 2,
+    activeProfileId: sanitized.id,
+    profiles: [
+      ...current.profiles.filter((candidate) => candidate.id !== sanitized.id),
+      sanitized,
+    ],
+  }))
+  if (sanitized.homeConnection?.webrtcProfile) {
+    store.saveConnectionProfile(sanitized.homeConnection.webrtcProfile)
+  }
+  const runtime = browserRuntimeCache?.runtime
+  browserRuntimeCache = null
+  browserCredentialStore = null
+  await runtime?.close()
+}
+
 export async function selectAuroraBrowserThinProfile(
   profileId: string,
 ): Promise<void> {
   createAuroraBrowserRuntime()
   const store = browserCredentialStore
   if (!store) throw new Error('Browser thin-client persistence is unavailable')
-  const current = store.loadThinProfileDocument() ?? emptyThinProfileDocument()
+  const current = store.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   if (!current.profiles.some((profile) => profile.id === profileId)) {
-    throw new Error('Browser thin-client profile does not exist')
+    throw new Error('Browser runtime profile does not exist')
   }
-  store.saveThinProfileDocument({
+  store.saveRuntimeProfileDocument({
     ...current,
     activeProfileId: profileId,
   })
@@ -203,12 +260,23 @@ export function auroraBrowserRuntimeDiagnostics(): string[] {
 }
 
 function browserClientCacheKey(): string {
-  const document = browserCredentialStore?.loadThinProfileDocument() ?? emptyThinProfileDocument()
+  const document = browserCredentialStore?.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   return JSON.stringify({
     document,
     demoMode: isBrowserDemoMode(),
     rolloutFlags: browserWebRtcRolloutFlags(),
   })
+}
+
+function thinProfileFromRuntimeProfile(
+  profile: AuroraRuntimeProfileV2 | undefined,
+): ThinConnectionProfile | undefined {
+  if (!profile?.homeConnection) return undefined
+  try {
+    return runtimeProfileToThinConnectionProfile(profile)
+  } catch {
+    return undefined
+  }
 }
 
 function browserWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {

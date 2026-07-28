@@ -6,15 +6,18 @@ import {
   AppShell,
   OnboardingView,
   WebThinConnectionPanel,
+  activeRuntimeProfile,
   buildShellSnapshot,
   loadingShellSnapshot,
+  runtimeProfileToThinConnectionProfile,
   retainThinShellSnapshot,
+  type AuroraNodeMode,
+  type ThinProfileDocument,
   type AuroraShellSnapshot,
 } from '@aurora/ui'
 import {
   auroraBrowserRequiresOnboarding,
-  auroraBrowserThinProfile,
-  auroraBrowserThinProfileDocument,
+  auroraBrowserRuntimeProfileDocument,
   createAuroraBrowserRuntime,
   saveAuroraBrowserThinProfile,
 } from './aurora-client'
@@ -91,8 +94,10 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
   }, [requiresOnboarding, runtime, thinPeerReadyRevision])
 
   if (requiresOnboarding) {
-    const document = auroraBrowserThinProfileDocument()
-    const profile = auroraBrowserThinProfile()
+    const runtimeDocument = auroraBrowserRuntimeProfileDocument()
+    const runtimeProfile = activeRuntimeProfile(runtimeDocument)
+    const document = thinDocumentFromRuntimeDocument(runtimeDocument)
+    const profile = document.profiles.find((candidate) => candidate.id === document.activeProfileId)
     return (
       <OnboardingView
         client={runtime.client}
@@ -103,6 +108,7 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
           evidenceSource: 'browser runtime profile required before network requests are enabled',
         }}
         setupRequired
+        modePreferenceStore={runtimeNodeModePreference(runtimeProfile?.nodeMode)}
         thinConnectionPanel={
           <WebThinConnectionPanel
             key={refreshKey}
@@ -138,6 +144,34 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
       </AppShell>
     </BrowserShellRuntimeProvider>
   )
+}
+
+function thinDocumentFromRuntimeDocument(
+  runtimeDocument: ReturnType<typeof auroraBrowserRuntimeProfileDocument>,
+): ThinProfileDocument {
+  const profiles = runtimeDocument.profiles.flatMap((profile) => {
+    try {
+      return profile.homeConnection ? [runtimeProfileToThinConnectionProfile(profile)] : []
+    } catch {
+      return []
+    }
+  })
+  const activeProfileId = profiles.some((profile) => profile.id === runtimeDocument.activeProfileId)
+    ? runtimeDocument.activeProfileId
+    : null
+  return { version: 1, activeProfileId, profiles }
+}
+
+function runtimeNodeModePreference(nodeMode: AuroraNodeMode | undefined) {
+  let selected = nodeMode ?? 'remote-console'
+  return {
+    evidence: 'browser runtime profile node-mode context',
+    readSelectedMode: async () => selected,
+    writeSelectedMode: async (modeId: string) => {
+      selected = modeId === 'mesh-node' ? 'mesh-node' : 'remote-console'
+      return true
+    },
+  }
 }
 
 function BrowserShellBootScreen() {

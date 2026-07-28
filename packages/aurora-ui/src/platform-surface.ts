@@ -1,14 +1,5 @@
-import type { AuroraPhysicalSurfaceKind, AuroraRuntimeTier } from './runtime-profile'
-
-export type AuroraSurfaceKind =
-  | 'desktop-local'
-  | 'desktop-thin'
-  | 'web'
-  | 'android'
-  | 'ios'
-  | 'mobile'
-  | 'mock'
-  | 'unknown'
+import type { AuroraRuntimeTier, AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
+export type { AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
 
 /**
  * Native shells dispatch this event when foreground media must be released
@@ -35,10 +26,14 @@ export interface AuroraSurfaceProfileInput {
 
 export interface AuroraSurfaceProfile {
   /** Physical runtime surface. Product role, transport, and runtime tier are modeled separately. */
-  physicalKind: AuroraPhysicalSurfaceKind
-  /** Legacy deployment/surface alias retained for existing callers during the runtime-profile migration. */
-  kind: AuroraSurfaceKind
-  legacyKind: AuroraSurfaceKind
+  physicalKind: AuroraSurfaceKind
+  /**
+   * Deprecated compatibility alias for legacy deployment labels. New code must
+   * use physicalKind plus runtime profile node/connection/tier fields.
+   */
+  kind: LegacyAuroraSurfaceKind
+  legacyKind: LegacyAuroraSurfaceKind
+  deploymentKind: LegacyAuroraSurfaceKind
   label: string
   isDesktop: boolean
   isMobile: boolean
@@ -110,7 +105,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const usesWebRtcTransport = transportKind === 'mesh' || transportKind === 'webrtc' || transportKind === 'webrtc-preferred' || transportKind === 'webrtc-only'
   const usesNativeShell = usesLocalSidecar || isDesktopThin || transportKind.startsWith('tauri') || isMobile
 
-  const kind: AuroraSurfaceKind = isAndroid
+  const legacyKind: LegacyAuroraSurfaceKind = isAndroid
     ? 'android'
     : isIos
       ? 'ios'
@@ -126,19 +121,20 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
                 ? 'mobile'
                 : 'unknown'
 
-  const physicalKind: AuroraPhysicalSurfaceKind = physicalSurfaceKind(kind)
-  const isDesktop = kind === 'desktop-local' || kind === 'desktop-thin'
-  const isWebThin = kind === 'web' || kind === 'desktop-thin' || (isMobile && (transportKind === 'http' || usesWebRtcTransport))
+  const physicalKind: AuroraSurfaceKind = physicalSurfaceKind(legacyKind)
+  const isDesktop = legacyKind === 'desktop-local' || legacyKind === 'desktop-thin'
+  const isWebThin = legacyKind === 'web' || legacyKind === 'desktop-thin' || (isMobile && (transportKind === 'http' || usesWebRtcTransport))
   const supportsWebRtcThin = isWebThin || isMobile
   const prefersWebRtcTransport = usesWebRtcTransport
   const trustsNativeWebViewOrigin = usesNativeShell
-  const canManageLocalServiceConfiguration = usesLocalSidecar || kind === 'mock'
-  const voiceCapture = getAuroraVoiceCapturePolicy(kind)
+  const canManageLocalServiceConfiguration = usesLocalSidecar || legacyKind === 'mock'
+  const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind)
   return {
     physicalKind,
-    kind,
-    legacyKind: kind,
-    label: surfaceLabel(kind),
+    kind: legacyKind,
+    legacyKind,
+    deploymentKind: legacyKind,
+    label: surfaceLabel(legacyKind),
     isDesktop,
     isMobile,
     isAndroid,
@@ -160,7 +156,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
 
 export function getAuroraPhysicalSurfaceKind(
   input: AuroraSurfaceProfileInput = {},
-): AuroraPhysicalSurfaceKind {
+): AuroraSurfaceKind {
   return getAuroraSurfaceProfile(input).physicalKind
 }
 
@@ -199,7 +195,7 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
   }
 }
 
-export function getAuroraVoiceCapturePolicy(kind: AuroraSurfaceKind): AuroraVoiceCapturePolicy {
+export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): AuroraVoiceCapturePolicy {
   switch (kind) {
     case 'desktop-local':
       return {
@@ -256,7 +252,7 @@ function normalize(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase()
 }
 
-function surfaceLabel(kind: AuroraSurfaceKind): string {
+function surfaceLabel(kind: LegacyAuroraSurfaceKind): string {
   switch (kind) {
     case 'desktop-local':
       return 'Desktop local'
@@ -277,7 +273,7 @@ function surfaceLabel(kind: AuroraSurfaceKind): string {
   }
 }
 
-function physicalSurfaceKind(kind: AuroraSurfaceKind): AuroraPhysicalSurfaceKind {
+function physicalSurfaceKind(kind: LegacyAuroraSurfaceKind): AuroraSurfaceKind {
   switch (kind) {
     case 'desktop-local':
     case 'desktop-thin':
