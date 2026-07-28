@@ -17,6 +17,11 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./local-data": {
+      "types": "./src/local-data/index.ts",
+      "import": "./src/local-data/index.ts",
+      "default": "./src/local-data/index.ts"
+    },
     "./styles.css": "./src/styles.css",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/shadcn-lib/*.ts",
