@@ -372,7 +372,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
 
   async function deny(tool: ToolApprovalCardModel) {
     const selectedProviderId = state.selectedProviders[tool.id]
-    setDecisionMessage(tool.id, 'Submitting backend denial...')
+    setDecisionMessage(tool.id, 'Sending denial...')
     try {
       const result = await submitToolDenialAction({
         client,
@@ -387,7 +387,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
   }
 
   async function executeSafe(tool: ToolApprovalCardModel) {
-    setDecisionMessage(tool.id, 'Executing safe local tool through Tooling.ExecuteTool...')
+    setDecisionMessage(tool.id, 'Running local tool...')
     try {
       await client.tools.execute({
         tool_name: tool.id,
@@ -397,7 +397,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         confirmed: true,
         correlation_id: tool.correlationId ?? null
       })
-      setDecisionMessage(tool.id, 'Executed safe local tool through Tooling.ExecuteTool.')
+      setDecisionMessage(tool.id, 'Local tool finished.')
     } catch (error) {
       setDecisionMessage(tool.id, errorMessage(error))
     }

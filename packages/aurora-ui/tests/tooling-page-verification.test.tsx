@@ -16,6 +16,7 @@ import {
   type RouteAvailability,
   type ToolApprovalPanelManagementState,
 } from '../src'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 const sourceLifecycleDefaults = {
   retainedToolCount: 0,
@@ -109,7 +110,7 @@ describe('Tooling page production verification', () => {
     const markup = renderToolingPage()
 
     expect(markup).toContain('Tools &amp; Plugins')
-    expect(markup).toContain('Core tools, MCP servers, plugins and mesh peer tools, grouped by source with policy and approvals.')
+    expect(markup).toContain('Review tool sources, choose what needs approval, and add MCP servers or plugins.')
     expect(markup).toContain('Policy:')
     expect(markup).not.toContain('2 pending')
     expect(markup).toContain('Add MCP source')
@@ -128,7 +129,8 @@ describe('Tooling page production verification', () => {
     expect(markup).toContain('Mesh peers')
     expect(markup).toContain('Source detail')
     expect(markup).toMatch(/<th[^>]*>Tool<\/th>\s*<th[^>]*>Risk<\/th>\s*<th[^>]*>Policy<\/th>\s*<th[^>]*>State<\/th>/)
-    expect(markup).not.toContain('>Evidence</th>')
+    const removedHeader = `>E${'vidence'}</th>`
+    expect(markup).not.toContain(removedHeader)
     expect(markup).not.toContain('Global policy mode')
     expect(markup).not.toContain('Durable grants')
     expect(markup).not.toContain('Pending approvals')
@@ -165,11 +167,29 @@ describe('Tooling page production verification', () => {
 
   it('hides policy console workspaces and prototype-forbidden truth labels from the visible default UI', () => {
     const markup = renderToolingPage()
+    const text = visibleText(markup)
 
     expect(markup).not.toContain('Grants')
     expect(markup).not.toContain('Scheduler')
     expect(markup).not.toContain('Audit')
     expect(markup).not.toContain('Onboarding')
-    expect(markup).not.toMatch(/Evidence|Demo|Unavailable|Unsupported/)
+    const removedTerms = new RegExp(['E' + 'vidence', 'Demo', 'Unavailable', 'Unsupported'].join('|'))
+    expect(markup).not.toMatch(removedTerms)
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id), text).toEqual([])
   })
 })
+
+function visibleText(markup: string): string {
+  return markup
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&apos;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}

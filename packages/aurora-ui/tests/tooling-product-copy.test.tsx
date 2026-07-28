@@ -8,10 +8,10 @@ import { ToolApprovalPanel, auroraNavSections, navItemSnapshot, type RouteAvaila
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import { ToolSharingRowControl } from '../src/tooling/tool-sharing-controls'
 
-describe('tooling product copy', () => {
-  let container: HTMLDivElement
-  let root: Root
+let container: HTMLDivElement
+let root: Root
 
+describe('tooling product copy', () => {
   beforeEach(() => {
     globalThis.ResizeObserver = class {
       observe() {}
@@ -52,7 +52,7 @@ describe('tooling product copy', () => {
 
     const text = visibleText(markup)
     expect(text).toContain('Tools are unavailable. Review access and try again.')
-    expect(text).toContain('No core, MCP, plugin, mesh, unknown, or blocked sources')
+    expect(text).toContain('No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.')
     expectForbiddenFree(text)
   })
 
@@ -84,6 +84,79 @@ describe('tooling product copy', () => {
     expectForbiddenFree(text)
   })
 
+  it('renders MCP setup success and failure states without remapping success to failure copy', async () => {
+    await renderPanel(client({
+      testMcpSource: async () => ({ ok: true, status: 'ok', supported: true, errors: [] }),
+    }))
+    await openMcpDiscoverStep()
+    await act(async () => findButton('Test connection')!.click())
+
+    let text = visibleText(container.innerHTML)
+    expect(text).toContain('MCP source connection looks ready.')
+    expect(text).not.toContain('Could not connect')
+    expectForbiddenFree(text)
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    await renderPanel(client({
+      testMcpSource: async () => {
+        throw new Error('provider route failed with transport stack trace')
+      },
+    }))
+    await openMcpDiscoverStep()
+    await act(async () => findButton('Test connection')!.click())
+
+    text = visibleText(container.innerHTML)
+    expect(text).toContain('Could not connect to this Aurora device. Try again.')
+    expect(text).not.toContain('provider route failed')
+    expectForbiddenFree(text)
+  })
+
+  it('keeps expanded tool details and raw result errors product-safe', async () => {
+    await renderPanel(client(), [tool({
+      state: 'unavailable',
+      disabledReason: 'provider transport route stack trace',
+      result: {
+        ok: false,
+        status: 'failed',
+        providerPeerId: 'peer-kitchen',
+        correlationId: 'corr-safe',
+        auditReceipt: null,
+        routePath: ['Tooling.ExecuteTool'],
+        durationMs: null,
+        redactionStatus: 'redacted',
+        retryEligible: true,
+        fallbackEligible: true,
+        outputPreview: null,
+        error: 'provider route failed at WebRTC transport',
+      },
+    })])
+
+    const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="Toggle details for Calendar lookup"]')
+    expect(toggle).toBeTruthy()
+    await act(async () => toggle!.click())
+    const text = visibleText(container.innerHTML)
+    expect(text).toContain('This tool needs attention before Aurora can use it.')
+    expect(text).toContain('Needs attention')
+    expect(text).toContain('Connection lost. Reconnecting...')
+    expect(text).not.toContain('Tooling.ExecuteTool')
+    expect(text).not.toContain('provider route failed')
+    expectForbiddenFree(text)
+  })
+
+  it('keeps policy, scheduler, grant, approval, and activity workspaces hidden from the compact page', async () => {
+    await renderPanel(client(), [tool()])
+
+    const text = visibleText(container.innerHTML)
+    expect(text).toContain('Tools & Plugins')
+    expect(text).not.toContain('Global policy mode')
+    expect(text).not.toContain('Scheduled tool actions')
+    expect(text).not.toContain('Durable grants')
+    expect(text).not.toContain('Pending approvals')
+    expect(text).not.toContain('Activity and audit')
+    expectForbiddenFree(text)
+  })
+
   it('maps sharing control errors and remote-tool copy to user state', () => {
     const remoteMarkup = renderToStaticMarkup(
       <ToolSharingRowControl
@@ -111,6 +184,38 @@ describe('tooling product copy', () => {
   })
 })
 
+async function renderPanel(testClient: AuroraClient, tools: ToolApprovalCardModel[] = []): Promise<void> {
+  await act(async () => {
+    root.render(
+      <ToolApprovalPanel
+        client={testClient}
+        route={toolsRoute()}
+        initialTools={tools}
+        initialSchedulerJobs={[]}
+        initialManagementState={{
+          sourceSummaries: [],
+          sourceDetails: {},
+          managementLoading: false,
+          sharingLoading: false,
+        }}
+      />,
+    )
+  })
+}
+
+async function openMcpDiscoverStep(): Promise<void> {
+  const add = findButton('Add MCP source')
+  expect(add).toBeTruthy()
+  await act(async () => add!.click())
+  const discover = findButton('3. Discover')
+  expect(discover).toBeTruthy()
+  await act(async () => discover!.click())
+}
+
+function findButton(text: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text))
+}
+
 function expectForbiddenFree(text: string): void {
   const matches = findForbiddenProductionCopyTerms(text).map((term) => term.id)
   expect(matches, text).toEqual([])
@@ -131,12 +236,15 @@ function visibleText(markup: string): string {
     .trim()
 }
 
-function client(): AuroraClient {
+function client(overrides: { testMcpSource?: () => Promise<unknown> } = {}): AuroraClient {
   return {
     transport: { kind: 'http' },
     auth: {
       snapshot: () => ({ principalId: 'admin' }),
       subscribe: () => () => undefined,
+    },
+    tools: {
+      testMcpSource: overrides.testMcpSource,
     },
   } as unknown as AuroraClient
 }
@@ -160,7 +268,7 @@ function toolsRoute(): RouteAvailability {
   }
 }
 
-function tool(): ToolApprovalCardModel {
+function tool(overrides: Partial<ToolApprovalCardModel> = {}): ToolApprovalCardModel {
   return {
     id: 'tool:calendar:list',
     name: 'Calendar lookup',
@@ -205,6 +313,7 @@ function tool(): ToolApprovalCardModel {
     result: null,
     secretsRedacted: true,
     exportable: true,
+    ...overrides,
   } as ToolApprovalCardModel
 }
 

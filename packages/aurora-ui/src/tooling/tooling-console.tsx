@@ -506,7 +506,7 @@ function PolicyCommandBar({
       <StatStrip
         ariaLabel="Tooling policy summary"
         items={[
-          { label: 'Global policy mode', value: policy.mode, caption: policy.defaultBehavior, tone: dangerous ? 'warning' : 'default' },
+          { label: 'Global policy mode', value: policyModeLabel(policy.mode), caption: policy.defaultBehavior, tone: dangerous ? 'warning' : 'default' },
           { label: 'Sources', value: policy.sourceCount, caption: `${policy.blockedCount} blocked tools`, tone: policy.blockedCount > 0 ? 'warning' : 'default' },
           { label: 'Pending approvals', value: policy.pendingApprovalCount, caption: 'assistant approvals stay inline; this is the management queue' },
           { label: 'Connection', value: policyConnectionLabel(transportKind), caption: surfaceLabel }
@@ -515,25 +515,25 @@ function PolicyCommandBar({
       {dangerous ? (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
-          <AlertDescription>{policy.denyAll ? 'Deny-all mode is active or inferred from Tooling policy/catalog state.' : 'Dry-run or bypass-sensitive policy state needs operator review.'}</AlertDescription>
+          <AlertDescription>{policy.denyAll ? 'All tools are blocked until policy changes.' : 'This policy needs administrator review.'}</AlertDescription>
         </Alert>
       ) : null}
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Policy controls">
         {['enforce', 'dry_run_only', 'deny_all', 'unrestricted_except_blocked'].map((mode) => (
-          <Button key={mode} variant={policy.mode === mode ? 'primary' : 'outline'} ariaPressed={policy.mode === mode} onClick={() => onSetPolicyMode?.(mode)} disabled={!onSetPolicyMode} disabledReason="Route through Tooling.SetPolicyMode.">
-            {mode}
+          <Button key={mode} variant={policy.mode === mode ? 'primary' : 'outline'} ariaPressed={policy.mode === mode} onClick={() => onSetPolicyMode?.(mode)} disabled={!onSetPolicyMode} disabledReason="Policy changes are unavailable right now.">
+            {policyModeLabel(mode)}
           </Button>
         ))}
-        <Badge variant="outline" className="gap-1"><Lock size={14} aria-hidden />Dangerous confirmations: ALLOW NON-BLOCKED TOOLS · DENY ALL TOOLS · DRY RUN ONLY</Badge>
-        <Badge variant="outline" className="gap-1"><FileDiff size={14} aria-hidden />{`${route.item.capabilityModule}.${route.item.capabilityMethod ?? route.item.expectedTask}`}</Badge>
+        <Badge variant="outline" className="gap-1"><Lock size={14} aria-hidden />Confirmation required for high-risk policy changes</Badge>
+        <Badge variant="outline" className="gap-1"><FileDiff size={14} aria-hidden />Managed by Aurora</Badge>
       </div>
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Source catalog lifecycle">
-        <Badge variant="outline" className="gap-1"><Network size={14} aria-hidden />Negotiated catalog cache</Badge>
-        <Badge variant="outline">epoch / hash tracked for mesh peers</Badge>
-        <Badge variant="outline">stale, removed / unshared, stale grant, missing grant states block scheduler execution</Badge>
-        <Badge variant="outline">Scheduled tool actions via Scheduler.ListJobs</Badge>
+        <Badge variant="outline" className="gap-1"><Network size={14} aria-hidden />Shared tool list</Badge>
+        <Badge variant="outline">Changes are tracked for connected devices</Badge>
+        <Badge variant="outline">Unavailable tools block scheduled use</Badge>
+        <Badge variant="outline">Scheduled tool actions stay reviewable</Badge>
         <Badge variant="outline">Grant dependency warnings link to /admin/scheduler</Badge>
-        <Badge variant="outline">AdminAction confirmation protects high-risk scheduled executions</Badge>
+        <Badge variant="outline">Administrator confirmation protects high-risk scheduled actions</Badge>
       </div>
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Management workspaces">
         <Badge variant="outline" className="gap-1"><KeyRound size={14} aria-hidden />Durable grants</Badge>
@@ -550,7 +550,7 @@ function PolicyCommandBar({
       <MetaGrid columns={2} items={[
         { label: 'Last policy change', value: policy.lastChanged },
         { label: 'Actor', value: policy.actor },
-        { label: 'Mutation status', value: 'Durable policy changes route through Tooling.SetPolicyMode.' }
+        { label: 'Change status', value: 'Policy changes use the approved admin flow.' }
       ]} />
     </Card>
   )
@@ -763,7 +763,7 @@ function PluginsWorkspace({
   return (
     <main className="flex flex-col gap-4 py-4" aria-label="Plugins">
       {loading ? <LoadingState title="Loading plugins" detail="Loading plugins and saved settings." /> : null}
-      {resultMessage ? <Alert><AlertDescription>{toolingSafeMessage(resultMessage)}</AlertDescription></Alert> : null}
+      {resultMessage ? <Alert><AlertDescription>{resultMessage}</AlertDescription></Alert> : null}
       {!loading && builtinPlugins.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
           {builtinPlugins.map((plugin) => {
@@ -1179,6 +1179,7 @@ function ToolDetailRow({
                 {tool.dataEgress ? ' · data egress' : ''}
                 {tool.providerLabel ? ` · ${tool.providerLabel}` : ''}
               </p>
+              {tool.result ? <ToolResultCard result={tool.result} /> : null}
               <div className="flex flex-col gap-1 bg-background/25 px-3">
                 <ToolSharingRowControl
                   tool={tool}
@@ -1391,8 +1392,8 @@ function PolicyWorkspace({
       <Card title="Source trust" icon={<SlidersHorizontal size={18} aria-hidden />} description="Trust shows the saved source policy. Changes use the approved admin flow.">
         <MetaGrid columns={1} items={[
           { label: 'Effective trust', value: source.effectiveTrust },
-          { label: 'Future child tools', value: source.type === 'core' ? 'trusted core catalog' : 'approval required by default unless backend policy explicitly enables inheritance' },
-          { label: 'Global mode', value: policyMode },
+          { label: 'New tools', value: source.type === 'core' ? 'Trusted after review' : 'Approval required unless you choose otherwise' },
+          { label: 'Global mode', value: policyModeLabel(policyMode) },
           { label: 'Blocked child overrides', value: source.blockedToolCount }
         ]} />
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -1408,13 +1409,13 @@ function PolicyWorkspace({
             <div key={tool.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2.5 text-sm">
               <strong className="font-medium">{tool.name}</strong>
               <span className="text-muted-foreground">{effectivePolicyCopy(tool, source)}</span>
-              <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'approve_all_for_peer')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Trust override requires Tooling.UpsertToolPolicyOverride.' : undefined}>Trust tool</Button>
-              <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'ask_each_time')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Approval override requires Tooling.UpsertToolPolicyOverride.' : undefined}>Require approval</Button>
-              <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'deny_all')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Block override requires Tooling.UpsertToolPolicyOverride.' : undefined}>Block tool</Button>
+              <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'approve_all_for_peer')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Tool trust changes are unavailable right now.' : undefined}>Trust tool</Button>
+              <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'ask_each_time')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Approval changes are unavailable right now.' : undefined}>Require approval</Button>
+              <Button variant="ghost" onClick={() => onUpsertToolOverride?.(tool, 'deny_all')} disabled={!onUpsertToolOverride} disabledReason={!onUpsertToolOverride ? 'Blocking is unavailable right now.' : undefined}>Block tool</Button>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">To remove a durable child override and inherit from the source again, revoke its grant in the Grants tab.</p>
+        <p className="mt-2 text-sm text-muted-foreground">To return this tool to the source default, remove its saved approval.</p>
       </Card>
     </div>
   )
@@ -1430,7 +1431,7 @@ function GrantsPanel({ grants, onRevokeGrant }: { grants: ReturnType<typeof buil
             <strong className="font-medium">{grant.target}</strong>
             <span className="text-muted-foreground">{grant.scope} · {grant.principal} · {grant.expires}</span>
             <ToneBadge tone={stateTone(grant.status)}>{grant.status}</ToneBadge>
-            <Button variant="ghost" onClick={() => onRevokeGrant?.(grant)} disabled={!onRevokeGrant} disabledReason={!onRevokeGrant ? 'Grant revocation requires Tooling.RevokeApprovalGrant.' : undefined}>Revoke</Button>
+            <Button variant="ghost" onClick={() => onRevokeGrant?.(grant)} disabled={!onRevokeGrant} disabledReason={!onRevokeGrant ? 'Removing saved approvals is unavailable right now.' : undefined}>Revoke</Button>
           </div>
         ))}
       </div>
@@ -1449,12 +1450,12 @@ function ApprovalsPanel(props: {
   onDeny: (tool: ToolApprovalCardModel) => void
 }) {
   return (
-    <Card title="Pending approvals" icon={<Clock size={18} aria-hidden />} description="Assistant inline approval remains in chat; this queue explains backend pending requests and grants.">
-      {props.approvals.length === 0 && props.backendApprovals.length === 0 ? <p className="text-sm text-muted-foreground">No pending runtime approvals are present in the current Tooling catalog snapshot.</p> : null}
+    <Card title="Pending approvals" icon={<Clock size={18} aria-hidden />} description="Assistant approvals remain in chat; this queue shows requests waiting for review.">
+      {props.approvals.length === 0 && props.backendApprovals.length === 0 ? <p className="text-sm text-muted-foreground">No tool approvals are waiting right now.</p> : null}
       {props.backendApprovals.map((approval) => (
         <div key={approval.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2.5 text-sm">
           <strong className="font-medium">{approval.displayName}</strong>
-          <span className="text-muted-foreground">{approval.status} · thread {approval.threadId} · approval {approval.approvalRequestId ?? 'pending id'}</span>
+          <span className="text-muted-foreground">{approvalStatusLabel(approval.status)} · waiting in Assistant</span>
           <Badge variant="outline">Approve in Assistant</Badge>
           <code className="font-mono text-xs text-muted-foreground">{approval.correlationId ?? 'correlation pending'}</code>
         </div>
@@ -1485,28 +1486,28 @@ function sourceForApproval(tool: ToolApprovalCardModel): ToolingSourceModel {
 
 function SchedulerPanel({ jobs, loading, error }: { jobs: NormalizedSchedulerJob[]; loading: boolean; error: string | null }) {
   return (
-    <Card title="Scheduled tool actions" icon={<CalendarClock size={18} aria-hidden />} description="Scheduled jobs show grant dependencies and stale/revoked warning states from Scheduler.ListJobs.">
+    <Card title="Scheduled tool actions" icon={<CalendarClock size={18} aria-hidden />} description="Scheduled actions show whether approval is still valid before they run.">
       {error ? (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{toolingSafeMessage(error)}</AlertDescription>
         </Alert>
       ) : null}
-      {loading ? <p className="text-sm text-muted-foreground">Loading scheduler jobs through Aurora...</p> : null}
-      {!loading && jobs.length === 0 && !error ? <p className="text-sm text-muted-foreground">No scheduler jobs were returned by Scheduler.ListJobs.</p> : null}
+      {loading ? <p className="text-sm text-muted-foreground">Loading scheduled actions through Aurora...</p> : null}
+      {!loading && jobs.length === 0 && !error ? <p className="text-sm text-muted-foreground">No scheduled tool actions are set up.</p> : null}
       <div className="flex flex-col gap-2">
         {jobs.map((job) => (
           <div key={job.job_id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2.5 text-sm">
             <strong className="font-medium">{job.name}</strong>
             <span className="text-muted-foreground"><code className="font-mono text-xs">{job.schedule}</code> · {job.action} · next {job.next_run ?? 'not scheduled'}</span>
             <StateIndicator state={schedulerAvailability(job)} />
-            <span className="text-muted-foreground">{job.blocked_reason ? `grant warning: ${job.blocked_reason}` : 'grant dependency review required before fire'}</span>
+            <span className="text-muted-foreground">{job.blocked_reason ? 'Approval needs attention before this action can run.' : 'Review approval before this action runs.'}</span>
           </div>
         ))}
       </div>
       <div className="mt-2 flex items-center gap-2">
         <a className="text-sm font-medium text-muted-foreground hover:text-foreground hover:underline" href="/admin/scheduler">Open scheduler</a>
-        <Badge variant="outline">Scheduler.ListJobs</Badge>
+        <Badge variant="outline">Scheduled actions</Badge>
       </div>
     </Card>
   )
@@ -1526,11 +1527,11 @@ function ActivityPanel({ rows }: { rows: ReturnType<typeof buildAuditRows> }) {
     },
     { key: 'target', header: 'Target', render: (row) => row.target },
     { key: 'status', header: 'Status', render: (row) => row.status },
-    { key: 'correlation', header: 'Correlation', render: (row) => <code className="font-mono text-xs">{row.correlationId}</code> },
+    { key: 'correlation', header: 'Reference ID', render: (row) => <code className="font-mono text-xs">{row.correlationId}</code> },
     { key: 'policy', header: 'Policy', render: (row) => <code className="font-mono text-xs">{row.policyDecisionId}</code> }
   ]
   return (
-    <Card title="Activity and audit" icon={<History size={18} aria-hidden />} description="Recent policy, grant, tool execution, catalog, onboarding, and scheduler events with redacted payload boundaries.">
+    <Card title="Activity and audit" icon={<History size={18} aria-hidden />} description="Recent tool, approval, plugin, and scheduled-action changes.">
       <DataTable columns={columns} rows={rows} getRowKey={(row) => row.id} />
     </Card>
   )
@@ -1575,7 +1576,7 @@ function OnboardingPanel({
       <div className="mt-3 flex flex-col gap-3" role="dialog" aria-modal="false" aria-labelledby="tool-wizard-title">
         <header className="flex flex-col gap-1">
           <h3 id="tool-wizard-title" className="text-sm font-semibold">{title}</h3>
-          <p className="text-sm text-muted-foreground">{surfaceLabel}; local command launch is {canLaunchLocalCommands ? 'available for desktop-local source tests' : 'not available on this surface'}.</p>
+          <p className="text-sm text-muted-foreground">{surfaceLabel}; local command launch is {canLaunchLocalCommands ? 'available on this computer' : 'not available here'}.</p>
         </header>
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Wizard steps">
           {['Details', 'Authenticate', 'Discover', 'Trust'].map((label, index) => (
@@ -1681,14 +1682,14 @@ function WizardStep({
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">Check the connection before saving. Secrets are never shown again.</p>
       <Button variant="outline" onClick={() => { void onTestSource?.(wizard, draft) }} disabled={!onTestSource} disabledReason={!onTestSource ? 'Connection check is unavailable right now.' : undefined}>Test connection</Button>
-      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{toolingSafeMessage(resultMessage)}</p> : null}
+      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{resultMessage}</p> : null}
     </div>
   )
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">New tools require approval unless you choose to trust this source.</p>
       <Button variant="primary" onClick={() => { void onCreateSource?.(wizard, draft) }} disabled={!onCreateSource} disabledReason={!onCreateSource ? 'Saving is unavailable right now.' : undefined}>Create source</Button>
-      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{toolingSafeMessage(resultMessage)}</p> : null}
+      {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{resultMessage}</p> : null}
     </div>
   )
 }
@@ -1704,8 +1705,8 @@ function onboardingResultMessage(kind: 'mcp' | 'plugin', action: 'test' | 'creat
 }
 
 function LoadingState({
-  title = 'Loading source catalog',
-  detail = 'Loading catalog, source details, policy, grants, approvals, sharing state, and peer metadata.'
+  title = 'Loading tool sources',
+  detail = 'Loading tools, approvals, sharing state, and connected devices.'
 }: {
   title?: string
   detail?: string
@@ -1714,7 +1715,7 @@ function LoadingState({
 }
 
 function EmptyCatalog({ onAddMcp }: { onAddMcp: () => void }) {
-  return <Card title="No sources" icon={<Boxes size={18} aria-hidden />}><p className="text-sm text-muted-foreground">No core, MCP, plugin, mesh, unknown, or blocked sources were returned by the SDK catalog.</p><Button variant="primary" onClick={onAddMcp}>Connect your first MCP server</Button></Card>
+  return <Card title="No sources" icon={<Boxes size={18} aria-hidden />}><p className="text-sm text-muted-foreground">No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.</p><Button variant="primary" onClick={onAddMcp}>Connect your first MCP server</Button></Card>
 }
 
 function TrustPill({ trust }: { trust: ToolingTrustState }) {
@@ -1850,6 +1851,13 @@ function resultStatusCopy(status: string): string {
   if (/pending|running/i.test(status)) return 'In progress'
   if (/denied|blocked|failed|error/i.test(status)) return 'Needs attention'
   return 'Received'
+}
+
+function approvalStatusLabel(status: string): string {
+  if (/approved|ready/i.test(status)) return 'Approved'
+  if (/denied|blocked|failed|error/i.test(status)) return 'Needs attention'
+  if (/expired/i.test(status)) return 'Expired'
+  return 'Waiting'
 }
 
 function trustLabel(trust: ToolingTrustState): string {
