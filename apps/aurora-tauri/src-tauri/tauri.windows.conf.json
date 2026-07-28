@@ -9,6 +9,11 @@
     }
   },
   "bundle": {
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    },
     "targets": [
       "msi",
       "nsis"

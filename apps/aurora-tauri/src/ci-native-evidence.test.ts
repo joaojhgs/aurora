@@ -105,7 +105,7 @@ describe('Tauri CI native evidence contract', () => {
   it('keeps Tauri and frontend CI check names canonical and non-duplicative', () => {
     const workflowExpectations: Array<[string, string, string[]]> = [
       ['.github/workflows/frontend-sdk.yml', 'Frontend and SDK', ['SDK, shared UI, and web app']],
-      ['.github/workflows/tauri-desktop.yml', 'Tauri Desktop Verification', ['Desktop Tauri bundle (${{ matrix.bundle_mode }})', 'Sidecar profile staging (${{ matrix.profile }})']],
+      ['.github/workflows/tauri-desktop.yml', 'Tauri Desktop Verification', ['Desktop Tauri bundle (${{ matrix.bundle_mode }})', 'Desktop thin package (${{ matrix.platform }})', 'Sidecar profile staging (${{ matrix.profile }})']],
       ['.github/workflows/tauri-android.yml', 'Tauri Android Verification', ['Android thin APK/AAB build and emulator smoke']],
       ['.github/workflows/tauri-ios.yml', 'Tauri iOS Baseline', ['macOS Xcode Tauri iOS init and build']],
       ['.github/workflows/tauri-ios-release.yml', 'Tauri iOS Policy and Signing', ['iOS manifest and UI policy', 'macOS Xcode iOS preflight']],
@@ -322,6 +322,129 @@ describe('Tauri CI native evidence contract', () => {
     expect(commonInstall).not.toContain('python3-dev')
     expect(localPythonInstall).toContain('if: matrix.needs_python')
     expect(localPythonInstall).toContain('python3-dev')
+  })
+
+  it('packages every thin WebRTC surface with its required runtime and permission contract', () => {
+    const cargo = repoText('apps/aurora-tauri/src-tauri/Cargo.toml')
+    const thinCapability = repoText(
+      'apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json',
+    )
+    const nativeWebRtcPermission = repoText(
+      'apps/aurora-tauri/src-tauri/permissions/aurora-native-webrtc.toml',
+    )
+    const windowsConfig = JSON.parse(
+      repoText('apps/aurora-tauri/src-tauri/tauri.windows.conf.json'),
+    ) as {
+      bundle: {
+        windows: {
+          webviewInstallMode: { type: string }
+        }
+      }
+    }
+    const macosConfig = JSON.parse(
+      repoText('apps/aurora-tauri/src-tauri/tauri.macos.conf.json'),
+    ) as {
+      bundle: {
+        macOS: {
+          hardenedRuntime: boolean
+          entitlements: string
+          infoPlist: string
+        }
+      }
+    }
+    const macosPlist = repoText(
+      `apps/aurora-tauri/src-tauri/${macosConfig.bundle.macOS.infoPlist}`,
+    )
+    const macosEntitlements = repoText(
+      `apps/aurora-tauri/src-tauri/${macosConfig.bundle.macOS.entitlements}`,
+    )
+    const iosPlist = repoText(
+      'apps/aurora-tauri/src-tauri/Info.ios.plist',
+    )
+    const androidManifest = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/AndroidManifest.xml',
+    )
+    const barcodeManifest = repoText(
+      'apps/aurora-tauri/src-tauri/vendor/tauri-plugin-barcode-scanner/android/src/main/AndroidManifest.xml',
+    )
+    const androidPlugin = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
+    )
+    const androidSyncScript = repoText(
+      'apps/aurora-tauri/scripts/install-android-native-plugin.mjs',
+    )
+    const desktopWorkflow = repoText(
+      '.github/workflows/tauri-desktop.yml',
+    )
+
+    const linuxDependencies =
+      cargo.match(
+        /\[target\.'cfg\(target_os = "linux"\)'\.dependencies\]([\s\S]*?)(?=\n\[|$)/,
+      )?.[1] ?? ''
+    expect(linuxDependencies).toContain('webrtc = "0.11.0"')
+    expect(linuxDependencies).toContain('base64 = "0.22"')
+    expect(linuxDependencies).toContain('bytes = "1"')
+    expect(cargo).not.toContain('webkit2gtk =')
+    expect(thinCapability).toContain('"aurora-native-webrtc"')
+    expect(nativeWebRtcPermission).toContain(
+      'aurora_native_webrtc_create',
+    )
+    expect(nativeWebRtcPermission).toContain(
+      'aurora_native_webrtc_data_channel_send',
+    )
+
+    expect(windowsConfig.bundle.windows.webviewInstallMode.type).toBe(
+      'embedBootstrapper',
+    )
+    expect(macosConfig.bundle.macOS.infoPlist).toBe(
+      'Info.macos.plist',
+    )
+    expect(macosConfig.bundle.macOS.hardenedRuntime).toBe(true)
+    expect(macosConfig.bundle.macOS.entitlements).toBe(
+      'entitlements.macos.plist',
+    )
+    expect(macosPlist).toContain('NSMicrophoneUsageDescription')
+    expect(macosPlist).toContain('NSLocalNetworkUsageDescription')
+    expect(macosEntitlements).toContain(
+      'com.apple.security.device.audio-input',
+    )
+
+    expect(iosPlist).toContain('NSCameraUsageDescription')
+    expect(iosPlist).toContain('NSMicrophoneUsageDescription')
+    expect(iosPlist).toContain('NSLocalNetworkUsageDescription')
+    expect(iosPlist).toContain('NSAppTransportSecurity')
+
+    for (const permission of [
+      'android.permission.INTERNET',
+      'android.permission.ACCESS_NETWORK_STATE',
+      'android.permission.RECORD_AUDIO',
+      'android.permission.MODIFY_AUDIO_SETTINGS',
+    ]) {
+      expect(androidManifest).toContain(permission)
+    }
+    expect(barcodeManifest).toContain('android.permission.CAMERA')
+    expect(androidManifest).toContain('android.software.webview')
+    expect(androidManifest).toContain('android:usesCleartextTraffic="true"')
+    expect(androidSyncScript).toContain('android.software.webview')
+    expect(androidSyncScript).toContain('android:usesCleartextTraffic="true"')
+    expect(androidPlugin).toContain(
+      'override fun onPermissionRequest(request: PermissionRequest)',
+    )
+    expect(androidPlugin).toContain(
+      'PermissionRequest.RESOURCE_AUDIO_CAPTURE',
+    )
+
+    expect(desktopWorkflow).toContain(
+      'Desktop thin package (${{ matrix.platform }})',
+    )
+    expect(desktopWorkflow).toContain('os: macos-latest')
+    expect(desktopWorkflow).toContain('os: windows-latest')
+    expect(desktopWorkflow).toContain(
+      'pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin',
+    )
+    expect(desktopWorkflow).toContain(
+      'apps/aurora-tauri/src-tauri/target/release/bundle/**',
+    )
   })
 
   it('defines a Python-free desktop-thin bundle lane with deterministic artifact proof', () => {

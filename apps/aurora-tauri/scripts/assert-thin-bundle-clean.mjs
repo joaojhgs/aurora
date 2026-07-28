@@ -2,8 +2,9 @@ import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
-const packageRoot = resolve(dirname(new URL(import.meta.url).pathname), '..')
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
 const srcTauriRoot = join(packageRoot, 'src-tauri')
 const thinConfigPath = resolve(process.env.AURORA_TAURI_THIN_CONFIG_PATH ?? join(srcTauriRoot, 'tauri.thin.conf.json'))

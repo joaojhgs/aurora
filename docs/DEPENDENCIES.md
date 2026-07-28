@@ -12,6 +12,7 @@ Aurora uses `uv` and `pyproject.toml` optional dependency groups to avoid instal
 - Add dependencies to the narrowest service, mode, hardware, or integration group that owns them.
 - Do not commit generated dependency trees, audit snapshots, or temporary analysis JSON/TXT under `docs/`. Generate them locally or publish them as CI artifacts.
 - For Tauri bundles, choose an explicit sidecar profile instead of shipping every local dependency in one package.
+- For Python-free Tauri thin bundles, keep platform runtime dependencies target-specific. Linux links the native peer primitive only on Linux; Windows provisions WebView2; macOS/iOS use WKWebView; Android uses System WebView. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md#thin-shell-platform-runtime-prerequisites).
 
 ## Common local installs
 

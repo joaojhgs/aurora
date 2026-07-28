@@ -500,6 +500,10 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     )
 
     expect(manifest).toContain('android:usesCleartextTraffic="true"')
+    expect(manifest).toContain('android.software.webview')
+    const syncScript = readFileSync(syncNativePlugin, 'utf8')
+    expect(syncScript).toContain('android.software.webview')
+    expect(syncScript).toContain('android:usesCleartextTraffic="true"')
   })
 })
 

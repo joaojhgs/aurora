@@ -166,6 +166,16 @@ function mergePluginManifest(content) {
   if (permissionBlock) {
     patched = patched.replace(/(\s*<application\b)/, `\n${permissionBlock}\n$1`)
   }
+  if (!patched.includes('android.software.webview')) {
+    patched = patched.replace(
+      /(\s*<application\b)/,
+      '\n    <uses-feature android:name="android.software.webview" android:required="true" />\n$1',
+    )
+  }
+  patched = patched.replace(
+    /android:usesCleartextTraffic="[^"]*"/,
+    'android:usesCleartextTraffic="true"',
+  )
 
   // Keep the generated app manifest aligned with the canonical native-plugin
   // manifest. Remove stale Aurora-owned component declarations first so this

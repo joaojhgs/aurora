@@ -9,6 +9,11 @@
     }
   },
   "bundle": {
+    "macOS": {
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.macos.plist",
+      "infoPlist": "Info.macos.plist"
+    },
     "targets": [
       "dmg"
     ]

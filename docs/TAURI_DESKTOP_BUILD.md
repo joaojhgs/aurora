@@ -67,6 +67,26 @@ pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
 
 The desktop-thin command (and its `build:bundle:thin` alias) uses Tauri's `--config src-tauri/tauri.thin.conf.json` flavor overlay. `prepare:bundle:desktop-thin` compiles no Gateway or signaling URL, generates a runtime-configurable `connect-src 'self' http: https: ws: wss:` policy, replaces the base capability list with `aurora-thin`, and omits `bundle.externalBin` plus `bundle.resources`. At runtime, invite-first onboarding supplies the local node name and signaling/pairing material; normal connection settings edit the selected HTTP Gateway and/or WebRTC signaling profile afterward.
 
+## Thin-shell platform runtime prerequisites
+
+| Platform | Package/runtime dependency | Aurora package contract |
+| --- | --- | --- |
+| Linux | Tauri uses system GTK/WebKitGTK. The generated Debian package declares the normal GTK, WebKitGTK, and tray dependencies. | `webrtc-rs`, base64, and bytes are Linux-target-only Cargo dependencies linked into the binary. When WebKitGTK lacks `RTCPeerConnection`, desktop thin injects this native ICE/DTLS/SCTP/DataChannel primitive. No GStreamer or system WebRTC package is required by the fallback. |
+| macOS | WKWebView is part of macOS. | `tauri.macos.conf.json` enables hardened runtime, signs with the narrow audio-input entitlement, and merges `Info.macos.plist` microphone/local-network purpose strings for focused voice/WebRTC and runtime-configured LAN peers. |
+| Windows | Tauri uses Microsoft Edge WebView2. Rust's MSVC runtime is statically linked by Tauri's default Windows build policy. | MSI/NSIS configuration embeds the small Evergreen WebView2 bootstrapper, so the installer can provision/update WebView2 when it is missing. The bootstrapper needs internet only when the OS does not already have WebView2; it does not pin a stale fixed runtime. |
+| Android | Tauri uses Android System WebView. | The manifest declares WebView as required and the app packages AndroidX WebKit compatibility APIs. Manifest/plugin merging declares Internet, network-state, record/modify-audio, foreground microphone, notification, biometric, camera, and vibration permissions. Release and debug builds allow user-configured cleartext LAN HTTP/WS endpoints. The native WebChromeClient grants WebView audio capture only after runtime permission, trusted origin, focus, and foreground checks. |
+| iOS | WKWebView is part of iOS. | `Info.ios.plist` declares camera, microphone, local-network, Face ID, and runtime HTTP/WebSocket transport usage. Camera is used for invite QR scanning; microphone remains focused/user-initiated. |
+
+The platform WebView remains OS-serviced on macOS, Android, and iOS. Windows
+uses the Evergreen WebView2 updater path rather than bundling a fixed browser.
+Linux keeps WebKitGTK for the UI but does not depend on its optional WebRTC DOM
+feature.
+
+The existing desktop workflow builds Linux local/thin packages and now also
+builds Python-free macOS DMG and Windows MSI/NSIS thin packages on their native
+GitHub runners. Android APK/AAB and iOS simulator/WKWebView packages remain in
+their existing platform-specific workflows.
+
 Local assistant variants are explicit:
 
 ```bash

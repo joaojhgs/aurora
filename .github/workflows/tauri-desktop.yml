@@ -173,6 +173,63 @@ jobs:
           path: apps/aurora-tauri/reports/eventstream-smoke.json
           if-no-files-found: warn
 
+  desktop-thin-native-packages:
+    name: Desktop thin package (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            artifact_suffix: macos
+          - platform: Windows
+            os: windows-latest
+            artifact_suffix: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri workspace dependencies
+        run: |
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Verify native package policy and frontend types
+        run: |
+          pnpm --filter @aurora/tauri-ui test:ci-native-evidence
+          pnpm --filter @aurora/tauri-ui typecheck
+
+      - name: Check platform Rust package
+        run: cargo check
+        working-directory: apps/aurora-tauri/src-tauri
+
+      - name: Build Python-free desktop thin package
+        run: pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
+
+      - name: Upload desktop thin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-thin-${{ matrix.artifact_suffix }}
+          path: apps/aurora-tauri/src-tauri/target/release/bundle/**
+          if-no-files-found: error
+
   sidecar-profile-matrix:
     name: Sidecar profile staging (${{ matrix.profile }})
     runs-on: ubuntu-latest
