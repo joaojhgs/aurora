@@ -1,3 +1,6 @@
 export * from './browser-indexeddb.js'
+export * from './browser-sqlite-opfs.js'
+export * from './browser-sqlite-worker-client.js'
 export * from './browser-storage-lock.js'
+export * from './create-local-data-backend.js'
 export * from './storage-health.js'

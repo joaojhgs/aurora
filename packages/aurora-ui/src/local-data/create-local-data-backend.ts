@@ -1,5 +1,6 @@
 import { LocalDataError, type LocalDataBackend } from '@aurora/client/local-data'
 
+import { BrowserIndexedDbLocalDataBackend } from './browser-indexeddb.js'
 import { BrowserSqliteLocalDataBackend, fallbackReasonFromError, type BrowserSqliteLocalDataBackendOptions } from './browser-sqlite-worker-client.js'
 
 export type BrowserLocalDataFallbackReason =
@@ -14,7 +15,7 @@ export type BrowserLocalDataFallbackReason =
   | 'migration_failed'
 
 export interface CreateLocalDataBackendOptions extends BrowserSqliteLocalDataBackendOptions {
-  readonly indexedDbBackend: LocalDataBackend
+  readonly indexedDbBackend?: LocalDataBackend
   readonly onStorageHealth?: (status: BrowserLocalDataStorageHealthInput) => void
 }
 
@@ -28,7 +29,7 @@ export interface BrowserLocalDataStorageHealthInput {
 export async function createLocalDataBackend(
   profileId: string,
   localNodeId: string,
-  options: CreateLocalDataBackendOptions
+  options: CreateLocalDataBackendOptions = {}
 ): Promise<LocalDataBackend> {
   const sqliteBackend = new BrowserSqliteLocalDataBackend(options)
   try {
@@ -43,7 +44,7 @@ export async function createLocalDataBackend(
   } catch (error) {
     await sqliteBackend.close().catch(() => undefined)
     const fallbackReason = fallbackReasonFromError(error)
-    const fallback = options.indexedDbBackend
+    const fallback = options.indexedDbBackend ?? new BrowserIndexedDbLocalDataBackend()
     try {
       await fallback.open(profileId, localNodeId)
     } catch (fallbackError) {

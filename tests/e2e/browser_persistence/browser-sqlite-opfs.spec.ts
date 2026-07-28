@@ -34,7 +34,8 @@ test.afterAll(async () => {
   await vite.close()
 })
 
-test('opens, writes, closes, reloads, and reopens persistent browser SQLite without fallback', async ({ page }) => {
+test('opens, writes, closes, reloads, and reopens persistent browser SQLite without fallback', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'The OPFS SAH pool proof currently requires Chromium.')
   const localNodeId = `node-sqlite-proof-${Date.now()}-${Math.random().toString(16).slice(2)}`
   await page.goto(`${origin}tests/e2e/browser_persistence/browser-sqlite-proof.html`)
 

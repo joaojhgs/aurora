@@ -167,6 +167,100 @@ test('real Chromium IndexedDB local data uses Web Locks ownership and persists a
   expect(result.reacquiredCount).toBe(1)
 })
 
+test('production browser selector uses durable IndexedDB when SQLite ownership is unavailable', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'This selector proof requires Chromium IndexedDB, Web Locks, and OPFS capability detection.')
+  await page.goto(origin)
+  const result = await page.evaluate(async () => {
+    const {
+      createLocalDataBackend,
+      deriveBrowserLocalDataDatabaseName,
+    } = await import('/packages/aurora-ui/dist/local-data/index.js')
+    const profileId = 'profile-selector'
+    const localNodeId = 'node-selector'
+    const databaseName = deriveBrowserLocalDataDatabaseName(location.origin, localNodeId)
+    await deleteDatabase(databaseName)
+    await deleteDatabase('aurora-browser-storage-locks')
+
+    const health: unknown[] = []
+    const deniedSqliteLock = {
+      async acquire(): Promise<never> {
+        throw new Error('SQLite writer is already active')
+      },
+    }
+    const backend = await createLocalDataBackend(profileId, localNodeId, {
+      lock: deniedSqliteLock,
+      onStorageHealth: (status: unknown) => health.push(status),
+    })
+    const session = await backend.open(profileId, localNodeId)
+    await session.memory.upsertMemoryItem(memory(profileId, localNodeId))
+    const firstStatus = await backend.status()
+    await session.close()
+
+    const reopenedBackend = await createLocalDataBackend(profileId, localNodeId, {
+      lock: deniedSqliteLock,
+    })
+    const reopened = await reopenedBackend.open(profileId, localNodeId)
+    const reopenedItems = await reopened.memory.listMemoryItems()
+    await reopened.clear()
+    await reopened.close()
+    await deleteDatabase(databaseName)
+    await deleteDatabase('aurora-browser-storage-locks')
+
+    return {
+      backendKind: backend.kind,
+      firstStatus,
+      health,
+      reopenedCount: reopenedItems.length,
+    }
+
+    function memory(profile: string, node: string) {
+      return {
+        id: 'memory-selector',
+        profileId: profile,
+        localNodeId: node,
+        namespace: 'notes',
+        payloadEnvelope: {
+          version: 1,
+          algorithm: 'AES-GCM-256',
+          keyId: 'key-browser-selector',
+          nonceB64Url: 'AAAAAAAAAAAAAAAA',
+          ciphertextAndTagB64Url: 'AAAAAAAAAAAAAAAAAAAAAA',
+          createdAtMs: 1000,
+        },
+        sourceType: 'selector-proof',
+        sourceId: null,
+        createdAtMs: 1000,
+        updatedAtMs: 1000,
+        expiresAtMs: null,
+      }
+    }
+
+    function deleteDatabase(name: string): Promise<void> {
+      return new Promise((resolveDelete, rejectDelete) => {
+        const request = indexedDB.deleteDatabase(name)
+        request.onsuccess = () => resolveDelete()
+        request.onerror = () => rejectDelete(request.error ?? new Error('Unable to reset selector database'))
+        request.onblocked = () => rejectDelete(new Error('Selector database reset was blocked'))
+      })
+    }
+  })
+
+  expect(result.backendKind).toBe('indexeddb')
+  expect(result.firstStatus).toMatchObject({
+    kind: 'indexeddb',
+    persistent: true,
+    sqlite: false,
+    profileId: 'profile-selector',
+  })
+  expect(result.health).toEqual([{
+    selectedBackend: 'indexeddb',
+    sqliteAttempted: true,
+    sqliteAvailable: false,
+    fallbackReason: 'ownership_unavailable',
+  }])
+  expect(result.reopenedCount).toBe(1)
+})
+
 function resolveServedFilePath(pathname: string): string | null {
   const requestedPath = resolve(repositoryRoot, `.${pathname}`)
   const allowedPrefix = `${repositoryRoot}${sep}`
