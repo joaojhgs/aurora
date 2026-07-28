@@ -12,6 +12,8 @@ import {
 } from '../src/assistant-view'
 import type { RouteAvailability } from '../src/shell-data'
 
+const hostileCatalogPattern = /\b(?:SDK|WebView|daemon|Orchestrator|native-manifest|WebRTC|transport|fallback|runtime|Gateway\.ExplainRoute|Tooling\.DeleteSecret|api_key|secret-token|sk-secret)\b|provider:\/\/|peer-WebRTC-runtime/i
+
 describe('assistant execution and model pickers', () => {
   it('offers local execution and preserves the selected peer dispatch identity', () => {
     const options = assistantExecutionOptions(route())
@@ -33,14 +35,14 @@ describe('assistant execution and model pickers', () => {
     const dispatchChoices = assistantModelChoices(catalog(), execution[1]!)
 
     expect(localChoices.map((choice) => choice.model.name)).toEqual([
-      'GPT 5 · configured',
-      'GPT 5',
-      'DialoGPT Medium',
-      'Qwen 32B'
+      'Configured default',
+      'Cloud model 1.1',
+      'Local model 2.1',
+      'Connected device model 3.1'
     ])
     expect(dispatchChoices.map((choice) => choice.model.name)).toEqual([
-      'Peer default',
-      'Qwen 32B'
+      'Connected device default',
+      'Connected device model 1.1'
     ])
 
     const localGroups = assistantModelChoiceGroups(localChoices, execution[0]!)
@@ -49,14 +51,14 @@ describe('assistant execution and model pickers', () => {
       heading: group.heading,
       models: group.choices.map((choice) => choice.model.name)
     }))).toEqual([
-      { heading: 'Configured default', models: ['GPT 5 · configured'] },
-      { heading: 'OpenAI · 1 model', models: ['GPT 5'] },
-      { heading: 'HuggingFace Pipeline · 1 model', models: ['DialoGPT Medium'] },
-      { heading: 'Studio OpenAI · 1 model', models: ['Qwen 32B'] }
+      { heading: 'Configured default', models: ['Configured default'] },
+      { heading: 'Cloud service 1 · 1 model', models: ['Cloud model 1.1'] },
+      { heading: 'This device 2 · 1 model', models: ['Local model 2.1'] },
+      { heading: 'Connected device 1 · 1 model', models: ['Connected device model 3.1'] }
     ])
     expect(dispatchGroups.map((group) => group.heading)).toEqual([
-      'studio default',
-      'Studio OpenAI · 1 model'
+      'Connected device default',
+      'Connected device 1 · 1 model'
     ])
     expect(assistantModelSourceGroups(localGroups, execution[0]!, execution).map((source) => ({
       heading: source.heading,
@@ -65,12 +67,12 @@ describe('assistant execution and model pickers', () => {
     }))).toEqual([
       {
         heading: 'This device',
-        providers: ['OpenAI · 1 model', 'HuggingFace Pipeline · 1 model'],
+        providers: ['Cloud service 1 · 1 model', 'This device 2 · 1 model'],
         modelCount: 2
       },
       {
-        heading: 'Shared by studio',
-        providers: ['Studio OpenAI · 1 model'],
+        heading: 'Connected device 1',
+        providers: ['Connected device 1 · 1 model'],
         modelCount: 1
       }
     ])
@@ -96,10 +98,10 @@ describe('assistant execution and model pickers', () => {
     }])
 
     expect(assistantModelChoices(merged, execution[0]!).map((choice) => choice.model.name)).toEqual([
-      'GPT 5 · configured',
-      'GPT 5',
-      'DialoGPT Medium',
-      'Qwen 32B'
+      'Configured default',
+      'Cloud model 1.1',
+      'Local model 2.1',
+      'Connected device model 3.1'
     ])
     expect(merged.providers.filter((provider) => provider.provider_peer_id).map((provider) =>
       provider.provider_peer_id
@@ -118,6 +120,54 @@ describe('assistant execution and model pickers', () => {
       runtimeProviderId: null,
       modelId: 'qwen-32b',
       dataLeavesDevice: true
+    }))
+  })
+
+  it('keeps hostile catalog fields out of model selector presentation while preserving request keys', () => {
+    const hostileProviderId = 'remote:peer-WebRTC-runtime:Gateway.ExplainRoute:native-manifest'
+    const hostileModelId = 'SDK-Orchestrator-secret-model'
+    const hostileCatalog: ModelRuntimeCatalogResponse = {
+      generated_at: '2026-07-28T00:00:00Z',
+      selected_provider_id: hostileProviderId,
+      providers: [
+        provider({
+          provider_id: hostileProviderId,
+          display_name: 'native-manifest WebRTC transport fallback secret Gateway.ExplainRoute',
+          provider_kind: 'mesh_peer',
+          provider_type: 'remote',
+          provider_peer_id: 'peer-WebRTC-runtime',
+          provider_service_instance_id: 'remote:peer-WebRTC-runtime:Orchestrator',
+          model_id: hostileModelId,
+          models: [model(hostileProviderId, hostileModelId, 'SDK Orchestrator secret model')]
+        })
+      ],
+      provider_index: {},
+      unavailable: [],
+      internal_only: [],
+      secrets_redacted: true
+    }
+    const execution = assistantExecutionOptions(route())[0]!
+    const choices = assistantModelChoices(hostileCatalog, execution)
+    const explicit = choices.find((choice) => !choice.automatic)!
+    const groups = assistantModelChoiceGroups(choices, execution)
+    const sources = assistantModelSourceGroups(groups, execution, [execution])
+    const renderedSelectorFields = JSON.stringify({
+      ids: choices.map((choice) => choice.model.id),
+      names: choices.map((choice) => choice.model.name),
+      descriptions: choices.map((choice) => choice.model.description),
+      keywords: choices.map((choice) => choice.model.keywords),
+      groups: groups.map((group) => group.heading),
+      sources: sources.map((source) => [source.heading, source.description])
+    })
+
+    expect(renderedSelectorFields).not.toMatch(hostileCatalogPattern)
+    expect(explicit.model.id).toBe('model-choice-1-1')
+    expect(explicit.provider?.provider_id).toBe(hostileProviderId)
+    expect(explicit.runtimeModel?.model_id).toBe(hostileModelId)
+    expect(assistantInferencePolicy(explicit, route())).toEqual(expect.objectContaining({
+      providerId: hostileProviderId,
+      modelId: hostileModelId,
+      peerId: 'peer-WebRTC-runtime'
     }))
   })
 

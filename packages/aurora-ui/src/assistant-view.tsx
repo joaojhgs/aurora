@@ -664,8 +664,8 @@ export function AssistantView({
           catalog.providers.find((candidate) => candidate.provider_id === catalog.selected_provider_id) ?? null,
           catalog.providers
         )
-        if (provider?.model_id) setModelLabel(provider.model_id)
-        if (provider?.display_name) setRuntimeProviderLabel(provider.display_name)
+        if (provider?.model_id) setModelLabel('Configured default')
+        if (provider) setRuntimeProviderLabel('Selected model source')
         setModelCatalogLoading(false)
       })
       .catch((error) => {
@@ -964,12 +964,8 @@ export function AssistantView({
       text: replayFrom ? 'Replaying stream from last backend event...' : 'Waiting for Aurora stream...',
       createdAt: now,
       status: 'streaming',
-      modelLabel: selectedModelChoice.runtimeModel?.display_name
-        ?? selectedModelChoice.runtimeModel?.model_id
-        ?? modelLabel
-        ?? runtimeHealth?.selectedModel
-        ?? null,
-      providerLabel: selectedModelChoice.provider?.display_name ?? runtimeProviderLabel ?? route.providerLabel,
+      modelLabel: selectedModelChoice.model.name,
+      providerLabel: selectedModelChoice.provider ? 'Selected model source' : runtimeProviderLabel ?? route.providerLabel,
       routeLabel: selectedExecution.mode === 'local' ? 'Local' : selectedExecution.label,
       executionPeerId: selectedExecution.routePolicy.peerId
     }
@@ -2325,7 +2321,7 @@ export function AssistantView({
                       <Marker className="aui-chat-empty" variant="border">
                         <MarkerContent>
                           <strong>Start with a prompt</strong>
-                          <span>Responses appear only after the SDK returns final Orchestrator output.</span>
+                          <span>Aurora will show responses here after it finishes answering.</span>
                         </MarkerContent>
                       </Marker>
                     </MessageScrollerItem>
@@ -2463,7 +2459,7 @@ export function AssistantView({
                   showControls={false}
                   className="aui-composer-recorder-panel"
                   title="Listening"
-                  sourceLabel={surfaceProfile.kind === 'desktop-local' ? 'WebView microphone' : 'Browser microphone'}
+                  sourceLabel="This device microphone"
                   detail="Live microphone level"
                 />
               </div>
@@ -2724,26 +2720,26 @@ export function buildAssistantVoiceModel(input: {
     retentionPolicy: remoteAudioRoute.disabled ? 'not retained: route unavailable' : 'transient unless backend retention policy says otherwise',
     sessionTtl: input.consentGranted ? 'current UI session' : 'consent not granted',
     transport: input.client.transport.kind,
-    platformTruth: surfaceProfile.voiceCapture.detail,
-    visualizerSourceLabel: surfaceProfile.kind === 'desktop-local' ? 'WebView microphone / daemon wake events' : 'Browser microphone',
+    platformTruth: 'This device microphone is used while Aurora is open.',
+    visualizerSourceLabel: 'This device microphone',
     targetLabel: remoteAudioRoute.providerLabel,
     chips: [
       {
         id: 'browser-capture',
-        label: 'Browser capture',
+        label: 'Device microphone',
         state: browserCaptureState.state,
         privacyClass: 'raw-audio',
         providerLabel: browserCaptureState.providerLabel,
         detail: browserCaptureState.detail,
         blockers: browserCaptureState.blockers,
-        evidence: [input.client.transport.kind, 'browser getUserMedia']
+        evidence: ['device_voice_status']
       },
       nativeCapture,
-      voiceChip('remote-processing', 'Remote processing', transcription, 'raw-audio', input.consentGranted
-        ? 'Remote STT route has UI session consent.'
-        : 'Remote STT route requires consent before audio leaves this device.'),
+      voiceChip('remote-processing', 'Connected speech help', transcription, 'raw-audio', input.consentGranted
+        ? 'Session consent is active for speech help.'
+        : 'Session consent is required before audio leaves this device.'),
       voiceChip('wake', 'Wake and background', wakeControl.disabled ? wakeProcess : wakeControl, 'raw-audio', wakeDetail(input.nativePlatform ?? 'not available', wakeControl, wakeProcess)),
-      voiceChip('tts', 'TTS synthesis', ttsSynthesize, 'personal', 'Batch synthesis is separate from playback hardware control.'),
+      voiceChip('tts', 'Speech generation', ttsSynthesize, 'personal', 'Speech can be prepared before playback starts.'),
       voiceChip('playback', 'Local playback', ttsStop, 'personal', 'Playback stop/control is separate from remote synthesis.')
     ],
     controls: [
@@ -2752,7 +2748,7 @@ export function buildAssistantVoiceModel(input: {
         label: input.captureStatus === 'listening' || input.captureStatus === 'processing' || input.captureStatus === 'speaking' ? 'Stop listening' : 'Push to talk',
         state: pushToTalkControlState(surfaceProfile, browserCaptureState.state),
         enabled: pushToTalkControlState(surfaceProfile, browserCaptureState.state) !== 'unsupported',
-        reason: surfaceProfile.voiceCapture.detail,
+        reason: 'This device microphone is ready while Aurora is open.',
         route: null
       },
       {
@@ -2761,11 +2757,11 @@ export function buildAssistantVoiceModel(input: {
         state: remoteAudioRoute.disabled ? remoteAudioRoute.state : input.consentGranted ? 'available-local' : 'privacy-blocked',
         enabled: !remoteAudioRoute.disabled || remoteAudioRoute.state === 'privacy-blocked',
         reason: input.consentGranted
-          ? 'Consent can be revoked before starting another remote audio session.'
-          : 'Required before raw audio is routed to a remote peer/provider.',
+          ? 'Consent can be revoked before starting another audio session.'
+          : 'Required before microphone audio is shared with a connected device.',
         route: remoteAudioRoute
       },
-      voiceAction('remote-transcription', 'Start transcription', transcription, input.captureStatus, input.consentGranted),
+      voiceAction('remote-transcription', 'Start speech capture', transcription, input.captureStatus, input.consentGranted),
       voiceAction('wakeword', 'Wake foreground', wakeControl.disabled ? wakeProcess : wakeControl, input.captureStatus, input.consentGranted),
       voiceAction('tts-synthesize', 'Synthesize speech', ttsSynthesize, input.captureStatus, input.consentGranted),
       voiceAction('playback-stop', 'Stop playback', ttsStop, input.captureStatus, input.consentGranted)
@@ -2803,7 +2799,7 @@ function VoiceModePanel({
           <PrivacyBadge privacy={model.privacyClass} />
           <EvidenceBadge label={productConnectionCopy(model.transport)} />
           <EvidenceBadge label={model.consentGranted ? 'consent granted' : 'consent required'} />
-          <EvidenceBadge label={model.targetLabel} />
+          <EvidenceBadge label={voiceDestinationCopy(model.targetLabel)} />
         </div>
       </header>
 
@@ -3238,20 +3234,18 @@ export function assistantModelChoices(
         catalog.providers
       )
     : null
-  const configuredModel = configuredProvider?.models?.find((model) => model.model_id === configuredProvider.model_id)
-    ?? configuredProvider?.models?.find((model) => model.default)
   const automatic: AssistantModelChoice = {
     id: 'automatic',
     model: {
       id: 'automatic',
       name: execution.mode === 'local'
-        ? `${configuredModel?.display_name ?? configuredProvider?.model_id ?? 'Configured default'}${configuredProvider ? ' · configured' : ''}`
-        : 'Peer default',
+        ? 'Configured default'
+        : 'Connected device default',
       description: execution.mode === 'local'
         ? configuredProvider
-          ? `Configured default · ${configuredProvider.display_name}`
+          ? 'Aurora uses the configured model for this device.'
           : 'Let Aurora choose from the configured, available model routes.'
-        : `${execution.label} chooses from the models it shares and permits.`,
+        : 'The selected connected device chooses from the models it shares and permits.',
       icon: execution.mode === 'local' ? <Laptop aria-hidden /> : <Network aria-hidden />
     },
     provider: null,
@@ -3260,10 +3254,11 @@ export function assistantModelChoices(
   }
   if (!catalog) return [automatic]
 
-  const choices = catalog.providers
+  const usableProviders = catalog.providers
     .filter((provider) => providerUsableForAssistant(provider))
     .filter((provider) => execution.mode === 'local' || providerMatchesExecution(provider, execution))
-    .flatMap((provider) => {
+  const choices = usableProviders
+    .flatMap((provider, providerIndex) => {
       const models = provider.models?.filter((model) => model.available !== false) ?? []
       const availableModels = models.length > 0
         ? models
@@ -3275,22 +3270,19 @@ export function assistantModelChoices(
               secrets_redacted: true
             } satisfies ModelRuntimeModelInfo]
           : []
-      return availableModels.map((runtimeModel): AssistantModelChoice => {
-        const providerDisplayName = modelProviderDisplayName(provider, execution)
-        const location = providerIsRemote(provider)
-          ? `Shared by ${provider.provider_peer_id ?? provider.display_name}`
-          : provider.provider_type === 'cloud' || /cloud|openai|anthropic|google/i.test(`${provider.provider_kind} ${provider.backend_kind} ${provider.provider_type}`)
-            ? 'Cloud model'
-            : 'Available on this device'
-        const id = assistantModelChoiceId(provider.provider_id, runtimeModel.model_id)
+      return availableModels.map((runtimeModel, modelIndex): AssistantModelChoice => {
+        const providerClass = assistantModelProviderClass(provider)
+        const providerLabel = assistantModelProviderLabel(providerClass, providerIndex + 1)
+        const modelLabel = assistantModelLabel(providerClass, providerIndex + 1, modelIndex + 1)
+        const id = assistantModelChoiceId(providerIndex + 1, modelIndex + 1)
         return {
           id,
           model: {
             id,
-            name: runtimeModel.display_name || runtimeModel.model_id,
-            description: `${providerDisplayName} · ${location}`,
+            name: modelLabel,
+            description: assistantModelDescription(providerClass, providerLabel),
             icon: providerIsRemote(provider) ? <Network aria-hidden /> : <Cpu aria-hidden />,
-            keywords: [providerDisplayName, provider.display_name, provider.provider_id, runtimeModel.model_id, location]
+            keywords: assistantModelKeywords(providerClass, providerIndex + 1, modelIndex + 1)
           },
           provider,
           runtimeModel,
@@ -3322,9 +3314,11 @@ export function assistantModelChoiceGroups(
       existing.choices.push(choice)
       continue
     }
+    const providerClass = assistantModelProviderClass(provider)
+    const providerOrdinal = target.size + 1
     target.set(id, {
       id,
-      heading: `${modelProviderDisplayName(provider, execution)} · ${modelCountLabel(1)}`,
+      heading: `${assistantModelProviderLabel(providerClass, providerOrdinal)} · ${modelCountLabel(1)}`,
       choices: [choice],
       scope: remote ? 'connected device' : 'this device'
     })
@@ -3333,7 +3327,7 @@ export function assistantModelChoiceGroups(
   const groups: AssistantModelChoiceGroup[] = automatic.length > 0
     ? [{
         id: 'configured-default',
-        heading: execution.mode === 'local' ? 'Configured default' : `${execution.label} default`,
+        heading: execution.mode === 'local' ? 'Configured default' : 'Connected device default',
         choices: automatic,
         scope: 'default'
       }]
@@ -3349,7 +3343,7 @@ export function assistantModelChoiceGroups(
 export function assistantModelSourceGroups(
   providerGroups: AssistantModelChoiceGroup[],
   execution: AssistantExecutionOption,
-  executionOptions: AssistantExecutionOption[] = [execution]
+  _executionOptions: AssistantExecutionOption[] = [execution]
 ): AssistantModelSourceGroup[] {
   const sources = new Map<string, AssistantModelSourceGroup>()
   for (const group of providerGroups) {
@@ -3360,7 +3354,6 @@ export function assistantModelSourceGroups(
     const peerId = remote
       ? provider.provider_peer_id ?? peerIdFromProviderIdentity(provider.provider_id) ?? 'remote'
       : null
-    const peerLabel = remote ? modelProviderPeerLabel(provider, execution, executionOptions) : null
     const sourceId = remote ? `source:peer:${peerId}` : 'source:local'
     const existing = sources.get(sourceId)
     if (existing) {
@@ -3368,16 +3361,17 @@ export function assistantModelSourceGroups(
       existing.modelCount += group.choices.length
       continue
     }
+    const sourceOrdinal = [...sources.values()].filter((source) => source.scope === 'peer').length + 1
     sources.set(sourceId, {
       id: sourceId,
       heading: remote
-        ? execution.mode === 'dispatch' ? `Dispatch · ${peerLabel}` : `Shared by ${peerLabel}`
+        ? execution.mode === 'dispatch' ? 'Selected connected device' : `Connected device ${sourceOrdinal}`
         : 'This device',
       description: remote
         ? execution.mode === 'dispatch'
-          ? `Models ${peerLabel} allows for dispatched assistant execution.`
-          : `Models advertised and permitted by ${peerLabel}.`
-        : 'Models configured on this Aurora device, grouped by provider.',
+          ? 'Models allowed for assistant work on the selected connected device.'
+          : 'Models shared by a connected Aurora device.'
+        : 'Models configured on this Aurora device, grouped by source.',
       providerGroups: [group],
       modelCount: group.choices.length,
       scope: remote ? 'peer' : 'local'
@@ -3490,8 +3484,11 @@ export function defaultAssistantModelChoiceId(
     ?? selectedProvider.models?.find((model) => model.default)?.model_id
     ?? selectedProvider.model_id
   if (!selectedModelId) return 'automatic'
-  const id = assistantModelChoiceId(selectedProvider.provider_id, selectedModelId)
-  return choices.some((choice) => choice.id === id) ? id : 'automatic'
+  return choices.find((choice) =>
+    !choice.automatic &&
+    choice.provider?.provider_id === selectedProvider.provider_id &&
+    choice.runtimeModel?.model_id === selectedModelId
+  )?.id ?? 'automatic'
 }
 
 export function assistantInferencePolicy(
@@ -3516,8 +3513,8 @@ export function assistantInferencePolicy(
   }
 }
 
-function assistantModelChoiceId(providerId: string, modelId: string): string {
-  return `model:${encodeURIComponent(providerId)}:${encodeURIComponent(modelId)}`
+function assistantModelChoiceId(providerOrdinal: number, modelOrdinal: number): string {
+  return `model-choice-${providerOrdinal}-${modelOrdinal}`
 }
 
 function providerUsableForAssistant(provider: ModelRuntimeProviderInfo): boolean {
@@ -3528,21 +3525,6 @@ function providerUsableForAssistant(provider: ModelRuntimeProviderInfo): boolean
 function providerIsRemote(provider: ModelRuntimeProviderInfo): boolean {
   return /mesh|remote|peer/i.test(`${provider.provider_kind ?? ''}`)
     || /^(?:mesh|remote):/i.test(provider.provider_id)
-}
-
-function modelProviderDisplayName(
-  provider: ModelRuntimeProviderInfo,
-  execution: AssistantExecutionOption
-): string {
-  if (execution.mode !== 'dispatch') return provider.display_name
-  const peerId = execution.routePolicy.peerId
-  return peerId
-    ? provider.display_name.replace(new RegExp(`\\s*\\(${escapeRegExp(peerId)}\\)\\s*$`), '')
-    : provider.display_name
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function providerMatchesExecution(
@@ -3558,17 +3540,50 @@ function providerMatchesExecution(
   return Boolean(peerId && evidence.includes(peerId))
 }
 
-function modelProviderPeerLabel(
-  provider: ModelRuntimeProviderInfo,
-  execution: AssistantExecutionOption,
-  executionOptions: AssistantExecutionOption[]
+type AssistantModelProviderClass = 'connected' | 'cloud' | 'local'
+
+function assistantModelProviderClass(provider: ModelRuntimeProviderInfo): AssistantModelProviderClass {
+  if (providerIsRemote(provider)) return 'connected'
+  const trustedClass = `${provider.provider_type ?? ''} ${provider.provider_kind ?? ''} ${provider.backend_kind ?? ''}`.toLowerCase()
+  if (/\bcloud\b/.test(trustedClass) || /\b(?:openai|anthropic|google)\b/.test(trustedClass)) return 'cloud'
+  return 'local'
+}
+
+function assistantModelProviderLabel(providerClass: AssistantModelProviderClass, ordinal: number): string {
+  if (providerClass === 'connected') return `Connected device ${ordinal}`
+  if (providerClass === 'cloud') return `Cloud service ${ordinal}`
+  return `This device ${ordinal}`
+}
+
+function assistantModelLabel(
+  providerClass: AssistantModelProviderClass,
+  providerOrdinal: number,
+  modelOrdinal: number
 ): string {
-  if (execution.mode === 'dispatch') return execution.label
-  const peerId = provider.provider_peer_id ?? peerIdFromProviderIdentity(provider.provider_id)
-  const option = executionOptions.find((candidate) =>
-    candidate.mode === 'dispatch' && candidate.routePolicy.peerId === peerId
-  )
-  return option?.label ?? peerId ?? 'Peer'
+  if (providerClass === 'connected') return `Connected device model ${providerOrdinal}.${modelOrdinal}`
+  if (providerClass === 'cloud') return `Cloud model ${providerOrdinal}.${modelOrdinal}`
+  return `Local model ${providerOrdinal}.${modelOrdinal}`
+}
+
+function assistantModelDescription(
+  providerClass: AssistantModelProviderClass,
+  providerLabel: string
+): string {
+  if (providerClass === 'connected') return `${providerLabel} shares this model for approved assistant work.`
+  if (providerClass === 'cloud') return `${providerLabel} can help when your privacy choices allow it.`
+  return `${providerLabel} runs on this device.`
+}
+
+function assistantModelKeywords(
+  providerClass: AssistantModelProviderClass,
+  providerOrdinal: number,
+  modelOrdinal: number
+): string[] {
+  return [
+    providerClass === 'connected' ? 'connected device' : providerClass === 'cloud' ? 'cloud service' : 'local device',
+    `choice group ${providerOrdinal}`,
+    `model ${modelOrdinal}`
+  ]
 }
 
 function modelCountLabel(count: number): string {
@@ -3970,8 +3985,8 @@ function missingVoiceRoute(
       expectedTask: 'service contract'
     },
     state: 'unsupported',
-    explanation: `${capability} capability status is not available in the SDK snapshot.`,
-    providerLabel: 'service contract pending',
+    explanation: 'Voice support is unavailable right now.',
+    providerLabel: 'Not available',
     blockers: ['capability_not_advertised'],
     repairActions: [],
     candidateProviders: [],
@@ -4003,7 +4018,7 @@ function nativeCaptureState(
         : 'unsupported'
   return {
     id: 'native-capture',
-    label: 'Native capture',
+    label: 'Device voice',
     state,
     privacyClass: 'raw-audio',
     providerLabel: nativeAvailable ? 'This device' : 'Not available',
@@ -4011,8 +4026,8 @@ function nativeCaptureState(
       ? 'This device reports microphone or voice capture support.'
       : state === 'privacy-blocked'
         ? nativePlatform.toLowerCase().includes('ios')
-          ? 'iOS foreground capture is blocked until microphone permission, raw-audio consent, and a visible stop/revoke path are available.'
-          : 'Native capture is blocked until the platform microphone permission is granted.'
+          ? 'iOS voice capture is blocked until microphone permission, audio consent, and a visible stop/revoke path are available.'
+          : 'Device voice capture is blocked until microphone permission is granted.'
         : 'Device capture stays disabled until Aurora can confirm microphone support.',
     blockers: state === 'available-local' ? [] : [permission && !permission.granted ? 'device_permission_missing' : 'voice_capture_unavailable'],
     evidence: nativeAvailable ? ['device_voice_status'] : []
@@ -4032,7 +4047,7 @@ function browserCaptureAvailability(
     return {
       state: captureStatus === 'listening' || captureStatus === 'processing' || captureStatus === 'speaking' ? 'available-local' : 'pending',
       providerLabel: 'This computer',
-      detail: surfaceProfile.voiceCapture.detail,
+      detail: 'This device microphone is ready for focused voice capture.',
       blockers: []
     }
   }
@@ -4040,7 +4055,7 @@ function browserCaptureAvailability(
     return {
       state: captureStatus === 'listening' || captureStatus === 'processing' || captureStatus === 'speaking' ? 'available-local' : 'pending',
       providerLabel: 'This device',
-      detail: surfaceProfile.voiceCapture.detail,
+      detail: 'This device microphone is ready while Aurora is open.',
       blockers: []
     }
   }
@@ -4048,7 +4063,7 @@ function browserCaptureAvailability(
     return {
       state: 'available-local',
       providerLabel: 'This device',
-      detail: 'Local browser microphone stream is active on this device.',
+      detail: 'This device microphone is active.',
       blockers: []
     }
   }
@@ -4064,7 +4079,7 @@ function browserCaptureAvailability(
     return {
       state: 'denied',
       providerLabel: 'This device',
-      detail: 'Browser microphone permission was denied.',
+      detail: 'Microphone permission was denied.',
       blockers: ['browser_microphone_permission_denied']
     }
   }
@@ -4080,13 +4095,13 @@ function browserCaptureAvailability(
     return {
       state: 'degraded',
       providerLabel: 'This device',
-      detail: 'Browser microphone capture failed; retry or inspect device settings.',
+      detail: 'Microphone capture failed; retry or inspect device settings.',
       blockers: ['browser_microphone_error']
     }
   }
   return {
     state: 'pending',
-    providerLabel: 'browser getUserMedia',
+    providerLabel: 'This device',
     detail: 'Local capture waits for the browser permission prompt.',
     blockers: []
   }
@@ -4122,14 +4137,14 @@ function voiceChip(
 
 function wakeDetail(nativePlatform: string, wakeControl: RouteAvailability, wakeProcess: RouteAvailability): string {
   if (nativePlatform.toLowerCase().includes('ios')) {
-    return 'iOS wake/background assistant behavior remains foreground-only or app-owned through Siri/Shortcuts/App Intents, widgets, share sheet, deep links, or notifications; system assistant ownership is unavailable.'
+    return 'iOS voice controls stay available only while Aurora is open or started from system shortcuts.'
   }
   if (nativePlatform.toLowerCase().includes('android')) {
-    return 'Android wake/background behavior requires foreground service and native plugin status.'
+    return 'Android voice controls need this device to confirm foreground voice support.'
   }
-  if (!wakeControl.disabled) return 'Wake control is foreground-capable through backend route status.'
-  if (!wakeProcess.disabled) return 'Wake audio processing exists, but foreground/background control is not advertised.'
-  return 'Wakeword remains unsupported until backend and native capture capability status exists.'
+  if (!wakeControl.disabled) return 'Foreground voice control is available on this device.'
+  if (!wakeProcess.disabled) return 'Voice audio can be checked, but hands-free control is unavailable.'
+  return 'Hands-free voice control is unavailable right now.'
 }
 
 function remoteAudioRouteFor(...routes: RouteAvailability[]): RouteAvailability {
@@ -4161,7 +4176,7 @@ function voiceAction(
       label,
       state: 'privacy-blocked',
       enabled: false,
-      reason: 'Grant session consent before routing microphone/audio work to a remote peer.',
+      reason: 'Grant session consent before sharing microphone audio with a connected device.',
       route
     }
   }
@@ -4192,19 +4207,19 @@ function voiceEventRows(
 ): VoiceEventRow[] {
   const captureFailure: VoiceEventRow | null =
     captureStatus === 'permission-denied'
-      ? { id: 'permission-loss', label: 'Local permission loss', state: 'denied', detail: 'Browser or native microphone permission was lost or denied.' }
+      ? { id: 'permission-loss', label: 'Local permission loss', state: 'denied', detail: 'Microphone permission was lost or denied.' }
       : captureStatus === 'no-device' || captureStatus === 'error'
         ? { id: 'capture-error', label: 'Capture error', state: captureStatus === 'no-device' ? 'unsupported' : 'degraded', detail: 'Local capture failed before audio could be routed.' }
         : null
   const rows = [
-    { id: 'partial', label: 'Partial transcription', state: transcription.disabled ? 'unsupported' : 'pending', detail: 'Incremental text remains tied to backend stream events.' },
-    { id: 'final', label: 'Final transcription', state: transcription.disabled ? 'unsupported' : transcription.state, detail: 'Final text must come from Transcription service status.' },
+    { id: 'partial', label: 'Partial speech text', state: transcription.disabled ? 'unsupported' : 'pending', detail: 'Aurora is listening for more speech.' },
+    { id: 'final', label: 'Final speech text', state: transcription.disabled ? 'unsupported' : transcription.state, detail: 'Aurora is ready to use the final speech text.' },
     { id: 'tts-started', label: 'Speech started', state: 'pending', detail: 'Playback starts after Aurora confirms speech has begun.' },
     { id: 'tts-stopped', label: 'Speech stopped', state: 'pending', detail: 'Stop and cancel controls wait for Aurora to finish stopping speech.' },
     { id: 'timeout', label: 'Timeout', state: 'degraded', detail: 'Timeouts remain visible as retryable voice session outcomes.' },
     { id: 'cancelled', label: 'Cancelled', state: 'pending', detail: 'Cancellation must revoke or stop the current audio session.' },
-    { id: 'remote-denied', label: 'Remote denial', state: 'denied', detail: 'Policy, selector, or peer denial is shown without silent fallback.' },
-    { id: 'peer-disconnect', label: 'Peer disconnect', state: 'stale', detail: 'Remote peer loss makes the current provider unselectable.' },
+    { id: 'remote-denied', label: 'Connected help denied', state: 'denied', detail: 'A privacy choice or connected device prevented voice help.' },
+    { id: 'peer-disconnect', label: 'Connected device offline', state: 'stale', detail: 'A connected device stopped responding.' },
     ...(captureFailure ? [captureFailure] : [])
   ] satisfies VoiceEventRow[]
   return applyVoiceEvidenceRows(rows, voiceEvents)
@@ -4251,12 +4266,23 @@ function availabilityForVoiceEvent(event: VoiceRuntimeEvent, fallback: VoiceEven
 }
 
 function voiceEvidenceDetail(event: VoiceRuntimeEvent): string {
-  const text = event.text ? ` / ${event.text}` : ''
-  const reason = event.reason ? ` / ${event.reason}` : ''
-  const peer = event.targetPeerId ?? event.sourcePeerId ?? 'local'
-  const session = event.sessionId ?? 'no-session'
-  const correlation = event.correlationId ?? 'no-correlation'
-  return `${event.topic ?? event.kind} status from ${peer}; session ${session}; correlation ${correlation}; privacy ${event.privacyClass}${text}${reason}`
+  if (event.state === 'denied' || event.state === 'error') return 'Voice needs attention before it can continue.'
+  if (event.state === 'disconnected') return 'A connected device stopped responding.'
+  if (event.state === 'timeout') return 'Voice took too long; try again.'
+  if (event.state === 'cancelled') return 'Voice was cancelled for this session.'
+  if (event.kind === 'transcription_partial') return 'Aurora is hearing speech.'
+  if (event.kind === 'transcription_final') return 'Aurora received the final speech text.'
+  if (event.kind === 'tts_started') return 'Aurora started speaking.'
+  if (event.kind === 'tts_stopped' || event.kind === 'tts_paused' || event.kind === 'tts_resumed') return 'Speech playback changed.'
+  if (event.kind === 'stt_timeout') return 'Voice took too long; try again.'
+  if (event.kind === 'audio_cancelled' || event.kind === 'session_ended') return 'Voice stopped for this session.'
+  if (event.kind === 'audio_denied' || event.kind === 'stt_error' || event.kind === 'tts_error') return 'Voice needs attention before it can continue.'
+  if (event.kind === 'audio_disconnected') return 'A connected device stopped responding.'
+  if (event.state === 'listening') return 'This device is listening.'
+  if (event.state === 'processing') return 'Aurora is processing audio.'
+  if (event.state === 'speaking') return 'Aurora is speaking.'
+  if (event.state === 'paused') return 'Voice is paused.'
+  return 'Voice status changed.'
 }
 
 function waveformBars(captureStatus: VoiceCaptureStatus): number[] {
@@ -4292,10 +4318,9 @@ function shouldApplyVoiceRuntimeEvent(
   const local = isLocalVoiceEventSource(event)
   if (event.kind === 'session_started') return local && !shouldIgnoreForeignVoiceSessionEvent(event, activeSessionId, captureStatus)
   if (event.kind === 'transcription_partial' || event.kind === 'transcription_final') {
-    // WebView push-to-talk calls Transcription directly and owns its response in
-    // transcribeRecordedBrowserAudio. Ignore sessionless bus echoes while a UI
-    // capture session is active; daemon wakeword/STTCoordinator finals carry the
-    // owned session id and pass the check above.
+    // Focused push-to-talk owns its response locally. Ignore sessionless echoes
+    // while a UI capture session is active; background finals carry the owned
+    // session id and pass the check above.
     if (activeSessionId && !event.sessionId) return false
     if (shouldIgnoreForeignVoiceSessionEvent(event, activeSessionId, captureStatus)) return false
     return local
@@ -4776,7 +4801,7 @@ function voiceChipStatusCopy(chip: VoiceCapabilityChip): string {
 
 function voiceControlReasonCopy(control: VoiceControlModel): string {
   if (control.enabled) return 'Ready'
-  if (control.state === 'privacy-blocked') return 'Grant session consent before routing audio work to another device.'
+  if (control.state === 'privacy-blocked') return 'Grant session consent before sharing audio with another device.'
   if (control.state === 'denied') return 'Permission is needed before continuing.'
   if (control.state === 'pending') return 'Start local capture before creating an audio session.'
   if (control.state === 'degraded' || control.state === 'stale') return 'Audio is temporarily unavailable.'

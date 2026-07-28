@@ -7,7 +7,8 @@ import {
   evaluateRoutePolicy,
   routeExplainFixture,
   type PrivacyClass,
-  type RoutePolicyEvaluation
+  type RoutePolicyEvaluation,
+  type VoiceRuntimeEvent
 } from '@aurora/client'
 import {
   AssistantView,
@@ -40,7 +41,8 @@ const hostile = {
   providerId: 'provider://mesh-peer-runtime',
   peerId: 'peer-webrtc-runtime',
   json: '{"api_key":"sk-secret","transport":"WebRTC","payload":{"token":"secret-token"}}',
-  audio: 'NotReadableError: WebRTC transport runtime fallback failed'
+  audio: 'NotReadableError: WebRTC transport runtime fallback failed',
+  sdk: 'SDK native-manifest WebView daemon Orchestrator'
 }
 
 const hostileValues = Object.values(hostile)
@@ -61,6 +63,7 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
           nativePlatform={hostile.routeReason}
           nativePermissions={[{ name: hostile.routeReason, granted: false }]}
           nativeCapabilities={[{ name: hostile.methodId, enabled: false }]}
+          recentVoiceEvents={hostileVoiceEvents()}
         />
       ),
       renderToStaticMarkup(<MemoryView client={client} route={enabledRoute('memory')} initialModel={memoryModel()} />),
@@ -84,7 +87,7 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
         expect(rendered).not.toContain(value)
         expect(markup).not.toContain(value)
       }
-      expect(rendered).not.toMatch(/\b(WebRTC|transport|fallback|runtime|provider|Tooling\.DeleteSecret|secret-token|api_key)\b/i)
+      expect(rendered).not.toMatch(hostileCopyPattern)
       expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), `surface ${index}: ${rendered}`).toEqual([])
     }
 
@@ -97,12 +100,15 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
       nativeCapabilities: [{ name: hostile.methodId, enabled: false }],
       captureStatus: 'idle',
       consentGranted: false,
-      voiceEvents: [],
+      voiceEvents: hostileVoiceEvents(),
       waveformBars: []
     })
     const nativeCapture = voiceModel.chips.find((chip) => chip.id === 'native-capture')
     const voiceCopy = JSON.stringify({
       controls: voiceModel.controls.map((control) => ({ label: control.label, reason: control.reason })),
+      visualizerSourceLabel: voiceModel.visualizerSourceLabel,
+      platformTruth: voiceModel.platformTruth,
+      events: voiceModel.events.map((event) => ({ label: event.label, detail: event.detail, state: event.state })),
       nativeCapture: nativeCapture ? {
         label: nativeCapture.label,
         providerLabel: nativeCapture.providerLabel,
@@ -112,7 +118,7 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
       } : null
     })
     for (const value of hostileValues) expect(voiceCopy).not.toContain(value)
-    expect(voiceCopy).not.toContain('native-manifest')
+    expect(voiceCopy).not.toMatch(hostileCopyPattern)
   })
 
   it('keeps structured denied route-policy failures distinct from unavailable failures', async () => {
@@ -129,6 +135,74 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
       .resolves.toMatchObject({ loadState: 'unavailable' })
   })
 })
+
+const hostileCopyPattern = /\b(?:SDK|WebView|daemon|Orchestrator|native-manifest|WebRTC|transport|fallback|runtime|Gateway\.ExplainRoute|Tooling\.DeleteSecret|api_key|secret-token|sk-secret)\b|provider:\/\/|peer-webrtc-runtime/i
+
+function hostileVoiceEvents(): VoiceRuntimeEvent[] {
+  return [
+    hostileVoiceEvent({
+      id: 'voice-hostile-final',
+      kind: 'transcription_final',
+      topic: 'STTCoordinator.Final',
+      state: 'processing',
+      text: hostile.sdk,
+      reason: hostile.routeReason
+    }),
+    hostileVoiceEvent({
+      id: 'voice-hostile-denied',
+      kind: 'audio_denied',
+      topic: 'AudioSession.Events',
+      state: 'denied',
+      text: hostile.json,
+      reason: hostile.mixedReason
+    })
+  ]
+}
+
+function hostileVoiceEvent(overrides: Partial<VoiceRuntimeEvent>): VoiceRuntimeEvent {
+  return {
+    id: 'voice-hostile',
+    kind: 'stt_error',
+    topic: 'Gateway.ExplainRoute',
+    sessionId: 'session-WebRTC-runtime',
+    correlationId: 'correlation-secret-token',
+    sourcePeerId: hostile.peerId,
+    targetPeerId: hostile.peerId,
+    targetDeviceId: 'device-native-manifest',
+    consentDecision: hostile.methodId,
+    policyDecisionId: hostile.providerId,
+    privacyClass: 'raw-audio',
+    state: 'error',
+    text: hostile.json,
+    level: null,
+    peak: null,
+    bars: null,
+    reason: hostile.routeReason,
+    redacted: true,
+    occurredAt: '2026-07-28T00:00:00Z',
+    audit: {
+      correlationId: 'correlation-secret-token',
+      eventKind: 'Gateway.ExplainRoute',
+      peerId: hostile.peerId,
+      principalId: hostile.providerId,
+      targetPeerId: hostile.peerId,
+      method: hostile.methodId,
+      busTopic: 'Gateway.ExplainRoute',
+      toolId: hostile.methodId,
+      resourceId: hostile.providerId,
+      status: hostile.routeReason,
+      transport: 'WebRTC',
+      redaction: {
+        secretsRedacted: true,
+        redactedFields: ['api_key'],
+        source: 'transport',
+        warnings: [hostile.mixedReason]
+      }
+    },
+    raw: { payload: hostile.json, reason: hostile.routeReason },
+    ...overrides
+  }
+}
 
 function assistantSession(): AssistantSessionSnapshot {
   return {
@@ -400,7 +474,7 @@ function enabledRoute(id: string): RouteAvailability {
 }
 
 function renderedUserCopy(markup: string): string {
-  const attributes = Array.from(markup.matchAll(/\s(?:aria-label|title|placeholder|disabledreason)="([^"]*)"/giu), (match) => match[1] ?? '')
+  const attributes = Array.from(markup.matchAll(/\s(?:aria-label|title|placeholder|disabledreason|data-(?!slot|variant|size|state)[a-z0-9-]+)="([^"]*)"/giu), (match) => match[1] ?? '')
   const text = markup
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')

@@ -1201,16 +1201,16 @@ describe('Aurora production shell', () => {
 
     expect(eventDrivenModel.events.find((event) => event.id === 'partial')).toEqual(expect.objectContaining({
       state: 'available-local',
-      detail: expect.stringContaining('STTCoordinator.Partial status')
+      detail: 'Aurora is hearing speech.'
     }))
-    expect(eventDrivenModel.events.find((event) => event.id === 'final')?.detail).toContain('session voice-session-1')
+    expect(eventDrivenModel.events.find((event) => event.id === 'final')?.detail).toBe('Aurora received the final speech text.')
     expect(eventDrivenModel.events.find((event) => event.id === 'tts-started')).toEqual(expect.objectContaining({
       state: 'available-local',
-      detail: expect.stringContaining('TTS.Started status')
+      detail: 'Aurora started speaking.'
     }))
     expect(eventDrivenModel.events.find((event) => event.id === 'remote-denied')).toEqual(expect.objectContaining({
       state: 'denied',
-      detail: expect.stringContaining('policy_denied')
+      detail: 'Voice needs attention before it can continue.'
     }))
   })
 
