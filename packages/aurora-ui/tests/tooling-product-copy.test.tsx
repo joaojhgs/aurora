@@ -193,6 +193,55 @@ describe('tooling product copy', () => {
     expectForbiddenFree(text)
   })
 
+  it('keeps backend and fallback source names product-safe while preserving ordinary names', async () => {
+    const safeSourceName = 'Family calendar source'
+    await renderPanel(client(), [], {
+      sourceSummaries: [
+        backendSourceSummary('backend-safe-source', safeSourceName),
+        backendSourceSummary('backend-hostile-source', dynamicHostileText()),
+      ],
+      sourceDetails: {
+        'backend-safe-source': sourceDetail([tool({ id: 'tool:calendar:safe-source', name: 'Safe source calendar', description: 'Reads family events.' })]),
+        'backend-hostile-source': sourceDetail([tool({ id: 'tool:calendar:backend-hostile', name: 'Backend hostile calendar', description: 'Reads shared events.' })]),
+      },
+    })
+
+    let rendered = visibleAndAriaText()
+    expect(rendered).toContain(safeSourceName)
+    expect(rendered).toContain('Aurora source')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    await renderPanel(client(), [
+      tool({
+        id: 'tool:calendar:fallback-safe',
+        name: 'Grouped safe calendar',
+        sourceType: 'mcp',
+        shareGroupId: 'safe-source-group',
+        shareGroupLabel: safeSourceName,
+        serviceInstanceId: safeSourceName,
+        providerLabel: safeSourceName,
+      }),
+      tool({
+        id: 'tool:calendar:fallback-hostile',
+        name: 'Grouped hostile calendar',
+        sourceType: 'mcp',
+        shareGroupId: 'hostile-source-group',
+        shareGroupLabel: dynamicHostileText(),
+        serviceInstanceId: dynamicHostileText(),
+        providerLabel: dynamicHostileText(),
+      }),
+    ])
+
+    rendered = visibleAndAriaText()
+    expect(rendered).toContain(safeSourceName)
+    expect(rendered).toContain('Aurora source')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+  })
+
   it('keeps expanded tool result errors product-safe', async () => {
     await renderPanel(client(), [tool({
       state: 'unavailable',
@@ -349,6 +398,14 @@ function dynamicHostileText(): string {
   return hostileDynamicTerms().join(' ')
 }
 
+function visibleAndAriaText(): string {
+  return [
+    visibleText(container.innerHTML),
+    ...[...container.querySelectorAll<HTMLElement>('[aria-label]')]
+      .map((element) => element.getAttribute('aria-label') ?? ''),
+  ].join(' ')
+}
+
 function visibleText(markup: string): string {
   return markup
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
@@ -410,6 +467,44 @@ function configField(keyPath: string, title: string, description: string, curren
     affected_services: ['tooling'],
     constraints: {},
   } as NonNullable<ToolApprovalPanelManagementState['builtinPlugins']>[number]['fields'][number]
+}
+
+function backendSourceSummary(id: string, label: string): NonNullable<ToolApprovalPanelManagementState['sourceSummaries']>[number] {
+  return {
+    id,
+    kind: 'mcp',
+    label,
+    providerPeerId: 'local',
+    providerServiceInstanceId: id,
+    providerKind: 'mcp',
+    transport: 'mcp',
+    trustTier: 'untrusted',
+    status: 'active',
+    toolCount: 1,
+    blockedToolCount: 0,
+    approvalRequiredCount: 0,
+    newOrReviewCount: 0,
+    activeGrantCount: 0,
+    staleGrantCount: 0,
+    includeFutureTools: false,
+    cacheStatus: 'ready',
+    catalogEpoch: null,
+    catalogHash: null,
+    generatedAt: '2026-07-28T00:00:00.000Z',
+    lastAnnouncementAt: '2026-07-28T00:00:00.000Z',
+    retainedToolCount: 0,
+    removedToolCount: 0,
+    unsharedToolCount: 0,
+    secretsRedacted: true,
+  } as unknown as NonNullable<ToolApprovalPanelManagementState['sourceSummaries']>[number]
+}
+
+function sourceDetail(tools: ToolApprovalCardModel[]): NonNullable<ToolApprovalPanelManagementState['sourceDetails']>[string] {
+  return {
+    tools,
+    blockedTools: [],
+    retainedTools: [],
+  } as unknown as NonNullable<ToolApprovalPanelManagementState['sourceDetails']>[string]
 }
 
 function toolsRoute(): RouteAvailability {

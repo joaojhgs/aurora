@@ -347,7 +347,7 @@ export function ToolingConsole({
                   setWizardStep(1)
                   setPluginDraft({
                     ...pluginDraft,
-                    packageName: source.name,
+                    packageName: productSafeSourceName(source.name),
                     pluginId: source.serviceInstanceId ?? source.id,
                     sourceUrl: typeof source.transport === 'string' && source.transport.startsWith('http') ? source.transport : (pluginDraft.sourceUrl ?? null),
                     reason: `Configure plugin source ${source.id} from /tools`
@@ -627,7 +627,7 @@ function SourceRail({
             onClick={() => onSelectSource(source)}
           >
             <span className="flex flex-col">
-              <strong className="font-medium">{source.name}</strong>
+              <strong className="font-medium">{productSafeSourceName(source.name)}</strong>
               <small className="text-xs text-muted-foreground">{sourceSectionLabel(source.type)} · {source.toolCount} tools</small>
             </span>
             <TrustPill trust={source.effectiveTrust} />
@@ -660,11 +660,12 @@ function SourceOverview({
   onUpsertSourcePolicy?: ((source: ToolingSourceModel, trustTier: string, includeFutureTools?: boolean) => void) | undefined
 }) {
   const configuredTier = source.configuredTrustTier ?? 'inherit'
+  const sourceDisplayName = productSafeSourceName(source.name)
   return (
     <Card
       ariaLabel="Selected source overview"
       title="Execution approval"
-      description={`Controls the approval or grant required after sharing, service policy, and peer permissions have already allowed a request. ${source.name} · ${sourceSectionLabel(source.type)} · ${source.toolCount} tools.`}
+      description={`Controls the approval or grant required after sharing, service policy, and peer permissions have already allowed a request. ${sourceDisplayName} · ${sourceSectionLabel(source.type)} · ${source.toolCount} tools.`}
       actions={<><TrustPill trust={source.effectiveTrust} />{policyBypass ? <ToneBadge tone="danger">Wide access</ToneBadge> : null}</>}
     >
       <div className="flex flex-col gap-1 bg-muted/10 px-3">
@@ -682,7 +683,7 @@ function SourceOverview({
             variant="default"
             spacing={1}
             disabled={!onUpsertSourcePolicy}
-            aria-label={`Trust policy for ${source.name}`}
+            aria-label={`Trust policy for ${sourceDisplayName}`}
             className="bg-background/60 p-1 shadow-inner"
           >
             {SOURCE_TRUST_ACTIONS.map((action) => (
@@ -801,7 +802,7 @@ function PluginsWorkspace({
           <h3 className="mt-2 text-sm font-semibold">Plugin tool sources</h3>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
             {plugins.map(({ source, status }) => (
-              <Card key={source.id} title={source.name} icon={<Package size={18} aria-hidden />} description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`} actions={<ToneBadge tone={pluginStatusTone(status)}>{status}</ToneBadge>}>
+              <Card key={source.id} title={productSafeSourceName(source.name)} icon={<Package size={18} aria-hidden />} description={`${sourceSectionLabel(source.type)} · ${source.toolCount} tools`} actions={<ToneBadge tone={pluginStatusTone(status)}>{status}</ToneBadge>}>
                 <p className="text-sm text-muted-foreground">{productSafeSourceLabel(source.providerLabel)}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Button variant="outline" onClick={() => onConfigure(source)}>Configure source</Button>
@@ -1257,7 +1258,7 @@ function ToolInventory(props: {
 }) {
   if (props.tools.length === 0) return <p className="text-sm text-muted-foreground">No tools match the current source/search filter.</p>
   return (
-    <div className="flex flex-col gap-2" aria-label={`${props.source.name} tools`}>
+    <div className="flex flex-col gap-2" aria-label={`${productSafeSourceName(props.source.name)} tools`}>
       {props.tools.map((tool) => (
         <ToolRow
           key={tool.id}
@@ -1833,7 +1834,7 @@ function effectivePolicyCopy(tool: ToolApprovalCardModel, source: ToolingSourceM
   if (isBlockedTool(tool)) return 'Blocked until this source is reviewed.'
   if (source.effectiveTrust === 'trusted' && !tool.approvalRequired) return 'Trusted from reviewed source.'
   if (tool.approvalRequired) return 'Approval required for this exact tool scope.'
-  return `${trustLabel(source.effectiveTrust)} from ${source.name}.`
+  return `${trustLabel(source.effectiveTrust)} from ${productSafeSourceName(source.name)}.`
 }
 
 function toolDisabledCopy(tool: ToolApprovalCardModel): string {
@@ -1864,6 +1865,12 @@ function productSafeToolDescription(tool: ToolApprovalCardModel): string {
 
 function productSafeSourceLabel(label: string | null | undefined): string {
   const trimmed = label?.trim()
+  if (!trimmed) return 'Aurora source'
+  return containsInternalToolCopy(trimmed) ? 'Aurora source' : trimmed
+}
+
+function productSafeSourceName(name: string | null | undefined): string {
+  const trimmed = name?.trim()
   if (!trimmed) return 'Aurora source'
   return containsInternalToolCopy(trimmed) ? 'Aurora source' : trimmed
 }
