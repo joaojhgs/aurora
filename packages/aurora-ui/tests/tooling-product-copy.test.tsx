@@ -242,6 +242,26 @@ describe('tooling product copy', () => {
     expectForbiddenFree(visibleText(container.innerHTML))
   })
 
+  it('keeps selected sharing group labels product-safe in visible and ARIA copy', async () => {
+    await renderPanel(client(), [
+      tool({
+        id: 'tool:calendar:selected-sharing-hostile',
+        name: 'Selected sharing calendar',
+        sourceType: 'mcp',
+        shareGroupId: 'selected-sharing-hostile',
+        shareGroupLabel: dynamicHostileText(),
+        serviceInstanceId: dynamicHostileText(),
+        providerLabel: dynamicHostileText(),
+      }),
+    ])
+
+    const rendered = visibleAndAriaText()
+    expect(rendered).toContain('Choose whether Aurora source tools are advertised to mesh peers.')
+    expect(rendered).toContain('Mesh sharing for Aurora source group')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+  })
+
   it('keeps expanded tool result errors product-safe', async () => {
     await renderPanel(client(), [tool({
       state: 'unavailable',
@@ -305,11 +325,21 @@ describe('tooling product copy', () => {
         error="provider route failed with transport fallback stack trace"
       />,
     )
+    const hostileRemoteMarkup = renderToStaticMarkup(
+      <ToolSharingRowControl
+        tool={{ ...tool(), exportable: false, sourceType: 'mesh_peer', providerKind: 'mesh_peer', providerLabel: dynamicHostileText() }}
+        policy={sharingPolicy()}
+        peers={peers()}
+        decision={null}
+      />,
+    )
 
-    const text = `${visibleText(remoteMarkup)} ${visibleText(errorMarkup)}`
+    const text = `${visibleText(remoteMarkup)} ${visibleText(errorMarkup)} ${visibleText(hostileRemoteMarkup)}`
     expect(text).toContain('Shared from another device')
     expect(text).toContain('Change sharing on Kitchen Aurora')
+    expect(text).toContain('Change sharing on Aurora source')
     expect(text).toContain('Could not connect to this Aurora device. Try again.')
+    expectNoHostileTerms(text)
     expectForbiddenFree(text)
   })
 })

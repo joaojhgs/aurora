@@ -88,13 +88,14 @@ export function ToolSharingGroupControl({
   pending = false,
   onMutate
 }: ToolSharingGroupControlProps) {
+  const safeGroupLabel = sharingSafeSourceLabel(groupLabel)
   return (
     <ToolSharingPolicyControl
       scopeType="group"
       scopeId={groupId}
-      ariaLabel={`Mesh sharing for ${groupLabel} group`}
+      ariaLabel={`Mesh sharing for ${safeGroupLabel} group`}
       label="Tool sharing"
-      description={`Choose whether ${groupLabel} tools are advertised to mesh peers.`}
+      description={`Choose whether ${safeGroupLabel} tools are advertised to mesh peers.`}
       policy={policy}
       peers={peers}
       loading={loading}
@@ -118,13 +119,14 @@ export function ToolSharingRowControl({
   onMutate
 }: ToolSharingRowControlProps) {
   if (!isLocalExportCandidate(tool)) {
+    const safeProviderLabel = sharingSafeSourceLabel(tool.providerLabel)
     return (
       <div className="py-2.5" role="group" aria-label={`Mesh sharing for ${tool.name}`}>
         <div className="flex flex-wrap items-center gap-2">
           <strong className="text-xs">Tool sharing</strong>
           <ToneBadge tone="neutral">Shared from another device</ToneBadge>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">Change sharing on {tool.providerLabel || 'that device'}.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Change sharing on {safeProviderLabel}.</p>
       </div>
     )
   }
@@ -147,6 +149,17 @@ export function ToolSharingRowControl({
       {...(onMutate ? { onMutate } : {})}
     />
   )
+}
+
+function sharingSafeSourceLabel(label: string | null | undefined): string {
+  const trimmed = label?.trim()
+  if (!trimmed) return 'that device'
+  return containsInternalSharingCopy(trimmed) ? 'Aurora source' : trimmed
+}
+
+function containsInternalSharingCopy(value: string): boolean {
+  return /\b(?:Tooling|Scheduler|AdminAction|SDK|cache|route|provider|schema|protocol|transport|runtime|manifest|contract|fallback|sidecar|SQLite|IndexedDB|OPFS|stack trace|debug|fixture|assertion|implementation|tested|evidence)\b/i.test(value)
+    || /\b[A-Z][A-Za-z0-9]*(?:\.[A-Za-z0-9_-]+)+\b/.test(value)
 }
 
 function ToolSharingPolicyControl({

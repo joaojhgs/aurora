@@ -292,7 +292,7 @@ export function ToolingConsole({
                         sharingControl={selectedSource.type !== 'mesh' && selectedSource.shareGroupId ? (
                           <ToolSharingGroupControl
                             groupId={selectedSource.shareGroupId}
-                            groupLabel={selectedSource.shareGroupLabel ?? selectedSource.name}
+                            groupLabel={productSafeSourceName(selectedSource.shareGroupLabel ?? selectedSource.name)}
                             policy={sharingPolicy}
                             peers={sharingPeers}
                             loading={sharingLoading}
