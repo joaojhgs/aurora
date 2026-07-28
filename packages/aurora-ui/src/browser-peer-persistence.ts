@@ -10,9 +10,15 @@ import {
 } from '@aurora/client/webrtc'
 import {
   parseThinProfileDocument,
-  serializeThinProfileDocument,
   type ThinProfileDocument,
 } from './thin-connection-profile'
+import {
+  migrateThinProfileDocumentToRuntime,
+  parseRuntimeProfileDocument,
+  runtimeProfileDocumentToThinDocument,
+  serializeRuntimeProfileDocument,
+  type AuroraRuntimeProfileDocumentV2,
+} from './runtime-profile'
 
 const VAULT_VERSION = 1
 const DEFAULT_DATABASE = 'aurora-web-thin-v1'
@@ -20,6 +26,7 @@ const DEFAULT_OBJECT_STORE = 'vault'
 const KEY_RECORD = 'internal:vault-key'
 const PROFILE_KEY = 'aurora.webThin.profile.v1'
 const THIN_PROFILE_DOCUMENT_KEY = 'aurora.webThin.connectionProfiles.v1'
+const RUNTIME_PROFILE_DOCUMENT_KEY = 'aurora.runtimeProfiles.v2'
 const STABLE_PEER_KEY = 'aurora.webThin.localStablePeerId.v1'
 const CREDENTIAL_PREFIX = 'credential:'
 const ROOM_PREFIX = 'room:'
@@ -69,6 +76,8 @@ export interface BrowserWebRtcCredentialStore extends WebRtcPeerCredentialStore 
   loadConnectionProfile(): WebRtcPeerConnectionProfile | null
   saveThinProfileDocument(document: ThinProfileDocument): void
   loadThinProfileDocument(): ThinProfileDocument | null
+  saveRuntimeProfileDocument(document: AuroraRuntimeProfileDocumentV2): void
+  loadRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 | null
   getOrCreateLocalStablePeerId(): string
   persistenceStatus(): BrowserPeerPersistenceStatus
 }
@@ -152,17 +161,54 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
 
   saveThinProfileDocument(document: ThinProfileDocument): void {
     this.assertOpen()
-    this.writeMetadata(THIN_PROFILE_DOCUMENT_KEY, serializeThinProfileDocument(document))
+    this.saveRuntimeProfileDocument(migrateThinProfileDocumentToRuntime(document))
   }
 
   loadThinProfileDocument(): ThinProfileDocument | null {
     this.assertOpen()
+    const runtimeDocument = this.loadRuntimeProfileDocument()
+    if (runtimeDocument) {
+      try {
+        return runtimeProfileDocumentToThinDocument(runtimeDocument)
+      } catch {
+        return null
+      }
+    }
     const encoded = this.readMetadata(THIN_PROFILE_DOCUMENT_KEY)
     if (!encoded) return null
     const parsed = parseThinProfileDocument(encoded)
     if (parsed) return parsed
     this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
     return null
+  }
+
+  saveRuntimeProfileDocument(document: AuroraRuntimeProfileDocumentV2): void {
+    this.assertOpen()
+    this.writeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY, serializeRuntimeProfileDocument(document))
+    this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
+  }
+
+  loadRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 | null {
+    this.assertOpen()
+    const encoded = this.readMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
+    if (encoded) {
+      const parsed = parseRuntimeProfileDocument(encoded)
+      if (parsed) return parsed
+      this.removeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
+      return null
+    }
+    const legacy = this.readMetadata(THIN_PROFILE_DOCUMENT_KEY)
+    if (!legacy) return null
+    const parsed = parseRuntimeProfileDocument(legacy)
+    if (!parsed) {
+      this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
+      return null
+    }
+    if (this.metadataUsable) {
+      this.writeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY, serializeRuntimeProfileDocument(parsed))
+      this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
+    }
+    return parsed
   }
 
   setRoomSecret(ref: string, value: string): void {
@@ -259,6 +305,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     }
     this.removeMetadata(PROFILE_KEY)
     this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
+    this.removeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(STABLE_PEER_KEY)
   }
 

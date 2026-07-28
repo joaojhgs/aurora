@@ -1,3 +1,5 @@
+import type { AuroraPhysicalSurfaceKind, AuroraRuntimeTier } from './runtime-profile'
+
 export type AuroraSurfaceKind =
   | 'desktop-local'
   | 'desktop-thin'
@@ -32,7 +34,11 @@ export interface AuroraSurfaceProfileInput {
 }
 
 export interface AuroraSurfaceProfile {
+  /** Physical runtime surface. Product role, transport, and runtime tier are modeled separately. */
+  physicalKind: AuroraPhysicalSurfaceKind
+  /** Legacy deployment/surface alias retained for existing callers during the runtime-profile migration. */
   kind: AuroraSurfaceKind
+  legacyKind: AuroraSurfaceKind
   label: string
   isDesktop: boolean
   isMobile: boolean
@@ -120,6 +126,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
                 ? 'mobile'
                 : 'unknown'
 
+  const physicalKind: AuroraPhysicalSurfaceKind = physicalSurfaceKind(kind)
   const isDesktop = kind === 'desktop-local' || kind === 'desktop-thin'
   const isWebThin = kind === 'web' || kind === 'desktop-thin' || (isMobile && (transportKind === 'http' || usesWebRtcTransport))
   const supportsWebRtcThin = isWebThin || isMobile
@@ -128,7 +135,9 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const canManageLocalServiceConfiguration = usesLocalSidecar || kind === 'mock'
   const voiceCapture = getAuroraVoiceCapturePolicy(kind)
   return {
+    physicalKind,
     kind,
+    legacyKind: kind,
     label: surfaceLabel(kind),
     isDesktop,
     isMobile,
@@ -146,6 +155,27 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     trustsNativeWebViewOrigin,
     canManageLocalServiceConfiguration,
     voiceCapture,
+  }
+}
+
+export function getAuroraPhysicalSurfaceKind(
+  input: AuroraSurfaceProfileInput = {},
+): AuroraPhysicalSurfaceKind {
+  return getAuroraSurfaceProfile(input).physicalKind
+}
+
+export function surfaceSupportsRuntimeTier(
+  profile: AuroraSurfaceProfile,
+  runtimeTier: AuroraRuntimeTier,
+  options: { packageIncludesPython?: boolean | undefined } = {},
+): boolean {
+  switch (runtimeTier) {
+    case 'none':
+      return true
+    case 'lightweight-ts':
+      return profile.physicalKind !== 'unknown'
+    case 'python-full':
+      return profile.physicalKind === 'desktop-tauri' && options.packageIncludesPython === true
   }
 }
 
@@ -244,5 +274,24 @@ function surfaceLabel(kind: AuroraSurfaceKind): string {
       return 'Local mode'
     case 'unknown':
       return 'Unknown surface'
+  }
+}
+
+function physicalSurfaceKind(kind: AuroraSurfaceKind): AuroraPhysicalSurfaceKind {
+  switch (kind) {
+    case 'desktop-local':
+    case 'desktop-thin':
+      return 'desktop-tauri'
+    case 'web':
+      return 'hosted-web'
+    case 'android':
+      return 'android'
+    case 'ios':
+      return 'ios'
+    case 'mock':
+      return 'test'
+    case 'mobile':
+    case 'unknown':
+      return 'unknown'
   }
 }

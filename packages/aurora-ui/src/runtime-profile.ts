@@ -1,0 +1,530 @@
+import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
+import type { AuroraThinConnectionMode } from './web-thin-runtime'
+
+export type AuroraPhysicalSurfaceKind =
+  | 'hosted-web'
+  | 'desktop-tauri'
+  | 'android'
+  | 'ios'
+  | 'test'
+  | 'unknown'
+
+export type LegacyAuroraSurfaceKind =
+  | 'desktop-local'
+  | 'desktop-thin'
+  | 'web'
+  | 'mobile'
+  | 'mock'
+
+export type AuroraNodeMode = 'remote-console' | 'mesh-node'
+export type AuroraConnectionMode = 'http-only' | 'webrtc-only' | 'webrtc-preferred'
+export type AuroraRuntimeTier = 'none' | 'lightweight-ts' | 'python-full'
+export type AuroraAuthority = 'unauthenticated' | 'view' | 'use' | 'manage' | 'admin'
+export type AuroraCapabilityPack =
+  | 'local-tools'
+  | 'native-actions'
+  | 'local-conversations'
+  | 'lightweight-memory'
+  | 'lightweight-orchestrator'
+  | 'foreground-voice'
+  | 'local-inference'
+
+export interface AuroraHomeConnectionProfile {
+  mode: AuroraConnectionMode
+  gatewayUrl?: string | undefined
+  signalingUrl?: string | undefined
+  homePeerId?: string | undefined
+  webrtcProfile?: WebRtcPeerConnectionProfile | undefined
+}
+
+export interface AuroraMeshMembershipProfile {
+  signalingUrl: string
+  webrtcProfile: WebRtcPeerConnectionProfile
+}
+
+export interface AuroraLocalNodeProfile {
+  nodeName: string
+  stablePeerId: string
+  enabledCapabilityPacks: AuroraCapabilityPack[]
+  meshMembership?: AuroraMeshMembershipProfile | undefined
+}
+
+export interface AuroraRuntimeProfileV2 {
+  version: 2
+  id: string
+  label: string
+  nodeMode: AuroraNodeMode
+  runtimeTier: AuroraRuntimeTier
+  homeConnection?: AuroraHomeConnectionProfile | undefined
+  localNode: AuroraLocalNodeProfile
+}
+
+export interface AuroraRuntimeProfileDocumentV2 {
+  version: 2
+  activeProfileId: string | null
+  profiles: AuroraRuntimeProfileV2[]
+}
+
+export interface RuntimeProfileValidationOptions {
+  allowPythonFull?: boolean | undefined
+}
+
+interface ThinConnectionProfileV1 {
+  id: string
+  label: string
+  mode: AuroraThinConnectionMode
+  gatewayUrl: string
+  signalingUrl: string
+  nodeName: string
+  localStablePeerId: string
+  webrtcProfile?: WebRtcPeerConnectionProfile | undefined
+}
+
+interface ThinProfileDocumentV1 {
+  version: 1
+  activeProfileId: string | null
+  profiles: ThinConnectionProfileV1[]
+}
+
+type ProfileDocumentWire = AuroraRuntimeProfileDocumentV2 | ThinProfileDocumentV1
+
+export function emptyRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 {
+  return {
+    version: 2,
+    activeProfileId: null,
+    profiles: [],
+  }
+}
+
+export function activeRuntimeProfile(
+  document: AuroraRuntimeProfileDocumentV2 | null | undefined,
+): AuroraRuntimeProfileV2 | undefined {
+  if (!document?.activeProfileId) return undefined
+  return document.profiles.find((profile) => profile.id === document.activeProfileId)
+}
+
+export function isRuntimeProfileConfigured(
+  profile: AuroraRuntimeProfileV2 | null | undefined,
+): boolean {
+  if (!profile) return false
+  if (profile.nodeMode === 'remote-console') {
+    return isHomeConnectionConfigured(profile.homeConnection)
+  }
+  if (!profile.localNode.meshMembership) return false
+  return profile.homeConnection === undefined || isHomeConnectionConfigured(profile.homeConnection)
+}
+
+export function migrateThinProfileToRuntimeProfile(profile: ThinConnectionProfileV1): AuroraRuntimeProfileV2 {
+  const sanitized = sanitizeThinConnectionProfileV1(profile)
+  const homeConnection: AuroraHomeConnectionProfile = {
+    mode: sanitized.mode,
+    ...(sanitized.gatewayUrl ? { gatewayUrl: sanitized.gatewayUrl } : {}),
+    ...(sanitized.signalingUrl ? { signalingUrl: sanitized.signalingUrl } : {}),
+    ...(sanitized.webrtcProfile ? { webrtcProfile: sanitized.webrtcProfile } : {}),
+  }
+  const homePeerId = sanitized.webrtcProfile?.expectedStablePeerId
+  if (homePeerId) homeConnection.homePeerId = homePeerId
+  return sanitizeRuntimeProfile({
+    version: 2,
+    id: sanitized.id,
+    label: sanitized.label,
+    nodeMode: 'remote-console',
+    runtimeTier: 'none',
+    homeConnection,
+    localNode: {
+      nodeName: sanitized.nodeName,
+      stablePeerId: sanitized.localStablePeerId,
+      enabledCapabilityPacks: [],
+    },
+  })
+}
+
+export function migrateThinProfileDocumentToRuntime(
+  document: ThinProfileDocumentV1,
+): AuroraRuntimeProfileDocumentV2 {
+  return sanitizeRuntimeProfileDocument({
+    version: 2,
+    activeProfileId: document.activeProfileId,
+    profiles: document.profiles.map(migrateThinProfileToRuntimeProfile),
+  })
+}
+
+export function runtimeProfileToThinConnectionProfile(
+  profile: AuroraRuntimeProfileV2,
+): ThinConnectionProfileV1 {
+  const sanitized = sanitizeRuntimeProfile(profile)
+  const home = sanitized.homeConnection
+  return sanitizeThinConnectionProfileV1({
+    id: sanitized.id,
+    label: sanitized.label,
+    mode: home?.mode ?? 'http-only',
+    gatewayUrl: home?.gatewayUrl ?? '',
+    signalingUrl: home?.signalingUrl ?? '',
+    nodeName: sanitized.localNode.nodeName,
+    localStablePeerId: sanitized.localNode.stablePeerId,
+    ...(home?.webrtcProfile ? { webrtcProfile: home.webrtcProfile } : {}),
+  })
+}
+
+export function runtimeProfileDocumentToThinDocument(
+  document: AuroraRuntimeProfileDocumentV2,
+): ThinProfileDocumentV1 {
+  const sanitized = sanitizeRuntimeProfileDocument(document)
+  if (sanitized.activeProfileId === null) {
+    return { version: 1, activeProfileId: null, profiles: [] }
+  }
+  return {
+    version: 1,
+    activeProfileId: sanitized.activeProfileId,
+    profiles: sanitized.profiles.map(runtimeProfileToThinConnectionProfile),
+  }
+}
+
+export function sanitizeRuntimeProfileDocument(
+  document: AuroraRuntimeProfileDocumentV2,
+  options: RuntimeProfileValidationOptions = {},
+): AuroraRuntimeProfileDocumentV2 {
+  if (!isRecord(document) || document.version !== 2 || !Array.isArray(document.profiles)) {
+    throw new Error('Runtime profile document is invalid')
+  }
+  const profiles = document.profiles.map((profile) => sanitizeRuntimeProfile(profile, options))
+  const activeProfileId = document.activeProfileId
+  if (activeProfileId === null) {
+    if (profiles.length !== 0) {
+      throw new Error('An unconfigured runtime profile document must not contain profiles')
+    }
+  } else if (typeof activeProfileId !== 'string' || !profiles.some((profile) => profile.id === activeProfileId)) {
+    throw new Error('Runtime profile active profile must exist')
+  }
+  return { version: 2, activeProfileId, profiles }
+}
+
+export function sanitizeRuntimeProfile(
+  profile: AuroraRuntimeProfileV2,
+  options: RuntimeProfileValidationOptions = {},
+): AuroraRuntimeProfileV2 {
+  if (!isRecord(profile) || profile.version !== 2) throw new Error('Runtime profile is invalid')
+  rejectSecretFields(profile, [])
+  const id = requiredText(profile.id, 'profile id', 96)
+  const label = requiredText(profile.label, 'profile label', 120)
+  const nodeMode = profile.nodeMode
+  if (nodeMode !== 'remote-console' && nodeMode !== 'mesh-node') {
+    throw new Error('Runtime profile node mode is invalid')
+  }
+  const runtimeTier = profile.runtimeTier
+  if (runtimeTier !== 'none' && runtimeTier !== 'lightweight-ts' && runtimeTier !== 'python-full') {
+    throw new Error('Runtime profile tier is invalid')
+  }
+  if (nodeMode === 'remote-console' && runtimeTier !== 'none') {
+    throw new Error('Remote console profiles cannot run a local runtime tier')
+  }
+  if (nodeMode === 'mesh-node' && runtimeTier === 'none') {
+    throw new Error('Mesh node profiles require a local runtime tier')
+  }
+  if (runtimeTier === 'python-full' && options.allowPythonFull !== true) {
+    throw new Error('Python full runtime requires a package with bundled Python support')
+  }
+  const homeConnection = profile.homeConnection === undefined
+    ? undefined
+    : sanitizeHomeConnection(profile.homeConnection)
+  if (nodeMode === 'remote-console' && !homeConnection) {
+    throw new Error('Remote console profiles require a home connection')
+  }
+  const localNode = sanitizeLocalNode(profile.localNode, nodeMode)
+  return {
+    version: 2,
+    id,
+    label,
+    nodeMode,
+    runtimeTier,
+    ...(homeConnection ? { homeConnection } : {}),
+    localNode,
+  }
+}
+
+export function serializeRuntimeProfileDocument(
+  document: AuroraRuntimeProfileDocumentV2,
+  options: RuntimeProfileValidationOptions = {},
+): string {
+  return JSON.stringify(sanitizeRuntimeProfileDocument(document, options))
+}
+
+export function parseRuntimeProfileDocument(
+  value: string | null | undefined,
+  options: RuntimeProfileValidationOptions = {},
+): AuroraRuntimeProfileDocumentV2 | null {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value) as ProfileDocumentWire
+    if (!isRecord(parsed)) return null
+    if (parsed.version === 1) return migrateThinProfileDocumentToRuntime(parsed)
+    if (parsed.version === 2) return sanitizeRuntimeProfileDocument(parsed, options)
+    return null
+  } catch {
+    return null
+  }
+}
+
+export function parseRuntimeProfileDocumentWire(
+  value: string | null | undefined,
+  options: RuntimeProfileValidationOptions = {},
+): { document: AuroraRuntimeProfileDocumentV2; migratedFromVersion: 1 | 2 } | null {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value) as ProfileDocumentWire
+    if (!isRecord(parsed)) return null
+    if (parsed.version === 1) {
+      return { document: migrateThinProfileDocumentToRuntime(parsed), migratedFromVersion: 1 }
+    }
+    if (parsed.version === 2) {
+      return { document: sanitizeRuntimeProfileDocument(parsed, options), migratedFromVersion: 2 }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function sanitizeHomeConnection(value: AuroraHomeConnectionProfile): AuroraHomeConnectionProfile {
+  if (!isRecord(value)) throw new Error('Runtime profile home connection is invalid')
+  const mode = value.mode
+  if (mode !== 'http-only' && mode !== 'webrtc-only' && mode !== 'webrtc-preferred') {
+    throw new Error('Runtime profile connection mode is invalid')
+  }
+  const gatewayUrl = optionalRuntimeEndpoint(value.gatewayUrl, 'Aurora address', new Set(['http:', 'https:']))
+  const signalingUrl = optionalRuntimeEndpoint(value.signalingUrl, 'signaling address', new Set(['ws:', 'wss:']))
+  const webrtcProfile = value.webrtcProfile
+    ? sanitizeWebRtcProfile(value.webrtcProfile, signalingUrl, mode)
+    : undefined
+  if (mode !== 'webrtc-only' && !gatewayUrl) {
+    throw new Error(`${mode} requires an HTTP or HTTPS Aurora address`)
+  }
+  if (mode !== 'http-only' && !webrtcProfile) {
+    throw new Error(`${mode} requires an Aurora WebRTC invite`)
+  }
+  const homePeerId = optionalText(value.homePeerId, 'home peer id', 256)
+  return {
+    mode,
+    ...(gatewayUrl ? { gatewayUrl } : {}),
+    ...((signalingUrl || webrtcProfile?.signalingBrokers[0])
+      ? { signalingUrl: signalingUrl || webrtcProfile?.signalingBrokers[0] }
+      : {}),
+    ...(homePeerId ? { homePeerId } : {}),
+    ...(webrtcProfile ? { webrtcProfile } : {}),
+  }
+}
+
+function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMode): AuroraLocalNodeProfile {
+  if (!isRecord(value)) throw new Error('Runtime profile local node is invalid')
+  const nodeName = requiredText(value.nodeName, 'node name', 160)
+  const stablePeerId = requiredText(value.stablePeerId, 'stable peer id', 160)
+  const enabledCapabilityPacks = sanitizeCapabilityPacks(value.enabledCapabilityPacks)
+  const meshMembership = value.meshMembership === undefined
+    ? undefined
+    : sanitizeMeshMembership(value.meshMembership)
+  if (nodeMode === 'remote-console' && enabledCapabilityPacks.length !== 0) {
+    throw new Error('Remote console profiles cannot enable local capability packs')
+  }
+  if (nodeMode === 'mesh-node' && !meshMembership) {
+    throw new Error('Mesh node profiles require WebRTC mesh membership')
+  }
+  return {
+    nodeName,
+    stablePeerId,
+    enabledCapabilityPacks,
+    ...(meshMembership ? { meshMembership } : {}),
+  }
+}
+
+function sanitizeMeshMembership(value: AuroraMeshMembershipProfile): AuroraMeshMembershipProfile {
+  if (!isRecord(value)) throw new Error('Runtime profile mesh membership is invalid')
+  const signalingUrl = optionalRuntimeEndpoint(value.signalingUrl, 'mesh membership address', new Set(['ws:', 'wss:']))
+  if (!signalingUrl) throw new Error('Mesh membership requires a signaling address')
+  return {
+    signalingUrl,
+    webrtcProfile: sanitizeWebRtcProfile(value.webrtcProfile, signalingUrl, 'webrtc-only'),
+  }
+}
+
+function sanitizeCapabilityPacks(value: unknown): AuroraCapabilityPack[] {
+  if (!Array.isArray(value)) throw new Error('Runtime profile capability packs are invalid')
+  const seen = new Set<AuroraCapabilityPack>()
+  for (const item of value) {
+    if (!isCapabilityPack(item)) throw new Error('Runtime profile capability pack is invalid')
+    seen.add(item)
+  }
+  return [...seen]
+}
+
+function isCapabilityPack(value: unknown): value is AuroraCapabilityPack {
+  return value === 'local-tools'
+    || value === 'native-actions'
+    || value === 'local-conversations'
+    || value === 'lightweight-memory'
+    || value === 'lightweight-orchestrator'
+    || value === 'foreground-voice'
+    || value === 'local-inference'
+}
+
+function isHomeConnectionConfigured(value: AuroraHomeConnectionProfile | undefined): boolean {
+  if (!value) return false
+  if (value.mode !== 'webrtc-only' && !value.gatewayUrl) return false
+  if (value.mode !== 'http-only' && !value.webrtcProfile) return false
+  return true
+}
+
+function sanitizeThinConnectionProfileV1(profile: ThinConnectionProfileV1): ThinConnectionProfileV1 {
+  if (!isRecord(profile)) throw new Error('Thin-client connection profile is invalid')
+  rejectSecretFields(profile, [])
+  const home = sanitizeHomeConnection({
+    mode: profile.mode,
+    gatewayUrl: profile.gatewayUrl,
+    signalingUrl: profile.signalingUrl,
+    ...(profile.webrtcProfile ? { webrtcProfile: profile.webrtcProfile } : {}),
+  })
+  return {
+    id: requiredText(profile.id, 'profile id', 96),
+    label: requiredText(profile.label, 'profile label', 120),
+    mode: home.mode,
+    gatewayUrl: home.gatewayUrl ?? '',
+    signalingUrl: home.signalingUrl ?? '',
+    nodeName: requiredText(profile.nodeName, 'node name', 160),
+    localStablePeerId: requiredText(profile.localStablePeerId, 'stable peer id', 160),
+    ...(home.webrtcProfile ? { webrtcProfile: home.webrtcProfile } : {}),
+  }
+}
+
+function sanitizeWebRtcProfile(
+  value: WebRtcPeerConnectionProfile,
+  signalingOverride: string,
+  mode: AuroraConnectionMode,
+): WebRtcPeerConnectionProfile {
+  if (!isRecord(value)) throw new Error('Runtime profile WebRTC invite is invalid')
+  const appId = requiredText(value.appId, 'WebRTC app id', 256)
+  const room = requiredText(value.room, 'WebRTC room', 512)
+  const roomSecretRef = requiredText(value.roomSecretRef, 'WebRTC room-secret reference', 1024)
+  const configuredBrokers = signalingOverride
+    ? [signalingOverride]
+    : Array.isArray(value.signalingBrokers)
+      ? [...value.signalingBrokers]
+      : []
+  if (configuredBrokers.length === 0 || configuredBrokers.length > 16) {
+    throw new Error('Runtime profile WebRTC signaling broker list is invalid')
+  }
+  const signalingBrokers = configuredBrokers.map((broker) =>
+    optionalRuntimeEndpoint(broker, 'signaling broker', new Set(['ws:', 'wss:'])),
+  )
+  const out: WebRtcPeerConnectionProfile = {
+    mode: mode === 'webrtc-only' ? 'webrtc-only' : 'webrtc-preferred',
+    appId,
+    room,
+    roomSecretRef,
+    signalingBrokers,
+  }
+  copyOptionalText(value.expectedStablePeerId, out, 'expectedStablePeerId', 256)
+  copyOptionalText(value.expectedSignalingPeerId, out, 'expectedSignalingPeerId', 256)
+  copyOptionalText(value.nodeName, out, 'nodeName', 160)
+  copyOptionalBoolean(value.production, out, 'production')
+  copyOptionalBoolean(value.allowInsecureLoopbackSignaling, out, 'allowInsecureLoopbackSignaling')
+  copyOptionalBoolean(value.requireAppLayerE2ee, out, 'requireAppLayerE2ee')
+  const stunServers = sanitizeIceServers(value.stunServers, new Set(['stun:', 'stuns:']))
+  const turnServers = sanitizeIceServers(value.turnServers, new Set(['turn:', 'turns:']))
+  if (stunServers) out.stunServers = stunServers
+  if (turnServers) out.turnServers = turnServers
+  return out
+}
+
+function optionalRuntimeEndpoint(
+  value: unknown,
+  label: string,
+  protocols: Set<string>,
+): string {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!trimmed) return ''
+  const url = new URL(trimmed)
+  if (!protocols.has(url.protocol) || url.username || url.password) {
+    throw new Error(
+      `${label} must use ${[...protocols].join('/')} without embedded credentials`,
+    )
+  }
+  if (url.hash) throw new Error(`${label} must not contain URL fragments`)
+  for (const key of url.searchParams.keys()) {
+    if (isSecretFieldName(key)) {
+      throw new Error(`${label} must not store credentials in URL query parameters`)
+    }
+  }
+  return url.toString().replace(/\/$/, '')
+}
+
+function sanitizeIceServers(
+  values: readonly string[] | undefined,
+  protocols: Set<string>,
+): string[] | undefined {
+  if (values === undefined) return undefined
+  if (!Array.isArray(values) || values.length > 16) throw new Error('Runtime profile ICE server list is invalid')
+  return values.map((value) => {
+    const protocol = value.slice(0, value.indexOf(':') + 1).toLowerCase()
+    if (!protocols.has(protocol) || value.length > 2048) {
+      throw new Error('Runtime profile ICE server URL is invalid')
+    }
+    return value
+  })
+}
+
+function requiredText(value: unknown, label: string, maxLength: number): string {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!trimmed || trimmed.length > maxLength) throw new Error(`Runtime profile ${label} is required`)
+  return trimmed
+}
+
+function optionalText(value: unknown, label: string, maxLength: number): string | undefined {
+  if (value === undefined) return undefined
+  return requiredText(value, label, maxLength)
+}
+
+function copyOptionalText(
+  value: string | undefined,
+  target: WebRtcPeerConnectionProfile,
+  key: 'expectedStablePeerId' | 'expectedSignalingPeerId' | 'nodeName',
+  maxLength: number,
+): void {
+  if (value === undefined) return
+  target[key] = requiredText(value, key, maxLength)
+}
+
+function copyOptionalBoolean(
+  value: boolean | undefined,
+  target: WebRtcPeerConnectionProfile,
+  key: 'production' | 'allowInsecureLoopbackSignaling' | 'requireAppLayerE2ee',
+): void {
+  if (value !== undefined) {
+    if (typeof value !== 'boolean') throw new Error(`Runtime profile ${key} is invalid`)
+    target[key] = value
+  }
+}
+
+function rejectSecretFields(value: unknown, path: string[]): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => rejectSecretFields(item, [...path, String(index)]))
+    return
+  }
+  if (!isRecord(value)) return
+  for (const [key, child] of Object.entries(value)) {
+    if (isSecretFieldName(key) && !isAllowedSecretReferenceField(key)) {
+      throw new Error(`Runtime profile must not contain secret field ${[...path, key].join('.')}`)
+    }
+    rejectSecretFields(child, [...path, key])
+  }
+}
+
+function isSecretFieldName(value: string): boolean {
+  return /(?:token|secret|password|credential|authorization|bearer)/iu.test(value)
+}
+
+function isAllowedSecretReferenceField(value: string): boolean {
+  return value === 'roomSecretRef'
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

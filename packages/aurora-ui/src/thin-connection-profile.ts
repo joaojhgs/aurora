@@ -1,5 +1,6 @@
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import type { AuroraThinConnectionMode } from './web-thin-runtime'
+export * from './runtime-profile'
 
 export interface ThinConnectionProfile {
   id: string

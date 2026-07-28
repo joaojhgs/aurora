@@ -20,10 +20,15 @@ import {
   explainBrowserThinRuntime,
   getAuroraSurfaceProfile,
   isThinConnectionProfileConfigured,
+  migrateThinProfileToRuntimeProfile,
   parseThinProfileDocument as parseSharedThinProfileDocument,
   parseWebRtcInvite,
   sanitizeThinConnectionProfile,
   serializeThinProfileDocument as serializeSharedThinProfileDocument,
+  surfaceSupportsRuntimeTier,
+  type AuroraNodeMode,
+  type AuroraRuntimeProfileV2,
+  type AuroraRuntimeTier,
   type ParsedWebRtcInvite,
   type ThinConnectionProfile,
   type ThinProfileDocument,
@@ -52,6 +57,9 @@ export interface AuroraTauriRuntime {
   thinPeer?: BrowserWebThinRuntime["peer"] | undefined;
   thinDiagnostics: () => string[];
   thinProfile?: AuroraThinConnectionProfile | undefined;
+  runtimeProfile?: AuroraRuntimeProfileV2 | undefined;
+  nodeMode?: AuroraNodeMode | undefined;
+  runtimeTier?: AuroraRuntimeTier | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -265,6 +273,9 @@ export function createAuroraTauriRuntime({
   consumeThinInvite?: boolean;
 } = {}): AuroraTauriRuntime {
   const configuredProfile = activeThinProfile(thinProfileDocument);
+  const configuredRuntimeProfile = configuredProfile
+    ? migrateThinProfileToRuntimeProfile(configuredProfile)
+    : undefined;
   const configuredGatewayUrl = configuredProfile?.gatewayUrl || undefined;
   const thinConnectionMode =
     configuredProfile?.mode ?? DEFAULT_THIN_CONNECTION_MODE;
@@ -314,6 +325,9 @@ export function createAuroraTauriRuntime({
               mobilePlatform,
           ),
           thinProfile: configuredProfile,
+          runtimeProfile: configuredRuntimeProfile,
+          nodeMode: configuredRuntimeProfile?.nodeMode ?? "remote-console",
+          runtimeTier: configuredRuntimeProfile?.runtimeTier ?? "none",
           thinProfileConfigured,
           requiresOnboarding: !thinProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -366,6 +380,8 @@ export function createAuroraTauriRuntime({
           "Unrecognized mobile Tauri surface uses the platform transport; Android and iOS use the shared WebView thin runtime",
         ],
         thinProfileConfigured: false,
+        nodeMode: "remote-console",
+        runtimeTier: "none",
         requiresOnboarding: false,
         pendingThinInviteText: null,
         modePreferenceStore: secureModePreferenceStore(
@@ -429,6 +445,9 @@ export function createAuroraTauriRuntime({
             thinInviteText,
         ),
         thinProfile: configuredProfile,
+        runtimeProfile: configuredRuntimeProfile,
+        nodeMode: configuredRuntimeProfile?.nodeMode ?? "remote-console",
+        runtimeTier: configuredRuntimeProfile?.runtimeTier ?? "none",
         thinProfileConfigured,
         requiresOnboarding: !thinProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -474,6 +493,10 @@ export function createAuroraTauriRuntime({
         "desktop-local preserves Rust-supervised Python sidecar and STTCoordinator wakeword ownership",
       ],
       thinProfileConfigured: false,
+      nodeMode: "mesh-node",
+      runtimeTier: surfaceSupportsRuntimeTier(currentAuroraSurfaceProfile(), "python-full", {
+        packageIncludesPython: true,
+      }) ? "python-full" : "lightweight-ts",
       requiresOnboarding: false,
       pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(
@@ -531,6 +554,9 @@ export function createAuroraTauriRuntime({
           thinInviteText,
       ),
       thinProfile: configuredProfile,
+      runtimeProfile: configuredRuntimeProfile,
+      nodeMode: configuredRuntimeProfile?.nodeMode ?? "remote-console",
+      runtimeTier: configuredRuntimeProfile?.runtimeTier ?? "none",
       thinProfileConfigured,
       requiresOnboarding: !thinProfileConfigured,
       pendingThinInviteText: thinInviteText,
@@ -570,6 +596,8 @@ export function createAuroraTauriRuntime({
       "mock/offline demo transport; no live Gateway, WebRTC peer, or sidecar",
     ],
     thinProfileConfigured: false,
+    nodeMode: "remote-console",
+    runtimeTier: "none",
     requiresOnboarding: false,
     pendingThinInviteText: null,
     modePreferenceStore: memoryOnlyModePreferenceStore(

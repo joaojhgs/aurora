@@ -8,7 +8,10 @@ import {
   BrowserPersistentPeerCredentialStore,
   type BrowserVaultStorage,
 } from '../src/browser-peer-persistence'
-import type { ThinProfileDocument } from '../src/thin-connection-profile'
+import {
+  migrateThinProfileDocumentToRuntime,
+  type ThinProfileDocument,
+} from '../src/thin-connection-profile'
 
 class MapVaultStorage implements BrowserVaultStorage {
   readonly values = new Map<string, unknown>()
@@ -205,13 +208,43 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     store.saveThinProfileDocument(thinProfileDocument)
 
     expect(store.loadThinProfileDocument()).toEqual(thinProfileDocument)
+    expect(store.loadRuntimeProfileDocument()).toEqual(migrateThinProfileDocumentToRuntime(thinProfileDocument))
     const plaintextMetadata = [...metadata.values.values()].join('\n')
+    expect(metadata.getItem('aurora.runtimeProfiles.v2')).toContain('"version":2')
+    expect(metadata.getItem('aurora.webThin.connectionProfiles.v1')).toBeNull()
     expect(plaintextMetadata).toContain('https://gateway.example.test/api?tenant=home')
     expect(plaintextMetadata).toContain('wss://signal.example.test/mqtt?tenant=home')
     expect(plaintextMetadata).not.toContain(credential.rawBearerToken)
     expect(plaintextMetadata).not.toContain('never-store-this-room-secret-in-plaintext')
     expect(plaintextMetadata).not.toContain('"roomSecret"')
     await store.close()
+  })
+
+  it('migrates legacy v1 metadata to v2 and removes corrupt v2 metadata safely', async () => {
+    const metadata = new MapMetadataStorage()
+    metadata.setItem('aurora.webThin.connectionProfiles.v1', JSON.stringify(thinProfileDocument))
+    const migrated = new BrowserPersistentPeerCredentialStore({
+      storage: new MapVaultStorage(),
+      metadataStorage: metadata,
+      crypto: globalThis.crypto,
+      origin: 'https://profiles.aurora.example.test',
+    })
+
+    expect(migrated.loadRuntimeProfileDocument()).toEqual(migrateThinProfileDocumentToRuntime(thinProfileDocument))
+    expect(metadata.getItem('aurora.runtimeProfiles.v2')).toContain('"version":2')
+    expect(metadata.getItem('aurora.webThin.connectionProfiles.v1')).toBeNull()
+    await migrated.close()
+
+    metadata.setItem('aurora.runtimeProfiles.v2', '{"version":2,"activeProfileId":"missing","profiles":[]}')
+    const corrupt = new BrowserPersistentPeerCredentialStore({
+      storage: new MapVaultStorage(),
+      metadataStorage: metadata,
+      crypto: globalThis.crypto,
+      origin: 'https://profiles.aurora.example.test',
+    })
+    expect(corrupt.loadRuntimeProfileDocument()).toBeNull()
+    expect(metadata.getItem('aurora.runtimeProfiles.v2')).toBeNull()
+    await corrupt.close()
   })
 
   it('keeps runtime profile metadata available for the current SPA session when browser storage is unavailable', async () => {
