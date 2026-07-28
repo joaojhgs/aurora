@@ -1,4 +1,5 @@
 import type { AuroraShellSnapshot } from './shell-data'
+import { getAuroraSurfaceProfile } from './platform-surface'
 import {
   SettingsPermissionsView,
   buildSettingsPermissionsModel,
@@ -44,6 +45,10 @@ export function buildNativePlatformEvidenceArtifact(
       .map((integration) => integration.id)
   ].sort()
   const mobileThin = id === 'android-preflight' || id === 'ios-preflight'
+  const profile = getAuroraSurfaceProfile({
+    transportKind: snapshot.transportKind,
+    nativePlatform: snapshot.nativePlatform
+  })
   return {
     id,
     label: platformEvidenceLabel(id),
@@ -57,7 +62,7 @@ export function buildNativePlatformEvidenceArtifact(
     nativeIntegrationRows: model.nativeIntegrations.length,
     unsupportedAvailableClaims,
     thinClientUsable: mobileThin
-      ? ['native-mobile', 'http', 'mock'].includes(snapshot.transportKind) && snapshot.loadState !== 'loading'
+      ? (profile.supportsMobileNative || profile.isWebThin || snapshot.transportKind === 'mock') && snapshot.loadState !== 'loading'
       : id === 'web-fallback',
     localPythonRequired: id === 'desktop-local',
     notes: platformEvidenceNotes(id, snapshot)
@@ -76,33 +81,33 @@ export const buildNativePlatformStatusArtifact = buildNativePlatformEvidenceArti
 export const buildNativePlatformStatusJson = buildNativePlatformEvidenceJson
 
 function platformEvidenceLabel(id: NativePlatformEvidenceArtifact['id']): string {
-  if (id === 'desktop-local') return 'Desktop Tauri local native status'
-  if (id === 'web-fallback') return 'Web browser fallback status'
-  if (id === 'android-preflight') return 'Android mobile thin preflight status'
-  return 'iOS mobile thin preflight status'
+  if (id === 'desktop-local') return 'Desktop app status'
+  if (id === 'web-fallback') return 'Browser status'
+  if (id === 'android-preflight') return 'Android app readiness'
+  return 'iOS app readiness'
 }
 
 function platformEvidenceNotes(id: NativePlatformEvidenceArtifact['id'], snapshot: AuroraShellSnapshot): string[] {
   if (id === 'desktop-local') {
     return [
-      'Desktop native claims require Tauri manifest status.',
-      snapshot.nativeAvailable ? `Native platform reported: ${snapshot.nativePlatform}.` : 'Native manifest missing.'
+      'Desktop features are shown only when this app can use them.',
+      snapshot.nativeAvailable ? 'Desktop features are available on this device.' : 'Desktop features are not available on this device.'
     ]
   }
   if (id === 'web-fallback') {
     return [
-      'Web fallback must not claim Tauri, Android, or iOS native permissions.',
-      'Remote Gateway/auth pairing remains the thin-client path.'
+      'Browser sessions use features from a connected Aurora device.',
+      'Pair this browser before using features that live on another device.'
     ]
   }
   if (id === 'android-preflight') {
     return [
-      'Android is a mobile thin client: endpoint or mesh pairing first, no local Python sidecar requirement.',
+      'Connect Android to Aurora before using features from another device.',
       'Assistant role remains conditional on RoleManager, package qualification, OEM support, and user grant.'
     ]
   }
   return [
-    'iOS is a mobile thin client: endpoint or mesh pairing first, no local Python sidecar requirement.',
-    'Invocation is app-owned through App Intents, Shortcuts, widgets, share, or deep links; no system assistant replacement claim.'
+    'Connect iOS to Aurora before using features from another device.',
+    'Aurora actions stay inside the app, Shortcuts, widgets, share sheet, and links.'
   ]
 }

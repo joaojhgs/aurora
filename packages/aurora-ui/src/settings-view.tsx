@@ -7,17 +7,12 @@ import { SettingsPermissionsView } from './settings-permissions-view'
 import { ConfigEditorView, parseFieldValue, stringifyValue } from './config-editor-view'
 import { DataPolicyResource } from './data-policy-view'
 import { PageTabs, type PageTabItem } from './shared-components'
+import { safeErrorCopy } from './product-copy'
 import { Card } from './primitives'
 import { ToneBadge } from './status-badges'
 import { Badge } from '#components/ui/badge'
 import { Input } from '#components/ui/input'
 
-/**
- * Top-level Settings shell (plan section 4.6): three tabs -- General mounts the existing
- * `SettingsPermissionsView` as-is, Configuration mounts the existing `ConfigEditorView` as-is,
- * and Advanced is new schema-driven content (config_schema.json groups without their own
- * dedicated screen, plus Data policy folded in at the bottom) built specifically for this shell.
- */
 export type SettingsViewTab = 'general' | 'configuration' | 'advanced'
 
 export interface SettingsViewProps {
@@ -56,12 +51,6 @@ export function SettingsView({ client, snapshot, configRoute, dataRoute, initial
   )
 }
 
-// ---------------------------------------------------------------------------
-// Advanced tab: config_schema.json groups without a dedicated screen, dynamically
-// rendered from live ConfigFieldMetadata (never a hardcoded field list), plus Data
-// policy folded in at the bottom instead of staying a standalone page/route.
-// ---------------------------------------------------------------------------
-
 interface AdvancedSettingsTabProps {
   client: AuroraClient
   configRoute: RouteAvailability
@@ -91,12 +80,12 @@ function AdvancedSettingsTab({ client, configRoute, dataRoute }: AdvancedSetting
           setLoadState('ready')
         } else {
           setLoadState('error')
-          setMessage(result.error.message)
+          setMessage(productSettingsErrorCopy(result.error))
         }
       },
       (error: unknown) => {
         setLoadState('error')
-        setMessage(errorMessage(error))
+        setMessage(productSettingsErrorCopy(error))
       }
     )
   }, [client, configRoute])
@@ -118,7 +107,7 @@ function AdvancedSettingsTab({ client, configRoute, dataRoute }: AdvancedSetting
         reason: 'Advanced settings update from Aurora UI',
         reauthConfirmed: true
       })
-      if (!result.data.success) throw new Error(result.data.error ?? `Config.Set failed for ${field.key_path}`)
+      if (!result.data.success) throw new Error(result.data.error ?? 'settings_update_failed')
       setFieldState((current) => ({ ...current, [field.key_path]: 'idle' }))
       setEdits((current) => {
         const next = { ...current }
@@ -128,14 +117,14 @@ function AdvancedSettingsTab({ client, configRoute, dataRoute }: AdvancedSetting
       refresh()
     } catch (error) {
       setFieldState((current) => ({ ...current, [field.key_path]: 'error' }))
-      setMessage(`Update failed for ${field.key_path}: ${errorMessage(error)}`)
+      setMessage(productSettingsErrorCopy(error, 'Your change was not saved. Try again.'))
     }
   }
 
   return (
     <div className="flex flex-col gap-4 py-4">
       <p className="text-sm text-muted-foreground">
-        Service sections without their own management page -- same edit pattern as Configuration, grouped by config_schema.json section.
+        Additional Aurora settings that do not have a dedicated page yet.
       </p>
 
       {loadState === 'error' ? (
@@ -144,9 +133,9 @@ function AdvancedSettingsTab({ client, configRoute, dataRoute }: AdvancedSetting
         </p>
       ) : null}
       {loadState === 'unavailable' ? (
-        <p className="text-sm text-muted-foreground">Advanced settings are unavailable: {configRoute.explanation}</p>
+        <p className="text-sm text-muted-foreground">Advanced settings are unavailable. {safeSettingsText(configRoute.explanation, 'Review access and try again.')}</p>
       ) : null}
-      {loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading configuration schema from Aurora.</p> : null}
+      {loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading Aurora settings.</p> : null}
       {message && loadState === 'ready' ? (
         <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">{message}</p>
       ) : null}
@@ -168,7 +157,7 @@ function AdvancedSettingsTab({ client, configRoute, dataRoute }: AdvancedSetting
         </Card>
       ))}
       {sections.length === 0 && loadState === 'ready' ? (
-        <p className="text-sm text-muted-foreground">No additional schema sections are available.</p>
+        <p className="text-sm text-muted-foreground">No additional settings are available.</p>
       ) : null}
 
       <DataPolicyResource client={client} route={dataRoute} />
@@ -192,17 +181,17 @@ function AdvancedFieldRow({
   return (
     <div className="grid grid-cols-1 items-center gap-2.5 border-b border-border/60 pb-4 last:border-0 last:pb-0 sm:grid-cols-[1fr_minmax(0,300px)]">
       <div className="flex flex-col gap-1">
-        <div className="font-mono text-[12.5px]">{field.key_path}</div>
-        <p className="text-[11.5px] text-muted-foreground">{field.description || 'No schema description provided.'}</p>
+        <div className="text-[12.5px] font-medium">{advancedFieldTitle(field)}</div>
+        <p className="text-[11.5px] text-muted-foreground">{advancedFieldDescription(field)}</p>
         <div className="flex flex-wrap gap-1.5">
-          <Badge variant="secondary" className="text-[9.5px] uppercase">{field.source_layer}</Badge>
+          <Badge variant="secondary" className="text-[9.5px] uppercase">{sourceLayerLabel(field.source_layer)}</Badge>
           {field.restart_required ? <ToneBadge tone="warning" className="text-[9.5px] uppercase">restart</ToneBadge> : null}
         </div>
       </div>
       <Input
         value={field.secret ? '[REDACTED]' : value}
         disabled={field.secret || saving}
-        className="font-mono text-[12.5px]"
+        className="text-[12.5px]"
         onChange={(event) => onChange(event.target.value)}
         onBlur={(event) => onCommit(event.target.value)}
         onKeyDown={(event) => {
@@ -216,7 +205,6 @@ function AdvancedFieldRow({
   )
 }
 
-/** Excludes config_schema.json subtrees that already have a dedicated screen elsewhere. */
 function isExcludedFromAdvanced(keyPath: string): boolean {
   return (
     keyPath === 'services.gateway' ||
@@ -248,6 +236,45 @@ function groupAdvancedFields(fields: ConfigFieldMetadata[]): Array<[string, Conf
   return Array.from(groups.entries())
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+function advancedFieldTitle(field: ConfigFieldMetadata): string {
+  return safeSettingsText(field.title, titleFromPath(field.key_path))
+}
+
+function advancedFieldDescription(field: ConfigFieldMetadata): string {
+  return safeSettingsText(field.description, 'Update how Aurora behaves on this device.')
+}
+
+function titleFromPath(keyPath: string): string {
+  const leaf = keyPath.split('.').filter(Boolean).at(-1) ?? 'setting'
+  return leaf
+    .replace(/[-_]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function safeSettingsText(value: unknown, replacement: string): string {
+  if (typeof value !== 'string') return replacement
+  const trimmed = value.trim()
+  if (!trimmed || containsInternalSettingsText(trimmed)) return replacement
+  return trimmed
+}
+
+function sourceLayerLabel(value: unknown): string {
+  if (value === 'user') return 'saved'
+  if (value === 'env') return 'device'
+  if (value === 'default') return 'default'
+  return 'Aurora'
+}
+
+function containsInternalSettingsText(value: string): boolean {
+  return /\b(?:proof|evidence|fixtures?|assertions?|implement(?:ation|ed|ing)?|tested|debug(?:ging)?|fallback|provider|consumer|hybrid|manifest|contracts?|protocol|transport|runtime|schema|migrations?|sqlite|indexeddb|opfs|sidecar|thin|AdminAction|method|key[-_ ]?paths?|permission)\b|\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\.[a-z0-9_.]+\b/iu.test(value)
+}
+
+function productSettingsErrorCopy(problem: unknown, backup = 'Aurora settings could not be loaded. Try again.'): string {
+  const copy = safeErrorCopy(problem)
+  if (!copy.title) return backup
+  if (!copy.action || copy.title.toLowerCase().includes(copy.action.toLowerCase())) return copy.title
+  return `${copy.title}. ${copy.action}.`
 }
