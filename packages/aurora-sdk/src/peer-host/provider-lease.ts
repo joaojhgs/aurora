@@ -42,7 +42,7 @@ export class ProviderLeaseController {
     const issuedAtMs = Math.floor(this.clock())
     this.revision += 1
     this.current = {
-      type: 'provider_lease',
+      type: 'provider_unavailable',
       peer_id: this.peerId,
       connection_epoch: this.epoch,
       availability_revision: this.revision,

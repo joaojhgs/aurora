@@ -1,8 +1,12 @@
+import { sha256 } from '@noble/hashes/sha2.js'
+
 import { AuroraValidationError } from '../validation/index.js'
+import { bytesToHex, canonicalJson } from '../webrtc/encoding.js'
 import type { CallFrame, SubscribeFrame } from '../webrtc/protocol.js'
 import { ProviderLeaseController } from './provider-lease.js'
 import type {
   PeerHostCallContext,
+  PeerHostEventDescriptor,
   PeerHostErrorBody,
   PeerHostFrameSender,
   PeerHostIdentity,
@@ -10,11 +14,12 @@ import type {
   PeerHostOptions
 } from './types.js'
 
-type ActiveWork = { abort: AbortController; cleanup(): void }
+type ActiveWork = { abort: AbortController; cleanup(): void; settled: boolean; kind: 'call' | 'stream' | 'subscription' }
+type ManifestEvidence = { epoch: string; revision: string; digest: string; requiredServices: string[] } | null
 
 const DEFAULT_MAX_REQUEST_BYTES = 256 * 1024
 const DEFAULT_TIMEOUT_MS = 30_000
-const MAX_ERROR_MESSAGE = 160
+const TIMEOUT_ERROR_REF = 'peer-host-timeout'
 
 export class WebRtcPeerHost {
   readonly lease: ProviderLeaseController
@@ -24,6 +29,9 @@ export class WebRtcPeerHost {
   private acceptingInbound = false
   private availabilityRevision = 0
   private connectionEpoch: string
+  private manifestRevision = '0'
+  private manifestDigest = '0'.repeat(64)
+  private pendingManifest: ManifestEvidence = null
 
   constructor(options: PeerHostOptions) {
     const randomId = options.randomId ?? (() => `host-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`)
@@ -48,11 +56,21 @@ export class WebRtcPeerHost {
     const lease = this.lease.startEpoch()
     this.connectionEpoch = lease.connection_epoch
     this.availabilityRevision = lease.availability_revision
+    this.manifestRevision = String(this.availabilityRevision)
+    this.pendingManifest = null
     return this.buildManifest()
   }
 
-  markManifestAcknowledged(): void {
+  markManifestAcknowledged(ack: Record<string, unknown>): boolean {
+    if (!this.pendingManifest) return false
+    if (ack.connection_epoch !== this.pendingManifest.epoch) return false
+    if (ack.manifest_revision !== this.pendingManifest.revision) return false
+    if (ack.manifest_digest !== this.pendingManifest.digest) return false
+    const compatible = Array.isArray(ack.compatible_services) ? ack.compatible_services.filter((item): item is string => typeof item === 'string') : []
+    if (!this.pendingManifest.requiredServices.every((service) => compatible.includes(service))) return false
     this.acceptingInbound = true
+    this.pendingManifest = null
+    return true
   }
 
   suspend(reason = 'provider_unavailable'): Record<string, unknown> {
@@ -85,10 +103,31 @@ export class WebRtcPeerHost {
       input_schema_id: method.inputSchemaId,
       output_schema_id: method.outputSchemaId
     }))
+    const requiredServices = methods.length > 0 ? ['Tooling'] : []
+    const digestInput = {
+      peer_id: this.options.localPeerId,
+      connection_epoch: this.connectionEpoch,
+      manifest_revision: this.manifestRevision,
+      shared_services: [{
+        module: 'Tooling',
+        methods,
+        capabilities: ['provider_lease_v1']
+      }]
+    }
+    this.manifestDigest = bytesToHex(sha256(new TextEncoder().encode(canonicalJson(digestInput))))
+    this.pendingManifest = {
+      epoch: this.connectionEpoch,
+      revision: this.manifestRevision,
+      digest: this.manifestDigest,
+      requiredServices
+    }
     return {
       type: 'manifest',
       peer_id: this.options.localPeerId,
       node_name: this.options.nodeName,
+      manifest_revision: this.manifestRevision,
+      manifest_digest: this.manifestDigest,
+      required_services: requiredServices,
       shared_services: [{
         module: 'Tooling',
         provider_id: `local:${encodeURIComponent(this.options.localPeerId)}:Tooling`,
@@ -110,7 +149,7 @@ export class WebRtcPeerHost {
         registry_revision: String(this.availabilityRevision),
         policy_revision: '0',
         auth_grant_revision: 0,
-        projection_digest: '0'.repeat(64)
+        projection_digest: this.manifestDigest
       }
     }
   }
@@ -151,24 +190,31 @@ export class WebRtcPeerHost {
       return
     }
     const abort = new AbortController()
-    const timer = setTimeout(() => abort.abort('deadline'), Math.max(1, deadlineAtMs - nowMs))
-    this.active.set(frame.id, { abort, cleanup: () => clearTimeout(timer) })
+    const active: ActiveWork = {
+      abort,
+      kind: 'call',
+      settled: false,
+      cleanup: () => clearTimeout(timer)
+    }
+    const timer = setTimeout(() => {
+      void this.timeoutWork(frame.id, active)
+    }, Math.max(1, deadlineAtMs - nowMs))
+    this.active.set(frame.id, active)
     try {
       const context = this.callContext(frame, method, remotePeerId, identity, abort.signal, nowMs, deadlineAtMs)
       const result = await this.options.registry.dispatch(method, frame.params ?? {}, context)
-      await sender.sendFrame({ type: 'result', id: frame.id, result })
+      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'result', id: frame.id, result })
     } catch (error) {
-      await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error) })
+      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
     } finally {
-      const active = this.active.get(frame.id)
-      active?.cleanup()
-      this.active.delete(frame.id)
+      this.finishActive(frame.id, active)
     }
   }
 
   async handleSubscribe(frame: SubscribeFrame, remotePeerId: string): Promise<void> {
+    const sender = this.requireSender()
     if (!this.acceptingInbound || !this.lease.isActive()) {
-      await this.requireSender().sendFrame({
+      await sender.sendFrame({
         type: 'subscribe_rejected',
         id: frame.id,
         reason: 'provider_not_ready',
@@ -176,10 +222,63 @@ export class WebRtcPeerHost {
       })
       return
     }
+    const events = frame.topics.map((topic) => this.options.registry.getEvent(topic))
+    if (events.some((event) => event === undefined)) {
+      await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'topic_not_registered', rejected_topics: frame.topics })
+      return
+    }
+    const nowMs = Math.floor(this.options.clock())
+    const identity = { callerPeerId: remotePeerId, effectivePermissions: [] }
+    for (const event of events as PeerHostEventDescriptor[]) {
+      const decision = await this.options.authorizationStore.authorize({
+        remotePeerId,
+        methodId: event.topic,
+        requiredPermissions: event.requiredPermissions,
+        identity,
+        nowMs
+      })
+      if (!decision.allowed) {
+        await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: decision.reasonCode ?? 'not_authorized', rejected_topics: frame.topics })
+        return
+      }
+    }
     const abort = new AbortController()
-    const timer = setTimeout(() => abort.abort('ttl'), Math.max(1, frame.ttl_seconds ?? 60) * 1000)
-    this.active.set(frame.id, { abort, cleanup: () => clearTimeout(timer) })
-    await this.requireSender().sendFrame({
+    const timer = setTimeout(() => this.handleCancel(frame.id), Math.max(1, frame.ttl_seconds ?? 60) * 1000)
+    const handles: Array<{ close(reason?: string): void | Promise<void> }> = []
+    const active: ActiveWork = {
+      abort,
+      kind: 'subscription',
+      settled: false,
+      cleanup: () => {
+        clearTimeout(timer)
+        for (const handle of handles) void handle.close('subscription_closed')
+      }
+    }
+    try {
+      for (const event of events as PeerHostEventDescriptor[]) {
+        const ttlSeconds = frame.ttl_seconds ?? 60
+        if (event.maxTtlSeconds !== undefined && ttlSeconds > event.maxTtlSeconds) {
+          await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'ttl_too_large', rejected_topics: frame.topics })
+          return
+        }
+        const handle = await this.options.registry.openSubscription(event, {
+          id: frame.id,
+          remotePeerId,
+          topics: frame.topics,
+          correlationIds: frame.correlation_ids ?? [],
+          ttlSeconds,
+          signal: abort.signal,
+          receivedAtMs: nowMs
+        })
+        if (handle) handles.push(handle)
+      }
+    } catch {
+      for (const handle of handles) void handle.close('subscription_rejected')
+      await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'handler_failed', rejected_topics: frame.topics })
+      return
+    }
+    this.active.set(frame.id, active)
+    await sender.sendFrame({
       type: 'subscribed',
       id: frame.id,
       subscription_id: frame.id,
@@ -197,8 +296,7 @@ export class WebRtcPeerHost {
     const active = this.active.get(id)
     if (!active) return
     active.abort.abort('remote_cancelled')
-    active.cleanup()
-    this.active.delete(id)
+    this.finishActive(id, active)
   }
 
   handleDisconnect(reason = 'disconnect'): void {
@@ -213,22 +311,30 @@ export class WebRtcPeerHost {
   private async handleStreamCall(method: PeerHostMethodDescriptor, frame: CallFrame, remotePeerId: string, identity: PeerHostIdentity, nowMs: number, deadlineAtMs: number): Promise<void> {
     const sender = this.requireSender()
     const abort = new AbortController()
-    const timer = setTimeout(() => abort.abort('deadline'), Math.max(1, deadlineAtMs - nowMs))
-    this.active.set(frame.id, { abort, cleanup: () => clearTimeout(timer) })
+    const active: ActiveWork = {
+      abort,
+      kind: 'stream',
+      settled: false,
+      cleanup: () => clearTimeout(timer)
+    }
+    const timer = setTimeout(() => {
+      void this.timeoutWork(frame.id, active)
+    }, Math.max(1, deadlineAtMs - nowMs))
+    this.active.set(frame.id, active)
     try {
       const context = this.callContext(frame, method, remotePeerId, identity, abort.signal, nowMs, deadlineAtMs)
       const stream = await this.options.registry.openStream(method, frame.params ?? {}, context)
       for await (const chunk of stream) {
-        if (abort.signal.aborted) break
-        await sender.sendFrame({ type: 'chunk', id: frame.id, data: chunk })
+        if (abort.signal.aborted || active.settled) break
+        const parsed = this.options.registry.parseOutput(method, chunk)
+        if (this.active.get(frame.id) !== active || active.settled) break
+        await sender.sendFrame({ type: 'chunk', id: frame.id, data: parsed })
       }
-      await sender.sendFrame({ type: 'eof', id: frame.id, cancelled: abort.signal.aborted })
+      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'eof', id: frame.id, cancelled: abort.signal.aborted })
     } catch (error) {
-      await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error) })
+      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
     } finally {
-      const active = this.active.get(frame.id)
-      active?.cleanup()
-      this.active.delete(frame.id)
+      this.finishActive(frame.id, active)
     }
   }
 
@@ -247,9 +353,27 @@ export class WebRtcPeerHost {
   private cancelAll(reason: string): void {
     for (const [id, active] of this.active) {
       active.abort.abort(reason)
-      active.cleanup()
-      this.active.delete(id)
+      this.finishActive(id, active)
     }
+  }
+
+  private async timeoutWork(id: string, active: ActiveWork): Promise<void> {
+    if (!this.finishActive(id, active)) return
+    active.abort.abort('deadline')
+    await this.requireSender().sendFrame({
+      type: 'error',
+      id,
+      correlation_id: id,
+      error: { code: 504, message: 'request timed out', reason_code: 'request_timeout', error_ref: TIMEOUT_ERROR_REF }
+    })
+  }
+
+  private finishActive(id: string, active: ActiveWork): boolean {
+    if (active.settled || this.active.get(id) !== active) return false
+    active.settled = true
+    active.cleanup()
+    this.active.delete(id)
+    return true
   }
 
   private requireSender(): PeerHostFrameSender {
@@ -269,7 +393,7 @@ function parseIdentity(value: unknown, fallbackPeerId: string): PeerHostIdentity
   }
 }
 
-function redactError(error: unknown): PeerHostErrorBody {
+function redactError(error: unknown, randomId: () => string): PeerHostErrorBody {
   if (error instanceof AuroraValidationError) {
     return {
       code: 400,
@@ -283,8 +407,12 @@ function redactError(error: unknown): PeerHostErrorBody {
   if (error instanceof Error && error.name === 'AbortError') {
     return { code: 499, message: 'request cancelled', reason_code: 'request_cancelled' }
   }
-  const message = error instanceof Error ? error.message : 'handler failed'
-  return { code: 500, message: message.slice(0, MAX_ERROR_MESSAGE), reason_code: 'handler_failed' }
+  return {
+    code: 500,
+    message: 'handler failed',
+    reason_code: 'handler_failed',
+    error_ref: String(randomId()).slice(0, 64)
+  }
 }
 
 function errorFrame(id: string, code: number, message: string, reasonCode: string): Record<string, unknown> {

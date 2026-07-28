@@ -75,12 +75,20 @@ export interface ProviderLeaseFrame {
   available?: boolean
   reason_code?: string
 }
+export interface ManifestAckFrame {
+  type: 'manifest_ack'
+  connection_epoch: string
+  manifest_revision: string
+  manifest_digest: string
+  compatible_services: string[]
+  incompatible_services?: string[]
+}
 
 export type AuroraRpcFrame = CallFrame | ResultFrame | ErrorFrame | ChunkFrame | EofFrame | CancelFrame | EventFrame
 export type AuroraSubscriptionFrame = SubscribeFrame | SubscribedFrame | SubscribeRejectedFrame | UnsubscribeFrame | UnsubscribedFrame
 export type AuroraSignalingFrame = OfferFrame | AnswerFrame | CandidateFrame | PresenceFrame
 export type AuroraPairingFrame = PairingCommitFrame | PairingRevealFrame | PairingTerminalFrame
-export type AuroraAuthFrame = MeshAuthChallengeFrame | MeshAuthProofFrame | ProviderLeaseFrame
+export type AuroraAuthFrame = MeshAuthChallengeFrame | MeshAuthProofFrame | ProviderLeaseFrame | ManifestAckFrame
 export type AuroraProtocolFrame = AuroraRpcFrame | AuroraSubscriptionFrame | AuroraSignalingFrame | AuroraPairingFrame | AuroraAuthFrame | ProtocolHello | FragmentFrame | Record<string, unknown>
 
 export class WebRtcProtocolParseError extends Error {
@@ -158,6 +166,7 @@ export function parseWebRtcFrame(frame: unknown, limits: Partial<ParserLimits> =
     case 'pairing_v2_terminal': return parsePairingTerminal(object)
     case 'mesh_auth_challenge_v1': return parseMeshAuthChallenge(object)
     case 'mesh_auth_proof_v1': return parseMeshAuthProof(object)
+    case 'manifest_ack': return parseManifestAck(object, merged)
     case 'provider_lease':
     case 'provider_unavailable': return parseProviderLease(object, type)
     case PROTOCOL_HELLO_TYPE: return parseProtocolHello(object)
@@ -366,6 +375,17 @@ function parseProviderLease(object: Record<string, unknown>, type: 'provider_lea
   return frame
 }
 
+function parseManifestAck(object: Record<string, unknown>, limits: ParserLimits): ManifestAckFrame {
+  return {
+    type: 'manifest_ack',
+    connection_epoch: requireId(object.connection_epoch) as string,
+    manifest_revision: requireString(object.manifest_revision, 'manifest_revision', ID_MAX),
+    manifest_digest: requireHex64(object.manifest_digest, 'manifest_digest'),
+    compatible_services: requireStringArray(object.compatible_services, 'compatible_services', limits.maxTopics, limits.maxTopicLength),
+    ...(object.incompatible_services !== undefined ? { incompatible_services: requireStringArray(object.incompatible_services, 'incompatible_services', limits.maxTopics, limits.maxTopicLength) } : {})
+  }
+}
+
 function parseFragmentMetadata(object: Record<string, unknown>): FragmentFrame {
   return {
     type: FRAGMENT_FRAME_TYPE,
@@ -515,5 +535,5 @@ function requireExactVersion2(value: unknown): void {
 }
 
 function isKnownControlType(type: string): boolean {
-  return ['auth', 'reauth', 'manifest', 'manifest_request', 'manifest_ack', 'ping', 'pong', 'mesh_event'].includes(type)
+  return ['auth', 'reauth', 'manifest', 'manifest_request', 'ping', 'pong', 'mesh_event'].includes(type)
 }

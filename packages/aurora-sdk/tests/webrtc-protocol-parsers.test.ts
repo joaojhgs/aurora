@@ -174,6 +174,32 @@ describe('WebRTC actual-G002 protocol parsers', () => {
     expect(buildUnsubscribeFrame('s1')).toEqual({ type: 'unsubscribe', id: 's1' })
     expect(() => buildSubscribeFrame({ id: 's1', topics: ['Tooling.*'] })).toThrow(/exact typed topic/)
   })
+
+  it('parses provider lease and manifest ACK evidence with bounded fields', () => {
+    const ack = {
+      type: 'manifest_ack',
+      connection_epoch: 'epoch-1',
+      manifest_revision: '3',
+      manifest_digest: 'a'.repeat(64),
+      compatible_services: ['Tooling'],
+      incompatible_services: []
+    }
+    expect(parseWebRtcFrame(ack)).toEqual(ack)
+    expect(() => parseWebRtcFrame({ type: 'manifest_ack', compatible_services: ['Tooling'] })).toThrow(/connection_epoch|id/i)
+    expect(() => parseWebRtcFrame({ ...ack, manifest_digest: 'not-a-digest' })).toThrow(/manifest_digest/)
+
+    const lease = {
+      type: 'provider_lease',
+      peer_id: 'peer-a',
+      connection_epoch: 'epoch-1',
+      availability_revision: 1,
+      issued_at_ms: 1000,
+      expires_at_ms: 61_000,
+      available: true
+    }
+    expect(parseWebRtcFrame(lease)).toEqual(lease)
+    expect(() => parseWebRtcFrame({ ...lease, expires_at_ms: 999 })).toThrow(/expires/)
+  })
 })
 
 describe('WebRTC peer protocol helpers', () => {

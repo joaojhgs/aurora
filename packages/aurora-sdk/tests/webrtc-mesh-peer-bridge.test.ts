@@ -69,6 +69,18 @@ function localGrant(): LocalPeerGrantV1 {
   }
 }
 
+function ackFromSentManifest(session: FakeSession): Record<string, unknown> {
+  const manifest = session.sent.find((frame) => (frame as any).type === 'manifest') as Record<string, unknown> | undefined
+  if (!manifest) throw new Error('manifest not sent')
+  return {
+    type: 'manifest_ack',
+    connection_epoch: manifest.connection_epoch,
+    manifest_revision: manifest.manifest_revision,
+    manifest_digest: manifest.manifest_digest,
+    compatible_services: manifest.required_services
+  }
+}
+
 describe('WebRtcMeshPeerBridge', () => {
   it('sends exact call frames and resolves result/errors while ignoring unknown duplicates', async () => {
     const session = new FakeSession()
@@ -304,13 +316,113 @@ describe('WebRtcMeshPeerBridge', () => {
       localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] })
     })
     session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
-    session.emit({ type: 'manifest_ack', compatible_services: ['Tooling'] })
+    await flush()
+    session.emit(ackFromSentManifest(session))
     session.emit({ type: 'call', id: 'host-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
     await flush()
     await flush()
     expect(handler).toHaveBeenCalledTimes(1)
     expect(session.sent.at(-1)).toEqual({ type: 'result', id: 'host-call', result: { count: 0, tools: [] } })
     bridge.close()
+  })
+
+  it('rejects forged or stale manifest ACKs and does not send lease-bearing manifests to older peers', async () => {
+    const handler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: handler,
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: (() => { let i = 0; return () => `epoch-${++i}` })()
+    })
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    const ack = ackFromSentManifest(session)
+    session.emit({ ...ack, manifest_digest: '1'.repeat(64) })
+    session.emit({ type: 'call', id: 'forged-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
+    await flush()
+    expect(handler).not.toHaveBeenCalled()
+    expect(session.sent.at(-1)).toMatchObject({ type: 'error', id: 'forged-call', error: { code: 425 } })
+    session.emit(ack)
+    session.emit({ type: 'call', id: 'valid-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
+    await flush(); await flush()
+    expect(handler).toHaveBeenCalledTimes(1)
+    bridge.close()
+
+    const oldSession = new FakeSession()
+    const oldHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: handler,
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: () => 'epoch-old'
+    })
+    new WebRtcMeshPeerBridge({
+      session: oldSession,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost: oldHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    oldSession.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1] }))
+    oldSession.emit({ type: 'manifest_request' })
+    oldHost.resume()
+    oldHost.renewLease()
+    await flush()
+    expect(oldSession.sent.some((frame) => ['manifest', 'provider_lease', 'provider_unavailable'].includes((frame as any).type))).toBe(false)
+  })
+
+  it('expires consumer provider leases by TTL, re-arms renewal, and tombstones manifest routes', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1000)
+      const session = new FakeSession()
+      const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'manifest-lease' })
+      session.emit(hello())
+      const manifestPromise = bridge.getManifest('peer-a')
+      await flush()
+      session.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
+      await expect(manifestPromise).resolves.toMatchObject({ peerId: 'peer-a' })
+      session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 1, issued_at_ms: 1000, expires_at_ms: 61_000, available: true })
+      vi.advanceTimersByTime(20_000)
+      session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 2, issued_at_ms: 21_000, expires_at_ms: 81_000, available: true })
+      vi.advanceTimersByTime(59_999)
+      await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({ peerId: 'peer-a' })
+      vi.advanceTimersByTime(1)
+      await expect(bridge.getManifest('peer-a')).resolves.toBeNull()
+
+      const tombstoneSession = new FakeSession()
+      const tombstoneBridge = new WebRtcMeshPeerBridge({ session: tombstoneSession, remotePeerId: 'peer-a', randomId: () => 'manifest-tombstone' })
+      tombstoneSession.emit(hello())
+      const manifestAgain = tombstoneBridge.getManifest('peer-a')
+      await flush()
+      tombstoneSession.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
+      await expect(manifestAgain).resolves.toMatchObject({ peerId: 'peer-a' })
+      tombstoneSession.emit({ type: 'provider_unavailable', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 3, issued_at_ms: 81_000, expires_at_ms: 81_000, available: false })
+      await expect(tombstoneBridge.getManifest('peer-a')).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('enforces stable identity, abort cancellation, and negotiated fragmentation only', async () => {

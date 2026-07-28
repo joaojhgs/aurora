@@ -32,10 +32,15 @@ export interface PeerHostSubscribeContext {
   readonly receivedAtMs: number
 }
 
+export interface PeerHostSubscriptionHandle {
+  close(reason?: string): void | Promise<void>
+}
+
 export interface PeerHostErrorBody {
   readonly code: number
   readonly message: string
   readonly reason_code: string
+  readonly error_ref?: string
   readonly schema_id?: string
   readonly boundary?: string
   readonly issues?: readonly { path: string; code: string; message: string }[]
@@ -53,6 +58,15 @@ export interface PeerHostMethodDescriptor<TInput = unknown, TOutput = unknown> {
   readonly timeoutMs?: number
   readonly handler: (input: TInput, context: PeerHostCallContext) => Promise<TOutput> | TOutput
   readonly streamHandler?: (input: TInput, context: PeerHostCallContext) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>
+}
+
+export interface PeerHostEventDescriptor<TEvent = unknown> {
+  readonly topic: string
+  readonly outputSchemaId: string
+  readonly outputSchema: z.ZodType<TEvent>
+  readonly requiredPermissions: readonly string[]
+  readonly maxTtlSeconds?: number
+  readonly handler: (context: PeerHostSubscribeContext) => Promise<PeerHostSubscriptionHandle | void> | PeerHostSubscriptionHandle | void
 }
 
 export interface PeerHostAuthorizeRequest {
@@ -116,7 +130,7 @@ export interface PeerHostManifest {
 }
 
 export interface ProviderLeaseRecord {
-  readonly type: 'provider_lease'
+  readonly type: 'provider_lease' | 'provider_unavailable'
   readonly peer_id: string
   readonly connection_epoch: string
   readonly availability_revision: number

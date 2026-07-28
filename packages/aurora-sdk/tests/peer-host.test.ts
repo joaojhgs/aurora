@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod/v4'
 
 import {
   PeerHostContractRegistry,
@@ -58,9 +59,20 @@ function host(handler: (input: unknown, context: PeerHostCallContext) => Promise
   })
   const sent: unknown[] = []
   peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
-  peerHost.startEpoch()
-  peerHost.markManifestAcknowledged()
+  const manifest = peerHost.startEpoch()
+  peerHost.markManifestAcknowledged(ackFromManifest(manifest))
   return { peerHost, sent, handler }
+}
+
+function ackFromManifest(manifest: Record<string, unknown>, patch: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    type: 'manifest_ack',
+    connection_epoch: manifest.connection_epoch,
+    manifest_revision: manifest.manifest_revision,
+    manifest_digest: manifest.manifest_digest,
+    compatible_services: manifest.required_services,
+    ...patch
+  }
 }
 
 describe('WebRtcPeerHost', () => {
@@ -80,6 +92,37 @@ describe('WebRtcPeerHost', () => {
 
     expect(handler).toHaveBeenCalledTimes(1)
     expect(sent.at(-1)).toEqual({ type: 'result', id: 'call-1', result: { count: 0, tools: [] } })
+  })
+
+  it('does not open handlers for bare, forged, stale, or incompatible manifest ACKs', async () => {
+    const handler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const registry = createToolingPeerHostRegistry({
+      getTools: handler,
+      getExportCatalog: async () => { throw new Error('not implemented') },
+      prepareExecution: async () => { throw new Error('not implemented') },
+      executeTool: async () => { throw new Error('not implemented') }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] })]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const first = peerHost.startEpoch()
+    expect(peerHost.markManifestAcknowledged({ type: 'manifest_ack' })).toBe(false)
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(first, { connection_epoch: 'wrong' }))).toBe(false)
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(first, { manifest_digest: '1'.repeat(64) }))).toBe(false)
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(first, { compatible_services: [] }))).toBe(false)
+    await peerHost.handleCall({ type: 'call', id: 'not-ready', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
+    expect(handler).not.toHaveBeenCalled()
+    expect(sent.at(-1)).toMatchObject({ type: 'error', id: 'not-ready', error: { code: 425 } })
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(first))).toBe(true)
+    await peerHost.handleCall({ type: 'call', id: 'ready', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
+    expect(handler).toHaveBeenCalledTimes(1)
   })
 
   it('never dispatches malformed, oversized, unauthorized, expired, or revoked calls', async () => {
@@ -155,6 +198,12 @@ describe('WebRtcPeerHost', () => {
       requiredPermissions: ['Tooling.GetTools'],
       handler: async () => ({ count: 0, tools: [] }),
       streamHandler: stream
+    }).registerEvent({
+      topic: 'Tooling.ProjectionInvalidated',
+      outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+      outputSchema: z.object({ provider_peer_id: z.string() }),
+      requiredPermissions: [],
+      handler: () => ({ close: vi.fn() })
     })
     registry.parseInput = (_method, value) => value
     registry.parseOutput = (_method, value) => value
@@ -162,14 +211,14 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([grant()]),
+      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] })]),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
     const sent: unknown[] = []
     peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
-    peerHost.startEpoch()
-    peerHost.markManifestAcknowledged()
+    const manifest = peerHost.startEpoch()
+    peerHost.markManifestAcknowledged(ackFromManifest(manifest))
 
     void peerHost.handleCall({ type: 'call', id: 'stream-1', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
     await Promise.resolve()
@@ -182,5 +231,118 @@ describe('WebRtcPeerHost', () => {
     expect(peerHost.getActiveWorkCount()).toBe(1)
     peerHost.handleDisconnect('lost')
     expect(peerHost.getActiveWorkCount()).toBe(0)
+  })
+
+  it('authorizes registered subscriptions before activation and rejects hostile subscription attempts', async () => {
+    const opened = vi.fn(() => ({ close: vi.fn() }))
+    const registry = new PeerHostContractRegistry().registerEvent({
+      topic: 'Tooling.ProjectionInvalidated',
+      outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+      outputSchema: z.object({ provider_peer_id: z.string() }),
+      requiredPermissions: ['Tooling.SubscribeProjection'],
+      handler: opened
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'] })]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const manifest = peerHost.startEpoch()
+    peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+
+    await peerHost.handleSubscribe({ type: 'subscribe', id: 'unknown', topics: ['Unknown.Topic'], correlation_ids: [], ttl_seconds: 60 }, 'peer-a')
+    await peerHost.handleSubscribe({ type: 'subscribe', id: 'unauthorized', topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 60 }, 'peer-a')
+    expect(opened).not.toHaveBeenCalled()
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+    expect(sent).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'subscribe_rejected', id: 'unknown', reason: 'topic_not_registered' }),
+      expect.objectContaining({ type: 'subscribe_rejected', id: 'unauthorized', reason: 'missing_required_permission' })
+    ]))
+
+    for (const [id, store, reason] of [
+      ['expired-sub', new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'], expiresAtMs: 500 })]), 'grant_expired'],
+      ['revoked-sub', new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'], revokedAtMs: 500 })]), 'grant_revoked'],
+    ] as const) {
+      const blocked = new WebRtcPeerHost({
+        localPeerId: 'local-peer',
+        nodeName: 'Local',
+        registry: new PeerHostContractRegistry().registerEvent({
+          topic: 'Tooling.ProjectionInvalidated',
+          outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+          outputSchema: z.object({ provider_peer_id: z.string() }),
+          requiredPermissions: [],
+          handler: opened
+        }),
+        authorizationStore: store,
+        clock: () => 1000,
+        randomId: () => 'epoch-1'
+      })
+      const blockedSent: unknown[] = []
+      blocked.attach({ sendFrame: async (frame) => { blockedSent.push(frame) } })
+      const blockedManifest = blocked.startEpoch()
+      blocked.markManifestAcknowledged(ackFromManifest(blockedManifest))
+      await blocked.handleSubscribe({ type: 'subscribe', id, topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 60 }, 'peer-a')
+      expect(blocked.getActiveWorkCount()).toBe(0)
+      expect(blockedSent.at(-1)).toMatchObject({ type: 'subscribe_rejected', id, reason })
+    }
+
+    const allowed = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: new PeerHostContractRegistry().registerEvent({
+        topic: 'Tooling.ProjectionInvalidated',
+        outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+        outputSchema: z.object({ provider_peer_id: z.string() }),
+        requiredPermissions: [],
+        handler: opened
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'] })]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const allowedSent: unknown[] = []
+    allowed.attach({ sendFrame: async (frame) => { allowedSent.push(frame) } })
+    const allowedManifest = allowed.startEpoch()
+    allowed.markManifestAcknowledged(ackFromManifest(allowedManifest))
+    await allowed.handleSubscribe({ type: 'subscribe', id: 'sub-ok', topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 60 }, 'peer-a')
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(allowed.getActiveWorkCount()).toBe(1)
+    expect(allowedSent.at(-1)).toMatchObject({ type: 'subscribed', id: 'sub-ok' })
+  })
+
+  it('races non-cooperative handlers, sends one timeout, ignores late success, and hides raw errors', async () => {
+    vi.useFakeTimers()
+    try {
+      let release!: () => void
+      const handler = vi.fn(async () => {
+        await new Promise<void>((resolve) => { release = resolve })
+        return { count: 0, tools: [] }
+      })
+      const { peerHost, sent } = host(handler)
+      const pending = peerHost.handleCall({ type: 'call', id: 'slow', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
+      await Promise.resolve()
+      await Promise.resolve()
+      vi.advanceTimersByTime(30_001)
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(sent.filter((frame) => (frame as any).type === 'error' && (frame as any).id === 'slow')).toHaveLength(1)
+      expect(sent.at(-1)).toMatchObject({ type: 'error', id: 'slow', error: { code: 504, message: 'request timed out', reason_code: 'request_timeout' } })
+      expect(peerHost.getActiveWorkCount()).toBe(0)
+      release()
+      await pending
+      expect(sent.filter((frame) => (frame as any).id === 'slow')).toHaveLength(1)
+
+      const boom = host(vi.fn(async () => { throw new Error('secret stack token') }))
+      await boom.peerHost.handleCall({ type: 'call', id: 'boom', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a')
+      expect(JSON.stringify(boom.sent.at(-1))).not.toContain('secret stack token')
+      expect(boom.sent.at(-1)).toMatchObject({ type: 'error', id: 'boom', error: { code: 500, message: 'handler failed', reason_code: 'handler_failed' } })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

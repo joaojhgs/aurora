@@ -118,6 +118,7 @@ export type {
   PairingTerminalFrame,
   ParserLimits,
   PresenceFrame,
+  ManifestAckFrame,
   ProviderLeaseFrame,
   ResultFrame,
   RpcFrameType,
