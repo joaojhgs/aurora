@@ -23,6 +23,7 @@ import {
   type WebThinRoomSecret,
 } from '../src/index'
 import { LocalNodeLifecycleController } from '../src/local-node-lifecycle'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 const roots: Root[] = []
 const createClient = (transport: AuroraTransport) => new AuroraClient({ transport })
@@ -219,7 +220,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(runtime.peer.snapshot()).toMatchObject({
       status: 'disabled',
       hasHttpFallback: true,
-      diagnostic: expect.stringMatching(/rollout flag/i),
+      diagnostic: 'This device cannot use an invite right now.',
     })
     expect(credentialStore.loadConnectionProfile).not.toHaveBeenCalled()
     expect(credentialStore.saveConnectionProfile).not.toHaveBeenCalled()
@@ -242,10 +243,10 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(runtime.peer.snapshot()).toMatchObject({
       status: 'disabled',
       hasHttpFallback: false,
-      diagnostic: expect.stringMatching(/rollout flag/i),
+      diagnostic: 'This device cannot use an invite right now.',
     })
-    await expect(runtime.peer.connect()).rejects.toThrow(/rollout flag/i)
-    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/rollout flag/i)
+    await expect(runtime.peer.connect()).rejects.toThrow('This device cannot use an invite right now.')
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow('This device cannot use an invite right now.')
     await runtime.close()
   })
 
@@ -324,7 +325,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     const snapshot = runtime.peer.snapshot()
     expect(snapshot.status).toBe('needs-secure-context')
     expect(snapshot.hasHttpFallback).toBe(false)
-    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/secure|unavailable/i)
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/secure page|Aurora device/i)
   })
 
   it('surfaces missing RTCPeerConnection during connect without using HTTP in WebRTC-only mode', async () => {
@@ -359,7 +360,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       windowLocation: { protocol: 'https:', hostname: 'app.example' },
     })
 
-    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/WebRTC mesh transport is not connected|fallback is disabled/i)
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow('Could not connect to this Aurora device')
     expect(fetchImpl).not.toHaveBeenCalled()
     expect(runtime.peer.snapshot().hasHttpFallback).toBe(true)
     await runtime.close()
@@ -379,7 +380,7 @@ describe('browser WebRTC thin-shell runtime', () => {
 
     expect(runtime.peer.snapshot().status).toBe('needs-secure-context')
     expect(runtime.peer.snapshot().hasHttpFallback).toBe(false)
-    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/secure|unavailable/i)
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(/secure page|Aurora device/i)
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
@@ -417,7 +418,9 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(peer.disconnectedReasons).toEqual([])
     expect(controller.snapshot().status).toBe('authorized')
     expect(controller.snapshot().visible).toBe(false)
-    expect(controller.snapshot().diagnostic).toMatch(/remains connected.*hidden/i)
+    expect(controller.snapshot().diagnostic).toBe(
+      'Connection continues while this page is in the background. Some updates may wait until you return.',
+    )
   })
 
   it('drives local provider leases from page lifecycle while blur does not withdraw', () => {
@@ -520,7 +523,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(JSON.stringify(evidence)).not.toMatch(/\b\d{1,3}(?:\.\d{1,3}){3}\b/)
   })
 
-  it('redacts secret-bearing runtime diagnostics', async () => {
+  it('uses fixed user copy for secret-bearing connection diagnostics', async () => {
     const runtime = createBrowserWebThinRuntime({
       createClient,
       createDemoClient,
@@ -534,8 +537,70 @@ describe('browser WebRTC thin-shell runtime', () => {
 
     await expect(runtime.peer.connect()).rejects.toThrow()
     const diagnostic = runtime.peer.snapshot().diagnostic ?? ''
+    expect(diagnostic).toBe('Could not connect to this Aurora device. Try again from Connection settings.')
     expect(diagnostic).not.toContain('secret-room-password')
     expect(diagnostic).not.toContain('abc123')
+    expectProductionCopyClean(diagnostic)
+  })
+
+  it('keeps hostile connection errors out of client-facing failures', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createClient,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      signalingFactory: () => {
+        throw new Error('WebRTC runtime transport provider manifest protocol token=secret')
+      },
+      scryptDeriver: async () => new Uint8Array(32).fill(7),
+      randomId: () => 'local-hostile',
+    })
+
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(
+      'Could not connect to this Aurora device. Try again from Connection settings.',
+    )
+    await expect(runtime.client.capabilities.listCatalog()).rejects.not.toThrow(
+      /WebRTC|runtime|transport|provider|manifest|protocol|token=secret/i,
+    )
+  })
+
+  it('maps hostile structured peer status into safe presentation copy', async () => {
+    const hostileDiagnostic = 'WebRTC runtime transport provider manifest protocol fallback token=secret'
+    const peer = new FakeBrowserPeer({
+      status: 'failed',
+      state: 'failed',
+      diagnostic: hostileDiagnostic,
+      lastRedactedError: {
+        code: 'transport_loss',
+        message: hostileDiagnostic,
+      },
+    } as Partial<BrowserWebRtcSnapshot>)
+    const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false })
+    const runtimeDiagnostic = controller.snapshot().diagnostic ?? ''
+
+    expect(runtimeDiagnostic).toBe('Could not connect to this Aurora device. Try again from Connection settings.')
+    expectProductionCopyClean(runtimeDiagnostic)
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="mesh"
+        />,
+      )
+    })
+
+    const rendered = container.textContent ?? ''
+    expect(rendered).toContain('Could not connect to this Aurora device')
+    expect(rendered).not.toContain(hostileDiagnostic)
+    expectProductionCopyClean(rendered)
   })
 
   it('renders invite diagnostics and SAS confirmation controls accessibly', async () => {
@@ -1030,6 +1095,13 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.textContent?.includes(text))
   if (!button) throw new Error(`button ${text} not found`)
   return button
+}
+
+function expectProductionCopyClean(value: string): void {
+  expect(findForbiddenProductionCopyTerms(value)).toEqual([])
+  expect(value).not.toMatch(
+    /\b(?:runtime|thin|WebRTC|transport|consumer|provider|manifest|protocol|HTTP|WSS?|signaling|datachannel|fallback)\b/i,
+  )
 }
 
 

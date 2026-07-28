@@ -1,6 +1,6 @@
 import {
+  AuroraClient,
   AuroraError,
-  type AuroraClient,
   type AuroraTransport,
   type HttpTransportOptions,
   type JsonObject,
@@ -118,6 +118,14 @@ type BrowserSnapshotListener = (snapshot: BrowserWebRtcSnapshot) => void
 type SelectedCandidatePairEvidence = Awaited<ReturnType<PeerConnectionController['getSelectedCandidatePairEvidence']>>
 
 const DEFAULT_MODE: AuroraThinConnectionMode = 'http-only'
+const CONNECTION_UNAVAILABLE_COPY = 'Could not connect to this Aurora device. Try again from Connection settings.'
+const INVITE_REQUIRED_COPY = 'Add a valid Aurora invite before connecting.'
+const SECURE_CONTEXT_REQUIRED_COPY = 'Open Aurora from a secure page, localhost, or the desktop app before joining.'
+const INVITE_UNAVAILABLE_COPY = 'This device cannot use an invite right now.'
+const INVITE_INCOMPLETE_COPY = 'This invite is incomplete. Create a new Aurora invite and try again.'
+const CLIENT_SETUP_INCOMPLETE_COPY = 'Aurora could not finish setup.'
+const REQUEST_TIMEOUT_COPY = 'Aurora request timed out. Try again.'
+const SAVED_ADDRESS_CONNECTED_COPY = 'Connected with the saved address.'
 
 /** A saved thin profile keeps WebRTC enabled even while its peer is offline. */
 export function isBrowserWebRtcConfigured(
@@ -157,7 +165,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   if (webrtcDisabled) {
     const disabled = new AuroraError({
       code: 'unsupported_feature',
-      message: 'WebRTC thin-client sessions are disabled by the webrtc_thin_client rollout flag.',
+      message: INVITE_UNAVAILABLE_COPY,
     })
     const rollbackRuntime = rollbackHttp
       ? createBrowserWebRtcAuroraRuntime<AuroraClient>({
@@ -191,7 +199,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   const activeProfile = config.profile ?? parsedInvite?.profile ?? credentialStore.loadConnectionProfile?.() ?? null
   if (parsedInvite) {
     if (credentialStore.setRoomSecret) credentialStore.setRoomSecret(parsedInvite.profile.roomSecretRef, parsedInvite.roomSecret)
-    else if (!credentialStore.getRoomSecret) throw new AuroraError({ code: 'validation', message: 'WebRTC invite requires a room-secret capable credential store.' })
+    else if (!credentialStore.getRoomSecret) throw new AuroraError({ code: 'validation', message: INVITE_INCOMPLETE_COPY })
     credentialStore.saveConnectionProfile?.(parsedInvite.profile)
   }
   const localStablePeerId = config.localStablePeerId ?? credentialStore.getOrCreateLocalStablePeerId?.()
@@ -270,7 +278,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     : null
   lifecycle?.start()
   return {
-    client: sdkRuntime.client,
+    client: clientFromRuntimeTransport(config, new ProductSafeTransport(sdkRuntime.client.transport)),
     peer,
     surface,
     mode,
@@ -414,7 +422,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   importInvite(inviteText: string): WebRtcPeerConnectionProfile {
     if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
     const parsed = parseWebRtcInvite(inviteText, this.config)
-    if (!parsed) throw new AuroraError({ code: 'validation', message: 'Paste a valid Aurora mesh invite before connecting WebRTC thin mode.' })
+    if (!parsed) throw new AuroraError({ code: 'validation', message: INVITE_REQUIRED_COPY })
     if (this.credentialStore?.setRoomSecret) this.credentialStore.setRoomSecret(parsed.profile.roomSecretRef, parsed.roomSecret)
     this.credentialStore?.saveConnectionProfile?.(parsed.profile)
     return parsed.profile
@@ -422,7 +430,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
 
   async connect(profile?: WebRtcPeerConnectionProfile): Promise<void> {
     if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
-    if (!this.peer) throw new AuroraError({ code: 'unavailable_service', message: diagnosticFromError(this.creationError) ?? 'WebRTC runtime is unavailable.' })
+    if (!this.peer) throw new AuroraError({ code: 'unavailable_service', message: productDiagnosticFromError(this.creationError) ?? CONNECTION_UNAVAILABLE_COPY })
     this.fallbackReason = undefined
     this.connectionDiagnostic = undefined
     this.attemptedConnect = true
@@ -431,7 +439,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     try {
       await this.peer.connect(profile as WebRtcPeerConnectionProfile)
     } catch (error) {
-      this.connectionDiagnostic = diagnosticFromError(error) ?? 'WebRTC connection failed.'
+      this.connectionDiagnostic = productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY
       this.emit()
       throw error
     }
@@ -445,7 +453,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   }
 
   async confirmPairing(sessionId: string): Promise<void> {
-    if (!this.peer) throw new AuroraError({ code: 'unavailable_service', message: 'No WebRTC peer is available.' })
+    if (!this.peer) throw new AuroraError({ code: 'unavailable_service', message: CONNECTION_UNAVAILABLE_COPY })
     await this.peer.confirmPairing(sessionId)
   }
 
@@ -473,7 +481,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   }
 
   markFallback(reason: string): void {
-    this.fallbackReason = reason
+    this.fallbackReason = reason ? SAVED_ADDRESS_CONNECTED_COPY : undefined
     this.emit()
   }
 
@@ -484,9 +492,9 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       const hidden = doc?.visibilityState === 'hidden'
       const blurred = typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus()
       this.visibilityDiagnostic = hidden
-        ? 'WebRTC remains connected while the thin shell is hidden; browser throttling may delay signaling or media callbacks. Focused microphone capture is released separately.'
+        ? 'Connection continues while this page is in the background. Some updates may wait until you return.'
         : blurred
-          ? 'WebRTC remains connected while the thin shell is unfocused. Focused microphone capture is released separately.'
+          ? 'Connection continues while this page is not active. Some updates may wait until you return.'
           : undefined
       this.emit()
     }
@@ -539,19 +547,57 @@ class FailingTransport {
     throw this.toError()
   }
   private toError(): AuroraError {
-    if (this.error instanceof AuroraError) return new AuroraError({ ...this.error, message: diagnosticFromError(this.error) ?? 'WebRTC runtime is unavailable.' })
-    return new AuroraError({ code: 'unavailable_service', message: `${this.mode} runtime is unavailable: ${diagnosticFromError(this.error) ?? 'unknown error'}` })
+    if (this.error instanceof AuroraError) {
+      return new AuroraError({ ...this.error, message: productDiagnosticFromError(this.error) ?? CONNECTION_UNAVAILABLE_COPY })
+    }
+    return new AuroraError({ code: 'unavailable_service', message: productDiagnosticFromError(this.error) ?? CONNECTION_UNAVAILABLE_COPY })
+  }
+}
+
+class ProductSafeTransport implements AuroraTransport {
+  readonly kind: AuroraTransport['kind']
+
+  constructor(private readonly source: AuroraTransport) {
+    this.kind = source.kind
+  }
+
+  async request<TData = unknown, TPayload = unknown>(
+    request: Parameters<AuroraTransport['request']>[0],
+  ) {
+    try {
+      return await this.source.request<TData, TPayload>(request as never)
+    } catch (error) {
+      throw productSafeAuroraError(error)
+    }
+  }
+
+  subscribe<TEventPayload = unknown, TPayload = unknown>(request: unknown): unknown {
+    const source = this.source as AuroraTransport & {
+      subscribe?: <TNextEventPayload = TEventPayload, TNextPayload = TPayload>(request: unknown) => unknown
+    }
+    if (!source.subscribe) {
+      throw new AuroraError({ code: 'unsupported_feature', message: CONNECTION_UNAVAILABLE_COPY })
+    }
+    try {
+      return source.subscribe<TEventPayload, TPayload>(request)
+    } catch (error) {
+      throw productSafeAuroraError(error)
+    }
   }
 }
 
 function demoClientFromFactory(config: BrowserThinRuntimeConfig): AuroraClient {
   if (config.createDemoClient) return config.createDemoClient()
-  throw new AuroraError({ code: 'validation', message: 'Browser thin runtime demo mode requires an app-provided demo client factory.' })
+  throw new AuroraError({ code: 'validation', message: CLIENT_SETUP_INCOMPLETE_COPY })
 }
 
 function clientFromFactory(config: BrowserThinRuntimeConfig, transport: AuroraTransport): AuroraClient {
   if (config.createClient) return config.createClient(transport)
-  throw new AuroraError({ code: 'validation', message: 'Browser thin runtime requires an app-provided client factory for this transport path.' })
+  throw new AuroraError({ code: 'validation', message: CLIENT_SETUP_INCOMPLETE_COPY })
+}
+
+function clientFromRuntimeTransport(config: BrowserThinRuntimeConfig, transport: AuroraTransport): AuroraClient {
+  return config.createClient ? config.createClient(transport) : new AuroraClient({ transport })
 }
 
 function httpOptionsFromConfig(config: BrowserThinRuntimeConfig): HttpTransportOptions | null {
@@ -728,12 +774,45 @@ function emptySelectedCandidatePairEvidence(): SelectedCandidatePairEvidence {
 }
 
 function diagnosticFromSnapshot(snapshot: PeerConnectionSnapshot | null): string | undefined {
-  return redactThinDiagnostic(snapshot?.lastRedactedError?.message)
+  const diagnostic = `${snapshot?.lastRedactedError?.code ?? ''} ${snapshot?.lastRedactedError?.message ?? ''}`.trim()
+  if (isExpectedOfflineDiagnostic(diagnostic)) return undefined
+  return productDiagnosticFromValue(diagnostic)
 }
 
 function diagnosticFromError(error: unknown): string | undefined {
   if (!error) return undefined
   return redactThinDiagnostic(error instanceof Error ? error.message : String(error))
+}
+
+function productDiagnosticFromError(error: unknown): string | undefined {
+  return productDiagnosticFromValue(diagnosticFromError(error))
+}
+
+function productDiagnosticFromValue(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  if (value.includes(INVITE_UNAVAILABLE_COPY)) return INVITE_UNAVAILABLE_COPY
+  if (/timed?\s*out|timeout/iu.test(value)) return REQUEST_TIMEOUT_COPY
+  if (/secure|https|localhost/iu.test(value)) return SECURE_CONTEXT_REQUIRED_COPY
+  if (/invite|profile|room|pair/iu.test(value)) return INVITE_REQUIRED_COPY
+  return CONNECTION_UNAVAILABLE_COPY
+}
+
+function productSafeAuroraError(error: unknown): AuroraError {
+  if (error instanceof AuroraError) {
+    return new AuroraError({
+      ...error,
+      message: productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY,
+    })
+  }
+  return new AuroraError({
+    code: 'unavailable_service',
+    message: productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY,
+    cause: error,
+  })
+}
+
+function isExpectedOfflineDiagnostic(value: string): boolean {
+  return /mesh transport is not connected|transport datachannel not connected|preferred-mode fallback is unavailable/iu.test(value)
 }
 
 function redactThinDiagnostic(value: string | undefined): string | undefined {
