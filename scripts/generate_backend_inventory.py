@@ -69,10 +69,10 @@ DEFAULT_SDK_TOOLING_PROVIDER_OUTPUT = (
 )
 
 SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
-    "Tooling.ExecuteTool",
-    "Tooling.GetMCPStatus",
-    "Tooling.GetStats",
     "Tooling.GetTools",
+    "Tooling.GetExportCatalog",
+    "Tooling.PrepareExecution",
+    "Tooling.ExecuteTool",
 )
 TOOLING_PROVIDER_PEER_ID = "aurora-sdk-local-provider-v1"
 TOOLING_PROVIDER_SERVICE_INSTANCE_ID = f"local:{quote(TOOLING_PROVIDER_PEER_ID, safe='')}:Tooling"
@@ -464,20 +464,6 @@ def _model_wire_schema(model: Any, *, mode: str) -> dict[str, Any]:
 
 def _positive_fixture(model_name: str) -> Any | None:
     fixtures: dict[str, Any] = {
-        "ToolingGetStatsRequest": {},
-        "ToolingGetStatsResponse": {
-            "total_tools": 2,
-            "mcp_tools_loaded": 1,
-            "core_tools": 1,
-            "plugin_tools": 0,
-            "unexpected": "stripped",
-        },
-        "ToolingGetMCPStatusRequest": {},
-        "ToolingGetMCPStatusResponse": {
-            "servers": [{"name": "local", "active": True}],
-            "total_servers": 1,
-            "active_servers": 1,
-        },
         "ToolingExecuteToolRequest": {
             "tool_name": "echo",
             "arguments": {"message": "hello", "unicode": "snowman \u2603"},
@@ -498,21 +484,76 @@ def _positive_fixture(model_name: str) -> Any | None:
             "top_k": 1,
             "unexpected": "stripped",
         },
+        "ToolingGetToolsResponse": {
+            "tools": [],
+            "count": 0,
+            "unexpected": "stripped",
+        },
+        "ToolingGetExportCatalogRequest": {
+            "protocol_tier": "projection_v1",
+            "page_size": 1,
+            "last_projection_digest": "0" * 64,
+            "unexpected": "stripped",
+        },
+        "ToolingGetExportCatalogResponse": {
+            "ok": True,
+            "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
+            "service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
+            "authority_revision": {
+                "catalog_revision": 1,
+                "export_policy_revision": 1,
+                "auth_grant_revision": 1,
+                "manifest_revision": 1,
+                "switch_revision": 1,
+                "protocol_revision": 1,
+            },
+            "projection_revision": "projection-1",
+            "projection_digest": "1" * 64,
+            "page_index": 0,
+            "page_size": 1,
+            "page_hash": "2" * 64,
+            "tools": [],
+            "blocked_tools": [],
+            "retirements": [],
+            "complete": True,
+            "total_count": 0,
+            "final_checksum": "3" * 64,
+            "unexpected": "stripped",
+        },
+        "ToolingPrepareExecutionRequest": {
+            "tool_name": "echo",
+            "arguments": {"message": "hello"},
+            "dry_run": True,
+            "caller_peer_id": TOOLING_PROVIDER_PEER_ID,
+            "unexpected": "stripped",
+        },
+        "ToolingPrepareExecutionResponse": {
+            "ok": True,
+            "policy_decision": {
+                "allowed": True,
+                "share": True,
+                "approval_required": False,
+                "approval_mode": "approve_all_local_safe",
+                "decision_id": "decision-1",
+            },
+            "args_hash": "a" * 64,
+            "resource_selector_hash": "b" * 64,
+            "route_decision_id": "route-1",
+            "correlation_id": "corr-prepare-1",
+            "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
+            "provider_service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
+            "global_tool_id": f"aurora-tool:v1:{TOOLING_PROVIDER_SERVICE_INSTANCE_ID}:echo",
+            "local_tool_name": "echo",
+            "display_args_preview": {"message": "hello"},
+            "secrets_redacted": True,
+            "unexpected": "stripped",
+        },
     }
     return fixtures.get(model_name)
 
 
 def _negative_fixture(model_name: str) -> Any | None:
     fixtures: dict[str, Any] = {
-        "ToolingGetStatsResponse": {
-            "total_tools": "two",
-            "mcp_tools_loaded": 1,
-        },
-        "ToolingGetMCPStatusResponse": {
-            "servers": [],
-            "total_servers": "one",
-            "active_servers": 0,
-        },
         "ToolingExecuteToolRequest": {
             "tool_name": 12,
             "arguments": {},
@@ -522,6 +563,43 @@ def _negative_fixture(model_name: str) -> Any | None:
         },
         "ToolingGetToolsRequest": {
             "top_k": "one",
+        },
+        "ToolingGetToolsResponse": {
+            "count": "zero",
+            "tools": [],
+        },
+        "ToolingGetExportCatalogRequest": {
+            "protocol_tier": "projection_v1",
+            "page_size": 0,
+        },
+        "ToolingGetExportCatalogResponse": {
+            "ok": True,
+            "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
+            "service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
+            "authority_revision": {
+                "catalog_revision": 1,
+                "export_policy_revision": 1,
+                "auth_grant_revision": 1,
+                "manifest_revision": 1,
+                "switch_revision": 1,
+                "protocol_revision": 1,
+            },
+            "projection_revision": "projection-1",
+            "projection_digest": "ABC",
+            "page_index": 0,
+            "page_size": 1,
+            "page_hash": "2" * 64,
+            "complete": True,
+            "total_count": 0,
+            "final_checksum": "3" * 64,
+        },
+        "ToolingPrepareExecutionRequest": {
+            "tool_name": 12,
+            "arguments": {},
+        },
+        "ToolingPrepareExecutionResponse": {
+            "ok": True,
+            "args_hash": "a" * 64,
         },
     }
     return fixtures.get(model_name)
@@ -567,19 +645,25 @@ def build_sdk_contract_schema() -> dict[str, Any]:
     from app.shared.contracts.models.tooling import (
         ToolingExecuteToolRequest,
         ToolingExecuteToolResponse,
-        ToolingGetMCPStatusRequest,
-        ToolingGetMCPStatusResponse,
-        ToolingGetStatsRequest,
-        ToolingGetStatsResponse,
+        ToolingGetExportCatalogRequest,
+        ToolingGetExportCatalogResponse,
         ToolingGetToolsRequest,
         ToolingGetToolsResponse,
+        ToolingPrepareExecutionRequest,
+        ToolingPrepareExecutionResponse,
     )
 
     static_models = {
         "Tooling.ExecuteTool": (ToolingExecuteToolRequest, ToolingExecuteToolResponse),
-        "Tooling.GetMCPStatus": (ToolingGetMCPStatusRequest, ToolingGetMCPStatusResponse),
-        "Tooling.GetStats": (ToolingGetStatsRequest, ToolingGetStatsResponse),
+        "Tooling.GetExportCatalog": (
+            ToolingGetExportCatalogRequest,
+            ToolingGetExportCatalogResponse,
+        ),
         "Tooling.GetTools": (ToolingGetToolsRequest, ToolingGetToolsResponse),
+        "Tooling.PrepareExecution": (
+            ToolingPrepareExecutionRequest,
+            ToolingPrepareExecutionResponse,
+        ),
     }
     for method_id in SDK_CONTRACT_ALLOWLIST:
         contract = contracts.get(method_id)

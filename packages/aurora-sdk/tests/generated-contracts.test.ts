@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ToolingExecuteToolInputToolingExecuteToolRequestSchema,
-  ToolingGetStatsOutputToolingGetStatsResponseSchema
+  ToolingGetExportCatalogInputToolingGetExportCatalogRequestSchema,
+  ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema
 } from '../src/generated/index.js'
 
 const generatedRoot = resolve(process.cwd(), 'src/generated')
@@ -28,19 +29,28 @@ describe('generated backend contracts', () => {
       dry_run: true
     })
 
-    const stats = ToolingGetStatsOutputToolingGetStatsResponseSchema.parse({
-      total_tools: 2,
-      mcp_tools_loaded: 1,
-      core_tools: 1,
-      plugin_tools: 0,
+    const exportRequest = ToolingGetExportCatalogInputToolingGetExportCatalogRequestSchema.parse({
+      protocol_tier: 'projection_v1',
+      page_size: 1,
       unexpected: 'stripped'
     })
 
-    expect(stats).toEqual({
-      total_tools: 2,
-      mcp_tools_loaded: 1,
-      core_tools: 1,
-      plugin_tools: 0
+    expect(exportRequest).toEqual({
+      protocol_tier: 'projection_v1',
+      page_size: 1
+    })
+
+    const prepare = ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema.parse({
+      tool_name: 'echo',
+      arguments: { message: 'hello' },
+      dry_run: true,
+      unexpected: 'stripped'
+    })
+
+    expect(prepare).toEqual({
+      tool_name: 'echo',
+      arguments: { message: 'hello' },
+      dry_run: true
     })
   })
 
@@ -55,10 +65,10 @@ describe('generated backend contracts', () => {
 
   it('keeps manifest and local provider identities stable', () => {
     expect(contractSchema.allowlist).toEqual([
+      'Tooling.GetTools',
+      'Tooling.GetExportCatalog',
+      'Tooling.PrepareExecution',
       'Tooling.ExecuteTool',
-      'Tooling.GetMCPStatus',
-      'Tooling.GetStats',
-      'Tooling.GetTools'
     ])
     expect(manifest.generator_format_version).toBe('aurora-sdk-zod-codegen-v1')
     expect(providerInventory.provider_service_instance_id).toBe('local:aurora-sdk-local-provider-v1:Tooling')

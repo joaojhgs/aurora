@@ -103,20 +103,32 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert {item["method_id"] for item in provider["methods"]} == set(
         generate_backend_inventory.SDK_CONTRACT_ALLOWLIST
     )
+    assert schema["allowlist"] == [
+        "Tooling.GetTools",
+        "Tooling.GetExportCatalog",
+        "Tooling.PrepareExecution",
+        "Tooling.ExecuteTool",
+    ]
 
 
 def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
     schema = generate_backend_inventory.build_sdk_contract_schema()
     by_model = {item["model_name"]: item for item in schema["schemas"]}
 
-    stats_vector = by_model["ToolingGetStatsResponse"]["vectors"]["positive"]
-    assert stats_vector["normalized"] == {
-        "core_tools": 1,
-        "mcp_tools_loaded": 1,
-        "plugin_tools": 0,
-        "total_tools": 2,
-    }
+    export_vector = by_model["ToolingGetExportCatalogResponse"]["vectors"]["positive"]
+    assert export_vector["normalized"]["provider_peer_id"] == "aurora-sdk-local-provider-v1"
+    assert export_vector["normalized"]["service_instance_id"] == (
+        "local:aurora-sdk-local-provider-v1:Tooling"
+    )
+    assert "unexpected" not in export_vector["normalized"]
+
+    prepare_vector = by_model["ToolingPrepareExecutionResponse"]["vectors"]["positive"]
+    assert prepare_vector["normalized"]["policy_decision"]["decision_id"] == "decision-1"
+    assert prepare_vector["normalized"]["secrets_redacted"] is True
 
     execute_negative = by_model["ToolingExecuteToolRequest"]["vectors"]["negative"]
     assert execute_negative["accepted"] is False
     assert execute_negative["issue_path"] == "$.tool_name"
+
+    disallowed_methods = {"Tooling.GetStats", "Tooling.GetMCPStatus"}
+    assert disallowed_methods.isdisjoint({item["method_id"] for item in schema["schemas"]})

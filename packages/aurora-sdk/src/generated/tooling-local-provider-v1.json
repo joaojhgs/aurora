@@ -1,34 +1,7 @@
 {
   "artifact": "tooling_local_provider_v1",
-  "final_checksum": "49a1bcee53a12ac3936d14f3b7f45d3f6382ad955f6113c62debc3e8c6e2a7b6",
+  "final_checksum": "4c3ff199299d1aa40c9578daccdc7ff947e775451ff7f8ed387d228c2b0e3288",
   "methods": [
-    {
-      "input_schema_hash": "060a3ffaaf65eca4c4394653708d0be6c13e451be0546da90f19b7ceec0c742e",
-      "method_id": "Tooling.ExecuteTool",
-      "output_schema_hash": "8a39353a4c40118973b7724f4c9f549b8f65873d8c458e12b141f74045752855",
-      "provider_peer_id": "aurora-sdk-local-provider-v1",
-      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-      "required_permission": "Tooling.ExecuteTool",
-      "tool_id": "aurora-tool:v1:local:aurora-sdk-local-provider-v1:Tooling:Tooling.ExecuteTool"
-    },
-    {
-      "input_schema_hash": "d7c0c7ebb8715263e7533df46ae5aedbd381ad92dda090ca653a1d3098b3a45a",
-      "method_id": "Tooling.GetMCPStatus",
-      "output_schema_hash": "8f40d61a2c44172bd99523938cbda842be9e900c797e0ea4b71b7582bb27881f",
-      "provider_peer_id": "aurora-sdk-local-provider-v1",
-      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-      "required_permission": "Tooling.GetMCPStatus",
-      "tool_id": "aurora-tool:v1:local:aurora-sdk-local-provider-v1:Tooling:Tooling.GetMCPStatus"
-    },
-    {
-      "input_schema_hash": "5e064188682376e9e79ccb0df2bc63847ab411634c8f348c964cdc027816266e",
-      "method_id": "Tooling.GetStats",
-      "output_schema_hash": "b9d2c2605fcc5699e5ab03ee53884b3a44afe9c3812730ddba7f16276fa2403d",
-      "provider_peer_id": "aurora-sdk-local-provider-v1",
-      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-      "required_permission": "Tooling.GetStats",
-      "tool_id": "aurora-tool:v1:local:aurora-sdk-local-provider-v1:Tooling:Tooling.GetStats"
-    },
     {
       "input_schema_hash": "a942f1e26fb5a35791f9547295d79f82dd380b16fc1feea1502b3f7a51b11d21",
       "method_id": "Tooling.GetTools",
@@ -37,9 +10,36 @@
       "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
       "required_permission": "Tooling.GetTools",
       "tool_id": "aurora-tool:v1:local:aurora-sdk-local-provider-v1:Tooling:Tooling.GetTools"
+    },
+    {
+      "input_schema_hash": "cdeed2488d3f60ba2f6e26409c88256af3b7d5527f3a2a8e104bcf7e722726ba",
+      "method_id": "Tooling.GetExportCatalog",
+      "output_schema_hash": "7f68260274e66e11210423cbdcfc6331eb8cacac5f721efba329e194790e1a37",
+      "provider_peer_id": "aurora-sdk-local-provider-v1",
+      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+      "required_permission": "Tooling.GetExportCatalog",
+      "tool_id": "aurora-tool:v1:local:aurora-sdk-local-provider-v1:Tooling:Tooling.GetExportCatalog"
+    },
+    {
+      "input_schema_hash": "b668872ba22ce243c42b0bd5a9e3a59ee46b0a60977b4b6579f8c30d8323f4a4",
+      "method_id": "Tooling.PrepareExecution",
+      "output_schema_hash": "08ef64c1dec8a9126e0e76374b85da99dcebee06483db1ca98c9b2ccc1cebf64",
+      "provider_peer_id": "aurora-sdk-local-provider-v1",
+      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+      "required_permission": "Tooling.PrepareExecution",
+      "tool_id": "aurora-tool:v1:local:aurora-sdk-local-provider-v1:Tooling:Tooling.PrepareExecution"
+    },
+    {
+      "input_schema_hash": "060a3ffaaf65eca4c4394653708d0be6c13e451be0546da90f19b7ceec0c742e",
+      "method_id": "Tooling.ExecuteTool",
+      "output_schema_hash": "8a39353a4c40118973b7724f4c9f549b8f65873d8c458e12b141f74045752855",
+      "provider_peer_id": "aurora-sdk-local-provider-v1",
+      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+      "required_permission": "Tooling.ExecuteTool",
+      "tool_id": "aurora-tool:v1:local:aurora-sdk-local-provider-v1:Tooling:Tooling.ExecuteTool"
     }
   ],
-  "projection_page_hash": "4819d58425b509f17d48088bdfdd70577524702e2fd3a4124532588a830d7a08",
+  "projection_page_hash": "90bfa4b34b7b8ee8ba3b2172477b02bce2c5a9fb563493b517f467928d5de782",
   "provider_peer_id": "aurora-sdk-local-provider-v1",
   "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
   "version": 1
