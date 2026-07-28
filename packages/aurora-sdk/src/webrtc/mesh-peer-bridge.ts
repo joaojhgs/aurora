@@ -5,6 +5,7 @@ import {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
+  CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   FragmentReassembler,
   PeerProtocolLimits,
@@ -18,6 +19,7 @@ import {
 import type { WebRtcPeerSession, PeerSessionSnapshot } from './peer-session.js'
 import { buildWebRtcManifestAck, parseWebRtcMeshManifest } from './manifest.js'
 import { DEFAULT_PARSER_LIMITS, parseWebRtcFrame, type AuroraProtocolFrame } from './protocol.js'
+import type { WebRtcPeerHost } from '../peer-host/index.js'
 
 export interface WebRtcMeshPeerBridgeOptions {
   session: Pick<WebRtcPeerSession, 'sendFrame' | 'subscribeFrames' | 'subscribe' | 'getSnapshot'>
@@ -30,6 +32,7 @@ export interface WebRtcMeshPeerBridgeOptions {
   randomId?: () => string
   manifestParser?: (frame: unknown, expectedPeerId: string) => MeshPeerManifest
   clock?: () => number
+  peerHost?: WebRtcPeerHost
 }
 
 export interface WebRtcMeshTransportOptions extends Omit<MeshP2PTransportOptions, 'bridge'> {
@@ -110,6 +113,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly randomId: () => string
   private readonly manifestParser: ((frame: unknown, expectedPeerId: string) => MeshPeerManifest) | undefined
   private readonly clock: () => number
+  private readonly peerHost: WebRtcPeerHost | undefined
   private readonly pending = new Map<string, PendingRpc>()
   private readonly pendingSubscribes = new Map<string, PendingSubscribe>()
   private readonly pendingManifests = new Map<string, PendingManifest>()
@@ -141,6 +145,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
           CAP_FRAGMENTATION_V1,
           CAP_BACKPRESSURE_V1,
           CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+          ...(this.localPeerRole === 'consumer' ? [] : [CAP_PROVIDER_LEASE_V1]),
           ...(this.localPeerRole === 'consumer' ? [CAP_CONSUMER_ONLY_V1] : []),
         ],
       })
@@ -148,7 +153,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.randomId = options.randomId ?? (() => `webrtc-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`)
     this.manifestParser = options.manifestParser ?? ((frame, expectedPeerId) => parseWebRtcMeshManifest(assertRecord(frame, 'manifest frame'), expectedPeerId))
     this.clock = options.clock ?? (() => Date.now() / 1000)
+    this.peerHost = options.peerHost
     this.assertAuthenticatedPeerSnapshot(this.session.getSnapshot())
+    this.peerHost?.attach({ sendFrame: (frame) => this.sendLogicalFrame(frame) })
     this.eventSubscriptions = new MeshEventSubscriptionRegistry({ maxTopicsPerPeer: 32, clock: this.clock })
     this.reassembler = new FragmentReassembler({ limits: new PeerProtocolLimits(), clock: this.clock })
     this.unsubscribeFrames = this.session.subscribeFrames((frame) => this.handleFrame(frame))
@@ -323,6 +330,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.streams.clear()
     for (const stream of this.rpcStreams.values()) this.failRpcStream(stream, new Error(reason))
     this.rpcStreams.clear()
+    this.peerHost?.handleDisconnect(reason)
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.clearAllTimers()
   }
@@ -527,6 +535,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.finishStream(String(frame.id))
         return
       case 'cancel':
+        this.peerHost?.handleCancel(String(frame.id))
         if (this.finishRpcStream(String(frame.id))) return
         this.finishStream(String(frame.id))
         return
@@ -536,6 +545,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       case 'subscribed':
         this.resolveSubscribe(frame as unknown as { id: string; subscription_id: string; accepted_topics: string[]; correlation_ids: string[]; ttl_seconds: number })
         return
+      case 'subscribe':
+        void this.handleInboundSubscribe(frame as unknown as import('./protocol.js').SubscribeFrame)
+        return
       case 'subscribe_rejected':
         this.rejectSubscribe(String(frame.id), new Error(String(frame.reason)))
         return
@@ -543,10 +555,20 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.eventSubscriptions.unsubscribe(this.remotePeerId, String(frame.subscription_id ?? frame.id))
         return
       case 'call':
-        void this.rejectInboundCall(frame as unknown as { id: string })
+        void this.handleInboundCall(frame as unknown as import('./protocol.js').CallFrame)
         return
       case 'manifest':
         this.handleManifest(frame)
+        return
+      case 'manifest_request':
+        void this.sendLocalManifest()
+        return
+      case 'manifest_ack':
+        this.peerHost?.markManifestAcknowledged()
+        return
+      case 'provider_lease':
+      case 'provider_unavailable':
+        this.handleProviderLease(frame as Record<string, unknown>)
         return
       case 'ping':
         void this.sendLogicalFrame({ type: 'pong', id: typeof frame.id === 'string' ? frame.id : undefined }).catch(() => undefined)
@@ -560,6 +582,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.remoteProtocol = negotiateProtocol(this.localProtocol, protocol)
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.reassembler = new FragmentReassembler({ limits: this.remoteProtocol.limits, clock: this.clock })
+    if (this.peerHost && this.remoteProtocol.capabilities.has(CAP_PROVIDER_LEASE_V1)) {
+      void this.sendLogicalFrame(this.peerHost.startEpoch()).catch(() => undefined)
+    }
   }
 
   private resolvePending(id: string, value: unknown): void {
@@ -717,10 +742,28 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.rejectSubscribe(id, error)
   }
 
-  private async rejectInboundCall(frame: { id: string }): Promise<void> {
+  private async handleInboundCall(frame: import('./protocol.js').CallFrame): Promise<void> {
     if (this.localPeerRole === 'consumer' || this.remoteProtocol?.role === 'consumer' || this.remoteProtocol?.capabilities.has(CAP_CONSUMER_ONLY_V1)) {
       await this.sendLogicalFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: { code: 405, message: 'Local peer is consumer-only' } })
+      return
     }
+    if (!this.peerHost) {
+      await this.sendLogicalFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: { code: 503, message: 'Local provider is unavailable' } })
+      return
+    }
+    await this.peerHost.handleCall(frame, this.remotePeerId)
+  }
+
+  private async handleInboundSubscribe(frame: import('./protocol.js').SubscribeFrame): Promise<void> {
+    if (this.localPeerRole === 'consumer' || this.remoteProtocol?.role === 'consumer' || this.remoteProtocol?.capabilities.has(CAP_CONSUMER_ONLY_V1)) {
+      await this.sendLogicalFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'consumer_only', rejected_topics: frame.topics })
+      return
+    }
+    if (!this.peerHost) {
+      await this.sendLogicalFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'provider_unavailable', rejected_topics: frame.topics })
+      return
+    }
+    await this.peerHost.handleSubscribe(frame, this.remotePeerId)
   }
 
   private handleManifest(frame: unknown): void {
@@ -737,6 +780,23 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       for (const pending of this.pendingManifests.values()) {
         this.clearTimer(pending.timer)
         pending.reject(error)
+      }
+      this.pendingManifests.clear()
+    }
+  }
+
+  private async sendLocalManifest(): Promise<void> {
+    if (!this.peerHost || this.localPeerRole === 'consumer') return
+    await this.sendLogicalFrame(this.peerHost.buildManifest())
+  }
+
+  private handleProviderLease(frame: Record<string, unknown>): void {
+    if (frame.peer_id !== this.remotePeerId) return
+    if (frame.available === false || frame.type === 'provider_unavailable') {
+      this.manifest = null
+      for (const pending of this.pendingManifests.values()) {
+        this.clearTimer(pending.timer)
+        pending.resolve(null)
       }
       this.pendingManifests.clear()
     }

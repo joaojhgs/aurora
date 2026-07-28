@@ -11,7 +11,7 @@ export type RpcFrameType = 'call' | 'result' | 'error' | 'chunk' | 'eof' | 'canc
 export type SubscriptionFrameType = 'subscribe' | 'subscribed' | 'subscribe_rejected' | 'unsubscribe' | 'unsubscribed'
 export type SignalingFrameType = 'presence' | 'presence_departed' | 'offer' | 'answer' | 'candidate' | 'mesh_event'
 export type PairingFrameType = 'pairing_v2_commit' | 'pairing_v2_reveal' | 'pairing_v2_terminal'
-export type AuthFrameType = 'auth' | 'reauth' | 'mesh_auth_challenge_v1' | 'mesh_auth_proof_v1' | 'manifest' | 'manifest_request' | 'ping' | 'pong'
+export type AuthFrameType = 'auth' | 'reauth' | 'mesh_auth_challenge_v1' | 'mesh_auth_proof_v1' | 'manifest' | 'manifest_request' | 'manifest_ack' | 'provider_lease' | 'provider_unavailable' | 'ping' | 'pong'
 
 export interface CallFrame {
   type: 'call'
@@ -65,12 +65,22 @@ export interface MeshAuthBindingFrame {
 }
 export type MeshAuthChallengeFrame = MeshAuthBindingFrame & { type: 'mesh_auth_challenge_v1' }
 export type MeshAuthProofFrame = MeshAuthBindingFrame & { type: 'mesh_auth_proof_v1'; token_id: string; proof: string }
+export interface ProviderLeaseFrame {
+  type: 'provider_lease' | 'provider_unavailable'
+  peer_id: string
+  connection_epoch: string
+  availability_revision: number
+  issued_at_ms: number
+  expires_at_ms: number
+  available?: boolean
+  reason_code?: string
+}
 
 export type AuroraRpcFrame = CallFrame | ResultFrame | ErrorFrame | ChunkFrame | EofFrame | CancelFrame | EventFrame
 export type AuroraSubscriptionFrame = SubscribeFrame | SubscribedFrame | SubscribeRejectedFrame | UnsubscribeFrame | UnsubscribedFrame
 export type AuroraSignalingFrame = OfferFrame | AnswerFrame | CandidateFrame | PresenceFrame
 export type AuroraPairingFrame = PairingCommitFrame | PairingRevealFrame | PairingTerminalFrame
-export type AuroraAuthFrame = MeshAuthChallengeFrame | MeshAuthProofFrame
+export type AuroraAuthFrame = MeshAuthChallengeFrame | MeshAuthProofFrame | ProviderLeaseFrame
 export type AuroraProtocolFrame = AuroraRpcFrame | AuroraSubscriptionFrame | AuroraSignalingFrame | AuroraPairingFrame | AuroraAuthFrame | ProtocolHello | FragmentFrame | Record<string, unknown>
 
 export class WebRtcProtocolParseError extends Error {
@@ -148,6 +158,8 @@ export function parseWebRtcFrame(frame: unknown, limits: Partial<ParserLimits> =
     case 'pairing_v2_terminal': return parsePairingTerminal(object)
     case 'mesh_auth_challenge_v1': return parseMeshAuthChallenge(object)
     case 'mesh_auth_proof_v1': return parseMeshAuthProof(object)
+    case 'provider_lease':
+    case 'provider_unavailable': return parseProviderLease(object, type)
     case PROTOCOL_HELLO_TYPE: return parseProtocolHello(object)
     case FRAGMENT_FRAME_TYPE: return parseFragmentMetadata(object)
     default:
@@ -339,6 +351,21 @@ function parseMeshAuthBindings(object: Record<string, unknown>, type: 'mesh_auth
   }
 }
 
+function parseProviderLease(object: Record<string, unknown>, type: 'provider_lease' | 'provider_unavailable'): ProviderLeaseFrame {
+  const frame: ProviderLeaseFrame = {
+    type,
+    peer_id: requireId(object.peer_id) as string,
+    connection_epoch: requireId(object.connection_epoch) as string,
+    availability_revision: requireInteger(object.availability_revision, 'availability_revision', 0, Number.MAX_SAFE_INTEGER),
+    issued_at_ms: requireInteger(object.issued_at_ms, 'issued_at_ms', 0, Number.MAX_SAFE_INTEGER),
+    expires_at_ms: requireInteger(object.expires_at_ms, 'expires_at_ms', 0, Number.MAX_SAFE_INTEGER)
+  }
+  if (object.available !== undefined) frame.available = requireBoolean(object.available, 'available')
+  if (object.reason_code !== undefined) frame.reason_code = requireString(object.reason_code, 'reason_code', 128)
+  if (frame.expires_at_ms < frame.issued_at_ms) throw new WebRtcProtocolParseError('provider lease expires before issue time')
+  return frame
+}
+
 function parseFragmentMetadata(object: Record<string, unknown>): FragmentFrame {
   return {
     type: FRAGMENT_FRAME_TYPE,
@@ -488,5 +515,5 @@ function requireExactVersion2(value: unknown): void {
 }
 
 function isKnownControlType(type: string): boolean {
-  return ['auth', 'reauth', 'manifest', 'manifest_request', 'ping', 'pong', 'mesh_event'].includes(type)
+  return ['auth', 'reauth', 'manifest', 'manifest_request', 'manifest_ack', 'ping', 'pong', 'mesh_event'].includes(type)
 }

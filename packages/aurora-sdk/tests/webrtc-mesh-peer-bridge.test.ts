@@ -6,12 +6,17 @@ import {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
+  CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   PeerProtocolLimits,
+  SessionPeerHostAuthorizationStore,
+  WebRtcPeerHost,
   WebRtcMeshPeerBridge,
   buildProtocolHello,
+  createToolingPeerHostRegistry,
   createWebRtcMeshTransport,
   fragmentMessage,
+  type LocalPeerGrantV1,
   type PeerSessionSnapshot
 } from '../src/webrtc/index.js'
 
@@ -47,6 +52,21 @@ function hello(): unknown {
     capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_CONSUMER_ONLY_V1],
     limits: new PeerProtocolLimits()
   })
+}
+
+function localGrant(): LocalPeerGrantV1 {
+  return {
+    version: 1,
+    grantId: 'grant-1',
+    tokenId: 'token-1',
+    claimantPeerId: 'peer-a',
+    allowedMethodIds: ['Tooling.GetTools'],
+    allowedToolContractIds: [],
+    capabilityPackIds: [],
+    resourceScopes: [],
+    createdAtMs: 1,
+    grantRevision: 1
+  }
 }
 
 describe('WebRtcMeshPeerBridge', () => {
@@ -251,6 +271,46 @@ describe('WebRtcMeshPeerBridge', () => {
     await flush()
     session.emit({ type: 'result', id: 'transport-1', result: { registry: true } })
     await expect(resultPromise).resolves.toMatchObject({ ok: true, data: { registry: true } })
+  })
+
+  it('preserves consumer-only 405 and dispatches authorized hybrid inbound calls through peer host', async () => {
+    const consumerSession = new FakeSession()
+    const consumerBridge = new WebRtcMeshPeerBridge({ session: consumerSession, remotePeerId: 'peer-a' })
+    consumerSession.emit({ type: 'call', id: 'remote-call', method: 'Tooling.GetTools', params: {} })
+    await flush()
+    expect(consumerSession.sent.at(-1)).toMatchObject({ type: 'error', id: 'remote-call', error: { code: 405, message: 'Local peer is consumer-only' } })
+    consumerBridge.close()
+
+    const handler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: handler,
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
+    session.emit({ type: 'manifest_ack', compatible_services: ['Tooling'] })
+    session.emit({ type: 'call', id: 'host-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
+    await flush()
+    await flush()
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(session.sent.at(-1)).toEqual({ type: 'result', id: 'host-call', result: { count: 0, tools: [] } })
+    bridge.close()
   })
 
   it('enforces stable identity, abort cancellation, and negotiated fragmentation only', async () => {

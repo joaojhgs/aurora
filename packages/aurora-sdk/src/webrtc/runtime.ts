@@ -10,6 +10,7 @@ import {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
+  CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   buildProtocolHello
 } from './peer-protocol.js'
@@ -54,6 +55,7 @@ import {
   type SignalingMessage
 } from './peer-session.js'
 import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
+import type { WebRtcPeerHost } from '../peer-host/index.js'
 import type {
   AuroraConnectionMode,
   PeerConnectionController,
@@ -83,6 +85,7 @@ const DEFAULT_PAIRING_CONNECT_POLL: PairingConnectPollOptions = {
 
 export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   mode: AuroraConnectionMode
+  nodeRole?: 'remote-console' | 'mesh-node'
   http?: WebRtcRuntimeHttpOptions | undefined
   profile?: WebRtcPeerConnectionProfile | undefined
   localStablePeerId?: string | undefined
@@ -100,6 +103,7 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   scryptDeriver?: AuroraScryptDeriver | undefined
   scryptWorkerFactory?: ScryptWorkerFactory | undefined
   localProtocolCapabilities?: readonly string[] | undefined
+  peerHost?: WebRtcPeerHost | undefined
   appLayerE2eeAllowed?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
   pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
@@ -419,6 +423,8 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     const bridgeOptions = {
       session,
       remotePeerId: profile.expectedStablePeerId,
+      localPeerRole: this.options.nodeRole === 'mesh-node' ? 'hybrid' as const : 'consumer' as const,
+      ...(this.options.peerHost ? { peerHost: this.options.peerHost } : {}),
       ...(this.activeLocalProtocolHello
         ? { localProtocolHello: this.activeLocalProtocolHello }
         : {})
@@ -987,6 +993,12 @@ function buildLocalProtocolHello(
     CAP_BACKPRESSURE_V1,
     CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   ]
+  if (options.nodeRole === 'mesh-node') {
+    return buildProtocolHello({
+      role: 'hybrid',
+      capabilities: [...new Set([...configured, CAP_PROVIDER_LEASE_V1])]
+    })
+  }
   return buildProtocolHello({
     role: 'consumer',
     capabilities: [...new Set([...configured, CAP_CONSUMER_ONLY_V1])]

@@ -44,6 +44,7 @@ export {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
+  CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   DEFAULT_FRAGMENT_PAYLOAD_BYTES,
   DEFAULT_INCOMPLETE_TTL_SECONDS,
@@ -117,6 +118,7 @@ export type {
   PairingTerminalFrame,
   ParserLimits,
   PresenceFrame,
+  ProviderLeaseFrame,
   ResultFrame,
   RpcFrameType,
   SignalingFrameType,
@@ -127,6 +129,8 @@ export type {
   UnsubscribeFrame,
   UnsubscribedFrame
 } from './protocol.js'
+
+export * from '../peer-host/index.js'
 
 export {
   PAIRING_COMMIT_TYPE,

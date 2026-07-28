@@ -6,12 +6,14 @@ export const CAP_FRAGMENTATION_V1 = 'fragmentation_v1' as const
 export const CAP_BACKPRESSURE_V1 = 'backpressure_v1' as const
 export const CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1 = 'scoped_event_subscriptions_v1' as const
 export const CAP_CONSUMER_ONLY_V1 = 'consumer_only_v1' as const
+export const CAP_PROVIDER_LEASE_V1 = 'provider_lease_v1' as const
 
 export const KNOWN_PEER_CAPABILITIES = new Set<string>([
   CAP_FRAGMENTATION_V1,
   CAP_BACKPRESSURE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
-  CAP_CONSUMER_ONLY_V1
+  CAP_CONSUMER_ONLY_V1,
+  CAP_PROVIDER_LEASE_V1
 ])
 
 export const DEFAULT_PEER_CAPABILITIES = Object.freeze([
