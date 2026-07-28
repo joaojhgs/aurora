@@ -97,7 +97,7 @@ export interface AssistantModelChoiceGroup {
   id: string
   heading: string
   choices: AssistantModelChoice[]
-  scope: 'default' | 'local-provider' | 'peer-provider'
+  scope: 'default' | 'this device' | 'connected device'
 }
 
 export interface AssistantModelSourceGroup {
@@ -548,7 +548,7 @@ export function AssistantView({
       if (sessionLoadGenerationRef.current !== generation) return
       setSessionIndex([])
       setSession(emptyAssistantSession())
-      setSessionIndexError(assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+      setSessionIndexError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
     } finally {
       if (sessionLoadGenerationRef.current === generation) {
         setSessionIndexLoading(false)
@@ -586,7 +586,7 @@ export function AssistantView({
       setSession(emptyAssistantSession())
       setSessionIndex([])
       setSessionIndexLoading(false)
-      setSessionIndexError('Persisted chat sessions are not available over mesh transports.')
+      setSessionIndexError('Saved chats are unavailable for this connection.')
       return
     }
 
@@ -670,7 +670,7 @@ export function AssistantView({
       })
       .catch((error) => {
         if (!active) return
-        setModelCatalogError(error instanceof Error ? error.message : String(error))
+        setModelCatalogError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
         setModelCatalogLoading(false)
       })
     return () => {
@@ -708,7 +708,7 @@ export function AssistantView({
       .catch((error) => {
         if (!active) return
         setDispatchModelCatalog(null)
-        setModelCatalogError(error instanceof Error ? error.message : String(error))
+        setModelCatalogError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
         setModelCatalogLoading(false)
       })
     return () => {
@@ -749,7 +749,7 @@ export function AssistantView({
         setStreamState((current) => ({
           ...current,
           status: 'lost',
-          message: 'Focused WebView microphone capture stopped because the thin shell lost visibility or focus.'
+          message: 'Microphone listening stopped because Aurora was no longer the active window.'
         }))
       }
     }
@@ -794,11 +794,11 @@ export function AssistantView({
         }
       } catch (error) {
         if (active) {
-          const message = assistantErrorMessage(error instanceof Error ? error : new Error(String(error)))
+          const message = productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error)))
           const currentVoiceState = voiceCaptureStatusRef.current
           if (currentVoiceState === 'listening' || currentVoiceState === 'processing' || currentVoiceState === 'speaking') {
-            setLastError(`Voice event stream unavailable: ${message}`)
-            setStreamState((current) => ({ ...current, status: 'lost', message: `Voice event stream unavailable: ${message}` }))
+            setLastError(message)
+            setStreamState((current) => ({ ...current, status: 'lost', message }))
           }
           setVoiceEvents((current) => current)
         }
@@ -868,7 +868,7 @@ export function AssistantView({
       resetConversationUi(assistantSessionFromPersisted(loaded.data))
       window.setTimeout(() => textAreaRef.current?.focus(), 0)
     } catch (error) {
-      setSessionIndexError(assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+      setSessionIndexError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
     } finally {
       setSessionIndexLoading(false)
     }
@@ -878,7 +878,7 @@ export function AssistantView({
     if (!supportsPersistedSessions) return
     const listed = await client.memory.listSessions({ type: 'chat', limit: 100 })
     if (!listed.ok) {
-      setSessionIndexError(assistantErrorMessage(listed.error))
+      setSessionIndexError(productAssistantErrorCopy(listed.error))
       return
     }
     setSessionIndex(sortSessionsByModification(listed.data.sessions))
@@ -889,9 +889,9 @@ export function AssistantView({
     if (!supportsPersistedSessions) return null
     const created = await client.memory.createSession({ type: 'chat' })
     if (!created.ok) {
-      const error = assistantErrorMessage(created.error)
-      setSessionIndexError(error)
-      setLastError(error)
+      const failureCopy = productAssistantErrorCopy(created.error)
+      setSessionIndexError(failureCopy)
+      setLastError(failureCopy)
       return null
     }
     setSessionIndex((current) => upsertSessionByModification(current, created.data.session))
@@ -958,7 +958,7 @@ export function AssistantView({
       createdAt: now,
       status: 'sent'
     }
-    const pendingMessage: AssistantUiMessage = {
+      const pendingMessage: AssistantUiMessage = {
       id: requestId,
       role: 'assistant',
       text: replayFrom ? 'Replaying stream from last backend event...' : 'Waiting for Aurora stream...',
@@ -1016,7 +1016,7 @@ export function AssistantView({
       }
     } catch (error) {
       if (!abort.signal.aborted && !cancelledPendingIdsRef.current.has(pendingMessage.id)) {
-        markAssistantTurnFailed(pendingMessage.id, assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+        markAssistantTurnFailed(pendingMessage.id, productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
       }
     } finally {
       if (abortRef.current === abort) abortRef.current = null
@@ -1026,12 +1026,12 @@ export function AssistantView({
     }
   }
 
-  function markAssistantTurnFailed(pendingId: string, error: string) {
-    setLastError(error)
+  function markAssistantTurnFailed(pendingId: string, failureCopy: string) {
+    setLastError(failureCopy)
     setStreamState((current) => ({
       status: 'lost',
       lastEventId: current.lastEventId,
-      message: error
+      message: failureCopy
     }))
     setSession((current) => ({
       ...current,
@@ -1039,9 +1039,9 @@ export function AssistantView({
         message.id === pendingId
           ? {
               ...message,
-              text: message.text.trim() && message.text !== 'Waiting for Aurora stream...' ? message.text : error,
+              text: message.text.trim() && message.text !== 'Waiting for Aurora stream...' ? message.text : failureCopy,
               status: 'failed',
-              error
+              error: failureCopy
             }
           : message
       )
@@ -1075,7 +1075,7 @@ export function AssistantView({
     })
 
     if (!result.ok) {
-      const message = assistantErrorMessage(result.error)
+      const message = productAssistantErrorCopy(result.error)
       setLastError(message)
       setAttachments((current) =>
         current.map((attachment) =>
@@ -1146,17 +1146,17 @@ export function AssistantView({
       return
     }
 
-    const error = assistantErrorMessage(result.error)
-    setLastError(error)
+    const failureCopy = productAssistantErrorCopy(result.error)
+    setLastError(failureCopy)
     setSession((current) => ({
       ...current,
       messages: current.messages.map((message) =>
         message.id === pendingId
           ? {
               ...message,
-              text: error,
+              text: failureCopy,
               status: 'failed',
-              error
+              error: failureCopy
             }
           : message
       )
@@ -1172,12 +1172,12 @@ export function AssistantView({
     const updateProviderLabel = metadataStringValue(update.metadata ?? {}, 'provider_label') ?? metadataStringValue(update.metadata ?? {}, 'provider')
     if (updateProviderLabel) setRuntimeProviderLabel(updateProviderLabel)
     if (update.kind === 'transport_lost') {
-      const error = assistantErrorMessage(update.error ?? new Error('Assistant stream disconnected.'))
-      setLastError(error)
+      const failureCopy = productAssistantErrorCopy(update.error ?? new Error('Assistant stream disconnected.'))
+      setLastError(failureCopy)
       setStreamState((current) => ({
         status: 'lost',
         lastEventId: current.lastEventId,
-        message: 'Stream disconnected. Replay will request events after the last backend event when the transport supports it.'
+        message: 'The answer was interrupted. Replay will continue from the last saved update when available.'
       }))
       setSession((current) => ({
         ...current,
@@ -1185,9 +1185,9 @@ export function AssistantView({
           message.id === pendingId
             ? {
                 ...message,
-                text: message.text.trim() ? message.text : error,
+                text: message.text.trim() ? message.text : failureCopy,
                 status: 'failed',
-                error
+                error: failureCopy
               }
             : message
         )
@@ -1202,7 +1202,7 @@ export function AssistantView({
           message.id === pendingId ? applyAssistantToolUpdate(message, update) : message
         )
       }))
-      setStreamState((current) => ({ ...current, status: 'streaming', message: 'Tool call approval card received from assistant stream.' }))
+      setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora needs your approval before continuing.' }))
       return
     }
     if (update.kind === 'tts_audio_chunk') {
@@ -1224,18 +1224,18 @@ export function AssistantView({
       return
     }
     if (update.kind === 'failed') {
-      const error = assistantErrorMessage(update.error ?? new Error(update.text))
-      setLastError(error)
-      setStreamState((current) => ({ ...current, status: 'lost', message: error }))
+      const failureCopy = productAssistantErrorCopy(update.error ?? new Error(update.text))
+      setLastError(failureCopy)
+      setStreamState((current) => ({ ...current, status: 'lost', message: failureCopy }))
       setSession((current) => ({
         ...current,
         messages: current.messages.map((message) =>
           message.id === pendingId
             ? {
                 ...message,
-                text: error,
+                text: failureCopy,
                 status: 'failed',
-                error
+                error: failureCopy
               }
             : message
         )
@@ -1288,7 +1288,7 @@ export function AssistantView({
         }
       })
       if (update.kind === 'completed') {
-        setStreamState((current) => ({ ...current, status: 'idle', message: 'Final assistant event received.' }))
+      setStreamState((current) => ({ ...current, status: 'idle', message: 'Aurora finished responding.' }))
       }
       return
     }
@@ -1342,7 +1342,7 @@ export function AssistantView({
       setStreamState((current) => ({ ...current, status: 'streaming', message: event.text ? `Wake word heard: ${event.text}` : 'Aurora is listening.' }))
       if (surfaceProfile.voiceCapture.canUseWebViewVisualizer) {
         void startLocalAudioCapture({ recordForTranscription: false, optionalVisualizer: true }).catch((error: unknown) => {
-          setLastError(audioCaptureErrorMessage(error))
+          setLastError(productAudioCaptureErrorCopy(error))
         })
       }
       return
@@ -1472,13 +1472,13 @@ export function AssistantView({
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
       coordinatorVoiceSessionIdsRef.current.clear()
-      setStreamState((current) => ({ ...current, status: 'idle', message: 'Wakeword response persisted to the active chat.' }))
+      setStreamState((current) => ({ ...current, status: 'idle', message: 'Voice response was saved to the active chat.' }))
       void openPersistedSession(update.sessionId, false)
       return
     }
     if (update.kind === 'failed' || update.kind === 'transport_lost') {
-      const error = assistantErrorMessage(update.error ?? new Error(update.text || 'Voice assistant response failed.'))
-      setLastError(error)
+      const failureCopy = productAssistantErrorCopy(update.error ?? new Error(update.text || 'Voice assistant response failed.'))
+      setLastError(failureCopy)
       setVoiceCaptureStatus('error')
       voicePendingAssistantIdRef.current = null
       setVoiceResponsePendingId(null)
@@ -1490,7 +1490,7 @@ export function AssistantView({
       setSession((current) => ({
         ...current,
         messages: current.messages.map((message) =>
-          message.id === pendingId ? { ...message, text: error, status: 'failed', error } : message
+          message.id === pendingId ? { ...message, text: failureCopy, status: 'failed', error: failureCopy } : message
         )
       }))
       return
@@ -1589,13 +1589,13 @@ export function AssistantView({
     voiceResponseTimeoutRef.current = null
   }
 
-  function markVoiceAssistantFailed(pendingId: string, error: string) {
-    setLastError(error)
+  function markVoiceAssistantFailed(pendingId: string, failureCopy: string) {
+    setLastError(failureCopy)
     setVoiceCaptureStatus('error')
     setStreamState((current) => ({
       status: 'lost',
       lastEventId: current.lastEventId,
-      message: error
+      message: failureCopy
     }))
     voicePendingAssistantIdRef.current = null
     setVoiceResponsePendingId(null)
@@ -1607,7 +1607,7 @@ export function AssistantView({
       ...current,
       messages: current.messages.map((message) =>
         message.id === pendingId
-          ? { ...message, text: error, status: 'failed', error }
+          ? { ...message, text: failureCopy, status: 'failed', error: failureCopy }
           : message
       )
     }))
@@ -1702,11 +1702,11 @@ export function AssistantView({
       throw result.error
     } catch (error) {
       if (browserReadAloud(speakableText, message.id)) {
-        setStreamState((current) => ({ ...current, message: 'Aurora TTS unavailable; using browser speech synthesis.' }))
+        setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
         return
       }
       setSpeakingMessageId(null)
-      setLastError(assistantErrorMessage(error instanceof Error ? error : new Error(String(error))))
+      setLastError(productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
     }
   }
 
@@ -1774,7 +1774,7 @@ export function AssistantView({
         })
       }))
     } catch (error) {
-      const message = assistantErrorMessage(error instanceof Error ? error : new Error(String(error)))
+      const message = productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error)))
       setLastError(message)
       setSession((current) => ({
         ...current,
@@ -1802,7 +1802,7 @@ export function AssistantView({
       scopes: ['tts_playback'],
       reason
     })
-    if (!result.ok) setLastError(assistantErrorMessage(result.error))
+    if (!result.ok) setLastError(productAssistantErrorCopy(result.error))
   }
 
   function clearReadAloudFallbackTimer() {
@@ -1840,7 +1840,7 @@ export function AssistantView({
     readAloudFallbackTimerRef.current = window.setTimeout(() => {
       if (readAloudFallbackTokenRef.current !== token) return
       if (browserReadAloud(textToSpeak, messageId)) {
-        setStreamState((current) => ({ ...current, message: 'Aurora TTS did not report playback; using browser speech synthesis.' }))
+      setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
       }
     }, 2500)
   }
@@ -1866,7 +1866,7 @@ export function AssistantView({
       }))
       return
     }
-    setLastError(assistantErrorMessage(result.error))
+    setLastError(productAssistantErrorCopy(result.error))
   }
 
   async function retryLastPrompt(replay = false) {
@@ -1964,17 +1964,17 @@ export function AssistantView({
       ...current,
       status: 'streaming',
       message: options.fallback
-        ? 'Focused WebView microphone was unavailable; using Aurora local STT service for this push-to-talk session.'
-        : 'Starting Aurora server microphone through the local STT service…'
+        ? 'Focused microphone access was unavailable; Aurora is listening on this computer instead.'
+        : 'Starting microphone listening on this computer...'
     }))
     try {
       const started = await client.assistant.startVoiceListen({ sessionId, timeoutMs: 8_000 })
       if (!started.ok) {
         activeVoiceSessionRef.current = null
         ownedVoiceSessionIdsRef.current.delete(sessionId)
-        setLastError(assistantErrorMessage(started.error))
+        setLastError(productAssistantErrorCopy(started.error))
         setVoiceCaptureStatus('error')
-        setStreamState((current) => ({ ...current, status: 'lost', message: assistantErrorMessage(started.error) }))
+        setStreamState((current) => ({ ...current, status: 'lost', message: productAssistantErrorCopy(started.error) }))
         return false
       }
       activeVoiceSessionRef.current = started.data.sessionId
@@ -1984,17 +1984,17 @@ export function AssistantView({
         ...current,
         status: 'streaming',
         message: options.fallback
-          ? 'Aurora is listening through the local STT service fallback.'
-          : 'Aurora is listening through the local STT service.'
+          ? 'Aurora is listening on this computer.'
+          : 'Aurora is listening on this computer.'
       }))
       void startLocalAudioCapture({ recordForTranscription: false, optionalVisualizer: true }).catch(() => {
-        setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora is listening through the local STT service; WebView microphone levels are unavailable.' }))
+        setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora is listening on this computer; live microphone levels are unavailable.' }))
       })
       return true
     } catch (error) {
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.delete(sessionId)
-      const message = assistantErrorMessage(error instanceof Error ? error : new Error(String(error)))
+      const message = productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error)))
       setLastError(message)
       setVoiceCaptureStatus('error')
       setStreamState((current) => ({ ...current, status: 'lost', message }))
@@ -2011,7 +2011,7 @@ export function AssistantView({
       scopes: ['tts_playback'],
       reason: 'voice_capture_started'
     })
-    if (!result.ok) setLastError(assistantErrorMessage(result.error))
+    if (!result.ok) setLastError(productAssistantErrorCopy(result.error))
   }
 
   async function toggleLocalCapture() {
@@ -2020,7 +2020,7 @@ export function AssistantView({
       const sessionId = activeVoiceSessionRef.current
       if (sessionId && coordinatorVoiceSessionIdsRef.current.has(sessionId)) {
         const stopped = await client.assistant.stopVoiceListen({ sessionId, reason: 'user_request' })
-        if (!stopped.ok) setLastError(assistantErrorMessage(stopped.error))
+        if (!stopped.ok) setLastError(productAssistantErrorCopy(stopped.error))
       }
       stopLocalCapture({ finalizeTranscription: currentCaptureStatus === 'listening' })
       setVoiceCaptureStatus('idle')
@@ -2055,7 +2055,7 @@ export function AssistantView({
         ...current,
         status: 'streaming',
         message: surfaceProfile.kind === 'desktop-local'
-          ? 'Focused push-to-talk is using the WebView microphone; daemon wakeword remains owned by STTCoordinator.'
+          ? 'Focused push-to-talk is using this window. Background wake listening remains separate.'
           : 'Focused browser microphone capture is active.'
       }))
       return
@@ -2070,7 +2070,7 @@ export function AssistantView({
         if (fallbackStarted) return
       }
       const name = error instanceof DOMException ? error.name : ''
-      setLastError(audioCaptureErrorMessage(error))
+      setLastError(productAudioCaptureErrorCopy(error))
       setVoiceCaptureStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'permission-denied' : 'no-device')
     }
   }
@@ -2224,7 +2224,7 @@ export function AssistantView({
       const audioData = recordedPcmBase64(final ? undefined : 12)
       if (!audioData) {
         if (final) {
-          setLastError('No microphone samples were captured. Check browser/WebView microphone permission and try push-to-talk again.')
+          setLastError('No microphone audio was captured. Check microphone permission and try push-to-talk again.')
           setVoiceCaptureStatus('idle')
         }
         return
@@ -2239,7 +2239,7 @@ export function AssistantView({
       if (voiceRecordingGenerationRef.current !== generation && !final) return
       if (!result.ok) {
         if (final) {
-          setLastError(assistantErrorMessage(result.error))
+          setLastError(productAssistantErrorCopy(result.error))
           setVoiceCaptureStatus('error')
         }
         return
@@ -2267,7 +2267,7 @@ export function AssistantView({
       setVoiceCaptureStatus('idle')
     } catch (error) {
       if (final) {
-        setLastError(error instanceof Error ? error.message : 'Browser audio transcription failed.')
+        setLastError(productAudioCaptureErrorCopy(error))
         setVoiceCaptureStatus('error')
       }
     }
@@ -2556,7 +2556,7 @@ export function AssistantView({
             </button>
           </div>
           <dl>
-            <div><dt>Provider</dt><dd>{route.providerLabel}</dd></div>
+	            <div><dt>Device or service</dt><dd>{presentableSignal(route.providerLabel)}</dd></div>
             <div><dt>Availability</dt><dd>{route.state}</dd></div>
             <div><dt>Privacy</dt><dd>{route.item.privacyClass}</dd></div>
             <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
@@ -2574,7 +2574,7 @@ export function AssistantView({
             <RouteSheet
               client={client}
               title="Assistant route preview"
-              description="The SDK evaluates where this prompt can run before dispatch."
+              description="Aurora checks where this prompt can run before it leaves this device."
               payload={{
                 message: text.trim() || '<pending prompt>',
                 session_id: session.sessionId,
@@ -2603,15 +2603,15 @@ function assistantVoicePlatformTruth(model: AssistantVoiceModel): string {
 
 function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
   return (
-    <section className="aui-assistant-runtime-strip" aria-label="Assistant runtime strip">
+    <section className="aui-assistant-runtime-strip" aria-label="Assistant status">
       <p className="aui-runtime-secondary-label">
-        Local sidecar status is visible for desktop troubleshooting, but the assistant conversation remains the primary page.
+        Local service status is available for this computer, while the assistant conversation remains the primary page.
       </p>
       <dl>
         <div><dt>Selected model</dt><dd>{health.selectedModel ?? 'model pending'}</dd></div>
         <div><dt>Model state</dt><dd>{health.selectedModel ? 'configured' : 'no model configured / awaiting backend model status'}</dd></div>
         <div><dt>Route</dt><dd>{health.routeLabel}</dd></div>
-        <div><dt>Sidecar</dt><dd>{health.sidecarHealth}</dd></div>
+        <div><dt>Local service</dt><dd>{health.sidecarHealth}</dd></div>
         <div><dt>Gateway</dt><dd>{health.gatewayHealth}</dd></div>
       </dl>
     </section>
@@ -2627,7 +2627,7 @@ export function buildAssistantRuntimeStrip(
   return {
     selectedModel: runtimeHealth?.selectedModel ?? modelLabel,
     routeLabel: runtimeHealth?.routeLabel ?? `${route.providerLabel} / ${route.state}`,
-    sidecarHealth: runtimeHealth?.sidecarHealth ?? (transportKind === 'mock' ? 'demo demo only' : 'not reported by this shell'),
+    sidecarHealth: runtimeHealth?.sidecarHealth ?? (transportKind === 'mock' ? 'local preview only' : 'not reported by this app'),
     gatewayHealth: runtimeHealth?.gatewayHealth ?? `${transportKind} transport`
   }
 }
@@ -2865,15 +2865,15 @@ function VoiceModePanel({
           <h3>Audio privacy</h3><span className="aui-sr-only">Route sheet</span>
           <dl>
             <div><dt>Privacy class</dt><dd>{model.privacyClass}</dd></div>
-            <div><dt>Peer/provider</dt><dd>{model.targetLabel}</dd></div>
-            <div><dt>Transport</dt><dd>{model.transport}</dd></div>
+            <div><dt>Destination</dt><dd>{presentableSignal(model.targetLabel)}</dd></div>
+            <div><dt>Connection</dt><dd>{presentableSignal(model.transport)}</dd></div>
             <div><dt>Retention</dt><dd>{model.retentionPolicy}</dd></div>
             <div><dt>Session TTL</dt><dd>{model.sessionTtl}</dd></div>
           </dl>
           <RouteSheet
             client={client}
             title="Audio route and consent"
-            description="Raw audio leaves the local device only when the selected route, consent, privacy indicator, and target policy allow it."
+            description="Microphone audio leaves this device only when the selected destination, consent, privacy indicator, and policy allow it."
             payload={{
               audio_privacy_class: model.privacyClass,
               capture_state: model.captureStatus,
@@ -3322,7 +3322,7 @@ export function assistantModelChoiceGroups(
       id,
       heading: `${modelProviderDisplayName(provider, execution)} · ${modelCountLabel(1)}`,
       choices: [choice],
-      scope: remote ? 'peer-provider' : 'local-provider'
+      scope: remote ? 'connected device' : 'this device'
     })
   }
 
@@ -3608,17 +3608,19 @@ export function assistantRemotePrivacyWarning(route: RouteAvailability): string 
   const label = privacyClass === 'raw-audio'
     ? 'Raw audio'
     : privacyClass.charAt(0).toUpperCase() + privacyClass.slice(1)
-  return `${label} data requires route/privacy review before remote or mesh fallback; no payload leaves until consent, privacy indicator, and backend route policy allow it.`
+  return `${label} data needs privacy review before another device can help; nothing leaves until consent, privacy indicator, and policy allow it.`
 }
 
-export function assistantErrorMessage(error: AuroraError | Error): string {
+export function productAssistantErrorCopy(error: AuroraError | Error): string {
   if ('code' in error && error.code === 'timeout') return 'Aurora timed out before returning a final assistant response.'
-  if ('code' in error && (error.code === 'auth' || error.code === 'permission')) return 'Assistant request denied by authentication or permissions.'
-  if ('code' in error && (error.code === 'unavailable_service' || error.code === 'unsupported_feature')) return 'Assistant service is unavailable in this backend or deployment mode.'
-  if ('code' in error && error.code === 'privacy_blocked') return 'Assistant route is blocked by privacy policy until required consent or selector status exists.'
-  if ('code' in error && error.code === 'transport_loss') return 'Assistant stream disconnected before Aurora sent a final event.'
-  return error.message || 'Assistant request failed.'
+  if ('code' in error && (error.code === 'auth' || error.code === 'permission')) return 'Assistant request denied. Review access and try again.'
+  if ('code' in error && (error.code === 'unavailable_service' || error.code === 'unsupported_feature')) return 'Assistant service is unavailable for this Aurora setup.'
+  if ('code' in error && error.code === 'privacy_blocked') return 'Assistant request is blocked until the required privacy choice is made.'
+  if ('code' in error && error.code === 'transport_loss') return 'Assistant response was interrupted before Aurora finished.'
+  return 'Assistant request failed. Try again.'
 }
+
+export const assistantErrorMessage = productAssistantErrorCopy
 
 export function assistantControlsForRoute(
   route: RouteAvailability,
@@ -4000,15 +4002,15 @@ function nativeCaptureState(
     label: 'Native capture',
     state,
     privacyClass: 'raw-audio',
-    providerLabel: nativeAvailable ? `native:${nativePlatform}` : 'native manifest missing',
+    providerLabel: nativeAvailable ? nativePlatform : 'Not available',
     detail: state === 'available-local'
-      ? 'SDK native manifest reports microphone or voice capture support.'
+      ? 'This device reports microphone or voice capture support.'
       : state === 'privacy-blocked'
         ? nativePlatform.toLowerCase().includes('ios')
           ? 'iOS foreground capture is blocked until microphone permission, raw-audio consent, and a visible stop/revoke path are available.'
           : 'Native capture is blocked until the platform microphone permission is granted.'
-        : 'Tauri, Android, and iOS capture stay disabled until native manifest support lands.',
-    blockers: state === 'available-local' ? [] : [permission && !permission.granted ? `native permission missing: ${permission.name}` : 'native voice capture unavailable'],
+        : 'Device capture stays disabled until Aurora can confirm microphone support.',
+    blockers: state === 'available-local' ? [] : [permission && !permission.granted ? `device permission missing: ${permission.name}` : 'voice capture unavailable'],
     evidence: nativeAvailable ? ['native-manifest'] : []
   }
 }
@@ -4025,7 +4027,7 @@ function browserCaptureAvailability(
   if (surfaceProfile.kind === 'desktop-local') {
     return {
       state: captureStatus === 'listening' || captureStatus === 'processing' || captureStatus === 'speaking' ? 'available-local' : 'pending',
-      providerLabel: 'WebView getUserMedia + STTCoordinator wake',
+      providerLabel: 'This computer',
       detail: surfaceProfile.voiceCapture.detail,
       blockers: []
     }
@@ -4033,7 +4035,7 @@ function browserCaptureAvailability(
   if (surfaceProfile.isMobile) {
     return {
       state: captureStatus === 'listening' || captureStatus === 'processing' || captureStatus === 'speaking' ? 'available-local' : 'pending',
-      providerLabel: 'mobile WebView getUserMedia',
+      providerLabel: 'This device',
       detail: surfaceProfile.voiceCapture.detail,
       blockers: []
     }
@@ -4041,7 +4043,7 @@ function browserCaptureAvailability(
   if (captureStatus === 'listening') {
     return {
       state: 'available-local',
-      providerLabel: 'browser getUserMedia',
+      providerLabel: 'This device',
       detail: 'Local browser microphone stream is active on this device.',
       blockers: []
     }
@@ -4049,7 +4051,7 @@ function browserCaptureAvailability(
   if (captureStatus === 'processing' || captureStatus === 'speaking') {
     return {
       state: 'available-local',
-      providerLabel: 'browser getUserMedia',
+      providerLabel: 'This device',
       detail: captureStatus === 'processing' ? 'Captured audio is being processed.' : 'Assistant speech playback is active.',
       blockers: []
     }
@@ -4057,7 +4059,7 @@ function browserCaptureAvailability(
   if (captureStatus === 'permission-denied') {
     return {
       state: 'denied',
-      providerLabel: 'browser getUserMedia',
+      providerLabel: 'This device',
       detail: 'Browser microphone permission was denied.',
       blockers: ['browser_microphone_permission_denied']
     }
@@ -4065,15 +4067,15 @@ function browserCaptureAvailability(
   if (captureStatus === 'no-device') {
     return {
       state: 'unsupported',
-      providerLabel: 'browser getUserMedia',
-      detail: 'This runtime did not expose a browser microphone device API.',
+      providerLabel: 'This device',
+      detail: 'This device did not expose a microphone.',
       blockers: ['browser_microphone_api_missing']
     }
   }
   if (captureStatus === 'error') {
     return {
       state: 'degraded',
-      providerLabel: 'browser getUserMedia',
+      providerLabel: 'This device',
       detail: 'Browser microphone capture failed; retry or inspect device settings.',
       blockers: ['browser_microphone_error']
     }
@@ -4174,7 +4176,7 @@ function voiceAction(
     label,
     state: route.state,
     enabled: false,
-    reason: 'Capability route is visible; direct audio streaming uses the SDK audio/STT contracts when this platform supports microphone routing.',
+    reason: 'Audio can start after this device confirms microphone access.',
     route
   }
 }
@@ -4193,8 +4195,8 @@ function voiceEventRows(
   const rows = [
     { id: 'partial', label: 'Partial transcription', state: transcription.disabled ? 'unsupported' : 'pending', detail: 'Incremental text remains tied to backend stream events.' },
     { id: 'final', label: 'Final transcription', state: transcription.disabled ? 'unsupported' : transcription.state, detail: 'Final text must come from Transcription service status.' },
-    { id: 'tts-started', label: 'TTS started', state: 'pending', detail: 'Playback start waits for TTS.Started status.' },
-    { id: 'tts-stopped', label: 'TTS stopped', state: 'pending', detail: 'Stop/cancel controls require TTS.Stopped or interrupt status.' },
+    { id: 'tts-started', label: 'Speech started', state: 'pending', detail: 'Playback starts after Aurora confirms speech has begun.' },
+    { id: 'tts-stopped', label: 'Speech stopped', state: 'pending', detail: 'Stop and cancel controls wait for Aurora to finish stopping speech.' },
     { id: 'timeout', label: 'Timeout', state: 'degraded', detail: 'Timeouts remain visible as retryable voice session outcomes.' },
     { id: 'cancelled', label: 'Cancelled', state: 'pending', detail: 'Cancellation must revoke or stop the current audio session.' },
     { id: 'remote-denied', label: 'Remote denial', state: 'denied', detail: 'Policy, selector, or peer denial is shown without silent fallback.' },
@@ -4410,7 +4412,7 @@ function waveformBarsFromTimeDomain(samples: Uint8Array, barCount: number): numb
   return bars
 }
 
-function audioCaptureErrorMessage(error: unknown): string {
+function productAudioCaptureErrorCopy(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
       return 'Microphone permission was denied by the OS or WebView.'

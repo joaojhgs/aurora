@@ -12,6 +12,7 @@ import type {
   RoutePolicyEvaluation
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { safeErrorCopy } from './product-copy'
 import type { RouteAvailability } from './shell-data'
 
 export type RoutePolicyLoadState = 'loading' | 'ready' | 'degraded' | 'denied' | 'unavailable' | 'error'
@@ -285,7 +286,7 @@ export function RoutePolicyView({
         <div>
           <p className="aui-kicker">Mesh route policy</p>
           <h1 id="route-policy-title">Route policy decisions</h1>
-          <p>Review how Aurora routes peer, privacy, selector, and fallback scenarios before configuration changes are applied.</p>
+          <p>Review how Aurora handles shared devices, privacy, and selection before configuration changes are applied.</p>
         </div>
         <div className="aui-mesh-badges" aria-label="Route policy status">
           <StatusBadge state={snapshot.loadState === 'loading' ? 'pending' : snapshot.routeState} />
@@ -299,7 +300,7 @@ export function RoutePolicyView({
         <PolicyFact label="Selected scenario" value={selected ? `${selected.scenario.label}: ${selected.state}` : 'not loaded'} />
       </dl>
 
-      {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{snapshot.error}</p> : null}
+      {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{productRoutePolicyErrorCopy(snapshot.error)}</p> : null}
       {snapshot.warnings.length > 0 ? (
         <ul className="aui-mesh-warnings" aria-label="Route policy warnings">
           {snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}
@@ -353,13 +354,13 @@ function RouteScenarioDetails({ result }: { result: RoutePolicyScenarioResult })
           {evaluation ? <PrivacyBadge privacy={evaluation.privacyClass} /> : null}
         </div>
       </header>
-      {result.error ? <p className="aui-message aui-message-danger" role="alert">{result.error}</p> : null}
+      {result.error ? <p className="aui-message aui-message-danger" role="alert">{productRoutePolicyErrorCopy(result.error)}</p> : null}
       {evaluation ? (
         <>
           <dl className="aui-route-policy-summary">
             <PolicyFact label="Decision" value={`${evaluation.decision}: ${evaluation.reasonCode}`} />
-            <PolicyFact label="Selected provider" value={previewTarget(evaluation)} />
-            <PolicyFact label="Fallback" value={evaluation.preview.fallbackBehavior} />
+            <PolicyFact label="Selected destination" value={previewTarget(evaluation)} />
+            <PolicyFact label="Sharing behavior" value={productRoutePolicySharingCopy(evaluation.preview.fallbackBehavior)} />
             <PolicyFact label="Repair path" value={evaluation.repairPath ?? 'none required'} />
             <PolicyFact label="Selector" value={evaluation.explicitSelectorRequired ? 'explicit selector required' : 'selector accepted or not required'} />
             <PolicyFact label="Audit" value={evaluation.preview.auditReceiptTarget ?? 'not reported'} />
@@ -368,19 +369,19 @@ function RouteScenarioDetails({ result }: { result: RoutePolicyScenarioResult })
             {evaluation.route.candidates.map((candidate) => (
               <article key={candidate.provider_id} className="aui-route-candidate" data-selected={candidate.selected}>
                 <header>
-                  <strong>{candidate.provider_kind} / {candidate.provider_id}</strong>
+                  <strong>{productCandidateTitle(candidate)}</strong>
                   <StatusBadge state={candidate.selected ? 'available-remote' : candidate.included ? 'degraded' : 'denied'} />
                 </header>
                 <dl className="aui-route-policy-summary">
-                  <PolicyFact label="Peer" value={candidate.peer_id} />
+                  <PolicyFact label="Device" value={candidate.peer_id ? 'Shared device' : 'This device'} />
                   <PolicyFact label="Latency" value={candidate.latency_ms === null ? 'not reported' : `${candidate.latency_ms} ms`} />
                   <PolicyFact label="Capacity" value={`${candidate.active_calls}/${candidate.max_concurrent}; ${candidate.available_capacity ?? 'unknown'} available`} />
-                  <PolicyFact label="Reason" value={`${candidate.reason_code}: ${candidate.reason}`} />
+                  <PolicyFact label="Reason" value={productRouteReasonCopy(candidate.reason || candidate.reason_code)} />
                 </dl>
                 {candidate.blockers.length > 0 ? (
                   <ul>
                     {candidate.blockers.map((blocker) => (
-                      <li key={`${candidate.provider_id}-${blocker.code}`}>{blocker.code}: {blocker.message}</li>
+                      <li key={`${candidate.provider_id}-${blocker.code}`}>{productRouteReasonCopy(blocker.message || blocker.code)}</li>
                     ))}
                   </ul>
                 ) : null}
@@ -395,11 +396,11 @@ function RouteScenarioDetails({ result }: { result: RoutePolicyScenarioResult })
 
 export function routePolicyScenarios(): RoutePolicyScenario[] {
   return [
-    scenario('assistant_prompt', 'Assistant prompt', 'Prompt routing must keep personal text off fallback paths unless policy allows it.', 'Orchestrator.UserInput', 'Orchestrator', 'UserInput', { text: 'summarize my calendar' }, null, 'personal', ['personal']),
-    scenario('tool_call', 'Tool call', 'Duplicated local and remote tools require provider identity, safety class, and approval state.', 'Tooling.ExecuteTool', 'Tooling', 'ExecuteTool', { global_tool_id: 'mesh:workstation:shell.run', args_hash: 'sha256:redacted' }, { tool_id: 'mesh:workstation:shell.run' }, 'admin-critical', ['admin-critical']),
-    scenario('rag_query', 'Remote RAG namespace', 'RAG/data queries need namespace and privacy policy status; raw cross-peer SQL remains blocked.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'home-lab' }, { resource_id: 'rag:home-lab' }, 'sensitive', ['sensitive']),
-    scenario('audio_session', 'Remote STT session', 'Audio sessions require consent and privacy indicator status before raw audio leaves the node.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
-    scenario('model_runtime', 'Model runtime', 'Model selection can choose local, peer, or cloud fallback only when privacy class permits it.', 'Orchestrator.GetModelRuntime', 'Orchestrator', 'GetModelRuntime', { requested_runtime: 'balanced' }, { resource_id: 'model:balanced' }, 'personal', ['personal']),
+    scenario('assistant_prompt', 'Assistant prompt', 'Prompt routing must keep personal text on approved paths unless policy allows otherwise.', 'Orchestrator.UserInput', 'Orchestrator', 'UserInput', { text: 'summarize my calendar' }, null, 'personal', ['personal']),
+    scenario('tool_call', 'Tool call', 'Duplicated local and shared tools require source identity, safety class, and approval state.', 'Tooling.ExecuteTool', 'Tooling', 'ExecuteTool', { global_tool_id: 'mesh:workstation:shell.run', args_hash: 'sha256:redacted' }, { tool_id: 'mesh:workstation:shell.run' }, 'admin-critical', ['admin-critical']),
+    scenario('rag_query', 'Shared knowledge collection', 'Knowledge queries need collection and privacy policy status; unrestricted database access remains blocked.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'home-lab' }, { resource_id: 'rag:home-lab' }, 'sensitive', ['sensitive']),
+    scenario('audio_session', 'Shared transcription session', 'Audio sessions require consent and privacy indicator status before microphone audio leaves this device.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
+    scenario('model_runtime', 'Model selection', 'Model selection can choose this device, another approved device, or cloud only when privacy class permits it.', 'Orchestrator.GetModelRuntime', 'Orchestrator', 'GetModelRuntime', { requested_runtime: 'balanced' }, { resource_id: 'model:balanced' }, 'personal', ['personal']),
     scenario('scheduler_job', 'Scheduler delegation', 'Delegated jobs need namespace, owner, target selector, and correlation policy.', 'Scheduler.ScheduleJob', 'Scheduler', 'ScheduleJob', { namespace: 'household', owner_peer_id: 'local', target_selector: { peer_id: 'studio-peer' } }, { peer_id: 'studio-peer', resource_id: 'scheduler:household' }, 'admin-critical', ['admin-critical']),
     scenario('admin_action', 'Sensitive config change', 'Admin-critical mutations must preserve confirmation and audit receipt requirements.', 'Config.Set', 'Config', 'Set', { key_path: 'services.tts.mesh_routing', value: { require_explicit_selector: true } }, null, 'admin-critical', ['admin-critical'])
   ]
@@ -421,9 +422,13 @@ export function routePolicyDraftChange(draft: RoutePolicyDraft): { key_path: str
 
 export function routePolicyErrorMessage(error: unknown): string {
   if (!error) return 'Aurora route policy request failed.'
-  if (error instanceof Error) return error.message
-  if (typeof error === 'object' && error !== null && 'message' in error) return String((error as { message?: unknown }).message)
-  return String(error)
+  return safeErrorCopy(error).title
+}
+
+function productRoutePolicyErrorCopy(value: string): string {
+  if (/permission|denied|access/i.test(value)) return 'Route policy request denied. Review access and try again.'
+  if (/timeout/i.test(value)) return 'Route policy request timed out. Try again.'
+  return 'Route policy is unavailable. Try again.'
 }
 
 function scenario(
@@ -472,8 +477,8 @@ function capabilityAvailability(action: CapabilityCatalogResponse['actions'][num
 function capabilityReason(action: CapabilityCatalogResponse['actions'][number]): string {
   const blockers = [...action.route_blockers, ...action.policy.denial_reasons]
   if (blockers.length > 0) return presentableSignal(blockers.join(', '))
-  if (action.policy.approval_required) return `${action.topic} requires approval before mutation.`
-  return `${action.topic} is ${action.bindability} via ${action.provider_kind}.`
+  if (action.policy.approval_required) return 'Approval is required before this change can run.'
+  return action.bindability === 'available' ? 'Available through Aurora.' : 'Not ready yet.'
 }
 
 function settledValue<T>(result: PromiseSettledResult<T>): T | null {
@@ -491,9 +496,27 @@ function isDeniedFailure(result: PromiseSettledResult<unknown>): boolean {
 
 function previewTarget(evaluation: RoutePolicyEvaluation): string {
   if (evaluation.preview.providerId || evaluation.preview.peerId) {
-    return `${evaluation.preview.providerKind} / ${evaluation.preview.providerId ?? 'provider pending'} / ${evaluation.preview.peerId ?? 'peer pending'}`
+    return evaluation.preview.peerId ? 'Shared device' : 'This device'
   }
-  return evaluation.route.selected_target || 'none'
+  return evaluation.route.selected_target ? 'Selected destination' : 'none'
+}
+
+function productRoutePolicySharingCopy(value: string): string {
+  if (/block|deny/i.test(value)) return 'Blocked until policy allows it'
+  if (/fallback|remote|mesh|peer|cloud/i.test(value)) return 'Can use another approved device'
+  if (/none|not/i.test(value)) return 'No alternate destination'
+  return 'Uses selected destination'
+}
+
+function productCandidateTitle(candidate: RoutePolicyEvaluation['route']['candidates'][number]): string {
+  return candidate.selected ? 'Selected destination' : candidate.included ? 'Available destination' : 'Unavailable destination'
+}
+
+function productRouteReasonCopy(value: string): string {
+  const copy = presentableSignal(value)
+  if (/permission|denied|blocked|selector|consent|privacy/i.test(copy)) return copy
+  if (/timeout|offline|unavailable|stale/i.test(copy)) return copy
+  return copy ? 'Aurora reported this destination state.' : 'No issue reported.'
 }
 
 function PolicyFact({ label, value }: { label: string; value: string }) {

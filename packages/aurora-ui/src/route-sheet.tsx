@@ -12,6 +12,7 @@ import type {
   RoutePolicyEvaluation
 } from '@aurora/client'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { safeErrorCopy } from './product-copy'
 
 export type RouteSheetScope = 'request' | 'session' | 'feature' | 'global'
 export type AdminActionRouteState = 'not-required' | 'required' | 'drafted' | 'confirmed' | 'error'
@@ -73,7 +74,7 @@ const scopeOptions: Array<{ scope: RouteSheetScope; label: string; description: 
 export function RouteSheet({
   client,
   title = 'Route and privacy',
-  description = 'Review target, privacy class, redacted payload, policy reason, and audit destination before data leaves this surface.',
+  description = 'Review destination, privacy class, hidden sensitive values, policy reason, and account history before data leaves this surface.',
   topic = null,
   method = null,
   routeRequest,
@@ -224,7 +225,7 @@ export function RouteSheet({
         <RouteSheetDecision model={model} />
       </header>
 
-      {model.loadState === 'loading' ? <RouteSheetNotice icon="loading" message="Loading route policy from Aurora." /> : null}
+      {model.loadState === 'loading' ? <RouteSheetNotice icon="loading" message="Loading policy from Aurora." /> : null}
       {model.loadState === 'error' ? (
         <RouteSheetNotice icon="error" message={model.error ?? 'Aurora route policy evaluation failed.'} role="alert" />
       ) : null}
@@ -241,11 +242,11 @@ export function RouteSheet({
               <span>{model.primaryReason}</span>
             </div>
             <div>
-              <strong>AdminAction</strong>
+              <strong>Admin approval</strong>
               <span>{adminActionLabel(model.adminActionState)}</span>
             </div>
             <div>
-              <strong>Rollback/error</strong>
+              <strong>Retry</strong>
               <span>{model.canConfirm ? 'Selection can be retried or changed before dispatch.' : 'Dispatch remains blocked until policy is repaired.'}</span>
             </div>
           </div>
@@ -392,36 +393,36 @@ export function routeSheetPolicySignals(
       label: 'Privacy selector',
       state: selectorState,
       detail: selectorState === 'preference'
-        ? 'Local provider selector is a preference; it does not hard-block this route.'
-        : selectorState === 'blocked'
-          ? 'Explicit peer, provider, or resource selector is required before dispatch.'
-          : 'Backend policy does not require an explicit selector for this route.'
+	          ? 'A local destination preference is set; this route remains available.'
+	        : selectorState === 'blocked'
+	          ? 'Choose the device or resource before continuing.'
+	          : 'Aurora does not require an explicit selection for this route.'
     },
     {
       id: 'consent',
       label: 'Consent',
       state: consentBlocked ? 'blocked' : 'not-required',
       detail: consentBlocked
-        ? 'Consent is missing and must be collected before this payload can leave the local node.'
-        : 'No missing consent blocker is present in backend route policy status.'
+	        ? 'Consent is missing and must be collected before this request can leave this device.'
+	        : 'No missing consent blocker is present.'
     },
     {
       id: 'privacy-indicator',
       label: 'Privacy indicator',
       state: privacyIndicatorBlocked ? 'blocked' : 'not-required',
       detail: privacyIndicatorBlocked
-        ? 'The required privacy indicator has not been shown yet.'
-        : 'No missing privacy-indicator blocker is present in backend route policy status.'
+	        ? 'The required privacy indicator has not been shown yet.'
+	        : 'No missing privacy-indicator blocker is present.'
     },
     {
       id: 'native-permission',
-      label: 'Native permission',
-      state: nativeBlocker ? 'blocked' : 'not-required',
-      detail: nativeBlocker?.message ?? 'No missing native platform permission is present in route policy status.'
+	      label: 'Device permission',
+	      state: nativeBlocker ? 'blocked' : 'not-required',
+	      detail: nativeBlocker ? 'A device permission is missing.' : 'No missing device permission is present.'
     },
     {
       id: 'admin-action',
-      label: 'AdminAction',
+	      label: 'Admin approval',
       state: adminActionSignalState(adminActionState),
       detail: adminActionSignalDetail(adminActionState)
     }
@@ -435,11 +436,11 @@ function adminActionSignalState(state: AdminActionRouteState): RouteSheetPolicyS
 }
 
 function adminActionSignalDetail(state: AdminActionRouteState): string {
-  if (state === 'not-required') return 'This route does not require AdminAction confirmation.'
-  if (state === 'confirmed') return 'AdminAction confirmation exists for this route.'
-  if (state === 'drafted') return 'AdminAction draft exists but confirmation is still pending.'
-  if (state === 'error') return 'AdminAction failed; retry or choose a different route.'
-  return 'AdminAction confirmation is required before dispatch.'
+  if (state === 'not-required') return 'This route does not require administrator confirmation.'
+  if (state === 'confirmed') return 'Administrator confirmation exists for this route.'
+  if (state === 'drafted') return 'Administrator review is started but confirmation is still pending.'
+  if (state === 'error') return 'Administrator review failed; retry or choose a different route.'
+  return 'Administrator confirmation is required before continuing.'
 }
 
 function isSelectorBlockerCode(code: string): boolean {
@@ -497,29 +498,29 @@ function routeSheetPrimaryReason(
   error: string | null,
   adminActionState: AdminActionRouteState
 ): string {
-  if (error) return error
-  if (!evaluation) return 'Route policy has not returned service status yet.'
-  if (adminActionState === 'required') return 'AdminAction confirmation is required before this manage/admin-critical route can run.'
-  if (adminActionState === 'drafted') return 'AdminAction draft exists but confirmation is still pending.'
-  if (adminActionState === 'error') return 'AdminAction failed; retry or choose a different route.'
-  if (evaluation.allowed) return evaluation.repairPath ?? 'Backend policy allows this route.'
+  if (error) return safeErrorCopy({ code: 'connection_lost' }).title
+  if (!evaluation) return 'Aurora has not returned policy status yet.'
+  if (adminActionState === 'required') return 'Administrator confirmation is required before this sensitive route can run.'
+  if (adminActionState === 'drafted') return 'Administrator review is started but confirmation is still pending.'
+  if (adminActionState === 'error') return 'Administrator review failed; retry or choose a different route.'
+  if (evaluation.allowed) return evaluation.repairPath ?? 'Policy allows this route.'
   return evaluation.repairPath ?? evaluation.blockers[0]?.message ?? evaluation.reasonCode
 }
 
 function adminActionLabel(state: AdminActionRouteState): string {
   if (state === 'not-required') return 'not required'
-  if (state === 'confirmed') return 'confirmed by backend-issued AdminAction'
+  if (state === 'confirmed') return 'confirmed by Aurora'
   if (state === 'drafted') return 'drafted; waiting for confirmation'
   if (state === 'error') return 'error; route remains blocked'
-  return 'required before dispatch'
+  return 'required before continuing'
 }
 
 function previewTarget(preview: RoutePolicyEvaluation['preview']): string {
   return [
     preview.egressDestination,
-    preview.peerId ? `peer ${preview.peerId}` : null,
-    preview.providerId ? `provider ${preview.providerId}` : null,
-    preview.serviceInstanceId ? `service ${preview.serviceInstanceId}` : null
+    preview.peerId ? 'shared device' : null,
+    preview.providerId ? 'selected service' : null,
+    preview.serviceInstanceId ? 'service ready' : null
   ].filter(Boolean).join(' / ') || 'none'
 }
 

@@ -22,6 +22,7 @@ import { Label } from '#components/ui/label'
 import { Textarea } from '#components/ui/textarea'
 import { PageHeader } from './state-surface'
 import { StatusBadge, presentableSignal } from './status-badges'
+import { safeErrorCopy } from './product-copy'
 import type { RouteAvailability } from './shell-data'
 import {
   Button,
@@ -185,7 +186,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       setLoadState('ready')
       return
     }
-    setLoadError(result.error)
+    setLoadError(productPairingErrorCopy(result.error))
     setLoadState('error')
   }, [client, includeNonPending, route.disabled])
 
@@ -254,7 +255,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       setCreatedCredential(buildPairingCredentialModel(result.data, result.confirmation.audit_receipt))
       setOperation({
         status: 'success',
-        message: 'Pairing code created; copy the code or deep link before it expires. QR rendering remains unavailable without a QR contract/renderer.',
+        message: 'Pairing code created; copy the code or deep link before it expires.',
         auditReceipt: result.confirmation.audit_receipt
       })
       await loadQueue()
@@ -307,7 +308,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       const result = await client.admin.execute<TokenRevokeResponse>(request)
       setOperation({
         status: 'success',
-        message: result.data.success ? 'Exchanged token revoked through Auth.RevokeToken.' : 'Auth.RevokeToken completed without success confirmation.',
+        message: result.data.success ? 'Exchanged credential revoked.' : 'Aurora finished the revoke request but did not confirm the outcome.',
         auditReceipt: result.confirmation.audit_receipt
       })
     } catch (error) {
@@ -329,12 +330,12 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     try {
       const clipboard = globalThis.navigator?.clipboard
       if (!clipboard?.writeText) {
-        throw new Error('Clipboard API unavailable; open the controlled pairing details on a secure desktop session.')
+        throw new Error('Clipboard unavailable')
       }
       await clipboard.writeText(value)
       setCopiedRequestId(requestId)
     } catch (error) {
-      setCopyError(error instanceof Error ? error.message : 'Unable to copy pairing value.')
+      setCopyError(productPairingErrorCopy(error))
     }
   }, [])
 
@@ -515,7 +516,7 @@ export function PairingQueueSurface({
         eyebrow="Admin"
         title="Pairing queue"
         description={model.meshPairingManaged
-          ? 'Review bilateral mesh pairing requests. Both Auroras create an incoming request automatically after signaling connects.'
+          ? 'Review pairing requests. Both Auroras create an incoming request automatically after they connect.'
           : 'Review pending device and peer pairing requests, and mint or exchange pairing codes through audited AdminAction.'}
         badges={<StatusBadge state={route.state} />}
         badgesLabel="Pairing route status"
@@ -563,7 +564,7 @@ export function PairingQueueSurface({
               id="pairing-permissions"
               value={permissions}
               disabled={controlsDisabled}
-              placeholder="Auth.use, Gateway.use"
+              placeholder="Example: feature access"
               onChange={(event) => onPermissionsChange?.(event.currentTarget.value)}
             />
             <p className="text-xs text-muted-foreground">Space or comma separated permissions granted on approval.</p>
@@ -594,14 +595,14 @@ export function PairingQueueSurface({
       {model.meshPairingManaged ? (
         <Alert role="note">
           <AlertDescription>
-            <strong>Mesh pairing creates requests automatically.</strong> Once both Auroras connect to the same signaling room, both Auroras create an incoming request automatically. Confirm that the verification code matches on both Auroras, then approve independently on each Aurora. Manual Create pairing code and Exchange controls are disabled while mesh mode is active.
+            <strong>Aurora creates pairing requests automatically.</strong> Once both Auroras connect, both devices create an incoming request automatically. Confirm that the verification code matches on both Auroras, then approve independently on each Aurora. Manual Create pairing code and Exchange controls are disabled while this mode is active.
           </AlertDescription>
         </Alert>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <Card title="Create pairing code" icon={<KeyRound size={18} aria-hidden />} ariaLabel="Create pairing code">
           <p className="text-sm text-muted-foreground">
-            Uses <code className="font-mono text-xs">{AUTH_METHODS.pairingStart}</code>. QR image is unavailable until a renderer or backend QR contract exists; the deep-link payload is provided for native handoff.
+            Create a one-time pairing code for a trusted device. QR image display is unavailable here; use the code or deep link instead.
           </p>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="pairing-device">Device name</Label>
@@ -649,7 +650,7 @@ export function PairingQueueSurface({
 
           <Card title="Exchange and revoke" icon={<RotateCcw size={18} aria-hidden />} ariaLabel="Pairing exchange and revoke">
           <p className="text-sm text-muted-foreground">
-            Exchange uses <code className="font-mono text-xs">{AUTH_METHODS.pairingExchange}</code>. Exchanged tokens revoke through <code className="font-mono text-xs">{AUTH_METHODS.revokeToken}</code> when the backend returns a token id.
+            Exchange a one-time code, then revoke the exchanged credential when Aurora reports one.
           </p>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="pairing-exchange-code">Pairing code to exchange</Label>
@@ -675,7 +676,7 @@ export function PairingQueueSurface({
               {pendingAction === 'revoke-token' ? 'Revoking through AdminAction' : 'Revoke exchanged token via AdminAction'}
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground" role="note">Pending pairing revoke unavailable: missing backend contract Auth.PairingRevoke.</p>
+          <p className="text-sm text-muted-foreground" role="note">Pending pairing revoke is unavailable in this Aurora setup.</p>
           {exchangeResult ? (
             <section className="rounded-lg border border-success/35 bg-success/5 p-3" aria-label="Pairing exchange result">
               <MetaGrid
@@ -695,7 +696,7 @@ export function PairingQueueSurface({
 
       {operation.message ? (
         <Alert variant={operation.status === 'error' ? 'destructive' : 'default'} role={operation.status === 'error' ? 'alert' : 'status'}>
-          <AlertDescription>{operation.message}</AlertDescription>
+          <AlertDescription>{productPairingOperationCopy(operation.message)}</AlertDescription>
         </Alert>
       ) : null}
       {operation.auditReceipt ? <p className="text-sm text-muted-foreground">AdminAction audit receipt: {operation.auditReceipt}</p> : null}
@@ -716,12 +717,12 @@ export function PairingQueueSurface({
       ) : null}
       {model.disabledReason ? (
         <Alert role="note">
-          <AlertDescription>{model.disabledReason}</AlertDescription>
+          <AlertDescription>{productPairingNoticeCopy(model.disabledReason)}</AlertDescription>
         </Alert>
       ) : null}
       {model.error ? (
         <Alert variant="destructive" role="alert">
-          <AlertDescription>{model.error}</AlertDescription>
+          <AlertDescription>{productPairingNoticeCopy(model.error)}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -822,7 +823,7 @@ export function buildPairingQueueModel({
       expiredCount: 0,
       secretsRedacted: true,
       disabledReason: null,
-      error: pairingErrorMessage(error),
+    error: productPairingErrorCopy(error),
       outgoingPeers: [],
       meshPairingManaged
     }
@@ -967,7 +968,7 @@ export function buildPairingCredentialModel(
     expiresAt: expiryFromSeconds(response.expires_in_seconds),
     deepLink,
     qrPayload: deepLink,
-    qrUnavailableReason: 'QR image unavailable: no @aurora/ui QR renderer or backend QR contract is exposed in this checkout.',
+    qrUnavailableReason: 'QR image unavailable here. Use the code or deep link instead.',
     auditReceipt
   }
 }
@@ -986,14 +987,32 @@ export function assertPairingAdminAction(request: PairingAdminActionRequest): Pa
 }
 
 export function pairingErrorMessage(error: unknown): string {
+  return productPairingErrorCopy(error)
+}
+
+function productPairingErrorCopy(error: unknown): string {
   if (error instanceof AuroraError) {
-    if (error.code === 'permission' || error.code === 'auth') return `Permission denied by Auth: ${error.message}`
-    if (error.code === 'unavailable_service') return `Auth service unavailable: ${error.message}`
-    if (error.code === 'unsupported_feature') return `Pairing backend unsupported by this deployment: ${error.message}`
-    if (error.code === 'timeout') return `Aurora request timed out: ${error.message}`
-    return error.message
+    if (error.code === 'permission' || error.code === 'auth') return 'Pairing request denied. Review access and try again.'
+    if (error.code === 'unavailable_service') return 'Pairing is unavailable for this Aurora setup.'
+    if (error.code === 'unsupported_feature') return 'This Aurora setup cannot use that pairing feature yet.'
+    if (error.code === 'timeout') return 'Pairing request timed out. Try again.'
   }
-  return error instanceof Error ? error.message : 'Unknown pairing queue error'
+  return safeErrorCopy(error).title
+}
+
+function productPairingOperationCopy(value: string): string {
+  if (/denied|permission|access/i.test(value)) return 'Pairing request denied. Review access and try again.'
+  if (/created|copy|deep link|expires/i.test(value)) return 'Pairing code created; copy the code or deep link before it expires.'
+  if (/revok/i.test(value)) return 'Pairing credential update finished.'
+  if (/pending|creating|exchanging|submitting/i.test(value)) return 'Pairing request is in progress.'
+  return 'Pairing request updated.'
+}
+
+function productPairingNoticeCopy(value: string): string {
+  if (/unavailable|unsupported/i.test(value)) return 'Pairing is unavailable for this Aurora setup.'
+  if (/denied|permission|access/i.test(value)) return 'Pairing request denied. Review access and try again.'
+  if (/pending|loading/i.test(value)) return 'Pairing request is in progress.'
+  return 'Pairing status changed.'
 }
 
 function routeEvidence(route: RouteAvailability): string {

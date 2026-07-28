@@ -13,6 +13,7 @@ import type {
 import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { safeErrorCopy } from './product-copy'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
 import { cn } from '#lib/utils'
@@ -122,7 +123,7 @@ export async function buildDataPolicySnapshot(client: AuroraClient, route: Route
   const checks = definitions.map<DataPolicyCheck>((definition, index) => {
     const result = checkResults[index]
     if (result?.status === 'fulfilled') return { ...definition, evaluation: result.value, error: null }
-    return { ...definition, evaluation: null, error: policyErrorText(result?.reason) }
+    return { ...definition, evaluation: null, error: productDataPolicyErrorCopy(result?.reason) }
   })
   const namespaces = namespacesResponse?.namespaces ?? []
   const conversations = (messagesResponse?.messages ?? []).map(normalizeConversationMessage)
@@ -196,7 +197,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         eyebrow="Memory"
         id="data-policy-title"
         title="Data policy and retention"
-        description="Review settings-style privacy controls for retention defaults, namespace visibility, raw audio/transcript storage, remote fallback rules, data flows, and audit state before data leaves Aurora."
+        description="Review retention defaults, collection visibility, audio and transcript storage, sharing rules, and account history before data leaves Aurora."
         badges={
           <>
             <StatusBadge state={dataPolicyStatusState(snapshot.loadState)} />
@@ -210,9 +211,9 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       <StatStrip
         ariaLabel="Data policy summary"
         items={[
-          { label: 'Retention defaults', value: totals.retentionModes, caption: `${snapshot.namespaces.length} namespace(s)` },
-          { label: 'Namespace visibility', value: `${totals.localNamespaces} local / ${totals.remoteNamespaces} remote`, caption: `${totals.deniedNamespaces} denied or stale` },
-          { label: 'Raw audio/transcripts', value: `${snapshot.conversations.length} transcript record(s)`, caption: 'raw audio off by default' },
+          { label: 'Retention defaults', value: totals.retentionModes, caption: `${snapshot.namespaces.length} collection(s)` },
+          { label: 'Collection visibility', value: `${totals.localNamespaces} local / ${totals.remoteNamespaces} shared`, caption: `${totals.deniedNamespaces} denied or stale` },
+          { label: 'Audio and transcripts', value: `${snapshot.conversations.length} transcript record(s)`, caption: 'audio storage off by default' },
           { label: 'Audit trail', value: `${totals.auditTargets} target(s)`, caption: `${totals.policyDecisions} policy decision(s)` }
         ]}
       />
@@ -223,7 +224,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         </div>
       ) : null}
       {snapshot.loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading data policy from Aurora.</p> : null}
-      {snapshot.loadState === 'empty' ? <p className="text-sm text-muted-foreground">No namespaces or transcript records were returned by the backend.</p> : null}
+      {snapshot.loadState === 'empty' ? <p className="text-sm text-muted-foreground">No collections or transcript records were returned by Aurora.</p> : null}
       {snapshot.warnings.length > 0 ? (
         <ul className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning" aria-label="Data policy warnings">
           {snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}
@@ -231,8 +232,8 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       ) : null}
 
       <Card
-        title="Retention defaults and namespace visibility"
-        description="DB.RAGListNamespaces is the source of truth for sharing mode, privacy class, operations, freshness, and AdminAction requirements."
+        title="Retention defaults and collection visibility"
+        description="Aurora shows sharing mode, privacy class, available actions, freshness, and approval requirements for each collection."
         icon={<Database size={18} aria-hidden />}
         actions={<Button variant="ghost" icon={<RefreshCw size={15} aria-hidden />} onClick={onRefresh} disabled={snapshot.loadState === 'loading'}>Refresh</Button>}
       >
@@ -240,41 +241,41 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
           columns={retentionColumns}
           rows={snapshot.namespaces}
           getRowKey={(namespace) => namespace.namespace}
-          empty="No namespace policy rows returned."
+          empty="No collection policy rows returned."
         />
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card
-          title="Raw audio, transcripts, and fallback rules"
-          description="Storage toggles are represented as policy state until backend AdminAction mutation endpoints exist."
+          title="Audio, transcripts, and sharing rules"
+          description="Storage choices are shown as policy state until Aurora can safely apply changes."
           icon={<Mic size={18} aria-hidden />}
         >
           <div className="flex flex-col gap-3">
-            <DataPolicyToggle label="Raw audio storage" value="Off by default" detail="Raw audio is transient unless the selected route, consent, privacy indicator, and backend policy allow retention." />
-            <DataPolicyToggle label="Transcript storage" value={`${snapshot.conversations.length} recent transcript record(s)`} detail="Conversation text is loaded via DB.GetMessages and inherits each record privacy class; retention changes require AdminAction audit." />
-            <DataPolicyToggle label="Remote/mesh fallback" value={totals.remoteFallback} detail="Remote RAG and audio routes require explicit selector, consent/privacy indicators where applicable, and cannot silently fall back to cloud." />
-            <DataPolicyToggle label="Namespace visibility" value={totals.visibilityPolicy} detail="Denied, stale, and secret namespaces stay visible as policy status but are not actionable data sources." />
+            <DataPolicyToggle label="Audio storage" value="Off by default" detail="Audio is temporary unless the selected destination, consent, privacy indicator, and policy allow retention." />
+            <DataPolicyToggle label="Transcript storage" value={`${snapshot.conversations.length} recent transcript record(s)`} detail="Conversation text keeps each record privacy class; retention changes require approval and account history." />
+            <DataPolicyToggle label="Shared-device help" value={totals.remoteFallback} detail="Shared memory and audio work require explicit selection, consent, and privacy indicators where applicable, and cannot switch destinations silently." />
+            <DataPolicyToggle label="Collection visibility" value={totals.visibilityPolicy} detail="Denied, stale, and secret collections stay visible as policy status but are not actionable data sources." />
           </div>
         </Card>
 
         <Card
           title="Export, delete, and import data flows"
-          description="Each flow is enabled only when namespace policy and AdminAction permit it; no raw payloads or tokens are rendered."
+          description="Each flow is enabled only when collection policy and approval permit it; sensitive values stay hidden."
           icon={<ShieldCheck size={18} aria-hidden />}
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Data policy flow cards">
-            <FlowCard icon={<FileDown size={18} aria-hidden />} label="Export snapshot" value={`${totals.exportableNamespaces} namespace(s)`} detail="Exports require namespace policy support plus AdminAction approval before records leave this node." />
-            <FlowCard icon={<Trash2 size={18} aria-hidden />} label="Delete record" value={`${totals.deleteableNamespaces} namespace(s)`} detail="Deletes remain admin-critical and must carry reason, policy decision, and audit correlation." />
-            <FlowCard icon={<Upload size={18} aria-hidden />} label="Import preview" value={`${totals.importableNamespaces} namespace(s)`} detail="Imports are previewed before write; owner overwrite and remote source metadata remain policy-gated." />
-            <FlowCard icon={<Network size={18} aria-hidden />} label="Remote query" value={`${totals.remoteQueryableNamespaces} namespace(s)`} detail="Remote query is allowed only for selected namespaces and never exposes raw SQL or unrestricted replication." />
+            <FlowCard icon={<FileDown size={18} aria-hidden />} label="Export snapshot" value={`${totals.exportableNamespaces} collection(s)`} detail="Exports require collection policy support plus approval before records leave this device." />
+            <FlowCard icon={<Trash2 size={18} aria-hidden />} label="Delete record" value={`${totals.deleteableNamespaces} collection(s)`} detail="Deletes require an administrator reason, policy decision, and account history." />
+            <FlowCard icon={<Upload size={18} aria-hidden />} label="Import preview" value={`${totals.importableNamespaces} collection(s)`} detail="Imports are previewed before saving; ownership changes and shared sources remain policy-gated." />
+            <FlowCard icon={<Network size={18} aria-hidden />} label="Shared query" value={`${totals.remoteQueryableNamespaces} collection(s)`} detail="Shared search is allowed only for selected collections and never exposes unrestricted database access." />
           </div>
         </Card>
       </div>
 
       <Card
         title="Audit trail for policy changes"
-        description="Route policy dry-runs show the audit target, policy decision, fallback behavior, and blockers that would accompany data-policy changes."
+        description="Aurora previews account history, policy decisions, sharing behavior, and blockers before data-policy changes."
         icon={<History size={18} aria-hidden />}
         actions={
           <a
@@ -301,17 +302,17 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
                 <StatusBadge state={check.evaluation?.availability ?? (check.error ? 'unsupported' : 'pending')} />
               </header>
               <p className="text-xs text-muted-foreground">{check.description}</p>
-              {check.error ? <p className="text-xs text-destructive" role="alert">{check.error}</p> : null}
+              {check.error ? <p className="text-xs text-destructive" role="alert">{productDataPolicyErrorCopy(check.error)}</p> : null}
               <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
                 <PolicyFact label="Privacy class" value={check.evaluation?.privacyClass ?? check.privacyClass} />
                 <PolicyFact label="Decision" value={check.evaluation ? `${check.evaluation.decision}: ${check.evaluation.reasonCode}` : 'pending'} />
-                <PolicyFact label="Fallback" value={check.evaluation?.preview.fallbackBehavior ?? 'not evaluated'} />
-                <PolicyFact label="Audit target" value={check.evaluation?.preview.auditReceiptTarget ?? check.auditReceiptTarget} />
+                <PolicyFact label="Sharing behavior" value={productSharingBehaviorCopy(check.evaluation?.preview.fallbackBehavior ?? 'not evaluated')} />
+                <PolicyFact label="Account history" value={productDataPolicyHistoryCopy(check.evaluation?.preview.auditReceiptTarget ?? check.auditReceiptTarget)} />
               </dl>
             </article>
           ))}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground" role="alert">Policy edits require AdminAction draft/confirm/audit through Config.Set; this route does not mutate retention, raw audio, transcript, fallback, export, delete, or import policy directly.</p>
+        <p className="mt-3 text-xs text-muted-foreground" role="alert">Policy edits require administrator review and account history; this screen does not directly change retention, audio, transcript, sharing, export, delete, or import policy.</p>
       </Card>
     </section>
   )
@@ -328,11 +329,11 @@ function dataPolicyStatusState(state: DataPolicyLoadState) {
 
 function dataPolicyDefinitions(): Omit<DataPolicyCheck, 'evaluation' | 'error'>[] {
   return [
-    policyCheck('rag-search', 'RAG search policy', 'Namespace search needs privacy class, selector, and backend route status.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'main.rag' }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false),
-    policyCheck('raw-audio', 'Raw audio route', 'Raw audio cannot leave the device without consent and a visible privacy indicator.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'policy-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], false, false, false),
-    policyCheck('transcript-storage', 'Transcript storage', 'Transcript retention follows DB.GetMessages policy and per-record privacy classes.', 'DB.GetMessages', 'DB', 'GetMessages', { limit: 6, message_type: 'TEXT' }, null, 'personal', ['personal'], true, true, false),
-    policyCheck('remote-fallback', 'Remote mesh fallback', 'Remote fallback is policy-controlled and requires explicit peer/resource selector status.', 'DB.RAGSearchRemote', 'DB', 'RAGSearchRemote', { query: 'remote namespace', namespace: 'peer-studio-gpu.memories' }, { peer_id: 'peer-studio-gpu', resource_namespace: 'peer-studio-gpu.memories' }, 'personal', ['personal'], true, true, false),
-    policyCheck('export-import-delete', 'Export/delete/import policy', 'Data mutations require namespace support plus AdminAction/audit before payload movement.', 'DB.RAGExportNamespace', 'DB', 'RAGExportNamespace', { namespace: 'main.rag', include_tombstones: false }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false)
+    policyCheck('rag-search', 'Collection search policy', 'Collection search needs privacy class, selector, and Aurora route status.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'main.rag' }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false),
+    policyCheck('raw-audio', 'Audio route', 'Audio cannot leave the device without consent and a visible privacy indicator.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'policy-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], false, false, false),
+    policyCheck('transcript-storage', 'Transcript storage', 'Transcript retention follows policy and per-record privacy classes.', 'DB.GetMessages', 'DB', 'GetMessages', { limit: 6, message_type: 'TEXT' }, null, 'personal', ['personal'], true, true, false),
+    policyCheck('remote-fallback', 'Shared-device help', 'Shared-device help is policy-controlled and requires explicit device or resource selection.', 'DB.RAGSearchRemote', 'DB', 'RAGSearchRemote', { query: 'remote namespace', namespace: 'peer-studio-gpu.memories' }, { peer_id: 'peer-studio-gpu', resource_namespace: 'peer-studio-gpu.memories' }, 'personal', ['personal'], true, true, false),
+    policyCheck('export-import-delete', 'Export/delete/import policy', 'Data changes require collection support plus administrator approval and account history before records move.', 'DB.RAGExportNamespace', 'DB', 'RAGExportNamespace', { namespace: 'main.rag', include_tombstones: false }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false)
   ]
 }
 
@@ -389,9 +390,9 @@ function dataPolicyTotals(namespaces: DBRAGNamespaceInfo[], conversations: Norma
     highestPrivacy,
     auditTargets,
     policyDecisions,
-    audioPolicy: rawAudio?.evaluation?.allowed ? 'raw audio route allowed by policy' : 'raw audio transient until consent/indicator/backend policy allow retention',
-    remoteFallback: remoteFallback?.evaluation?.allowed ? 'remote fallback allowed with selector status' : 'remote fallback blocked unless selector/backend policy allow it',
-    visibilityPolicy: deniedNamespaces > 0 ? 'Denied/stale namespaces visible as policy status' : 'All namespaces actionable by current policy',
+    audioPolicy: rawAudio?.evaluation?.allowed ? 'audio allowed by policy' : 'audio remains temporary until consent, indicator, and policy allow retention',
+    remoteFallback: remoteFallback?.evaluation?.allowed ? 'shared-device help allowed after selection' : 'shared-device help blocked until selection and policy allow it',
+    visibilityPolicy: deniedNamespaces > 0 ? 'Denied/stale collections visible as policy status' : 'All collections actionable by current policy',
     exportableNamespaces: namespaces.filter((namespace) => namespace.policy.export_supported).length,
     deleteableNamespaces: namespaces.filter((namespace) => namespace.policy.delete_supported).length,
     importableNamespaces: namespaces.filter((namespace) => namespace.policy.import_supported).length,
@@ -401,8 +402,8 @@ function dataPolicyTotals(namespaces: DBRAGNamespaceInfo[], conversations: Norma
 }
 
 function namespaceVisibility(namespace: DBRAGNamespaceInfo) {
-  const origin = namespace.source_peer_id === 'local-peer' ? 'local node' : `remote peer ${namespace.source_peer_id}`
-  return `${origin}; ${namespace.availability}; schema ${namespace.schema_version}`
+  const origin = namespace.source_peer_id === 'local-peer' ? 'this device' : 'shared device'
+  return `${origin}; ${namespace.availability}; version ${namespace.schema_version}`
 }
 
 function dataFlowText(namespace: DBRAGNamespaceInfo) {
@@ -413,6 +414,21 @@ function dataFlowText(namespace: DBRAGNamespaceInfo) {
     namespace.policy.delete_supported ? 'delete' : null
   ].filter((value): value is string => Boolean(value))
   return flows.length > 0 ? flows.join(', ') : namespace.policy.denial_reason ?? 'no data flow allowed'
+}
+
+function productDataPolicyErrorCopy(error: unknown): string {
+  return safeErrorCopy(error).title
+}
+
+function productSharingBehaviorCopy(value: string): string {
+  if (/none|not evaluated/i.test(value)) return value
+  if (/block|deny/i.test(value)) return 'Blocked until policy allows it'
+  if (/fallback|remote|mesh|peer|cloud/i.test(value)) return 'Can use another approved device'
+  return 'Uses the selected destination'
+}
+
+function productDataPolicyHistoryCopy(value: string): string {
+  return value ? 'Account history enabled' : 'Not reported'
 }
 
 function PolicyFact({ label, value }: { label: string; value: string }) {

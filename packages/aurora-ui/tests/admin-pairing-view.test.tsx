@@ -13,6 +13,7 @@ import {
 } from '../src/pairing-queue-view'
 import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 describe('PairingQueueView admin pairing surface', () => {
   it('renders pending queue, expiry, audit, create, exchange, revoke, and honest QR/revoke contract states', () => {
@@ -50,11 +51,12 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(markup).toContain('QR image unavailable')
     expect(markup).toContain('Exchange via AdminAction')
     expect(markup).toContain('Revoke exchanged token via AdminAction')
-    expect(markup).toContain('Pending pairing revoke unavailable: missing backend contract Auth.PairingRevoke')
+    expect(markup).toContain('Pending pairing revoke is unavailable in this Aurora setup.')
     expect(markup).toContain('audit-create-001')
     expect(markup).toContain('audit-exchange-001')
     expect(markup).toContain('AdminAction audit receipt: audit-latest-001')
     expect(markup).not.toContain('secret-token')
+    expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
   })
 
   it('builds approve, deny, create, exchange, and revoke requests only after explicit AdminAction unlock', () => {
@@ -169,8 +171,8 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(waitingMarkup).not.toContain('Only the receiving Aurora shows an incoming pending request')
     expect(waitingMarkup).not.toContain('the reverse request will appear here for approval')
     expect(waitingMarkup).toContain('Outgoing pairing is active')
-    expect(waitingMarkup).toContain('Mesh pairing creates requests automatically')
-    expect(waitingMarkup).toContain('Manual Create pairing code and Exchange controls are disabled while mesh mode is active')
+    expect(waitingMarkup).toContain('Aurora creates pairing requests automatically')
+    expect(waitingMarkup).toContain('Manual Create pairing code and Exchange controls are disabled while this mode is active')
     expect(waitingMarkup).not.toContain('Create pairing code via AdminAction')
     expect(waitingMarkup).not.toContain('Exchange via AdminAction')
 
@@ -194,7 +196,7 @@ describe('PairingQueueView admin pairing surface', () => {
     )
 
     expect(model.meshPairingManaged).toBe(true)
-    expect(markup).toContain('Mesh pairing creates requests automatically')
+    expect(markup).toContain('Aurora creates pairing requests automatically')
     expect(markup).not.toContain('Create pairing code via AdminAction')
     expect(markup).not.toContain('Exchange via AdminAction')
   })
@@ -262,10 +264,41 @@ describe('PairingQueueView admin pairing surface', () => {
 
     expect(pairingDeepLink('space code/with symbols')).toBe('aurora://pairing/exchange?code=space%20code%2Fwith%20symbols')
     expect(credential.qrPayload).toBe(credential.deepLink)
-    expect(credential.qrUnavailableReason).toContain('no @aurora/ui QR renderer or backend QR contract')
+    expect(credential.qrUnavailableReason).toContain('QR image unavailable here')
     expect(credential.auditReceipt).toBe('audit-created')
   })
+
+  it('maps hostile pairing notices and errors to stable product copy', () => {
+    const hostile = 'thin client HTTP Gateway WebRTC transport failed'
+    const model = {
+      ...buildPairingQueueModel({ route: pairingRoute(), response: pairingResponse() }),
+      error: hostile,
+      disabledReason: hostile
+    }
+    const markup = renderToStaticMarkup(
+      <PairingQueueSurface
+        model={model}
+        route={pairingRoute()}
+        operation={{ status: 'error', message: hostile, auditReceipt: null }}
+      />
+    )
+    const text = visibleText(markup)
+
+    expect(text).toContain('Pairing status changed.')
+    expect(text).toContain('Pairing request updated.')
+    expect(text).not.toContain(hostile)
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
+  })
 })
+
+function visibleText(markup: string): string {
+  return markup
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 function pairingRoute(): RouteAvailability {
   const item = [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems].find((candidate) => candidate.id === 'pairing')

@@ -7,10 +7,12 @@ import {
   buildShellSnapshot,
   DataPolicyView,
   MemoryView,
+  emptyMemoryViewModel,
   type RouteAvailability,
   auroraEmbeddedNavItems,
   navItemSnapshot
 } from '../src/index'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 describe('Memory and data policy production stories', () => {
   it('renders prototype-density Memory & Knowledge collections and search list', async () => {
@@ -26,12 +28,13 @@ describe('Memory and data policy production stories', () => {
     expect(markup).toContain('Memory &amp; Knowledge')
     expect(markup).toContain('Collections')
     expect(markup).toContain('Search conversations')
-    expect(markup).toContain('Remote peer')
+    expect(markup).toContain('Shared by another device')
     expect(markup).toContain('Search hit for &quot;mesh pairing&quot;')
     expect(markup).not.toContain('Memory &amp; RAG collections')
     expect(markup).not.toContain('Export snapshot unsupported')
     expect(markup).not.toContain('Delete record unsupported')
     expect(markup).not.toContain('Evidence')
+    expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
   })
 
   it('explains the no-memory state without duplicating a generic browse or capability report', async () => {
@@ -58,18 +61,41 @@ describe('Memory and data policy production stories', () => {
 
     const markup = renderToStaticMarkup(<DataPolicyView snapshot={snapshot} />)
 
-    expect(markup).toContain('settings-style privacy controls')
+    expect(markup).toContain('Review retention defaults')
     expect(markup).toContain('Retention defaults')
-    expect(markup).toContain('Namespace visibility')
-    expect(markup).toContain('Raw audio storage')
+    expect(markup).toContain('Collection visibility')
+    expect(markup).toContain('Audio storage')
     expect(markup).toContain('Transcript storage')
-    expect(markup).toContain('Remote/mesh fallback')
+    expect(markup).toContain('Shared-device help')
     expect(markup).toContain('Export, delete, and import data flows')
-    expect(markup).toContain('Policy edits require AdminAction draft/confirm/audit through Config.Set')
+    expect(markup).toContain('Policy edits require administrator review and account history')
     expect(markup).toContain('href="/admin/audit"')
     expect(markup).not.toContain('id="memory-query"')
+    expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
+  })
+
+  it('maps hostile memory errors to stable product copy', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const memoryRoute = await enabledRoute(client, 'memory')
+    const hostile = 'thin client HTTP Gateway WebRTC transport failed'
+    const model = { ...emptyMemoryViewModel(memoryRoute), loadState: 'error' as const, error: hostile }
+
+    const text = visibleText(renderToStaticMarkup(<MemoryView client={client} route={memoryRoute} initialModel={model} />))
+
+    expect(text).toContain('Memory is unavailable. Try again.')
+    expect(text).not.toContain(hostile)
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
   })
 })
+
+function visibleText(markup: string): string {
+  return markup
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 async function enabledRoute(client: Aurora, id: string): Promise<RouteAvailability> {
   const snapshot = await buildShellSnapshot(client)

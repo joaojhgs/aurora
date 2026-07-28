@@ -13,6 +13,7 @@ import type {
 import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { PrivacyBadge, presentableSignal } from './status-badges'
+import { safeErrorCopy } from './product-copy'
 import { PageHeader } from './state-surface'
 import { Button, Card, MetaGrid } from './primitives'
 import { Input } from '#components/ui/input'
@@ -197,7 +198,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
       <PageHeader
         eyebrow="Memory"
         title="Memory & Knowledge"
-        description="Conversation history, RAG collections, and retention. See exactly where each memory lives."
+        description="Conversation history, knowledge collections, and retention. See where each memory is saved."
         id="memory-title"
       />
 
@@ -265,7 +266,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
 
         {model.error ? (
           <p className="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
-            {model.error}
+            {productMemoryErrorCopy(model.error)}
           </p>
         ) : null}
         {model.denialReason ? (
@@ -309,7 +310,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
         )}
       </Card>
 
-      <p className="text-xs text-muted-foreground">Deleting a memory previews affected DB and RAG records before removal.</p>
+      <p className="text-xs text-muted-foreground">Deleting a memory previews affected saved records before removal.</p>
     </section>
   )
 }
@@ -326,17 +327,17 @@ function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; name
       <MetaGrid
         items={[
           { label: 'Namespace', value: item.namespace },
-          { label: 'Peer/provider', value: item.provenance.source_peer_id },
+          { label: 'Source', value: productMemorySourceCopy(item.provenance.source_peer_id) },
           {
-            label: 'Route path',
+            label: 'Saved through',
             value: item.provenance.owner_peer_id === item.provenance.source_peer_id
-              ? 'owner peer'
-              : `${item.provenance.source_peer_id} -> ${item.provenance.owner_peer_id}`
+              ? 'owning device'
+              : 'shared device'
           },
-          { label: 'Privacy class', value: namespace?.info.policy.privacy_class ?? 'not reported by namespace metadata' },
-          { label: 'Citation', value: item.provenance.record_id, mono: true },
-          { label: 'Policy', value: item.provenance.policy_decision_id, mono: true },
-          { label: 'Audit', value: item.provenance.correlation_id, mono: true },
+          { label: 'Privacy class', value: namespace?.info.policy.privacy_class ?? 'not reported for this collection' },
+          { label: 'Citation', value: productReferenceCopy(item.provenance.record_id) },
+          { label: 'Policy', value: productReferenceCopy(item.provenance.policy_decision_id) },
+          { label: 'History', value: productReferenceCopy(item.provenance.correlation_id) },
           { label: 'Tombstone', value: item.provenance.tombstone ? item.provenance.delete_reason ?? 'deleted' : 'active' }
         ]}
       />
@@ -360,12 +361,12 @@ function recordCountLabel(count: number | null): string {
 }
 
 function namespaceStoreLabel(namespace: MemoryNamespaceView): string {
-  if (namespace.kind === 'local-memory') return 'Local DB'
-  if (namespace.kind === 'local-rag') return 'Local RAG store'
+  if (namespace.kind === 'local-memory') return 'Saved on this device'
+  if (namespace.kind === 'local-rag') return 'Knowledge on this device'
   if (namespace.kind === 'imported-snapshot') return 'Imported snapshot'
-  if (namespace.kind === 'remote-peer') return namespace.info.provider_peer_id ? `Remote peer ${namespace.info.provider_peer_id}` : 'Remote peer'
-  if (namespace.kind === 'stale') return 'Stale remote peer'
-  if (namespace.kind === 'denied') return 'Policy denied remote peer'
+  if (namespace.kind === 'remote-peer') return 'Shared by another device'
+  if (namespace.kind === 'stale') return 'Shared device needs refresh'
+  if (namespace.kind === 'denied') return 'Access denied by policy'
   return 'Store pending'
 }
 
@@ -374,11 +375,11 @@ function namespaceView(info: DBRAGNamespaceInfo): MemoryNamespaceView {
   const prefix = kind === 'local-memory'
     ? 'Local memory'
     : kind === 'local-rag'
-      ? 'Local RAG'
+        ? 'Local knowledge'
       : kind === 'imported-snapshot'
         ? 'Imported snapshot'
         : kind === 'remote-peer'
-          ? 'Remote peer'
+          ? 'Shared device'
           : kind
   const selectable = info.availability === 'available' && info.policy.allowed_operations.includes('search')
   return {
@@ -403,9 +404,9 @@ function namespaceKind(info: DBRAGNamespaceInfo): MemoryNamespaceKind {
 
 function namespaceRepairCopy(info: DBRAGNamespaceInfo): string | null {
   if (info.policy.denial_reason) return info.policy.denial_reason
-  if (info.availability === 'stale') return 'Refresh peer manifest before selecting this namespace.'
+  if (info.availability === 'stale') return 'Refresh this shared device before selecting this collection.'
   if (info.availability === 'denied') return 'Policy denied access to this namespace.'
-  if (info.policy.explicit_selector_required) return 'Explicit peer/resource selector required.'
+  if (info.policy.explicit_selector_required) return 'Choose the shared device or collection before searching.'
   if (info.embedding_model?.includes('legacy')) return 'Embedding compatibility must be checked before search.'
   return null
 }
@@ -421,7 +422,7 @@ function buildActionStates(route: RouteAvailability, namespace: MemoryNamespaceV
       reason: routeBlocked
         ? `Route unavailable: ${presentableSignal(route.blockers.join(', ') || route.state)}`
         : namespace?.selectable
-          ? 'Search uses DB.RAGSearchRemote through Aurora.'
+          ? 'Search uses Aurora.'
           : namespace?.repairCopy ?? 'Namespace is not selectable.'
           ,
       requiresAdminAction: false
@@ -444,8 +445,8 @@ function actionState(
     : routeBlocked
       ? `${label} disabled until the memory route is available.`
       : requiresAdminAction
-        ? `${label} requires AdminAction or data-sharing approval.`
-        : `${label} supported by backend policy.`
+        ? `${label} requires administrator or sharing approval.`
+        : `${label} supported by policy.`
   return {
     supported,
     disabled: !supported || routeBlocked || requiresAdminAction || Boolean(denialReason),
@@ -473,9 +474,23 @@ function errorModel(
 }
 
 function memoryErrorMessage(error: AuroraError): string {
-  if (error.code === 'auth' || error.code === 'permission') return 'Memory request denied by authentication or permissions.'
-  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'Memory and RAG contracts are unavailable in this backend.'
+  if (error.code === 'auth' || error.code === 'permission') return 'Memory request denied. Review access and try again.'
+  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'Memory is unavailable for this Aurora setup.'
   if (error.code === 'privacy_blocked') return 'Memory access is blocked until selector, consent, or policy approval exists.'
-  if (error.code === 'timeout') return 'Memory request timed out before service status arrived.'
-  return error.message || 'Memory request failed.'
+  if (error.code === 'timeout') return 'Memory request timed out before Aurora responded.'
+  return safeErrorCopy(error).title
+}
+
+function productMemoryErrorCopy(value: string): string {
+  if (/permission|denied|access/i.test(value)) return 'Memory request denied. Review access and try again.'
+  if (/timeout/i.test(value)) return 'Memory request timed out before Aurora responded.'
+  return 'Memory is unavailable. Try again.'
+}
+
+function productMemorySourceCopy(value: string | null | undefined): string {
+  return value === 'local-peer' || !value ? 'This device' : 'Shared device'
+}
+
+function productReferenceCopy(value: string | null | undefined): string {
+  return value ? 'Available in account history' : 'Not reported'
 }

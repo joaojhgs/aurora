@@ -61,7 +61,7 @@ describe('Assistant focused WebView microphone policy', () => {
     })
 
     expect(stopped).toHaveBeenCalledTimes(1)
-    expect(container.textContent).toContain('Focused WebView microphone capture stopped')
+    expect(container.textContent).toContain('Microphone listening stopped because Aurora was no longer the active window.')
   })
 
   it('stops focused media on a native lifecycle release without requiring the WebRTC peer to disconnect', async () => {
@@ -102,7 +102,7 @@ describe('Assistant focused WebView microphone policy', () => {
     })
 
     expect(stopped).toHaveBeenCalledTimes(1)
-    expect(container.textContent).toContain('Focused WebView microphone capture stopped')
+    expect(container.textContent).toContain('Microphone listening stopped because Aurora was no longer the active window.')
   })
 })
 
