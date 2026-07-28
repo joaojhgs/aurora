@@ -6,7 +6,7 @@ authors = ["Aurora contributors"]
 license = "MIT"
 repository = "https://github.com/joaojhgs/aurora"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.77.2"
 default-run = "aurora-tauri"
 
 [lib]
@@ -26,6 +26,7 @@ serde_json = "1.0"
 sha2 = "0.10"
 tauri = { version = "2.9.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-deep-link = "2.4.6"
+tauri-plugin-sql = { version = "=2.4.0", default-features = false, features = ["sqlite"] }
 tauri-plugin-updater = "2.9.0"
 thiserror = "2.0"
 tokio = { version = "1", features = ["sync"] }

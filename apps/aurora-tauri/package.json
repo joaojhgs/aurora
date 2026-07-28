@@ -97,6 +97,7 @@
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-barcode-scanner": "^2.4.0",
     "@tauri-apps/plugin-deep-link": "^2.4.0",
+    "@tauri-apps/plugin-sql": "2.4.0",
     "react": "^19",
     "react-dom": "^19"
   },
