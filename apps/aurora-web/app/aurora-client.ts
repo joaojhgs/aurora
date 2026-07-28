@@ -80,7 +80,7 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
   browserCredentialStore = credentialStore
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   const runtimeProfile = activeRuntimeProfile(profileDocument)
-  const thinProfile = thinProfileFromRuntimeProfile(runtimeProfile)
+  const thinProfile = thinRuntimeProfileFromRuntimeProfile(runtimeProfile)
   const key = browserClientCacheKey()
   const cached = browserRuntimeCache
   if (cached?.key === key) return cached.runtime
@@ -346,6 +346,27 @@ function thinProfileFromRuntimeProfile(
   } catch {
     return undefined
   }
+}
+
+function thinRuntimeProfileFromRuntimeProfile(
+  profile: AuroraRuntimeProfileV2 | undefined,
+): ThinConnectionProfile | undefined {
+  if (!profile) return undefined
+  if (profile.nodeMode === 'mesh-node' && profile.localNode.meshMembership) {
+    const membership = profile.localNode.meshMembership
+    const gatewayUrl = profile.homeConnection?.gatewayUrl ?? ''
+    return sanitizeThinConnectionProfile({
+      id: profile.id,
+      label: profile.label,
+      mode: gatewayUrl ? 'webrtc-preferred' : 'webrtc-only',
+      gatewayUrl,
+      signalingUrl: membership.signalingUrl,
+      nodeName: profile.localNode.nodeName,
+      localStablePeerId: profile.localNode.stablePeerId,
+      webrtcProfile: membership.webrtcProfile,
+    })
+  }
+  return thinProfileFromRuntimeProfile(profile)
 }
 
 function thinDocumentFromRuntimeDocument(document: AuroraRuntimeProfileDocumentV2): ThinProfileDocument {

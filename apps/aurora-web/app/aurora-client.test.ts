@@ -263,7 +263,7 @@ describe('createAuroraBrowserClient', () => {
     resetAuroraBrowserClientForTests()
     const runtime = createAuroraBrowserRuntime()
 
-    expect(runtime.mode).toBe('http-only')
+    expect(runtime.mode).toBe('webrtc-only')
     expect(auroraBrowserRequiresOnboarding()).toBe(false)
     const restoredProfile = auroraBrowserRuntimeProfile()
     expect(restoredProfile?.homeConnection).toBeUndefined()
@@ -448,6 +448,8 @@ function installBrowserStorage(): Storage & { dump(): Record<string, string> } {
   vi.stubGlobal('window', {
     localStorage: storage,
     location: new URL('https://app.example/'),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
   })
   vi.stubGlobal('localStorage', storage)
   vi.stubGlobal('sessionStorage', storage)

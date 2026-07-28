@@ -34,6 +34,7 @@ import {
   createInitialAuroraTauriRuntime,
   createMemoryRuntimeProfileStore,
   createMemoryThinProfileStore,
+  createTauriPackageCapabilities,
   ANDROID_LIFECYCLE_EVENT,
   ANDROID_NATIVE_PLUGIN_NAME,
   createTauriPeerCredentialCommandInvoker,
@@ -249,7 +250,45 @@ describe('desktop-thin live connection profiles', () => {
     await runtime.dispose()
   })
 
+  it('preserves legacy v1 profiles across sequential controller saves and selects', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    let saved: AuroraThinProfileDocument = document
+    const store = {
+      evidence: 'test v1 profile store',
+      load: vi.fn(async () => saved),
+      save: vi.fn(async (next: AuroraThinProfileDocument) => { saved = next }),
+    }
+    const runtime = createAuroraTauriRuntime({
+      thinProfileStore: store,
+      thinProfileDocument: document,
+      consumeThinInvite: false,
+    })
+
+    await runtime.thinProfileController!.saveProfile({
+      ...profile,
+      id: 'backup',
+      label: 'Backup',
+    })
+    await runtime.thinProfileController!.saveProfile({
+      ...profile,
+      id: 'travel',
+      label: 'Travel',
+    })
+    await runtime.thinProfileController!.selectProfile('backup')
+
+    expect(saved.activeProfileId).toBe('backup')
+    expect(saved.profiles.map((candidate) => candidate.id).sort()).toEqual([
+      'backup',
+      'office',
+      'travel',
+    ])
+    expect(runtime.thinProfileController!.document).toEqual(saved)
+    await runtime.dispose()
+  })
+
   it('requires explicit package capability proof before accepting python-full runtime profiles', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     const pythonFullDocument: AuroraRuntimeProfileDocument = {
       ...runtimeDocument,
       profiles: [{
@@ -262,10 +301,37 @@ describe('desktop-thin live connection profiles', () => {
       runtimeProfileDocument: pythonFullDocument,
       consumeThinInvite: false,
     })).toThrow(/bundled Python/)
+    expect(() => createAuroraTauriRuntime({
+      runtimeProfileDocument: pythonFullDocument,
+      packageCapabilities: { pythonFullRuntime: true },
+      consumeThinInvite: false,
+    })).toThrow(/bundled Python/)
+    expect(() => createAuroraTauriRuntime({
+      runtimeProfileDocument: pythonFullDocument,
+      packageCapabilities: createTauriPackageCapabilities({
+        source: 'test',
+        runtimeMode: 'desktop-local',
+        includesPython: false,
+      }),
+      consumeThinInvite: false,
+    })).toThrow(/bundled Python/)
+    expect(() => createAuroraTauriRuntime({
+      runtimeProfileDocument: pythonFullDocument,
+      packageCapabilities: createTauriPackageCapabilities({
+        source: 'test',
+        runtimeMode: 'desktop-thin',
+        includesPython: true,
+      }),
+      consumeThinInvite: false,
+    })).toThrow(/bundled Python/)
 
     const runtime = createAuroraTauriRuntime({
       runtimeProfileDocument: pythonFullDocument,
-      packageCapabilities: { pythonFullRuntime: true },
+      packageCapabilities: createTauriPackageCapabilities({
+        source: 'test',
+        runtimeMode: 'desktop-local',
+        includesPython: true,
+      }),
       consumeThinInvite: false,
     })
 
@@ -300,7 +366,6 @@ describe('desktop-thin live connection profiles', () => {
 
     const runtime = createAuroraTauriRuntime({
       runtimeProfileDocument: remoteDocument,
-      packageCapabilities: { pythonFullRuntime: true },
       consumeThinInvite: false,
     })
 
@@ -326,14 +391,22 @@ describe('desktop-thin live connection profiles', () => {
 
     const runtime = createAuroraTauriRuntime({
       runtimeProfileDocument: meshOnlyDocument,
-      packageCapabilities: { pythonFullRuntime: true },
       consumeThinInvite: false,
     })
 
     expect(runtime.mode).toBe('desktop-thin')
     expect(runtime.nodeMode).toBe('mesh-node')
     expect(runtime.runtimeTier).toBe('lightweight-ts')
-    expect(runtime.thinProfile).toBeUndefined()
+    expect(runtime.thinConnectionMode).toBe('webrtc-only')
+    expect(runtime.thinProfile).toMatchObject({
+      id: 'mesh-only',
+      mode: 'webrtc-only',
+      gatewayUrl: '',
+      signalingUrl: 'wss://signaling.example.invalid',
+      webrtcProfile: expect.objectContaining({
+        room: 'office-room',
+      }),
+    })
     expect(await runtime.sidecarStatus()).toBeNull()
     await runtime.dispose()
   })
@@ -351,7 +424,11 @@ describe('desktop-thin live connection profiles', () => {
 
     const runtime = createAuroraTauriRuntime({
       runtimeProfileDocument: fullDocument,
-      packageCapabilities: { pythonFullRuntime: true },
+      packageCapabilities: createTauriPackageCapabilities({
+        source: 'test',
+        runtimeMode: 'desktop-local',
+        includesPython: true,
+      }),
       consumeThinInvite: false,
     })
 
@@ -361,7 +438,7 @@ describe('desktop-thin live connection profiles', () => {
     await runtime.dispose()
   })
 
-  it('resolves production package capability proof from explicit runtime environment', async () => {
+  it('rejects spoofed env-only package capability for python-full profiles', async () => {
     vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-local')
     vi.stubEnv('VITE_AURORA_PACKAGE_INCLUDES_PYTHON', '1')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
@@ -373,14 +450,10 @@ describe('desktop-thin live connection profiles', () => {
       }],
     }
 
-    const runtime = createAuroraTauriRuntime({
+    expect(() => createAuroraTauriRuntime({
       runtimeProfileDocument: fullDocument,
       consumeThinInvite: false,
-    })
-
-    expect(runtime.mode).toBe('desktop-local')
-    expect(runtime.runtimeTier).toBe('python-full')
-    await runtime.dispose()
+    })).toThrow(/bundled Python/)
   })
 
   it('does not classify a v1 store as runtime storage from human evidence text', async () => {
@@ -448,7 +521,6 @@ describe('desktop-thin live connection profiles', () => {
     const runtime = createAuroraTauriRuntime({
       runtimeProfileStore: store,
       runtimeProfileDocument: initial,
-      packageCapabilities: { pythonFullRuntime: true },
       consumeThinInvite: false,
     })
     await runtime.thinProfileController!.saveProfile({
@@ -468,7 +540,10 @@ describe('desktop-thin live connection profiles', () => {
       id: 'mesh-only',
       nodeMode: 'mesh-node',
     })
-    expect(recreated.thinProfile).toBeUndefined()
+    expect(recreated.thinProfile).toMatchObject({
+      id: 'mesh-only',
+      mode: 'webrtc-only',
+    })
     await runtime.dispose()
     await recreated.dispose()
   })
@@ -478,10 +553,10 @@ describe('desktop-thin live connection profiles', () => {
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     const store = createMemoryRuntimeProfileStore(runtimeDocument)
 
-    const first = await bootstrapAuroraTauriRuntime(store, { pythonFullRuntime: true })
+    const first = await bootstrapAuroraTauriRuntime(store)
     await first.thinProfileController!.selectProfile(runtimeDocument.activeProfileId!)
     await first.dispose()
-    const restarted = await bootstrapAuroraTauriRuntime(store, { pythonFullRuntime: true })
+    const restarted = await bootstrapAuroraTauriRuntime(store)
 
     expect(restarted.runtimeProfile).toMatchObject({
       id: 'runtime-office',

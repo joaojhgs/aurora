@@ -118,6 +118,33 @@ describe('runtime profile document', () => {
     })).toThrow(/too many/u)
   })
 
+  it('enforces runtime profile size limits by UTF-8 bytes', () => {
+    const migrated = migrateThinProfileDocumentToRuntime(v1Document)
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated.profiles[0]!,
+      label: 'é'.repeat(61),
+    })).toThrow(/profile label/u)
+
+    const oversizedProfiles = Array.from({ length: 64 }, (_, index) => ({
+      ...migrated.profiles[0]!,
+      id: `profile-${index}`,
+      label: `Profile ${index}`,
+      homeConnection: {
+        ...migrated.profiles[0]!.homeConnection!,
+        webrtcProfile: {
+          ...webrtcProfile,
+          room: `${index}-${'é'.repeat(250)}`,
+          roomSecretRef: `ref:${index}:${'é'.repeat(500)}`,
+        },
+      },
+    }))
+    expect(() => sanitizeRuntimeProfileDocument({
+      version: 2,
+      activeProfileId: null,
+      profiles: oversizedProfiles,
+    })).toThrow(/too large/u)
+  })
+
   it('keeps surface, node role, connection, and runtime tier independent', () => {
     const hostedWebSurface = getAuroraSurfaceProfile({
       runtimeMode: 'web-thin',

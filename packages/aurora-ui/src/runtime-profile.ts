@@ -216,7 +216,7 @@ export function sanitizeRuntimeProfileDocument(
     throw new Error('Runtime profile active profile must exist')
   }
   const sanitized = { version: 2 as const, activeProfileId, profiles }
-  if (JSON.stringify(sanitized).length > MAX_RUNTIME_PROFILE_DOCUMENT_BYTES) {
+  if (utf8ByteLength(JSON.stringify(sanitized)) > MAX_RUNTIME_PROFILE_DOCUMENT_BYTES) {
     throw new Error('Runtime profile document is too large')
   }
   return sanitized
@@ -515,7 +515,7 @@ function validateIceServerUrl(value: string, protocol: string): void {
 
 function requiredText(value: unknown, label: string, maxLength: number): string {
   const trimmed = typeof value === 'string' ? value.trim() : ''
-  if (!trimmed || trimmed.length > maxLength) throw new Error(`Runtime profile ${label} is required`)
+  if (!trimmed || utf8ByteLength(trimmed) > maxLength) throw new Error(`Runtime profile ${label} is required`)
   return trimmed
 }
 
@@ -565,6 +565,10 @@ function isSecretFieldName(value: string): boolean {
 
 function isAllowedSecretReferenceField(value: string): boolean {
   return value === 'roomSecretRef'
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

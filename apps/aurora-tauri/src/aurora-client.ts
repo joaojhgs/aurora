@@ -138,8 +138,15 @@ export type AuroraThinConnectionProfile = ThinConnectionProfile;
 export type AuroraThinProfileDocument = ThinProfileDocument;
 export type AuroraRuntimeProfileDocument = AuroraRuntimeProfileDocumentV2;
 
+export interface AuroraTauriPythonRuntimeProof {
+  source: "native-package" | "test";
+  runtimeMode: string;
+  includesPython: boolean;
+}
+
 export interface AuroraTauriPackageCapabilities {
   pythonFullRuntime: boolean;
+  pythonFullRuntimeProof?: AuroraTauriPythonRuntimeProof | undefined;
 }
 
 export interface AuroraThinProfileStore {
@@ -308,18 +315,18 @@ export function createAuroraTauriRuntime({
 } = {}): AuroraTauriRuntime {
   const runtimeDocument = runtimeProfileDocument
     ? sanitizeRuntimeProfileDocument(runtimeProfileDocument, {
-      allowPythonFull: packageCapabilities.pythonFullRuntime,
+      allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
     })
     : thinProfileDocument
       ? migrateThinProfileDocumentToRuntime(thinProfileDocument)
       : emptyRuntimeProfileDocument();
   const configuredRuntimeProfile = activeRuntimeProfile(runtimeDocument);
   const configuredProfile = activeThinProfile(thinProfileDocument)
-    ?? thinProfileFromRuntimeProfile(configuredRuntimeProfile);
+    ?? thinRuntimeProfileFromRuntimeProfile(configuredRuntimeProfile);
   const configuredGatewayUrl = configuredProfile?.gatewayUrl || undefined;
   const thinConnectionMode =
-    configuredRuntimeProfile?.homeConnection?.mode
-    ?? configuredProfile?.mode
+    configuredProfile?.mode
+    ?? configuredRuntimeProfile?.homeConnection?.mode
     ?? DEFAULT_THIN_CONNECTION_MODE;
   const thinInviteText =
     explicitThinInviteText ??
@@ -550,7 +557,7 @@ export function createAuroraTauriRuntime({
       nodeMode: configuredRuntimeProfile?.nodeMode ?? "mesh-node",
       runtimeTier: configuredRuntimeProfile?.runtimeTier
         ?? (surfaceSupportsRuntimeTier(currentAuroraSurfaceProfile(), "python-full", {
-          packageIncludesPython: packageCapabilities.pythonFullRuntime,
+          packageIncludesPython: hasPythonFullRuntimeCapability(packageCapabilities),
         }) ? "python-full" : "lightweight-ts"),
       requiresOnboarding: false,
       pendingThinInviteText: null,
@@ -1063,7 +1070,7 @@ function secureRuntimeProfileStore(
     save: async (document) => {
       const result = await invoke<{ ok?: boolean }>("aurora_thin_profile_set", {
         value: serializeRuntimeProfileDocument(document, {
-          allowPythonFull: packageCapabilities.pythonFullRuntime,
+          allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
         }),
       });
       if (!result.ok)
@@ -1138,9 +1145,10 @@ function createThinProfileController(
   store: AuroraThinProfileStore,
   document: AuroraThinProfileDocument,
 ): AuroraThinProfileController {
-  return {
+  let currentDocument = document;
+  const controller: AuroraThinProfileController = {
     evidence: store.evidence,
-    document,
+    document: currentDocument,
     saveProfile: async (profile, roomSecret) => {
       const sanitized = sanitizeThinConnectionProfile(profile);
       if (roomSecret) {
@@ -1156,7 +1164,7 @@ function createThinProfileController(
           roomSecret.roomSecret,
         );
       }
-      const profiles = document.profiles.filter(
+      const profiles = currentDocument.profiles.filter(
         (candidate) => candidate.id !== sanitized.id,
       );
       const next: AuroraThinProfileDocument = {
@@ -1165,14 +1173,18 @@ function createThinProfileController(
         profiles: [...profiles, sanitized],
       };
       await store.save(next);
-      return next;
+      currentDocument = next;
+      controller.document = currentDocument;
+      return currentDocument;
     },
     selectProfile: async (profileId) => {
-      if (!document.profiles.some((profile) => profile.id === profileId))
+      if (!currentDocument.profiles.some((profile) => profile.id === profileId))
         throw new Error("Desktop-thin connection profile does not exist");
-      const next = { ...document, activeProfileId: profileId };
+      const next = { ...currentDocument, activeProfileId: profileId };
       await store.save(next);
-      return next;
+      currentDocument = next;
+      controller.document = currentDocument;
+      return currentDocument;
     },
     createRuntime: (next) =>
       createAuroraTauriRuntime({
@@ -1180,6 +1192,7 @@ function createThinProfileController(
         thinProfileDocument: next,
       }),
   };
+  return controller;
 }
 
 function createRuntimeBackedThinProfileController(
@@ -1273,6 +1286,27 @@ function thinProfileFromRuntimeProfile(
   }
 }
 
+function thinRuntimeProfileFromRuntimeProfile(
+  profile: AuroraRuntimeProfileV2 | undefined,
+): AuroraThinConnectionProfile | undefined {
+  if (!profile) return undefined;
+  if (profile.nodeMode === "mesh-node" && profile.localNode.meshMembership) {
+    const membership = profile.localNode.meshMembership;
+    const gatewayUrl = profile.homeConnection?.gatewayUrl ?? "";
+    return sanitizeThinConnectionProfile({
+      id: profile.id,
+      label: profile.label,
+      mode: gatewayUrl ? "webrtc-preferred" : "webrtc-only",
+      gatewayUrl,
+      signalingUrl: membership.signalingUrl,
+      nodeName: profile.localNode.nodeName,
+      localStablePeerId: profile.localNode.stablePeerId,
+      webrtcProfile: membership.webrtcProfile,
+    });
+  }
+  return thinProfileFromRuntimeProfile(profile);
+}
+
 function thinDocumentFromRuntimeDocument(
   document: AuroraRuntimeProfileDocument,
 ): AuroraThinProfileDocument {
@@ -1306,11 +1340,27 @@ function projectRemoteConsoleRuntimeDocumentToThinDocument(
 }
 
 function resolveTauriPackageCapabilities(): AuroraTauriPackageCapabilities {
+  return { pythonFullRuntime: false };
+}
+
+export function createTauriPackageCapabilities(
+  proof: AuroraTauriPythonRuntimeProof,
+): AuroraTauriPackageCapabilities {
   return {
-    pythonFullRuntime: truthy(
-      import.meta.env.VITE_AURORA_PACKAGE_INCLUDES_PYTHON,
-    ),
+    pythonFullRuntime: proof.includesPython,
+    pythonFullRuntimeProof: proof,
   };
+}
+
+function hasPythonFullRuntimeCapability(
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): boolean {
+  const proof = packageCapabilities.pythonFullRuntimeProof;
+  return packageCapabilities.pythonFullRuntime === true
+    && !!proof
+    && proof.includesPython === true
+    && (proof.source === "native-package" || proof.source === "test")
+    && proof.runtimeMode === import.meta.env.VITE_AURORA_RUNTIME_MODE;
 }
 
 function defaultThinProfileDocument(): AuroraThinProfileDocument {
