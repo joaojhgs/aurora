@@ -48,6 +48,14 @@ const profile: AuroraThinConnectionProfile = {
   signalingUrl: 'wss://signaling.example.invalid',
   nodeName: 'Aurora desktop',
   localStablePeerId: 'desktop-peer-01',
+  webrtcProfile: {
+    mode: 'webrtc-preferred',
+    appId: 'aurora',
+    room: 'office-room',
+    roomSecretRef: 'ref:memory:office-room',
+    signalingBrokers: ['wss://signaling.example.invalid'],
+    nodeName: 'Aurora desktop',
+  },
 }
 
 const document: AuroraThinProfileDocument = {
@@ -238,23 +246,24 @@ describe('desktop-thin live connection profiles', () => {
     })
 
     expect(serialized).not.toContain('must-not-persist')
-    expect(serialized).not.toMatch(/bearerToken|invite|roomSecret/)
+    expect(serialized).not.toMatch(/bearerToken|invite|\"roomSecret\"\s*:/)
     expect(parseThinProfileDocument(serialized)).toEqual(document)
   })
 
-  it('rejects all persisted endpoint query strings', () => {
-    expect(() =>
-      serializeThinProfileDocument({
-        ...document,
-        profiles: [
-          {
-            ...profile,
-            gatewayUrl:
-              'https://gateway.example.invalid?access_token=must-not-persist',
-          },
-        ],
-      }),
-    ).toThrow(/query strings/)
+  it('preserves runtime endpoint query strings without treating them as credential storage', () => {
+    const serialized = serializeThinProfileDocument({
+      ...document,
+      profiles: [
+        {
+          ...profile,
+          gatewayUrl:
+            'https://gateway.example.invalid/tenant?region=local',
+        },
+      ],
+    })
+
+    expect(serialized).toContain('region=local')
+    expect(serialized).not.toContain('access_token')
   })
 
   it('rejects persisted endpoint URL fragments', () => {
@@ -271,7 +280,7 @@ describe('desktop-thin live connection profiles', () => {
     ).toThrow(/URL fragments/)
   })
 
-  it('requires WSS for persisted WebRTC signaling endpoints', () => {
+  it('requires WebSocket schemes for persisted WebRTC signaling endpoints', () => {
     expect(() =>
       serializeThinProfileDocument({
         ...document,
@@ -282,21 +291,19 @@ describe('desktop-thin live connection profiles', () => {
           },
         ],
       }),
-    ).toThrow(/exact wss: endpoint/i)
+    ).toThrow(/ws:\/wss:/i)
   })
 
-  it('rejects credential material in endpoint authority and query before persistence', () => {
+  it('rejects credential material in endpoint authority before persistence', () => {
     for (const gatewayUrl of [
       'https://user:password@gateway.example.invalid',
-      'https://gateway.example.invalid?token=must-not-persist',
-      'https://gateway.example.invalid?debug=true',
     ]) {
       expect(() =>
         serializeThinProfileDocument({
           ...document,
           profiles: [{ ...profile, gatewayUrl }],
         }),
-      ).toThrow(/embedded credentials|query strings/)
+      ).toThrow(/embedded credentials/)
     }
   })
 
@@ -424,16 +431,25 @@ describe('desktop-thin live connection profiles', () => {
 
   it('classifies a packaged iOS-thin build without relying on the WebView user agent', async () => {
     vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'ios-thin')
-    vi.stubEnv('VITE_AURORA_CONNECTION_MODE', 'webrtc-preferred')
-    vi.stubEnv('VITE_AURORA_GATEWAY_URL', 'https://gateway.example.invalid')
-    vi.stubEnv('VITE_AURORA_SIGNALING_URL', 'wss://signaling.example.invalid')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
     Object.defineProperty(window.navigator, 'userAgent', {
       value: 'Mozilla/5.0 (Linux; Android 15) conflicting-test-agent',
       configurable: true,
     })
 
-    const runtime = createInitialAuroraTauriRuntime()
+    const iosProfile: AuroraThinConnectionProfile = {
+      ...profile,
+      label: 'iOS thin',
+      nodeName: 'Aurora iOS thin',
+      localStablePeerId: 'aurora-ios-thin',
+    }
+    const runtime = createAuroraTauriRuntime({
+      thinProfileDocument: {
+        version: 1,
+        activeProfileId: iosProfile.id,
+        profiles: [iosProfile],
+      },
+    })
 
     expect(runtime.mode).toBe('mobile-native')
     expect(runtime.thinConnectionMode).toBe('webrtc-preferred')

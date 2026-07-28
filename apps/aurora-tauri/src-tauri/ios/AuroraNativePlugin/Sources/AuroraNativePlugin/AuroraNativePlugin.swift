@@ -509,6 +509,34 @@ public final class AuroraNativePlugin: Plugin {
     }
   }
 
+  @objc public func thinRoomSecretSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinRoomSecretSetArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.thinRoomSecretSet(args))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_room_secret_set_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func thinRoomSecretGet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinRoomSecretGetArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.thinRoomSecretGet(args))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_room_secret_get_failed"
+        )
+      )
+    }
+  }
+
   @objc public func iosBiometricStatus(_ invoke: Invoke) throws {
     let context = LAContext()
     var error: NSError?

@@ -55,6 +55,7 @@ private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
 private const val SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
 private const val PEER_PROOF_PREFIX = "aurora.mesh.peer-proof."
+private const val ROOM_SECRET_PREFIX = "aurora.mesh.room-secret."
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
 private const val AES_GCM_TRANSFORMATION = "AES/GCM/NoPadding"
 private const val AES_GCM_TAG_BITS = 128
@@ -591,11 +592,55 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("thin profile value length must be <= 65536 bytes")
             return
         }
-        activity.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE).edit().putString(THIN_PROFILE_KEY, args.value).apply()
+        val committed = activity.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(THIN_PROFILE_KEY, args.value)
+            .commit()
+        if (!committed) {
+            invoke.reject("thin_profile_set_failed")
+            return
+        }
         val ret = thinProfileStatusObject()
         ret.put("key", THIN_PROFILE_KEY)
         ret.put("ok", true)
         invoke.resolve(ret)
+    }
+
+    @Command
+    fun thinRoomSecretSet(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinRoomSecretSetArgs::class.java)
+        try {
+            validateNonEmpty("roomSecretRef", args.ref, 1024)
+            validateNonEmpty("roomSecret", args.value, 8192)
+            val committed = securePrefs()
+                .edit()
+                .putString(thinRoomSecretKey(args.ref), encryptSecureValue(args.value))
+                .commit()
+            if (!committed) {
+                throw IllegalStateException("thin_room_secret_set_failed")
+            }
+            val ret = thinRoomSecretStatusObject()
+            ret.put("ref", args.ref)
+            ret.put("ok", true)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_room_secret_set_failed")
+        }
+    }
+
+    @Command
+    fun thinRoomSecretGet(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinRoomSecretGetArgs::class.java)
+        try {
+            validateNonEmpty("roomSecretRef", args.ref, 1024)
+            val stored = securePrefs().getString(thinRoomSecretKey(args.ref), null)
+            val ret = thinRoomSecretStatusObject()
+            ret.put("ref", args.ref)
+            ret.put("value", stored?.let { decryptSecureValue(it) })
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_room_secret_get_failed")
+        }
     }
 
     @Command
@@ -1108,6 +1153,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return ret
     }
 
+    private fun thinRoomSecretStatusObject(): JSObject {
+        val ret = secureStorageStatusObject()
+        ret.put("backend", "android-keystore")
+        ret.put("privacyClass", "secret")
+        ret.put("rawGetter", true)
+        ret.put("allowedGenericSecureStorage", false)
+        ret.put("evidenceSource", "android-keystore-thin-room-secret-namespace")
+        return ret
+    }
+
     private fun thinProfileStatusObject(): JSObject {
         val ret = JSObject()
         ret.put("platform", "android")
@@ -1188,6 +1243,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun thinPeerCredentialKey(peerId: String): String =
         PEER_PROOF_PREFIX + sha256Hex(peerId.toByteArray(Charsets.UTF_8))
+
+    private fun thinRoomSecretKey(ref: String): String =
+        ROOM_SECRET_PREFIX + sha256Hex(ref.toByteArray(Charsets.UTF_8))
 
     private fun loadUnexpiredThinPeerCredential(peerId: String): JSONObject? {
         val key = thinPeerCredentialKey(peerId)
@@ -1689,6 +1747,17 @@ class MeshReconnectChallengeFrameArgs {
 @InvokeArg
 class ThinProfileSetArgs {
     var value: String = ""
+}
+
+@InvokeArg
+class ThinRoomSecretSetArgs {
+    var ref: String = ""
+    var value: String = ""
+}
+
+@InvokeArg
+class ThinRoomSecretGetArgs {
+    var ref: String = ""
 }
 
 @InvokeArg

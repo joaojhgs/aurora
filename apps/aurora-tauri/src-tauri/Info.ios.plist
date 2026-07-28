@@ -4,5 +4,12 @@
   <dict>
     <key>NSFaceIDUsageDescription</key>
     <string>Aurora uses Face ID or Touch ID to confirm admin unlocks and protect local credentials.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsArbitraryLoads</key>
+      <true/>
+      <key>NSAllowsArbitraryLoadsInWebContent</key>
+      <true/>
+    </dict>
   </dict>
 </plist>

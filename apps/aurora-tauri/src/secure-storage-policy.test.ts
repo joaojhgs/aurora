@@ -91,6 +91,45 @@ describe('Tauri secure storage policy', () => {
     expect(runtimeSource).toContain('aurora_thin_profile_set')
   })
 
+  it('persists WebRTC room secrets in a narrow platform vault before saving reconnect metadata', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const appSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/tauri-app.tsx'), 'utf8')
+    const panelSource = readFileSync(resolve(repoRoot, 'packages/aurora-ui/src/web-thin-connection-panel.tsx'), 'utf8')
+    const rustSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
+    const permission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-thin-peer-credentials.toml'), 'utf8')
+    const kotlinSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt'), 'utf8')
+    const swiftStorage = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift',
+      ),
+      'utf8',
+    )
+
+    for (const command of [
+      'aurora_thin_room_secret_set',
+      'aurora_thin_room_secret_get',
+    ]) {
+      expect(runtimeSource).toContain(command)
+      expect(rustSource).toContain(command)
+      expect(permission).toContain(command)
+    }
+    expect(panelSource).toMatch(/onSaveProfile\?\.\(nextProfile,\s*\{\s*roomSecretRef:/s)
+    expect(appSource).toContain('controller.saveProfile(profile, roomSecret)')
+    expect(runtimeSource).toMatch(
+      /await persistTauriRoomSecret\([\s\S]*?await store\.save\(next\)/,
+    )
+    expect(rustSource).toContain('aurora.mesh.room-secret.')
+    expect(rustSource).toContain('sha256_hex(ref_id.as_bytes())')
+    expect(kotlinSource).toContain('encryptSecureValue(args.value)')
+    expect(kotlinSource).toMatch(/thinRoomSecretKey\(args\.ref\)[\s\S]*?\.commit\(\)/)
+    expect(swiftStorage).toContain('kSecAttrAccessibleWhenUnlockedThisDeviceOnly')
+    expect(swiftStorage).toContain('roomSecretAccount(ref: args.ref)')
+    expect(swiftStorage).toContain('"rawGetter": true')
+    expect(permission).toContain('raw bearer tokens')
+  })
+
   it('wires Android thin lifecycle and foreground microphone policy through native plugin command names', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
@@ -174,6 +213,8 @@ describe('Tauri secure storage policy', () => {
       'thinPeerReconnectProve',
       'thinProfileGet',
       'thinProfileSet',
+      'thinRoomSecretSet',
+      'thinRoomSecretGet',
     ]) {
       expect(pluginSource).toContain(`@objc public func ${command}`)
       expect(rustSource).toContain(`"${command}"`)

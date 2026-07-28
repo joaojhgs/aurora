@@ -4,6 +4,7 @@ import Security
 
 private let auroraThinPeerKeychainService = "dev.aurora.ios.thin-peer-credentials"
 private let auroraThinPeerAccountPrefix = "aurora.mesh.peer-proof."
+private let auroraThinRoomSecretAccountPrefix = "aurora.mesh.room-secret."
 private let auroraThinProfileKey = "aurora.session.ios-thin-connection-profile.v1"
 private let auroraReconnectProofDomain = Data("aurora.mesh.reconnect-proof.v1\u{0}".utf8)
 
@@ -83,6 +84,15 @@ struct AuroraMeshReconnectChallenge: Decodable {
 
 struct AuroraThinProfileSetArgs: Decodable {
   let value: String
+}
+
+struct AuroraThinRoomSecretSetArgs: Decodable {
+  let ref: String
+  let value: String
+}
+
+struct AuroraThinRoomSecretGetArgs: Decodable {
+  let ref: String
 }
 
 private struct AuroraThinPeerCredentialRecord: Codable {
@@ -204,6 +214,41 @@ enum AuroraThinPeerStorage {
       "persisted": true,
       "privacyClass": "nonsecret-connection-profile",
       "secretsRedacted": true
+    ]
+  }
+
+  static func thinRoomSecretSet(_ args: AuroraThinRoomSecretSetArgs) throws -> [String: Any] {
+    try validateNonEmpty(args.ref, maxBytes: 1024)
+    try validateNonEmpty(args.value, maxBytes: 8192)
+    try keychainWrite(account: try roomSecretAccount(ref: args.ref), value: Data(args.value.utf8))
+    return [
+      "ref": args.ref,
+      "ok": true,
+      "backend": "ios-keychain",
+      "persisted": true,
+      "privacyClass": "secret",
+      "rawGetter": true,
+      "allowedGenericSecureStorage": false
+    ]
+  }
+
+  static func thinRoomSecretGet(_ args: AuroraThinRoomSecretGetArgs) throws -> [String: Any] {
+    try validateNonEmpty(args.ref, maxBytes: 1024)
+    let value: Any
+    if let stored = try keychainRead(account: try roomSecretAccount(ref: args.ref)),
+       let decoded = String(data: stored, encoding: .utf8) {
+      value = decoded
+    } else {
+      value = NSNull()
+    }
+    return [
+      "ref": args.ref,
+      "value": value,
+      "backend": "ios-keychain",
+      "persisted": true,
+      "privacyClass": "secret",
+      "rawGetter": true,
+      "allowedGenericSecureStorage": false
     ]
   }
 
@@ -396,6 +441,11 @@ enum AuroraThinPeerStorage {
   private static func credentialAccount(peerId: String) throws -> String {
     try validatePeerId(peerId)
     return auroraThinPeerAccountPrefix + Data(SHA256.hash(data: Data(peerId.utf8))).lowercaseHex
+  }
+
+  private static func roomSecretAccount(ref: String) throws -> String {
+    try validateNonEmpty(ref, maxBytes: 1024)
+    return auroraThinRoomSecretAccountPrefix + Data(SHA256.hash(data: Data(ref.utf8))).lowercaseHex
   }
 
   private static func keychainQuery(account: String) -> [String: Any] {

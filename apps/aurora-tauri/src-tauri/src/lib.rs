@@ -221,6 +221,21 @@ struct ThinPeerReconnectProveRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ThinRoomSecretSetRequest {
+    #[serde(rename = "ref")]
+    ref_id: String,
+    value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinRoomSecretGetRequest {
+    #[serde(rename = "ref")]
+    ref_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ThinPeerCredentialRecord {
     token_id: String,
     claimant_peer_id: String,
@@ -2322,6 +2337,110 @@ async fn aurora_thin_profile_set(
 }
 
 #[tauri::command]
+async fn aurora_thin_room_secret_set(
+    request: ThinRoomSecretSetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_room_secret_ref(&request.ref_id)?;
+    validate_non_empty_field("roomSecret", &request.value, 8192)?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "thinRoomSecretSet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "thinRoomSecretSet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let storage_key = thin_room_secret_key(&request.ref_id)?;
+        peer_credential_storage_entry(&storage_key)?
+            .set_password(&request.value)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+        Ok(json!({
+            "ref": request.ref_id,
+            "ok": true,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "privacyClass": "secret",
+            "secretsRedacted": true
+        }))
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "thin room-secret storage is only available on desktop keychain, Android Keystore, and iOS Keychain targets"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_thin_room_secret_get(
+    request: ThinRoomSecretGetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_room_secret_ref(&request.ref_id)?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "thinRoomSecretGet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "thinRoomSecretGet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let storage_key = thin_room_secret_key(&request.ref_id)?;
+        let value = match peer_credential_storage_entry(&storage_key)?.get_password() {
+            Ok(value) => Some(value),
+            Err(keyring::Error::NoEntry) => None,
+            Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+        };
+        Ok(json!({
+            "ref": request.ref_id,
+            "value": value,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "privacyClass": "secret"
+        }))
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "thin room-secret storage is only available on desktop keychain, Android Keystore, and iOS Keychain targets"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
 async fn aurora_secure_storage_get(
     key: String,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
@@ -3598,7 +3717,7 @@ fn thin_profile_storage_entry() -> Result<keyring::Entry, AuroraCommandError> {
 
 #[cfg(desktop)]
 fn peer_credential_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
-    if !is_peer_proof_storage_key(key) {
+    if !is_peer_proof_storage_key(key) && !is_room_secret_storage_key(key) {
         return Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()));
     }
     raw_secure_storage_entry(key)
@@ -3656,6 +3775,27 @@ fn thin_peer_credential_key(peer_id: &str) -> Result<String, AuroraCommandError>
         "aurora.mesh.peer-proof.{}",
         sha256_hex(peer_id.as_bytes())
     ))
+}
+
+fn thin_room_secret_key(ref_id: &str) -> Result<String, AuroraCommandError> {
+    validate_room_secret_ref(ref_id)?;
+    Ok(format!(
+        "aurora.mesh.room-secret.{}",
+        sha256_hex(ref_id.as_bytes())
+    ))
+}
+
+fn is_room_secret_storage_key(key: &str) -> bool {
+    key.starts_with("aurora.mesh.room-secret.")
+        && key
+            .strip_prefix("aurora.mesh.room-secret.")
+            .is_some_and(|suffix| {
+                suffix.len() == 64 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+}
+
+fn validate_room_secret_ref(ref_id: &str) -> Result<(), AuroraCommandError> {
+    validate_non_empty_field("roomSecretRef", ref_id, 1024)
 }
 
 fn validate_credential_record_fields(
@@ -4989,6 +5129,8 @@ pub fn run() {
             aurora_remote_origin_policy,
             aurora_thin_profile_get,
             aurora_thin_profile_set,
+            aurora_thin_room_secret_set,
+            aurora_thin_room_secret_get,
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
@@ -6368,7 +6510,7 @@ mod tests {
             "bundle": {
                 "externalBin": [],
                 "resources": {},
-                "longDescription": "Aurora Android thin packages the shared WebView HTTP/WebRTC app without Python, sidecar resources, or external binaries. It connects only to exact operator-managed HTTPS/WSS origins compiled into this validation overlay."
+                "longDescription": "Aurora Android thin packages the shared WebView HTTP/WebRTC app without Python, sidecar resources, or external binaries. Gateway and signaling endpoints are configured at runtime during onboarding and are not compiled into the artifact."
             }
         })
     }

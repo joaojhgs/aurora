@@ -47,6 +47,7 @@ import {
   type AuroraOwlLoaderStageId,
   type AuroraShellSnapshot,
   type RouteAvailability,
+  type WebThinRoomSecret,
 } from "@aurora/ui";
 import owlSrc from "./assets/aurora-owl.png";
 import { GATEWAY_METHODS } from "@aurora/client";
@@ -106,7 +107,6 @@ const primaryTauriRouteIds = [
   "audit",
   "settings",
   "models",
-  "onboarding",
 ] as const;
 
 const embeddedTauriRouteIds = [
@@ -118,6 +118,7 @@ const embeddedTauriRouteIds = [
   "diagnostics",
   "data",
   "native",
+  "onboarding",
 ] as const;
 
 const tauriRouteIds = [
@@ -186,6 +187,7 @@ export const tauriRouteRegistry = {
                   onSelectProfile: nativeContext.selectThinProfile,
                 }
               : {})}
+            {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
           />
         ) : null}
         <MeshPeersResource
@@ -306,6 +308,9 @@ export function AuroraTauriApp({
     [runtimeOverride],
   );
   const [runtime, setRuntime] = useState(initialRuntime);
+  const [profileBootstrapReady, setProfileBootstrapReady] = useState(
+    () => Boolean(runtimeOverride) || !requiresAsyncAuroraTauriBootstrap(),
+  );
   const [snapshot, setSnapshot] = useState<AuroraShellSnapshot>(
     initialSnapshotOverride ?? loadingShellSnapshot,
   );
@@ -343,11 +348,15 @@ export function AuroraTauriApp({
           return;
         }
         await runtime.dispose();
-        if (!cancelled) setRuntime(nextRuntime);
+        if (!cancelled) {
+          setRuntime(nextRuntime);
+          setProfileBootstrapReady(true);
+        }
       })
-      .catch((error) =>
-        console.warn("desktop-thin profile bootstrap failed", error),
-      );
+      .catch((error) => {
+        console.warn("desktop-thin profile bootstrap failed", error);
+        if (!cancelled) setProfileBootstrapReady(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -367,8 +376,16 @@ export function AuroraTauriApp({
   );
 
   const saveThinProfile = useCallback(
-    (profile: AuroraThinConnectionProfile) =>
-      rebuildThinRuntime((controller) => controller.saveProfile(profile)),
+    (
+      profile: AuroraThinConnectionProfile,
+      roomSecret?: {
+        roomSecretRef: string;
+        roomSecret: string;
+      },
+    ) =>
+      rebuildThinRuntime((controller) =>
+        controller.saveProfile(profile, roomSecret),
+      ),
     [rebuildThinRuntime],
   );
 
@@ -397,6 +414,18 @@ export function AuroraTauriApp({
       let readySidecar: TauriSidecarStatus | null = null;
       let modelsPhaseActive = false;
       try {
+        if (runtime.requiresOnboarding) {
+          setSnapshot({
+            ...loadingShellSnapshot,
+            loadState: "ready",
+            nodeName: "Aurora thin client",
+            transportKind: runtime.client.transport.kind,
+            evidenceSource:
+              "runtime profile required before network requests are enabled",
+          });
+          reportStage("ready");
+          return;
+        }
         reportStage("core");
         readySidecar = await runRuntimeReadinessProbes(
           runtime,
@@ -594,6 +623,50 @@ export function AuroraTauriApp({
     saveThinProfile,
     selectThinProfile,
   };
+
+  if (!profileBootstrapReady) {
+    return (
+      <AuroraOwlLoader
+        owlSrc={owlSrc}
+        stageId="boot"
+        progressPct={null}
+        detail="Loading the device connection profile"
+      />
+    );
+  }
+
+  if (
+    runtime.requiresOnboarding &&
+    runtime.thinPeer &&
+    runtime.thinProfileController
+  ) {
+    return (
+      <OnboardingView
+        client={runtime.client}
+        snapshot={snapshot}
+        modePreferenceStore={runtime.modePreferenceStore}
+        setupRequired
+        thinConnectionPanel={
+          <WebThinConnectionPanel
+            peer={runtime.thinPeer}
+            mode={runtime.thinConnectionMode}
+            transportKind={runtime.client.transport.kind}
+            nativePlatform={snapshot.nativePlatform}
+            initialInviteText={
+              runtime.pendingThinInviteText ?? initialThinInviteFromUrl()
+            }
+            profile={runtime.thinProfile}
+            profiles={runtime.thinProfileController.document.profiles}
+            profileStoreEvidence={runtime.thinProfileController.evidence}
+            onSaveProfile={saveThinProfile}
+            onSelectProfile={selectThinProfile}
+            configureOnly
+            {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
+          />
+        }
+      />
+    );
+  }
 
   if (snapshot.loadState === "loading") {
     return (
@@ -841,7 +914,10 @@ interface NativeContext {
   >["thinDiagnostics"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
-  saveThinProfile: (profile: AuroraThinConnectionProfile) => Promise<void>;
+  saveThinProfile: (
+    profile: AuroraThinConnectionProfile,
+    roomSecret?: WebThinRoomSecret,
+  ) => Promise<void>;
   selectThinProfile: (profileId: string) => Promise<void>;
   nativePermissions: TauriNativePermissionStatus | null;
   nativeFeatures: Record<string, TauriNativeFeatureStatus | null>;

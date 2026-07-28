@@ -29,7 +29,10 @@ import {
   type BrowserWebRtcSnapshot,
 } from "@aurora/ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAuroraTauriRuntime } from "./aurora-client";
+import {
+  createAuroraTauriRuntime,
+  type AuroraThinConnectionProfile,
+} from "./aurora-client";
 import {
   AuroraTauriApp,
   routeForPath,
@@ -100,7 +103,41 @@ function expectedRenderedLandmarks(
   );
 }
 
-const runtimeRouteIds = new Set(["settings", "models", "onboarding"]);
+const runtimeRouteIds = new Set(["settings", "models"]);
+
+function thinRuntimeProfile(
+  mode: "http-only" | "webrtc-only" | "webrtc-preferred",
+  gatewayUrl = mode === "webrtc-only" ? "" : "https://gateway.example.test",
+): AuroraThinConnectionProfile {
+  const base: AuroraThinConnectionProfile = {
+    id: `test-${mode}`,
+    label: `Test ${mode}`,
+    mode,
+    gatewayUrl,
+    signalingUrl: mode === "http-only" ? "" : "wss://signaling.example.test",
+    nodeName: "Aurora test thin client",
+    localStablePeerId: `aurora-test-${mode}`,
+  };
+  if (mode !== "http-only") {
+    base.webrtcProfile = {
+      mode,
+      appId: "aurora",
+      room: "test-room",
+      roomSecretRef: "ref:test:test-room",
+      signalingBrokers: ["wss://signaling.example.test"],
+      nodeName: base.nodeName,
+    };
+  }
+  return base;
+}
+
+function thinRuntimeDocument(profile: AuroraThinConnectionProfile) {
+  return {
+    version: 1 as const,
+    activeProfileId: profile.id,
+    profiles: [profile],
+  };
+}
 
 class RecordingMockAuroraTransport extends MockAuroraTransport {
   readonly requests: AuroraTransportRequest[] = [];
@@ -141,6 +178,9 @@ function testRuntime(
     thinConnectionMode: "http-only",
     thinDiagnostics: () => ["mode=http-only", "mock runtime"],
     modePreferenceStore,
+    thinProfileConfigured: true,
+    requiresOnboarding: false,
+    pendingThinInviteText: null,
     sidecarStatus: async () => null,
     startSidecar: async () => null,
     stopSidecar: async () => null,
@@ -225,6 +265,40 @@ function fakeThinPeer(
     isFallbackEligibleAfterWebRtcRoute: () => false,
     markFallback: () => undefined,
   } as unknown as NonNullable<AuroraTauriRuntime["thinPeer"]>;
+}
+
+function unconfiguredThinRuntime(
+  mode: "desktop-thin" | "mobile-native",
+  client: Aurora,
+): AuroraTauriRuntime {
+  const document = {
+    version: 1 as const,
+    activeProfileId: null,
+    profiles: [],
+  };
+  let runtime!: AuroraTauriRuntime;
+  const controller: NonNullable<AuroraTauriRuntime["thinProfileController"]> = {
+    evidence: "test narrow runtime profile store",
+    document,
+    saveProfile: async (profile) => ({
+      version: 1,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    }),
+    selectProfile: async () => document,
+    createRuntime: () => runtime,
+  };
+  runtime = {
+    ...testRuntime(client),
+    mode,
+    thinConnectionMode: "http-only",
+    thinPeer: fakeThinPeer({ status: "needs-invite" }),
+    thinProfileConfigured: false,
+    requiresOnboarding: true,
+    pendingThinInviteText: null,
+    thinProfileController: controller,
+  };
+  return runtime;
 }
 
 async function mountOutcomeApp(runtime: AuroraTauriRuntime) {
@@ -921,13 +995,18 @@ describe("Aurora Tauri runtime wrapper", () => {
   });
 
   it("uses HTTP Gateway transport without a sidecar when Tauri runs in desktop-thin mode", async () => {
-    vi.stubEnv("VITE_AURORA_GATEWAY_URL", "http://gateway.example.test:8000");
     Object.defineProperty(window, "__TAURI__", {
       value: {},
       configurable: true,
     });
+    const profile = thinRuntimeProfile(
+      "http-only",
+      "http://gateway.example.test:8000",
+    );
 
-    const runtime = createAuroraTauriRuntime();
+    const runtime = createAuroraTauriRuntime({
+      thinProfileDocument: thinRuntimeDocument(profile),
+    });
 
     expect(runtime.mode).toBe("desktop-thin");
     expect(runtime.client.transport.kind).toBe("http");
@@ -939,8 +1018,6 @@ describe("Aurora Tauri runtime wrapper", () => {
   });
 
   it("selects desktop-thin WebRTC-only in Tauri without starting the local sidecar", async () => {
-    vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
-    vi.stubEnv("VITE_AURORA_CONNECTION_MODE", "webrtc-only");
     Object.defineProperty(window, "__TAURI__", {
       value: {},
       configurable: true,
@@ -951,7 +1028,11 @@ describe("Aurora Tauri runtime wrapper", () => {
       "/mesh#invite=aurora%3A%2F%2Fmesh%2Finvite%3Fbad%3D1",
     );
 
-    const runtime = createAuroraTauriRuntime();
+    const runtime = createAuroraTauriRuntime({
+      thinProfileDocument: thinRuntimeDocument(
+        thinRuntimeProfile("webrtc-only"),
+      ),
+    });
 
     expect(runtime.mode).toBe("desktop-thin");
     expect(runtime.thinConnectionMode).toBe("webrtc-only");
@@ -968,8 +1049,6 @@ describe("Aurora Tauri runtime wrapper", () => {
   });
 
   it("selects desktop-thin WebRTC-preferred with explicit HTTP fallback diagnostics", async () => {
-    vi.stubEnv("VITE_AURORA_GATEWAY_URL", "https://gateway.example.test");
-    vi.stubEnv("VITE_AURORA_CONNECTION_MODE", "webrtc-preferred");
     vi.stubEnv("VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK", "1");
     Object.defineProperty(window, "__TAURI__", {
       value: {},
@@ -981,7 +1060,11 @@ describe("Aurora Tauri runtime wrapper", () => {
       `/mesh#invite=${encodeURIComponent(testMeshInviteText())}`,
     );
 
-    const runtime = createAuroraTauriRuntime();
+    const runtime = createAuroraTauriRuntime({
+      thinProfileDocument: thinRuntimeDocument(
+        thinRuntimeProfile("webrtc-preferred"),
+      ),
+    });
 
     expect(runtime.mode).toBe("desktop-thin");
     expect(runtime.thinConnectionMode).toBe("webrtc-preferred");
@@ -999,15 +1082,17 @@ describe("Aurora Tauri runtime wrapper", () => {
   });
 
   it("keeps desktop-thin HTTP and sidecar isolation intact when WebRTC rollout is disabled", async () => {
-    vi.stubEnv("VITE_AURORA_GATEWAY_URL", "https://gateway.example.test");
-    vi.stubEnv("VITE_AURORA_CONNECTION_MODE", "webrtc-preferred");
     vi.stubEnv("VITE_AURORA_WEBRTC_THIN_CLIENT", "false");
     Object.defineProperty(window, "__TAURI__", {
       value: {},
       configurable: true,
     });
 
-    const runtime = createAuroraTauriRuntime();
+    const runtime = createAuroraTauriRuntime({
+      thinProfileDocument: thinRuntimeDocument(
+        thinRuntimeProfile("webrtc-preferred"),
+      ),
+    });
 
     expect(runtime.mode).toBe("desktop-thin");
     expect(runtime.thinConnectionMode).toBe("webrtc-preferred");
@@ -1023,10 +1108,12 @@ describe("Aurora Tauri runtime wrapper", () => {
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__;
   });
 
-  it("uses thin HTTP mode for browser previews with an explicit Gateway URL", async () => {
-    vi.stubEnv("VITE_AURORA_GATEWAY_URL", "http://127.0.0.1:8000");
+  it("uses thin HTTP mode for browser previews only from an explicit runtime profile", async () => {
+    const profile = thinRuntimeProfile("http-only", "http://127.0.0.1:8000");
 
-    const runtime = createAuroraTauriRuntime();
+    const runtime = createAuroraTauriRuntime({
+      thinProfileDocument: thinRuntimeDocument(profile),
+    });
 
     expect(runtime.mode).toBe("desktop-thin");
     expect(runtime.client.transport.kind).toBe("http");
@@ -1144,6 +1231,63 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).not.toContain("aurora_sidecar_start");
   });
 
+  it.each([
+    ["desktop thin", "desktop-thin", "desktop"],
+    ["Android thin", "mobile-native", "android"],
+    ["iOS thin", "mobile-native", "ios"],
+  ] as const)(
+    "gates an unconfigured %s runtime on first-run connection onboarding",
+    (_label, mode, nativePlatform) => {
+      const transport = new RecordingMockAuroraTransport();
+      const runtime = unconfiguredThinRuntime(
+        mode,
+        new Aurora({ transport }),
+      );
+      const markup = renderToStaticMarkup(
+        <AuroraTauriApp
+          runtimeOverride={runtime}
+          initialSnapshotOverride={{
+            ...loadingShellSnapshot,
+            loadState: "ready",
+            nativePlatform,
+          }}
+        />,
+      );
+
+      expect(markup).toContain("Connect this Aurora client");
+      expect(markup).toContain("HTTP Gateway endpoint");
+      expect(markup).toContain("WebSocket signaling endpoint");
+      expect(markup).toContain("Scan QR invite");
+      expect(markup).toContain("Open invite file");
+      expect(markup).not.toContain('aria-label="Primary navigation"');
+      expect(markup).not.toContain('id="content"');
+      expect(transport.requests).toHaveLength(0);
+    },
+  );
+
+  it("keeps desktop-local startup outside the thin-client onboarding gate", () => {
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(new Aurora({ transport: new MockAuroraTransport() })),
+      mode: "desktop-local",
+      thinProfileConfigured: false,
+      requiresOnboarding: false,
+    };
+    const markup = renderToStaticMarkup(
+      <AuroraTauriApp
+        runtimeOverride={runtime}
+        initialSnapshotOverride={{
+          ...loadingShellSnapshot,
+          loadState: "ready",
+          transportKind: "tauri-local",
+        }}
+      />,
+    );
+
+    expect(markup).not.toContain("Connect this Aurora client");
+    expect(markup).toContain('id="content"');
+    expect(markup).toContain("Assistant");
+  });
+
   it("renders the models page for the models route", () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
     window.history.replaceState({}, "", "/models");
@@ -1250,7 +1394,7 @@ describe("Tauri CI/E2E route gates", () => {
 
   it("e2e:routes renders every registered route without placeholder or debug dashboard UI", () => {
     const routes = auroraNavSections.flatMap((section) => section.items);
-    expect(routes).toHaveLength(14);
+    expect(routes).toHaveLength(13);
     expect(new Set(tauriRouteRegistryRouteIds)).toEqual(
       new Set(routes.map((route) => route.id)),
     );
@@ -2420,7 +2564,6 @@ describe("Tauri CI/E2E route gates", () => {
     expect(routes.map((route) => route.id)).toEqual([
       "settings",
       "models",
-      "onboarding",
     ]);
 
     for (const route of routes) {

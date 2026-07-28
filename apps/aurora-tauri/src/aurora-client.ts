@@ -13,9 +13,19 @@ import {
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  activeThinConnectionProfile,
   createBrowserWebThinRuntime,
+  emptyThinProfileDocument,
   explainBrowserThinRuntime,
   getAuroraSurfaceProfile,
+  isThinConnectionProfileConfigured,
+  parseThinProfileDocument as parseSharedThinProfileDocument,
+  parseWebRtcInvite,
+  sanitizeThinConnectionProfile,
+  serializeThinProfileDocument as serializeSharedThinProfileDocument,
+  type ParsedWebRtcInvite,
+  type ThinConnectionProfile,
+  type ThinProfileDocument,
   type AuroraWebRtcRolloutFlags,
   type AuroraThinConnectionMode,
   type BrowserWebThinRuntime,
@@ -38,6 +48,9 @@ export interface AuroraTauriRuntime {
   thinPeer?: BrowserWebThinRuntime["peer"] | undefined;
   thinDiagnostics: () => string[];
   thinProfile?: AuroraThinConnectionProfile | undefined;
+  thinProfileConfigured: boolean;
+  requiresOnboarding: boolean;
+  pendingThinInviteText: string | null;
   thinProfileController?: AuroraThinProfileController | undefined;
   modePreferenceStore?: AuroraModePreferenceStore;
   sidecarStatus: () => Promise<TauriSidecarStatus | null>;
@@ -100,21 +113,8 @@ export interface AndroidMediaPolicyStatus {
   reason?: string;
 }
 
-export interface AuroraThinConnectionProfile {
-  id: string;
-  label: string;
-  mode: AuroraThinConnectionMode;
-  gatewayUrl: string;
-  signalingUrl: string;
-  nodeName: string;
-  localStablePeerId: string;
-}
-
-export interface AuroraThinProfileDocument {
-  version: 1;
-  activeProfileId: string;
-  profiles: AuroraThinConnectionProfile[];
-}
+export type AuroraThinConnectionProfile = ThinConnectionProfile;
+export type AuroraThinProfileDocument = ThinProfileDocument;
 
 export interface AuroraThinProfileStore {
   evidence: string;
@@ -127,11 +127,69 @@ export interface AuroraThinProfileController {
   document: AuroraThinProfileDocument;
   saveProfile: (
     profile: AuroraThinConnectionProfile,
+    roomSecret?: {
+      roomSecretRef: string;
+      roomSecret: string;
+    },
   ) => Promise<AuroraThinProfileDocument>;
   selectProfile: (profileId: string) => Promise<AuroraThinProfileDocument>;
   createRuntime: (
     document: AuroraThinProfileDocument,
   ) => AuroraTauriRuntime;
+}
+
+export function isThinProfileConfigured(
+  profile: AuroraThinConnectionProfile | undefined,
+): boolean {
+  return isThinConnectionProfileConfigured(profile);
+}
+
+export function thinProfileFromParsedWebRtcInvite(
+  parsed: ParsedWebRtcInvite,
+  baseProfile?: AuroraThinConnectionProfile | undefined,
+): {
+  profile: AuroraThinConnectionProfile;
+  roomSecret: { roomSecretRef: string; roomSecret: string };
+} {
+  const surfaceDefaults = thinSurfaceDefaults();
+  const profile = sanitizeThinConnectionProfile({
+    id: baseProfile?.id || "default",
+    label: baseProfile?.label || surfaceDefaults.label,
+    mode: baseProfile?.gatewayUrl ? "webrtc-preferred" : "webrtc-only",
+    gatewayUrl: baseProfile?.gatewayUrl || "",
+    signalingUrl:
+      baseProfile?.signalingUrl ||
+      parsed.profile.signalingBrokers[0] ||
+      "",
+    nodeName:
+      baseProfile?.nodeName ||
+      parsed.profile.nodeName ||
+      surfaceDefaults.nodeName,
+    localStablePeerId:
+      baseProfile?.localStablePeerId || surfaceDefaults.localStablePeerId,
+    webrtcProfile: parsed.profile,
+  });
+  return {
+    profile,
+    roomSecret: {
+      roomSecretRef: parsed.profile.roomSecretRef,
+      roomSecret: parsed.roomSecret,
+    },
+  };
+}
+
+export function thinProfileFromWebRtcInvite(
+  inviteText: string,
+  baseProfile?: AuroraThinConnectionProfile | undefined,
+): ReturnType<typeof thinProfileFromParsedWebRtcInvite> | null {
+  const parsed = parseWebRtcInvite(inviteText, {
+    nodeName: baseProfile?.nodeName,
+    signalingUrl: baseProfile?.signalingUrl,
+    allowInsecureLoopbackSignaling: truthy(
+      import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
+    ),
+  });
+  return parsed ? thinProfileFromParsedWebRtcInvite(parsed, baseProfile) : null;
 }
 
 export interface AuroraModePreferenceStore {
@@ -154,8 +212,6 @@ export interface AuroraOverlayCommandStatus {
 }
 
 const ONBOARDING_MODE_KEY = "aurora.session.onboarding-mode";
-const DESKTOP_THIN_PROFILES_KEY =
-  "aurora.session.desktop-thin-connection-profiles.v1";
 const DEFAULT_THIN_CONNECTION_MODE: AuroraThinConnectionMode = "http-only";
 export const ANDROID_NATIVE_PLUGIN_NAME = "aurora-native";
 export const ANDROID_LIFECYCLE_EVENT = "aurora://android-lifecycle";
@@ -165,10 +221,17 @@ export async function bootstrapAuroraTauriRuntime(
 ): Promise<AuroraTauriRuntime> {
   if (!requiresAsyncAuroraTauriBootstrap()) return createAuroraTauriRuntime();
   const thinInviteText = consumeFragmentInviteFromRuntime();
-  const store =
+  const preferredStore =
     profileStore ??
     secureThinProfileStore(new TauriLocalTransport({ invoke, listen }));
-  const document = await store.load();
+  let store = preferredStore;
+  let document: AuroraThinProfileDocument;
+  try {
+    document = await preferredStore.load();
+  } catch {
+    store = createMemoryThinProfileStore();
+    document = await store.load();
+  }
   return createAuroraTauriRuntime({
     thinProfileStore: store,
     thinProfileDocument: document,
@@ -198,13 +261,10 @@ export function createAuroraTauriRuntime({
   thinInviteText?: string | null;
   consumeThinInvite?: boolean;
 } = {}): AuroraTauriRuntime {
-  const configuredGatewayEnv = import.meta.env.VITE_AURORA_GATEWAY_URL;
-  const configuredProfile =
-    activeThinProfile(thinProfileDocument) ?? defaultThinProfileFromEnv();
-  const configuredGatewayUrl =
-    configuredProfile?.gatewayUrl || optionalEnv(configuredGatewayEnv);
+  const configuredProfile = activeThinProfile(thinProfileDocument);
+  const configuredGatewayUrl = configuredProfile?.gatewayUrl || undefined;
   const thinConnectionMode =
-    configuredProfile?.mode ?? tauriThinConnectionMode();
+    configuredProfile?.mode ?? DEFAULT_THIN_CONNECTION_MODE;
   const thinInviteText =
     explicitThinInviteText ??
     (consumeThinInvite ? consumeFragmentInviteFromRuntime() : null);
@@ -212,6 +272,7 @@ export function createAuroraTauriRuntime({
     thinProfileStore && thinProfileDocument
       ? createThinProfileController(thinProfileStore, thinProfileDocument)
       : undefined;
+  const thinProfileConfigured = isThinProfileConfigured(configuredProfile);
 
   if (isTauriRuntime()) {
     const nativeTransport = new TauriLocalTransport({ invoke, listen });
@@ -224,11 +285,11 @@ export function createAuroraTauriRuntime({
           mode: thinConnectionMode,
           gatewayUrl: configuredGatewayUrl,
           signalingUrl: configuredProfile?.signalingUrl,
+          webrtcProfile: configuredProfile?.webrtcProfile,
           inviteText: thinInviteText,
           runtimeMode: "mobile-native",
           nodeName:
             configuredProfile?.nodeName ||
-            import.meta.env.VITE_AURORA_NODE_NAME ||
             `Aurora ${mobilePlatform} thin WebView`,
           localStablePeerId: configuredProfile?.localStablePeerId,
         });
@@ -248,8 +309,11 @@ export function createAuroraTauriRuntime({
               thinInviteText,
               "mobile-native",
               mobilePlatform,
-            ),
+          ),
           thinProfile: configuredProfile,
+          thinProfileConfigured,
+          requiresOnboarding: !thinProfileConfigured,
+          pendingThinInviteText: thinInviteText,
           thinProfileController,
           modePreferenceStore: memoryOnlyModePreferenceStore(
             `${mobilePlatform} thin mode preference is selected by the narrow nonsecret thin profile; no generic secure storage`,
@@ -298,6 +362,9 @@ export function createAuroraTauriRuntime({
           "mode=http-only",
           "Unrecognized mobile Tauri surface uses the platform transport; Android and iOS use the shared WebView thin runtime",
         ],
+        thinProfileConfigured: false,
+        requiresOnboarding: false,
+        pendingThinInviteText: null,
         modePreferenceStore: secureModePreferenceStore(
           nativeTransport,
           "Tauri secure storage for mobile native mode preference",
@@ -338,11 +405,11 @@ export function createAuroraTauriRuntime({
         mode: thinConnectionMode,
         gatewayUrl: configuredGatewayUrl,
         signalingUrl: configuredProfile?.signalingUrl,
+        webrtcProfile: configuredProfile?.webrtcProfile,
         inviteText: thinInviteText,
         runtimeMode: "desktop-thin",
         nodeName:
           configuredProfile?.nodeName ||
-          import.meta.env.VITE_AURORA_NODE_NAME ||
           "Aurora Tauri desktop thin shell",
         localStablePeerId: configuredProfile?.localStablePeerId,
       });
@@ -357,8 +424,11 @@ export function createAuroraTauriRuntime({
             configuredGatewayUrl,
             configuredProfile?.signalingUrl,
             thinInviteText,
-          ),
+        ),
         thinProfile: configuredProfile,
+        thinProfileConfigured,
+        requiresOnboarding: !thinProfileConfigured,
+        pendingThinInviteText: thinInviteText,
         thinProfileController,
         modePreferenceStore: memoryOnlyModePreferenceStore(
           "Desktop-thin mode preference is runtime/profile selected; no generic secure-storage permission",
@@ -400,6 +470,9 @@ export function createAuroraTauriRuntime({
         "mode=http-only",
         "desktop-local preserves Rust-supervised Python sidecar and STTCoordinator wakeword ownership",
       ],
+      thinProfileConfigured: false,
+      requiresOnboarding: false,
+      pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(
         nativeTransport,
         "Tauri secure storage for desktop local mode preference",
@@ -428,19 +501,17 @@ export function createAuroraTauriRuntime({
     };
   }
 
-  const gatewayUrl =
-    configuredGatewayUrl ??
-    (configuredGatewayEnv === undefined ? devLoopbackGatewayUrl() : undefined);
+  const gatewayUrl = configuredGatewayUrl;
   if (gatewayUrl || thinConnectionMode !== "http-only") {
     const thinRuntime = createTauriWebThinRuntime({
       mode: thinConnectionMode,
       gatewayUrl,
       signalingUrl: configuredProfile?.signalingUrl,
+      webrtcProfile: configuredProfile?.webrtcProfile,
       inviteText: thinInviteText,
       runtimeMode: "desktop-thin",
       nodeName:
         configuredProfile?.nodeName ||
-        import.meta.env.VITE_AURORA_NODE_NAME ||
         "Aurora Tauri browser preview thin shell",
       localStablePeerId: configuredProfile?.localStablePeerId,
     });
@@ -455,8 +526,11 @@ export function createAuroraTauriRuntime({
           gatewayUrl,
           configuredProfile?.signalingUrl,
           thinInviteText,
-        ),
+      ),
       thinProfile: configuredProfile,
+      thinProfileConfigured,
+      requiresOnboarding: !thinProfileConfigured,
+      pendingThinInviteText: thinInviteText,
       thinProfileController,
       modePreferenceStore: memoryOnlyModePreferenceStore(
         "browser thin mode preference is memory-only; no web storage persistence",
@@ -492,6 +566,9 @@ export function createAuroraTauriRuntime({
       "mode=http-only",
       "mock/offline demo transport; no live Gateway, WebRTC peer, or sidecar",
     ],
+    thinProfileConfigured: false,
+    requiresOnboarding: false,
+    pendingThinInviteText: null,
     modePreferenceStore: memoryOnlyModePreferenceStore(
       "mock/offline demo mode preference is memory-only fixture state",
     ),
@@ -538,16 +615,32 @@ function createTauriNativePeerCredentialStore(): WebRtcPeerCredentialStore & {
 
 class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore {
   private readonly roomSecrets = new Map<string, Uint8Array>();
+  private pendingRoomSecretWrites: Promise<void> = Promise.resolve();
 
   constructor(private readonly nativeStore: NativePeerCredentialStore) {}
 
   setRoomSecret(ref: string, value: string): void {
-    this.roomSecrets.set(ref, new TextEncoder().encode(value));
+    const bytes = new TextEncoder().encode(value);
+    this.roomSecrets.get(ref)?.fill(0);
+    this.roomSecrets.set(ref, bytes);
+    this.pendingRoomSecretWrites = this.pendingRoomSecretWrites
+      .catch(() => undefined)
+      .then(() => persistTauriRoomSecret(ref, value));
   }
 
   async getRoomSecret(ref: string): Promise<Uint8Array | null> {
     const value = this.roomSecrets.get(ref);
-    return value ? new Uint8Array(value) : null;
+    if (value) return new Uint8Array(value);
+    await this.pendingRoomSecretWrites.catch(() => undefined);
+    const stored = await invoke<{ value?: string | null }>(
+      "aurora_thin_room_secret_get",
+      { request: { ref } },
+    ).catch(() => null);
+    const persisted = stored?.value;
+    if (!persisted) return null;
+    const bytes = new TextEncoder().encode(persisted);
+    this.roomSecrets.set(ref, bytes);
+    return new Uint8Array(bytes);
   }
 
   get(peerId: string): Promise<StoredPeerCredentialMetadata | undefined> {
@@ -575,6 +668,7 @@ class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore 
   }
 
   async clear(): Promise<void> {
+    await this.pendingRoomSecretWrites.catch(() => undefined);
     for (const value of this.roomSecrets.values()) value.fill(0);
     this.roomSecrets.clear();
   }
@@ -585,10 +679,23 @@ class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore 
   }
 }
 
+async function persistTauriRoomSecret(
+  ref: string,
+  value: string,
+): Promise<void> {
+  const result = await invoke<{ ok?: boolean }>("aurora_thin_room_secret_set", {
+    request: { ref, value },
+  });
+  if (!result.ok) {
+    throw new Error("Thin-client room-secret persistence failed");
+  }
+}
+
 function createTauriWebThinRuntime({
   mode,
   gatewayUrl,
   signalingUrl,
+  webrtcProfile,
   inviteText,
   runtimeMode,
   nodeName,
@@ -597,6 +704,7 @@ function createTauriWebThinRuntime({
   mode: AuroraThinConnectionMode;
   gatewayUrl?: string | undefined;
   signalingUrl?: string | undefined;
+  webrtcProfile?: WebRtcPeerConnectionProfile | undefined;
   inviteText?: string | null | undefined;
   runtimeMode: string;
   nodeName: string;
@@ -608,6 +716,7 @@ function createTauriWebThinRuntime({
     gatewayUrl,
     bearerToken: () => runtime.client.auth.bearerToken(),
     signalingUrl,
+    profile: webrtcProfile,
     inviteText,
     rolloutFlags: tauriWebRtcRolloutFlags(),
     credentialStore:
@@ -632,6 +741,11 @@ function createTauriWebThinRuntime({
     createDemoClient: () =>
       new AuroraClient({ transport: new MockAuroraTransport() }),
   });
+  if (webrtcProfile && mode !== "http-only") {
+    queueMicrotask(() => {
+      void runtime.peer.connect(webrtcProfile).catch(() => undefined);
+    });
+  }
   return runtime;
 }
 
@@ -851,8 +965,21 @@ function createThinProfileController(
   return {
     evidence: store.evidence,
     document,
-    saveProfile: async (profile) => {
-      const sanitized = sanitizeThinProfile(profile);
+    saveProfile: async (profile, roomSecret) => {
+      const sanitized = sanitizeThinConnectionProfile(profile);
+      if (roomSecret) {
+        if (
+          sanitized.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef
+        ) {
+          throw new Error(
+            "Thin-client room secret does not match the saved WebRTC profile",
+          );
+        }
+        await persistTauriRoomSecret(
+          roomSecret.roomSecretRef,
+          roomSecret.roomSecret,
+        );
+      }
       const profiles = document.profiles.filter(
         (candidate) => candidate.id !== sanitized.id,
       );
@@ -882,171 +1009,23 @@ function createThinProfileController(
 export function serializeThinProfileDocument(
   document: AuroraThinProfileDocument,
 ): string {
-  const profiles = document.profiles.map(sanitizeThinProfile);
-  if (!profiles.some((profile) => profile.id === document.activeProfileId))
-    throw new Error("Desktop-thin active profile must exist");
-  return JSON.stringify({
-    version: 1,
-    activeProfileId: document.activeProfileId,
-    profiles,
-  } satisfies AuroraThinProfileDocument);
+  return serializeSharedThinProfileDocument(document);
 }
 
 export function parseThinProfileDocument(
   value: string | null | undefined,
 ): AuroraThinProfileDocument | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as {
-      version?: unknown;
-      activeProfileId?: unknown;
-      profiles?: unknown;
-    };
-    if (
-      parsed.version !== 1 ||
-      typeof parsed.activeProfileId !== "string" ||
-      !Array.isArray(parsed.profiles)
-    )
-      return null;
-    const profiles = parsed.profiles.map((profile) =>
-      sanitizeThinProfile(profile as AuroraThinConnectionProfile),
-    );
-    if (!profiles.some((profile) => profile.id === parsed.activeProfileId))
-      return null;
-    return {
-      version: 1,
-      activeProfileId: parsed.activeProfileId,
-      profiles,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function sanitizeThinProfile(
-  profile: AuroraThinConnectionProfile,
-): AuroraThinConnectionProfile {
-  const id = requiredProfileText(profile.id, "profile id", 96);
-  const label = requiredProfileText(profile.label, "profile label", 120);
-  const nodeName = requiredProfileText(profile.nodeName, "node name", 160);
-  const localStablePeerId = requiredProfileText(
-    profile.localStablePeerId,
-    "stable peer id",
-    160,
-  );
-  const mode = profile.mode;
-  if (
-    mode !== "http-only" &&
-    mode !== "webrtc-only" &&
-    mode !== "webrtc-preferred"
-  )
-    throw new Error("Desktop-thin connection mode is invalid");
-  const gatewayUrl = optionalExactEndpoint(
-    profile.gatewayUrl,
-    "Gateway",
-    new Set(["https:"]),
-  );
-  const signalingUrl = optionalExactEndpoint(
-    profile.signalingUrl,
-    "signaling",
-    new Set(["wss:"]),
-  );
-  if (mode !== "webrtc-only" && !gatewayUrl)
-    throw new Error(`${mode} requires an exact HTTPS Gateway endpoint`);
-  if (mode !== "http-only" && !signalingUrl)
-    throw new Error(`${mode} requires an exact WSS signaling endpoint`);
-  return {
-    id,
-    label,
-    mode,
-    gatewayUrl,
-    signalingUrl,
-    nodeName,
-    localStablePeerId,
-  };
-}
-
-function requiredProfileText(
-  value: string,
-  label: string,
-  maxLength: number,
-): string {
-  const trimmed = typeof value === "string" ? value.trim() : "";
-  if (!trimmed || trimmed.length > maxLength)
-    throw new Error(`Desktop-thin ${label} is required`);
-  return trimmed;
-}
-
-function optionalExactEndpoint(
-  value: string,
-  label: string,
-  protocols: Set<string>,
-): string {
-  const trimmed = typeof value === "string" ? value.trim() : "";
-  if (!trimmed) return "";
-  const url = new URL(trimmed);
-  if (!protocols.has(url.protocol) || url.username || url.password)
-    throw new Error(
-      `Desktop-thin ${label} must be an exact ${[...protocols].join("/")} endpoint without embedded credentials`,
-    );
-  if (url.hash)
-    throw new Error(
-      `Desktop-thin ${label} endpoint must not contain URL fragments`,
-    );
-  if (url.search)
-    throw new Error(
-      `Desktop-thin ${label} endpoint must not contain query strings`,
-    );
-  return url.toString().replace(/\/$/, "");
+  return parseSharedThinProfileDocument(value);
 }
 
 function activeThinProfile(
   document: AuroraThinProfileDocument | undefined,
 ): AuroraThinConnectionProfile | undefined {
-  return document?.profiles.find(
-    (profile) => profile.id === document.activeProfileId,
-  );
+  return activeThinConnectionProfile(document);
 }
 
 function defaultThinProfileDocument(): AuroraThinProfileDocument {
-  const surfaceDefaults = thinSurfaceDefaults();
-  const profile = defaultThinProfileFromEnv() ?? {
-    id: "default",
-    label: surfaceDefaults.label,
-    mode: tauriThinConnectionMode(),
-    gatewayUrl: optionalEnv(import.meta.env.VITE_AURORA_GATEWAY_URL) ?? "",
-    signalingUrl:
-      optionalEnv(import.meta.env.VITE_AURORA_SIGNALING_URL) ?? "",
-    nodeName:
-      optionalEnv(import.meta.env.VITE_AURORA_NODE_NAME) ??
-      surfaceDefaults.nodeName,
-    localStablePeerId:
-      optionalEnv(import.meta.env.VITE_AURORA_STABLE_PEER_ID) ??
-      surfaceDefaults.localStablePeerId,
-  };
-  return { version: 1, activeProfileId: profile.id, profiles: [profile] };
-}
-
-function defaultThinProfileFromEnv(): AuroraThinConnectionProfile | undefined {
-  const gatewayUrl = optionalEnv(import.meta.env.VITE_AURORA_GATEWAY_URL) ?? "";
-  const signalingUrl =
-    optionalEnv(import.meta.env.VITE_AURORA_SIGNALING_URL) ?? "";
-  if (!gatewayUrl && !signalingUrl && !isPackagedDesktopThinRuntime())
-    return undefined;
-  const surfaceDefaults = thinSurfaceDefaults();
-  return {
-    id: "default",
-    label: surfaceDefaults.label,
-    mode: tauriThinConnectionMode(),
-    gatewayUrl,
-    signalingUrl,
-    nodeName:
-      optionalEnv(import.meta.env.VITE_AURORA_NODE_NAME) ??
-      surfaceDefaults.nodeName,
-    localStablePeerId:
-      optionalEnv(import.meta.env.VITE_AURORA_STABLE_PEER_ID) ??
-      surfaceDefaults.localStablePeerId,
-  };
+  return emptyThinProfileDocument();
 }
 
 function thinSurfaceDefaults(): {
@@ -1114,7 +1093,7 @@ function tauriNativePlatform(): string {
 function currentAuroraSurfaceProfile() {
   return getAuroraSurfaceProfile({
     runtimeMode: import.meta.env.VITE_AURORA_RUNTIME_MODE,
-    transportKind: tauriThinConnectionMode(),
+    transportKind: DEFAULT_THIN_CONNECTION_MODE,
     userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent,
   });
 }
@@ -1209,26 +1188,7 @@ function currentWebViewOrigin(): string {
 }
 
 function configuredHttpsOrigins(): string[] {
-  const origins = new Set<string>(["https://tauri.localhost"]);
-  for (const value of [
-    import.meta.env.VITE_AURORA_GATEWAY_URL,
-    import.meta.env.VITE_AURORA_SIGNALING_URL,
-  ]) {
-    const origin = endpointOrigin(value);
-    if (origin) origins.add(origin);
-  }
-  return [...origins];
-}
-
-function endpointOrigin(value: string | undefined): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  try {
-    const url = new URL(trimmed);
-    return url.protocol === "https:" ? url.origin : null;
-  } catch {
-    return null;
-  }
+  return ["https://tauri.localhost"];
 }
 
 async function optionalInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
@@ -1310,26 +1270,6 @@ interface AndroidLifecyclePluginPayload {
   reason?: string;
 }
 
-function devLoopbackGatewayUrl(): string | undefined {
-  if (!import.meta.env.DEV || typeof window === "undefined") return undefined;
-  if (!["127.0.0.1", "localhost"].includes(window.location.hostname))
-    return undefined;
-  return "http://127.0.0.1:8000";
-}
-
-function tauriThinConnectionMode(): AuroraThinConnectionMode {
-  const value =
-    import.meta.env.VITE_AURORA_CONNECTION_MODE ??
-    import.meta.env.VITE_AURORA_THIN_CONNECTION_MODE;
-  if (
-    value === "http-only" ||
-    value === "webrtc-only" ||
-    value === "webrtc-preferred"
-  )
-    return value;
-  return DEFAULT_THIN_CONNECTION_MODE;
-}
-
 function tauriWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {
   return {
     webrtc_thin_client: enabledUnlessExplicitlyFalse(
@@ -1371,11 +1311,6 @@ function consumeFragmentInviteFromRuntime(): string | null {
   return invite;
 }
 
-
-function optionalEnv(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
 
 function truthy(value: string | undefined): boolean {
   return (

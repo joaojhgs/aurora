@@ -513,10 +513,10 @@
           "markdownDescription": "Allow the frontend SDK adapter to open, activate, and close the Aurora EventStream subscription bridge through the configured Gateway SSE route."
         },
         {
-          "description": "Allow desktop-thin WebView runtime to store/delete/status peer reconnect credentials and request challenge-bound reconnect proofs through the platform keychain. Raw bearer tokens are never returned to the WebView.",
+          "description": "Allow thin WebView runtimes to store/delete/status opaque peer reconnect credentials, request challenge-bound reconnect proofs without returning raw bearer tokens, and store/retrieve the separately scoped room secret required to rebuild an approved WebRTC session.",
           "type": "string",
           "const": "aurora-thin-peer-credentials",
-          "markdownDescription": "Allow desktop-thin WebView runtime to store/delete/status peer reconnect credentials and request challenge-bound reconnect proofs through the platform keychain. Raw bearer tokens are never returned to the WebView."
+          "markdownDescription": "Allow thin WebView runtimes to store/delete/status opaque peer reconnect credentials, request challenge-bound reconnect proofs without returning raw bearer tokens, and store/retrieve the separately scoped room secret required to rebuild an approved WebRTC session."
         },
         {
           "description": "Allow the desktop-thin shell to load and save only the nonsecret connection-profile document. This does not expose generic secure-storage get/set/delete or auth/admin/gateway secret keys.",
