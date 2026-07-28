@@ -56,12 +56,16 @@ export class MapBrowserStorageLeaseStore implements BrowserStorageLeaseStore {
 
 export class FakeWebLocks implements BrowserStorageLockManagerLike {
   readonly held = new Set<string>()
+  asyncCallback = false
+  failBeforeCallback: Error | null = null
 
   async request<T>(
     name: string,
     options: { ifAvailable?: boolean },
     callback: (lock: unknown | null) => T | Promise<T>,
   ): Promise<T> {
+    if (this.failBeforeCallback !== null) throw this.failBeforeCallback
+    if (this.asyncCallback) await new Promise((resolve) => setTimeout(resolve, 0))
     if (this.held.has(name)) {
       if (options.ifAvailable) return await callback(null)
       throw new Error('lock is already held')

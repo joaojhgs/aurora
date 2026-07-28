@@ -292,27 +292,48 @@ async function tryAcquireWebLock(
   lockKey: string,
   ownerId: string,
 ): Promise<BrowserStorageWriterLock | null> {
-  let releaseHeldLock: (() => void) | null = null
-  const held = locks.request(lockKey, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
-    if (lock === null) return false
-    await new Promise<void>((resolve) => {
-      releaseHeldLock = resolve
-    })
-    return true
+  let signalSettled = false
+  let resolveSignal: (value: { release: () => void } | null) => void = () => {}
+  let rejectSignal: (reason: unknown) => void = () => {}
+  const signal = new Promise<{ release: () => void } | null>((resolve, reject) => {
+    resolveSignal = (value) => {
+      signalSettled = true
+      resolve(value)
+    }
+    rejectSignal = (reason) => {
+      signalSettled = true
+      reject(reason)
+    }
   })
-  await Promise.resolve()
-  if (releaseHeldLock === null) {
-    const unavailable = await Promise.race([held, Promise.resolve(false)])
-    if (unavailable === false) return null
+  const held = Promise.resolve()
+    .then(async () => await locks.request(lockKey, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+      if (lock === null) {
+        resolveSignal(null)
+        return false
+      }
+      let releaseHeldLock: () => void = () => {}
+      const releasePromise = new Promise<void>((resolve) => {
+        releaseHeldLock = resolve
+      })
+      resolveSignal({ release: releaseHeldLock })
+      await releasePromise
+      return true
+    }))
+    .then(() => undefined, (error: unknown) => {
+      if (!signalSettled) rejectSignal(error)
+    })
+  const acquired = await signal
+  if (acquired === null) {
+    await held
+    return null
   }
-  if (releaseHeldLock === null) return null
   return new WebLocksWriterLock({
     acquired: true,
     mode: 'web-locks',
     lockKey,
     ownerId,
     expiresAtMs: null
-  }, releaseHeldLock, held)
+  }, acquired.release, held)
 }
 
 export function deriveBrowserStorageOwnerKey(origin: string, localNodeId: string): string {

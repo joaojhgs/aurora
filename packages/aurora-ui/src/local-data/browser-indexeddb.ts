@@ -36,7 +36,7 @@ import {
   type BrowserStorageLeaseStore,
   type BrowserStorageLockManagerLike,
   type BrowserStorageWriterLock
-} from './browser-storage-lock'
+} from './browser-storage-lock.js'
 
 export interface BrowserIndexedDbDocumentStore {
   load(): Promise<StoredBrowserLocalDataDocument | null>

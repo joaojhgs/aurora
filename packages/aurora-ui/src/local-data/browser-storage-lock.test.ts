@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   BrowserStorageLockCoordinator,
@@ -38,6 +38,40 @@ describe('BrowserStorageLockCoordinator', () => {
     }).acquire()).resolves.toMatchObject({
       status: { mode: 'web-locks' }
     })
+  })
+
+  it('waits for async Web Locks callbacks before deciding availability', async () => {
+    const locks = new FakeWebLocks()
+    locks.asyncCallback = true
+
+    const acquired = await new BrowserStorageLockCoordinator({
+      origin: 'https://aurora.example.test',
+      localNodeId: 'node-async',
+      ownerId: 'owner-async',
+      locks
+    }).acquire()
+
+    expect(acquired.status.mode).toBe('web-locks')
+    expect(locks.held.has(acquired.status.lockKey)).toBe(true)
+    await acquired.release()
+    expect(locks.held.has(acquired.status.lockKey)).toBe(false)
+  })
+
+  it('propagates Web Locks request exceptions without unhandled rejections', async () => {
+    const locks = new FakeWebLocks()
+    locks.failBeforeCallback = new Error('web locks unavailable now')
+    const unhandled = vi.fn()
+    process.once('unhandledRejection', unhandled)
+
+    await expect(new BrowserStorageLockCoordinator({
+      origin: 'https://aurora.example.test',
+      localNodeId: 'node-exception',
+      ownerId: 'owner-exception',
+      locks
+    }).acquire()).rejects.toThrow(/web locks unavailable now/u)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(unhandled).not.toHaveBeenCalled()
+    process.removeListener('unhandledRejection', unhandled)
   })
 
   it('isolates distinct local-node identities even under the same origin', async () => {
