@@ -474,7 +474,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       )
     })
 
-    expect(container.textContent).toContain('Thin-shell transport')
+    expect(container.textContent).toContain('Peer connection')
     expect(container.textContent).toContain('Compare SAS')
     expect(container.textContent).toContain('12345678')
     expect(container.textContent).toContain('memory-only')
@@ -551,6 +551,43 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
     expect(container.querySelector('input[name*="token" i]')).toBeNull()
     expect(container.querySelector('input[name*="secret" i]')).toBeNull()
+  })
+
+  it('renders a configured disconnected peer as offline without a transport error', async () => {
+    const peer = new FakeBrowserPeer({
+      status: 'failed',
+      state: 'failed',
+      expectedStablePeerId: 'peer-host',
+      nodeName: 'Aurora host',
+      diagnostic: 'WebRTC mesh transport is not connected; preferred-mode fallback is unavailable.',
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="mesh"
+        />,
+      )
+    })
+
+    expect(container.textContent).toContain('Aurora host is offline')
+    expect(container.textContent).toContain('WebRTC remains enabled')
+    expect(container.textContent).toContain('other trusted mesh peers')
+    expect(container.textContent).toContain('HTTP fallbacknot configured')
+    expect(container.textContent).not.toContain('Thin-shell transport')
+    expect(container.textContent).not.toContain('WebRTC rollout disabled')
+    expect(container.textContent).not.toContain(
+      'WebRTC mesh transport is not connected',
+    )
+    expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
   it('imports an invite into secure storage before leaving configure-only onboarding', async () => {

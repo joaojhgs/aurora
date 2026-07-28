@@ -23,6 +23,12 @@ import { EvidenceBadge, StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
 import { PageHeader } from './state-surface'
 import { Button, StatStrip } from './primitives'
+import {
+  isBrowserWebRtcConfigured,
+  isBrowserWebRtcConnected,
+  type BrowserWebRtcPeerController,
+  type BrowserWebRtcSnapshot,
+} from './web-thin-runtime'
 
 export type MeshDiagnosticsLoadState = 'loading' | 'ready' | 'empty' | 'degraded' | 'denied' | 'unavailable' | 'error'
 
@@ -156,6 +162,7 @@ export interface MeshDiagnosticsSnapshot {
 export interface MeshDiagnosticsResourceProps {
   client: AuroraClient
   route: RouteAvailability
+  thinPeer?: BrowserWebRtcPeerController
 }
 
 export interface MeshDiagnosticsViewProps {
@@ -328,6 +335,145 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     warnings,
     errors,
     evidenceSource: errors.length ? 'partial Aurora diagnostics responses' : 'Aurora Gateway diagnostics, mesh status, and capability catalog'
+  }
+}
+
+/**
+ * Merge client-side thin transport truth with remote Gateway diagnostics.
+ * Gateway diagnostics can be unavailable precisely because the peer is
+ * offline; that must not be rendered as WebRTC being disabled.
+ */
+export function reconcileMeshDiagnosticsWithThinPeer(
+  next: MeshDiagnosticsSnapshot,
+  thinPeer: BrowserWebRtcSnapshot | null | undefined,
+  previous?: MeshDiagnosticsSnapshot | null,
+): MeshDiagnosticsSnapshot {
+  if (!isBrowserWebRtcConfigured(thinPeer)) return next
+
+  const connected = isBrowserWebRtcConnected(thinPeer)
+  const remoteUnavailable =
+    next.loadState === 'unavailable'
+    || next.loadState === 'error'
+  const previousHasRemoteEvidence = Boolean(
+    previous
+    && previous.loadState !== 'loading'
+    && previous.loadState !== 'unavailable'
+    && previous.loadState !== 'error'
+    && previous.loadState !== 'denied',
+  )
+  const base = remoteUnavailable && previousHasRemoteEvidence
+    ? previous!
+    : next
+  const peerId = thinPeer.expectedStablePeerId!
+  const nodeName = thinPeer.nodeName?.trim() || 'Invited Aurora peer'
+  const state: AvailabilityState = connected
+    ? 'available-remote'
+    : thinPeer.status === 'pairing'
+      ? 'pending'
+      : 'stale'
+  const thinRow: MeshTransportRow = {
+    id: `thin:${peerId}`,
+    peerId,
+    signalingPeerId: thinPeer.connectedSignalingPeerId ?? 'not connected',
+    nodeName,
+    state,
+    connectionState: connected ? 'connected' : 'offline',
+    iceConnectionState: connected ? thinPeer.icePathCategory : 'not connected',
+    iceGatheringState: connected ? 'complete' : 'idle',
+    signalingState: connected ? 'stable' : 'waiting for peer',
+    dataChannelState: connected ? 'open' : 'closed',
+    dataChannelLabel: 'aurora-rpc',
+    hasSendChannel: connected,
+    rttMs: null,
+    authState: connected ? 'authenticated' : 'saved peer offline',
+    identitySource: 'saved thin WebRTC profile',
+    isAdmin: false,
+    effectivePermissionCount: 0,
+    pairingState: thinPeer.status === 'pairing'
+      ? 'bilateral approval pending'
+      : 'no pairing work reported',
+    routeQuality: connected ? 'connected' : 'offline',
+    routeProvider: connected
+      ? 'authorized direct peer and its advertised mesh providers'
+      : 'last-known providers retained until reconnect',
+    trustLabel: connected
+      ? 'authenticated saved peer'
+      : 'saved peer identity; live trust state unavailable',
+    fingerprint: peerId,
+    permissions: connected
+      ? 'effective permissions loaded from the peer catalog'
+      : 'permissions refreshed on reconnect',
+    compatibility: 'checked again on reconnect',
+    lastSeen: thinPeer.updatedAt,
+  }
+  const transportRows = [
+    ...base.transportRows.filter((row) => row.peerId !== peerId),
+    thinRow,
+  ]
+  const errors = next.errors.filter(
+    (error) => !isExpectedOfflineTransportDiagnostic(error),
+  )
+  const warnings = [
+    ...new Set([
+      ...base.warnings.filter(
+        (warning) => !isExpectedOfflineTransportDiagnostic(warning),
+      ),
+      ...(!connected
+        ? [`${nodeName} is offline. WebRTC remains enabled and the saved peer identity will be retried.`]
+        : []),
+    ]),
+  ]
+  const liveProbes = base.liveProbes.some(
+    (probe) => probe.name === 'Thin WebRTC peer',
+  )
+    ? base.liveProbes.map((probe) =>
+        probe.name === 'Thin WebRTC peer'
+          ? thinPeerProbe(nodeName, state, connected)
+          : probe,
+      )
+    : [...base.liveProbes, thinPeerProbe(nodeName, state, connected)]
+
+  return {
+    ...base,
+    loadState: base.loadState === 'denied'
+      ? 'denied'
+      : connected && !remoteUnavailable
+        ? base.loadState
+        : 'degraded',
+    localNodeName: base.localNodeName === 'Aurora node'
+      ? nodeName
+      : base.localNodeName,
+    started: true,
+    enabled: true,
+    meshEnabled: true,
+    signalingState: connected ? 'available-remote' : 'degraded',
+    signalingEvidence: connected
+      ? `Thin WebRTC runtime is enabled and connected to ${nodeName}.`
+      : `Thin WebRTC runtime is enabled; ${nodeName} peer is offline.`,
+    signalingRepair: connected
+      ? 'The saved thin peer is connected.'
+      : 'Wait for the peer or reconnect manually. WebRTC remains enabled and saved peer/capability metadata remains visible as stale.',
+    diagnosticsCapabilityState: connected
+      ? base.diagnosticsCapabilityState
+      : base.diagnosticsCapabilityState === 'denied'
+        ? 'denied'
+        : 'stale',
+    diagnosticsCapabilityReason: connected
+      ? base.diagnosticsCapabilityReason
+      : 'Remote diagnostics refresh when a trusted peer route reconnects.',
+    connectedPeerCount: connected
+      ? Math.max(1, base.connectedPeerCount)
+      : base.connectedPeerCount,
+    authenticatedPeerCount: connected
+      ? Math.max(1, base.authenticatedPeerCount)
+      : base.authenticatedPeerCount,
+    liveProbes,
+    transportRows,
+    warnings,
+    errors,
+    evidenceSource: remoteUnavailable
+      ? 'saved thin peer profile and last-known redacted diagnostics'
+      : `${base.evidenceSource}; local thin WebRTC runtime`,
   }
 }
 
@@ -899,6 +1045,25 @@ function buildTransportRows(
       lastSeen: meshPeer ? `ping ${age(meshPeer.last_ping_age_s)}; manifest ${age(meshPeer.last_manifest_age_s)}` : 'manifest not reported'
     }
   })
+}
+
+function thinPeerProbe(
+  nodeName: string,
+  state: AvailabilityState,
+  connected: boolean,
+): DiagnosticsProbeRow {
+  return {
+    name: 'Thin WebRTC peer',
+    state,
+    latency: connected ? 'connected' : 'offline',
+    detail: connected
+      ? `${nodeName} is connected through the browser/WebView WebRTC runtime.`
+      : `${nodeName} is offline; WebRTC remains enabled and will retry the saved peer.`,
+  }
+}
+
+function isExpectedOfflineTransportDiagnostic(value: string): boolean {
+  return /webrtc mesh transport is not connected|transport datachannel not connected/i.test(value)
 }
 
 function findMeshPeer(mesh: MeshStatusResponse | null, peer: WebRTCPeerDiagnostic): MeshPeerDiagnostic | null {

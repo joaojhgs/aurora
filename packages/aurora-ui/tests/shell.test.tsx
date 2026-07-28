@@ -83,6 +83,7 @@ import {
   buildAssistantVoiceModel,
   buildMemoryViewModel,
   buildShellSnapshot,
+  loadingShellSnapshot,
   buildModelsViewModel,
   buildConfigEditorModel,
   buildSettingsPermissionsModel,
@@ -96,8 +97,11 @@ import {
   pairingErrorMessage,
   meshPeerErrorMessage,
   meshDiagnosticsSnapshotFromResults,
+  reconcileMeshDiagnosticsWithThinPeer,
+  reconcileMeshPeersWithThinPeer,
   parseMeshPermissionList,
   redactDiagnosticText,
+  retainThinShellSnapshot,
   routePolicyDraftChange,
   routePolicyFromRoute,
   routePolicyScenarios,
@@ -2251,6 +2255,166 @@ describe('Aurora production shell', () => {
     }
   })
 
+  it('keeps a configured thin peer visible as offline instead of calling WebRTC disabled', async () => {
+    const unavailable = await buildMeshPeersSnapshot(
+      new Aurora({
+        transport: MockAuroraTransport.empty()
+          .lose('Gateway.GetMeshStatus', 'WebRTC mesh transport is not connected')
+          .lose('Gateway.GetWebRTCDiagnostics', 'WebRTC mesh transport is not connected')
+          .lose('Gateway.GetCapabilityCatalog', 'WebRTC mesh transport is not connected'),
+      }),
+      meshRoute(),
+    )
+    const thinPeerSnapshot: BrowserWebRtcSnapshot = {
+      state: 'failed',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-host',
+      nodeName: 'Aurora host',
+      icePathCategory: 'unknown',
+      protocolCapabilities: [],
+      reconnectCount: 3,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-07-28T00:00:00Z',
+      status: 'failed',
+      diagnostic: 'WebRTC mesh transport is not connected; preferred-mode fallback is unavailable.',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    }
+
+    const snapshot = reconcileMeshPeersWithThinPeer(
+      unavailable,
+      thinPeerSnapshot,
+    )
+
+    expect(snapshot.loadState).toBe('degraded')
+    expect(snapshot.meshEnabled).toBe(true)
+    expect(snapshot.webrtcStarted).toBe(true)
+    expect(snapshot.error).toBeNull()
+    expect(snapshot.peers).toEqual([
+      expect.objectContaining({
+        peerId: 'peer-host',
+        nodeName: 'Aurora host',
+        lifecycleState: 'stale',
+        connectionStatus: 'offline',
+      }),
+    ])
+    expect(snapshot.warnings.join(' ')).not.toContain(
+      'WebRTC mesh transport is not connected',
+    )
+
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () =>
+        root.render(
+          <MeshPeersView
+            snapshot={snapshot}
+            route={meshRoute()}
+            canManageLocalServiceConfiguration={false}
+            thinPeerSnapshot={thinPeerSnapshot}
+            onReconnectThinPeer={vi.fn()}
+          />,
+        ),
+      )
+      expect(container.textContent).toContain('Aurora host is offline')
+      expect(container.textContent).toContain('WebRTC remains enabled')
+      expect(container.textContent).not.toContain(
+        'Peer connection needs attention',
+      )
+      expect(container.textContent).not.toContain(
+        'WebRTC mesh transport is not connected',
+      )
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('retains last-known peer providers and projects the thin peer offline without emptying the shell', async () => {
+    const ready = await buildShellSnapshot(
+      new Aurora({ transport: new MockAuroraTransport() }),
+    )
+    const failed = errorShellSnapshot(
+      'mesh',
+      new Error('WebRTC mesh transport is not connected'),
+    )
+    const thinPeerSnapshot: BrowserWebRtcSnapshot = {
+      state: 'failed',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-host',
+      nodeName: 'Aurora host',
+      icePathCategory: 'unknown',
+      protocolCapabilities: [],
+      reconnectCount: 1,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-07-28T00:00:00Z',
+      status: 'failed',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    }
+
+    const retained = retainThinShellSnapshot(ready, failed, thinPeerSnapshot)
+
+    expect(retained.nodeName).toBe('Aurora host')
+    expect(retained.routeCount).toBe(ready.routeCount)
+    expect(retained.routes).toHaveLength(ready.routes.length)
+    expect(
+      retained.routes.flatMap((route) =>
+        route.candidateProviders.map((candidate) => candidate.id),
+      ),
+    ).toEqual(
+      expect.arrayContaining(
+        ready.routes
+          .flatMap((route) =>
+            route.candidateProviders.map((candidate) => candidate.id),
+          )
+          .slice(0, 1),
+      ),
+    )
+    expect(retained.routes.every((route) => route.state === 'stale')).toBe(true)
+    expect(
+      Object.values(retained.assistantVoiceRoutes).every(
+        (route) => route.state === 'stale',
+      ),
+    ).toBe(true)
+    expect(retained.availableCount).toBe(0)
+    expect(retained.error).toBeNull()
+
+    const coldOffline = retainThinShellSnapshot(
+      { ...loadingShellSnapshot, loadState: 'ready' },
+      failed,
+      thinPeerSnapshot,
+    )
+    expect(coldOffline.routes).toHaveLength(failed.routes.length)
+    expect(coldOffline.routes.every((route) => route.state === 'stale')).toBe(true)
+    expect(coldOffline.routes[0]?.explanation).toContain(
+      'another trusted mesh route reconnects',
+    )
+    expect(coldOffline.error).toBeNull()
+  })
+
   it('keeps pending pairing requests out of the scopes approval path', async () => {
     const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
     const pendingPeer = snapshot.peers.find((peer) => peer.pendingPairing)
@@ -2688,6 +2852,58 @@ describe('Aurora production shell', () => {
     )
     expect(unavailableSnapshot.loadState).toBe('unavailable')
     expect(unavailableSnapshot.signalingRepair).toContain('Repair Gateway.GetWebRTCDiagnostics')
+  })
+
+  it('reports the configured thin transport as enabled and its expected peer as offline', async () => {
+    const unavailable = await buildMeshDiagnosticsSnapshot(
+      new Aurora({
+        transport: MockAuroraTransport.empty()
+          .lose('Gateway.GetWebRTCDiagnostics', 'WebRTC mesh transport is not connected')
+          .lose('Gateway.GetMeshStatus', 'WebRTC mesh transport is not connected')
+          .lose('Gateway.GetCapabilityCatalog', 'WebRTC mesh transport is not connected')
+          .lose('Gateway.GetSupportBundle', 'WebRTC mesh transport is not connected'),
+      }),
+      meshRoute(),
+    )
+    const snapshot = reconcileMeshDiagnosticsWithThinPeer(unavailable, {
+      state: 'failed',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-host',
+      nodeName: 'Aurora host',
+      icePathCategory: 'unknown',
+      protocolCapabilities: [],
+      reconnectCount: 2,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-07-28T00:00:00Z',
+      status: 'failed',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    })
+
+    expect(snapshot.loadState).toBe('degraded')
+    expect(snapshot.enabled).toBe(true)
+    expect(snapshot.started).toBe(true)
+    expect(snapshot.signalingEvidence).toContain('peer is offline')
+    expect(snapshot.signalingRepair).toContain('WebRTC remains enabled')
+    expect(snapshot.errors).toEqual([])
+    expect(snapshot.transportRows).toEqual([
+      expect.objectContaining({
+        peerId: 'peer-host',
+        nodeName: 'Aurora host',
+        state: 'stale',
+        connectionState: 'offline',
+      }),
+    ])
   })
 
   it('builds mesh peer AdminAction requests with typed method paths and redacted scopes', () => {

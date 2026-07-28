@@ -8,6 +8,7 @@ import {
   WebThinConnectionPanel,
   buildShellSnapshot,
   loadingShellSnapshot,
+  retainThinShellSnapshot,
   type AuroraShellSnapshot,
 } from '@aurora/ui'
 import {
@@ -78,7 +79,11 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
     }))
     void buildShellSnapshot(runtime.client).then(async (nextSnapshot) => {
       await runtime.client.authApi.whoAmI().catch(() => null)
-      if (!cancelled) setActiveSnapshot(nextSnapshot)
+      if (!cancelled) {
+        setActiveSnapshot((current) =>
+          retainThinShellSnapshot(current, nextSnapshot, runtime.peer.snapshot()),
+        )
+      }
     })
     return () => {
       cancelled = true

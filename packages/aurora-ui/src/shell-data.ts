@@ -25,6 +25,10 @@ import {
   type AuroraNavItem,
   type AuroraNavItemSnapshot
 } from './nav'
+import {
+  isBrowserWebRtcConfigured,
+  type BrowserWebRtcSnapshot,
+} from './web-thin-runtime'
 
 export type ShellLoadState = 'loading' | 'ready' | 'error'
 
@@ -241,6 +245,74 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes
+  }
+}
+
+/**
+ * Keep the last redacted capability graph visible while a configured thin peer
+ * is offline. Routes are deliberately made stale/non-callable, but provider
+ * identities remain visible so an outage is not misrepresented as an empty
+ * deployment or disabled WebRTC runtime.
+ */
+export function retainThinShellSnapshot(
+  current: AuroraShellSnapshot,
+  next: AuroraShellSnapshot,
+  peer: BrowserWebRtcSnapshot | null | undefined,
+): AuroraShellSnapshot {
+  if (next.loadState !== 'error' || !isBrowserWebRtcConfigured(peer)) return next
+
+  const hasLastKnownGraph =
+    current.routes.length > 0
+    && (
+      current.loadState === 'ready'
+      || current.routes.some((route) => route.candidateProviders.length > 0)
+    )
+  const base = hasLastKnownGraph ? current : next
+  const peerLabel = peer.nodeName?.trim() || peer.expectedStablePeerId || 'Invited Aurora peer'
+  const retainRoute = (route: RouteAvailability): RouteAvailability => ({
+    ...route,
+    state: 'stale',
+    explanation: hasLastKnownGraph
+      ? `Last-known capability data is retained while ${peerLabel} is offline.`
+      : `${peerLabel} is offline. Capability providers will appear when this peer or another trusted mesh route reconnects.`,
+    blockers: sortedUnique([...route.blockers, 'thin_peer_offline']),
+    candidateProviders: route.candidateProviders.map((candidate) => ({
+      ...candidate,
+      state: 'stale' as const,
+      selectable: false,
+      reason: `Last-known provider; ${peerLabel} is offline.`,
+    })),
+    routeable: false,
+    disabled: true,
+  })
+  const routes = base.routes.map(retainRoute)
+  const assistantCancellationRoute = base.assistantCancellationRoute
+    ? retainRoute(base.assistantCancellationRoute)
+    : null
+  const assistantVoiceRoutes: AssistantVoiceRoutes = {
+    transcription: retainRoute(base.assistantVoiceRoutes.transcription),
+    wakeProcess: retainRoute(base.assistantVoiceRoutes.wakeProcess),
+    wakeControl: retainRoute(base.assistantVoiceRoutes.wakeControl),
+    ttsSynthesize: retainRoute(base.assistantVoiceRoutes.ttsSynthesize),
+    ttsStop: retainRoute(base.assistantVoiceRoutes.ttsStop),
+  }
+
+  return {
+    ...base,
+    loadState: 'error',
+    nodeName: peerLabel,
+    transportKind: 'mesh',
+    evidenceSource: hasLastKnownGraph
+      ? 'last-known redacted capability graph and saved thin peer profile'
+      : 'saved thin peer profile; capability graph pending reconnect',
+    secretsRedacted: true,
+    routeCount: routes.length,
+    availableCount: 0,
+    blockedCount: routes.length,
+    routes,
+    assistantCancellationRoute,
+    assistantVoiceRoutes,
+    error: null,
   }
 }
 

@@ -1226,9 +1226,9 @@ describe("Aurora Tauri runtime wrapper", () => {
       />,
     );
 
-    expect(markup).toContain("Thin-shell transport");
+    expect(markup).toContain("Peer connection");
     expect(markup).toContain(
-      "WebRTC uses the browser/WebView RTCPeerConnection path; no Rust transport or Python sidecar is claimed here",
+      "Connection details come from the saved Aurora invite and can be changed at runtime",
     );
     expect(markup).toContain("Thin connection mode");
     expect(markup).toContain("webrtc-only");

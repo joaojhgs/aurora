@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, FileUp, Link2, LockKeyhole, Network, QrCode, ShieldCheck, WifiOff } from 'lucide-react'
 import {
+  isBrowserWebRtcConfigured,
   parseWebRtcInvite,
   type BrowserWebRtcPeerController,
   type BrowserWebRtcSnapshot,
@@ -85,6 +86,19 @@ export function WebThinConnectionPanel({
     draftProfile,
     typeof window === 'undefined' ? null : window.location.protocol,
   )
+  const configuredWebRtc = isBrowserWebRtcConfigured(snapshot)
+  const configuredPeerOffline =
+    configuredWebRtc
+    && (snapshot.status === 'closed' || snapshot.status === 'failed')
+  const peerLabel =
+    snapshot.nodeName?.trim()
+    || snapshot.expectedStablePeerId
+    || 'Invited Aurora peer'
+  const visibleDiagnostic =
+    snapshot.diagnostic
+    && (!configuredPeerOffline || !isExpectedOfflineDiagnostic(snapshot.diagnostic))
+      ? snapshot.diagnostic
+      : null
   const connectDisabled = (!configureOnly && mode === 'http-only')
     || snapshot.status === 'disabled'
     || !invite
@@ -403,13 +417,15 @@ export function WebThinConnectionPanel({
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2 text-base"><Network size={18} aria-hidden /> Thin-shell transport</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Network size={18} aria-hidden /> Peer connection</CardTitle>
             <CardDescription>
-              {surface.label} · {mode}. Configure HTTP Gateway and WebRTC signaling at runtime; no build-time endpoint or Python sidecar is required for thin mode.
-              {' '}WebRTC uses the browser/WebView RTCPeerConnection path; no Rust transport or Python sidecar is claimed here.
+              {surface.label} · {mode}. Connection details come from the saved
+              Aurora invite and can be changed at runtime.
             </CardDescription>
           </div>
-          <Badge variant={snapshot.status === 'authorized' ? 'default' : 'outline'}>{snapshot.status}</Badge>
+          <Badge variant={snapshot.status === 'authorized' ? 'default' : 'outline'}>
+            {configuredPeerOffline ? 'offline' : snapshot.status}
+          </Badge>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -490,7 +506,7 @@ export function WebThinConnectionPanel({
         ) : null}
         <div className="grid gap-2 text-sm md:grid-cols-3" aria-label="Thin transport diagnostics">
           <Diagnostic icon={<ShieldCheck size={15} aria-hidden />} label="Secure context" value={snapshot.secureContext ? 'ready' : 'required'} />
-          <Diagnostic icon={<Link2 size={15} aria-hidden />} label="Fallback" value={mode === 'webrtc-only' ? 'disabled' : snapshot.hasHttpFallback ? 'HTTP available' : 'none'} />
+          <Diagnostic icon={<Link2 size={15} aria-hidden />} label="HTTP fallback" value={mode === 'webrtc-only' ? 'not configured' : snapshot.hasHttpFallback ? 'available' : 'not available'} />
           <Diagnostic
             icon={<LockKeyhole size={15} aria-hidden />}
             label="Secrets"
@@ -511,7 +527,18 @@ export function WebThinConnectionPanel({
             <AlertDescription>{snapshot.diagnostic ?? 'HTTP and desktop-local modes remain available.'}</AlertDescription>
           </Alert>
         ) : null}
-        {snapshot.fallbackReason ? (
+        {configuredPeerOffline ? (
+          <Alert role="status">
+            <WifiOff size={16} aria-hidden />
+            <AlertTitle>{peerLabel} is offline</AlertTitle>
+            <AlertDescription>
+              WebRTC remains enabled. Aurora will retry the saved peer, and
+              other trusted mesh peers can provide capabilities when a route
+              becomes available.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {snapshot.fallbackReason && snapshot.status === 'fallback-http' ? (
           <Alert>
             <WifiOff size={16} aria-hidden />
             <AlertTitle>HTTP fallback active</AlertTitle>
@@ -570,7 +597,7 @@ export function WebThinConnectionPanel({
             Persistent browser vault unavailable; continuing memory-only. {snapshot.persistenceFallbackReason}
           </p>
         ) : null}
-        {error ?? snapshot.diagnostic ? <p role="alert" className="text-sm text-destructive">{error ?? snapshot.diagnostic}</p> : null}
+        {error ?? visibleDiagnostic ? <p role="alert" className="text-sm text-destructive">{error ?? visibleDiagnostic}</p> : null}
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
         <Button type="button" disabled={connectDisabled || invitePending} onClick={() => void connectInvite()}>
@@ -650,4 +677,8 @@ function redactUiDiagnostic(value: string): string {
     .replace(/\b((?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|room_password)\b(\s*[:=]\s*)(["']?)[^\s,;<>"']+/gi, '$1$2$3[redacted]')
     .replace(/([?&](?:(?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|room_password)=)[^&#\s]+/gi, '$1[redacted]')
     .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
+}
+
+function isExpectedOfflineDiagnostic(value: string): boolean {
+  return /webrtc mesh transport is not connected|transport datachannel not connected|preferred-mode fallback is unavailable/i.test(value)
 }

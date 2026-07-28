@@ -43,6 +43,7 @@ import {
   loadingShellSnapshot,
   navItemSnapshot,
   redactDiagnosticText,
+  retainThinShellSnapshot,
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
   type AuroraShellSnapshot,
@@ -509,7 +510,13 @@ export function AuroraTauriApp({
         await runtime.client.authApi.whoAmI().catch(() => null);
         if (!cancelled) {
           reportStage("workspace");
-          setSnapshot(nextSnapshot);
+          setSnapshot((current) =>
+            retainThinShellSnapshot(
+              current,
+              nextSnapshot,
+              runtime.thinPeer?.snapshot(),
+            ),
+          );
           setSidecar(nextSidecar);
           setNativePermissions(nextNativePermissions);
           setNativeFeatures({
@@ -532,7 +539,13 @@ export function AuroraTauriApp({
       } catch (error) {
         modelsPhaseActive = false;
         if (!cancelled) {
-          setSnapshot(errorShellSnapshot(runtime.client.transport.kind, error));
+          setSnapshot((current) =>
+            retainThinShellSnapshot(
+              current,
+              errorShellSnapshot(runtime.client.transport.kind, error),
+              runtime.thinPeer?.snapshot(),
+            ),
+          );
           setSidecar(readySidecar);
         }
       }
@@ -1521,7 +1534,11 @@ function TauriDiagnosticsPage({
         </button>
       </section>
       <RouteMatrix routes={snapshot.routes} />
-      <MeshDiagnosticsResource client={client} route={route} />
+      <MeshDiagnosticsResource
+        client={client}
+        route={route}
+        thinPeer={nativeContext.thinPeer}
+      />
     </div>
   );
 }

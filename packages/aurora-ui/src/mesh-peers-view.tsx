@@ -28,9 +28,11 @@ import {
 } from './platform-surface'
 import { presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
-import type {
-  BrowserWebRtcPeerController,
-  BrowserWebRtcSnapshot,
+import {
+  isBrowserWebRtcConfigured,
+  isBrowserWebRtcConnected,
+  type BrowserWebRtcPeerController,
+  type BrowserWebRtcSnapshot,
 } from './web-thin-runtime'
 
 export type MeshPeersLoadState = 'loading' | 'ready' | 'empty' | 'degraded' | 'denied' | 'service-unavailable' | 'error'
@@ -309,14 +311,28 @@ export function MeshPeersResource({
       setThinPeerSnapshot(null)
       return
     }
-    return thinPeer.subscribe(setThinPeerSnapshot)
+    return thinPeer.subscribe((nextThinSnapshot) => {
+      setThinPeerSnapshot(nextThinSnapshot)
+      setSnapshot((current) =>
+        reconcileMeshPeersWithThinPeer(
+          current,
+          nextThinSnapshot,
+          current,
+        ),
+      )
+    })
   }, [thinPeer])
 
   const loadPeers = useCallback(async () => {
-    setSnapshot(loadingSnapshot)
     const next = await buildMeshPeersSnapshot(client, route)
-    setSnapshot(next)
-  }, [client, route])
+    setSnapshot((current) =>
+      reconcileMeshPeersWithThinPeer(
+        next,
+        thinPeer?.snapshot() ?? thinPeerSnapshot,
+        current,
+      ),
+    )
+  }, [client, route, thinPeer, thinPeerSnapshot])
 
   useEffect(() => {
     if (!snapshot.meshEnabled) return
@@ -327,7 +343,15 @@ export function MeshPeersResource({
       pending = true
       try {
         const next = await buildMeshPeersSnapshot(client, route)
-        if (!cancelled) setSnapshot(next)
+        if (!cancelled) {
+          setSnapshot((current) =>
+            reconcileMeshPeersWithThinPeer(
+              next,
+              thinPeer?.snapshot() ?? thinPeerSnapshot,
+              current,
+            ),
+          )
+        }
       } finally {
         pending = false
       }
@@ -337,18 +361,26 @@ export function MeshPeersResource({
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [client, route, snapshot.meshEnabled])
+  }, [client, route, snapshot.meshEnabled, thinPeer, thinPeerSnapshot])
 
   useEffect(() => {
     let cancelled = false
     setSnapshot(loadingSnapshot)
     void buildMeshPeersSnapshot(client, route).then((next) => {
-      if (!cancelled) setSnapshot(next)
+      if (!cancelled) {
+        setSnapshot((current) =>
+          reconcileMeshPeersWithThinPeer(
+            next,
+            thinPeer?.snapshot() ?? thinPeerSnapshot,
+            current,
+          ),
+        )
+      }
     })
     return () => {
       cancelled = true
     }
-  }, [client, route])
+  }, [client, route, thinPeer])
 
   const runAction = useCallback(
     async (peer: MeshPeerRow, kind: 'approve' | 'deny' | 'remove') => {
@@ -790,6 +822,136 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
   }
 }
 
+/**
+ * Project the local thin transport into the normal Mesh model. A saved invite
+ * represents enabled mesh membership even when its expected peer is offline;
+ * remote data is retained as stale instead of being replaced with an empty
+ * service-unavailable page.
+ */
+export function reconcileMeshPeersWithThinPeer(
+  next: MeshPeersSnapshot,
+  thinPeer: BrowserWebRtcSnapshot | null | undefined,
+  previous?: MeshPeersSnapshot | null,
+): MeshPeersSnapshot {
+  if (!isBrowserWebRtcConfigured(thinPeer)) return next
+
+  const connected = isBrowserWebRtcConnected(thinPeer)
+  const previousHasRemoteEvidence = Boolean(
+    previous
+    && previous.loadState !== 'loading'
+    && previous.loadState !== 'service-unavailable'
+    && previous.loadState !== 'error'
+    && previous.loadState !== 'denied',
+  )
+  const remoteUnavailable =
+    next.loadState === 'service-unavailable'
+    || next.loadState === 'error'
+  const base = remoteUnavailable && previousHasRemoteEvidence
+    ? {
+        ...previous!,
+        warnings: uniqueStrings([
+          ...previous!.warnings,
+          ...next.warnings,
+        ]),
+      }
+    : next
+  const peerId = thinPeer.expectedStablePeerId!
+  const nodeName = thinPeer.nodeName?.trim() || 'Invited Aurora peer'
+  const peerState: AvailabilityState = connected
+    ? 'available-remote'
+    : thinPeer.status === 'pairing'
+      ? 'pending'
+      : 'stale'
+  const connectionStatus = connected ? 'connected' : 'offline'
+  const existingPeer = base.peers.find((peer) => peer.peerId === peerId)
+  const projectedPeer: MeshPeerRow = existingPeer
+    ? {
+        ...existingPeer,
+        nodeName: existingPeer.nodeName || nodeName,
+        lifecycleState: peerState,
+        lifecycleLabel: connected
+          ? 'authorized WebRTC thin peer'
+          : 'saved WebRTC thin peer is offline',
+        connectionStatus,
+        lastSeen: thinPeer.updatedAt,
+        lastEvidenceSource: `${existingPeer.lastEvidenceSource}; local thin WebRTC runtime`,
+      }
+    : {
+        peerId,
+        nodeName,
+        roomName: 'saved invite profile',
+        lifecycleState: peerState,
+        lifecycleLabel: connected
+          ? 'authorized WebRTC thin peer'
+          : 'saved WebRTC thin peer is offline',
+        trustState: connected ? 'available-remote' : peerState,
+        trustLabel: connected
+          ? 'authenticated through the saved thin peer credential'
+          : 'saved peer identity; live trust state unavailable while offline',
+        outboundStatus: connected ? 'approved' : 'saved',
+        inboundStatus: connected ? 'approved' : 'unknown',
+        connectionStatus,
+        fingerprint: peerId,
+        permissions: [],
+        inboundPermissions: [],
+        latencyMs: null,
+        routeQuality: connected ? 'connected' : 'offline',
+        compatibility: 'checked again on reconnect',
+        serviceCount: 0,
+        services: [],
+        lastSeen: thinPeer.updatedAt,
+        lastEvidenceSource: 'saved thin WebRTC profile and local runtime state',
+        pendingPairing: null,
+        approveAction: null,
+        denyAction: null,
+        removeAction: null,
+      }
+  const peers = [
+    ...base.peers.filter((peer) => peer.peerId !== peerId),
+    projectedPeer,
+  ]
+  const warnings = uniqueStrings([
+    ...base.warnings.filter((warning) => !isExpectedOfflineTransportMessage(warning)),
+    ...(!connected
+      ? [`${nodeName} is offline. WebRTC remains enabled; saved peers and last-known capabilities stay visible until a trusted route reconnects.`]
+      : []),
+  ])
+
+  return {
+    ...base,
+    loadState: base.loadState === 'denied'
+      ? 'denied'
+      : connected && !remoteUnavailable
+        ? base.loadState
+        : 'degraded',
+    meshEnabled: true,
+    meshStarted: true,
+    webrtcStarted: true,
+    peers,
+    approvedCount: peers.filter((peer) =>
+      peer.trustState === 'available-local'
+      || peer.trustState === 'available-remote',
+    ).length,
+    listState: connected
+      ? base.listState
+      : base.peers.length > 0
+        ? 'stale'
+        : peerState,
+    listReason: connected
+      ? base.listReason
+      : `Saved peer ${nodeName} is offline; retained peer and capability metadata is stale until reconnect.`,
+    statusState: connected ? base.statusState : 'degraded',
+    statusReason: connected
+      ? base.statusReason
+      : 'The thin WebRTC runtime is enabled and retrying its saved peer.',
+    warnings,
+    error: base.loadState === 'denied' ? base.error : null,
+    evidenceSource: remoteUnavailable
+      ? 'saved thin peer profile and last-known redacted mesh state'
+      : `${base.evidenceSource}; local thin WebRTC runtime`,
+  }
+}
+
 export function MeshPeersView({
   snapshot,
   route,
@@ -1042,6 +1204,34 @@ function ThinPeerConnectionStatus({
         <AlertDescription>
           WebRTC signaling is active. The bilateral verification request will
           appear here when the peer DataChannel is ready.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (
+    snapshot.status === 'closed'
+    || snapshot.status === 'failed'
+  ) {
+    const peerName =
+      snapshot.nodeName
+      || snapshot.expectedStablePeerId
+      || 'Invited Aurora peer'
+    return (
+      <Alert role="status">
+        <Wifi />
+        <AlertTitle>{peerName} is offline</AlertTitle>
+        <AlertDescription className="flex flex-col items-start gap-2">
+          <span>
+            WebRTC remains enabled with the saved peer identity. Aurora will
+            retry the connection; saved peers and last-known capabilities stay
+            visible as stale until a trusted route reconnects.
+          </span>
+          {onReconnect ? (
+            <Button type="button" size="sm" variant="outline" onClick={onReconnect}>
+              Reconnect
+            </Button>
+          ) : null}
         </AlertDescription>
       </Alert>
     )
@@ -2647,6 +2837,14 @@ export function meshPeerErrorMessage(error: unknown): string {
     return error.message
   }
   return error instanceof Error ? error.message : 'Unknown mesh peer lifecycle error'
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+}
+
+function isExpectedOfflineTransportMessage(value: string): boolean {
+  return /webrtc mesh transport is not connected|transport datachannel not connected/i.test(value)
 }
 
 function MeshFact({ label, value }: { label: string; value: string }) {

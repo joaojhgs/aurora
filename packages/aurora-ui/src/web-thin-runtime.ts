@@ -114,6 +114,25 @@ type SelectedCandidatePairEvidence = Awaited<ReturnType<PeerConnectionController
 
 const DEFAULT_MODE: AuroraThinConnectionMode = 'http-only'
 
+/** A saved thin profile keeps WebRTC enabled even while its peer is offline. */
+export function isBrowserWebRtcConfigured(
+  snapshot: BrowserWebRtcSnapshot | null | undefined,
+): snapshot is BrowserWebRtcSnapshot {
+  return Boolean(
+    snapshot
+    && snapshot.connectionMode !== 'http-only'
+    && snapshot.status !== 'disabled'
+    && snapshot.status !== 'needs-invite'
+    && snapshot.expectedStablePeerId,
+  )
+}
+
+export function isBrowserWebRtcConnected(
+  snapshot: BrowserWebRtcSnapshot | null | undefined,
+): boolean {
+  return Boolean(snapshot && snapshot.status === 'authorized')
+}
+
 export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {}): BrowserWebThinRuntime {
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)

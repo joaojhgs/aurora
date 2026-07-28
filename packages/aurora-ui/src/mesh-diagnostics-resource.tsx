@@ -5,31 +5,64 @@ import {
   MeshDiagnosticsView,
   buildMeshDiagnosticsSnapshot,
   loadingMeshDiagnosticsSnapshot,
+  reconcileMeshDiagnosticsWithThinPeer,
   type MeshDiagnosticsSnapshot,
   type SupportBundleExportState
 } from './mesh-diagnostics-view'
 import type { MeshDiagnosticsResourceProps } from './mesh-diagnostics-view'
 
-export function MeshDiagnosticsResource({ client, route }: MeshDiagnosticsResourceProps) {
+export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnosticsResourceProps) {
   const [snapshot, setSnapshot] = useState<MeshDiagnosticsSnapshot>(loadingMeshDiagnosticsSnapshot)
+  const [thinPeerSnapshot, setThinPeerSnapshot] = useState(() => thinPeer?.snapshot() ?? null)
   const [exportState, setExportState] = useState<SupportBundleExportState>({ status: 'idle', message: null })
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
 
+  useEffect(() => {
+    if (!thinPeer) {
+      setThinPeerSnapshot(null)
+      return
+    }
+    return thinPeer.subscribe((nextThinSnapshot) => {
+      setThinPeerSnapshot(nextThinSnapshot)
+      setSnapshot((current) =>
+        reconcileMeshDiagnosticsWithThinPeer(
+          current,
+          nextThinSnapshot,
+          current,
+        ),
+      )
+    })
+  }, [thinPeer])
+
   const loadDiagnostics = useCallback(async () => {
-    setSnapshot(loadingMeshDiagnosticsSnapshot)
-    setSnapshot(await buildMeshDiagnosticsSnapshot(client, route))
-  }, [client, route])
+    const next = await buildMeshDiagnosticsSnapshot(client, route)
+    setSnapshot((current) =>
+      reconcileMeshDiagnosticsWithThinPeer(
+        next,
+        thinPeer?.snapshot() ?? thinPeerSnapshot,
+        current,
+      ),
+    )
+  }, [client, route, thinPeer, thinPeerSnapshot])
 
   useEffect(() => {
     let cancelled = false
     setSnapshot(loadingMeshDiagnosticsSnapshot)
     void buildMeshDiagnosticsSnapshot(client, route).then((next) => {
-      if (!cancelled) setSnapshot(next)
+      if (!cancelled) {
+        setSnapshot((current) =>
+          reconcileMeshDiagnosticsWithThinPeer(
+            next,
+            thinPeer?.snapshot() ?? thinPeerSnapshot,
+            current,
+          ),
+        )
+      }
     })
     return () => {
       cancelled = true
     }
-  }, [client, route])
+  }, [client, route, thinPeer])
 
   const exportSupportBundle = useCallback(async () => {
     if (!reauthConfirmed) {
@@ -48,11 +81,18 @@ export function MeshDiagnosticsResource({ client, route }: MeshDiagnosticsResour
         status: 'success',
         message: `Exported redacted support bundle ${result.data.correlation_id ?? 'without correlation'} with audit receipt ${result.confirmation.audit_receipt}.`
       })
-      setSnapshot(await buildMeshDiagnosticsSnapshot(client, route))
+      const next = await buildMeshDiagnosticsSnapshot(client, route)
+      setSnapshot((current) =>
+        reconcileMeshDiagnosticsWithThinPeer(
+          next,
+          thinPeer?.snapshot() ?? thinPeerSnapshot,
+          current,
+        ),
+      )
     } catch (error) {
       setExportState({ status: 'error', message: error instanceof Error ? error.message : 'Support-bundle export failed.' })
     }
-  }, [client, route, reauthConfirmed])
+  }, [client, route, reauthConfirmed, thinPeer, thinPeerSnapshot])
 
   return (
     <MeshDiagnosticsView
