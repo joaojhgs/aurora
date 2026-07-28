@@ -196,6 +196,11 @@ class _MeshStartOutcome(Enum):
     RETRY = "retry"
 
 
+def _mesh_connection_status(registry_status: str) -> str:
+    """Translate internal peer-registry states to the persisted connection contract."""
+    return "connected" if registry_status in {"authenticated", "negotiated"} else "disconnected"
+
+
 @dataclass(frozen=True, slots=True)
 class _MeshAuthorityReconcileResult:
     success: bool
@@ -2080,7 +2085,10 @@ class GatewayService(BaseService):
 
     async def _capture_gateway_event(self, envelope: Envelope) -> None:
         """Capture bus events into a redacted normalized stream."""
-        if envelope.type in {AuroraMethods.EVENT_STREAM, AudioTopics.STREAM_MICROPHONE}:
+        if envelope.type in {
+            AuroraMethods.EVENT_STREAM,
+            AudioTopics.STREAM_MICROPHONE,
+        } or envelope.type.startswith("reply."):
             return
         payload = _payload_dict(envelope.payload)
         event = _event_from_envelope(envelope)
@@ -4011,7 +4019,10 @@ class GatewayService(BaseService):
             bus_for_callbacks = self.bus
 
             async def _on_peer_registered(p_id: str, p_name: str, p_status: str) -> None:
-                from app.shared.contracts.models.mesh import MeshPeerUpsertRequest
+                from app.shared.contracts.models.mesh import (
+                    MeshPeerUpdateConnectionRequest,
+                    MeshPeerUpsertRequest,
+                )
 
                 await bus_for_callbacks.request(
                     AuthMethods.MESH_UPSERT_PEER,
@@ -4019,6 +4030,14 @@ class GatewayService(BaseService):
                         peer_id=p_id,
                         room_name=room_name_for_callbacks,
                         node_name=p_name,
+                    ),
+                    timeout=5.0,
+                )
+                await bus_for_callbacks.request(
+                    AuthMethods.MESH_UPDATE_PEER_CONNECTION,
+                    MeshPeerUpdateConnectionRequest(
+                        peer_id=p_id,
+                        connection_status=_mesh_connection_status(p_status),
                     ),
                     timeout=5.0,
                 )
@@ -4036,8 +4055,7 @@ class GatewayService(BaseService):
                     AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                     MeshPeerUpdateConnectionRequest(
                         peer_id=p_id,
-                        room_name=room_name_for_callbacks,
-                        connection_status="disconnected",
+                        connection_status=_mesh_connection_status(p_status),
                     ),
                     timeout=5.0,
                 )
@@ -4067,8 +4085,7 @@ class GatewayService(BaseService):
                     AuthMethods.MESH_UPDATE_PEER_CONNECTION,
                     MeshPeerUpdateConnectionRequest(
                         peer_id=p_id,
-                        room_name=room_name_for_callbacks,
-                        connection_status=p_status,
+                        connection_status=_mesh_connection_status(p_status),
                     ),
                     timeout=5.0,
                 )

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const rootIndexPath = resolve(packageRoot, 'src/index.ts')
 const webrtcIndexPath = resolve(packageRoot, 'src/webrtc/index.ts')
+const signalingMqttPath = resolve(packageRoot, 'src/webrtc/signaling-mqtt.ts')
 const packageJsonPath = resolve(packageRoot, 'package.json')
 
 function read(path: string): string {
@@ -66,6 +67,12 @@ describe('WebRTC package boundary', () => {
       if (oldWorker !== undefined) (globalThis as Record<string, unknown>).Worker = oldWorker
       if (oldRtc !== undefined) (globalThis as Record<string, unknown>).RTCPeerConnection = oldRtc
     }
+  })
+
+  it('keeps MQTT bundling synchronous inside the isolated WebRTC subpath', () => {
+    const signaling = read(signalingMqttPath)
+    expect(signaling).toMatch(/import mqtt from ['"]mqtt['"]/u)
+    expect(signaling).not.toMatch(/import\(['"]mqtt['"]\)/u)
   })
 
   it('points package exports at build artifacts once the SDK build has run', () => {

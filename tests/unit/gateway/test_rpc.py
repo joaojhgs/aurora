@@ -13,7 +13,8 @@ from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.services.orchestrator.service import OrchestratorService
-from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo, ServiceAnnouncement
 from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatRequest,
     OrchestratorMethods,
@@ -2168,6 +2169,330 @@ def _g007_mesh_projection_kwargs(
         ),
         "tooling_authority_revision_provider": lambda: (7, 9),
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "topic",
+    [
+        GatewayMethods.GET_REGISTRY,
+        GatewayMethods.GET_SERVICES,
+        GatewayMethods.GET_SERVICE_HEALTH,
+        GatewayMethods.GET_DEPLOYMENT_TOPOLOGY,
+        GatewayMethods.GET_MESH_STATUS,
+        GatewayMethods.GET_WEBRTC_DIAGNOSTICS,
+        GatewayMethods.GET_CAPABILITY_GRAPH,
+        GatewayMethods.GET_CAPABILITY_CATALOG,
+        GatewayMethods.EXPLAIN_ROUTE,
+    ],
+)
+async def test_authenticated_gateway_bootstrap_reads_bypass_mesh_export_policy(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    topic,
+):
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Gateway",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name=topic.rsplit(".", 1)[-1],
+                bus_topic=topic,
+                exposure="external",
+                required_perms=["Gateway.use"],
+                method_type="use",
+            )
+        ],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"secrets_redacted": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Gateway.use"),
+        mesh_config=MeshConfig(enabled=True, services={}),
+        peer_id="gateway-thin-session",
+        stable_peer_id_provider=lambda: "gateway-thin-peer",
+        authenticated_peer_validator=lambda: True,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": f"bootstrap-{topic}",
+                "method": topic,
+                "params": {},
+            }
+        )
+    )
+
+    mock_bus.request.assert_awaited_once()
+    assert mock_bus.request.await_args.args[0] == topic
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+    assert response["result"]["secrets_redacted"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("topic", "required_perms"),
+    [
+        (AuthMethods.WHO_AM_I, []),
+        (AuthMethods.MESH_LIST_PEERS, []),
+        (AuthMethods.MESH_GET_PEER, []),
+        (AuthMethods.LIST_PENDING_PAIRINGS, ["Auth.manage"]),
+    ],
+)
+async def test_authenticated_auth_bootstrap_reads_bypass_mesh_export_policy(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    topic,
+    required_perms,
+):
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Auth",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name=topic.rsplit(".", 1)[-1],
+                bus_topic=topic,
+                exposure="both",
+                required_perms=required_perms,
+                method_type="use",
+            )
+        ],
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"secrets_redacted": True})
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms(*(required_perms or ["member"])),
+        mesh_config=MeshConfig(enabled=True, services={}),
+        peer_id="auth-thin-session",
+        stable_peer_id_provider=lambda: "auth-thin-peer",
+        authenticated_peer_validator=lambda: True,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": f"bootstrap-{topic}",
+                "method": topic,
+                "params": {},
+            }
+        )
+    )
+
+    mock_bus.request.assert_awaited_once()
+    assert mock_bus.request.await_args.args[0] == topic
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "result"
+    assert response["result"]["secrets_redacted"] is True
+
+
+@pytest.mark.asyncio
+async def test_authenticated_auth_manage_bootstrap_read_still_requires_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    topic = AuthMethods.LIST_PENDING_PAIRINGS
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Auth",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="ListPendingPairings",
+                bus_topic=topic,
+                exposure="both",
+                required_perms=["Auth.manage"],
+                method_type="manage",
+            )
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("member"),
+        mesh_config=MeshConfig(enabled=True, services={}),
+        peer_id="auth-thin-session",
+        stable_peer_id_provider=lambda: "auth-thin-peer",
+        authenticated_peer_validator=lambda: True,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "auth-bootstrap-forbidden",
+                "method": topic,
+                "params": {},
+            }
+        )
+    )
+
+    mock_bus.request.assert_not_awaited()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Forbidden"
+
+
+@pytest.mark.asyncio
+async def test_authenticated_gateway_bootstrap_read_still_requires_gateway_permission(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    topic = GatewayMethods.GET_CAPABILITY_CATALOG
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Gateway",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="GetCapabilityCatalog",
+                bus_topic=topic,
+                exposure="external",
+                required_perms=["Gateway.use"],
+                method_type="use",
+            )
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("user"),
+        mesh_config=MeshConfig(enabled=True, services={}),
+        peer_id="gateway-thin-session",
+        stable_peer_id_provider=lambda: "gateway-thin-peer",
+        authenticated_peer_validator=lambda: True,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "bootstrap-forbidden",
+                "method": topic,
+                "params": {},
+            }
+        )
+    )
+
+    mock_bus.request.assert_not_awaited()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Forbidden"
+
+
+@pytest.mark.asyncio
+async def test_authenticated_gateway_bootstrap_read_still_requires_external_exposure(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    topic = GatewayMethods.GET_CAPABILITY_CATALOG
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Gateway",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="GetCapabilityCatalog",
+                bus_topic=topic,
+                exposure="internal",
+                required_perms=["Gateway.use"],
+                method_type="use",
+            )
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Gateway.use"),
+        mesh_config=MeshConfig(enabled=True, services={}),
+        peer_id="gateway-thin-session",
+        stable_peer_id_provider=lambda: "gateway-thin-peer",
+        authenticated_peer_validator=lambda: True,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "bootstrap-internal-contract",
+                "method": topic,
+                "params": {},
+            }
+        )
+    )
+
+    mock_bus.request.assert_not_awaited()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Method is not exposed for WebRTC RPC"
+
+
+@pytest.mark.asyncio
+async def test_gateway_secret_read_does_not_bypass_mesh_export_policy(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    topic = GatewayMethods.GET_MESH_INVITE_CONFIG
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Gateway",
+        version="1.0",
+        methods=[
+            MethodInfo(
+                name="GetMeshInviteConfig",
+                bus_topic=topic,
+                exposure="external",
+                required_perms=["Gateway.manage"],
+                method_type="manage",
+            )
+        ],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Gateway.manage"),
+        mesh_config=MeshConfig(enabled=True, services={}),
+        peer_id="gateway-thin-session",
+        stable_peer_id_provider=lambda: "gateway-thin-peer",
+        authenticated_peer_validator=lambda: True,
+        active_projection_provider=lambda: _active_projection(
+            recipient="gateway-thin-peer",
+            services=[],
+        ),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "gateway-secret-denied",
+                "method": topic,
+                "params": {},
+            }
+        )
+    )
+
+    mock_bus.request.assert_not_awaited()
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 403
+    assert response["error"]["message"] == "Service Gateway is not shared"
 
 
 @pytest.mark.asyncio

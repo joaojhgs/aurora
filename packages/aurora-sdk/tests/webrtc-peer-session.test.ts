@@ -139,7 +139,7 @@ function presence(from: string, stablePeerId = `stable-${from}`): SignalingMessa
 }
 
 async function flush(): Promise<void> {
-  for (let index = 0; index < 8; index += 1) await Promise.resolve()
+  for (let index = 0; index < 32; index += 1) await Promise.resolve()
 }
 
 async function authorizedAnswerer(options: Partial<ConstructorParameters<typeof WebRtcPeerSession>[0]> = {}): Promise<{
@@ -574,9 +574,16 @@ describe('WebRtcPeerSession', () => {
         return frame
       })
     }
+    let releaseFirstHandler!: () => void
+    const firstHandlerGate = new Promise<void>((resolve) => {
+      releaseFirstHandler = resolve
+    })
     const auth = {
       tryReconnect: vi.fn(async () => undefined),
       handleFrame: vi.fn(async (frame: unknown) => {
+        if ((frame as { sequence?: number }).sequence === 1) {
+          await firstHandlerGate
+        }
         handled.push(frame)
         return undefined
       })
@@ -603,6 +610,10 @@ describe('WebRtcPeerSession', () => {
     expect(handled).toEqual([])
 
     releaseFirstFrame()
+    await flush()
+    expect(handled).toEqual([])
+
+    releaseFirstHandler()
     await flush()
     expect(handled).toEqual([
       { type: 'pairing_v2_commit', sequence: 1 },

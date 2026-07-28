@@ -544,6 +544,33 @@ async def test_gateway_capture_republishes_normalized_aurora_event_stream():
 
 
 @pytest.mark.asyncio
+async def test_gateway_event_capture_ignores_internal_request_reply_envelopes():
+    service = GatewayService()
+    service.bus.publish = AsyncMock()
+
+    await service._capture_gateway_event(
+        Envelope(
+            type="reply.CapabilityCatalogRequest.corr-reply",
+            payload=CapabilityCatalogResponse(
+                providers=[
+                    CapabilityProviderInfo(
+                        provider_id=f"provider-{index}",
+                        peer_id=f"peer-{index}",
+                        service_instance_id=f"service-{index}",
+                        module="Tooling",
+                    )
+                    for index in range(100)
+                ]
+            ),
+            correlation_id="corr-reply",
+        )
+    )
+
+    assert list(service._event_stream) == []
+    service.bus.publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_gateway_event_capture_publishes_live_assistant_payload_without_storing_it():
     service = GatewayService()
     service.bus.publish = AsyncMock()

@@ -1,8 +1,12 @@
+import mqtt from 'mqtt'
+
 /** MQTT-over-WebSocket signaling for Aurora WebRTC thin clients.
  *
- * This module is intentionally not exported from the SDK root. It lazy-loads
- * MQTT.js only from `connect()` and can be imported in SSR/test environments
- * without touching `window`, WebRTC, or MQTT globals.
+ * This module is intentionally kept behind the dedicated SDK WebRTC subpath.
+ * MQTT.js is imported statically inside that subpath so browser bundlers cannot
+ * strand a nested lazy chunk before signaling starts. Importing the subpath in
+ * SSR/test environments remains safe because no MQTT connection is created
+ * until `connect()` runs in a browser/WebView.
  */
 
 export type SignalingChannel = 'presence' | 'offer' | 'answer' | 'candidate' | 'broadcast'
@@ -209,7 +213,6 @@ async function defaultMqttFactory(brokerUrl: string, options: MqttConnectOptions
   if (typeof window === 'undefined') {
     throw new Error('MQTT signaling runtime is browser/WebView-only; inject mqttFactory for tests or SSR')
   }
-  const mqtt = await import('mqtt')
   return mqtt.connect(brokerUrl, options as unknown as Record<string, unknown>) as unknown as MqttClientLike
 }
 

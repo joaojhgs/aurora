@@ -12,7 +12,11 @@ from app.services.db.models import Token
 from app.services.gateway.acl.identity import ANONYMOUS, OPEN_PEER, SYSTEM, Identity
 from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL, ProjectionResult
-from app.services.gateway.service import GatewayService, _MeshStartOutcome
+from app.services.gateway.service import (
+    GatewayService,
+    _mesh_connection_status,
+    _MeshStartOutcome,
+)
 from app.services.gateway.webrtc.rtc_client import (
     PeerAuthorityApplyResult,
     PeerAuthorityApplyStatus,
@@ -22,6 +26,7 @@ from app.shared.contracts.mesh_surface import (
     feature_contracts_for_module,
     feature_contracts_for_topic,
 )
+from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.mesh import (
     MeshEvents,
     MeshPeerAuthorityChangedEvent,
@@ -115,6 +120,23 @@ class _FakeBus:
 
     def unsubscribe(self, topic: str, handler: object) -> None:
         self.unsubscribed.append((topic, handler))
+
+
+@pytest.mark.parametrize(
+    ("registry_status", "persisted_status"),
+    [
+        ("authenticated", "connected"),
+        ("negotiated", "connected"),
+        ("disconnected", "disconnected"),
+        ("stale", "disconnected"),
+        ("failed", "disconnected"),
+    ],
+)
+def test_mesh_registry_status_maps_to_connection_contract(
+    registry_status: str,
+    persisted_status: str,
+) -> None:
+    assert _mesh_connection_status(registry_status) == persisted_status
 
 
 @pytest.fixture(autouse=True)
@@ -897,6 +919,24 @@ async def test_startup_success_snapshot_precedes_configure_credentials_presence(
 
     assert outcome is _MeshStartOutcome.STARTED
     assert sequence[:5] == ["id", "snapshot", "config", "credentials", "presence"]
+
+    bus.request.reset_mock()
+    await service._mesh_peer_registry.register_peer("browser-peer", "Browser Thin")
+
+    assert [call.args[0] for call in bus.request.await_args_list] == [
+        AuthMethods.MESH_UPSERT_PEER,
+        AuthMethods.MESH_UPDATE_PEER_CONNECTION,
+    ]
+    connection_update = bus.request.await_args_list[1].args[1]
+    assert connection_update.peer_id == "browser-peer"
+    assert connection_update.connection_status == "connected"
+
+    bus.request.reset_mock()
+    await service._mesh_peer_registry.remove_peer("browser-peer")
+    disconnect_update = bus.request.await_args.args[1]
+    assert bus.request.await_args.args[0] == AuthMethods.MESH_UPDATE_PEER_CONNECTION
+    assert disconnect_update.peer_id == "browser-peer"
+    assert disconnect_update.connection_status == "disconnected"
 
 
 def test_disconnect_retains_committed_evidence_and_close_clears_runtime_authority() -> None:

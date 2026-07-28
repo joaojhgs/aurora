@@ -604,7 +604,26 @@ export class WebRtcPeerSession {
     this.receiveQueue = Promise.resolve()
     channel.onopen = () => void this.onChannelOpen()
     channel.onmessage = (event) => {
-      const job = this.receiveQueue.then(() => this.onChannelMessage(channel, event.data))
+      const decoded = this.decodeChannelFrame(channel, event.data)
+      // Pairing/reconnect handlers can legitimately wait for an RPC response,
+      // or receive the peer's reciprocal pairing call, on this same
+      // DataChannel. Resolve RPC control frames outside the ordered
+      // application-frame queue so that operation cannot deadlock itself,
+      // while all non-RPC frames remain strictly arrival-ordered.
+      const controlFastPath = decoded
+        .then(async (frame) => {
+          if (!isRpcControlFrame(frame)) return false
+          await this.processChannelFrame(channel, frame)
+          return true
+        })
+        .catch((error) => {
+          this.rejectChannelFrame(channel, error)
+          return true
+        })
+      const job = this.receiveQueue.then(async () => {
+        if (await controlFastPath) return
+        await this.processChannelFrame(channel, await decoded)
+      })
       this.receiveQueue = job.catch(() => undefined)
     }
     channel.onclose = () => this.onTransientDisconnect('data channel closed')
@@ -629,18 +648,12 @@ export class WebRtcPeerSession {
     this.transition('awaiting-sas-confirmation')
   }
 
-  private async onChannelMessage(
+  private async decodeChannelFrame(
     channel: DataChannelLike,
     data: string | ArrayBuffer | ArrayBufferView
-  ): Promise<void> {
-    if (this.channel !== channel || this.isTerminal()) return
-    try {
-      const frame = await this.options.codec.open(data)
-      if (this.channel !== channel || this.isTerminal()) return
-      void this.processChannelFrame(channel, frame)
-    } catch (error) {
-      this.rejectChannelFrame(channel, error)
-    }
+  ): Promise<unknown> {
+    if (this.channel !== channel || this.isTerminal()) return undefined
+    return await this.options.codec.open(data)
   }
 
   private async processChannelFrame(channel: DataChannelLike, frame: unknown): Promise<void> {
@@ -928,6 +941,16 @@ function isProtocolHelloFrame(frame: unknown): boolean {
     && frame !== null
     && !Array.isArray(frame)
     && (frame as { type?: unknown }).type === 'protocol_hello'
+}
+
+function isRpcControlFrame(frame: unknown): boolean {
+  if (typeof frame !== 'object' || frame === null || Array.isArray(frame)) {
+    return false
+  }
+  const candidate = frame as { type?: unknown; id?: unknown; method?: unknown }
+  if (typeof candidate.id !== 'string' || candidate.id.length === 0) return false
+  if (candidate.type === 'result' || candidate.type === 'error') return true
+  return candidate.type === 'call' && typeof candidate.method === 'string'
 }
 
 function defaultLocalConsumerHello(): unknown {

@@ -2,7 +2,7 @@
 
 **Status:** Current source of truth
 
-**Last reviewed:** 2026-07-27
+**Last reviewed:** 2026-07-28
 
 This document describes the implemented browser/WebView WebRTC protocol shared by hosted web thin, desktop Tauri thin, and Android thin. Python remains the reference peer for room/signaling/auth semantics; TypeScript implements the browser/WebView runtime and consumes Python-owned protocol fixtures.
 
@@ -36,8 +36,10 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 - Hosted-browser reconnect material is encrypted before IndexedDB persistence with a non-extractable origin-scoped WebCrypto AES-GCM key. Unsupported or denied durable storage falls back to memory-only. Desktop/mobile native stores persist scoped reconnect material through OS credential stores. Profiles must not store raw invite secrets or bearer tokens.
 - Revoked credentials fail closed; mutation retry logic must not replay uncertain in-flight mutations on a different transport. Current live proof covers a mutation started event followed by disconnect before response settlement with execution count 1, not a broad exactly-once guarantee.
 - Event delivery is subscription/correlation scoped. Wildcard or wrong-correlation event leakage is a test failure. Scoped authorization stays on public production Auth/Gateway/DataChannel boundaries rather than private service calls.
+- After authentication, a narrow redacted bootstrap-read allowlist may bypass mesh service-export projection so a thin client can discover its own identity, peer state, registry/services/health/topology, Mesh/WebRTC diagnostics, capability graph/catalog, and route explanation before choosing a shared service route. Normal exposure and RBAC checks still apply; for example `Auth.ListPendingPairings` still requires `Auth.manage`, `Gateway.GetCapabilityCatalog` still requires Gateway permission, and secret-bearing invite configuration is not in the bypass.
 - Fragmentation/backpressure and scoped-event extensions are activated only from the authenticated intersection of the local and remote `protocol_hello` capability sets. A local rollout gate therefore cannot be overridden by a remote advertisement.
 - The application-layer E2EE rollout gate is an allowance, not a downgrade switch. A profile requiring E2EE fails closed when the gate is off; only a profile that explicitly permits DTLS-only JSON may use plaintext DataChannel frames.
+- Encrypted frames may finish decoding asynchronously, but non-RPC application frames are handled in strict DataChannel arrival order. Identified RPC `call`, `result`, and `error` control frames are dispatched outside that application queue because bilateral pairing/reconnect operations can wait for reciprocal calls or replies on the same channel; queuing the reply behind the waiting operation would deadlock. This fast path does not permit ordinary auth, pairing, event, stream, or protocol frames to overtake one another.
 
 ## Rollout contract
 
@@ -71,6 +73,7 @@ uv run python scripts/generate_webrtc_protocol_fixtures.py --check
 uv run pytest tests/unit/gateway/test_webrtc_web_thin_protocol_vectors.py
 pnpm --dir packages/aurora-sdk test -- tests/webrtc-protocol-vectors.test.ts
 pnpm --dir packages/aurora-sdk test -- tests/webrtc-runtime.test.ts
+pnpm test:web-thin:live
 pnpm test:webrtc:interop
 pnpm test:webrtc:turn
 pnpm test:webrtc:browsers

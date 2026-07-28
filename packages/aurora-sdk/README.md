@@ -267,6 +267,16 @@ profiles that require application-layer E2EE fail with
 explicitly permit DTLS-only JSON can use plaintext DataChannel frames. There
 is no automatic security downgrade.
 
+Inbound encrypted frames are decoded as they arrive. Non-RPC application
+frames are then handled through one strict arrival-order queue so asynchronous
+decryption or a slow pairing handler cannot let a later commitment/reveal or
+event overtake an earlier frame. RPC `call`, `result`, and `error` frames with
+an ID use a control fast path: bilateral pairing/reconnect handlers may wait
+for reciprocal calls or replies on the same DataChannel, so placing those
+control frames behind the waiting application operation would deadlock the
+session. Tests cover both the non-RPC ordering invariant and re-entrant
+bilateral RPC completion.
+
 ## Route And Privacy Policy
 
 `client.routes.evaluatePolicy()` combines backend `Gateway.ExplainRoute` output with `Gateway.GetCapabilityCatalog` policy facts. It does not guess the backend route; it preserves the selected candidate, denial code, explicit selector requirement, approval state, privacy class, redacted payload preview, fallback behavior, and audit target for RouteSheet/tool approval UI.

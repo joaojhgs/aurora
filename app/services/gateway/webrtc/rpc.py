@@ -29,6 +29,7 @@ from app.services.gateway.webrtc.event_subscriptions import (
 from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
 from app.shared.auth.permissions import check_access
 from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.gateway import GatewayMethods
 from app.shared.contracts.models.orchestrator import (
     OrchestratorInferChatChunk,
     OrchestratorInferChatResponse,
@@ -95,11 +96,32 @@ class RPCHandler:
         AuthMethods.PAIRING_EXCHANGE,
         AuthMethods.LOGIN,
     }
-    # Infrastructure bootstrap methods are intentionally reachable by their
-    # full service-qualified RPC names even though their service contracts are
-    # internal-only. All other DataChannel RPC calls must target methods marked
-    # external/both in the aggregated registry.
+    # A thin client needs a small, redacted control-plane view before it can
+    # choose any ordinary shared-service route. Gateway itself is not an
+    # operator-configurable mesh provider, so these authenticated read methods
+    # deliberately bypass service export/projection checks while retaining
+    # normal contract exposure and RBAC enforcement.
+    _AUTHENTICATED_BOOTSTRAP_METHODS = {
+        AuthMethods.WHO_AM_I,
+        AuthMethods.MESH_LIST_PEERS,
+        AuthMethods.MESH_GET_PEER,
+        AuthMethods.LIST_PENDING_PAIRINGS,
+        GatewayMethods.GET_REGISTRY,
+        GatewayMethods.GET_SERVICES,
+        GatewayMethods.GET_SERVICE_HEALTH,
+        GatewayMethods.GET_DEPLOYMENT_TOPOLOGY,
+        GatewayMethods.GET_MESH_STATUS,
+        GatewayMethods.GET_WEBRTC_DIAGNOSTICS,
+        GatewayMethods.GET_CAPABILITY_GRAPH,
+        GatewayMethods.GET_CAPABILITY_CATALOG,
+        GatewayMethods.EXPLAIN_ROUTE,
+    }
+    # Pairing infrastructure is intentionally reachable by its full
+    # service-qualified RPC name even when the service contract is
+    # internal-only. Authenticated bootstrap reads are separate: they bypass
+    # mesh export projection only and still require external/both exposure.
     _INFRASTRUCTURE_RPC_METHODS = _ANON_ALLOWED_METHODS
+    _PROJECTION_BYPASS_METHODS = _INFRASTRUCTURE_RPC_METHODS | _AUTHENTICATED_BOOTSTRAP_METHODS
     # G013 intentionally has no legacy full-catalog event fallback.  The sole
     # Tooling event crossing RTC is metadata-only and targeted by PeerBridge.
     _SAFE_FORWARDED_EVENT_TOPICS = {TOOLING_PROJECTION_INVALIDATED_TOPIC}
@@ -660,7 +682,7 @@ class RPCHandler:
                     return
             params = {**params, **pairing_context}
 
-        is_infra_method = canonical_method in self._ANON_ALLOWED_METHODS
+        bypasses_mesh_projection = canonical_method in self._PROJECTION_BYPASS_METHODS
         operation_mesh_config = self._current_mesh_config()
 
         if "/" in method_name:
@@ -702,7 +724,7 @@ class RPCHandler:
 
         if (
             self._local_peer_role() == "consumer"
-            and canonical_method not in self._INFRASTRUCTURE_RPC_METHODS
+            and canonical_method not in self._ANON_ALLOWED_METHODS
         ):
             await self._deny_rpc(
                 req_id,
@@ -720,7 +742,7 @@ class RPCHandler:
         projected_service = None
         projected_method = None
         max_concurrent = 0
-        if not is_infra_method and (
+        if not bypasses_mesh_projection and (
             operation_mesh_config is not None or self._is_mesh_transport_context()
         ):
             if operation_mesh_config is None:
