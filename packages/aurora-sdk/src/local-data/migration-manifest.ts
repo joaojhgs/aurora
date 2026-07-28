@@ -1,0 +1,40 @@
+import { validateLocalDataMigrationManifest } from './migration-manifest-runtime.js'
+
+export * from './migration-manifest-runtime.js'
+
+export const LOCAL_DATA_MIGRATION_MANIFEST = {
+  "databaseName": "aurora-lightweight.db",
+  "formatVersion": 1,
+  "latestVersion": 3,
+  "migrations": [
+    {
+      "checksum": "de9b1e7272b96401782962188605626abb84e4a722fc801ad585a5db2ca8c43f",
+      "file": "0001_core_conversations_memory.sql",
+      "ledger_sql": "INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) VALUES (1, 'core_conversations_memory', 'de9b1e7272b96401782962188605626abb84e4a722fc801ad585a5db2ca8c43f', :applied_at_ms);\nPRAGMA user_version = 1;",
+      "min_app_version": "0.1.0",
+      "name": "core_conversations_memory",
+      "requires_pre_migration_export": false,
+      "version": 1
+    },
+    {
+      "checksum": "952ab627dd1ed840fc6558bc2e5ff868f023a5481328ba57514dd3a337868372",
+      "file": "0002_local_tools.sql",
+      "ledger_sql": "INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) VALUES (2, 'local_tools', '952ab627dd1ed840fc6558bc2e5ff868f023a5481328ba57514dd3a337868372', :applied_at_ms);\nPRAGMA user_version = 2;",
+      "min_app_version": "0.1.0",
+      "name": "local_tools",
+      "requires_pre_migration_export": false,
+      "version": 2
+    },
+    {
+      "checksum": "7cac8a3ce58f55c519b6ec43107b08072afe074c12252c1aae7461feef6857a4",
+      "file": "0003_peer_grants_audit.sql",
+      "ledger_sql": "INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) VALUES (3, 'peer_grants_audit', '7cac8a3ce58f55c519b6ec43107b08072afe074c12252c1aae7461feef6857a4', :applied_at_ms);\nPRAGMA user_version = 3;",
+      "min_app_version": "0.1.0",
+      "name": "peer_grants_audit",
+      "requires_pre_migration_export": false,
+      "version": 3
+    }
+  ]
+} as const
+
+export const localDataMigrationManifest = validateLocalDataMigrationManifest(LOCAL_DATA_MIGRATION_MANIFEST)

@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "EncryptedDataEnvelopeV1": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "AES-GCM-256"
+        },
+        "ciphertextAndTagB64Url": {
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        "createdAtMs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "keyId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "nonceB64Url": {
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        "version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "version",
+        "algorithm",
+        "keyId",
+        "nonceB64Url",
+        "ciphertextAndTagB64Url",
+        "createdAtMs"
+      ],
+      "type": "object"
+    },
+    "LocalDataExportV1": {
+      "additionalProperties": false,
+      "properties": {
+        "exportedAtMs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "localNodeId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "profileId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "schemaVersion": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sourceBackend": {
+          "enum": [
+            "sqlite-wasm-opfs",
+            "sqlite-tauri",
+            "indexeddb",
+            "memory"
+          ]
+        },
+        "version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "version",
+        "sourceBackend",
+        "schemaVersion",
+        "profileId",
+        "localNodeId",
+        "exportedAtMs",
+        "encryptionEnvelopeVersions",
+        "recordCounts",
+        "collectionHashes",
+        "records"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "EncryptedDataEnvelopeV1": {
+      "$ref": "#/$defs/EncryptedDataEnvelopeV1"
+    },
+    "LocalDataExportV1": {
+      "$ref": "#/$defs/LocalDataExportV1"
+    }
+  },
+  "title": "AuroraLocalDataContracts",
+  "type": "object"
+}
