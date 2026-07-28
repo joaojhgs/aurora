@@ -191,6 +191,7 @@ async function openDatabase(request: Extract<BrowserSqliteWorkerRequest, { comma
     return status(workerState)
   }
   workerState.migrationState = 'running'
+  let openedDb: SqliteDatabase | null = null
   try {
     const initSqlite = sqlite3InitModule as unknown as (options: { locateFile: (path: string) => string }) => Promise<unknown>
     const sqlite3 = await initSqlite({
@@ -201,8 +202,10 @@ async function openDatabase(request: Extract<BrowserSqliteWorkerRequest, { comma
       clearOnInit: false
     })
     const db = new pool.OpfsSAHPoolDb(request.identity.databaseName)
+    openedDb = db
     const initialUserVersion = getUserVersion(db)
     const hadIdentityTable = tableExists(db, 'aurora_database_identity')
+    assertExistingSqliteProfileOwnership(db, request.profileId, request.localNodeId)
     workerState.db = db
     workerState.profileId = request.profileId
     workerState.localNodeId = request.localNodeId
@@ -217,7 +220,7 @@ async function openDatabase(request: Extract<BrowserSqliteWorkerRequest, { comma
   } catch (error) {
     workerState.migrationState = 'failed'
     try {
-      workerState.db?.close()
+      ;(workerState.db ?? openedDb)?.close()
     } catch {
       // Ignore close failures after initialization errors.
     }
@@ -314,6 +317,15 @@ function getStoredLedgerRows(db: SqliteDatabase): Array<{ version: number; check
 
 function tableExists(db: SqliteDatabase, tableName: string): boolean {
   return selectObjects<{ name: string }>(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?;", [tableName]).length > 0
+}
+
+function columnExists(db: SqliteDatabase, tableName: string, columnName: string): boolean {
+  return selectObjects<{ name: string }>(db, `PRAGMA table_info(${quoteIdentifier(tableName)});`).some((row) => row.name === columnName)
+}
+
+function tableHasColumns(db: SqliteDatabase, tableName: string, columnNames: readonly string[]): boolean {
+  if (!tableExists(db, tableName)) return false
+  return columnNames.every((columnName) => columnExists(db, tableName, columnName))
 }
 
 function validateStoredLedger(manifest: LocalDataMigrationManifest, stored: Array<{ version: number; checksum: string }>): void {
@@ -542,6 +554,31 @@ function assertDatabaseProfileOwnership(db: SqliteDatabase | null, profileId: st
       throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
     }
   }
+}
+
+export function assertExistingSqliteProfileOwnership(db: SqliteDatabase, profileId: string, localNodeId: string): void {
+  const checks: Array<{ readonly tableName: string; readonly idColumn: string }> = [
+    { tableName: 'aurora_conversations', idColumn: 'id' },
+    { tableName: 'aurora_memory_items', idColumn: 'id' },
+    { tableName: 'aurora_local_tool_state', idColumn: 'tool_contract_id' },
+    { tableName: 'aurora_peer_grant_metadata', idColumn: 'grant_id' },
+    { tableName: 'aurora_local_audit', idColumn: 'id' }
+  ]
+  for (const check of checks) {
+    if (!tableHasColumns(db, check.tableName, ['local_node_id', 'profile_id', check.idColumn])) continue
+    const rows = selectObjects<Record<string, unknown>>(
+      db,
+      `SELECT ${quoteIdentifier(check.idColumn)} FROM ${quoteIdentifier(check.tableName)} WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;`,
+      [localNodeId, profileId]
+    )
+    if (rows.length > 0) {
+      throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
+    }
+  }
+}
+
+function quoteIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`
 }
 
 function requireIdentity(value: string | null): string {
