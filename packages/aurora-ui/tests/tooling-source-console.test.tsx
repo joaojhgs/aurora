@@ -130,7 +130,7 @@ describe('source-first Tooling console', () => {
 
     expect(markup).toContain('Policy loading')
     expect(markup).toContain('Sources loading')
-    expect(markup).toContain('Loading source catalog')
+    expect(markup).toContain('Loading tool sources')
     expect(host.querySelectorAll('[aria-label="Tool sources"] button')).toHaveLength(0)
     expect(host.textContent).not.toContain('No sources match this search.')
   })
@@ -141,7 +141,7 @@ describe('source-first Tooling console', () => {
     const policy = buildToolingPolicySummary(tools, sources)
 
     expect(sources.map((source) => source.type)).toEqual(expect.arrayContaining(['core', 'mcp', 'mesh']))
-    expect(sources.find((source) => source.type === 'mesh')?.catalogEvidence).toContain('Negotiated cache evidence')
+    expect(sources.find((source) => source.type === 'mesh')?.catalogEvidence).toBe('audit.mesh.hardware')
     expect(policy.mode).toBe('dry_run_only')
     expect(policy.pendingApprovalCount).toBeGreaterThan(0)
   })
@@ -199,7 +199,7 @@ describe('source-first Tooling console', () => {
     const markup = renderToolsPanel('android')
 
     expect(markup).toContain('Tools &amp; Plugins')
-    expect(markup).toContain('Core tools, MCP servers, plugins and mesh peer tools, grouped by source with policy and approvals.')
+    expect(markup).toContain('Review tool sources, choose what needs approval, and add MCP servers or plugins.')
     expect(markup).toContain('Policy:')
     expect(markup).not.toContain('2 pending')
     expect(markup).toContain('Add MCP source')

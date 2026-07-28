@@ -160,6 +160,34 @@ describe('production UI copy checker', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  it('requires tooling error helpers to use an explicit product-copy boundary', () => {
+    const dir = fixtureDir()
+    const unsafe = join(dir, 'unsafe-tooling-message.tsx')
+    const safe = join(dir, 'safe-tooling-message.tsx')
+    writeFileSync(unsafe, `
+      function toolingSafeMessage(_error: unknown) {
+        return "Connection needs attention"
+      }
+      export function UnsafeToolingMessage({ error }: { error: unknown }) {
+        return <AlertDescription>{toolingSafeMessage(error)}</AlertDescription>
+      }
+    `)
+    writeFileSync(safe, `
+      function productToolingMessageCopy(_error: unknown) {
+        return "Connection needs attention"
+      }
+      export function SafeToolingMessage({ error }: { error: unknown }) {
+        return <AlertDescription>{productToolingMessageCopy(error)}</AlertDescription>
+      }
+    `)
+
+    const unsafeResult = runChecker(unsafe)
+    expect(unsafeResult.ok).toBe(false)
+    expect(unsafeResult.stderr).toContain('toolingSafeMessage(error)')
+    expect(runChecker(safe).ok).toBe(true)
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   it('detects raw dynamic error messages in rendered alerts and setters', () => {
     const dir = fixtureDir()
     const file = join(dir, 'raw-error-message.tsx')
@@ -235,6 +263,24 @@ describe('production UI copy checker', () => {
 
   it('permits only the standardized advanced connection labels in their real component', () => {
     expect(runChecker('packages/aurora-ui/src/web-thin-connection-panel.tsx').ok).toBe(true)
+  })
+
+  it('permits exact advanced MCP endpoint placeholders only in configured fields', () => {
+    expect(runChecker('packages/aurora-ui/src/tooling/tooling-console.tsx').ok).toBe(true)
+    expect(runChecker('packages/aurora-ui/src/components/assistant-ui/mcp-config.tsx').ok).toBe(true)
+
+    const dir = fixtureDir()
+    const file = join(dir, 'generic-url-copy.tsx')
+    writeFileSync(file, `
+      export function GenericUrlCopy() {
+        return <input placeholder="https://server" />
+      }
+    `)
+
+    const result = runChecker(file)
+    expect(result.ok).toBe(false)
+    expect(result.stderr).toContain('https://server')
+    rmSync(dir, { recursive: true, force: true })
   })
 })
 

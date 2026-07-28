@@ -85,6 +85,9 @@ ADVANCED_CONNECTION_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
     ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "HTTP only"),
     ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC only"),
     ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC preferred"),
+    ("packages/aurora-ui/src/tooling/tooling-console.tsx", "stdio command or https://server"),
+    ("packages/aurora-ui/src/tooling/tooling-console.tsx", "https://server"),
+    ("packages/aurora-ui/src/components/assistant-ui/mcp-config.tsx", "https://example.com/mcp"),
 })
 
 

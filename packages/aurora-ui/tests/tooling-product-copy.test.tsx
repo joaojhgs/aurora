@@ -153,6 +153,74 @@ describe('tooling product copy', () => {
     expectForbiddenFree(text)
   })
 
+  it('keeps plugin config paths in request data and out of rendered decision copy', async () => {
+    const reasons: string[] = []
+    const appliedPaths: string[] = []
+    await renderPanel(client({
+      applyChange: async (request) => {
+        reasons.push(request.reason)
+        appliedPaths.push(request.change.key_path)
+        throw new Error('services.tooling.plugins.brave_search.api_key provider route failed with transport stack trace')
+      },
+    }), [], {
+      builtinPlugins: [builtinPlugin({
+        active: false,
+        configured: true,
+        fields: [configField('services.tooling.plugins.brave_search.api_key', 'API key', 'Enter the API key.', '', true)],
+      })],
+    })
+    await openPluginsTab()
+    await act(async () => findButton('Configure')!.click())
+    const input = container.querySelector<HTMLInputElement>('input[type="password"]')!
+    await act(async () => {
+      setInputValue(input, 'secret-value')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      findButton('Save')!.click()
+      await flushAsync()
+    })
+
+    expect(appliedPaths).toEqual(['services.tooling.plugins.brave_search.api_key'])
+    expect(reasons).toEqual(['Update plugin settings from Aurora UI'])
+    const rendered = visibleAndAriaText()
+    expect(rendered).toContain('Could not connect to this Aurora device. Try again.')
+    expect(rendered).not.toContain('services.tooling.plugins.brave_search.api_key')
+    expect(rendered).not.toContain('provider route failed')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+  })
+
+  it('maps hostile catalog and top-level alert failures before rendering', async () => {
+    await renderPanel(client({
+      loadApprovalCards: async () => ({
+        ok: false,
+        error: {
+          code: 'connection_lost',
+          message: dynamicHostileText(),
+        },
+      }),
+    }), null)
+    await act(async () => { await flushAsync() })
+
+    let rendered = visibleAndAriaText()
+    expect(rendered).toContain('Connection lost. Reconnecting...')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    await renderPanel(client(), [], {
+      managementError: dynamicHostileText(),
+    })
+
+    rendered = visibleAndAriaText()
+    expect(rendered).toContain('Connection lost. Reconnecting...')
+    expectNoHostileTerms(rendered)
+    expectForbiddenFree(visibleText(container.innerHTML))
+  })
+
   it('keeps expanded tool details and raw result errors product-safe while preserving ordinary text', async () => {
     const safeDescription = 'Reads calendar events and shows upcoming meetings.'
     const safeProvider = 'Kitchen Aurora'
@@ -344,13 +412,13 @@ describe('tooling product copy', () => {
   })
 })
 
-async function renderPanel(testClient: AuroraClient, tools: ToolApprovalCardModel[] = [], managementState: ToolApprovalPanelManagementState = {}): Promise<void> {
+async function renderPanel(testClient: AuroraClient, tools: ToolApprovalCardModel[] | null = [], managementState: ToolApprovalPanelManagementState = {}): Promise<void> {
   await act(async () => {
     root.render(
       <ToolApprovalPanel
         client={testClient}
         route={toolsRoute()}
-        initialTools={tools}
+        initialTools={tools ?? undefined}
         initialSchedulerJobs={[]}
         initialManagementState={{
           sourceSummaries: [],
@@ -451,7 +519,11 @@ function visibleText(markup: string): string {
     .trim()
 }
 
-function client(overrides: { testMcpSource?: () => Promise<unknown> } = {}): AuroraClient {
+function client(overrides: {
+  testMcpSource?: () => Promise<unknown>
+  loadApprovalCards?: () => Promise<unknown>
+  applyChange?: (request: { change: { key_path: string; value: unknown }; reason: string }) => Promise<unknown>
+} = {}): AuroraClient {
   return {
     transport: { kind: 'http' },
     auth: {
@@ -460,11 +532,12 @@ function client(overrides: { testMcpSource?: () => Promise<unknown> } = {}): Aur
     },
     tools: {
       testMcpSource: overrides.testMcpSource,
+      loadApprovalCards: overrides.loadApprovalCards,
     },
     config: {
       previewDiff: async () => ({ ok: true, data: { valid: true, diffs: [], errors: [], secrets_redacted: true, base_revision: 1, preview_token: 'preview-1', changed_paths: [] } }),
       previewReloadImpact: async () => ({ ok: true, data: { affected_services: [], restart_required: false, reload_required: true, warnings: [] } }),
-      applyChange: async () => ({ ok: true, data: { applied: true, revision: 2, secrets_redacted: true } }),
+      applyChange: overrides.applyChange ?? (async () => ({ ok: true, data: { applied: true, revision: 2, secrets_redacted: true } })),
       getSchemaMetadata: async () => ({ ok: true, data: { fields: [configField('services.tooling.plugins.brave_search.activate', 'Activate', 'Enable Brave Search.', true, false)], secrets_redacted: true } }),
     },
   } as unknown as AuroraClient

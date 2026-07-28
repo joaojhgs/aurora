@@ -68,7 +68,8 @@ describe('Tooling source interactions', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('MCP source test failed: backend validation down')
+    expect(container.textContent).toContain('Could not connect to this Aurora device. Try again.')
+    expect(container.textContent).not.toContain('backend validation down')
   })
 
   it('does not present unsupported onboarding as successful validation', async () => {
@@ -93,7 +94,7 @@ describe('Tooling source interactions', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('MCP source test not enabled')
+    expect(container.textContent).toContain('MCP source is not available in this Aurora version yet.')
     expect(container.textContent).not.toContain('MCP source test valid')
   })
 })

@@ -126,7 +126,7 @@ describe('tool-row mesh sharing controls', () => {
 
   it('keeps remote tools visibly read-only instead of offering re-sharing actions', () => {
     const markup = renderToStaticMarkup(control({ tool: remoteTool, decision: null }))
-    expect(markup).toContain('Remote tool · not re-shareable')
+    expect(markup).toContain('Shared from another device')
     expect(markup).toContain('Change sharing on Kitchen Aurora')
     expect(markup).not.toContain('Not shared</button>')
   })

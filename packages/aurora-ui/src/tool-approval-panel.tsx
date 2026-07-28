@@ -127,7 +127,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         ...current,
         loading: false,
         tools: result.ok ? result.data : [],
-        error: result.ok ? null : toolErrorMessage(result)
+        error: result.ok ? null : productToolResponseCopy(result)
       }))
     })
     return () => {
@@ -144,7 +144,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       setState((current) => ({ ...current, schedulerLoading: false, schedulerJobs: jobs, schedulerError: null }))
     }).catch((error) => {
       if (cancelled) return
-      setState((current) => ({ ...current, schedulerLoading: false, schedulerJobs: [], schedulerError: errorMessage(error) }))
+      setState((current) => ({ ...current, schedulerLoading: false, schedulerJobs: [], schedulerError: productToolErrorCopy(error) }))
     })
     return () => {
       cancelled = true
@@ -166,14 +166,14 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
           client.config.getSchemaMetadata({ include_values: true }).catch(() => null),
           client.tools.getToolExportPolicyModel({}, { label: 'All peers' })
             .then((policy) => ({ policy, error: null as string | null }))
-            .catch((error) => ({ policy: null, error: errorMessage(error) })),
+            .catch((error) => ({ policy: null, error: productToolErrorCopy(error) })),
           client.mesh.listPeers({ include_disconnected: true }).catch(() => null)
         ])
         const detailResults = await Promise.all(sourceSummaries.map(async (source) => {
           try {
             return { sourceId: source.id, detail: await client.tools.getSourceDetail(source.id), error: null as string | null }
           } catch (error) {
-            return { sourceId: source.id, detail: null, error: errorMessage(error) }
+            return { sourceId: source.id, detail: null, error: productToolErrorCopy(error) }
           }
         }))
         const detailErrors = detailResults.filter((result) => result.error)
@@ -216,7 +216,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         }))
       } catch (error) {
         if (cancelled) return
-        setState((current) => ({ ...current, managementLoading: false, managementError: errorMessage(error), sharingLoading: false, sharingError: errorMessage(error) }))
+        setState((current) => ({ ...current, managementLoading: false, managementError: productToolErrorCopy(error), sharingLoading: false, sharingError: productToolErrorCopy(error) }))
       }
     }
     void loadManagementState()
@@ -252,7 +252,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       }))
     } catch (error) {
       if (generation !== sharingRequestGeneration.current) return
-      setState((current) => ({ ...current, sharingLoading: false, sharingError: errorMessage(error) }))
+      setState((current) => ({ ...current, sharingLoading: false, sharingError: productToolErrorCopy(error) }))
     }
   }
 
@@ -347,7 +347,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
             : 'Not shared with mesh peers.'
       }))
     } catch (error) {
-      const message = errorMessage(error)
+      const message = productToolErrorCopy(error)
       await refreshSharing()
       setState((current) => ({ ...current, sharingPendingKey: null, sharingError: message, sharingMessage: 'Previous effective sharing policy remains in effect.' }))
     }
@@ -367,7 +367,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       const result = await client.tools.submitApprovalDecision(selectedProviderId ? { ...request, selectedProviderId } : request)
       setDecisionMessage(tool.id, `Approved with correlation ${result.correlationId ?? 'pending'}`)
     } catch (error) {
-      setDecisionMessage(tool.id, errorMessage(error))
+      setDecisionMessage(tool.id, productToolErrorCopy(error))
     }
   }
 
@@ -383,7 +383,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       })
       setDecisionMessage(tool.id, denialResultMessage(result))
     } catch (error) {
-      setDecisionMessage(tool.id, errorMessage(error))
+      setDecisionMessage(tool.id, productToolErrorCopy(error))
     }
   }
 
@@ -400,7 +400,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       })
       setDecisionMessage(tool.id, 'Local tool finished.')
     } catch (error) {
-      setDecisionMessage(tool.id, errorMessage(error))
+      setDecisionMessage(tool.id, productToolErrorCopy(error))
     }
   }
 
@@ -433,7 +433,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       const policySummary = await client.tools.getPolicySummary()
       setState((current) => ({ ...current, policySummary, decisionMessages: { ...current.decisionMessages, __policy__: `Policy set to ${policyMode}` } }))
     } catch (error) {
-      setState((current) => ({ ...current, decisionMessages: { ...current.decisionMessages, __policy__: errorMessage(error) } }))
+      setState((current) => ({ ...current, decisionMessages: { ...current.decisionMessages, __policy__: productToolErrorCopy(error) } }))
     }
   }
 
@@ -472,7 +472,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         decisionMessages: { ...current.decisionMessages, __policy__: `Source ${source.id} set to ${trustTier}` }
       }))
     } catch (error) {
-      setDecisionMessage('__policy__', errorMessage(error))
+      setDecisionMessage('__policy__', productToolErrorCopy(error))
     }
   }
 
@@ -512,7 +512,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         decisionMessages: { ...current.decisionMessages, [tool.id]: `Policy override updated to ${approvalMode}.` }
       }))
     } catch (error) {
-      setDecisionMessage(tool.id, errorMessage(error))
+      setDecisionMessage(tool.id, productToolErrorCopy(error))
     }
   }
 
@@ -523,7 +523,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       const grants = await client.tools.listNormalizedGrants({ include_revoked: true })
       setState((current) => ({ ...current, grants, decisionMessages: { ...current.decisionMessages, __policy__: `Grant ${grant.id} revoked` } }))
     } catch (error) {
-      setDecisionMessage('__policy__', errorMessage(error))
+      setDecisionMessage('__policy__', productToolErrorCopy(error))
     }
   }
 
@@ -536,7 +536,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     for (const change of changes) {
       await client.config.applyChange({
         change,
-        reason: `Update tooling plugin config ${change.key_path}`,
+        reason: 'Update plugin settings from Aurora UI',
         reauthConfirmed: true
       })
     }
@@ -556,7 +556,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
         active ? `${plugin.label} is active. Review its tools before use.` : `${plugin.label} is inactive.`
       )
     } catch (error) {
-      setDecisionMessage('__plugins__', errorMessage(error))
+      setDecisionMessage('__plugins__', productToolErrorCopy(error))
     }
   }
 
@@ -570,7 +570,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     try {
       await applyPluginConfigChanges(changes, `${plugin.label} settings saved.`)
     } catch (error) {
-      setDecisionMessage('__plugins__', errorMessage(error))
+      setDecisionMessage('__plugins__', productToolErrorCopy(error))
     }
   }
 
@@ -583,7 +583,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       setDecisionMessage('__policy__', sourceResultMessage(kind, result))
       return result
     } catch (error) {
-      const message = errorMessage(error)
+      const message = productToolErrorCopy(error)
       setDecisionMessage('__policy__', message)
       throw error
     }
@@ -598,7 +598,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       setDecisionMessage('__policy__', sourceResultMessage(kind, result))
       return result
     } catch (error) {
-      const message = errorMessage(error)
+      const message = productToolErrorCopy(error)
       setDecisionMessage('__policy__', message)
       throw error
     }
@@ -786,12 +786,12 @@ function mergeSharingScopes(liveScopes: ToolExportScopeModel[], policy: ToolExpo
   return [...merged.values()].sort((left, right) => left.label.localeCompare(right.label) || (left.peerId ?? '').localeCompare(right.peerId ?? ''))
 }
 
-function toolErrorMessage(result: AuroraResponse<unknown>): string {
+function productToolResponseCopy(result: AuroraResponse<unknown>): string {
   if (result.ok) return ''
-  return result.error.message || 'Tooling catalog request failed.'
+  return safeErrorCopy(result.error).title
 }
 
-function errorMessage(error: unknown): string {
+function productToolErrorCopy(error: unknown): string {
   return safeErrorCopy(error).title
 }
 

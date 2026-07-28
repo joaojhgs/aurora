@@ -241,13 +241,13 @@ export function ToolingConsole({
       {error ? (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
-          <AlertDescription>{toolingSafeMessage(error)}</AlertDescription>
+          <AlertDescription>{productToolingMessageCopy(error)}</AlertDescription>
         </Alert>
       ) : null}
       {managementError ? (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
-          <AlertDescription>{toolingSafeMessage(managementError)}</AlertDescription>
+          <AlertDescription>{productToolingMessageCopy(managementError)}</AlertDescription>
         </Alert>
       ) : null}
       {managementLoading ? (
@@ -359,7 +359,7 @@ export function ToolingConsole({
                     const result = await onTestSource?.('plugin', draft)
                     setWizardResult(onboardingResultMessage('plugin', 'test', result))
                   } catch (error) {
-                    setWizardResult(toolingSafeMessage(error))
+                    setWizardResult(productToolingMessageCopy(error))
                   }
                 }}
                 onCreateSource={async (draft) => {
@@ -368,7 +368,7 @@ export function ToolingConsole({
                     const result = await onCreateSource?.('plugin', draft)
                     setWizardResult(onboardingResultMessage('plugin', 'create', result))
                   } catch (error) {
-                    setWizardResult(toolingSafeMessage(error))
+                    setWizardResult(productToolingMessageCopy(error))
                   }
                 }}
               />
@@ -392,7 +392,7 @@ export function ToolingConsole({
               const result = await onTestSource?.('mcp', draft)
               setWizardResult(onboardingResultMessage('mcp', 'test', result))
             } catch (error) {
-              setWizardResult(toolingSafeMessage(error))
+              setWizardResult(productToolingMessageCopy(error))
             }
           }}
           onCreateSource={async (draft) => {
@@ -401,7 +401,7 @@ export function ToolingConsole({
               const result = await onCreateSource?.('mcp', draft)
               setWizardResult(onboardingResultMessage('mcp', 'create', result))
             } catch (error) {
-              setWizardResult(toolingSafeMessage(error))
+              setWizardResult(productToolingMessageCopy(error))
             }
           }}
         />
@@ -1491,7 +1491,7 @@ function SchedulerPanel({ jobs, loading, error }: { jobs: NormalizedSchedulerJob
       {error ? (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
-          <AlertDescription>{toolingSafeMessage(error)}</AlertDescription>
+          <AlertDescription>{productToolingMessageCopy(error)}</AlertDescription>
         </Alert>
       ) : null}
       {loading ? <p className="text-sm text-muted-foreground">Loading scheduled actions through Aurora...</p> : null}
@@ -1907,7 +1907,7 @@ function policyConnectionLabel(kind: string): string {
   return 'Aurora connection'
 }
 
-function toolingSafeMessage(message: unknown): string {
+function productToolingMessageCopy(message: unknown): string {
   if (typeof message !== 'string') return safeErrorCopy(message).title
   if (/permission|denied/i.test(message)) return safeErrorCopy({ code: 'permission_denied' }).title
   if (/unsupported/i.test(message)) return safeErrorCopy({ code: 'unsupported' }).title

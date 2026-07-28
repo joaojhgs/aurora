@@ -79,10 +79,10 @@ describe('ToolApprovalPanel tools and automations stories', () => {
     expect(markup).toContain('Tools policy summary')
     expect(markup).toContain('Tool sources')
     expect(markup).toContain('Source detail')
-    expect(markup).toContain('Aurora core Tooling')
+    expect(markup).toContain('Aurora source')
     expect(markup).toContain('Add MCP source')
     expect(markup).not.toContain('2 pending')
-    expect(markup).toContain('dry_run_only')
+    expect(markup).toContain('Preview only')
   })
 
   it('covers source search helpers, selected tool details, and the risk/state catalog table', () => {
@@ -98,12 +98,12 @@ describe('ToolApprovalPanel tools and automations stories', () => {
     )
 
     expect(markup).toContain('Search sources and tools')
-    expect(markup).toContain('Aurora core Tooling')
+    expect(markup).toContain('Aurora source')
     // Stable backend share groups keep Diagnostics separate from the default
     // core group even when both sources are local/core.
     expect(markup).toContain('Diagnostics')
-    expect(markup).toContain('provider-selector-required')
-    expect(markup).toContain('Selected source tool inventory')
+    expect(markup).toContain('choose source')
+    expect(markup).toContain('Expand a tool to review what it can do and choose whether it needs approval.')
   })
 
   it('does not expose any inline execution or approval controls in the read-only catalog view', () => {
