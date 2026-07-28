@@ -14,6 +14,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SDK_FIXTURE = REPO_ROOT / "packages/aurora-sdk/src/fixtures.ts"
 DEFAULT_SDK_TYPES = REPO_ROOT / "packages/aurora-sdk/src/types.ts"
 DEFAULT_EVIDENCE_DIR = REPO_ROOT / ".artifacts/sdk-backend-conformance"
+DEFAULT_SDK_SCHEMA = REPO_ROOT / "packages/aurora-sdk/src/generated/backend-contracts.schema.json"
+DEFAULT_SDK_ZOD = REPO_ROOT / "packages/aurora-sdk/src/generated/backend-contracts.zod.ts"
+DEFAULT_SDK_MANIFEST = (
+    REPO_ROOT / "packages/aurora-sdk/src/generated/backend-contracts.manifest.json"
+)
+DEFAULT_TOOLING_PROVIDER = (
+    REPO_ROOT / "packages/aurora-sdk/src/generated/tooling-local-provider-v1.json"
+)
 DOC_ONLY_OPENAPI_PATHS = {"/api/docs", "/api/openapi.json", "/api/redoc"}
 SDK_MOCK_ONLY_METHODS = {"Gateway.InternalOnly"}
 SDK_TYPE_INTERFACES = (
@@ -21,6 +29,7 @@ SDK_TYPE_INTERFACES = (
     "BackendInventoryMethod",
     "GatewayBuiltinInventoryRoute",
 )
+EXPECTED_TOOLING_PROVIDER_SERVICE_INSTANCE_ID = "local:aurora-sdk-local-provider-v1:Tooling"
 
 SECRET_VALUE_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
@@ -65,6 +74,20 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise TypeError(f"{path} must contain a JSON object")
     return data
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def _sha256_text(value: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _sha256_json(value: Any) -> str:
+    return _sha256_text(_canonical_json(value))
 
 
 def _find_assignment_object(text: str, name: str) -> str:
@@ -577,10 +600,129 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
+def _walk_schema_objects(value: Any) -> list[dict[str, Any]]:
+    objects: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        if value.get("type") == "object" or "properties" in value:
+            objects.append(value)
+        for item in value.values():
+            objects.extend(_walk_schema_objects(item))
+    elif isinstance(value, list):
+        for item in value:
+            objects.extend(_walk_schema_objects(item))
+    return objects
+
+
+def _check_generated_contract_artifacts(
+    *,
+    schema_path: Path,
+    zod_path: Path,
+    manifest_path: Path,
+    tooling_provider_path: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for path in (schema_path, zod_path, manifest_path, tooling_provider_path):
+        if not path.exists():
+            issues.append(
+                {"fatal": True, "kind": "missing_generated_contract_artifact", "path": _rel(path)}
+            )
+    if issues:
+        return issues, {"checked": False}
+
+    schema = _read_json(schema_path)
+    manifest = _read_json(manifest_path)
+    tooling_provider = _read_json(tooling_provider_path)
+    zod_source = zod_path.read_text()
+    content_hashes = manifest.get("content_hashes") or {}
+    expected_hashes = {
+        "backend-contracts.schema.json": _sha256_json(schema),
+        "backend-contracts.zod.ts": _sha256_text(zod_source),
+        "tooling-local-provider-v1.json": _sha256_json(tooling_provider),
+    }
+    for name, expected in expected_hashes.items():
+        if content_hashes.get(name) != expected:
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "generated_content_hash_mismatch",
+                    "artifact": name,
+                    "manifest": content_hashes.get(name),
+                    "actual": expected,
+                }
+            )
+
+    for item in schema.get("schemas", []):
+        for obj_schema in _walk_schema_objects(item.get("schema")):
+            if obj_schema.get("x-aurora-extra-behavior") not in {"strip", "forbid", "preserve"}:
+                issues.append(
+                    {
+                        "fatal": True,
+                        "kind": "missing_object_extra_behavior",
+                        "schema_id": item.get("schema_id"),
+                    }
+                )
+    weakened_patterns = ("z.any(", "z.unknown(")
+    for pattern in weakened_patterns:
+        if pattern in zod_source.replace("\n", ""):
+            issues.append(
+                {"fatal": True, "kind": "weakened_generated_zod_fallback", "pattern": pattern}
+            )
+
+    provider_methods = tooling_provider.get("methods") or []
+    if (
+        tooling_provider.get("provider_service_instance_id")
+        != EXPECTED_TOOLING_PROVIDER_SERVICE_INSTANCE_ID
+    ):
+        issues.append(
+            {
+                "fatal": True,
+                "kind": "tooling_provider_service_instance_mismatch",
+                "actual": tooling_provider.get("provider_service_instance_id"),
+            }
+        )
+    for method in provider_methods:
+        if (
+            method.get("provider_service_instance_id")
+            != EXPECTED_TOOLING_PROVIDER_SERVICE_INSTANCE_ID
+        ):
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "tooling_method_service_instance_mismatch",
+                    "method_id": method.get("method_id"),
+                }
+            )
+        if not str(method.get("tool_id") or "").startswith("aurora-tool:v1:"):
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "tooling_method_tool_id_scheme_mismatch",
+                    "method_id": method.get("method_id"),
+                    "tool_id": method.get("tool_id"),
+                }
+            )
+
+    evidence = {
+        "checked": True,
+        "schema_artifact": _rel(schema_path),
+        "zod_artifact": _rel(zod_path),
+        "manifest_artifact": _rel(manifest_path),
+        "tooling_provider_artifact": _rel(tooling_provider_path),
+        "schema_count": len(schema.get("schemas", [])),
+        "tooling_provider_methods": len(provider_methods),
+        "content_hashes": expected_hashes,
+    }
+    return issues, evidence
+
+
 def build_report(
     inventory_path: Path,
     sdk_fixture_path: Path,
     sdk_types_path: Path,
+    sdk_schema_path: Path,
+    sdk_zod_path: Path,
+    sdk_manifest_path: Path,
+    tooling_provider_path: Path,
     *,
     strict_imports: bool,
     strict_sdk_coverage: bool,
@@ -605,6 +747,13 @@ def build_report(
     issues.extend(
         _compare_builtins(live_builtins, sdk_builtins, strict_sdk_coverage=strict_sdk_coverage)
     )
+    generated_issues, generated_evidence = _check_generated_contract_artifacts(
+        schema_path=sdk_schema_path,
+        zod_path=sdk_zod_path,
+        manifest_path=sdk_manifest_path,
+        tooling_provider_path=tooling_provider_path,
+    )
+    issues.extend(generated_issues)
     issues.extend(_find_secret_values(inventory))
     fatal_issues = [issue for issue in issues if issue.get("fatal", True)]
 
@@ -633,6 +782,7 @@ def build_report(
         "permission_exposure_matrix": permission_exposure_matrix,
         "openapi_paths": inventory.get("gateway_openapi_paths") or [],
         "sdk_type_surface": sdk_type_surface,
+        "generated_contract_artifacts": generated_evidence,
     }
     report = {
         "ok": not fatal_issues,
@@ -640,6 +790,10 @@ def build_report(
         "inventory": _rel(inventory_path),
         "sdk_fixture": _rel(sdk_fixture_path),
         "sdk_types": _rel(sdk_types_path),
+        "sdk_schema": _rel(sdk_schema_path),
+        "sdk_zod": _rel(sdk_zod_path),
+        "sdk_manifest": _rel(sdk_manifest_path),
+        "tooling_provider": _rel(tooling_provider_path),
         "checked": {
             "backend_methods": len(live_methods),
             "sdk_fixture_methods": len(sdk_methods),
@@ -647,6 +801,7 @@ def build_report(
             "sdk_fixture_builtins": len(sdk_builtins),
             "openapi_paths": len(inventory.get("gateway_openapi_paths") or []),
             "sdk_type_surface_issues": len(sdk_type_issues),
+            "generated_contract_artifact_issues": len(generated_issues),
             "fatal_issues": len(fatal_issues),
             "non_fatal_findings": len(issues) - len(fatal_issues),
         },
@@ -687,6 +842,10 @@ def main() -> int:
         default=DEFAULT_SDK_TYPES,
         help="SDK types.ts path used to validate backend inventory type surface",
     )
+    parser.add_argument("--sdk-schema", type=Path, default=DEFAULT_SDK_SCHEMA)
+    parser.add_argument("--sdk-zod", type=Path, default=DEFAULT_SDK_ZOD)
+    parser.add_argument("--sdk-manifest", type=Path, default=DEFAULT_SDK_MANIFEST)
+    parser.add_argument("--tooling-provider", type=Path, default=DEFAULT_TOOLING_PROVIDER)
     parser.add_argument(
         "--evidence-dir",
         type=Path,
@@ -714,6 +873,10 @@ def main() -> int:
         args.inventory,
         args.sdk_fixture,
         args.sdk_types,
+        args.sdk_schema,
+        args.sdk_zod,
+        args.sdk_manifest,
+        args.tooling_provider,
         strict_imports=args.strict_imports,
         strict_sdk_coverage=args.strict_sdk_coverage,
         strict_field_drift=args.strict_field_drift,
@@ -734,6 +897,10 @@ def main() -> int:
     )
     _write_json(args.evidence_dir / "openapi-paths.json", evidence["openapi_paths"])
     _write_json(args.evidence_dir / "sdk-type-surface.json", evidence["sdk_type_surface"])
+    _write_json(
+        args.evidence_dir / "generated-contract-artifacts.json",
+        evidence["generated_contract_artifacts"],
+    )
 
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["ok"] else 1

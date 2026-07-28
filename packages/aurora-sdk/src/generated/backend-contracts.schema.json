@@ -1,0 +1,1435 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allowlist": [
+    "Tooling.ExecuteTool",
+    "Tooling.GetMCPStatus",
+    "Tooling.GetStats",
+    "Tooling.GetTools"
+  ],
+  "allowlist_hash": "9b66ea607df1969b08dfbbd5d4313d9ed16d8c04c307822689561fc2ba083800",
+  "artifact": "aurora-sdk-backend-contracts",
+  "generator_format_version": "aurora-sdk-zod-codegen-v1",
+  "schema_draft": "https://json-schema.org/draft/2020-12/schema",
+  "schemas": [
+    {
+      "direction": "input",
+      "method_id": "Tooling.ExecuteTool",
+      "model_name": "ToolingExecuteToolRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$defs": {
+          "MeshAddressSelector": {
+            "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+            "properties": {
+              "data_scope": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Data Scope"
+              },
+              "hardware_target": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Hardware Target"
+              },
+              "peer_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Peer Id"
+              },
+              "provider_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Id"
+              },
+              "resource_namespace": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Resource Namespace"
+              },
+              "service_instance_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Service Instance Id"
+              },
+              "tool_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Tool Id"
+              }
+            },
+            "title": "MeshAddressSelector",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          },
+          "ToolingResourceSelector": {
+            "description": "Explicit resource selector for safety-sensitive tool execution.",
+            "properties": {
+              "data_scope": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Data Scope"
+              },
+              "hardware_target": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Hardware Target"
+              },
+              "resource_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Resource Id"
+              },
+              "resource_namespace": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Resource Namespace"
+              },
+              "resource_type": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Resource Type"
+              }
+            },
+            "title": "ToolingResourceSelector",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Request to execute a tool.",
+        "properties": {
+          "approval_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Approval Token"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object",
+            "x-aurora-extra-behavior": "preserve"
+          },
+          "caller_device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Caller Device Id"
+          },
+          "caller_peer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Caller Peer Id"
+          },
+          "caller_permissions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Caller Permissions"
+          },
+          "caller_principal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Caller Principal Id"
+          },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "expected_args_schema_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Args Schema Hash"
+          },
+          "mesh_selector": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MeshAddressSelector"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "resource_selector": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ToolingResourceSelector"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schedule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Schedule Id"
+          },
+          "scheduled_action_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scheduled Action Hash"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "arguments",
+          "tool_name"
+        ],
+        "title": "ToolingExecuteToolRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "060a3ffaaf65eca4c4394653708d0be6c13e451be0546da90f19b7ceec0c742e",
+      "schema_id": "Tooling.ExecuteTool.input.ToolingExecuteToolRequest",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "arguments": {},
+            "tool_name": 12
+          },
+          "issue_category": "string_type",
+          "issue_path": "$.tool_name"
+        },
+        "positive": {
+          "accepted": true,
+          "input": {
+            "arguments": {
+              "message": "hello",
+              "unicode": "snowman ☃"
+            },
+            "caller_peer_id": "aurora-sdk-local-provider-v1",
+            "confirmed": false,
+            "dry_run": true,
+            "tool_name": "echo",
+            "unexpected": "stripped"
+          },
+          "normalized": {
+            "approval_token": null,
+            "arguments": {
+              "message": "hello",
+              "unicode": "snowman ☃"
+            },
+            "caller_device_id": null,
+            "caller_peer_id": "aurora-sdk-local-provider-v1",
+            "caller_permissions": null,
+            "caller_principal_id": null,
+            "confirmed": false,
+            "correlation_id": null,
+            "dry_run": true,
+            "expected_args_schema_hash": null,
+            "mesh_selector": null,
+            "resource_selector": null,
+            "schedule_id": null,
+            "scheduled_action_hash": null,
+            "tool_name": "echo"
+          },
+          "normalized_hash": "e59287bf7ab1317ce7644fb58f9d6bc12dff29ab1687c4848fb383d282a7397c"
+        }
+      }
+    },
+    {
+      "direction": "output",
+      "method_id": "Tooling.ExecuteTool",
+      "model_name": "ToolingExecuteToolResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Response from tool execution.",
+        "properties": {
+          "args_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Args Hash"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          },
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Data"
+          },
+          "display_args_preview": {
+            "additionalProperties": true,
+            "title": "Display Args Preview",
+            "type": "object",
+            "x-aurora-extra-behavior": "preserve"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          },
+          "global_tool_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Global Tool Id"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "policy_decision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Policy Decision Id"
+          },
+          "provider_peer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider Peer Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "denied",
+                  "dry_run",
+                  "failed",
+                  "not_found",
+                  "success"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ToolingExecuteToolResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "8a39353a4c40118973b7724f4c9f549b8f65873d8c458e12b141f74045752855",
+      "schema_id": "Tooling.ExecuteTool.output.ToolingExecuteToolResponse",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "status": "success"
+          },
+          "issue_category": "missing",
+          "issue_path": "$.ok"
+        },
+        "positive": {
+          "accepted": true,
+          "input": {
+            "correlation_id": "corr-tooling-1",
+            "data": {
+              "result": "hello"
+            },
+            "display_args_preview": {
+              "message": "hello"
+            },
+            "ok": true,
+            "status": "success"
+          },
+          "normalized": {
+            "args_hash": null,
+            "correlation_id": "corr-tooling-1",
+            "data": {
+              "result": "hello"
+            },
+            "display_args_preview": {
+              "message": "hello"
+            },
+            "error": null,
+            "error_code": null,
+            "global_tool_id": null,
+            "ok": true,
+            "policy_decision_id": null,
+            "provider_peer_id": null,
+            "status": "success"
+          },
+          "normalized_hash": "be7cab0be555956978317f8297f0b6a09a247a1308419c9e3e17ebdf26bed4a1"
+        }
+      }
+    },
+    {
+      "direction": "input",
+      "method_id": "Tooling.GetMCPStatus",
+      "model_name": "ToolingGetMCPStatusRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Request to get MCP server status.",
+        "properties": {},
+        "title": "ToolingGetMCPStatusRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "d7c0c7ebb8715263e7533df46ae5aedbd381ad92dda090ca653a1d3098b3a45a",
+      "schema_id": "Tooling.GetMCPStatus.input.ToolingGetMCPStatusRequest",
+      "vectors": {
+        "positive": {
+          "accepted": true,
+          "input": {},
+          "normalized": {},
+          "normalized_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        }
+      }
+    },
+    {
+      "direction": "output",
+      "method_id": "Tooling.GetMCPStatus",
+      "model_name": "ToolingGetMCPStatusResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Response with MCP server status.",
+        "properties": {
+          "active_servers": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "title": "Active Servers",
+            "type": "integer"
+          },
+          "servers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object",
+              "x-aurora-extra-behavior": "preserve"
+            },
+            "title": "Servers",
+            "type": "array"
+          },
+          "total_servers": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "title": "Total Servers",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_servers",
+          "servers",
+          "total_servers"
+        ],
+        "title": "ToolingGetMCPStatusResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "8f40d61a2c44172bd99523938cbda842be9e900c797e0ea4b71b7582bb27881f",
+      "schema_id": "Tooling.GetMCPStatus.output.ToolingGetMCPStatusResponse",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "active_servers": 0,
+            "servers": [],
+            "total_servers": "one"
+          },
+          "issue_category": "int_parsing",
+          "issue_path": "$.total_servers"
+        },
+        "positive": {
+          "accepted": true,
+          "input": {
+            "active_servers": 1,
+            "servers": [
+              {
+                "active": true,
+                "name": "local"
+              }
+            ],
+            "total_servers": 1
+          },
+          "normalized": {
+            "active_servers": 1,
+            "servers": [
+              {
+                "active": true,
+                "name": "local"
+              }
+            ],
+            "total_servers": 1
+          },
+          "normalized_hash": "702b1a2b00ceb83fab8d4c2dd601f8defc526d722150b3e4f384cdd59d02daae"
+        }
+      }
+    },
+    {
+      "direction": "input",
+      "method_id": "Tooling.GetStats",
+      "model_name": "ToolingGetStatsRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Request to get tooling statistics.",
+        "properties": {},
+        "title": "ToolingGetStatsRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "5e064188682376e9e79ccb0df2bc63847ab411634c8f348c964cdc027816266e",
+      "schema_id": "Tooling.GetStats.input.ToolingGetStatsRequest",
+      "vectors": {
+        "positive": {
+          "accepted": true,
+          "input": {},
+          "normalized": {},
+          "normalized_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        }
+      }
+    },
+    {
+      "direction": "output",
+      "method_id": "Tooling.GetStats",
+      "model_name": "ToolingGetStatsResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Response with tooling statistics.",
+        "properties": {
+          "core_tools": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Core Tools"
+          },
+          "mcp_tools_loaded": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "title": "Mcp Tools Loaded",
+            "type": "integer"
+          },
+          "plugin_tools": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Plugin Tools"
+          },
+          "total_tools": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "title": "Total Tools",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mcp_tools_loaded",
+          "total_tools"
+        ],
+        "title": "ToolingGetStatsResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "b9d2c2605fcc5699e5ab03ee53884b3a44afe9c3812730ddba7f16276fa2403d",
+      "schema_id": "Tooling.GetStats.output.ToolingGetStatsResponse",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "mcp_tools_loaded": 1,
+            "total_tools": "two"
+          },
+          "issue_category": "int_parsing",
+          "issue_path": "$.total_tools"
+        },
+        "positive": {
+          "accepted": true,
+          "input": {
+            "core_tools": 1,
+            "mcp_tools_loaded": 1,
+            "plugin_tools": 0,
+            "total_tools": 2,
+            "unexpected": "stripped"
+          },
+          "normalized": {
+            "core_tools": 1,
+            "mcp_tools_loaded": 1,
+            "plugin_tools": 0,
+            "total_tools": 2
+          },
+          "normalized_hash": "05857d059274b39a2cdbaff1b0756bf1971b419b0411f7d787d263b83062ec96"
+        }
+      }
+    },
+    {
+      "direction": "input",
+      "method_id": "Tooling.GetTools",
+      "model_name": "ToolingGetToolsRequest",
+      "pydantic_mode": "validation",
+      "schema": {
+        "$defs": {
+          "MeshAddressSelector": {
+            "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+            "properties": {
+              "data_scope": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Data Scope"
+              },
+              "hardware_target": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Hardware Target"
+              },
+              "peer_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Peer Id"
+              },
+              "provider_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Id"
+              },
+              "resource_namespace": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Resource Namespace"
+              },
+              "service_instance_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Service Instance Id"
+              },
+              "tool_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Tool Id"
+              }
+            },
+            "title": "MeshAddressSelector",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Request to get available tools.",
+        "properties": {
+          "mesh_selector": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MeshAddressSelector"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          },
+          "top_k": {
+            "default": 100,
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "title": "ToolingGetToolsRequest",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "a942f1e26fb5a35791f9547295d79f82dd380b16fc1feea1502b3f7a51b11d21",
+      "schema_id": "Tooling.GetTools.input.ToolingGetToolsRequest",
+      "vectors": {
+        "negative": {
+          "accepted": false,
+          "input": {
+            "top_k": "one"
+          },
+          "issue_category": "int_parsing",
+          "issue_path": "$.top_k"
+        },
+        "positive": {
+          "accepted": true,
+          "input": {
+            "query": "echo",
+            "top_k": 1,
+            "unexpected": "stripped"
+          },
+          "normalized": {
+            "mesh_selector": null,
+            "query": "echo",
+            "top_k": 1
+          },
+          "normalized_hash": "81d75d557f2d731d4006c8dd84f9db1698584984771ade8d5d85ca83baf4b23e"
+        }
+      }
+    },
+    {
+      "direction": "output",
+      "method_id": "Tooling.GetTools",
+      "model_name": "ToolingGetToolsResponse",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$defs": {
+          "ToolingRateLimitHints": {
+            "description": "Optional rate-limit hints for a discovered tool provider.",
+            "properties": {
+              "max_calls": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max Calls"
+              },
+              "policy": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Policy"
+              },
+              "window_seconds": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Window Seconds"
+              }
+            },
+            "title": "ToolingRateLimitHints",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          },
+          "ToolingToolInfo": {
+            "description": "Typed metadata for a discovered tool.\n\n``name`` remains the bindable tool name expected by existing\norchestrator code. For local-only discovery it is the provider-local\nname; for provider-selected mesh discovery it is namespaced to avoid\ncollisions.",
+            "properties": {
+              "admin": {
+                "default": false,
+                "title": "Admin",
+                "type": "boolean"
+              },
+              "aliases": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Aliases",
+                "type": "array"
+              },
+              "args_schema": {
+                "additionalProperties": true,
+                "title": "Args Schema",
+                "type": "object",
+                "x-aurora-extra-behavior": "preserve"
+              },
+              "argument_visibility": {
+                "additionalProperties": {
+                  "enum": [
+                    "display",
+                    "hash_only",
+                    "raw_never",
+                    "secret",
+                    "support_bundle_redacted"
+                  ],
+                  "type": "string"
+                },
+                "title": "Argument Visibility",
+                "type": "object",
+                "x-aurora-extra-behavior": "preserve"
+              },
+              "capability_class": {
+                "default": "read",
+                "enum": [
+                  "admin",
+                  "device",
+                  "execute",
+                  "network",
+                  "read",
+                  "secrets",
+                  "write"
+                ],
+                "title": "Capability Class",
+                "type": "string"
+              },
+              "confirmation_required": {
+                "default": false,
+                "title": "Confirmation Required",
+                "type": "boolean"
+              },
+              "data_egress": {
+                "default": false,
+                "title": "Data Egress",
+                "type": "boolean"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "display_name": {
+                "title": "Display Name",
+                "type": "string"
+              },
+              "execution_location": {
+                "default": "local",
+                "enum": [
+                  "local",
+                  "remote"
+                ],
+                "title": "Execution Location",
+                "type": "string"
+              },
+              "exportable": {
+                "default": false,
+                "title": "Exportable",
+                "type": "boolean"
+              },
+              "external": {
+                "default": false,
+                "title": "External",
+                "type": "boolean"
+              },
+              "global_tool_id": {
+                "title": "Global Tool Id",
+                "type": "string"
+              },
+              "legacy_global_tool_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "title": "Legacy Global Tool Ids",
+                "type": "array"
+              },
+              "local_name": {
+                "title": "Local Name",
+                "type": "string"
+              },
+              "mutating": {
+                "default": false,
+                "title": "Mutating",
+                "type": "boolean"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "namespace": {
+                "title": "Namespace",
+                "type": "string"
+              },
+              "privacy_hints": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Privacy Hints",
+                "type": "array"
+              },
+              "provenance": {
+                "$ref": "#/$defs/ToolingToolProvenance"
+              },
+              "provider_available": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Available"
+              },
+              "provider_granted_permissions": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Granted Permissions"
+              },
+              "provider_label": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Label"
+              },
+              "provider_peer_id": {
+                "title": "Provider Peer Id",
+                "type": "string"
+              },
+              "provider_service_instance_id": {
+                "title": "Provider Service Instance Id",
+                "type": "string"
+              },
+              "rate_limit_hints": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ToolingRateLimitHints"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "required_permissions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Required Permissions",
+                "type": "array"
+              },
+              "resource_scope": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Resource Scope",
+                "type": "array"
+              },
+              "risk_class": {
+                "default": "standard",
+                "enum": [
+                  "dangerous",
+                  "sensitive",
+                  "standard"
+                ],
+                "title": "Risk Class",
+                "type": "string"
+              },
+              "safety_class": {
+                "default": "standard",
+                "enum": [
+                  "dangerous",
+                  "sensitive",
+                  "standard"
+                ],
+                "title": "Safety Class",
+                "type": "string"
+              },
+              "schema": {
+                "additionalProperties": true,
+                "title": "Schema",
+                "type": "object",
+                "x-aurora-extra-behavior": "preserve"
+              },
+              "share_group_id": {
+                "default": "",
+                "title": "Share Group Id",
+                "type": "string"
+              },
+              "share_group_label": {
+                "default": "",
+                "title": "Share Group Label",
+                "type": "string"
+              },
+              "source": {
+                "default": "unknown",
+                "enum": [
+                  "core",
+                  "mcp",
+                  "mesh_peer",
+                  "plugin",
+                  "unknown"
+                ],
+                "title": "Source",
+                "type": "string"
+              },
+              "source_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Source Id"
+              },
+              "source_type": {
+                "default": "local",
+                "enum": [
+                  "local",
+                  "mesh_peer"
+                ],
+                "title": "Source Type",
+                "type": "string"
+              },
+              "tool_contract_id": {
+                "default": "",
+                "title": "Tool Contract Id",
+                "type": "string"
+              },
+              "tool_id_scheme": {
+                "default": "legacy",
+                "enum": [
+                  "aurora-tool",
+                  "legacy"
+                ],
+                "title": "Tool Id Scheme",
+                "type": "string"
+              },
+              "tool_id_version": {
+                "default": 0,
+                "enum": [
+                  0,
+                  1
+                ],
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "title": "Tool Id Version",
+                "type": "integer"
+              },
+              "trust_tier": {
+                "default": "untrusted",
+                "enum": [
+                  "blocked",
+                  "trusted",
+                  "untrusted"
+                ],
+                "title": "Trust Tier",
+                "type": "string"
+              }
+            },
+            "required": [
+              "display_name",
+              "global_tool_id",
+              "local_name",
+              "name",
+              "namespace",
+              "provenance",
+              "provider_peer_id",
+              "provider_service_instance_id"
+            ],
+            "title": "ToolingToolInfo",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          },
+          "ToolingToolProvenance": {
+            "description": "Provenance carried with a discovered tool.",
+            "properties": {
+              "advertised_name": {
+                "title": "Advertised Name",
+                "type": "string"
+              },
+              "provider_kind": {
+                "default": "local",
+                "enum": [
+                  "local",
+                  "mesh_peer"
+                ],
+                "title": "Provider Kind",
+                "type": "string"
+              },
+              "provider_peer_id": {
+                "title": "Provider Peer Id",
+                "type": "string"
+              },
+              "provider_service_instance_id": {
+                "title": "Provider Service Instance Id",
+                "type": "string"
+              },
+              "provider_tool_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider Tool Id"
+              },
+              "source": {
+                "default": "unknown",
+                "enum": [
+                  "core",
+                  "mcp",
+                  "plugin",
+                  "unknown"
+                ],
+                "title": "Source",
+                "type": "string"
+              },
+              "stable_source_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Stable Source Id"
+              }
+            },
+            "required": [
+              "advertised_name",
+              "provider_peer_id",
+              "provider_service_instance_id"
+            ],
+            "title": "ToolingToolProvenance",
+            "type": "object",
+            "x-aurora-extra-behavior": "strip"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Response with available tools.",
+        "properties": {
+          "count": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "title": "Count",
+            "type": "integer"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/$defs/ToolingToolInfo"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "tools"
+        ],
+        "title": "ToolingGetToolsResponse",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "411ff3fcdfbe8eb846bacffc63b3405fa3c099897c84ccb522423e14a778480c",
+      "schema_id": "Tooling.GetTools.output.ToolingGetToolsResponse",
+      "vectors": {}
+    }
+  ]
+}

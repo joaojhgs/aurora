@@ -1,0 +1,16 @@
+{
+  "allowlist_hash": "9b66ea607df1969b08dfbbd5d4313d9ed16d8c04c307822689561fc2ba083800",
+  "artifact": "aurora-sdk-backend-contracts-manifest",
+  "content_hashes": {
+    "backend-contracts.schema.json": "92978a0152ee70cc321d12a1bda62a2cf20069aa80f86dafa12a82bc068b4bde",
+    "backend-contracts.zod.ts": "bfd0b61fdceb23441abf8762a2a33b5625bb0dd92e5595439374afb2f37d7f91",
+    "tooling-local-provider-v1.json": "8334e25344290cf33c75896b1bb4ada0989537b218fd32c7c4d0bd5d41ca0f41"
+  },
+  "final_checksum": "5e7fa7f8c686d93cb6c3a1e6d651341910e796402d5f3f9ddc95bee5e49475e6",
+  "generator_format_version": "aurora-sdk-zod-codegen-v1",
+  "generator_source_hash": "13399d0241343e131dddb608e0567f56aa436bab6587b3bc941288397766f037",
+  "pydantic_version": "2.12.5",
+  "python_version": "3.11.14",
+  "schema_draft": "https://json-schema.org/draft/2020-12/schema",
+  "zod_version": "4.x"
+}
