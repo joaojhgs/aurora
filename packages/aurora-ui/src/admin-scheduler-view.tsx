@@ -151,7 +151,7 @@ export async function buildAdminSchedulerSnapshot(
   const toolCards = valueOrNull(toolsResult) ?? []
   const warnings = [
     failureMessage('scheduler jobs', jobsResult),
-    failureMessage('registry methods', methodsResult),
+    failureMessage('available actions', methodsResult),
     failureMessage('capability catalog', catalogResult),
     failureMessage('tool catalog', toolsResult)
   ].filter((message): message is string => Boolean(message))
@@ -161,7 +161,7 @@ export async function buildAdminSchedulerSnapshot(
     return {
       ...loadingSchedulerSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
-      error: warnings.join(' ') || 'Scheduler jobs and registry methods are unavailable.',
+      error: warnings.join(' ') || 'Scheduler jobs and actions are unavailable.',
       warnings,
       evidenceSource: 'Aurora request error',
       toolOptions: []
@@ -185,7 +185,7 @@ export async function buildAdminSchedulerSnapshot(
     totals: schedulerTotals(rows),
     warnings: [...warnings, ...permissionWarnings],
     error: warnings[0] ?? permissionWarnings[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response',
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response',
     secretsRedacted: catalog?.secrets_redacted ?? true,
     toolOptions: schedulerToolOptions(toolCards)
   }
@@ -235,10 +235,10 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
 
   async function runAdminAction(label: string, methodId: string, payload: JsonObject) {
     if (!reauthConfirmed) {
-      setOperation({ status: 'failed', message: `${label} requires explicit in-session admin unlock before AdminAction submit.`, auditReceipt: null })
+      setOperation({ status: 'failed', message: `${label} requires your recent admin unlock before submit.`, auditReceipt: null })
       return
     }
-    setOperation({ status: 'pending', message: `${label} pending AdminAction draft, confirmation, and audit.`, auditReceipt: null })
+    setOperation({ status: 'pending', message: `${label} is pending admin confirmation and audit logging.`, auditReceipt: null })
     try {
       const result = await client.admin.execute<SchedulerActionResponse>({
         methodId,
@@ -341,7 +341,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-target">Target peer/provider</label>
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-target">Target device</label>
                 <select id="scheduler-target" className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={targetPeer} onChange={(event) => setTargetPeer(event.currentTarget.value)} disabled={!snapshot.createControl.available}>
                   {snapshot.createControl.targetOptions.map((option) => (
                     <option key={option.id} value={option.id} disabled={option.disabled}>{option.label}</option>
@@ -371,7 +371,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
             )}
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-reason">AdminAction reason</label>
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-reason">Reason</label>
               <textarea id="scheduler-reason" className="resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={reason} rows={3} onChange={(event) => setReason(event.currentTarget.value)} disabled={!snapshot.createControl.available} />
             </div>
             <label className="flex items-center gap-2 text-sm">
@@ -381,11 +381,11 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
                 disabled={!snapshot.createControl.available}
                 onChange={(event) => setReauthConfirmed(event.currentTarget.checked)}
               />
-              <span>I confirm recent AdminAction reauthentication for scheduler mutations</span>
+              <span>I confirm my recent admin unlock for scheduler changes</span>
             </label>
             <div className="flex items-center gap-2">
               <Button type="submit" variant="primary" icon={<Plus size={16} aria-hidden />} disabled={!canCreate} disabledReason={snapshot.createControl.reason}>
-                Create via AdminAction
+                Create schedule
               </Button>
             </div>
           </form>
@@ -395,8 +395,8 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
           <MetaGrid
             columns={1}
             items={[
-              { label: 'Route', value: presentableSignal(route.explanation) },
-              { label: 'AdminAction', value: route.requiresAdminAction ? 'required for schedule, cancel, pause, and resume' : 'not required by route metadata' },
+              { label: 'Connection', value: presentableSignal(route.explanation) },
+              { label: 'Admin approval', value: route.requiresAdminAction ? 'required for schedule, cancel, pause, and resume' : 'not required' },
               { label: 'Target selector', value: selectedTarget ? selectedTarget.reason : 'no selector status' },
               { label: 'Blockers', value: presentableSignal(route.blockers.join(', ') || snapshot.error || 'none') }
             ]}
@@ -621,8 +621,8 @@ function editOperationControl(methods: MethodDescriptor[]): SchedulerOperationCo
     state: baseSupport.state,
     requiresAdminAction: true,
     reason: method
-      ? `${methodId} is advertised, but the UI disables edit until the Scheduler edit payload contract is exported by @aurora/client.`
-      : `${SCHEDULER_EDIT_METHOD_CANDIDATES.join(' or ')} is not advertised by Gateway registry; edit is intentionally disabled.`
+      ? `${methodId} is listed, but editing is not ready in this version.`
+      : 'Editing is not ready in this version.'
   }
 }
 
@@ -639,14 +639,14 @@ function operationControl(
   const supportAvailable = Boolean(support && !support.disabled)
   const available = methodSupported && supportAvailable
   const reason = !method
-    ? `${methodId} is not advertised by Gateway registry.`
+    ? `${methodId} is not ready.`
     : !method.availableOverHttp
-      ? `${methodId} is internal-only and disabled for the UI.`
+      ? 'This action is only available inside Aurora.'
       : !hasSchedulerManagePermission(method)
-        ? `${methodId} does not advertise Scheduler.manage; mutation is permission-gated.`
+        ? 'Permission is needed to use this feature.'
         : !methodSupported
-        ? `${methodId} is not marked manage/admin-critical.`
-        : support?.reason ?? (available ? 'Available through AdminAction draft/confirm/audit.' : `${action} is unsupported for this job.`)
+        ? 'This action is not ready for admin changes.'
+        : support?.reason ?? (available ? 'Available after admin confirmation.' : `${action} is not available for this job.`)
   return {
     action,
     methodId,
@@ -676,26 +676,26 @@ function createControl(
         reason: provider.reason
       }
     })
-    : [{ id: localPeerId, label: 'Local scheduler', disabled: !available, reason: 'No Scheduler provider was returned by capability catalog.' }]
+    : [{ id: localPeerId, label: 'Local scheduler', disabled: !available, reason: 'No scheduler target was returned by Aurora.' }]
   return {
     available,
     state: available ? 'available-local' : support.state,
     requiresAdminAction: true,
     reason: available
-      ? 'Create/edit uses AdminAction; remote execution requires target selector, delegated permissions, policy decision, and audit correlation.'
-      : support.reason ?? `${SCHEDULER_METHODS.scheduleAction} is not advertised as an external manage/admin-critical method.`,
+      ? 'Create and edit require admin confirmation, a selected target, approved permissions, and audit logging.'
+      : support.reason ?? 'Schedule creation is not ready in this version.',
     targetOptions
   }
 }
 
 function methodSupport(method: MethodDescriptor | undefined): { ok: boolean; state: AvailabilityState; reason: string | null } {
   if (!method) return { ok: false, state: 'unsupported', reason: null }
-  if (!method.availableOverHttp) return { ok: false, state: 'unsupported', reason: `${method.busTopic} is internal-only and disabled for the UI.` }
+  if (!method.availableOverHttp) return { ok: false, state: 'unsupported', reason: 'This action is only available inside Aurora.' }
   if (!hasSchedulerManagePermission(method)) {
-    return { ok: false, state: 'denied', reason: `${method.busTopic} does not advertise Scheduler.manage; mutation is permission-gated.` }
+    return { ok: false, state: 'denied', reason: 'Permission is needed to use this feature.' }
   }
   if (method.methodType !== 'manage' && method.methodType !== 'admin-critical') {
-    return { ok: false, state: 'unsupported', reason: `${method.busTopic} is not marked manage/admin-critical.` }
+    return { ok: false, state: 'unsupported', reason: 'This action is not ready for admin changes.' }
   }
   return { ok: true, state: 'available-local', reason: null }
 }
@@ -709,7 +709,7 @@ function schedulerPermissionWarnings(methods: MethodDescriptor[]): string[] {
     .map((methodId) => methods.find((candidate) => candidate.busTopic === methodId))
     .filter((method): method is MethodDescriptor => Boolean(method))
     .filter((method) => method.availableOverHttp && (method.methodType === 'manage' || method.methodType === 'admin-critical') && !hasSchedulerManagePermission(method))
-    .map((method) => `${method.busTopic} is advertised without Scheduler.manage; UI mutations are disabled for that contract.`)
+    .map(() => 'Permission is needed before scheduler changes can run.')
 }
 
 function ownershipForJob(job: NormalizedSchedulerJob): SchedulerOwnershipState {
@@ -722,8 +722,8 @@ function ownershipForJob(job: NormalizedSchedulerJob): SchedulerOwnershipState {
 function ownershipLabel(state: SchedulerOwnershipState): string {
   if (state === 'local-owned') return 'Local job'
   if (state === 'delegated-owned') return 'Delegated by this node'
-  if (state === 'remote-running') return 'Running on remote peer'
-  return 'Denied foreign namespace'
+  if (state === 'remote-running') return 'Running on connected device'
+  return 'Denied by policy'
 }
 
 function approvalLabel(job: NormalizedSchedulerJob): string {

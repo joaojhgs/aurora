@@ -123,7 +123,7 @@ const loadingSnapshot: AdminServicesSnapshot = {
   contracts: [],
   warnings: [],
   error: null,
-  evidenceSource: 'pending Aurora service calls'
+  evidenceSource: 'Checking Aurora'
 }
 
 export function AdminServicesResource({ client, onPreviewAdminAction }: AdminServicesResourceProps) {
@@ -155,7 +155,7 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
   const catalog = valueOrNull(catalogResult)
   const failures = [
     failureMessage('services', servicesResult),
-    failureMessage('contracts', methodsResult),
+    failureMessage('actions', methodsResult),
     failureMessage('capability catalog', catalogResult)
   ].filter((message): message is string => Boolean(message))
   const denied = [servicesResult, methodsResult, catalogResult].some(isDeniedFailure)
@@ -165,9 +165,9 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
     return {
       ...loadingSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
-      error: failures.join(' ') || 'Aurora services and contract status are unavailable.',
+      error: failures.join(' ') || 'Aurora service actions are unavailable.',
       warnings: failures,
-      evidenceSource: 'Aurora request error'
+      evidenceSource: 'Aurora needs attention'
     }
   }
 
@@ -190,7 +190,7 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
     contracts,
     warnings: failures,
     error: failures[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
@@ -201,7 +201,7 @@ export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServi
     <div className="flex h-full flex-col" aria-labelledby="admin-services-title">
       <div className="border-b border-border px-6 py-5">
         <h1 id="admin-services-title" className="text-xl font-semibold tracking-tight">Services</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Backend service health and restart control. Admins only.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Service health and restart controls. Admins only.</p>
       </div>
       <div className="flex flex-col gap-4 px-6 py-5">
         <StatusPanel snapshot={snapshot} />
@@ -249,12 +249,12 @@ export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapsh
     <div className="flex flex-col gap-4" aria-labelledby="admin-contracts-title">
       <div className="flex items-start justify-between gap-3 border-b border-border px-6 py-5">
         <div>
-          <h1 id="admin-contracts-title" className="text-xl font-semibold tracking-tight">Contracts registry</h1>
+          <h1 id="admin-contracts-title" className="text-xl font-semibold tracking-tight">Service actions</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Method exposure, Gateway routes, schemas, permissions, and conformance status are rendered from Gateway.GetRegistry plus capability catalog data. Service lifecycle controls stay on /admin/services.
+            Review which Aurora actions are available, which require admin approval, and which need attention. Service controls stay on /admin/services.
           </p>
         </div>
-        <div aria-label="Contracts registry status">
+        <div aria-label="Service action status">
           <AvailabilityBadge state={state} />
         </div>
       </div>
@@ -263,12 +263,12 @@ export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapsh
         <StatusPanel snapshot={snapshot} />
 
         <StatStrip
-          ariaLabel="Contract registry coverage summary"
+          ariaLabel="Service action summary"
           items={[
-            { label: 'Contracts', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} manage/admin` },
-            { label: 'Services', value: String(snapshot.services.length), caption: 'registry modules with descriptors' },
+            { label: 'Actions', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} protected` },
+            { label: 'Services', value: String(snapshot.services.length), caption: 'service groups' },
             { label: 'Needs attention', value: String(totals.unavailable), caption: 'denied, stale, blocked, or awaiting support' },
-            { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'catalog timestamp' }
+            { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'last refresh' }
           ]}
         />
 
@@ -310,7 +310,7 @@ function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" aria-live="polite">
         <Activity size={16} aria-hidden />
-        <span>Loading services, contracts, and capability catalog through Aurora.</span>
+        <span>Loading services and available actions through Aurora.</span>
       </div>
     )
   }
@@ -319,7 +319,7 @@ function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" role="status">
         <FileCode2 size={16} aria-hidden />
-        <span>No service registry or method contracts were returned by the SDK.</span>
+        <span>No services or actions were returned by Aurora.</span>
       </div>
     )
   }
@@ -400,17 +400,17 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
   const groupedContracts = groupContractsByModule(filteredContracts)
 
   return (
-    <Card title="Contracts" flush>
+    <Card title="Actions" flush>
       {contracts.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No method descriptors were returned by Gateway.GetRegistry.</p>
+        <p className="text-sm text-muted-foreground">No service actions were returned by Aurora.</p>
       ) : (
         <div className="flex flex-col gap-4">
           <FilterBar
             search={{
               value: query,
               onChange: setQuery,
-              placeholder: 'Method, route, schema, permission',
-              label: 'Search contracts'
+              placeholder: 'Action, service, permission',
+              label: 'Search actions'
             }}
             controls={
               <>
@@ -444,10 +444,10 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
                   <select
                     value={selectedContract?.busTopic ?? ''}
                     onChange={(event) => setSelectedTopic(event.currentTarget.value)}
-                    aria-label="Select contract detail"
+                    aria-label="Select action detail"
                   >
                     {filteredContracts.map((contract) => (
-                      <option key={contract.busTopic} value={contract.busTopic}>{contract.busTopic}</option>
+                      <option key={contract.busTopic} value={contract.busTopic}>{actionDisplayName(contract)}</option>
                     ))}
                   </select>
                 </label>
@@ -456,32 +456,32 @@ function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
           />
 
           <StatStrip
-            ariaLabel="Contract explorer summary"
+            ariaLabel="Action browser summary"
             items={[
               { label: 'Filtered methods', value: String(filteredContracts.length), caption: `${modules.length} service modules` },
-              { label: 'HTTP routes', value: String(filteredContracts.filter((contract) => contract.availableOverHttp).length), caption: 'SDK route paths' },
-              { label: 'Live registry', value: String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length), caption: 'registry + capability catalog' },
-              { label: 'Schemas', value: String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length), caption: 'input or output JSON Schema' }
+              { label: 'Ready actions', value: String(filteredContracts.filter((contract) => contract.availableOverHttp).length), caption: 'available from this screen' },
+              { label: 'Confirmed by Aurora', value: String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length), caption: 'currently available' },
+              { label: 'Payload details', value: String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length), caption: 'request or response shape' }
             ]}
           />
 
           {filteredContracts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No contracts match the current search and filters.</p>
+            <p className="text-sm text-muted-foreground">No actions match the current search and filters.</p>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border">
               <Table>
                 <TableCaption className="sr-only">
-                  Contract registry browser grouped by service module with method detail controls
+                  Service action browser grouped by service with detail controls
                 </TableCaption>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Service/module</TableHead>
-                    <TableHead>Method</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Action</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Exposure</TableHead>
-                    <TableHead>Backend</TableHead>
-                    <TableHead>Gateway route</TableHead>
-                    <TableHead>Conformance</TableHead>
+                    <TableHead>Access</TableHead>
+                    <TableHead>Availability</TableHead>
+                    <TableHead>Readiness</TableHead>
                     <TableHead>Permissions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -522,15 +522,15 @@ function ContractModuleGroup({
     <>
       <TableRow className="hover:bg-transparent">
         <TableHead colSpan={8} scope="rowgroup" className="bg-muted/40 text-xs font-semibold text-foreground">
-          {module} module / {contracts.length} contracts
+          {moduleDisplayName(module)} service / {contracts.length} action(s)
         </TableHead>
       </TableRow>
       {contracts.map((contract) => (
         <TableRow key={contract.busTopic} aria-selected={contract.busTopic === selectedTopic}>
-          <TableCell className="font-medium">{contract.module}</TableCell>
+          <TableCell className="font-medium">{moduleDisplayName(contract.module)}</TableCell>
           <TableCell>
             <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => onSelect(contract.busTopic)}>
-              {contract.busTopic}
+              {actionDisplayName(contract)}
             </button>
             <p className="text-xs text-muted-foreground">{contract.summary || 'No summary provided.'}</p>
           </TableCell>
@@ -540,13 +540,13 @@ function ContractModuleGroup({
           <TableCell>
             <div className="flex items-center gap-1.5">
               <AvailabilityBadge state={contract.availability} />
-              <span className="text-xs text-muted-foreground">{contract.generatedRoutePath ?? 'not HTTP-exposed'}</span>
+              <span className="text-xs text-muted-foreground">{actionAccessLabel(contract)}</span>
             </div>
           </TableCell>
           <TableCell>
             <div className="flex flex-wrap gap-1">
-              <Badge variant="secondary" className="font-mono text-[10.5px]">{contract.liveRegistryStatus}</Badge>
-              <Badge variant="secondary" className="font-mono text-[10.5px]">{contract.conformanceStatus}</Badge>
+              <Badge variant="secondary" className="text-[10.5px]">{readinessLabel(contract.liveRegistryStatus)}</Badge>
+              <Badge variant="secondary" className="text-[10.5px]">{fitLabel(contract.conformanceStatus)}</Badge>
             </div>
           </TableCell>
           <TableCell><PermissionChips permissions={contract.requiredPermissions} /></TableCell>
@@ -565,36 +565,42 @@ function ExposureBadge({ exposure }: { exposure: ContractExposure }) {
 }
 
 function BackendCoverageBadge({ coverage }: { coverage: AdminContractRow['backendCoverage'] }) {
-  return <Badge variant="outline" className="capitalize">{coverage}</Badge>
+  return <Badge variant="outline">{coverageLabel(coverage)}</Badge>
+}
+
+function coverageLabel(coverage: AdminContractRow['backendCoverage']): string {
+  if (coverage === 'http') return 'Screen'
+  if (coverage === 'internal-only') return 'Inside Aurora'
+  if (coverage === 'gateway-builtin') return 'Built in'
+  return 'Needs attention'
 }
 
 function ContractDetail({ contract }: { contract: AdminContractRow }) {
   return (
     <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4" aria-labelledby="contract-detail-title">
       <div>
-        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Method detail</p>
-        <h3 id="contract-detail-title" className="font-mono text-sm font-semibold">{contract.busTopic}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{contract.summary || 'No summary provided by the live registry descriptor.'}</p>
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Action detail</p>
+        <h3 id="contract-detail-title" className="text-sm font-semibold">{actionDisplayName(contract)}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{contract.summary || 'No summary provided by Aurora.'}</p>
       </div>
       <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Service/module</dt><dd className="font-medium">{contract.module}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Method</dt><dd className="font-medium">{contract.name}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Input model</dt><dd className="font-medium">{contract.inputModel ?? 'none'}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Output model</dt><dd className="font-medium">{contract.outputModel ?? 'none'}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Service</dt><dd className="font-medium">{moduleDisplayName(contract.module)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Action</dt><dd className="font-medium">{humanizeToken(contract.name)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Request</dt><dd className="font-medium">{contract.inputModel ? 'Has details' : 'none'}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Response</dt><dd className="font-medium">{contract.outputModel ? 'Has details' : 'none'}</dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Exposure</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
         <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Capability permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Gateway route path</dt><dd className="font-mono text-xs">{contract.generatedRoutePath ?? 'not HTTP-exposed'}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">OpenAPI/export state</dt><dd className="font-medium">{contract.openApiState}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Export state</dt><dd className="font-medium">{contract.exportState}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Live-registry status</dt><dd className="font-medium">{contract.liveRegistryStatus}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Contract conformance</dt><dd className="font-medium">{contract.conformanceStatus}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Capability route status</dt><dd className="font-medium">{contract.routeReason}</dd></div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Schema state</dt><dd className="font-medium">{contract.schemaState}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Action permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Access</dt><dd className="font-medium">{actionAccessLabel(contract)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Availability</dt><dd className="font-medium">{actionAccessDetail(contract)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Status</dt><dd className="font-medium">{readinessLabel(contract.liveRegistryStatus)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Fit</dt><dd className="font-medium">{fitLabel(contract.conformanceStatus)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Readiness</dt><dd className="font-medium">{actionReasonLabel(contract)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Payload details</dt><dd className="font-medium">{contract.schemaState}</dd></div>
       </dl>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Input and output schema detail">
-        <SchemaBlock title="Input schema" schema={contract.inputSchema} />
-        <SchemaBlock title="Output schema" schema={contract.outputSchema} />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Request and response detail">
+        <SchemaBlock title="Request details" schema={contract.inputSchema} />
+        <SchemaBlock title="Response details" schema={contract.outputSchema} />
       </div>
     </aside>
   )
@@ -618,7 +624,7 @@ function SchemaBlock({ title, schema }: { title: string; schema: MethodDescripto
       {schema ? (
         <code className="block max-h-48 overflow-auto rounded-lg border border-border bg-muted/30 p-3 font-mono text-[11px] whitespace-pre-wrap">{JSON.stringify(schema, null, 2)}</code>
       ) : (
-        <p className="text-xs text-muted-foreground">No JSON Schema exported by this registry descriptor.</p>
+        <p className="text-xs text-muted-foreground">No payload details were returned by Aurora.</p>
       )}
     </section>
   )
@@ -642,7 +648,7 @@ function buildServiceRows(
       status: service.status,
       healthState: healthState(service),
       instanceId: service.instance_id,
-      providerLabel: primary ? providerLabel(primary) : `${service.module} provider pending`,
+      providerLabel: primary ? providerLabel(primary) : `${service.module} target pending`,
       routeState: primary?.availability ?? 'unsupported',
       routeReason: primary ? routeReason(primary) : 'Capability catalog does not advertise this service as executable.',
       privacyClass: primary?.privacyClass ?? 'public',
@@ -664,7 +670,7 @@ function buildContractRows(
       return {
         ...method,
         availability: capability?.availability ?? methodAvailability(method),
-        providerLabel: capability ? providerLabel(capability) : `${method.module} provider pending`,
+        providerLabel: capability ? providerLabel(capability) : `${method.module} target pending`,
         backendCoverage: backendCoverage(method, capability),
         privacyClass: capability?.privacyClass ?? privacyForMethod(method),
         routeReason: capability ? routeReason(capability) : 'No capability catalog action exists for this method.',
@@ -699,25 +705,25 @@ function contractConformance(method: MethodDescriptor, capability: CapabilitySum
 }
 
 function openApiEvidence(method: MethodDescriptor): string {
-  if (!method.availableOverHttp || !method.routePath) return 'Internal-only contract is intentionally absent from OpenAPI HTTP paths.'
-  return `Gateway/OpenAPI path ${method.routePath} from live registry descriptor ${method.module}.${method.name}.`
+  if (!method.availableOverHttp || !method.routePath) return 'Only available inside Aurora.'
+  return 'Available from this screen.'
 }
 
 function exportEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
-  const registryEvidence = `Gateway.GetRegistry exported ${method.busTopic}`
-  const capabilityEvidence = capability ? `; Gateway.GetCapabilityCatalog action ${capability.id}` : '; no capability-catalog action matched this bus topic'
+  const registryEvidence = `${method.busTopic} is listed by Aurora`
+  const capabilityEvidence = capability ? `; current action ${capability.id}` : '; no matching action is ready'
   return `${registryEvidence}${capabilityEvidence}.`
 }
 
 function schemaEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
-  const registrySchemas = [method.inputSchema ? 'input schema' : null, method.outputSchema ? 'output schema' : null]
+  const registrySchemas = [method.inputSchema ? 'request details' : null, method.outputSchema ? 'response details' : null]
     .filter((value): value is string => Boolean(value))
   const capabilitySchemas = capability
-    ? [capability.raw.input_schema ? 'capability input schema' : null, capability.raw.output_schema ? 'capability output schema' : null]
+    ? [capability.raw.input_schema ? 'action request details' : null, capability.raw.output_schema ? 'action response details' : null]
       .filter((value): value is string => Boolean(value))
     : []
   const evidence = [...registrySchemas, ...capabilitySchemas]
-  return evidence.length > 0 ? evidence.join(', ') : 'No JSON Schema exported by registry or capability catalog.'
+  return evidence.length > 0 ? evidence.join(', ') : 'No payload details returned.'
 }
 
 function serviceControl(
@@ -748,7 +754,7 @@ function serviceControl(
     action: available
       ? {
           title: `${serviceControlLabel(verb)} ${service.module}`,
-          description: `Aurora will ${verb} ${service.module} only through the AdminAction draft/confirm/audit controller.`,
+          description: `Aurora will ${verb} ${service.module} only after admin confirmation and audit logging.`,
           methodId,
           severity: verb === 'stop' ? 'critical' : 'high',
           serviceModule: service.module,
@@ -848,14 +854,14 @@ function controlReason(
   capability: CapabilitySummary | undefined,
   requiresAdminAction: boolean
 ): string {
-  if (!descriptor) return 'Supervisor control contract is not present in the service registry.'
-  if (!descriptor.availableOverHttp) return `${descriptor.busTopic} is internal-only and not available to this SDK transport.`
-  if (!requiresAdminAction) return `${descriptor.busTopic} is not marked manage/admin-critical; UI will not execute it.`
-  if (!capability) return 'Capability catalog does not advertise this control as executable.'
+  if (!descriptor) return 'This control is not available yet.'
+  if (!descriptor.availableOverHttp) return `${descriptor.busTopic} is only available inside Aurora.`
+  if (!requiresAdminAction) return `${descriptor.busTopic} is not approved for this screen.`
+  if (!capability) return 'Aurora does not list this control as ready.'
   if (!['available-local', 'available-remote', 'degraded'].includes(capability.availability)) {
     return routeReason(capability)
   }
-  return 'Preview requires AdminAction draft/confirm/audit before any mutation request.'
+  return 'Admin confirmation is required before this action can run.'
 }
 
 function valueOrNull<T>(settled: PromiseSettledResult<T>): T | null {
@@ -875,5 +881,58 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 
 function errorMessage(error: unknown): string {
   const maybe = error as Partial<AuroraError>
-  return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
+  if (maybe.code === 'auth' || maybe.code === 'permission') return 'Permission is needed to use this feature'
+  if (maybe.code === 'unsupported_feature' || maybe.code === 'unavailable_service') return 'This Aurora version cannot use that feature yet'
+  if (maybe.code === 'timeout' || maybe.code === 'transport_loss') return 'Connection lost. Reconnecting...'
+  return 'Aurora could not read this item'
+}
+
+function actionAccessLabel(contract: AdminContractRow): string {
+  return contract.availableOverHttp ? 'Available from this screen' : 'Only available inside Aurora'
+}
+
+function actionAccessDetail(contract: AdminContractRow): string {
+  return contract.openApiState
+}
+
+function actionReasonLabel(contract: AdminContractRow): string {
+  if (contract.availability === 'available-local' || contract.availability === 'available-remote') return 'Ready'
+  if (contract.availability === 'offline' || contract.availability === 'stale') return 'This device is offline'
+  if (contract.availability === 'denied' || contract.availability === 'privacy-blocked') return 'Permission is needed to use this feature'
+  if (contract.availability === 'unsupported') return 'This Aurora version cannot use that feature yet'
+  return 'Needs attention'
+}
+
+function readinessLabel(status: AdminContractRow['liveRegistryStatus']): string {
+  if (status === 'live-registry') return 'Ready'
+  if (status === 'capability-only') return 'Needs refresh'
+  return 'Listed'
+}
+
+function fitLabel(status: AdminContractRow['conformanceStatus']): string {
+  if (status === 'conformant') return 'Ready'
+  if (status === 'internal-only') return 'Inside Aurora only'
+  if (status === 'gateway-builtin') return 'Built in'
+  return 'Needs attention'
+}
+
+function actionDisplayName(contract: Pick<AdminContractRow, 'module' | 'name' | 'busTopic'>): string {
+  return `${moduleDisplayName(contract.module)} ${humanizeToken(contract.name || contract.busTopic)}`
+}
+
+function moduleDisplayName(module: string): string {
+  if (/gateway/i.test(module)) return 'Connection'
+  if (/auth/i.test(module)) return 'Access'
+  if (/orchestrator/i.test(module)) return 'Assistant'
+  if (/tooling/i.test(module)) return 'Tools'
+  if (/config/i.test(module)) return 'Settings'
+  return humanizeToken(module)
+}
+
+function humanizeToken(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/gu, '$1 $2')
+    .replace(/[._:-]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim()
 }

@@ -215,7 +215,7 @@ export async function buildAdminAuditSnapshot(
       total: auditResult.data.total,
       warnings: unsupportedFilterWarnings(effectiveFilters, backendFilter),
       error: null,
-      evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora Auth.AuditLog response',
+      evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora audit response',
       exportState: rows.length > 0 ? 'available-local' : 'unsupported',
       exportReason: rows.length > 0
         ? 'Export includes the redacted normalized rows, payload hashes, receipts, and support-bundle correlation IDs.'
@@ -232,7 +232,7 @@ export async function buildAdminAuditSnapshot(
       warnings: [errorMessage(error)],
       exportState: 'unsupported',
       exportReason: 'Export is disabled until Auth.AuditLog is available.',
-      evidenceSource: 'Aurora transport error'
+      evidenceSource: 'Aurora connection error'
     }
   }
 }
@@ -357,7 +357,7 @@ export function AdminAuditView({
             rows={visibleRows}
             getRowKey={(row) => row.id}
             onRowClick={(row) => setSelectedRowId(row.id)}
-            empty={<p>No audit events match the current SDK-backed filters.</p>}
+            empty={<p>No audit events match the current filters.</p>}
           />
         </Card>
         {selectedRow ? <AuditDetailDrawer row={selectedRow} /> : null}
@@ -416,7 +416,7 @@ function AuditFilters({
           <span>Search</span>
           <div className="relative">
             <Search size={15} aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground" />
-            <Input className="pl-8" value={filters.query} onChange={(event) => update('query', event.currentTarget.value)} placeholder="actor, event, receipt, route" />
+            <Input className="pl-8" value={filters.query} onChange={(event) => update('query', event.currentTarget.value)} placeholder="actor, event, receipt, path" />
           </div>
         </label>
         <label className={filterLabelClass}>
@@ -458,8 +458,8 @@ function AuditFilters({
           <FilterInput label="Action" value={filters.action ?? ''} onChange={(value) => update('action', value)} />
           <FilterInput label="Resource" value={filters.resource ?? ''} onChange={(value) => update('resource', value)} />
           <FilterInput label="Principal" value={filters.principalId} onChange={(value) => update('principalId', value)} />
-          <FilterInput label="Peer/provider" value={filters.peerOrProvider} onChange={(value) => update('peerOrProvider', value)} />
-          <FilterInput label="Route path" value={filters.routePath} onChange={(value) => update('routePath', value)} />
+          <FilterInput label="Device or service" value={filters.peerOrProvider} onChange={(value) => update('peerOrProvider', value)} />
+          <FilterInput label="Path" value={filters.routePath} onChange={(value) => update('routePath', value)} />
           <label className={filterLabelClass}>
             <span>Approval mode</span>
             <select className={selectControlClass} value={filters.approvalMode} onChange={(event) => update('approvalMode', event.currentTarget.value)}>
@@ -467,7 +467,7 @@ function AuditFilters({
               <option value="none">None</option>
               <option value="single">Single approval</option>
               <option value="approve_all">Approve all</option>
-              <option value="admin_action">AdminAction</option>
+              <option value="admin_action">Admin approval</option>
               <option value="dry_run">Dry-run</option>
             </select>
           </label>
@@ -548,7 +548,7 @@ function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   return (
     <Alert variant="destructive">
       <Lock size={18} aria-hidden />
-      <AlertDescription>{snapshot.error ?? 'Audit status is degraded or unavailable. Export remains disabled until redacted SDK data is present.'}</AlertDescription>
+      <AlertDescription>{snapshot.error ?? 'Audit status needs attention. Export remains disabled until protected data is present.'}</AlertDescription>
     </Alert>
   )
 }
@@ -559,7 +559,7 @@ function auditRow(entry: AuditLogEntry): AdminAuditRow {
   const action = stringValue(entry.action) || stringValue(details.action) || event
   const correlationId = firstString(entry.correlation_id, details.correlation_id, details.trace_id, details.support_bundle_correlation_id) || 'not reported'
   const peerId = firstString(entry.peer_id, details.peer_id, details.source_peer_id, details.target_peer_id) || 'local'
-  const providerId = firstString(entry.provider_id, details.provider_id, details.provider_peer_id, details.provider_service_instance_id) || 'local provider'
+  const providerId = firstString(entry.provider_id, details.provider_id, details.provider_peer_id, details.provider_service_instance_id) || 'local service'
   const routePath = firstString(entry.route, details.route, details.route_path, details.route_target, details.method_id) || 'not reported'
   const status = auditStatus(event, details)
   const supportBundleCorrelationIds = sortedUnique([
@@ -654,7 +654,7 @@ function rowMatchesFilters(row: AdminAuditRow, filters: AdminAuditFilters): bool
 
 function unsupportedFilterWarnings(filters: AdminAuditFilters, backendFilter: AuditLogRequest): string[] {
   const warnings: string[] = []
-  if ((filters.resource ?? '').trim()) warnings.push('Resource is filtered from normalized route, peer, provider, tool, namespace, audio, and scheduler fields after Auth.AuditLog returns.')
+  if ((filters.resource ?? '').trim()) warnings.push('Resource is filtered from returned event details.')
   if ((filters.createdAfter ?? '').trim() || (filters.createdBefore ?? '').trim()) warnings.push('Time range is filtered from returned audit rows after Auth.AuditLog returns.')
   if (filters.approvalMode !== 'all') warnings.push('Approval mode is filtered from redacted audit detail fields after Auth.AuditLog returns.')
   if (filters.dataNamespace.trim()) warnings.push('Data namespace is filtered from redacted audit detail fields after Auth.AuditLog returns.')
@@ -662,7 +662,7 @@ function unsupportedFilterWarnings(filters: AdminAuditFilters, backendFilter: Au
   if (filters.schedulerJobId.trim()) warnings.push('Scheduler job is filtered from redacted audit detail fields after Auth.AuditLog returns.')
   if (filters.denialReason.trim()) warnings.push('Denial reason is filtered from redacted audit detail fields after Auth.AuditLog returns.')
   if (filters.status !== 'all') warnings.push('Result is filtered from normalized audit status after Auth.AuditLog returns.')
-  if (filters.peerOrProvider.trim()) warnings.push('Peer/provider is filtered from returned audit rows to avoid over-constraining backend peer_id/provider_id filters.')
+  if (filters.peerOrProvider.trim()) warnings.push('Device or service is filtered from returned audit rows.')
   return warnings
 }
 
@@ -824,7 +824,10 @@ function sortedUnique(values: string[]): string[] {
 
 function errorMessage(error: unknown): string {
   const maybe = error as Partial<AuroraError>
-  return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
+  if (maybe.code === 'auth' || maybe.code === 'permission') return 'Permission is needed to use this feature'
+  if (maybe.code === 'unsupported_feature' || maybe.code === 'unavailable_service') return 'This Aurora version cannot use that feature yet'
+  if (maybe.code === 'timeout' || maybe.code === 'transport_loss') return 'Connection lost. Reconnecting...'
+  return 'Aurora could not read this item'
 }
 
 function isDeniedError(error: unknown): boolean {

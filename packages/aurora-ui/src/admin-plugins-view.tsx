@@ -83,7 +83,7 @@ const emptyPolicy: ToolingPolicySummaryModel = {
   denyAll: false,
   lastChanged: 'not reported',
   actor: 'not reported',
-  evidence: 'pending Aurora service calls'
+    evidence: 'Checking Aurora'
 }
 
 const loadingPluginsSnapshot: AdminPluginsSnapshot = {
@@ -136,7 +136,7 @@ export async function buildAdminPluginsSnapshot(client: AuroraClient, route?: Ro
     fallbackTools,
     warnings: [],
     error: null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
@@ -538,7 +538,7 @@ function AddMcpSourceDialog({
           <FormField label="Name" htmlFor="mcp-source-name">
             <Input id="mcp-source-name" value={name} placeholder="e.g. notion-mcp" onChange={(event) => setName(event.target.value)} />
           </FormField>
-          <FormField label="Transport" htmlFor="mcp-source-transport">
+          <FormField label="Connection method" htmlFor="mcp-source-transport">
             <Input id="mcp-source-transport" value={transport} placeholder="stdio, sse, or streamable-http" onChange={(event) => setTransport(event.target.value)} />
           </FormField>
           <FormField label="Command or URL" htmlFor="mcp-source-command">
@@ -658,9 +658,9 @@ function PluginConfigDialog({
 
 function sourceDescription(source: ToolingSourceModel): string {
   if (source.type === 'core') return 'Built-in tools shipped with Aurora services, always present, no install step.'
-  if (source.type === 'mcp') return `MCP server (${source.transport ?? 'transport not reported'}) exposing ${source.toolCount} tool(s).`
+  if (source.type === 'mcp') return `MCP server (${source.transport ?? 'connection method not reported'}) exposing ${source.toolCount} tool(s).`
   if (source.type === 'mesh') return `Tools announced by mesh peer ${source.name}'s Tooling catalog (cached, negotiated).`
-  if (source.type === 'unknown') return 'Announced tools from an unverified provider. Quarantined until reviewed.'
+  if (source.type === 'unknown') return 'Announced tools from an unverified source. Quarantined until reviewed.'
   if (source.type === 'plugin') return `Plugin source exposing ${source.toolCount} tool(s).`
   return source.catalogEvidence
 }

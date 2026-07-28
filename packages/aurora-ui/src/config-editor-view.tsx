@@ -21,6 +21,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '#c
 import { Badge } from '#components/ui/badge'
 import { Input } from '#components/ui/input'
 import { Textarea } from '#components/ui/textarea'
+import { safeErrorCopy } from './product-copy'
 
 export interface ConfigEditorViewProps {
   client: AuroraClient
@@ -57,7 +58,7 @@ export async function buildConfigEditorModel(client: AuroraClient, route?: Route
       client.config.getVersionHistory({ limit: 8 }),
       client.config.validate({})
     ])
-    if (!schema.ok) return errorModel(schema.error, 'schema metadata')
+    if (!schema.ok) return errorModel(schema.error, 'configuration details')
     if (!history.ok) return errorModel(history.error, 'version history')
     const validationErrors = validation.ok ? validation.data.errors : [validation.error.message]
     return {
@@ -127,10 +128,10 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       if (cancelled) return
       setDiff(diffResult.ok ? diffResult.data.diffs : [])
       setImpact(impactResult.ok ? impactResult.data.impacts : [])
-      if (!diffResult.ok) setMessage(`Diff preview failed: ${diffResult.error.message}`)
-      else if (!impactResult.ok) setMessage(`Reload impact failed: ${impactResult.error.message}`)
+      if (!diffResult.ok) setMessage(`Review failed: ${safeErrorCopy(diffResult.error).title}`)
+      else if (!impactResult.ok) setMessage(`Refresh review failed: ${safeErrorCopy(impactResult.error).title}`)
     }).catch((error) => {
-      if (!cancelled) setMessage(`Diff preview failed: ${errorMessage(error)}`)
+      if (!cancelled) setMessage(`Review failed: ${errorMessage(error)}`)
     })
     return () => {
       cancelled = true
@@ -161,11 +162,11 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       for (const change of changes) {
         const result = await client.config.applyChange({ change, reason, reauthConfirmed: true })
         receipts.push(result.confirmation.audit_receipt)
-        if (!result.data.success) throw new Error(result.data.error ?? `Config.Set failed for ${change.key_path}`)
+        if (!result.data.success) throw new Error(result.data.error ?? `Configuration update failed for ${change.key_path}`)
       }
       setEdits({})
       closeDialog()
-      setMessage(`Applied ${changes.length} change(s). Audit receipt: ${receipts.join(', ')}`)
+      setMessage(`Applied ${changes.length} change(s). Reference: ${receipts.join(', ')}`)
       await refresh()
     } catch (error) {
       setMessage(`Apply failed: ${errorMessage(error)}`)
@@ -184,8 +185,8 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         reason: rollbackReason,
         reauthConfirmed: true
       })
-      if (!result.data.success) throw new Error(result.data.error ?? 'Config rollback failed')
-      setMessage(`Rolled back ${rollbackTarget.key_path}. Audit receipt: ${result.confirmation.audit_receipt}`)
+      if (!result.data.success) throw new Error(result.data.error ?? 'Configuration rollback failed')
+      setMessage(`Rolled back ${rollbackTarget.key_path}. Reference: ${result.confirmation.audit_receipt}`)
       closeDialog()
       await refresh()
     } catch (error) {
@@ -233,13 +234,13 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         eyebrow="Admin configuration"
         id="config-editor-title"
         title="Configuration"
-        description="Schema-backed values, redacted secrets, validation, diff preview, reload impact, rollback, and audit receipts."
+        description="Review settings, protected values, pending changes, refresh impact, rollback history, and audit references."
         badges={
           <>
             <StatusBadge state={route.state} />
             <PrivacyBadge privacy={route.item.privacyClass} />
             <EvidenceBadge label={model.secretsRedacted ? 'secrets protected' : 'redaction pending'} />
-            <EvidenceBadge label={model.evidence} />
+            <EvidenceBadge label={configEvidenceLabel(model.evidence)} />
           </>
         }
       />
@@ -247,15 +248,15 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       <StatStrip
         ariaLabel="Configuration editor summary"
         items={[
-          { label: 'Schema fields', value: model.fields.length, caption: `${sections.length} accordion sections` },
-          { label: 'Secrets', value: secretCount, caption: 'redacted and disabled' },
+          { label: 'Fields', value: model.fields.length, caption: `${sections.length} section(s)` },
+          { label: 'Secrets', value: secretCount, caption: 'protected and disabled' },
           { label: 'Restart', value: restartCount, caption: 'fields require service restart' },
           { label: 'Staged', value: changes.length, caption: 'changes awaiting review', tone: changes.length > 0 ? 'warning' : 'default' }
         ]}
       />
 
       {model.state === 'loading' ? <p className="text-sm text-muted-foreground">Loading config from Aurora.</p> : null}
-      {model.state === 'empty' ? <EmptyState title="No config fields" message="Config schema metadata returned no editable fields." /> : null}
+      {model.state === 'empty' ? <EmptyState title="No settings" message="Aurora returned no editable settings." /> : null}
       {model.state === 'denied' || model.state === 'unavailable' || model.state === 'error'
         ? <EmptyState title="Configuration editor is unavailable" message={presentableSignal(model.error ?? route.explanation)} />
         : null}
@@ -273,23 +274,23 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card
-          title="Schema-backed config accordion"
+          title="Configuration sections"
           actions={
             <Button variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={() => setEdits({})} disabled={changes.length === 0 || busy}>
               Discard
             </Button>
           }
         >
-          {sections.length === 0 ? <p className="text-sm text-muted-foreground">No schema sections are available.</p> : null}
+          {sections.length === 0 ? <p className="text-sm text-muted-foreground">No settings sections are available.</p> : null}
           <Accordion multiple defaultValue={sections.map(([section]) => section)}>
             {sections.map(([section, fields]) => (
               <AccordionItem key={section} value={section}>
                 <AccordionTrigger>
                   <span className="flex flex-1 flex-col gap-0.5 text-left">
                     <strong className="text-sm font-semibold">{configSectionTitle(section)}</strong>
-                    <small className="text-xs font-normal text-muted-foreground">Config section: {section}</small>
+                    <small className="text-xs font-normal text-muted-foreground">Settings section: {configKeyLabel(section)}</small>
                   </span>
-                  <span className="flex flex-wrap items-center gap-1.5" aria-label={`${section} section badges`}>
+                    <span className="flex flex-wrap items-center gap-1.5" aria-label={`${configKeyLabel(section)} section badges`}>
                     <Badge variant="secondary">{fields.length} fields</Badge>
                     <Badge variant="secondary">{countChanged(fields, changes)} staged</Badge>
                     {fields.some((field) => field.secret) ? <Badge variant="outline">secret redacted</Badge> : null}
@@ -304,9 +305,9 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                       return (
                         <label key={field.key_path} className="grid grid-cols-1 gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_minmax(0,260px)] sm:items-start">
                           <span className="flex flex-col gap-1">
-                            <strong className="text-sm font-medium">{field.title ?? field.key_path}</strong>
-                            <code className="font-mono text-xs text-muted-foreground">{field.key_path}</code>
-                            <small className="text-xs text-muted-foreground">{field.description || 'No schema description provided.'}</small>
+                            <strong className="text-sm font-medium">{configFieldTitle(field)}</strong>
+                            <code className="font-mono text-xs text-muted-foreground">{configKeyLabel(field.key_path)}</code>
+                            <small className="text-xs text-muted-foreground">{configFieldDescription(field.description)}</small>
                           </span>
                           <span className="flex flex-col gap-1">
                             <ConfigFieldControl
@@ -320,7 +321,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                             <em className="text-[11px] not-italic text-muted-foreground">
                               {field.source_layer}; {fieldModeLabel(field)}
                               {field.secret ? '; secret redacted' : ''}
-                              {field.affected_services.length > 0 ? `; affects ${field.affected_services.join(', ')}` : ''}
+                              {field.affected_services.length > 0 ? `; affects ${field.affected_services.map(configKeyLabel).join(', ')}` : ''}
                             </em>
                           </span>
                         </label>
@@ -336,7 +337,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         <Card
           title="Staged review"
           icon={<ShieldCheck size={18} aria-hidden />}
-          description="Preview Config.PreviewDiff and Config.PreviewReloadImpact before Config.Set is submitted through AdminAction. Secret values stay redacted."
+          description="Review pending changes and their refresh impact before applying them. Secret values stay protected."
         >
           <div className="flex flex-col gap-4">
             <DiffList diff={diff} />
@@ -353,7 +354,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
               disabled={!canMutate || reviewBlocked || busy}
               onClick={() => setDialogKind('apply')}
             >
-              Review Apply through AdminAction
+              Review and apply
             </Button>
           </div>
         </Card>
@@ -374,25 +375,25 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
           title={dialogKind === 'apply' ? 'Apply staged config changes' : 'Roll back configuration value'}
           description={
             dialogKind === 'apply'
-              ? `Apply ${changes.length} staged change(s) through Config.Set. Reload/restart impact is shown in the staged review card; secret values stay redacted.`
-              : `Roll back ${rollbackTarget?.key_path ?? 'this field'} to a prior version through Config.Set.`
+              ? `Apply ${changes.length} staged change(s). Refresh impact is shown in the staged review card; secret values stay protected.`
+              : `Roll back ${rollbackTarget?.key_path ?? 'this field'} to a prior version.`
           }
           methodId="Config.Set"
           affected={dialogKind === 'apply' ? changes.map((change) => change.key_path) : rollbackTarget ? [rollbackTarget.key_path] : []}
           requireReason
           reasonValue={dialogKind === 'apply' ? reason : rollbackReason}
           onReasonChange={dialogKind === 'apply' ? setReason : setRollbackReason}
-          confirmLabel={dialogKind === 'apply' ? 'Confirm Apply through AdminAction' : 'Confirm Rollback through AdminAction'}
+          confirmLabel={dialogKind === 'apply' ? 'Confirm apply' : 'Confirm rollback'}
           onConfirm={dialogKind === 'apply' ? confirmApply : confirmRollback}
           onCancel={closeDialog}
           busy={busy}
           extraValid={reauthConfirmed}
-          extraInvalidReason="Confirm in-session admin unlock before config AdminAction."
+          extraInvalidReason="Confirm your recent admin unlock before changing settings."
         >
           <Checkbox
             checked={reauthConfirmed}
             onChange={setReauthConfirmed}
-            label="In-session admin unlock confirmed for config AdminAction"
+            label="Recent admin unlock confirmed for settings"
           />
         </AdminConfirmDialog>
       ) : null}
@@ -459,8 +460,8 @@ const SELECT_CLASSNAME =
 
 function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
   return (
-    <div className="flex flex-col gap-2" aria-label="Preview diff">
-      <h3 id="config-diff-preview-title" className="text-sm font-semibold">Diff preview</h3>
+    <div className="flex flex-col gap-2" aria-label="Pending changes">
+      <h3 id="config-diff-preview-title" className="text-sm font-semibold">Pending changes</h3>
       {diff.length === 0 ? <p className="text-sm text-muted-foreground">No staged changes.</p> : null}
       {diff.map((row) => (
         <div key={row.key_path} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
@@ -476,8 +477,8 @@ function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
 function ImpactList({ impact }: { impact: ConfigReloadImpactEntry[] }) {
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold">Reload impact</h3>
-      {impact.length === 0 ? <p className="text-sm text-muted-foreground">No reload impact reported.</p> : null}
+      <h3 className="text-sm font-semibold">Refresh impact</h3>
+      {impact.length === 0 ? <p className="text-sm text-muted-foreground">No refresh impact reported.</p> : null}
       {impact.map((entry) => (
         <p key={entry.key_path} className="text-xs text-muted-foreground">
           <strong className="font-mono text-foreground">{entry.key_path}</strong>: {entry.restart_required ? 'restart' : entry.reload_required ? 'reload' : 'hot update'}; {entry.affected_services.join(', ') || 'no service'}.
@@ -545,7 +546,7 @@ function validateConfigChanges(fields: ConfigFieldMetadata[], changes: ConfigCha
   const fieldByKey = new Map(fields.map((field) => [field.key_path, field]))
   return changes.flatMap((change) => {
     const field = fieldByKey.get(change.key_path)
-    if (!field) return [`${change.key_path}: field is not present in schema metadata`]
+    if (!field) return [`${change.key_path}: Aurora could not read this item`]
     const errors: string[] = []
     if (field.secret) errors.push(`${field.key_path}: secret fields cannot be edited from the UI`)
     if ((field.type === 'integer' || field.type === 'number') && (typeof change.value !== 'number' || Number.isNaN(change.value))) {
@@ -560,7 +561,7 @@ function validateConfigChanges(fields: ConfigFieldMetadata[], changes: ConfigCha
     if (typeof change.value === 'number' && minimum !== null && change.value < minimum) errors.push(`${field.key_path}: must be at least ${minimum}`)
     if (typeof change.value === 'number' && maximum !== null && change.value > maximum) errors.push(`${field.key_path}: must be at most ${maximum}`)
     if (field.choices && field.choices.length > 0 && !field.choices.some((choice) => stringifyValue(choice) === stringifyValue(change.value))) {
-      errors.push(`${field.key_path}: must match a schema choice`)
+      errors.push(`${field.key_path}: choose one of the listed values`)
     }
     return errors
   })
@@ -605,7 +606,7 @@ function configSectionName(keyPath: string): string {
 }
 
 function configSectionTitle(section: string): string {
-  return section
+  return configKeyLabel(section)
     .split('.')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' / ')
@@ -622,6 +623,31 @@ function fieldModeLabel(field: ConfigFieldMetadata): string {
   return 'hot update'
 }
 
+function configEvidenceLabel(value: string): string {
+  if (/Config\.|Get|Schema|Metadata/i.test(value)) return 'Current settings'
+  return presentableSignal(value)
+}
+
+function configFieldTitle(field: ConfigFieldMetadata): string {
+  return configKeyLabel(field.title ?? field.key_path)
+}
+
+function configKeyLabel(value: string): string {
+  return value
+    .replace(/\bgateway\b/giu, 'connection')
+    .replace(/\bschema\b/giu, 'setting')
+    .replace(/\bmetadata\b/giu, 'details')
+}
+
+function configFieldDescription(value: string | undefined): string {
+  const trimmed = value?.trim()
+  if (!trimmed) return 'No description provided.'
+  return trimmed
+    .replace(/\bschema\b/giu, 'setting')
+    .replace(/\bconfig metadata\b/giu, 'Aurora settings')
+    .replace(/\bmetadata\b/giu, 'details')
+}
+
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  return safeErrorCopy(error).title
 }

@@ -100,7 +100,7 @@ const loadingSnapshot: AdminTokensSnapshot = {
     "Loading Auth.RevokeToken capability status through Aurora.",
   createState: "unsupported",
   createReason:
-    "Auth.CreateToken is not exposed by the SDK/contracts in this checkout; creation remains a disabled preview.",
+    "Token creation is not ready in this Aurora version.",
   secretsRedacted: true,
   warnings: [],
   error: null,
@@ -156,7 +156,7 @@ export async function buildAdminTokensSnapshot(
   const denied = [tokensResult, catalogResult].some(isDeniedFailure);
 
   if (!tokensResponse && !catalog) {
-    const unavailableMessage = "Auth token SDK resources are unavailable.";
+    const unavailableMessage = "Aurora token resources are unavailable.";
     return {
       ...loadingSnapshot,
       loadState: denied ? "denied" : "service-unavailable",
@@ -195,21 +195,21 @@ export async function buildAdminTokensSnapshot(
     listReason: listCapability
       ? capabilityReason(listCapability)
       : tokensResponse
-        ? "Auth.ListTokens returned token metadata through the SDK."
-        : "Auth.ListTokens is not advertised by the capability catalog.",
+        ? "Aurora returned protected token details."
+        : "Token listing is not ready yet.",
     revokeState,
     revokeReason: revokeCapability
       ? capabilityReason(revokeCapability)
-      : "Auth.RevokeToken is not advertised by the capability catalog.",
+      : "Token revocation is not ready yet.",
     createState: "unsupported",
     createReason:
-      "Auth.CreateToken is not exposed by the SDK/contracts in this checkout; creation remains a disabled preview.",
+      "Token creation is not ready in this Aurora version.",
     secretsRedacted: catalog?.secrets_redacted ?? true,
     warnings: failures,
     error: failures[0] ?? null,
     evidenceSource:
       client.transport.kind === "mock"
-        ? "Aurora fixture transport"
+        ? "Local preview"
         : "Aurora service response",
     oneTimeReveal: null,
   };
@@ -343,7 +343,7 @@ export function buildTokenRevokeAdminAction(
   return {
     title: `Revoke token ${token.prefix}`,
     description:
-      "Aurora will revoke this token only after AdminAction draft, confirmation, reauth, and audit receipt.",
+      "Aurora will revoke this token only after admin confirmation and audit logging.",
     methodId: AUTH_METHODS.revokeToken,
     payload: { token_id: token.id } as JsonObject,
     affectedResources: [
@@ -367,7 +367,7 @@ export function buildTokenRotateAdminAction(
     ),
     title: `Rotate token ${token.prefix}`,
     description:
-      "Aurora will rotate this token only after AdminAction confirmation; the replacement secret may be revealed once and is then purged from the view.",
+      "Aurora will rotate this token only after admin confirmation. The replacement secret may be shown once and is then cleared from the view.",
     payload: { token_id: token.id, rotate: true } as JsonObject,
     affectedResources: [
       `token:${token.id}`,
@@ -414,7 +414,7 @@ function tokenRow(
     listState: listCapability?.availability ?? "available-local",
     listReason: listCapability
       ? capabilityReason(listCapability)
-      : "Auth.ListTokens returned this redacted token through the SDK.",
+      : "Aurora returned this protected token.",
     revokeState: revokeCapability?.availability ?? "unsupported",
     revokeReason: revokeCapability
       ? capabilityReason(revokeCapability)
@@ -449,8 +449,14 @@ function capabilityReason(capability: CapabilitySummary): string {
   if (capability.routeBlockers.length > 0)
     return capability.routeBlockers.join(", ");
   if (capability.raw.policy.approval_required)
-    return `${capability.busTopic} requires AdminAction approval.`;
-  return `${capability.busTopic} is ${capability.availability}.`;
+    return "Admin approval is required before this action can run.";
+  if (capability.availability === "offline" || capability.availability === "stale")
+    return "This device is offline";
+  if (capability.availability === "denied" || capability.availability === "privacy-blocked")
+    return "Permission is needed to use this feature";
+  if (capability.availability === "unsupported")
+    return "This Aurora version cannot use that feature yet";
+  return "Ready";
 }
 
 function responseDataOrNull<T>(
@@ -491,9 +497,11 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 
 function errorMessage(error: unknown): string {
   const maybe = error as Partial<AuroraError>;
-  return (
-    maybe.message ??
-    (error instanceof Error ? error.message : "Unknown SDK error")
-  );
+  if (maybe.code === "auth" || maybe.code === "permission")
+    return "Permission is needed to use this feature";
+  if (maybe.code === "unsupported_feature" || maybe.code === "unavailable_service")
+    return "This Aurora version cannot use that feature yet";
+  if (maybe.code === "timeout" || maybe.code === "transport_loss")
+    return "Connection lost. Reconnecting...";
+  return "Aurora could not read this item";
 }
-

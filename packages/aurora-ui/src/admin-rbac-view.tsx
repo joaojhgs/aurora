@@ -156,7 +156,7 @@ const loadingSnapshot: AdminRbacSnapshot = {
   permissionCatalog: [],
   audit: [],
   mutationState: 'pending',
-  mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through Aurora.',
+  mutationReason: 'Loading principals, permissions, and audit records through Aurora.',
   warnings: [],
   error: null,
   evidenceSource: 'pending Aurora service calls'
@@ -201,7 +201,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
   const denied = [principalsResult, permissionsResult, catalogResult, auditResult].some(isDeniedFailure)
 
   if (!principalResponse && permissionCatalog.length === 0 && !capabilityCatalog && !auditResponse) {
-    const unavailableMessage = 'Auth RBAC SDK resources are unavailable.'
+    const unavailableMessage = 'Aurora permission resources are unavailable.'
     return {
       ...loadingSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
@@ -240,7 +240,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
     mutationReason: mutationCapability ? capabilityReason(mutationCapability) : 'Auth.PatchPermissions is not advertised by the capability catalog.',
     warnings: failures,
     error: failures[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
@@ -527,7 +527,7 @@ export function buildRbacPermissionPatchAction(
   }
   return {
     title: `Patch permissions for ${principal.username}`,
-    description: 'Aurora will submit the permission patch only after AdminAction draft, confirmation, and audit receipt.',
+    description: 'Aurora will change permissions only after admin confirmation and audit logging.',
     methodId: AUTH_METHODS.patchPermissions,
     payload: payload as unknown as JsonObject,
     affectedResources: [`principal:${principal.id}`, ...grant.map((permission) => `grant:${permission}`), ...revoke.map((permission) => `revoke:${permission}`)],
@@ -561,8 +561,8 @@ function buildPrincipalRows(
       effectivePermissions,
       createdAt: principal.created_at ?? null,
       accessState: mutationCapability?.availability ?? 'unsupported',
-      accessReason: mutationCapability ? capabilityReason(mutationCapability) : 'Capability catalog does not advertise Auth RBAC mutation.',
-      providerLabel: mutationCapability ? providerLabel(mutationCapability) : 'Auth provider pending',
+      accessReason: mutationCapability ? capabilityReason(mutationCapability) : 'Permission changes are not ready yet.',
+      providerLabel: mutationCapability ? providerLabel(mutationCapability) : 'Auth target pending',
       patchPreview: preview
     }
   })
@@ -582,12 +582,12 @@ function buildRoleRows(
     return {
       id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       label,
-      description: `${label} is derived from current principal permissions because no standalone role CRUD contract is exposed.`,
+      description: `${label} is based on current principal permissions. Edit members by changing their permissions.`,
       principalCount: rows.length,
       permissions,
       system: permissions.includes('*'),
       manageState: mutationCapability?.availability ?? 'unsupported',
-      manageReason: 'Role CRUD is not a backend contract in this checkout; use principal permission AdminAction patches instead.'
+      manageReason: 'Role editing is not ready here. Change principal permissions instead.'
     }
   })
 }
@@ -619,11 +619,11 @@ function permissionPatchPreview(
   const after = sortedUnique([...before.filter((permission) => !revoke.includes(permission)), ...grant])
   const requiresAdminAction = true
   const available = Boolean(capability && ['available-local', 'available-remote', 'degraded'].includes(capability.availability))
-  const reason = capability ? capabilityReason(capability) : 'Auth.PatchPermissions is not advertised by the capability catalog.'
+  const reason = capability ? capabilityReason(capability) : 'Permission changes are not ready yet.'
   const cascade = [
     `Principal ${principal.id} permissions change from ${before.length} to ${after.length}.`,
-    'New sessions/tokens use backend effective-permission resolution.',
-    'Audit receipt is required after AdminAction submit.'
+    'New sessions and tokens use the updated permissions.',
+    'An audit record is required after submit.'
   ]
   return {
     methodId: AUTH_METHODS.patchPermissions,
@@ -673,9 +673,12 @@ function roleLabel(principal: PrincipalResponse): string {
 }
 
 function capabilityReason(capability: CapabilitySummary): string {
-  if (capability.routeBlockers.length > 0) return capability.routeBlockers.join(', ')
-  if (capability.raw.policy.approval_required) return `${capability.busTopic} requires AdminAction approval.`
-  return `${capability.busTopic} is ${capability.availability}.`
+  if (capability.availability === 'offline' || capability.availability === 'stale') return 'This device is offline'
+  if (capability.availability === 'denied' || capability.availability === 'privacy-blocked') return 'Permission is needed to use this feature'
+  if (capability.availability === 'unsupported') return 'This Aurora version cannot use that feature yet'
+  if (capability.routeBlockers.length > 0) return 'This action needs attention before it can run.'
+  if (capability.raw.policy.approval_required) return 'Admin approval is required before this action can run.'
+  return 'Ready'
 }
 
 function providerLabel(capability: CapabilitySummary): string {
@@ -716,7 +719,10 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 
 function errorMessage(error: unknown): string {
   const maybe = error as Partial<AuroraError>
-  return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
+  if (maybe.code === 'auth' || maybe.code === 'permission') return 'Permission is needed to use this feature'
+  if (maybe.code === 'unsupported_feature' || maybe.code === 'unavailable_service') return 'This Aurora version cannot use that feature yet'
+  if (maybe.code === 'timeout' || maybe.code === 'transport_loss') return 'Connection lost. Reconnecting...'
+  return 'Aurora could not read this item'
 }
 
 function stringValue(value: unknown): string {

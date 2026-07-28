@@ -44,10 +44,10 @@ const operationCopy: Record<BackupOperationKind, { title: string; confirmLabel: 
     describe: () => 'Aurora will create a new snapshot of this node and record the action in the audit log.'
   },
   verify: {
-    title: 'Verify manifest',
+    title: 'Check backup',
     confirmLabel: 'Verify',
     destructive: false,
-    describe: (backup) => `Aurora will verify the integrity of ${backup?.backup_id ?? 'this manifest'} and record the action in the audit log.`
+    describe: (backup) => `Aurora will check ${backup?.backup_id ?? 'this backup'} and record the action in the audit log.`
   },
   restore: {
     title: 'Restore backup',
@@ -113,10 +113,10 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
         const backup = pending.backup
         const result = await client.backups.verify(
           { backup_id: backup.backup_id, storage: backup.storage },
-          'Backup manifest verified from Aurora admin cockpit.',
+          'Backup checked from Aurora admin cockpit.',
           { reauthConfirmed: true }
         )
-        applyResult(result, (verified) => verified.message ?? (verified.verified ? 'Backup manifest verified.' : 'Backup manifest failed verification.'))
+        applyResult(result, (verified) => verified.message ?? (verified.verified ? 'Backup checked.' : 'Backup needs attention.'))
       } else if (kind === 'restore' && pending.backup) {
         const backup = pending.backup
         const result = await client.backups.restore(
@@ -210,12 +210,12 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
       <div className="flex flex-col gap-4 px-6 py-5">
         <BackupStatusNotice loadState={loadState} route={route} loadError={loadError} />
 
-        <Card title="Manifests" flush>
+        <Card title="Backups" flush>
           <DataTable
             columns={columns}
             rows={backups}
             getRowKey={(backup) => backup.backup_id}
-            empty={<p className="text-sm text-muted-foreground">No backup manifests were returned by the Backup service.</p>}
+            empty={<p className="text-sm text-muted-foreground">No backups were returned by Aurora.</p>}
           />
         </Card>
       </div>
@@ -238,7 +238,7 @@ function BackupStatusNotice({ loadState, route, loadError }: { loadState: Backup
   if (loadState === 'loading') {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" aria-live="polite">
-        Loading backup manifests from Aurora...
+        Loading backups from Aurora...
       </div>
     )
   }
@@ -246,7 +246,7 @@ function BackupStatusNotice({ loadState, route, loadError }: { loadState: Backup
   if (route.disabled) {
     return (
       <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" role="alert">
-        Backup operations are disabled until backend Backup.List capability state and Backup.* AdminAction contracts are available.
+        Backup operations are disabled until Aurora reports backup actions are ready.
         {route.blockers.length > 0 ? ` ${presentableSignal(route.blockers.join(', '))}` : null}
       </div>
     )
@@ -265,7 +265,7 @@ function BackupStatusNotice({ loadState, route, loadError }: { loadState: Backup
 export function backupErrorMessage(error: AuroraError): string {
   if (error.code === 'auth' || error.code === 'permission') return 'Backup request denied by authentication or permissions.'
   if (error.code === 'privacy_blocked') return 'Backup request is blocked by privacy policy until required approval exists.'
-  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'Backup service is unavailable in this backend or deployment mode.'
+  if (error.code === 'unavailable_service' || error.code === 'unsupported_feature') return 'This Aurora version cannot use backup actions yet.'
   if (error.code === 'timeout' || error.code === 'transport_loss') return 'Backup request could not reach Aurora reliably; retry after service health recovers.'
   return error.message || 'Backup request failed.'
 }
@@ -326,9 +326,9 @@ function loadStateFromError(error: AuroraError): BackupLoadState {
 function backupDisabledReason(route: RouteAvailability, loadError: string | null): string {
   if (loadError) return loadError
   if (route.blockers.length > 0) return presentableSignal(route.blockers.join(', '))
-  if (!route.routeable) return 'Backup route is not routeable from current capability status.'
-  if (route.disabled) return 'Backup backend contract is not advertised by the current SDK/capability graph.'
-  return 'Backup AdminAction mutation contract is not ready.'
+  if (!route.routeable) return 'Backup actions are not ready from the current connection.'
+  if (route.disabled) return 'Aurora does not list backup actions as ready.'
+  return 'Backup actions need admin confirmation before they can run.'
 }
 
 function localStorageTarget() {

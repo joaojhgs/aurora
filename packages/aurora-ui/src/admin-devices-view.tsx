@@ -149,17 +149,17 @@ const loadingSnapshot: AdminDevicesSnapshot = {
   devices: [],
   pendingPairings: [],
   listState: 'pending',
-  listReason: 'Loading Auth.ListDevices, Auth.ListTokens, capability catalog, and native manifest through Aurora.',
+  listReason: 'Loading devices, sessions, and platform features through Aurora.',
   tokenState: 'pending',
   tokenReason: 'Loading token/session status through Aurora.',
   pairingState: 'pending',
-  pairingReason: 'Loading Auth.ListPendingPairings through Aurora.',
+  pairingReason: 'Loading pending pairing requests through Aurora.',
   deleteState: 'pending',
-  deleteReason: 'Loading Auth.DeleteDevice capability before enabling mutations.',
+  deleteReason: 'Loading device removal status before enabling changes.',
   meshPeerState: 'pending',
-  meshPeerReason: 'Loading Auth.MeshListPeers for device-to-peer linkage.',
+  meshPeerReason: 'Loading connected device links.',
   meshPeerActionState: 'pending',
-  meshPeerActionReason: 'Loading Auth.MeshApprovePeer/Auth.MeshRemovePeer AdminAction capabilities before enabling trust actions.',
+  meshPeerActionReason: 'Loading trust actions before enabling device approval.',
   nativePlatform: null,
   nativeCapabilities: [],
   warnings: [],
@@ -266,12 +266,12 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
     failureMessage('pending pairings', pairingsResult),
     failureMessage('mesh peers', meshPeersResult),
     failureMessage('capability catalog', catalogResult),
-    failureMessage('native manifest', nativeResult, true)
+    failureMessage('platform features', nativeResult, true)
   ].filter((message): message is string => Boolean(message))
   const denied = [devicesResult, tokensResult, pairingsResult, catalogResult].some(isDeniedFailure)
 
   if (!devicesResponse && !tokensResponse && !pairingsResponse && !capabilityCatalog) {
-    const message = 'Auth device/session SDK resources are unavailable.'
+    const message = 'Aurora device and session resources are unavailable.'
     return {
       ...loadingSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
@@ -304,7 +304,7 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
   )
   const loadState: AdminDevicesLoadState = denied
     ? 'denied'
-    : failures.filter((message) => !message.includes('native manifest')).length > 0
+    : failures.filter((message) => !message.includes('platform features')).length > 0
       ? 'degraded'
       : devices.length === 0
         ? 'empty'
@@ -327,15 +327,15 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
     meshPeerState: meshPeersResponse ? (meshListCapability?.availability ?? 'available-local') : denied ? 'denied' : 'unsupported',
     meshPeerReason: meshListCapability ? capabilityReason(meshListCapability) : 'Auth.MeshListPeers is not advertised by the capability catalog; device mesh linkage may be incomplete.',
     meshPeerActionState,
-    meshPeerActionReason: meshPeerActionCapability ? capabilityReason(meshPeerActionCapability) : 'Auth.MeshApprovePeer/Auth.MeshRemovePeer AdminAction capabilities are not advertised by the capability catalog.',
+    meshPeerActionReason: meshPeerActionCapability ? capabilityReason(meshPeerActionCapability) : 'Device trust actions are not ready yet.',
     nativePlatform: nativeManifest?.platform ?? null,
     nativeCapabilities: Object.entries(nativeManifest?.capabilities ?? {})
       .filter(([, enabled]) => Boolean(enabled))
       .map(([capability]) => capability)
       .sort(),
     warnings: failures,
-    error: failures.find((message) => !message.includes('native manifest')) ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Local transport' : 'Aurora service response'
+    error: failures.find((message) => !message.includes('platform features')) ?? null,
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
@@ -391,10 +391,10 @@ export function AdminDevicesView({
 
       <DevicePlatformSecurityPanel snapshot={snapshot} reauthConfirmed={reauthConfirmed} onRunAdminAction={onRunAdminAction} />
 
-      <Card title="AdminAction boundary" description="Device, pairing, and mesh trust mutations require AdminAction draft, confirm, and audit.">
+      <Card title="Protected device changes" description="Device, pairing, and trust changes require admin confirmation and audit logging.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="admin-devices-reason">AdminAction reason</Label>
+            <Label htmlFor="admin-devices-reason">Reason</Label>
             <Textarea
               id="admin-devices-reason"
               value={adminReason}
@@ -405,15 +405,15 @@ export function AdminDevicesView({
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange?.(event.currentTarget.checked)} disabled={snapshot.deleteState === 'pending' || snapshot.deleteState === 'unsupported' || snapshot.deleteState === 'denied'} />
-            <span>I confirm recent AdminAction reauthentication for device, pairing, and mesh trust mutations.</span>
+            <span>I confirm my recent admin unlock for device, pairing, and trust changes.</span>
           </label>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <CapabilityFact label="List devices" state={snapshot.listState} reason={snapshot.listReason} />
             <CapabilityFact label="List tokens" state={snapshot.tokenState} reason={snapshot.tokenReason} />
             <CapabilityFact label="Pending pairings" state={snapshot.pairingState} reason={snapshot.pairingReason} />
             <CapabilityFact label="Delete device" state={snapshot.deleteState} reason={snapshot.deleteReason} />
-            <CapabilityFact label="Mesh peer linkage" state={snapshot.meshPeerState ?? 'unsupported'} reason={snapshot.meshPeerReason ?? 'Auth.MeshListPeers is not advertised by the capability catalog; device mesh linkage may be incomplete.'} />
-            <CapabilityFact label="Trust actions" state={snapshot.meshPeerActionState ?? 'unsupported'} reason={snapshot.meshPeerActionReason ?? 'Auth.MeshApprovePeer/Auth.MeshRemovePeer AdminAction capabilities are not advertised by the capability catalog.'} />
+            <CapabilityFact label="Connected device link" state={snapshot.meshPeerState ?? 'unsupported'} reason={snapshot.meshPeerReason ?? 'Connected device details are not ready yet.'} />
+            <CapabilityFact label="Trust actions" state={snapshot.meshPeerActionState ?? 'unsupported'} reason={snapshot.meshPeerActionReason ?? 'Device trust actions are not ready yet.'} />
           </div>
         </div>
       </Card>
@@ -548,7 +548,7 @@ function DevicesDataTable({
             disabledReason={device.deleteReason}
             onClick={() => onDeleteDevice?.(device)}
           >
-            {pendingDeviceId === device.id ? 'Submitting AdminAction' : 'Revoke'}
+            {pendingDeviceId === device.id ? 'Submitting' : 'Revoke'}
           </Button>
           {device.trustAction ? (
             <Button
@@ -557,7 +557,7 @@ function DevicesDataTable({
               disabled={!reauthConfirmed || Boolean(pendingDeviceId)}
               onClick={() => (device.trustAction ? onRunAdminAction?.(device.trustAction, device.id) : undefined)}
             >
-              Trust via AdminAction
+              Trust device
             </Button>
           ) : null}
         </div>
@@ -612,14 +612,14 @@ function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminActi
                         {pairing.permissionCount} permissions requested; admin={String(pairing.adminRequested)}; mesh={pairing.linkedMeshPeerLabel}; expires {formatDate(pairing.expiresAt)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        AdminAction approve={pairing.approveAction?.methodId ?? 'unsupported'} deny={pairing.denyAction?.methodId ?? 'unsupported'}; pairing secret redacted
+                        Approval is protected; pairing secret is redacted.
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Button variant="outline" icon={<CheckCircle2 size={16} aria-hidden />} disabled={!reauthConfirmed || !pairing.approveAction} onClick={() => (pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined)}>
-                          Approve/trust via AdminAction
+                          Approve and trust
                         </Button>
                         <Button variant="danger" icon={<XCircle size={16} aria-hidden />} disabled={!reauthConfirmed || !pairing.denyAction} onClick={() => (pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined)}>
-                          Deny via AdminAction
+                          Deny request
                         </Button>
                       </div>
                     </div>
@@ -635,7 +635,7 @@ function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminActi
             <dl className="flex flex-col gap-1.5 text-sm">
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Platform</dt>
-                <dd>{snapshot.nativePlatform ?? 'native manifest unavailable'}</dd>
+                <dd>{snapshot.nativePlatform ?? 'platform features unavailable'}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Capabilities</dt>
@@ -643,7 +643,7 @@ function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminActi
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Boundary</dt>
-                <dd className="text-right">Device trust uses Auth records; native capability claims use the SDK native manifest only.</dd>
+                <dd className="text-right">Device trust and platform claims are read from Aurora before actions are shown.</dd>
               </div>
             </dl>
           </div>
@@ -784,8 +784,8 @@ function buildDeviceRow(
     meshPeerEvidence: linkedMeshPeer
       ? `Auth.MeshListPeers peer ${linkedMeshPeer.peer_id}; inbound=${linkedMeshPeer.inbound_status}; outbound=${linkedMeshPeer.outbound_status}`
       : pendingPairing
-        ? `Auth.ListPendingPairings links ${pendingPairing.remote_peer_id}; approval still requires AdminAction`
-        : 'No Auth.MeshListPeers or pending pairing record matched this device label.'
+        ? `Waiting for approval on ${pendingPairing.remote_node_name || pendingPairing.remote_peer_id}`
+        : 'No connected device or pending pairing matched this device label.'
   }
 }
 
@@ -890,7 +890,7 @@ function DeviceStatusPanel({
     return (
       <Alert aria-live="polite">
         <ShieldCheck />
-        <AlertDescription>AdminAction submitted for {optimisticDeviceId}; refreshing device state before committing the row removal.</AlertDescription>
+        <AlertDescription>Device change submitted for {optimisticDeviceId}; refreshing before removing the row.</AlertDescription>
       </Alert>
     )
   }
@@ -898,7 +898,7 @@ function DeviceStatusPanel({
     return (
       <Alert variant="destructive" role="alert">
         <Lock />
-        <AlertDescription>Rollback required after AdminAction device deletion failed: {mutationError}</AlertDescription>
+        <AlertDescription>Your existing device access was not changed. Try again. {mutationError}</AlertDescription>
       </Alert>
     )
   }
@@ -906,7 +906,7 @@ function DeviceStatusPanel({
     return (
       <Alert aria-live="polite">
         <Activity />
-        <AlertDescription>Loading devices, token-backed sessions, capabilities, and native manifest through Aurora.</AlertDescription>
+        <AlertDescription>Loading devices, active sessions, and platform features through Aurora.</AlertDescription>
       </Alert>
     )
   }
@@ -957,10 +957,12 @@ function capabilityFor(methodId: string, summaries: CapabilitySummary[]): Capabi
 }
 
 function capabilityReason(capability: CapabilitySummary): string {
-  const blockers = capability.routeBlockers.length > 0 ? ` blockers: ${capability.routeBlockers.join(', ')}` : ''
-  const location = capability.peerId && capability.peerId !== 'local-peer' ? `remote:${capability.peerId}` : capability.providerId
-  const approval = capability.raw.policy.approval_required ? ' requires AdminAction approval' : ''
-  return `${location} / ${capability.serviceInstanceId}; ${capability.busTopic ?? `${capability.module}.${capability.method}`} is ${capability.availability}${approval}.${blockers}`
+  if (capability.availability === 'offline' || capability.availability === 'stale') return 'This device is offline'
+  if (capability.availability === 'denied' || capability.availability === 'privacy-blocked') return 'Permission is needed to use this feature'
+  if (capability.availability === 'unsupported') return 'This Aurora version cannot use that feature yet'
+  if (capability.routeBlockers.length > 0) return 'This action needs attention before it can run.'
+  if (capability.raw.policy.approval_required) return 'Admin approval is required before this action can run.'
+  return 'Ready'
 }
 
 function responseDataOrNull<T>(result: PromiseSettledResult<{ ok: boolean; data?: T }>): T | null {
@@ -976,7 +978,7 @@ function failureMessage(label: string, result: PromiseSettledResult<unknown>, op
     if (isAuroraResponseFailure(result.value)) return `${label}: ${result.value.error.message}`
     return null
   }
-  if (optional && result.reason instanceof AuroraError && result.reason.code === 'unsupported_feature') return `${label}: unsupported by this SDK transport`
+  if (optional && result.reason instanceof AuroraError && result.reason.code === 'unsupported_feature') return `${label}: This Aurora version cannot use that feature yet`
   return `${label}: ${deviceMutationErrorMessage(result.reason)}`
 }
 
@@ -1035,7 +1037,7 @@ function inferPlatformLabel(name: string, nativeManifest: NativeCapabilityManife
 }
 
 function platformEvidence(name: string, nativeManifest: NativeCapabilityManifest | null): string {
-  if (!nativeManifest) return 'native/platform manifest unavailable'
+  if (!nativeManifest) return 'platform features unavailable'
   const capabilityCount = Object.values(nativeManifest.capabilities).filter(Boolean).length
   return `${nativeManifest.platform}; ${capabilityCount} enabled native capabilities; inferred from device label "${name}"`
 }
