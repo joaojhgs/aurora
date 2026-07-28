@@ -41,12 +41,42 @@ describe('production product copy', () => {
   })
 
   it('rejects blocked wording when a new visible string regresses', () => {
-    expect(findForbiddenProductionCopyTerms('Web thin debug panel')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: 'thin' }),
-        expect.objectContaining({ id: 'debug' }),
-      ]),
-    )
+    const cases: Array<[string, string]> = [
+      ['Web thin debug panel', 'thin'],
+      ['Web thin debug panel', 'debug'],
+      ['Use the room_password value', 'room-password'],
+      ['Use the room-password value', 'room-password'],
+      ['Use the room/password value', 'room-password'],
+      ['Fall-back status', 'fallback'],
+      ['Fall_back status', 'fallback'],
+      ['Services/Gateway/API/Port setting', 'key-path'],
+      ['services-orchestrator-llm-provider setting', 'key-path'],
+      ['services_orchestrator_llm_provider setting', 'key-path'],
+      ['services.orchestrator.llm.provider setting', 'key-path'],
+      ['SDK details', 'sdk'],
+      ['WebView bridge', 'webview'],
+      ['Daemon status', 'daemon'],
+      ['Orchestrator state', 'orchestrator'],
+      ['Raw response', 'raw'],
+      ['HTTP endpoint', 'http'],
+      ['WSS signaling', 'webrtc-wss'],
+      ['WebRTC status', 'webrtc-wss'],
+      ['remote_console access', 'remote-console'],
+      ['mesh/node status', 'mesh-node'],
+      ['runtime_tier label', 'runtime-tier'],
+    ]
+
+    for (const [copy, id] of cases) {
+      expect(findForbiddenProductionCopyTerms(copy), copy).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id })]),
+      )
+    }
+  })
+
+  it('does not block ordinary words that only contain internal fragments', () => {
+    for (const copy of ['The room is ready', 'Fallbacks are handled elsewhere', 'This is a rawhide color name', 'The gateway is available']) {
+      expect(findForbiddenProductionCopyTerms(copy), copy).toEqual([])
+    }
   })
 })
 

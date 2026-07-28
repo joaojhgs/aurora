@@ -17,7 +17,7 @@ describe('production UI copy checker', () => {
       // runtime transport fallback should be ignored in comments
       export function SafeRender() {
         const docs = "https://aurora.example.test/docs"
-        console.info("runtime", docs)
+        console.info("runtime SDK WebView daemon raw services/gateway/api/port", docs)
         return <img alt="" title="" />
       }
     `)
@@ -39,6 +39,44 @@ describe('production UI copy checker', () => {
     expect(result.ok).toBe(false)
     expect(result.stderr).toContain('transport')
     expect(result.stderr).toContain('runtime')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('detects mixed-case punctuation variants in JSX text and attributes', () => {
+    const dir = fixtureDir()
+    const file = join(dir, 'punctuation-variants.tsx')
+    writeFileSync(file, `
+      export function PunctuationVariants() {
+        return (
+          <section aria-label="SDK WebView Room_Password">
+            <p>services/gateway/api/port uses fall-back fall_back raw daemon</p>
+            <button title="services-orchestrator-llm-provider">Open</button>
+            <input aria-label="services.orchestrator.llm.provider" />
+            <span>room/password remote_console mesh/node runtime_tier HTTP WSS WebRTC Orchestrator</span>
+          </section>
+        )
+      }
+    `)
+
+    const result = runChecker(file)
+    expect(result.ok).toBe(false)
+    for (const term of [
+      'sdk',
+      'webview',
+      'room-password',
+      'key-path',
+      'fallback',
+      'raw',
+      'daemon',
+      'remote-console',
+      'mesh-node',
+      'runtime-tier',
+      'http',
+      'webrtc-wss',
+      'orchestrator',
+    ]) {
+      expect(result.stderr).toContain(term)
+    }
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -71,6 +109,8 @@ describe('production UI copy checker', () => {
         evidence: "Tauri narrow nonsecret thin-client connection profile storage",
         runtimeTier: "python-full",
         nodeMode: "mesh-node",
+        source: "services/gateway/api/port",
+        roomSecretRef: "room-password",
       }
       console.debug("runtime transport", mode, id)
       export function InternalOnly() {
@@ -250,7 +290,10 @@ describe('production UI copy checker', () => {
     const file = join(dir, 'copy-helper.ts')
     writeFileSync(file, `
       export function statusCopy() {
-        return { title: "Runtime transport failed" }
+        return {
+          title: "Runtime transport failed",
+          description: "WebView SDK services_orchestrator_llm_provider room-password",
+        }
       }
     `)
 
@@ -258,6 +301,10 @@ describe('production UI copy checker', () => {
     expect(result.ok).toBe(false)
     expect(result.stderr).toContain('runtime')
     expect(result.stderr).toContain('transport')
+    expect(result.stderr).toContain('webview')
+    expect(result.stderr).toContain('sdk')
+    expect(result.stderr).toContain('key-path')
+    expect(result.stderr).toContain('room-password')
     rmSync(dir, { recursive: true, force: true })
   })
 
