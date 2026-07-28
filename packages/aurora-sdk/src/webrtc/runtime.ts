@@ -263,6 +263,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
   async connect(profile: WebRtcPeerConnectionProfile = this.requiredProfile()): Promise<void> {
     await this.disconnect('superseded connection')
     assertSecureRuntime(profile, this.options)
+    assertPeerConnectionRuntimeAvailable(this.options)
     const localSignalingId = this.options.randomId?.() ?? randomBrowserId()
     if (this.options.initialCredentials) {
       for (const credential of this.options.initialCredentials) {
@@ -1012,6 +1013,16 @@ function assertSecureRuntime(profile: WebRtcPeerConnectionProfile, options: Brow
   if (location.protocol === 'https:') return
   if ((options.allowInsecureLoopback || profile.allowInsecureLoopbackSignaling) && isLoopbackHost(location.hostname)) return
   throw new AuroraError({ code: 'native_permission_missing', message: 'WebRTC thin shell requires a secure browser/WebView context.' })
+}
+
+function assertPeerConnectionRuntimeAvailable(
+  options: BrowserWebRtcRuntimeOptions<unknown>
+): void {
+  if (options.createPeerConnection || globalThis.RTCPeerConnection) return
+  throw new AuroraError({
+    code: 'unsupported_feature',
+    message: 'RTCPeerConnection is unavailable in this WebView/browser.'
+  })
 }
 
 function isLoopbackHost(host: string): boolean {

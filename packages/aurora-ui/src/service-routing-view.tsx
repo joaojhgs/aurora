@@ -30,6 +30,12 @@ import { Switch } from '#components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
 import { meshPeerErrorMessage } from './mesh-peers-view'
 import type { RouteAvailability } from './shell-data'
+import {
+  isBrowserWebRtcConfigured,
+  isBrowserWebRtcConnected,
+  type BrowserWebRtcPeerController,
+  type BrowserWebRtcSnapshot,
+} from './web-thin-runtime'
 
 export type ServiceRoutingLoadState = 'loading' | 'ready' | 'degraded' | 'unavailable'
 export type ServiceRoutingProviderMode = 'any' | 'selected' | 'none'
@@ -135,6 +141,7 @@ export interface ServiceRoutingChange {
 export interface ServiceRoutingResourceProps {
   client: AuroraClient
   route: RouteAvailability
+  thinPeer?: BrowserWebRtcPeerController
 }
 
 export interface ServiceRoutingViewProps {
@@ -193,28 +200,59 @@ const loadingSnapshot: ServiceRoutingSnapshot = {
   evidenceSource: 'pending Aurora service calls',
 }
 
-export function ServiceRoutingResource({ client, route }: ServiceRoutingResourceProps) {
+export function ServiceRoutingResource({
+  client,
+  route,
+  thinPeer,
+}: ServiceRoutingResourceProps) {
   const [snapshot, setSnapshot] = useState<ServiceRoutingSnapshot>(loadingSnapshot)
   const [pendingRowId, setPendingRowId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const routeKey = [route.item.id, route.state, route.disabled ? 'disabled' : 'enabled'].join('|')
   const stableRoute = useMemo(() => route, [routeKey])
 
+  useEffect(() => {
+    if (!thinPeer) return
+    return thinPeer.subscribe((nextThinSnapshot) => {
+      setSnapshot((current) =>
+        reconcileServiceRoutingWithThinPeer(
+          current,
+          nextThinSnapshot,
+          current,
+        ),
+      )
+    })
+  }, [thinPeer])
+
   const load = useCallback(async () => {
-    setSnapshot(loadingSnapshot)
-    setSnapshot(await buildServiceRoutingSnapshot(client, stableRoute))
-  }, [client, stableRoute])
+    const next = await buildServiceRoutingSnapshot(client, stableRoute)
+    setSnapshot((current) =>
+      reconcileServiceRoutingWithThinPeer(
+        next,
+        thinPeer?.snapshot(),
+        current,
+      ),
+    )
+  }, [client, stableRoute, thinPeer])
 
   useEffect(() => {
     let cancelled = false
     setSnapshot(loadingSnapshot)
     void buildServiceRoutingSnapshot(client, stableRoute).then((next) => {
-      if (!cancelled) setSnapshot(next)
+      if (!cancelled) {
+        setSnapshot((current) =>
+          reconcileServiceRoutingWithThinPeer(
+            next,
+            thinPeer?.snapshot(),
+            current,
+          ),
+        )
+      }
     })
     return () => {
       cancelled = true
     }
-  }, [client, stableRoute])
+  }, [client, stableRoute, thinPeer])
 
   const previewRow = useCallback(
     async (_row: ServiceRoutingRow, changes: ServiceRoutingChange[]) => previewServiceRoutingChanges(client, changes),
@@ -344,6 +382,54 @@ export async function buildServiceRoutingSnapshot(client: AuroraClient, route: R
     warnings,
     error: null,
     evidenceSource: 'Gateway registry, recipient capability catalog, mesh status, peers, and Config service responses',
+  }
+}
+
+/**
+ * An imported thin profile keeps WebRTC enabled while its peer is offline.
+ * Keep last-known provider policy rows, and do not surface expected transport
+ * failures as configuration errors while that trusted route reconnects.
+ */
+export function reconcileServiceRoutingWithThinPeer(
+  next: ServiceRoutingSnapshot,
+  thinPeer: BrowserWebRtcSnapshot | null | undefined,
+  previous?: ServiceRoutingSnapshot | null,
+): ServiceRoutingSnapshot {
+  if (
+    !isBrowserWebRtcConfigured(thinPeer)
+    || isBrowserWebRtcConnected(thinPeer)
+  ) {
+    return next
+  }
+
+  const previousHasEvidence = Boolean(
+    previous
+    && previous.rows.length > 0
+    && previous.loadState !== 'loading'
+    && previous.loadState !== 'unavailable',
+  )
+  const base = next.loadState === 'unavailable' && previousHasEvidence
+    ? {
+        ...previous!,
+        loadState: 'degraded' as const,
+        editable: false,
+      }
+    : next
+  const warnings = [
+    ...new Set([
+      ...base.warnings,
+      ...next.warnings,
+    ].filter((warning) => !isExpectedOfflineTransportWarning(warning))),
+  ]
+
+  return {
+    ...base,
+    editable: false,
+    warnings,
+    error: next.loadState === 'unavailable' ? null : base.error,
+    evidenceSource: next.loadState === 'unavailable'
+      ? 'saved thin peer profile; service policies refresh after reconnect'
+      : base.evidenceSource,
   }
 }
 
@@ -719,6 +805,7 @@ function withSnapshotTimeout<T>(promise: Promise<T>, label: string): Promise<T> 
 function fulfilled<T>(result: PromiseSettledResult<T>): T | null { return result.status === 'fulfilled' ? result.value : null }
 function fulfilledOk<T>(result: PromiseSettledResult<{ ok: boolean; data?: T | null }>): T | null { return result.status === 'fulfilled' && result.value.ok ? result.value.data ?? null : null }
 function rejectedWarning(result: PromiseSettledResult<unknown>, label: string): string | null { return result.status === 'rejected' ? `${label} unavailable: ${meshPeerErrorMessage(result.reason)}` : null }
+function isExpectedOfflineTransportWarning(value: string): boolean { return /webrtc mesh (?:transport|event stream) is not connected|transport datachannel not connected|preferred-mode HTTP fallback/i.test(value) }
 function normalizeModule(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/g, '') }
 function matchesModule(module: string, candidates: string[]): boolean { return candidates.includes(normalizeModule(module)) }
 function matchRegistryService(candidates: string[], services: ServiceInfo[]): ServiceInfo | null { return services.find((service) => matchesModule(service.module, candidates)) ?? null }

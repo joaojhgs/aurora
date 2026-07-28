@@ -8,6 +8,7 @@ import {
   buildServiceRoutingSnapshot,
   commitServiceRoutingChanges,
   previewServiceRoutingChanges,
+  reconcileServiceRoutingWithThinPeer,
   serviceRoutingDraftChanges,
   serviceRoutingDraftFromRow,
   serviceRoutingProviderMode,
@@ -17,6 +18,7 @@ import {
   type ServiceRoutingSnapshot,
 } from '../src/service-routing-view'
 import type { RouteAvailability } from '../src/shell-data'
+import type { BrowserWebRtcSnapshot } from '../src/web-thin-runtime'
 
 const TARGET_BASES = [
   'services.orchestrator', 'services.db', 'services.tooling', 'services.scheduler',
@@ -119,6 +121,61 @@ function snapshotClient(metadata = metadataFields()): AuroraClient {
 }
 
 describe('Service sharing and outbound routing', () => {
+  it('retains provider rows and suppresses expected transport errors while a configured peer is offline', () => {
+    const previous = snapshot()
+    const unavailable: ServiceRoutingSnapshot = {
+      loadState: 'unavailable',
+      rows: [],
+      knownPeers: [],
+      editable: false,
+      registryMode: null,
+      warnings: [
+        'full service registry unavailable: WebRTC mesh transport is not connected',
+        'recipient capability catalog unavailable: preferred-mode HTTP fallback is unavailable',
+      ],
+      error: 'Gateway routing capability is unavailable for this route.',
+      evidenceSource: 'Aurora request error',
+    }
+    const thinPeer: BrowserWebRtcSnapshot = {
+      state: 'closed',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-provider',
+      nodeName: 'Studio node',
+      icePathCategory: 'unknown',
+      protocolCapabilities: [],
+      reconnectCount: 1,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-07-28T00:00:00Z',
+      status: 'failed',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    }
+
+    const reconciled = reconcileServiceRoutingWithThinPeer(
+      unavailable,
+      thinPeer,
+      previous,
+    )
+
+    expect(reconciled.loadState).toBe('degraded')
+    expect(reconciled.rows).toEqual(previous.rows)
+    expect(reconciled.knownPeers).toEqual(previous.knownPeers)
+    expect(reconciled.editable).toBe(false)
+    expect(reconciled.error).toBeNull()
+    expect(reconciled.warnings).toEqual([])
+    expect(reconciled.evidenceSource).toContain('refresh after reconnect')
+  })
+
   it('preserves Any, None, and Selected provider values without coercion', () => {
     expect(serviceRoutingProviderMode(null)).toBe('any')
     expect(serviceRoutingProviderMode([])).toBe('none')

@@ -1223,7 +1223,7 @@ function ThinPeerConnectionStatus({
         <AlertTitle>{peerName} is offline</AlertTitle>
         <AlertDescription className="flex flex-col items-start gap-2">
           <span>
-            WebRTC remains enabled with the saved peer identity. Aurora will
+            WebRTC remains enabled with the saved peer identity. Aurora can
             retry the connection; saved peers and last-known capabilities stay
             visible as stale until a trusted route reconnects.
           </span>
@@ -1330,6 +1330,21 @@ function ThinPeerPairingDialog({
 
 function MeshStateBadge({ state }: { state: AvailabilityState | MeshPeersLoadState }) {
   return <Badge variant="outline">{meshStateLabel(state)}</Badge>
+}
+
+function MeshPeerStateBadge({
+  peer,
+  optimistic,
+}: {
+  peer: MeshPeerRow
+  optimistic: boolean
+}) {
+  if (!optimistic && peer.lifecycleState === 'stale' && !peer.pendingPairing) {
+    return <Badge variant="outline">Offline</Badge>
+  }
+  return (
+    <MeshStateBadge state={optimistic ? 'pending' : peer.trustState} />
+  )
 }
 
 function meshStateLabel(state: AvailabilityState | MeshPeersLoadState): string {
@@ -1461,7 +1476,7 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenScopes, on
                     <p className="truncate font-mono text-[11px] text-muted-foreground">{peer.fingerprint}</p>
                   </div>
                 </div>
-                <MeshStateBadge state={optimistic ? 'pending' : peer.trustState} />
+                <MeshPeerStateBadge peer={peer} optimistic={optimistic} />
               </div>
               <div>
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
@@ -1569,9 +1584,15 @@ function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, o
                         <span className="text-[11.5px] text-muted-foreground">no access</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{peer.latencyMs === null ? 'measuring' : formatLatencyMs(peer.latencyMs)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {peer.lifecycleState === 'stale'
+                        ? 'offline'
+                        : peer.latencyMs === null
+                          ? 'measuring'
+                          : formatLatencyMs(peer.latencyMs)}
+                    </TableCell>
                     <TableCell>
-                      <MeshStateBadge state={optimistic ? 'pending' : peer.trustState} />
+                      <MeshPeerStateBadge peer={peer} optimistic={optimistic} />
                     </TableCell>
                     <TableCell className="text-right">
                       {meshPeerScopesEditable(peer) ? (

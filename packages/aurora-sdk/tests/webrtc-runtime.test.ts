@@ -75,6 +75,37 @@ describe('browser WebRTC Aurora runtime facade', () => {
     await runtime.close()
   })
 
+  it('fails before signaling when the WebView has no RTCPeerConnection implementation', async () => {
+    const oldRtc = (globalThis as Record<string, unknown>).RTCPeerConnection
+    const signalingFactory = vi.fn(() => {
+      throw new Error('signaling must not start without a peer connection runtime')
+    })
+    delete (globalThis as Record<string, unknown>).RTCPeerConnection
+    try {
+      const runtime = createBrowserWebRtcAuroraRuntime({
+        mode: 'webrtc-only',
+        profile: profile({ mode: 'webrtc-only' }),
+        signalingFactory,
+        windowLocation: secureLocation
+      })
+
+      await expect(runtime.peer.connect(profile({ mode: 'webrtc-only' }))).rejects.toMatchObject({
+        code: 'unsupported_feature'
+      })
+      expect(signalingFactory).not.toHaveBeenCalled()
+      expect(runtime.peer.snapshot()).toMatchObject({
+        connectionMode: 'webrtc-only',
+        expectedStablePeerId: 'peer-remote',
+        state: 'closed'
+      })
+      await runtime.close()
+    } finally {
+      if (oldRtc !== undefined) {
+        (globalThis as Record<string, unknown>).RTCPeerConnection = oldRtc
+      }
+    }
+  })
+
   it('fails closed for webrtc-only when no authorized peer is connected and never falls back to HTTP', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as unknown as typeof fetch
     const runtime = createBrowserWebRtcAuroraRuntime({

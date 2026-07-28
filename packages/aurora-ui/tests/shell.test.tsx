@@ -2336,6 +2336,8 @@ describe('Aurora production shell', () => {
       expect(container.textContent).not.toContain(
         'WebRTC mesh transport is not connected',
       )
+      expect(container.textContent).toContain('Offline')
+      expect(container.textContent).not.toContain('Needs attention')
     } finally {
       await act(async () => root.unmount())
       container.remove()

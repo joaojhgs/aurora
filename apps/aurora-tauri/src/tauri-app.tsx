@@ -181,7 +181,11 @@ export const tauriRouteRegistry = {
           initialInviteText={inviteParam}
           {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
         />
-        <ServiceRoutingResource client={client} route={route} />
+        <ServiceRoutingResource
+          client={client}
+          route={route}
+          thinPeer={nativeContext.thinPeer}
+        />
         <details>
           <summary className="cursor-pointer text-sm text-muted-foreground">
             Outbound route decision preview (advanced)
