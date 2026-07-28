@@ -506,12 +506,12 @@ function localProtocolCapabilities(flags: AuroraWebRtcRolloutFlags): string[] {
   ]
 }
 
-interface ParsedWebRtcInvite {
+export interface ParsedWebRtcInvite {
   profile: WebRtcPeerConnectionProfile
   roomSecret: string
 }
 
-function parseWebRtcInvite(
+export function parseWebRtcInvite(
   inviteText: string | null | undefined,
   config: Pick<BrowserThinRuntimeConfig, 'production' | 'allowInsecureLoopbackSignaling' | 'nodeName' | 'signalingUrl'> = {}
 ): ParsedWebRtcInvite | null {

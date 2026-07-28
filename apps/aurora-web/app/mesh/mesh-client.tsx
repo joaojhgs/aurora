@@ -2,12 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import { MeshPeersResource, RoutePolicyResource, WebThinConnectionPanel, type RouteAvailability } from '@aurora/ui'
-import { createAuroraBrowserRuntime } from '../aurora-client'
+import {
+  auroraBrowserThinProfile,
+  auroraBrowserThinProfileDocument,
+  createAuroraBrowserRuntime,
+  saveAuroraBrowserThinProfile,
+  selectAuroraBrowserThinProfile,
+} from '../aurora-client'
+import { useBrowserRoute } from '../browser-shell-runtime'
 
 export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
   const [incomingInvite, setIncomingInvite] = useState<string | null>(null)
   const runtime = createAuroraBrowserRuntime()
   const client = runtime.client
+  const activeRoute = useBrowserRoute(route)
+  const profile = auroraBrowserThinProfile()
+  const document = auroraBrowserThinProfileDocument()
 
   useEffect(() => {
     const invite = consumeFragmentInviteFromUrl(window.location.href, (nextUrl) => {
@@ -23,9 +33,20 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
         mode={runtime.mode}
         transportKind={client.transport.kind}
         initialInviteText={incomingInvite}
+        profile={profile}
+        profiles={document.profiles}
+        profileStoreEvidence="Hosted web keeps nonsecret runtime profile metadata in browser storage and encrypts WebRTC secrets in IndexedDB when available."
+        onSaveProfile={async (nextProfile, roomSecret) => {
+          await saveAuroraBrowserThinProfile(nextProfile, roomSecret)
+          window.location.reload()
+        }}
+        onSelectProfile={async (profileId) => {
+          await selectAuroraBrowserThinProfile(profileId)
+          window.location.reload()
+        }}
       />
-      <MeshPeersResource client={client} route={route} />
-      <RoutePolicyResource client={client} route={route} />
+      <MeshPeersResource client={client} route={activeRoute} />
+      <RoutePolicyResource client={client} route={activeRoute} />
     </>
   )
 }

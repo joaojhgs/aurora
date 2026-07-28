@@ -15,8 +15,11 @@ import {
   encodeMeshInviteToken,
   explainBrowserThinRuntime,
   getAuroraSurfaceProfile,
+  hostedMixedContentWarning,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
+  type ThinConnectionProfile,
+  type WebThinRoomSecret,
 } from '../src/index'
 
 const roots: Root[] = []
@@ -439,7 +442,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       )
     })
 
-    expect(container.querySelector('[aria-label="Desktop thin connection profile"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Thin connection profile"]')).not.toBeNull()
     expect(container.textContent).toContain('Nonsecret platform profile storage')
     const nodeName = container.querySelector<HTMLInputElement>('#webthin-profile-node-name')!
     await act(async () => {
@@ -458,6 +461,124 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
     expect(container.querySelector('input[name*="token" i]')).toBeNull()
     expect(container.querySelector('input[name*="secret" i]')).toBeNull()
+  })
+
+  it('imports an invite into secure storage before leaving configure-only onboarding', async () => {
+    const peer = new FakeBrowserPeer({ status: 'needs-invite' })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const actions: string[] = []
+    const onSaveProfile = vi.fn(async (
+      _profile: ThinConnectionProfile,
+      _roomSecret?: WebThinRoomSecret,
+    ) => {
+      actions.push('saved')
+    })
+    const onInviteAccepted = vi.fn(async () => {
+      actions.push('accepted')
+    })
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="http-only"
+          transportKind="http"
+          initialInviteText={inviteText()}
+          configureOnly
+          onSaveProfile={onSaveProfile}
+          onInviteAccepted={onInviteAccepted}
+        />
+      )
+    })
+
+    await act(async () => {
+      findButton(container, 'Save invite and continue').click()
+      await Promise.resolve()
+    })
+
+    expect(onSaveProfile).toHaveBeenCalledTimes(1)
+    expect(onSaveProfile.mock.calls[0]?.[0]).toMatchObject({
+      mode: 'webrtc-only',
+      signalingUrl: 'wss://broker.example/mqtt',
+      webrtcProfile: {
+        room: 'studio-room',
+        roomSecretRef: 'ref:memory:studio-room',
+      },
+    })
+    expect(onSaveProfile.mock.calls[0]?.[1]).toEqual({
+      roomSecretRef: 'ref:memory:studio-room',
+      roomSecret: 'secret-room-password',
+    })
+    expect(actions).toEqual(['saved', 'accepted'])
+    expect(peer.connectedProfiles).toHaveLength(0)
+  })
+
+  it('fills the invite field from native/browser QR scan and an invite file', async () => {
+    const peer = new FakeBrowserPeer({ status: 'needs-invite' })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const scannedInvite = inviteText()
+    const onScanQr = vi.fn(async () => scannedInvite)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="mesh"
+          onScanQr={onScanQr}
+        />
+      )
+    })
+    await act(async () => {
+      findButton(container, 'Scan QR invite').click()
+      await Promise.resolve()
+    })
+    expect(onScanQr).toHaveBeenCalledTimes(1)
+    expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
+      .toBe(scannedInvite)
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const file = new File(['ignored by mocked text'], 'invite.aurora', {
+      type: 'application/vnd.aurora.context+json',
+    })
+    Object.defineProperty(file, 'text', {
+      configurable: true,
+      value: async () => scannedInvite,
+    })
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [file],
+    })
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
+      .toBe(scannedInvite)
+  })
+
+  it('warns that hosted HTTPS cannot override browser mixed-content blocking', () => {
+    const profile = {
+      id: 'cleartext',
+      label: 'LAN',
+      mode: 'webrtc-preferred' as const,
+      gatewayUrl: 'http://aurora.lan:8000',
+      signalingUrl: 'ws://aurora.lan:9001/mqtt',
+      nodeName: 'Hosted browser',
+      localStablePeerId: 'hosted-browser-stable',
+    }
+
+    expect(hostedMixedContentWarning('web', profile, 'https:')).toContain(
+      'Browsers block HTTP or unencrypted WebSocket endpoints',
+    )
+    expect(hostedMixedContentWarning('desktop-thin', profile, 'https:')).toBeNull()
+    expect(hostedMixedContentWarning('web', profile, 'http:')).toBeNull()
   })
 
   it('re-enables profile controls after profile selection succeeds or fails', async () => {

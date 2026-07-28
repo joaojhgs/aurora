@@ -62,19 +62,19 @@ const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   // hooks and removed its duplicate hidden navigation control. The responsive
   // sheet remains aria-hidden and inert while closed.
   assistant: {
-    desktop: 'f15d225f1d79',
-    tablet: '85f9be4bf254',
-    mobile: '13545f27828f'
+    desktop: 'db5b518d73ed',
+    tablet: 'd3662b3537b0',
+    mobile: '923459f08f1e'
   },
   admin: {
-    desktop: 'd3dc702f624f',
-    tablet: 'a76ffa690b0a',
-    mobile: '8d680daa3330'
+    desktop: 'bf4fbc7a06bd',
+    tablet: 'fabe48dc9eb4',
+    mobile: '28143624e776'
   },
   'mobile-settings': {
-    desktop: '108d7aa844fd',
-    tablet: '0aafa73fc26b',
-    mobile: 'e2c3c0a31324'
+    desktop: '56e919aee3b8',
+    tablet: 'b0368cf86146',
+    mobile: 'f83a94812b99'
   }
 }
 

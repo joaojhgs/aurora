@@ -70,13 +70,13 @@ export const auroraNavSections: AuroraNavSection[] = [
   {
     label: 'Runtime',
     items: [
-      item('models', 'Models & Runtime', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract'),
-      item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'service contract')
+      item('models', 'Models & Runtime', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract')
     ]
   }
 ]
 
 export const auroraEmbeddedNavItems: AuroraNavItem[] = [
+  item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'first-run gate'),
   item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'service contract', true),
   item('config', 'Configuration', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
   item('contracts', 'Contracts', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'service contract', true),

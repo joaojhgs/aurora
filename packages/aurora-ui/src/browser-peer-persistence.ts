@@ -8,15 +8,22 @@ import {
   type WebRtcPeerConnectionProfile,
   type WebRtcPeerCredentialStore,
 } from '@aurora/client/webrtc'
+import {
+  parseThinProfileDocument,
+  serializeThinProfileDocument,
+  type ThinProfileDocument,
+} from './thin-connection-profile'
 
 const VAULT_VERSION = 1
 const DEFAULT_DATABASE = 'aurora-web-thin-v1'
 const DEFAULT_OBJECT_STORE = 'vault'
 const KEY_RECORD = 'internal:vault-key'
 const PROFILE_KEY = 'aurora.webThin.profile.v1'
+const THIN_PROFILE_DOCUMENT_KEY = 'aurora.webThin.connectionProfiles.v1'
 const STABLE_PEER_KEY = 'aurora.webThin.localStablePeerId.v1'
 const CREDENTIAL_PREFIX = 'credential:'
 const ROOM_PREFIX = 'room:'
+const volatileMetadata = new Map<string, string>()
 
 type PersistedProfile = Omit<WebRtcPeerConnectionProfile, 'signalingBrokers' | 'stunServers' | 'turnServers'> & {
   signalingBrokers: string[]
@@ -60,6 +67,8 @@ export interface BrowserWebRtcCredentialStore extends WebRtcPeerCredentialStore 
   getRoomSecret(ref: string): Promise<Uint8Array | string | null>
   saveConnectionProfile(profile: WebRtcPeerConnectionProfile): void
   loadConnectionProfile(): WebRtcPeerConnectionProfile | null
+  saveThinProfileDocument(document: ThinProfileDocument): void
+  loadThinProfileDocument(): ThinProfileDocument | null
   getOrCreateLocalStablePeerId(): string
   persistenceStatus(): BrowserPeerPersistenceStatus
 }
@@ -139,6 +148,21 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
       this.removeMetadata(PROFILE_KEY)
       return null
     }
+  }
+
+  saveThinProfileDocument(document: ThinProfileDocument): void {
+    this.assertOpen()
+    this.writeMetadata(THIN_PROFILE_DOCUMENT_KEY, serializeThinProfileDocument(document))
+  }
+
+  loadThinProfileDocument(): ThinProfileDocument | null {
+    this.assertOpen()
+    const encoded = this.readMetadata(THIN_PROFILE_DOCUMENT_KEY)
+    if (!encoded) return null
+    const parsed = parseThinProfileDocument(encoded)
+    if (parsed) return parsed
+    this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
+    return null
   }
 
   setRoomSecret(ref: string, value: string): void {
@@ -234,6 +258,8 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
       }
     }
     this.removeMetadata(PROFILE_KEY)
+    this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
+    this.removeMetadata(STABLE_PEER_KEY)
   }
 
   async close(): Promise<void> {
@@ -358,25 +384,32 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   }
 
   private readMetadata(key: string): string | null {
-    if (!this.metadataUsable || this.metadataStorage == null) return null
+    const fallback = volatileMetadata.get(this.volatileMetadataKey(key)) ?? null
+    if (!this.metadataUsable || this.metadataStorage == null) return fallback
     try {
-      return this.metadataStorage.getItem(key)
+      const persisted = this.metadataStorage.getItem(key)
+      return persisted ?? fallback
     } catch (error) {
       this.fallbackMetadataToMemory(error)
-      return null
+      return fallback
     }
   }
 
   private writeMetadata(key: string, value: string): void {
-    if (!this.metadataUsable || this.metadataStorage == null) return
+    if (!this.metadataUsable || this.metadataStorage == null) {
+      volatileMetadata.set(this.volatileMetadataKey(key), value)
+      return
+    }
     try {
       this.metadataStorage.setItem(key, value)
     } catch (error) {
       this.fallbackMetadataToMemory(error)
+      volatileMetadata.set(this.volatileMetadataKey(key), value)
     }
   }
 
   private removeMetadata(key: string): void {
+    volatileMetadata.delete(this.volatileMetadataKey(key))
     if (!this.metadataUsable || this.metadataStorage == null) return
     try {
       this.metadataStorage.removeItem(key)
@@ -394,6 +427,10 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.fallbackReason = error instanceof Error
       ? `Metadata storage unavailable: ${error.message}`
       : 'Metadata storage unavailable'
+  }
+
+  private volatileMetadataKey(key: string): string {
+    return `${this.origin}|${key}`
   }
 
   private assertOpen(): void {
@@ -590,11 +627,7 @@ function assertSafeSignalingBroker(value: string): void {
   } catch {
     throw new Error('Invalid persisted WebRTC signaling broker')
   }
-  if (parsed.protocol === 'wss:') return
-  if (
-    parsed.protocol === 'ws:' &&
-    (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]')
-  ) return
+  if (parsed.protocol === 'wss:' || parsed.protocol === 'ws:') return
   throw new Error('Invalid persisted WebRTC signaling broker')
 }
 

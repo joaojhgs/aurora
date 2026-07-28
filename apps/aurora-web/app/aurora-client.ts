@@ -9,10 +9,15 @@ import {
 } from '@aurora/client'
 import {
   BrowserPersistentPeerCredentialStore,
+  activeThinConnectionProfile,
   createBrowserWebThinRuntime,
+  emptyThinProfileDocument,
   explainBrowserThinRuntime,
+  isThinConnectionProfileConfigured,
+  sanitizeThinConnectionProfile,
+  type ThinConnectionProfile,
+  type ThinProfileDocument,
   type AuroraWebRtcRolloutFlags,
-  type AuroraThinConnectionMode,
   type BrowserWebThinRuntime,
 } from '@aurora/ui'
 
@@ -22,6 +27,7 @@ type BrowserRuntimeCache = {
 }
 
 let browserRuntimeCache: BrowserRuntimeCache | null = null
+let browserCredentialStore: BrowserPersistentPeerCredentialStore | null = null
 
 class MissingGatewayTransport implements AuroraTransport {
   readonly kind = 'http'
@@ -31,7 +37,7 @@ class MissingGatewayTransport implements AuroraTransport {
   ): Promise<AuroraTransportResponse<TData>> {
     throw new AuroraError({
       code: 'transport_loss',
-      message: 'Aurora Gateway URL is not configured. Set AURORA_GATEWAY_URL/NEXT_PUBLIC_AURORA_GATEWAY_URL, paste a WebRTC invite with NEXT_PUBLIC_AURORA_CONNECTION_MODE=webrtc-only|webrtc-preferred, or explicitly enable AURORA_WEB_DEMO_MODE=1 for labeled offline demo data.',
+      message: 'This Aurora thin client has not been configured. Complete first-run onboarding with an HTTP Gateway or Aurora WebRTC invite, or explicitly enable demo mode for labeled offline data.',
       method: request.method,
       busTopic: request.busTopic,
       detail: {
@@ -60,29 +66,33 @@ export function createAuroraWebClient(): AuroraClient {
 }
 
 export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
+  const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
+  browserCredentialStore = credentialStore
+  const profileDocument = credentialStore.loadThinProfileDocument() ?? emptyThinProfileDocument()
+  const thinProfile = activeThinConnectionProfile(profileDocument)
   const key = browserClientCacheKey()
   const cached = browserRuntimeCache
   if (cached?.key === key) return cached.runtime
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
-  const mode = browserConnectionMode()
+  const mode = thinProfile?.mode ?? 'http-only'
   const rolloutFlags = browserWebRtcRolloutFlags()
-  const gatewayUrl = process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL
-  const credentialStore = mode === 'http-only' || !rolloutFlags.webrtc_thin_client
-    ? undefined
-    : new BrowserPersistentPeerCredentialStore()
-  const persistedProfile = credentialStore?.loadConnectionProfile() ?? undefined
-  const localStablePeerId = credentialStore?.getOrCreateLocalStablePeerId()
+  const gatewayUrl = thinProfile?.gatewayUrl
+  const persistedProfile = thinProfile
+    ? thinProfile.webrtcProfile
+    : credentialStore.loadConnectionProfile() ?? undefined
+  const localStablePeerId = thinProfile?.localStablePeerId || credentialStore.getOrCreateLocalStablePeerId()
   const runtime = createBrowserWebThinRuntime({
     mode,
     gatewayUrl,
     bearerToken: () => runtime.client.auth.bearerToken(),
-    runtimeMode: browserRuntimeMode(),
+    signalingUrl: thinProfile?.signalingUrl,
+    runtimeMode: 'web-thin',
     demoMode: isBrowserDemoMode(),
     rolloutFlags,
     allowInsecureLoopback: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
     allowInsecureLoopbackSignaling: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
-    nodeName: process.env.NEXT_PUBLIC_AURORA_NODE_NAME ?? 'Aurora Web thin client',
-    ...(credentialStore ? { credentialStore } : {}),
+    nodeName: thinProfile?.nodeName ?? 'Aurora Web thin client',
+    credentialStore,
     ...(persistedProfile ? { profile: persistedProfile } : {}),
     ...(localStablePeerId ? { localStablePeerId } : {}),
     visibilityDocument: typeof document === 'undefined' ? undefined : document,
@@ -106,6 +116,75 @@ export function createAuroraBrowserClient(): AuroraClient {
 export function resetAuroraBrowserClientForTests(): void {
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
   browserRuntimeCache = null
+  browserCredentialStore = null
+}
+
+export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
+  createAuroraBrowserRuntime()
+  return browserCredentialStore?.loadThinProfileDocument() ?? emptyThinProfileDocument()
+}
+
+export function auroraBrowserThinProfile(): ThinConnectionProfile | undefined {
+  return activeThinConnectionProfile(auroraBrowserThinProfileDocument())
+}
+
+export function auroraBrowserRequiresOnboarding(): boolean {
+  return !isThinConnectionProfileConfigured(auroraBrowserThinProfile())
+}
+
+export async function saveAuroraBrowserThinProfile(
+  profile: ThinConnectionProfile,
+  roomSecret?: {
+    roomSecretRef: string
+    roomSecret: string
+  },
+): Promise<void> {
+  const sanitized = sanitizeThinConnectionProfile(profile)
+  createAuroraBrowserRuntime()
+  const store = browserCredentialStore
+  if (!store) throw new Error('Browser thin-client persistence is unavailable')
+  if (roomSecret) {
+    if (sanitized.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef) {
+      throw new Error('Browser thin-client room secret does not match the saved WebRTC profile')
+    }
+    store.setRoomSecret(roomSecret.roomSecretRef, roomSecret.roomSecret)
+  }
+  const current = store.loadThinProfileDocument() ?? emptyThinProfileDocument()
+  store.saveThinProfileDocument({
+    version: 1,
+    activeProfileId: sanitized.id,
+    profiles: [
+      ...current.profiles.filter((candidate) => candidate.id !== sanitized.id),
+      sanitized,
+    ],
+  })
+  if (sanitized.webrtcProfile) {
+    store.saveConnectionProfile(sanitized.webrtcProfile)
+  }
+  const runtime = browserRuntimeCache?.runtime
+  browserRuntimeCache = null
+  browserCredentialStore = null
+  await runtime?.close()
+}
+
+export async function selectAuroraBrowserThinProfile(
+  profileId: string,
+): Promise<void> {
+  createAuroraBrowserRuntime()
+  const store = browserCredentialStore
+  if (!store) throw new Error('Browser thin-client persistence is unavailable')
+  const current = store.loadThinProfileDocument() ?? emptyThinProfileDocument()
+  if (!current.profiles.some((profile) => profile.id === profileId)) {
+    throw new Error('Browser thin-client profile does not exist')
+  }
+  store.saveThinProfileDocument({
+    ...current,
+    activeProfileId: profileId,
+  })
+  const runtime = browserRuntimeCache?.runtime
+  browserRuntimeCache = null
+  browserCredentialStore = null
+  await runtime?.close()
 }
 
 export function isAuroraWebDemoMode(): boolean {
@@ -113,33 +192,23 @@ export function isAuroraWebDemoMode(): boolean {
 }
 
 export function auroraBrowserRuntimeDiagnostics(): string[] {
+  const profile = auroraBrowserThinProfile()
   return explainBrowserThinRuntime({
-    mode: browserConnectionMode(),
-    gatewayUrl: process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL,
+    mode: profile?.mode,
+    gatewayUrl: profile?.gatewayUrl,
+    signalingUrl: profile?.signalingUrl,
+    profile: profile?.webrtcProfile,
     rolloutFlags: browserWebRtcRolloutFlags(),
   })
 }
 
 function browserClientCacheKey(): string {
+  const document = browserCredentialStore?.loadThinProfileDocument() ?? emptyThinProfileDocument()
   return JSON.stringify({
-    gatewayUrl: process.env.NEXT_PUBLIC_AURORA_GATEWAY_URL ?? '',
-    mode: browserConnectionMode(),
+    document,
     demoMode: isBrowserDemoMode(),
-    nodeName: process.env.NEXT_PUBLIC_AURORA_NODE_NAME ?? '',
     rolloutFlags: browserWebRtcRolloutFlags(),
   })
-}
-
-function browserConnectionMode(): AuroraThinConnectionMode {
-  const value = process.env.NEXT_PUBLIC_AURORA_CONNECTION_MODE
-  if (value === 'http-only' || value === 'webrtc-only' || value === 'webrtc-preferred') return value
-  return 'http-only'
-}
-
-function browserRuntimeMode(): string {
-  const mode = browserConnectionMode()
-  if (mode === 'http-only') return 'web'
-  return 'web-thin'
 }
 
 function browserWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Check, Compass, KeyRound, Monitor, Server, ShieldCheck, Smartphone } from 'lucide-react'
 import type { AuroraClient, AuroraError, AuthSessionSnapshot, AvailabilityState } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
@@ -15,6 +15,8 @@ export interface OnboardingViewProps {
   client: AuroraClient
   snapshot: AuroraShellSnapshot
   modePreferenceStore?: OnboardingModePreferenceStore | undefined
+  thinConnectionPanel?: ReactNode
+  setupRequired?: boolean | undefined
 }
 
 export interface OnboardingModePreferenceStore {
@@ -75,7 +77,7 @@ export interface OnboardingViewModel {
   cockpitHref: string
 }
 
-export function OnboardingView({ client, snapshot, modePreferenceStore }: OnboardingViewProps) {
+export function OnboardingView({ client, snapshot, modePreferenceStore, thinConnectionPanel, setupRequired = false }: OnboardingViewProps) {
   const [session, setSession] = useState(() => client.auth.refreshClock())
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
   const [selectedModeId, setSelectedModeId] = useState(() => defaultModeId(client.transport.kind, snapshot, userAgent))
@@ -231,14 +233,38 @@ export function OnboardingView({ client, snapshot, modePreferenceStore }: Onboar
   const completedStepCount = model.setupSteps.filter(isStepComplete).length
   const allStepsComplete = model.setupSteps.length > 0 && completedStepCount === model.setupSteps.length
 
+  if (setupRequired && thinConnectionPanel) {
+    return (
+      <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 pt-6 pb-10 sm:px-6" aria-labelledby="onboarding-title">
+        <div className="text-center">
+          <h1 id="onboarding-title" className="text-xl font-semibold tracking-tight">
+            Connect this Aurora client
+          </h1>
+          <p className="mt-1.5 text-[13px] text-muted-foreground">
+            Choose HTTP, WebRTC, or WebRTC with HTTP fallback. This client stores the selected runtime profile on this device; endpoints are not compiled into the app.
+          </p>
+        </div>
+        <div data-step="thin-connection">{thinConnectionPanel}</div>
+      </section>
+    )
+  }
+
   return (
     <section className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-10" aria-labelledby="onboarding-title">
       <div className="text-center">
         <h1 id="onboarding-title" className="text-xl font-semibold tracking-tight">
           Welcome to Aurora
         </h1>
-        <p className="mt-1.5 text-[13px] text-muted-foreground">We auto-detect how this client is running, then walk through the setup that matches it.</p>
+        <p className="mt-1.5 text-[13px] text-muted-foreground">
+          {setupRequired ? 'Configure this thin client before entering Aurora.' : 'We auto-detect how this client is running, then walk through the setup that matches it.'}
+        </p>
       </div>
+
+      {thinConnectionPanel ? (
+        <div className="flex flex-col gap-3" data-step="thin-connection">
+          {thinConnectionPanel}
+        </div>
+      ) : null}
 
       {wizardStep === 'detect' ? (
         <div className="flex flex-col gap-4" data-step="detect">
@@ -527,7 +553,7 @@ function desktopThinState(snapshot: AuroraShellSnapshot, transportKind: string):
   return {
     state: transportKind === 'mock' ? 'degraded' : 'unsupported',
     evidence: transportKind === 'mock' ? 'demo only; no remote Gateway proof' : `Current transport is ${transportKind}.`,
-    repair: 'Configure AURORA_GATEWAY_URL or NEXT_PUBLIC_AURORA_GATEWAY_URL for a remote Gateway.',
+    repair: 'Open setup and configure or import a runtime HTTP/WebRTC connection profile.',
   }
 }
 

@@ -8,6 +8,7 @@ import {
   BrowserPersistentPeerCredentialStore,
   type BrowserVaultStorage,
 } from '../src/browser-peer-persistence'
+import type { ThinProfileDocument } from '../src/thin-connection-profile'
 
 class MapVaultStorage implements BrowserVaultStorage {
   readonly values = new Map<string, unknown>()
@@ -77,6 +78,26 @@ const challenge: MeshReconnectChallengeMessage = {
   claimant_signaling_peer_id: 'browser-signal-new',
   verifier_signaling_peer_id: 'host-signal-new',
   room_name: 'family-room',
+}
+
+const thinProfileDocument: ThinProfileDocument = {
+  version: 1,
+  activeProfileId: 'hosted-home',
+  profiles: [{
+    id: 'hosted-home',
+    label: 'Hosted home',
+    mode: 'webrtc-preferred',
+    gatewayUrl: 'https://gateway.example.test/api?tenant=home',
+    signalingUrl: 'wss://signal.example.test/mqtt?tenant=home',
+    nodeName: 'Aurora hosted web',
+    localStablePeerId: 'aurora-hosted-web-stable',
+    webrtcProfile: {
+      ...profile,
+      mode: 'webrtc-preferred',
+      nodeName: 'Aurora hosted web',
+      signalingBrokers: ['wss://signal.example.test/mqtt?tenant=home'],
+    },
+  }],
 }
 
 describe('BrowserPersistentPeerCredentialStore', () => {
@@ -170,6 +191,67 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     })
     expect(store.persistenceStatus().fallbackReason).toContain('metadata denied')
     await store.close()
+  })
+
+  it('persists a sanitized runtime connection profile without room or bearer secrets', async () => {
+    const metadata = new MapMetadataStorage()
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage: new MapVaultStorage(),
+      metadataStorage: metadata,
+      crypto: globalThis.crypto,
+      origin: 'https://profiles.aurora.example.test',
+    })
+
+    store.saveThinProfileDocument(thinProfileDocument)
+
+    expect(store.loadThinProfileDocument()).toEqual(thinProfileDocument)
+    const plaintextMetadata = [...metadata.values.values()].join('\n')
+    expect(plaintextMetadata).toContain('https://gateway.example.test/api?tenant=home')
+    expect(plaintextMetadata).toContain('wss://signal.example.test/mqtt?tenant=home')
+    expect(plaintextMetadata).not.toContain(credential.rawBearerToken)
+    expect(plaintextMetadata).not.toContain('never-store-this-room-secret-in-plaintext')
+    expect(plaintextMetadata).not.toContain('"roomSecret"')
+    await store.close()
+  })
+
+  it('keeps runtime profile metadata available for the current SPA session when browser storage is unavailable', async () => {
+    const origin = 'https://volatile-profile.aurora.example.test'
+    const first = new BrowserPersistentPeerCredentialStore({
+      storage: null,
+      metadataStorage: null,
+      crypto: globalThis.crypto,
+      origin,
+    })
+    first.saveThinProfileDocument(thinProfileDocument)
+    const stablePeerId = first.getOrCreateLocalStablePeerId()
+    expect(first.persistenceStatus()).toMatchObject({
+      backend: 'memory',
+      secretsPersisted: false,
+      profilePersisted: false,
+    })
+    await first.close()
+
+    const rebuiltInSamePage = new BrowserPersistentPeerCredentialStore({
+      storage: null,
+      metadataStorage: null,
+      crypto: globalThis.crypto,
+      origin,
+    })
+    expect(rebuiltInSamePage.loadThinProfileDocument()).toEqual(thinProfileDocument)
+    expect(rebuiltInSamePage.getOrCreateLocalStablePeerId()).toBe(stablePeerId)
+
+    await rebuiltInSamePage.clear()
+    await rebuiltInSamePage.close()
+    const afterClear = new BrowserPersistentPeerCredentialStore({
+      storage: null,
+      metadataStorage: null,
+      crypto: globalThis.crypto,
+      origin,
+    })
+    expect(afterClear.loadThinProfileDocument()).toBeNull()
+    expect(afterClear.getOrCreateLocalStablePeerId()).not.toBe(stablePeerId)
+    await afterClear.clear()
+    await afterClear.close()
   })
 
   it('rejects malformed persisted profile metadata without exposing secrets', async () => {

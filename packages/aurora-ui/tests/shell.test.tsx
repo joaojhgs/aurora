@@ -1433,7 +1433,7 @@ describe('Aurora production shell', () => {
     expect(model.modes.find((mode) => mode.id === 'desktop-web-thin')).toEqual(
       expect.objectContaining({
         state: 'degraded',
-        repair: expect.stringContaining('AURORA_GATEWAY_URL')
+        repair: expect.stringContaining('runtime HTTP/WebRTC connection profile')
       })
     )
     expect(model.setupSteps.every((step) => step.repair.length > 0)).toBe(true)
