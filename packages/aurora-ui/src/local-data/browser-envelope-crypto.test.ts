@@ -5,10 +5,13 @@ import {
   type EncryptedDataEnvelopeV1
 } from '@aurora/client/local-data'
 
-import { BrowserEnvelopeCryptoPort } from './browser-envelope-crypto'
 import {
-  MapBrowserEnvelopeCryptoKeyStore,
-  testEnvelopeScope
+  BrowserEnvelopeCryptoPort
+} from './browser-envelope-crypto'
+import {
+  deleteMemoryDatabase,
+  deriveTestBrowserEnvelopeCryptoDatabaseName,
+  MemoryIndexedDbFactory
 } from './__tests__/browser-envelope-crypto-test-helpers'
 
 const cryptoImpl = globalThis.crypto
@@ -16,8 +19,7 @@ const encoder = new TextEncoder()
 
 describe('BrowserEnvelopeCryptoPort', () => {
   it('roundtrips with real WebCrypto and emits canonical nondeterministic envelopes', async () => {
-    const store = new MapBrowserEnvelopeCryptoKeyStore()
-    const port = createPort(store)
+    const port = createPort()
     const plaintext = bytes('secret structured local data')
     const aad = bytes('table:memory|record:1|field:payload')
 
@@ -36,22 +38,24 @@ describe('BrowserEnvelopeCryptoPort', () => {
   })
 
   it('persists non-extractable CryptoKey handles across structured-cloned reload stores', async () => {
-    const store = new MapBrowserEnvelopeCryptoKeyStore()
-    const firstPort = createPort(store)
+    const indexedDB = new MemoryIndexedDbFactory()
+    const firstPort = createPort({ indexedDB })
     const aad = bytes('aad')
     const envelope = await firstPort.encrypt('local-structured-data', bytes('persisted secret'), aad)
-    const selectedKey = store.keys.get(envelope.keyId)
+    const selectedKey = readMemoryKey(indexedDB, envelope.keyId)
 
     expect(selectedKey).toBeDefined()
     expect(selectedKey?.extractable).toBe(false)
     await expect(cryptoImpl.subtle.exportKey('raw', selectedKey!)).rejects.toThrow()
 
-    const reloadedPort = createPort(store.snapshot())
+    await firstPort.close()
+    const reloadedPort = createPort({ indexedDB })
     await expect(reloadedPort.decrypt(envelope, aad)).resolves.toEqual(bytes('persisted secret'))
   })
 
   it('fails closed for wrong AAD, tamper, tag changes, and wrong scoped keyId without leaking plaintext', async () => {
-    const port = createPort(new MapBrowserEnvelopeCryptoKeyStore())
+    const indexedDB = new MemoryIndexedDbFactory()
+    const port = createPort({ indexedDB })
     const aad = bytes('correct aad')
     const envelope = await port.encrypt('local-structured-data', bytes('plain-secret-token'), aad)
 
@@ -65,10 +69,11 @@ describe('BrowserEnvelopeCryptoPort', () => {
       nonceB64Url: flipLastByte(envelope.nonceB64Url)
     }, aad), 'decryption_failed')
 
-    const otherScope = testEnvelopeScope({ profileId: 'profile-2' })
+    const otherProfile = createPort({ indexedDB, profileId: 'profile-2' })
+    const otherEnvelope = await otherProfile.encrypt('local-structured-data', bytes('other secret'), aad)
     await expectLocalDataFailure(port.decrypt({
       ...envelope,
-      keyId: `aurora-local-data-envelope.local-structured-data.${otherScope.scopeKey}.v1`
+      keyId: otherEnvelope.keyId
     }, aad), 'missing_key')
 
     for (const candidate of [envelope, { ...envelope, ciphertextAndTagB64Url: flipLastByte(envelope.ciphertextAndTagB64Url) }]) {
@@ -79,20 +84,18 @@ describe('BrowserEnvelopeCryptoPort', () => {
   })
 
   it('serializes concurrent first use so one active key version is selected', async () => {
-    const store = new MapBrowserEnvelopeCryptoKeyStore()
-    const port = createPort(store)
+    const port = createPort()
     const aad = bytes('aad')
     const envelopes = await Promise.all(Array.from({ length: 24 }, (_, index) =>
       port.encrypt('local-structured-data', bytes(`secret-${index}`), aad)
     ))
 
     expect(new Set(envelopes.map((envelope) => envelope.keyId)).size).toBe(1)
-    expect(store.createAttempts).toBe(1)
     await expect(port.decrypt(envelopes[17]!, aad)).resolves.toEqual(bytes('secret-17'))
   })
 
   it('rotates to a new active key while keeping old envelopes readable', async () => {
-    const port = createPort(new MapBrowserEnvelopeCryptoKeyStore())
+    const port = createPort()
     const aad = bytes('aad')
     const oldEnvelope = await port.encrypt('local-structured-data', bytes('old secret'), aad)
     const rotation = await port.rotateKey('local-structured-data')
@@ -106,9 +109,9 @@ describe('BrowserEnvelopeCryptoPort', () => {
   })
 
   it('serializes concurrent rotations and selects one final active key', async () => {
-    const store = new MapBrowserEnvelopeCryptoKeyStore()
-    const first = createPort(store)
-    const second = createPort(store)
+    const indexedDB = new MemoryIndexedDbFactory()
+    const first = createPort({ indexedDB })
+    const second = createPort({ indexedDB })
     const aad = bytes('aad')
     const original = await first.encrypt('local-structured-data', bytes('original secret'), aad)
 
@@ -117,20 +120,19 @@ describe('BrowserEnvelopeCryptoPort', () => {
       second.rotateKey('local-structured-data')
     ])
     const afterRotation = await first.encrypt('local-structured-data', bytes('active secret'), aad)
-    const finalActive = store.metadata.get(testEnvelopeScope().scopeKey)?.activeKeyId
 
     expect(rotations[0]?.newKeyId).not.toBe(rotations[1]?.newKeyId)
-    expect(afterRotation.keyId).toBe(finalActive)
+    expect(afterRotation.keyId).toBe(rotations[1]?.newKeyId)
     await expect(first.decrypt(original, aad)).resolves.toEqual(bytes('original secret'))
     await expect(first.decrypt(afterRotation, aad)).resolves.toEqual(bytes('active secret'))
   })
 
   it('isolates keys by origin, profile, and local node', async () => {
-    const store = new MapBrowserEnvelopeCryptoKeyStore()
-    const first = createPort(store, { origin: 'https://aurora.example.test/a', profileId: 'profile-1', localNodeId: 'node-1' })
-    const sameOriginPath = createPort(store, { origin: 'https://aurora.example.test/b', profileId: 'profile-1', localNodeId: 'node-1' })
-    const otherProfile = createPort(store, { origin: 'https://aurora.example.test', profileId: 'profile-2', localNodeId: 'node-1' })
-    const otherNode = createPort(store, { origin: 'https://aurora.example.test', profileId: 'profile-1', localNodeId: 'node-2' })
+    const indexedDB = new MemoryIndexedDbFactory()
+    const first = createPort({ indexedDB, origin: 'https://aurora.example.test/a', profileId: 'profile-1', localNodeId: 'node-1' })
+    const sameOriginPath = createPort({ indexedDB, origin: 'https://aurora.example.test/b', profileId: 'profile-1', localNodeId: 'node-1' })
+    const otherProfile = createPort({ indexedDB, origin: 'https://aurora.example.test', profileId: 'profile-2', localNodeId: 'node-1' })
+    const otherNode = createPort({ indexedDB, origin: 'https://aurora.example.test', profileId: 'profile-1', localNodeId: 'node-2' })
     const aad = bytes('aad')
     const envelope = await first.encrypt('local-structured-data', bytes('isolated secret'), aad)
 
@@ -139,18 +141,20 @@ describe('BrowserEnvelopeCryptoPort', () => {
     await expectLocalDataFailure(otherNode.decrypt(envelope, aad), 'missing_key')
   })
 
-  it('deletes a key through the adapter-private operation and proves missing-key unreadability', async () => {
-    const store = new MapBrowserEnvelopeCryptoKeyStore()
-    const port = createPort(store)
+  it('proves missing-key unreadability after the isolated key vault disappears', async () => {
+    const indexedDB = new MemoryIndexedDbFactory()
+    const port = createPort({ indexedDB })
     const aad = bytes('aad')
     const envelope = await port.encrypt('local-structured-data', bytes('delete secret'), aad)
 
-    await port.deleteKeyForTesting('local-structured-data', envelope.keyId)
-    await expectLocalDataFailure(port.decrypt(envelope, aad), 'missing_key')
+    await port.close()
+    await deleteMemoryDatabase(indexedDB, deriveTestBrowserEnvelopeCryptoDatabaseName('https://aurora.example.test', 'node-1'))
+    const reopened = createPort({ indexedDB })
+    await expectLocalDataFailure(reopened.decrypt(envelope, aad), 'missing_key')
   })
 
   it('validates canonical envelopes before decrypting', async () => {
-    const port = createPort(new MapBrowserEnvelopeCryptoKeyStore())
+    const port = createPort()
     const invalidEnvelope = {
       version: 1,
       algorithm: 'AES-GCM-256',
@@ -171,17 +175,22 @@ describe('BrowserEnvelopeCryptoPort', () => {
 })
 
 function createPort(
-  store: MapBrowserEnvelopeCryptoKeyStore,
-  overrides: Partial<{ origin: string; profileId: string; localNodeId: string }> = {},
+  overrides: Partial<{ origin: string; profileId: string; localNodeId: string; indexedDB: MemoryIndexedDbFactory }> = {},
 ): BrowserEnvelopeCryptoPort {
+  const indexedDB = overrides.indexedDB ?? new MemoryIndexedDbFactory()
   return new BrowserEnvelopeCryptoPort({
     origin: overrides.origin ?? 'https://aurora.example.test',
     profileId: overrides.profileId ?? 'profile-1',
     localNodeId: overrides.localNodeId ?? 'node-1',
-    keyStore: store,
+    indexedDB: indexedDB as unknown as IDBFactory,
     crypto: cryptoImpl,
     nowMs: () => 1_000
   })
+}
+
+function readMemoryKey(indexedDB: MemoryIndexedDbFactory, keyId: string): CryptoKey | undefined {
+  const databaseName = deriveTestBrowserEnvelopeCryptoDatabaseName('https://aurora.example.test', 'node-1')
+  return indexedDB.databases.get(databaseName)?.stores.get('keys')?.get(keyId) as CryptoKey | undefined
 }
 
 function bytes(value: string): Uint8Array {

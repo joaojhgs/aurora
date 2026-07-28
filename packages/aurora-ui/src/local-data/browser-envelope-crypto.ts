@@ -20,12 +20,11 @@ export interface BrowserEnvelopeCryptoPortOptions {
   readonly profileId: string
   readonly localNodeId: string
   readonly indexedDB?: IDBFactory
-  readonly keyStore?: BrowserEnvelopeCryptoKeyStore
   readonly crypto?: Crypto
   readonly nowMs?: () => number
 }
 
-export interface BrowserEnvelopeCryptoKeyStore {
+interface BrowserEnvelopeCryptoKeyStore {
   getActiveKey(
     scope: BrowserEnvelopeKeyScope,
     createCandidate: () => Promise<CryptoKey>,
@@ -37,11 +36,10 @@ export interface BrowserEnvelopeCryptoKeyStore {
     createCandidate: () => Promise<CryptoKey>,
     nowMs: number,
   ): Promise<{ previousKeyId: string; newKeyId: string }>
-  deleteKey(scope: BrowserEnvelopeKeyScope, keyId: string): Promise<void>
   close(): Promise<void>
 }
 
-export interface BrowserEnvelopeKeyScope {
+interface BrowserEnvelopeKeyScope {
   readonly origin: string
   readonly profileId: string
   readonly localNodeId: string
@@ -49,7 +47,7 @@ export interface BrowserEnvelopeKeyScope {
   readonly scopeKey: string
 }
 
-export interface BrowserEnvelopeSelectedKey {
+interface BrowserEnvelopeSelectedKey {
   readonly keyId: string
   readonly key: CryptoKey
 }
@@ -69,10 +67,10 @@ interface StoredBrowserEnvelopeKeyMetadataV1 {
 }
 
 export class BrowserEnvelopeCryptoPort implements EnvelopeCryptoPort {
+  #keyStore: BrowserEnvelopeCryptoKeyStore
   private readonly origin: string
   private readonly profileId: string
   private readonly localNodeId: string
-  private readonly keyStore: BrowserEnvelopeCryptoKeyStore
   private readonly cryptoImpl: Crypto
   private readonly nowMs: () => number
   private operationQueue: Promise<unknown> = Promise.resolve()
@@ -87,7 +85,7 @@ export class BrowserEnvelopeCryptoPort implements EnvelopeCryptoPort {
       throw new LocalDataError('unsupported_backend', 'Browser local data encryption is unavailable', { reason: 'webcrypto_unavailable' })
     }
     this.cryptoImpl = cryptoImpl
-    this.keyStore = options.keyStore ?? new IndexedDbBrowserEnvelopeCryptoKeyStore({
+    this.#keyStore = new IndexedDbBrowserEnvelopeCryptoKeyStore({
       ...(options.indexedDB === undefined ? {} : { indexedDB: options.indexedDB }),
       databaseName: deriveBrowserEnvelopeCryptoDatabaseName(this.origin, this.localNodeId)
     })
@@ -103,7 +101,7 @@ export class BrowserEnvelopeCryptoPort implements EnvelopeCryptoPort {
       this.assertOpen()
       assertSupportedKeyPurpose(keyPurpose)
       const scope = this.scope(keyPurpose)
-      const selected = await this.keyStore.getActiveKey(scope, () => this.generateKey(), this.nowMs())
+      const selected = await this.#keyStore.getActiveKey(scope, () => this.generateKey(), this.nowMs())
       const nonce = new Uint8Array(AES_GCM_NONCE_BYTES)
       this.cryptoImpl.getRandomValues(nonce)
       const ciphertextAndTag = new Uint8Array(await this.cryptoImpl.subtle.encrypt(
@@ -127,7 +125,7 @@ export class BrowserEnvelopeCryptoPort implements EnvelopeCryptoPort {
       this.assertOpen()
       const parsed = parseEncryptedDataEnvelopeV1(envelope)
       const scope = scopeFromKeyId(parsed.keyId, this.origin, this.profileId, this.localNodeId)
-      const key = await this.keyStore.getKey(scope, parsed.keyId)
+      const key = await this.#keyStore.getKey(scope, parsed.keyId)
       if (key === null) {
         throw new LocalDataError('invalid_record', 'Local data envelope key is unavailable', { reason: 'missing_key' })
       }
@@ -152,15 +150,7 @@ export class BrowserEnvelopeCryptoPort implements EnvelopeCryptoPort {
     return await this.enqueue(async () => {
       this.assertOpen()
       assertSupportedKeyPurpose(keyPurpose)
-      return await this.keyStore.rotateKey(this.scope(keyPurpose), () => this.generateKey(), this.nowMs())
-    })
-  }
-
-  async deleteKeyForTesting(keyPurpose: LocalDataKeyPurpose, keyId: string): Promise<void> {
-    await this.enqueue(async () => {
-      this.assertOpen()
-      assertSupportedKeyPurpose(keyPurpose)
-      await this.keyStore.deleteKey(this.scope(keyPurpose), keyId)
+      return await this.#keyStore.rotateKey(this.scope(keyPurpose), () => this.generateKey(), this.nowMs())
     })
   }
 
@@ -168,7 +158,7 @@ export class BrowserEnvelopeCryptoPort implements EnvelopeCryptoPort {
     await this.enqueue(async () => {
       if (this.closed) return
       this.closed = true
-      await this.keyStore.close()
+      await this.#keyStore.close()
     })
   }
 
@@ -201,7 +191,11 @@ export class BrowserEnvelopeCryptoPort implements EnvelopeCryptoPort {
   }
 }
 
-export class IndexedDbBrowserEnvelopeCryptoKeyStore implements BrowserEnvelopeCryptoKeyStore {
+export function createBrowserEnvelopeCryptoPort(options: BrowserEnvelopeCryptoPortOptions): EnvelopeCryptoPort {
+  return new BrowserEnvelopeCryptoPort(options)
+}
+
+class IndexedDbBrowserEnvelopeCryptoKeyStore implements BrowserEnvelopeCryptoKeyStore {
   private readonly indexedDB: IDBFactory
   private readonly databaseName: string
   private databasePromise: Promise<IDBDatabase> | null = null
@@ -278,13 +272,6 @@ export class IndexedDbBrowserEnvelopeCryptoKeyStore implements BrowserEnvelopeCr
         updatedAtMs: nowMs
       })
       return { previousKeyId: existing.activeKeyId, newKeyId: nextKeyId }
-    })
-  }
-
-  async deleteKey(scope: BrowserEnvelopeKeyScope, keyId: string): Promise<void> {
-    if (!keyIdBelongsToScope(keyId, scope)) return
-    await this.withTransaction('readwrite', async (stores) => {
-      await stores.deleteKey(keyId)
     })
   }
 
@@ -365,10 +352,6 @@ class BrowserEnvelopeTransactionStores {
   async putKey(keyId: string, key: CryptoKey): Promise<void> {
     await idbRequest(this.keyStore.put(key, keyId))
   }
-
-  async deleteKey(keyId: string): Promise<void> {
-    await idbRequest(this.keyStore.delete(keyId))
-  }
 }
 
 function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
@@ -378,11 +361,11 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
-export function deriveBrowserEnvelopeCryptoDatabaseName(origin: string | undefined, localNodeId: string): string {
+function deriveBrowserEnvelopeCryptoDatabaseName(origin: string | undefined, localNodeId: string): string {
   return `${ENVELOPE_KEY_ID_PREFIX}-${stableHash(`${canonicalOrigin(origin)}\u0000${localNodeId}`)}`
 }
 
-export function buildBrowserEnvelopeKeyScope(input: {
+function buildBrowserEnvelopeKeyScope(input: {
   origin: string
   profileId: string
   localNodeId: string

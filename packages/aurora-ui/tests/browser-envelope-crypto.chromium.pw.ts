@@ -66,10 +66,9 @@ test('real Chromium IndexedDB persists a non-extractable local-data envelope key
     const modulePath = '/packages/aurora-ui/dist/local-data/index.js'
     const {
       BrowserEnvelopeCryptoPort,
-      deriveBrowserEnvelopeCryptoDatabaseName,
     } = await import(modulePath)
 
-    const databaseName = deriveBrowserEnvelopeCryptoDatabaseName(location.origin, 'node-1')
+    const databaseName = deriveTestBrowserEnvelopeCryptoDatabaseName(location.origin, 'node-1')
     await deleteDatabase(databaseName)
 
     const aad = new TextEncoder().encode('aad')
@@ -94,15 +93,20 @@ test('real Chromium IndexedDB persists a non-extractable local-data envelope key
       localNodeId: 'node-1',
     })
     const decrypted = await reopened.decrypt(envelope, aad)
-    await reopened.deleteKeyForTesting('local-structured-data', envelope.keyId)
-    const missingKey = await reopened.decrypt(envelope, aad).then(
+    await reopened.close()
+    await deleteDatabase(databaseName)
+    const missingKeyPort = new BrowserEnvelopeCryptoPort({
+      origin: location.origin,
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+    })
+    const missingKey = await missingKeyPort.decrypt(envelope, aad).then(
       () => null,
       (error: unknown) => error instanceof Error && 'metadata' in error
         ? (error as { metadata?: { reason?: string } }).metadata?.reason ?? null
         : null,
     )
-    await reopened.close()
-    await deleteDatabase(databaseName)
+    await missingKeyPort.close()
 
     return {
       decrypted: new TextDecoder().decode(decrypted),
@@ -151,6 +155,20 @@ test('real Chromium IndexedDB persists a non-extractable local-data envelope key
         request.onerror = () => rejectDelete(request.error ?? new Error('IndexedDB delete failed'))
         request.onblocked = () => rejectDelete(new Error('IndexedDB delete blocked'))
       })
+    }
+
+    function deriveTestBrowserEnvelopeCryptoDatabaseName(origin: string, localNodeId: string): string {
+      return `aurora-local-data-envelope-${stableHash(`${new URL(origin).origin}\u0000${localNodeId}`)}`
+    }
+
+    function stableHash(value: string): string {
+      let hash = 0xcbf29ce484222325n
+      const prime = 0x100000001b3n
+      for (const byte of new TextEncoder().encode(value)) {
+        hash ^= BigInt(byte)
+        hash = BigInt.asUintN(64, hash * prime)
+      }
+      return hash.toString(16).padStart(16, '0')
     }
   })
 
