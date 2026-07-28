@@ -5,6 +5,10 @@ import Security
 private let auroraThinPeerKeychainService = "dev.aurora.ios.thin-peer-credentials"
 private let auroraThinPeerAccountPrefix = "aurora.mesh.peer-proof."
 private let auroraThinRoomSecretAccountPrefix = "aurora.mesh.room-secret."
+private let auroraLocalDataEnvelopeAccountPrefix = "aurora.local-data-envelope."
+private let auroraLocalDataEnvelopeCurrentPrefix = "aurora.local-data-envelope-current."
+private let auroraLocalDataEnvelopeAlgorithm = "AES-GCM-256"
+private let auroraLocalDataEnvelopePurpose = "local-structured-data"
 private let auroraThinProfileKey = "aurora.session.ios-thin-connection-profile.v1"
 private let auroraReconnectProofDomain = Data("aurora.mesh.reconnect-proof.v1\u{0}".utf8)
 
@@ -95,6 +99,36 @@ struct AuroraThinRoomSecretGetArgs: Decodable {
   let ref: String
 }
 
+struct AuroraLocalDataEnvelopeEncryptArgs: Decodable {
+  let keyPurpose: String
+  let profileId: String
+  let localNodeId: String
+  let plaintextB64Url: String
+  let aadB64Url: String
+}
+
+struct AuroraLocalDataEnvelopeDecryptArgs: Decodable {
+  let profileId: String
+  let localNodeId: String
+  let envelope: AuroraLocalDataEnvelopeV1
+  let aadB64Url: String
+}
+
+struct AuroraLocalDataEnvelopeRotateArgs: Decodable {
+  let keyPurpose: String
+  let profileId: String
+  let localNodeId: String
+}
+
+struct AuroraLocalDataEnvelopeV1: Codable {
+  let version: UInt32
+  let algorithm: String
+  let keyId: String
+  let nonceB64Url: String
+  let ciphertextAndTagB64Url: String
+  let createdAtMs: UInt64
+}
+
 private struct AuroraThinPeerCredentialRecord: Codable {
   let tokenId: String
   let claimantPeerId: String
@@ -108,6 +142,55 @@ private struct AuroraThinPeerCredentialRecord: Codable {
 }
 
 enum AuroraThinPeerStorage {
+  static func localDataEnvelopeEncrypt(_ args: AuroraLocalDataEnvelopeEncryptArgs) throws -> [String: Any] {
+    try validateLocalDataEnvelopeScope(args.keyPurpose, args.profileId, args.localNodeId)
+    let keyVersion = try currentLocalDataEnvelopeKeyVersion(profileId: args.profileId, localNodeId: args.localNodeId, purpose: args.keyPurpose)
+    let keyId = localDataEnvelopeKeyId(profileId: args.profileId, localNodeId: args.localNodeId, purpose: args.keyPurpose, version: keyVersion)
+    let plaintext = try base64UrlDecode(args.plaintextB64Url)
+    let aad = try base64UrlDecode(args.aadB64Url)
+    let key = try localDataEnvelopeKey(keyId: keyId)
+    let sealed = try AES.GCM.seal(plaintext, using: key, authenticating: aad)
+    return [
+      "version": 1,
+      "algorithm": auroraLocalDataEnvelopeAlgorithm,
+      "keyId": keyId,
+      "nonceB64Url": base64UrlEncode(Data(sealed.nonce)),
+      "ciphertextAndTagB64Url": base64UrlEncode(sealed.ciphertext + sealed.tag),
+      "createdAtMs": currentUnixMs()
+    ]
+  }
+
+  static func localDataEnvelopeDecrypt(_ args: AuroraLocalDataEnvelopeDecryptArgs) throws -> [String: Any] {
+    try validateLocalDataEnvelope(args.envelope)
+    try validateLocalDataEnvelopeBinding(profileId: args.profileId, localNodeId: args.localNodeId, keyId: args.envelope.keyId)
+    let nonce = try AES.GCM.Nonce(data: base64UrlDecode(args.envelope.nonceB64Url))
+    let ciphertextAndTag = try base64UrlDecode(args.envelope.ciphertextAndTagB64Url)
+    guard ciphertextAndTag.count >= 16 else { throw AuroraThinStorageError.invalidInput }
+    let ciphertext = ciphertextAndTag.prefix(ciphertextAndTag.count - 16)
+    let tag = ciphertextAndTag.suffix(16)
+    let box = try AES.GCM.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
+    let plaintext = try AES.GCM.open(box, using: try localDataEnvelopeKey(keyId: args.envelope.keyId), authenticating: try base64UrlDecode(args.aadB64Url))
+    return [
+      "plaintextB64Url": base64UrlEncode(plaintext),
+      "secretsRedacted": true
+    ]
+  }
+
+  static func localDataEnvelopeRotate(_ args: AuroraLocalDataEnvelopeRotateArgs) throws -> [String: Any] {
+    try validateLocalDataEnvelopeScope(args.keyPurpose, args.profileId, args.localNodeId)
+    let previousVersion = try currentLocalDataEnvelopeKeyVersion(profileId: args.profileId, localNodeId: args.localNodeId, purpose: args.keyPurpose)
+    let previousKeyId = localDataEnvelopeKeyId(profileId: args.profileId, localNodeId: args.localNodeId, purpose: args.keyPurpose, version: previousVersion)
+    let newVersion = previousVersion + 1
+    let newKeyId = localDataEnvelopeKeyId(profileId: args.profileId, localNodeId: args.localNodeId, purpose: args.keyPurpose, version: newVersion)
+    _ = try localDataEnvelopeKey(keyId: newKeyId)
+    try keychainWrite(account: localDataEnvelopeCurrentAccount(profileId: args.profileId, localNodeId: args.localNodeId, purpose: args.keyPurpose), value: Data(String(newVersion).utf8))
+    return [
+      "previousKeyId": previousKeyId,
+      "newKeyId": newKeyId,
+      "secretsRedacted": true
+    ]
+  }
+
   static func setCredential(_ args: AuroraThinPeerCredentialSetArgs) throws -> [String: Any] {
     try validatePeerId(args.peerId)
     try validateNonEmpty(args.tokenId, maxBytes: 128)
@@ -436,6 +519,93 @@ enum AuroraThinPeerStorage {
     else {
       throw AuroraThinStorageError.invalidInput
     }
+  }
+
+  private static func validateLocalDataEnvelopeScope(_ purpose: String, _ profileId: String, _ localNodeId: String) throws {
+    guard purpose == auroraLocalDataEnvelopePurpose else { throw AuroraThinStorageError.invalidInput }
+    try validateNonEmpty(profileId, maxBytes: 256)
+    try validateNonEmpty(localNodeId, maxBytes: 256)
+  }
+
+  private static func validateLocalDataEnvelope(_ envelope: AuroraLocalDataEnvelopeV1) throws {
+    guard envelope.version == 1, envelope.algorithm == auroraLocalDataEnvelopeAlgorithm else {
+      throw AuroraThinStorageError.invalidInput
+    }
+    guard try base64UrlDecode(envelope.nonceB64Url).count == 12 else {
+      throw AuroraThinStorageError.invalidInput
+    }
+    guard try base64UrlDecode(envelope.ciphertextAndTagB64Url).count >= 16 else {
+      throw AuroraThinStorageError.invalidInput
+    }
+    try validateLocalDataEnvelopeKeyId(envelope.keyId)
+  }
+
+  private static func validateLocalDataEnvelopeBinding(profileId: String, localNodeId: String, keyId: String) throws {
+    let expected = "aurora.local-data-envelope.v1.\(Data(SHA256.hash(data: Data(profileId.utf8))).lowercaseHex).\(Data(SHA256.hash(data: Data(localNodeId.utf8))).lowercaseHex).\(auroraLocalDataEnvelopePurpose).k"
+    guard keyId.hasPrefix(expected) else { throw AuroraThinStorageError.invalidInput }
+    try validateLocalDataEnvelopeKeyId(keyId)
+  }
+
+  private static func validateLocalDataEnvelopeKeyId(_ keyId: String) throws {
+    let pattern = #"^aurora\.local-data-envelope\.v1\.[0-9a-f]{64}\.[0-9a-f]{64}\.local-structured-data\.k[1-9][0-9]*$"#
+    guard keyId.range(of: pattern, options: .regularExpression) != nil else {
+      throw AuroraThinStorageError.invalidInput
+    }
+  }
+
+  private static func localDataEnvelopeKeyId(profileId: String, localNodeId: String, purpose: String, version: UInt32) -> String {
+    "aurora.local-data-envelope.v1.\(Data(SHA256.hash(data: Data(profileId.utf8))).lowercaseHex).\(Data(SHA256.hash(data: Data(localNodeId.utf8))).lowercaseHex).\(purpose).k\(version)"
+  }
+
+  private static func localDataEnvelopeCurrentAccount(profileId: String, localNodeId: String, purpose: String) -> String {
+    auroraLocalDataEnvelopeCurrentPrefix + Data(SHA256.hash(data: Data("\(profileId)\u{0}\(localNodeId)\u{0}\(purpose)".utf8))).lowercaseHex
+  }
+
+  private static func localDataEnvelopeAccount(keyId: String) throws -> String {
+    try validateLocalDataEnvelopeKeyId(keyId)
+    return auroraLocalDataEnvelopeAccountPrefix + Data(SHA256.hash(data: Data(keyId.utf8))).lowercaseHex
+  }
+
+  private static func currentLocalDataEnvelopeKeyVersion(profileId: String, localNodeId: String, purpose: String) throws -> UInt32 {
+    guard let stored = try keychainRead(account: localDataEnvelopeCurrentAccount(profileId: profileId, localNodeId: localNodeId, purpose: purpose)) else {
+      return 1
+    }
+    guard let text = String(data: stored, encoding: .utf8), let version = UInt32(text), version > 0 else {
+      throw AuroraThinStorageError.keychainFailure
+    }
+    return version
+  }
+
+  private static func localDataEnvelopeKey(keyId: String) throws -> SymmetricKey {
+    let account = try localDataEnvelopeAccount(keyId: keyId)
+    if let stored = try keychainRead(account: account) {
+      guard stored.count == 32 else { throw AuroraThinStorageError.keychainFailure }
+      return SymmetricKey(data: stored)
+    }
+    var key = Data(count: 32)
+    let status = key.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+    guard status == errSecSuccess else { throw AuroraThinStorageError.keychainFailure }
+    try keychainWrite(account: account, value: key)
+    return SymmetricKey(data: key)
+  }
+
+  private static func base64UrlEncode(_ value: Data) -> String {
+    value.base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-")
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
+  }
+
+  private static func base64UrlDecode(_ value: String) throws -> Data {
+    guard !value.isEmpty, !value.contains("=") else { throw AuroraThinStorageError.invalidInput }
+    let padded = value
+      .replacingOccurrences(of: "-", with: "+")
+      .replacingOccurrences(of: "_", with: "/")
+      .padding(toLength: value.count + ((4 - (value.count % 4)) % 4), withPad: "=", startingAt: 0)
+    guard let data = Data(base64Encoded: padded), base64UrlEncode(data) == value else {
+      throw AuroraThinStorageError.invalidInput
+    }
+    return data
   }
 
   private static func credentialAccount(peerId: String) throws -> String {

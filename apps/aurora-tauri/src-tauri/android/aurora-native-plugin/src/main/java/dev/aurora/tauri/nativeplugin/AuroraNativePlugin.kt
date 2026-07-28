@@ -55,6 +55,10 @@ private const val SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
 private const val SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
+private const val LOCAL_DATA_ENVELOPE_KEY_PREFIX = "aurora_local_data_envelope_v1_"
+private const val LOCAL_DATA_ENVELOPE_CURRENT_VERSION_PREFIX = "aurora_local_data_envelope_current_v1_"
+private const val LOCAL_DATA_ENVELOPE_ALGORITHM = "AES-GCM-256"
+private const val LOCAL_DATA_ENVELOPE_PURPOSE = "local-structured-data"
 private const val PEER_PROOF_PREFIX = "aurora.mesh.peer-proof."
 private const val ROOM_SECRET_PREFIX = "aurora.mesh.room-secret."
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
@@ -497,6 +501,78 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.resolve(ret)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "secure_storage_delete_failed")
+        }
+    }
+
+    @Command
+    fun localDataEnvelopeEncrypt(invoke: Invoke) {
+        val args = invoke.parseArgs(LocalDataEnvelopeEncryptArgs::class.java)
+        try {
+            validateLocalDataEnvelopeScope(args.keyPurpose, args.profileId, args.localNodeId)
+            val plaintext = base64UrlDecode(args.plaintextB64Url)
+            val aad = base64UrlDecode(args.aadB64Url)
+            val keyVersion = currentLocalDataEnvelopeKeyVersion(args.profileId, args.localNodeId, args.keyPurpose)
+            val keyId = localDataEnvelopeKeyId(args.profileId, args.localNodeId, args.keyPurpose, keyVersion)
+            val cipher = Cipher.getInstance(AES_GCM_TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, localDataEnvelopeKey(keyId))
+            cipher.updateAAD(aad)
+            val ciphertextAndTag = cipher.doFinal(plaintext)
+            val ret = JSObject()
+            ret.put("version", 1)
+            ret.put("algorithm", LOCAL_DATA_ENVELOPE_ALGORITHM)
+            ret.put("keyId", keyId)
+            ret.put("nonceB64Url", base64UrlEncode(cipher.iv))
+            ret.put("ciphertextAndTagB64Url", base64UrlEncode(ciphertextAndTag))
+            ret.put("createdAtMs", currentUnixMs())
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "local_data_envelope_encrypt_failed")
+        }
+    }
+
+    @Command
+    fun localDataEnvelopeDecrypt(invoke: Invoke) {
+        val args = invoke.parseArgs(LocalDataEnvelopeDecryptArgs::class.java)
+        try {
+            validateLocalDataEnvelope(args.envelope)
+            validateLocalDataEnvelopeBinding(args.profileId, args.localNodeId, args.envelope.keyId)
+            val cipher = Cipher.getInstance(AES_GCM_TRANSFORMATION)
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                localDataEnvelopeKey(args.envelope.keyId),
+                GCMParameterSpec(AES_GCM_TAG_BITS, base64UrlDecode(args.envelope.nonceB64Url)),
+            )
+            cipher.updateAAD(base64UrlDecode(args.aadB64Url))
+            val plaintext = cipher.doFinal(base64UrlDecode(args.envelope.ciphertextAndTagB64Url))
+            val ret = JSObject()
+            ret.put("plaintextB64Url", base64UrlEncode(plaintext))
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "local_data_envelope_decrypt_failed")
+        }
+    }
+
+    @Command
+    fun localDataEnvelopeRotate(invoke: Invoke) {
+        val args = invoke.parseArgs(LocalDataEnvelopeRotateArgs::class.java)
+        try {
+            validateLocalDataEnvelopeScope(args.keyPurpose, args.profileId, args.localNodeId)
+            val previousVersion = currentLocalDataEnvelopeKeyVersion(args.profileId, args.localNodeId, args.keyPurpose)
+            val previousKeyId = localDataEnvelopeKeyId(args.profileId, args.localNodeId, args.keyPurpose, previousVersion)
+            val newVersion = previousVersion + 1
+            val newKeyId = localDataEnvelopeKeyId(args.profileId, args.localNodeId, args.keyPurpose, newVersion)
+            localDataEnvelopeKey(newKeyId)
+            securePrefs().edit()
+                .putInt(localDataEnvelopeCurrentVersionKey(args.profileId, args.localNodeId, args.keyPurpose), newVersion)
+                .apply()
+            val ret = JSObject()
+            ret.put("previousKeyId", previousKeyId)
+            ret.put("newKeyId", newKeyId)
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "local_data_envelope_rotate_failed")
         }
     }
 
@@ -1119,6 +1195,71 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 .build(),
         )
         return keyGenerator.generateKey()
+    }
+
+    private fun localDataEnvelopeKey(keyId: String): SecretKey {
+        validateLocalDataEnvelopeKeyId(keyId)
+        val alias = LOCAL_DATA_ENVELOPE_KEY_PREFIX + sha256Hex(keyId.toByteArray(Charsets.UTF_8))
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        (keyStore.getKey(alias, null) as? SecretKey)?.let { return it }
+        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        keyGenerator.init(
+            KeyGenParameterSpec.Builder(
+                alias,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setKeySize(256)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build(),
+        )
+        return keyGenerator.generateKey()
+    }
+
+    private fun currentLocalDataEnvelopeKeyVersion(profileId: String, localNodeId: String, purpose: String): Int =
+        securePrefs().getInt(localDataEnvelopeCurrentVersionKey(profileId, localNodeId, purpose), 1)
+
+    private fun localDataEnvelopeCurrentVersionKey(profileId: String, localNodeId: String, purpose: String): String =
+        LOCAL_DATA_ENVELOPE_CURRENT_VERSION_PREFIX +
+            sha256Hex("${profileId}\u0000${localNodeId}\u0000${purpose}".toByteArray(Charsets.UTF_8))
+
+    private fun localDataEnvelopeKeyId(profileId: String, localNodeId: String, purpose: String, version: Int): String =
+        "aurora.local-data-envelope.v1.${sha256Hex(profileId.toByteArray(Charsets.UTF_8))}.${sha256Hex(localNodeId.toByteArray(Charsets.UTF_8))}.${purpose}.k${version}"
+
+    private fun validateLocalDataEnvelopeScope(purpose: String, profileId: String, localNodeId: String) {
+        if (purpose != LOCAL_DATA_ENVELOPE_PURPOSE) throw IllegalArgumentException("local_data_key_purpose_unsupported")
+        validateNonEmpty("profileId", profileId, 256)
+        validateNonEmpty("localNodeId", localNodeId, 256)
+    }
+
+    private fun validateLocalDataEnvelopeBinding(profileId: String, localNodeId: String, keyId: String) {
+        val expectedPrefix = "aurora.local-data-envelope.v1.${sha256Hex(profileId.toByteArray(Charsets.UTF_8))}.${sha256Hex(localNodeId.toByteArray(Charsets.UTF_8))}.${LOCAL_DATA_ENVELOPE_PURPOSE}.k"
+        if (!keyId.startsWith(expectedPrefix)) throw IllegalArgumentException("local_data_envelope_key_mismatch")
+        validateLocalDataEnvelopeKeyId(keyId)
+    }
+
+    private fun validateLocalDataEnvelopeKeyId(keyId: String) {
+        val regex = Regex("^aurora\\.local-data-envelope\\.v1\\.[0-9a-f]{64}\\.[0-9a-f]{64}\\.${LOCAL_DATA_ENVELOPE_PURPOSE}\\.k[1-9][0-9]*$")
+        if (!regex.matches(keyId)) throw IllegalArgumentException("local_data_envelope_key_invalid")
+    }
+
+    private fun validateLocalDataEnvelope(envelope: LocalDataEnvelopeArg) {
+        if (envelope.version != 1 || envelope.algorithm != LOCAL_DATA_ENVELOPE_ALGORITHM) {
+            throw IllegalArgumentException("local_data_envelope_unsupported")
+        }
+        if (base64UrlDecode(envelope.nonceB64Url).size != 12) throw IllegalArgumentException("local_data_envelope_nonce_invalid")
+        if (base64UrlDecode(envelope.ciphertextAndTagB64Url).size < 16) throw IllegalArgumentException("local_data_envelope_ciphertext_invalid")
+    }
+
+    private fun base64UrlEncode(value: ByteArray): String =
+        Base64.encodeToString(value, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+
+    private fun base64UrlDecode(value: String): ByteArray {
+        if (value.isEmpty() || value.contains("=")) throw IllegalArgumentException("base64url_invalid")
+        val bytes = Base64.decode(value, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        if (base64UrlEncode(bytes) != value) throw IllegalArgumentException("base64url_not_canonical")
+        return bytes
     }
 
     private fun secureStorageResult(key: String): JSObject {
@@ -1759,6 +1900,40 @@ class AndroidPermissionRequestArgs {
 class SecureStorageArgs {
     var key: String = ""
     var value: String = ""
+}
+
+@InvokeArg
+class LocalDataEnvelopeEncryptArgs {
+    var keyPurpose: String = ""
+    var profileId: String = ""
+    var localNodeId: String = ""
+    var plaintextB64Url: String = ""
+    var aadB64Url: String = ""
+}
+
+@InvokeArg
+class LocalDataEnvelopeDecryptArgs {
+    var profileId: String = ""
+    var localNodeId: String = ""
+    var envelope: LocalDataEnvelopeArg = LocalDataEnvelopeArg()
+    var aadB64Url: String = ""
+}
+
+@InvokeArg
+class LocalDataEnvelopeRotateArgs {
+    var keyPurpose: String = ""
+    var profileId: String = ""
+    var localNodeId: String = ""
+}
+
+@InvokeArg
+class LocalDataEnvelopeArg {
+    var version: Int = 0
+    var algorithm: String = ""
+    var keyId: String = ""
+    var nonceB64Url: String = ""
+    var ciphertextAndTagB64Url: String = ""
+    var createdAtMs: Long = 0
 }
 
 @InvokeArg

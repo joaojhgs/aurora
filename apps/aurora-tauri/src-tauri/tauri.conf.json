@@ -75,6 +75,11 @@
       "windows": {
         "installMode": "passive"
       }
+    },
+    "sql": {
+      "preload": [
+        "sqlite:aurora-lightweight.db"
+      ]
     }
   }
 }

@@ -1,3 +1,8 @@
+use aes_gcm::{
+    aead::{Aead, KeyInit, Payload},
+    Aes256Gcm, Nonce,
+};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hmac::{Hmac, Mac};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
@@ -28,11 +33,19 @@ use tokio::sync::watch;
 use url::Url;
 
 mod native_webrtc;
+mod generated {
+    pub mod local_data_migrations;
+}
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
+const LOCAL_DATA_DB_URL: &str = "sqlite:aurora-lightweight.db";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
 const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
+const LOCAL_DATA_ENVELOPE_KEY_SERVICE: &str = "dev.aurora.desktop.local-data-envelope";
+const LOCAL_DATA_ENVELOPE_ALGORITHM: &str = "AES-GCM-256";
+const LOCAL_DATA_ENVELOPE_KEY_PURPOSE: &str = "local-structured-data";
+const LOCAL_DATA_ENVELOPE_CURRENT_VERSION: u32 = 1;
 const DESKTOP_THIN_PROFILES_KEY: &str = "aurora.session.desktop-thin-connection-profiles.v1";
 const BUNDLED_SIDECAR_NAME: &str = "aurora-sidecar";
 #[cfg(test)]
@@ -234,6 +247,44 @@ struct ThinRoomSecretSetRequest {
 struct ThinRoomSecretGetRequest {
     #[serde(rename = "ref")]
     ref_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalDataEnvelopeEncryptRequest {
+    key_purpose: String,
+    profile_id: String,
+    local_node_id: String,
+    plaintext_b64_url: String,
+    aad_b64_url: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalDataEnvelopeDecryptRequest {
+    profile_id: String,
+    local_node_id: String,
+    envelope: LocalDataEnvelopeV1,
+    aad_b64_url: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalDataEnvelopeRotateRequest {
+    key_purpose: String,
+    profile_id: String,
+    local_node_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalDataEnvelopeV1 {
+    version: u32,
+    algorithm: String,
+    key_id: String,
+    nonce_b64_url: String,
+    ciphertext_and_tag_b64_url: String,
+    created_at_ms: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -2576,6 +2627,171 @@ async fn aurora_secure_storage_delete(
 }
 
 #[tauri::command]
+async fn aurora_local_data_envelope_encrypt(
+    request: LocalDataEnvelopeEncryptRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_local_data_key_scope(
+        &request.key_purpose,
+        &request.profile_id,
+        &request.local_node_id,
+    )?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "localDataEnvelopeEncrypt", json!(request));
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "localDataEnvelopeEncrypt", json!(request));
+    }
+
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = native;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "local data envelope crypto requires platform secure key handles".to_string(),
+        ));
+    }
+
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let plaintext = decode_base64url_bytes(&request.plaintext_b64_url)?;
+        let aad = decode_base64url_bytes(&request.aad_b64_url)?;
+        let key_version = current_local_data_envelope_key_version(
+            &request.profile_id,
+            &request.local_node_id,
+            &request.key_purpose,
+        )?;
+        let key_id = local_data_envelope_key_id(
+            &request.profile_id,
+            &request.local_node_id,
+            &request.key_purpose,
+            key_version,
+        );
+        let key = load_or_create_local_data_envelope_key(&key_id)?;
+        let envelope = encrypt_local_data_envelope(&key_id, &key, &plaintext, &aad)?;
+        Ok(serde_json::to_value(envelope)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?)
+    }
+}
+
+#[tauri::command]
+async fn aurora_local_data_envelope_decrypt(
+    request: LocalDataEnvelopeDecryptRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_local_data_envelope(&request.envelope)?;
+    let bound = parse_local_data_envelope_key_id(&request.envelope.key_id)?;
+    if bound.profile_hash != sha256_hex(request.profile_id.as_bytes())
+        || bound.local_node_hash != sha256_hex(request.local_node_id.as_bytes())
+        || bound.purpose != LOCAL_DATA_ENVELOPE_KEY_PURPOSE
+    {
+        return Err(AuroraCommandError::SecureStorage(
+            "local data envelope key does not match this profile".to_string(),
+        ));
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "localDataEnvelopeDecrypt", json!(request));
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "localDataEnvelopeDecrypt", json!(request));
+    }
+
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = native;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "local data envelope crypto requires platform secure key handles".to_string(),
+        ));
+    }
+
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let aad = decode_base64url_bytes(&request.aad_b64_url)?;
+        let key = load_existing_local_data_envelope_key(&request.envelope.key_id)?;
+        let plaintext = decrypt_local_data_envelope(&request.envelope, &key, &aad)?;
+        Ok(json!({
+            "plaintextB64Url": encode_base64url_bytes(&plaintext),
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_local_data_envelope_rotate(
+    request: LocalDataEnvelopeRotateRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_local_data_key_scope(
+        &request.key_purpose,
+        &request.profile_id,
+        &request.local_node_id,
+    )?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "localDataEnvelopeRotate", json!(request));
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "localDataEnvelopeRotate", json!(request));
+    }
+
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = native;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "local data envelope crypto requires platform secure key handles".to_string(),
+        ));
+    }
+
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let previous_version = current_local_data_envelope_key_version(
+            &request.profile_id,
+            &request.local_node_id,
+            &request.key_purpose,
+        )?;
+        let previous_key_id = local_data_envelope_key_id(
+            &request.profile_id,
+            &request.local_node_id,
+            &request.key_purpose,
+            previous_version,
+        );
+        let new_version = previous_version + 1;
+        let new_key_id = local_data_envelope_key_id(
+            &request.profile_id,
+            &request.local_node_id,
+            &request.key_purpose,
+            new_version,
+        );
+        let key = random_key_256()?;
+        store_local_data_envelope_key(&new_key_id, &key)?;
+        store_local_data_envelope_current_version(
+            &request.profile_id,
+            &request.local_node_id,
+            &request.key_purpose,
+            new_version,
+        )?;
+        Ok(json!({
+            "previousKeyId": previous_key_id,
+            "newKeyId": new_key_id,
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
 async fn aurora_biometric_admin_unlock_status(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
@@ -3043,6 +3259,29 @@ impl AuroraCommandError {
 
 fn native_permission_missing(permission: &'static str) -> AuroraCommandError {
     AuroraCommandError::NativePermissionMissing(permission.to_string())
+}
+
+fn local_data_sql_migrations() -> Vec<tauri_plugin_sql::Migration> {
+    debug_assert_eq!(
+        LOCAL_DATA_DB_URL.strip_prefix("sqlite:"),
+        Some(generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME)
+    );
+    debug_assert_eq!(
+        generated::local_data_migrations::LOCAL_DATA_LATEST_VERSION,
+        generated::local_data_migrations::LOCAL_DATA_MIGRATIONS
+            .last()
+            .map(|migration| migration.version)
+            .unwrap_or(0)
+    );
+    generated::local_data_migrations::LOCAL_DATA_MIGRATIONS
+        .iter()
+        .map(|migration| tauri_plugin_sql::Migration {
+            version: i64::from(migration.version),
+            description: migration.name,
+            sql: migration.sql,
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        })
+        .collect()
 }
 
 fn envelope(method: String, data: Value) -> AuroraEnvelope {
@@ -3731,6 +3970,298 @@ fn raw_secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandEr
         .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct LocalDataEnvelopeKeyBinding {
+    profile_hash: String,
+    local_node_hash: String,
+    purpose: String,
+    version: u32,
+}
+
+fn validate_local_data_key_scope(
+    purpose: &str,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    if purpose != LOCAL_DATA_ENVELOPE_KEY_PURPOSE {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "local data key purpose is unsupported".to_string(),
+        ));
+    }
+    validate_non_empty_field("profileId", profile_id, 256)?;
+    validate_non_empty_field("localNodeId", local_node_id, 256)?;
+    Ok(())
+}
+
+fn validate_local_data_envelope(envelope: &LocalDataEnvelopeV1) -> Result<(), AuroraCommandError> {
+    if envelope.version != 1 || envelope.algorithm != LOCAL_DATA_ENVELOPE_ALGORITHM {
+        return Err(AuroraCommandError::SecureStorage(
+            "local data envelope is unsupported".to_string(),
+        ));
+    }
+    if decode_base64url_bytes(&envelope.nonce_b64_url)?.len() != 12 {
+        return Err(AuroraCommandError::SecureStorage(
+            "local data envelope nonce is invalid".to_string(),
+        ));
+    }
+    if decode_base64url_bytes(&envelope.ciphertext_and_tag_b64_url)?.len() < 16 {
+        return Err(AuroraCommandError::SecureStorage(
+            "local data envelope ciphertext is invalid".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn local_data_envelope_key_id(
+    profile_id: &str,
+    local_node_id: &str,
+    purpose: &str,
+    version: u32,
+) -> String {
+    format!(
+        "aurora.local-data-envelope.v1.{}.{}.{}.k{}",
+        sha256_hex(profile_id.as_bytes()),
+        sha256_hex(local_node_id.as_bytes()),
+        purpose,
+        version
+    )
+}
+
+fn local_data_envelope_current_version_key(
+    profile_id: &str,
+    local_node_id: &str,
+    purpose: &str,
+) -> String {
+    format!(
+        "aurora.local-data-envelope-current.v1.{}.{}.{}",
+        sha256_hex(profile_id.as_bytes()),
+        sha256_hex(local_node_id.as_bytes()),
+        purpose
+    )
+}
+
+fn parse_local_data_envelope_key_id(
+    key_id: &str,
+) -> Result<LocalDataEnvelopeKeyBinding, AuroraCommandError> {
+    let Some(rest) = key_id.strip_prefix("aurora.local-data-envelope.v1.") else {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "local data envelope key handle is invalid".to_string(),
+        ));
+    };
+    let parts: Vec<&str> = rest.split('.').collect();
+    if parts.len() != 4 || !parts[3].starts_with('k') {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "local data envelope key handle is invalid".to_string(),
+        ));
+    }
+    let version = parts[3][1..].parse::<u32>().map_err(|_| {
+        AuroraCommandError::SecureStorageKeyInvalid(
+            "local data envelope key handle is invalid".to_string(),
+        )
+    })?;
+    if version == 0 || parts[2] != LOCAL_DATA_ENVELOPE_KEY_PURPOSE {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "local data envelope key handle is invalid".to_string(),
+        ));
+    }
+    Ok(LocalDataEnvelopeKeyBinding {
+        profile_hash: parts[0].to_string(),
+        local_node_hash: parts[1].to_string(),
+        purpose: parts[2].to_string(),
+        version,
+    })
+}
+
+fn decode_base64url_bytes(value: &str) -> Result<Vec<u8>, AuroraCommandError> {
+    if value.is_empty()
+        || value.contains('=')
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
+        return Err(AuroraCommandError::SecureStorage(
+            "local data envelope base64url value is invalid".to_string(),
+        ));
+    }
+    let bytes = URL_SAFE_NO_PAD.decode(value).map_err(|_| {
+        AuroraCommandError::SecureStorage(
+            "local data envelope base64url value is invalid".to_string(),
+        )
+    })?;
+    if encode_base64url_bytes(&bytes) != value {
+        return Err(AuroraCommandError::SecureStorage(
+            "local data envelope base64url value is not canonical".to_string(),
+        ));
+    }
+    Ok(bytes)
+}
+
+fn encode_base64url_bytes(bytes: &[u8]) -> String {
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn current_unix_ms_result() -> Result<u64, AuroraCommandError> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?
+        .as_millis() as u64)
+}
+
+fn random_key_256() -> Result<[u8; 32], AuroraCommandError> {
+    let mut key = [0_u8; 32];
+    getrandom::getrandom(&mut key)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+    Ok(key)
+}
+
+fn random_nonce_96() -> Result<[u8; 12], AuroraCommandError> {
+    let mut nonce = [0_u8; 12];
+    getrandom::getrandom(&mut nonce)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+    Ok(nonce)
+}
+
+fn encrypt_local_data_envelope(
+    key_id: &str,
+    key: &[u8; 32],
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<LocalDataEnvelopeV1, AuroraCommandError> {
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|_| AuroraCommandError::SecureStorage("local data key is invalid".to_string()))?;
+    let nonce = random_nonce_96()?;
+    let ciphertext_and_tag = cipher
+        .encrypt(
+            Nonce::from_slice(&nonce),
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
+        .map_err(|_| {
+            AuroraCommandError::SecureStorage("local data encryption failed".to_string())
+        })?;
+    Ok(LocalDataEnvelopeV1 {
+        version: 1,
+        algorithm: LOCAL_DATA_ENVELOPE_ALGORITHM.to_string(),
+        key_id: key_id.to_string(),
+        nonce_b64_url: encode_base64url_bytes(&nonce),
+        ciphertext_and_tag_b64_url: encode_base64url_bytes(&ciphertext_and_tag),
+        created_at_ms: current_unix_ms_result()?,
+    })
+}
+
+fn decrypt_local_data_envelope(
+    envelope: &LocalDataEnvelopeV1,
+    key: &[u8; 32],
+    aad: &[u8],
+) -> Result<Vec<u8>, AuroraCommandError> {
+    validate_local_data_envelope(envelope)?;
+    let nonce = decode_base64url_bytes(&envelope.nonce_b64_url)?;
+    let ciphertext_and_tag = decode_base64url_bytes(&envelope.ciphertext_and_tag_b64_url)?;
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|_| AuroraCommandError::SecureStorage("local data key is invalid".to_string()))?;
+    cipher
+        .decrypt(
+            Nonce::from_slice(&nonce),
+            Payload {
+                msg: &ciphertext_and_tag,
+                aad,
+            },
+        )
+        .map_err(|_| {
+            AuroraCommandError::SecureStorage("local data envelope could not be opened".to_string())
+        })
+}
+
+#[cfg(desktop)]
+fn local_data_envelope_entry(key_id: &str) -> Result<keyring::Entry, AuroraCommandError> {
+    parse_local_data_envelope_key_id(key_id)?;
+    keyring::Entry::new(LOCAL_DATA_ENVELOPE_KEY_SERVICE, key_id)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+#[cfg(desktop)]
+fn local_data_envelope_current_version_entry(
+    profile_id: &str,
+    local_node_id: &str,
+    purpose: &str,
+) -> Result<keyring::Entry, AuroraCommandError> {
+    keyring::Entry::new(
+        LOCAL_DATA_ENVELOPE_KEY_SERVICE,
+        &local_data_envelope_current_version_key(profile_id, local_node_id, purpose),
+    )
+    .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+#[cfg(desktop)]
+fn load_or_create_local_data_envelope_key(key_id: &str) -> Result<[u8; 32], AuroraCommandError> {
+    match load_existing_local_data_envelope_key(key_id) {
+        Ok(key) => Ok(key),
+        Err(AuroraCommandError::SecureStorage(message)) if message == "local_data_key_missing" => {
+            let key = random_key_256()?;
+            store_local_data_envelope_key(key_id, &key)?;
+            Ok(key)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(desktop)]
+fn load_existing_local_data_envelope_key(key_id: &str) -> Result<[u8; 32], AuroraCommandError> {
+    let entry = local_data_envelope_entry(key_id)?;
+    let encoded = match entry.get_password() {
+        Ok(value) => value,
+        Err(keyring::Error::NoEntry) => {
+            return Err(AuroraCommandError::SecureStorage(
+                "local_data_key_missing".to_string(),
+            ))
+        }
+        Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+    };
+    let bytes = decode_base64url_bytes(&encoded)?;
+    bytes
+        .try_into()
+        .map_err(|_| AuroraCommandError::SecureStorage("local data key is invalid".to_string()))
+}
+
+#[cfg(desktop)]
+fn store_local_data_envelope_key(key_id: &str, key: &[u8; 32]) -> Result<(), AuroraCommandError> {
+    let entry = local_data_envelope_entry(key_id)?;
+    entry
+        .set_password(&encode_base64url_bytes(key))
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+#[cfg(desktop)]
+fn current_local_data_envelope_key_version(
+    profile_id: &str,
+    local_node_id: &str,
+    purpose: &str,
+) -> Result<u32, AuroraCommandError> {
+    let entry = local_data_envelope_current_version_entry(profile_id, local_node_id, purpose)?;
+    match entry.get_password() {
+        Ok(value) => value.parse::<u32>().map_err(|_| {
+            AuroraCommandError::SecureStorage("local data key version is invalid".to_string())
+        }),
+        Err(keyring::Error::NoEntry) => Ok(LOCAL_DATA_ENVELOPE_CURRENT_VERSION),
+        Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+    }
+}
+
+#[cfg(desktop)]
+fn store_local_data_envelope_current_version(
+    profile_id: &str,
+    local_node_id: &str,
+    purpose: &str,
+    version: u32,
+) -> Result<(), AuroraCommandError> {
+    let entry = local_data_envelope_current_version_entry(profile_id, local_node_id, purpose)?;
+    entry
+        .set_password(&version.to_string())
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
 fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
     if is_peer_proof_storage_key(key) {
         return Err(AuroraCommandError::SecureStorageKeyInvalid(
@@ -3999,7 +4530,7 @@ fn compute_reconnect_proof_hex(
 ) -> Result<String, AuroraCommandError> {
     type HmacSha256 = Hmac<Sha256>;
     let key = Sha256::digest(raw_bearer_token.as_bytes());
-    let mut mac = HmacSha256::new_from_slice(&key)
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(&key)
         .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
     mac.update(&build_mesh_reconnect_proof_message(record, challenge)?);
     Ok(hex_encode(&mac.finalize().into_bytes()))
@@ -5029,6 +5560,11 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_deep_link::init());
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    let builder = builder.plugin(
+        tauri_plugin_sql::Builder::default()
+            .add_migrations(LOCAL_DATA_DB_URL, local_data_sql_migrations())
+            .build(),
+    );
     builder
         .plugin(aurora_mobile_native_plugin())
         .manage(sidecar_state.clone())
@@ -5137,6 +5673,9 @@ pub fn run() {
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
+            aurora_local_data_envelope_encrypt,
+            aurora_local_data_envelope_decrypt,
+            aurora_local_data_envelope_rotate,
             aurora_ios_secure_storage_status,
             aurora_ios_biometric_status,
             aurora_ios_admin_unlock,
@@ -6791,5 +7330,79 @@ mod tests {
         assert!(parse_overlay_shortcut_parts("Ctrl+F12").is_err());
         assert!(parse_overlay_shortcut_parts("Ctrl+K+P").is_err());
         assert!(parse_overlay_shortcut_parts("Ctrl++K").is_err());
+    }
+
+    #[test]
+    fn local_data_sql_migrations_follow_generated_manifest_order() {
+        let migrations = local_data_sql_migrations();
+        assert_eq!(
+            migrations.len(),
+            generated::local_data_migrations::LOCAL_DATA_MIGRATIONS.len()
+        );
+        assert_eq!(
+            generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME,
+            "aurora-lightweight.db"
+        );
+        assert_eq!(
+            generated::local_data_migrations::LOCAL_DATA_LATEST_VERSION,
+            3
+        );
+        for (index, migration) in migrations.iter().enumerate() {
+            let generated = generated::local_data_migrations::LOCAL_DATA_MIGRATIONS[index];
+            assert_eq!(migration.version, i64::from(generated.version));
+            assert_eq!(migration.description, generated.name);
+            assert_eq!(migration.sql, generated.sql);
+            assert!(generated.ledger_sql.contains("aurora_schema_migrations"));
+        }
+    }
+
+    #[test]
+    fn local_data_envelope_roundtrip_uses_nondeterministic_nonce_and_aad() {
+        let key = [7_u8; 32];
+        let key_id =
+            local_data_envelope_key_id("profile-1", "node-1", LOCAL_DATA_ENVELOPE_KEY_PURPOSE, 1);
+        let aad = br#"{"field":"payload","profileId":"profile-1"}"#;
+        let first = encrypt_local_data_envelope(&key_id, &key, b"secret payload", aad).unwrap();
+        let second = encrypt_local_data_envelope(&key_id, &key, b"secret payload", aad).unwrap();
+
+        assert_eq!(first.version, 1);
+        assert_eq!(first.algorithm, LOCAL_DATA_ENVELOPE_ALGORITHM);
+        assert_eq!(
+            decode_base64url_bytes(&first.nonce_b64_url).unwrap().len(),
+            12
+        );
+        assert_ne!(first.nonce_b64_url, second.nonce_b64_url);
+        assert_ne!(
+            first.ciphertext_and_tag_b64_url,
+            second.ciphertext_and_tag_b64_url
+        );
+        assert_eq!(
+            decrypt_local_data_envelope(&first, &key, aad).unwrap(),
+            b"secret payload"
+        );
+        assert!(decrypt_local_data_envelope(&first, &key, b"wrong aad").is_err());
+    }
+
+    #[test]
+    fn local_data_envelope_rejects_tamper_and_wrong_key_scope() {
+        let key = [3_u8; 32];
+        let other_key = [4_u8; 32];
+        let key_id =
+            local_data_envelope_key_id("profile-1", "node-1", LOCAL_DATA_ENVELOPE_KEY_PURPOSE, 1);
+        let mut envelope = encrypt_local_data_envelope(&key_id, &key, b"secret payload", b"aad")
+            .expect("encrypt envelope");
+        assert!(decrypt_local_data_envelope(&envelope, &other_key, b"aad").is_err());
+
+        let mut ciphertext = decode_base64url_bytes(&envelope.ciphertext_and_tag_b64_url).unwrap();
+        ciphertext[0] ^= 0x01;
+        envelope.ciphertext_and_tag_b64_url = encode_base64url_bytes(&ciphertext);
+        assert!(decrypt_local_data_envelope(&envelope, &key, b"aad").is_err());
+
+        let binding = parse_local_data_envelope_key_id(&key_id).unwrap();
+        assert_eq!(binding.profile_hash, sha256_hex("profile-1".as_bytes()));
+        assert_eq!(binding.local_node_hash, sha256_hex("node-1".as_bytes()));
+        assert_eq!(binding.purpose, LOCAL_DATA_ENVELOPE_KEY_PURPOSE);
+        assert_eq!(binding.version, 1);
+        assert!(parse_local_data_envelope_key_id("aurora.secure-storage.raw").is_err());
     }
 }

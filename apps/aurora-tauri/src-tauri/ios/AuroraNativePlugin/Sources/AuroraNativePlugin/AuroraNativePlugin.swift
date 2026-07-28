@@ -444,6 +444,33 @@ public final class AuroraNativePlugin: Plugin {
     }
   }
 
+  @objc public func localDataEnvelopeEncrypt(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraLocalDataEnvelopeEncryptArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.localDataEnvelopeEncrypt(args))
+    } catch {
+      invoke.reject("local_data_envelope_encrypt_failed")
+    }
+  }
+
+  @objc public func localDataEnvelopeDecrypt(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraLocalDataEnvelopeDecryptArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.localDataEnvelopeDecrypt(args))
+    } catch {
+      invoke.reject("local_data_envelope_decrypt_failed")
+    }
+  }
+
+  @objc public func localDataEnvelopeRotate(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraLocalDataEnvelopeRotateArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.localDataEnvelopeRotate(args))
+    } catch {
+      invoke.reject("local_data_envelope_rotate_failed")
+    }
+  }
+
   @objc public func thinPeerCredentialStatus(_ invoke: Invoke) {
     do {
       let args = try invoke.parseArgs(AuroraThinPeerCredentialLookupArgs.self)
