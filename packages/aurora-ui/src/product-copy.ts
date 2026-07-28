@@ -47,7 +47,7 @@ export const PRODUCT_COPY = {
       openFile: 'Open invite file',
       paste: 'Paste invite',
       continue: 'Save invite and continue',
-      saving: 'Saving...',
+      saving: 'Saving…',
       advanced: 'Connect with an address',
     },
     done: {

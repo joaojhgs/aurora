@@ -345,7 +345,7 @@ export function HomeNodeConnectionPanel({
           {summary ? (
             <div
               className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
-              aria-label="Invite preview"
+              aria-label="Invite details"
             >
               <CheckCircle2
                 className="shrink-0 text-primary"
@@ -357,7 +357,7 @@ export function HomeNodeConnectionPanel({
                   Invite from {summary.nodeName}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {summary.room} · {summary.brokerCount} signaling broker
+                  {summary.room} · {summary.brokerCount} invite address
                   {summary.brokerCount === 1 ? '' : 's'}
                 </p>
               </div>
@@ -513,7 +513,7 @@ export function HomeNodeConnectionPanel({
           <Alert variant="destructive">
             <AlertTriangle size={16} aria-hidden />
             <AlertTitle>Secure connection needed</AlertTitle>
-            <AlertDescription>Open Aurora from HTTPS, localhost, or the desktop app before joining.</AlertDescription>
+            <AlertDescription>Open Aurora from a secure page, localhost, or the desktop app before joining.</AlertDescription>
           </Alert>
         ) : null}
         {snapshot.status === 'disabled' ? (
@@ -579,7 +579,7 @@ export function HomeNodeConnectionPanel({
           </Button>
         </div>
         {summary ? (
-          <dl className="grid gap-1 rounded-lg border bg-muted/30 p-3 text-sm md:grid-cols-2" aria-label="Invite preview">
+          <dl className="grid gap-1 rounded-lg border bg-muted/30 p-3 text-sm md:grid-cols-2" aria-label="Invite details">
             <div><dt className="text-muted-foreground">Device</dt><dd>{summary.nodeName}</dd></div>
             <div><dt className="text-muted-foreground">Room</dt><dd>{summary.room}</dd></div>
             <div><dt className="text-muted-foreground">Invite service</dt><dd>{summary.signalingProvider} · {summary.brokerCount} address{summary.brokerCount === 1 ? '' : 'es'}</dd></div>
@@ -616,14 +616,14 @@ function defaultProfileForSurface(
     : `${Date.now()}`,
 ): WebThinConnectionProfile {
   const surfaceLabel = surface.isAndroid
-    ? 'Android thin'
+    ? 'Android device'
     : surface.isIos
-      ? 'iOS thin'
+      ? 'iOS device'
       : surface.isMobile
-        ? 'Mobile thin'
+        ? 'Mobile device'
         : surface.kind === 'web'
-          ? 'Hosted web thin'
-          : 'Desktop thin'
+          ? 'Hosted web'
+          : 'Desktop device'
   const nodeName = `Aurora ${surfaceLabel.toLowerCase()}`
   return {
     id: `profile-${suffix}`,

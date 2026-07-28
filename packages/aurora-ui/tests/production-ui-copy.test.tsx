@@ -1,11 +1,13 @@
-// @vitest-environment node
+// @vitest-environment jsdom
+import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuroraClient } from '@aurora/client'
 import { AppShell } from '../src/shell'
 import { errorShellSnapshot, type AuroraShellSnapshot, type RouteAvailability } from '../src/shell-data'
 import { MeshPeersView, type MeshPeersSnapshot } from '../src/mesh-peers-view'
-import { OnboardingView } from '../src/onboarding-view'
+import { OnboardingView, type OnboardingModePreferenceStore } from '../src/onboarding-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import { ServiceRoutingView, type ServiceRoutingSnapshot } from '../src/service-routing-view'
 import { HomeNodeConnectionPanel } from '../src/web-thin-connection-panel'
@@ -20,7 +22,7 @@ describe('production UI copy', () => {
         'onboarding',
         <OnboardingView
           key="onboarding"
-          client={client()}
+          client={client('http')}
           snapshot={snapshot}
           setupRequired
           thinConnectionPanel={<div>Use your Aurora invite to connect this device.</div>}
@@ -46,6 +48,139 @@ describe('production UI copy', () => {
       expect(matches, `${name} rendered forbidden copy in: ${text}`).toEqual([])
     }
   })
+
+  it('keeps setup-required onboarding on the role chooser before invite setup', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('http')}
+          snapshot={safeShellSnapshot()}
+          setupRequired
+          thinConnectionPanel={<div data-testid="home-node-panel">Invite panel</div>}
+        />,
+      )
+    })
+
+    expect(container.textContent).toContain('Connect to Aurora')
+    expect(container.textContent).toContain('Make this device available')
+    expect(container.textContent).not.toContain('Run Aurora on this computer')
+    expect(container.querySelector('[data-testid="home-node-panel"]')).toBeNull()
+
+    await act(async () => {
+      buttonByText(container, 'Continue').click()
+    })
+    expect(container.querySelector('[data-testid="home-node-panel"]')).not.toBeNull()
+    root.unmount()
+    container.remove()
+  })
+
+  it('renders role choices for hosted web, desktop, Android, and iOS surfaces', () => {
+    const surfaces = [
+      ['hosted-web', client('http'), safeShellSnapshot({ nativePlatform: 'web' }), false],
+      ['desktop-thin', client('mesh'), safeShellSnapshot({ nativePlatform: 'desktop' }), false],
+      ['android', client('native-mobile'), safeShellSnapshot({ nativePlatform: 'android', nativeAvailable: true }), false],
+      ['ios', client('native-mobile'), safeShellSnapshot({ nativePlatform: 'ios', nativeAvailable: true }), false],
+      ['desktop-local', client('tauri-local'), safeShellSnapshot({ nativePlatform: 'desktop', nativeAvailable: true }), true],
+    ] as const
+
+    for (const [name, surfaceClient, surfaceSnapshot, includesLocalRun] of surfaces) {
+      const text = visibleText(renderToStaticMarkup(<OnboardingView client={surfaceClient} snapshot={surfaceSnapshot} setupRequired />))
+      expect(text, name).toContain('Connect to Aurora')
+      expect(text, name).toContain('Make this device available')
+      if (includesLocalRun) expect(text, name).toContain('Run Aurora on this computer')
+      else expect(text, name).not.toContain('Run Aurora on this computer')
+      expect(findForbiddenProductionCopyTerms(text).map((term) => term.id), name).toEqual([])
+    }
+  })
+
+  it('restores legacy node modes into product choices and writes canonical node modes', async () => {
+    const writes: string[] = []
+    const store: OnboardingModePreferenceStore = {
+      evidence: 'Saved for this device',
+      readSelectedMode: async () => 'remote-console',
+      writeSelectedMode: async (modeId) => {
+        writes.push(modeId)
+        return true
+      },
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<OnboardingView client={client('http')} snapshot={safeShellSnapshot()} modePreferenceStore={store} setupRequired />)
+    })
+    await flushReactWork()
+
+    expect(activeChoiceText(container)).toContain('Connect to Aurora')
+    expect(container.textContent).not.toContain('remote-console')
+    expect(writes).toEqual([])
+
+    await act(async () => {
+      choiceByText(container, 'Make this device available').click()
+    })
+    expect(writes).toEqual(['local-provider'])
+
+    root.unmount()
+    container.remove()
+  })
+
+  it('gates saved full-local choices until desktop local capability is available', async () => {
+    const writes: string[] = []
+    const store: OnboardingModePreferenceStore = {
+      evidence: 'Saved for this device',
+      readSelectedMode: async () => 'full-local',
+      writeSelectedMode: async (modeId) => {
+        writes.push(modeId)
+        return true
+      },
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('tauri-local')}
+          snapshot={safeShellSnapshot({ nativePlatform: 'desktop', nativeAvailable: false })}
+          modePreferenceStore={store}
+          setupRequired
+        />,
+      )
+    })
+    await flushReactWork()
+
+    expect(container.textContent).not.toContain('Run Aurora on this computer')
+    expect(activeChoiceText(container)).not.toContain('Run Aurora on this computer')
+    expect(writes).toEqual([])
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('tauri-local')}
+          snapshot={safeShellSnapshot({ nativePlatform: 'desktop', nativeAvailable: true })}
+          modePreferenceStore={store}
+          setupRequired
+        />,
+      )
+    })
+    await flushReactWork()
+
+    expect(container.textContent).toContain('Run Aurora on this computer')
+    expect(activeChoiceText(container)).toContain('Run Aurora on this computer')
+
+    await act(async () => {
+      choiceByText(container, 'Run Aurora on this computer').click()
+    })
+    expect(writes).toEqual(['full-local'])
+
+    root.unmount()
+    container.remove()
+  })
 })
 
 function visibleText(markup: string): string {
@@ -63,9 +198,9 @@ function visibleText(markup: string): string {
     .trim()
 }
 
-function client(): AuroraClient {
+function client(kind: string = 'http'): AuroraClient {
   return {
-    transport: { kind: 'http' },
+    transport: { kind },
     auth: {
       refreshClock: () => ({
         state: 'anonymous',
@@ -77,6 +212,7 @@ function client(): AuroraClient {
         permissions: [],
       }),
       subscribe: () => () => undefined,
+      setPairing: vi.fn(),
       setPairingChallenge: vi.fn(),
     },
     authApi: {
@@ -88,7 +224,7 @@ function client(): AuroraClient {
   } as unknown as AuroraClient
 }
 
-function safeShellSnapshot(): AuroraShellSnapshot {
+function safeShellSnapshot(overrides: Partial<AuroraShellSnapshot> = {}): AuroraShellSnapshot {
   return {
     ...errorShellSnapshot('http', new Error('offline')),
     routes: [],
@@ -96,6 +232,7 @@ function safeShellSnapshot(): AuroraShellSnapshot {
     blockedCount: 0,
     availableCount: 0,
     error: null,
+    ...overrides,
   }
 }
 
@@ -175,18 +312,70 @@ function meshSnapshot(): MeshPeersSnapshot {
     webrtcStarted: false,
     inviteConfig: null,
     secretsRedacted: true,
-    peers: [],
+    peers: [{
+      peerId: 'peer-studio',
+      nodeName: 'Studio Aurora',
+      roomName: 'Private room',
+      lifecycleState: 'available-remote',
+      lifecycleLabel: 'Ready',
+      trustState: 'available-remote',
+      trustLabel: 'approved',
+      outboundStatus: 'approved',
+      inboundStatus: 'approved',
+      connectionStatus: 'connected',
+      fingerprint: 'peer-studio',
+      permissions: ['TTS.use'],
+      inboundPermissions: ['TTS.use'],
+      latencyMs: 12,
+      routeQuality: 'Ready',
+      compatibility: 'Ready',
+      serviceCount: 1,
+      services: ['TTS'],
+      lastSeen: '2026-07-28T00:00:00Z',
+      lastEvidenceSource: 'Aurora',
+      pendingPairing: null,
+      approveAction: null,
+      denyAction: null,
+      removeAction: null,
+    }],
     pendingRequests: [],
-    liveSessions: [],
-    devices: [],
+    liveSessions: [{
+      sessionId: 'session-1',
+      stablePeerId: 'peer-studio',
+      nodeName: 'Studio Aurora',
+      pairingSessionId: null,
+      verificationCode: null,
+      state: 'available-remote',
+      connectionState: 'connected',
+      iceState: 'connected',
+      dataChannelState: 'open',
+      authState: 'authenticated',
+      latencyMs: 12,
+      identitySource: 'saved',
+      permissions: 'Ready',
+      pairingState: 'Ready',
+      linkedPeerState: 'Ready',
+      evidenceSource: 'Aurora',
+    }],
+    devices: [{
+      deviceId: 'device-1',
+      name: 'Studio Aurora',
+      principalId: 'principal-1',
+      state: 'available-local',
+      trustLabel: 'Trusted',
+      linkedPeerId: 'peer-studio',
+      linkedPeerLabel: 'Studio Aurora',
+      lastSeen: '2026-07-28T00:00:00Z',
+      evidenceSource: 'Aurora',
+    }],
     pendingCount: 0,
-    approvedCount: 0,
+    approvedCount: 1,
     deniedCount: 0,
     removedCount: 0,
-    runtimePeerCount: 0,
-    liveSessionCount: 0,
-    deviceCount: 0,
-    routeCount: 0,
+    runtimePeerCount: 1,
+    liveSessionCount: 1,
+    deviceCount: 1,
+    routeCount: 1,
     compatibilityFailures: [],
     listState: 'available-local',
     listReason: 'No peers found.',
@@ -195,7 +384,22 @@ function meshSnapshot(): MeshPeersSnapshot {
     mutationState: 'available-local',
     mutationReason: 'Changes are available.',
     config: {
-      fields: [],
+      fields: [
+        {
+          key_path: 'services.gateway.mesh_network.enabled',
+          title: 'Mesh enabled',
+          description: 'Turn approved device connections on or off.',
+          type: 'boolean',
+          current_value: true,
+          default: true,
+          secret: false,
+          source_layer: 'user',
+          reload_required: false,
+          restart_required: false,
+          affected_services: [],
+          constraints: {},
+        },
+      ],
       state: 'available-local',
       reason: 'Settings are available.',
       secretsRedacted: true,
@@ -213,12 +417,51 @@ function meshSnapshot(): MeshPeersSnapshot {
 function serviceRoutingSnapshot(): ServiceRoutingSnapshot {
   return {
     loadState: 'ready',
-    rows: [],
-    knownPeers: [],
+    rows: [{
+      id: 'tts',
+      label: 'Text to speech',
+      basePath: 'services.tts',
+      sharingPath: 'services.tts.mesh_sharing',
+      routingPath: 'services.tts.mesh_routing',
+      registryStatus: 'healthy',
+      registryVersion: '1.0.0',
+      registered: true,
+      exportPolicy: { share: true, maxConcurrent: 2, unsharedFeatureIds: [], unsharedMethodIds: [] },
+      routingPolicy: { prefer: 'local', fallback: 'network', allowedProviderPeerIds: ['peer-studio'], minVersion: null, requiredProviderFeatureIds: [], requiredProviderCapabilityTags: [], requireExplicitSelector: false },
+      exportFeatures: [{ featureId: 'speech', label: 'Speech', summary: 'Speak responses aloud.', stale: false, methods: [{ topic: 'TTS.Speak', label: 'Speak', summary: 'Speak responses aloud.' }] }],
+      ungroupedMethods: [],
+      staleMethodIds: [],
+      providerOptions: [{ id: 'peer-studio', label: 'Studio Aurora', stale: false }],
+      remoteFeatureOptions: [{ id: 'speech', label: 'Speech', stale: false }],
+      remoteCapabilityTagOptions: [{ id: 'audio', label: 'Audio', stale: false }],
+    }],
+    knownPeers: [{ peerId: 'peer-studio', label: 'Studio Aurora' }],
     editable: true,
     registryMode: 'thread',
     warnings: [],
     error: null,
     evidenceSource: 'Aurora',
   }
+}
+
+function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((candidate) => candidate.textContent?.trim() === text)
+  if (!button) throw new Error(`Button not found: ${text}`)
+  return button
+}
+
+function choiceByText(container: HTMLElement, text: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')).find((candidate) => candidate.textContent?.includes(text))
+  if (!button) throw new Error(`Choice not found: ${text}`)
+  return button
+}
+
+function activeChoiceText(container: HTMLElement): string {
+  return container.querySelector<HTMLButtonElement>('button[role="radio"][aria-checked="true"]')?.textContent ?? ''
+}
+
+async function flushReactWork() {
+  await act(async () => {
+    await Promise.resolve()
+  })
 }

@@ -493,18 +493,18 @@ describe('browser WebRTC thin-shell runtime', () => {
       )
     })
 
-    expect(container.textContent).toContain('Peer connection')
-    expect(container.textContent).toContain('Compare SAS')
+    expect(container.textContent).toContain('Connected Aurora device')
+    expect(container.textContent).toContain('Compare this code on both devices')
     expect(container.textContent).toContain('12345678')
-    expect(container.textContent).toContain('memory-only')
+    expect(container.textContent).toContain('Temporary session')
 
-    const confirm = findButton(container, 'Confirm SAS')
+    const confirm = findButton(container, 'Approve connection')
     await act(async () => {
       confirm.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
     expect(peer.confirmed).toEqual(['pair-session-1'])
 
-    const accept = findButton(container, 'Use invite for WebRTC')
+    const accept = findButton(container, 'Use invite')
     await act(async () => {
       accept.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
@@ -512,7 +512,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(peer.connectedProfiles[0]?.room).toBe('studio-room')
     expect(onInviteAccepted).toHaveBeenCalledTimes(1)
 
-    const reconnect = findButton(container, 'Reconnect WebRTC')
+    const reconnect = findButton(container, 'Reconnect')
     await act(async () => {
       reconnect.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
@@ -544,15 +544,14 @@ describe('browser WebRTC thin-shell runtime', () => {
           transportKind="mesh"
           profile={profile}
           profiles={[profile, { ...profile, id: 'home', label: 'Home' }]}
-          profileStoreEvidence="Nonsecret platform profile storage"
+          profileStoreEvidence="Saved on this device"
           onSaveProfile={onSaveProfile}
           onSelectProfile={async () => undefined}
         />
       )
     })
 
-    expect(container.querySelector('[aria-label="Thin connection profile"]')).not.toBeNull()
-    expect(container.textContent).toContain('Nonsecret platform profile storage')
+    expect(container.querySelector('[aria-label="Saved connection profile"]')).not.toBeNull()
     const nodeName = container.querySelector<HTMLInputElement>('#webthin-profile-node-name')!
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -598,9 +597,8 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
 
     expect(container.textContent).toContain('Aurora host is offline')
-    expect(container.textContent).toContain('WebRTC remains enabled')
-    expect(container.textContent).toContain('other trusted mesh peers')
-    expect(container.textContent).toContain('HTTP fallbacknot configured')
+    expect(container.textContent).toContain('Aurora will retry the saved device')
+    expect(container.textContent).toContain('Address backupNot set')
     expect(container.textContent).not.toContain('Thin-shell transport')
     expect(container.textContent).not.toContain('WebRTC rollout disabled')
     expect(container.textContent).not.toContain(
@@ -706,9 +704,9 @@ describe('browser WebRTC thin-shell runtime', () => {
       )
     })
 
-    expect(container.textContent).toContain('Scan QR invite')
+    expect(container.textContent).toContain('Scan invite')
     expect(container.textContent).toContain('Open invite file')
-    expect(container.textContent).toContain('Paste mesh invite')
+    expect(container.textContent).toContain('Paste invite')
     expect(container.textContent).not.toContain(
       'http-only mode requires an HTTP endpoint',
     )
@@ -734,7 +732,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       )
     })
     await act(async () => {
-      findButton(container, 'Scan QR invite').click()
+      findButton(container, 'Scan invite').click()
       await Promise.resolve()
     })
     expect(onScanQr).toHaveBeenCalledTimes(1)
@@ -783,12 +781,12 @@ describe('browser WebRTC thin-shell runtime', () => {
       )
     })
     await act(async () => {
-      findButton(container, 'Scan QR invite').click()
+      findButton(container, 'Scan invite').click()
       await Promise.resolve()
     })
 
     expect(onScanQr).toHaveBeenCalledTimes(1)
-    expect(findButton(container, 'Scan QR invite').disabled).toBe(false)
+    expect(findButton(container, 'Scan invite').disabled).toBe(false)
     expect(findButton(container, 'Open invite file').disabled).toBe(false)
     expect(
       container.querySelector<HTMLInputElement>('#webthin-profile-node-name')
@@ -810,7 +808,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     }
 
     expect(hostedMixedContentWarning('web', profile, 'https:')).toContain(
-      'Browsers block HTTP or unencrypted WebSocket endpoints',
+      'Use a secure address',
     )
     expect(hostedMixedContentWarning('desktop-thin', profile, 'https:')).toBeNull()
     expect(hostedMixedContentWarning('web', profile, 'http:')).toBeNull()
@@ -870,7 +868,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     await openAndChoose('Failing')
     expect(onSelectProfile).toHaveBeenCalledWith('failing')
     expect(findButton(container, 'Save and use profile').hasAttribute('disabled')).toBe(false)
-    expect(container.textContent).toContain('[redacted]')
+    expect(container.textContent).toContain('Could not connect to this Aurora device')
     expect(container.textContent).not.toContain('token=secret')
   })
 

@@ -27,6 +27,10 @@ export const PRODUCTION_COPY_FORBIDDEN_TERMS = [
   term('opfs', /\bopfs\b/iu),
   term('sidecar', /\bsidecar\b/iu),
   term('thin', /\bthin\b/iu),
+  term('signaling', /\bsignaling\b/iu),
+  term('datachannel', /\bdatachannel\b/iu),
+  term('room-password', /\broom password\b/iu),
+  term('key-path', /\bkey[-_ ]?paths?\b|\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\.[a-z0-9_.]+\b/iu, ['services.tts.mesh_sharing.share']),
 ] as const satisfies readonly ProductionCopyForbiddenTerm[]
 
 export function findForbiddenProductionCopyTerms(value: string): ProductionCopyForbiddenTerm[] {

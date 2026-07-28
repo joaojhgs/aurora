@@ -295,13 +295,13 @@ export async function previewServiceRoutingChanges(client: AuroraClient, changes
 }
 
 export async function commitServiceRoutingChanges(client: AuroraClient, row: ServiceRoutingRow, changes: ServiceRoutingChange[], preview: ServiceRoutingPreviewEvidence, confirmation: ServiceRoutingSaveConfirmation): Promise<void> {
-  if (confirmation.reauthConfirmed !== true) throw new Error('Explicit reauthentication confirmation is required before saving service policy changes.')
+  if (confirmation.reauthConfirmed !== true) throw new Error('Approve this save before continuing.')
   const configChanges = changes.map((change) => ({ key_path: change.keyPath, value: change.value }))
   if (!preview.valid) {
-    throw new Error(preview.errors.join('; ') || 'Service policy change was not valid.')
+    throw new Error(preview.errors.map(serviceRoutingSafeError).join('; ') || 'Aurora could not save those changes.')
   }
   if (typeof preview.baseRevision !== 'number' || !preview.previewToken) {
-    throw new Error('Config preview did not return the revision token required for an atomic save.')
+    throw new Error('Aurora could not confirm that save. Refresh and review before saving again.')
   }
   const committed = await client.config.commitChangeSet({
     request: {
@@ -309,13 +309,13 @@ export async function commitServiceRoutingChanges(client: AuroraClient, row: Ser
       base_revision: preview.baseRevision,
       preview_token: preview.previewToken,
     },
-    reason: `Update ${row.label} service sharing and outbound routing`,
+    reason: `Update ${row.label} sharing preferences`,
     reauthConfirmed: confirmation.reauthConfirmed,
   })
   if (!committed.data.success) {
     const reason = committed.data.error_code === 'config_revision_conflict'
-      ? 'Configuration changed since preview. Refresh and review before saving again.'
-      : committed.data.error || committed.data.error_code || 'Atomic service policy save failed.'
+      ? 'Settings changed since review. Refresh and review before saving again.'
+      : serviceRoutingSafeError(committed.data.error || committed.data.error_code || 'Aurora could not save those changes.')
     throw new Error(reason)
   }
 }
@@ -353,8 +353,8 @@ export async function buildServiceRoutingSnapshot(client: AuroraClient, route: R
       ...loadingSnapshot,
       loadState: 'unavailable',
       warnings,
-      error: route.disabled ? 'Gateway routing capability is unavailable for this route.' : 'Service registry and configuration are both unreachable.',
-      evidenceSource: 'Aurora request error',
+      error: route.disabled ? 'This control is unavailable right now.' : 'Aurora could not load service sharing.',
+      evidenceSource: 'Aurora service status',
     }
   }
 
@@ -381,7 +381,7 @@ export async function buildServiceRoutingSnapshot(client: AuroraClient, route: R
     registryMode: services?.mode ?? null,
     warnings,
     error: null,
-    evidenceSource: 'Gateway registry, recipient capability catalog, mesh status, peers, and Config service responses',
+    evidenceSource: 'Aurora service status',
   }
 }
 
@@ -755,12 +755,12 @@ function ChangeReview({ review, pending, onCancel, onReauthChange, onConfirm }: 
     {review.error ? <p role="alert" className="text-xs text-destructive">Check failed: {review.error}</p> : null}
     {review.evidence ? <div className="flex flex-col gap-2 text-xs">
       <div className="flex flex-wrap gap-2"><Badge variant="outline">{review.evidence.valid ? 'Ready to save' : 'Needs attention'}</Badge></div>
-      {review.evidence.errors.length ? <ul className="list-inside list-disc text-destructive">{review.evidence.errors.map((error) => <li key={error}>{error}</li>)}</ul> : null}
-      <ul className="flex flex-col gap-1">{review.evidence.diffs.map((diff) => <li key={diff.key_path} className="rounded border border-border p-2"><code>{diff.key_path}</code><span className="block text-muted-foreground">{diff.secret ? 'Secret value redacted' : `${previewValue(diff.old_value)} → ${previewValue(diff.new_value)}`}</span><span className="block">{diff.reload_required ? 'Reload required' : 'No reload required'}{diff.restart_required ? ' · restart required' : ''}</span></li>)}</ul>
+      {review.evidence.errors.length ? <ul className="list-inside list-disc text-destructive">{review.evidence.errors.map((error) => <li key={error}>{serviceRoutingSafeError(error)}</li>)}</ul> : null}
+      <ul className="flex flex-col gap-1">{review.evidence.diffs.map((diff) => <li key={diff.key_path} className="rounded border border-border p-2"><span className="font-medium">{serviceRoutingChangeLabel(diff.key_path)}</span><span className="block text-muted-foreground">{diff.secret ? 'Protected value updated' : `${previewValue(diff.old_value)} to ${previewValue(diff.new_value)}`}</span><span className="block">{diff.reload_required ? 'Refresh needed' : 'Ready after save'}{diff.restart_required ? ' - restart needed' : ''}</span></li>)}</ul>
       {review.evidence.diffs.length === 0 ? <p className="text-muted-foreground">Aurora found no changes to save.</p> : null}
     </div> : null}
     <Label className="flex items-start gap-2 text-xs font-normal normal-case tracking-normal"><Checkbox checked={review.reauthConfirmed} disabled={pending || review.status !== 'ready'} onCheckedChange={(checked) => onReauthChange(Boolean(checked))} /><span>I approve these changes for this session.</span></Label>
-    <div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={pending} onClick={onCancel}>Cancel</Button><Button type="button" size="sm" disabled={pending || !evidenceReady || !review.reauthConfirmed} onClick={onConfirm}>{pending ? 'Saving...' : 'Save changes'}</Button></div>
+    <div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={pending} onClick={onCancel}>Cancel</Button><Button type="button" size="sm" disabled={pending || !evidenceReady || !review.reauthConfirmed} onClick={onConfirm}>{pending ? 'Saving…' : 'Save changes'}</Button></div>
   </div>
 }
 
@@ -774,7 +774,7 @@ function FeatureExportControl({ feature, draft, disabled, onDraftChange }: { fea
 }
 
 function OptionChecklist({ title, description, options, selected, disabled, onToggle }: { title: string; description: string; options: ServiceRoutingOption[]; selected: string[]; disabled: boolean; onToggle: (id: string) => void }) {
-  return <div className="flex flex-col gap-1.5"><div><p className="text-[12.5px] font-medium">{title}</p><p className="text-[11px] text-muted-foreground">{description}</p></div>{options.length === 0 ? <p className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">No remote provider options are currently advertised.</p> : <div className="flex flex-col gap-1 rounded border border-border p-2">{options.map((option) => <Label key={option.id} className="flex items-center gap-2 text-[12px] font-normal normal-case tracking-normal"><Checkbox checked={selected.includes(option.id)} disabled={disabled} onCheckedChange={() => onToggle(option.id)} /><span>{option.label}</span>{option.label !== option.id ? <code className="text-[10px] text-muted-foreground">{option.id}</code> : null}{option.stale ? <Badge variant="outline">stale</Badge> : null}</Label>)}</div>}</div>
+  return <div className="flex flex-col gap-1.5"><div><p className="text-[12.5px] font-medium">{title}</p><p className="text-[11px] text-muted-foreground">{description}</p></div>{options.length === 0 ? <p className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">No approved devices are currently available.</p> : <div className="flex flex-col gap-1 rounded border border-border p-2">{options.map((option) => <Label key={option.id} className="flex items-center gap-2 text-[12px] font-normal normal-case tracking-normal"><Checkbox checked={selected.includes(option.id)} disabled={disabled} onCheckedChange={() => onToggle(option.id)} /><span>{option.label}</span>{option.label !== option.id ? <code className="text-[10px] text-muted-foreground">{option.id}</code> : null}{option.stale ? <Badge variant="outline">Needs refresh</Badge> : null}</Label>)}</div>}</div>
 }
 
 function ServiceStatusBadge({ status, registered }: { status: string; registered: boolean }) {
@@ -792,8 +792,31 @@ function friendlyLoadState(state: ServiceRoutingLoadState): string { return stat
 function friendlyPolicyOption(value: string): string {
   return ({ local: 'Prefer this device', network: 'Prefer approved devices', local_only: 'This device only', network_only: 'Approved devices only', error: 'Ask before continuing', none: 'Stop instead' } as Record<string, string>)[value] ?? value.replace(/_/g, ' ')
 }
-function changeSummary(value: JsonValue): string { if (value === null) return 'Any eligible provider / unset'; if (Array.isArray(value)) return value.length ? `${value.length} selected value${value.length === 1 ? '' : 's'}` : 'None'; if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled'; return String(value) }
+function changeSummary(value: JsonValue): string { if (value === null) return 'Any approved device'; if (Array.isArray(value)) return value.length ? `${value.length} selected value${value.length === 1 ? '' : 's'}` : 'None'; if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled'; return String(value) }
 function previewValue(value: JsonValue | undefined): string { return value === undefined ? 'unset' : changeSummary(value) }
+
+function serviceRoutingChangeLabel(keyPath: string): string {
+  if (keyPath.endsWith('.mesh_sharing.share')) return 'Device sharing'
+  if (keyPath.endsWith('.mesh_sharing.max_concurrent')) return 'Maximum simultaneous calls'
+  if (keyPath.endsWith('.mesh_sharing.unshared_feature_ids')) return 'Shared features'
+  if (keyPath.endsWith('.mesh_sharing.unshared_method_ids')) return 'Feature exceptions'
+  if (keyPath.endsWith('.mesh_routing.prefer')) return 'Preferred device'
+  if (keyPath.endsWith('.mesh_routing.fallback')) return 'Unavailable service action'
+  if (keyPath.endsWith('.mesh_routing.allowed_provider_peer_ids')) return 'Allowed devices'
+  if (keyPath.endsWith('.mesh_routing.min_version')) return 'Minimum device version'
+  if (keyPath.endsWith('.mesh_routing.required_provider_feature_ids')) return 'Required features'
+  if (keyPath.endsWith('.mesh_routing.required_provider_capability_tags')) return 'Required device capabilities'
+  if (keyPath.endsWith('.mesh_routing.require_explicit_selector')) return 'Device selection requirement'
+  return 'Service setting'
+}
+
+function serviceRoutingSafeError(value: string): string {
+  if (!value.trim()) return 'Aurora could not complete that request.'
+  if (/\b(?:config|schema|contract|gateway|provider|transport|runtime|manifest|preview|fallback|webrtc|http|wss?)\b|\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\.[a-z0-9_.]+\b/iu.test(value)) {
+    return 'Aurora could not complete that request. Refresh and try again.'
+  }
+  return value
+}
 
 export const SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS = 60_000
 function withSnapshotTimeout<T>(promise: Promise<T>, label: string): Promise<T> {

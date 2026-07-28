@@ -26,6 +26,9 @@ export interface OnboardingModePreferenceStore {
   writeSelectedMode: (modeId: string) => Promise<boolean>
 }
 
+type OnboardingProductModeId = 'connect-to-aurora' | 'make-this-device-available' | 'run-aurora-on-this-computer'
+type AuroraNodeMode = 'remote-console' | 'local-provider' | 'full-local'
+
 export interface DeploymentModeCard {
   id: string
   label: string
@@ -126,10 +129,12 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     void modePreferenceStore.readSelectedMode().then(
       (modeId) => {
         if (cancelled) return
-        if (modeId && isSupportedModeId(modeId) && !modeSelectionTouchedRef.current) {
-          setSelectedModeId(modeId)
-          setModePreferenceEvidence(`Restored ${modeLabel(modeId)}`)
-        } else if (modeId && !isSupportedModeId(modeId)) {
+        const productModeId = modeId ? storedModeToProductModeId(modeId) : null
+        const availableModeId = productModeId ? availableProductModeId(productModeId, client.transport.kind, snapshot, userAgent) : null
+        if (availableModeId && !modeSelectionTouchedRef.current) {
+          setSelectedModeId(availableModeId)
+          setModePreferenceEvidence(`Restored ${modeLabel(availableModeId)}`)
+        } else if (modeId) {
           setModePreferenceEvidence('Choose how to use this device')
         } else {
           setModePreferenceEvidence('Choose how to use this device')
@@ -146,7 +151,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     return () => {
       cancelled = true
     }
-  }, [client.transport.kind, modePreferenceStore, snapshot.nativePlatform])
+  }, [client.transport.kind, modePreferenceStore, snapshot, userAgent])
 
   function onSelectMode(modeId: string) {
     if (!modePreferenceReady || !isSupportedModeId(modeId)) return
@@ -154,7 +159,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     setSelectedModeId(modeId)
     if (!modePreferenceStore) return
     setModePreferenceEvidence(`Saving ${modeLabel(modeId)}`)
-    void modePreferenceStore.writeSelectedMode(modeId).then(
+    void modePreferenceStore.writeSelectedMode(productModeIdToNodeMode(modeId)).then(
       (ok) => {
         setModePreferenceEvidence(ok ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
       },
@@ -205,7 +210,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     setBusy(null)
     if (result.ok) {
       client.auth.setPairing({
-        reason: 'Pairing code issued by Auth.PairingStart',
+        reason: 'Pairing code created',
       })
       setPairingCode(result.data.code)
       setMessage(`Pairing code created; expires in ${result.data.expires_in_seconds} seconds.`)
@@ -234,34 +239,6 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   const completedStepCount = model.setupSteps.filter(isStepComplete).length
   const allStepsComplete = model.setupSteps.length > 0 && completedStepCount === model.setupSteps.length
 
-  if (setupRequired && thinConnectionPanel) {
-    return (
-      <div
-        className="aui-onboarding-scroll-viewport"
-        data-onboarding-scroll-viewport="true"
-      >
-        <section
-          className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-center gap-5 px-4 py-8 sm:px-6 sm:py-12"
-          aria-labelledby="onboarding-title"
-        >
-          <div className="text-center">
-            <div className="mx-auto mb-3 grid size-10 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-              <KeyRound size={19} aria-hidden />
-            </div>
-            <p className="text-[11px] font-semibold tracking-[0.12em] text-primary uppercase">
-              First-run setup
-            </p>
-            <h1 id="onboarding-title" className="mt-1.5 text-2xl font-semibold tracking-tight">{PRODUCT_COPY.onboarding.title}</h1>
-            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Name this device, then use an invite from Aurora.
-            </p>
-          </div>
-          <div data-step="thin-connection">{thinConnectionPanel}</div>
-        </section>
-      </div>
-    )
-  }
-
   return (
     <section className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-10" aria-labelledby="onboarding-title">
       <div className="text-center">
@@ -272,12 +249,6 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
           {setupRequired ? 'Use an invite to connect this device.' : 'Choose how you want to use Aurora on this device.'}
         </p>
       </div>
-
-      {thinConnectionPanel ? (
-        <div className="flex flex-col gap-3" data-step="thin-connection">
-          {thinConnectionPanel}
-        </div>
-      ) : null}
 
       {wizardStep === 'detect' ? (
         <div className="flex flex-col gap-4" data-step="detect">
@@ -332,6 +303,12 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
             </button>
           </div>
 
+          {thinConnectionPanel ? (
+            <div className="flex flex-col gap-3" data-step="home-node-connection">
+              {thinConnectionPanel}
+            </div>
+          ) : null}
+
           <section aria-labelledby="guided-setup-title" className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <h2 id="guided-setup-title" className="flex items-center gap-2 text-sm font-semibold">
@@ -380,7 +357,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
                 id="aurora-endpoint"
                 value={endpoint}
                 onChange={(event) => setEndpoint(event.currentTarget.value)}
-                placeholder="https://aurora.example.test or http://127.0.0.1:8000"
+                placeholder="Aurora address"
                 inputMode="url"
               />
             </FormField>
@@ -529,15 +506,15 @@ function deploymentModes(transportKind: string, snapshot: AuroraShellSnapshot, u
     mode('connect-to-aurora', PRODUCT_COPY.onboarding.choices.connect.label, PRODUCT_COPY.mesh.connectedDevice, PRODUCT_COPY.onboarding.choices.connect.description, connectState.state, connectState.evidence, connectState.repair),
     mode('make-this-device-available', PRODUCT_COPY.onboarding.choices.makeAvailable.label, PRODUCT_COPY.mesh.localFeatures, PRODUCT_COPY.onboarding.choices.makeAvailable.description, makeAvailableState.state, makeAvailableState.evidence, makeAvailableState.repair),
   ]
-  if (transportKind === 'tauri-local') {
+  if (canOfferFullLocalMode(transportKind, snapshot)) {
     modes.push(mode('run-aurora-on-this-computer', PRODUCT_COPY.onboarding.choices.runHere.label, PRODUCT_COPY.mesh.localDevice, PRODUCT_COPY.onboarding.choices.runHere.description, desktopNative.state, desktopNative.evidence, desktopNative.repair))
   }
   return modes
 }
 
 function desktopLocalState(snapshot: AuroraShellSnapshot, transportKind: string): { state: AvailabilityState; evidence: string; repair: string } {
-  if (transportKind === 'tauri-local') {
-    const nativeEvidence = snapshot.nativeAvailable ? `native ${snapshot.nativePlatform}` : 'native manifest pending'
+  if (canOfferFullLocalMode(transportKind, snapshot)) {
+    const nativeEvidence = snapshot.nativeAvailable ? `${surfaceDeviceLabel(snapshot.nativePlatform)} features available` : 'Device features are still loading'
     return {
       state: snapshot.loadState === 'ready' ? 'available-local' : 'pending',
       evidence: `${nativeEvidence}; Aurora is running on this computer`,
@@ -578,28 +555,28 @@ function androidMobileThinState(snapshot: AuroraShellSnapshot, transportKind: st
   if (transportKind === 'native-mobile' && platform.includes('android')) {
     return {
       state: 'available-remote',
-      evidence: 'native-mobile Android transport with SDK native manifest status',
-      repair: 'Continue with endpoint/pairing and store credentials only through Android keystore-backed native storage when advertised.',
+      evidence: 'Android app connection is available.',
+      repair: 'Continue with an invite or sign-in, then keep credentials in Android secure storage when available.',
     }
   }
   if (platform.includes('android')) {
     return {
       state: snapshot.nativeAvailable ? 'degraded' : 'unsupported',
-      evidence: `Android manifest ${snapshot.nativeAvailable ? 'available' : 'missing'}; transport=${transportKind}`,
-      repair: 'Use remote Gateway or mesh pairing; assistant role depends on package qualification, OS support, and user/OEM grant.',
+      evidence: snapshot.nativeAvailable ? 'Android device features are available.' : 'Android device features are not available yet.',
+      repair: 'Use an invite or sign in, then review Android permissions.',
     }
   }
   if (transportKind === 'http') {
     return {
       state: 'pending',
-      evidence: 'HTTP transport can support Android thin after native shell packaging status.',
-      repair: 'Pair or authenticate against the remote Gateway, then verify Android permissions and keystore capability in /settings/native.',
+      evidence: 'Android can connect through the saved Aurora address.',
+      repair: 'Use an invite or sign in, then review Android permissions.',
     }
   }
   return {
     state: 'unsupported',
-    evidence: snapshot.nativePlatform || 'Android native manifest missing',
-    repair: 'Android thin mode requires Android native manifest status or a remote Gateway URL.',
+    evidence: snapshot.nativePlatform || 'Android device features are not available yet.',
+    repair: 'Open Aurora on Android or connect to another Aurora device.',
   }
 }
 
@@ -609,27 +586,27 @@ function iosMobileThinState(snapshot: AuroraShellSnapshot, transportKind: string
     return {
       state: iosLocalLightState(snapshot) === 'unsupported' ? 'degraded' : iosLocalLightState(snapshot),
       evidence: iosLocalLightEvidence(snapshot),
-      repair: 'Use Keychain for credentials when advertised; invoke through App Intents, Shortcuts, widgets, share sheet, file associations, or deep links only.',
+      repair: 'Use secure storage when available; launch Aurora from iOS shortcuts, widgets, sharing, or links.',
     }
   }
   if (platform.includes('ios')) {
     return {
       state: snapshot.nativeAvailable ? iosLocalLightState(snapshot) : 'unsupported',
       evidence: iosLocalLightEvidence(snapshot),
-      repair: 'iOS uses Siri/Shortcuts/App Intents, widgets, share sheet, and deep links in app-owned surfaces; system assistant ownership is unavailable.',
+      repair: 'Use iOS shortcuts, widgets, sharing, and links from Aurora-owned surfaces.',
     }
   }
   if (transportKind === 'http') {
     return {
       state: 'pending',
-      evidence: 'HTTP transport can support iOS thin after native shell packaging status.',
-      repair: 'Pair or authenticate against the remote Gateway, then verify Keychain/App Intents/Shortcuts support in /settings/native.',
+      evidence: 'iOS can connect through the saved Aurora address.',
+      repair: 'Use an invite or sign in, then review iOS device features.',
     }
   }
   return {
     state: 'unsupported',
-    evidence: snapshot.nativePlatform || 'iOS native manifest missing',
-    repair: 'iOS thin mode requires iOS native manifest status or a remote Gateway URL.',
+    evidence: snapshot.nativePlatform || 'iOS device features are not available yet.',
+    repair: 'Open Aurora on iOS or connect to another Aurora device.',
   }
 }
 
@@ -644,13 +621,13 @@ function mobileNativeState(snapshot: AuroraShellSnapshot, transportKind: string,
   if (transportKind === 'native-mobile')
     return {
       state: 'degraded',
-      evidence: 'native-mobile transport without Android/iOS manifest detail',
-      repair: 'Verify platform manifest status before claiming native credential storage or background capabilities.',
+      evidence: 'Mobile device features need attention.',
+      repair: 'Review device features before turning on background access.',
     }
   return {
     state: 'unsupported',
-    evidence: snapshot.nativePlatform || 'mobile native manifest missing',
-    repair: 'Open Aurora from Android or iOS native shell to use native storage, permission, and invocation surfaces.',
+    evidence: snapshot.nativePlatform || 'Mobile device features are not available yet.',
+    repair: 'Open Aurora from the Android or iOS app to use device features.',
   }
 }
 
@@ -663,25 +640,25 @@ function mobileWebThinState(snapshot: AuroraShellSnapshot, transportKind: string
   if (profile.isMobile && transportKind === 'http')
     return {
       state: 'available-remote',
-      evidence: 'HTTP Gateway transport on a mobile user agent/native platform',
-      repair: 'Authenticate or pair; background wake and durable credential storage require Mobile Native.',
+      evidence: 'Mobile browser connection is available.',
+      repair: 'Sign in or approve this device. Background features require the mobile app.',
     }
   if (transportKind === 'http')
     return {
       state: 'pending',
-      evidence: 'HTTP Gateway transport can be used from mobile web after mobile browser detection.',
-      repair: 'Open the Gateway URL from a mobile browser and authenticate or pair.',
+      evidence: 'Mobile browser connection can be used after this page opens on mobile.',
+      repair: 'Open Aurora in a mobile browser, then sign in or approve this device.',
     }
   if (transportKind === 'mock')
     return {
       state: 'degraded',
-      evidence: 'Mobile web setup waits for a live Gateway connection',
-      repair: 'Connect a remote Gateway from mobile browser for production truth.',
+      evidence: 'Mobile browser setup is waiting for a live Aurora address.',
+      repair: 'Connect to Aurora from a mobile browser.',
     }
   return {
     state: 'unsupported',
-    evidence: `Current transport is ${transportKind}; mobile web thin needs HTTP Gateway transport.`,
-    repair: 'Use a mobile browser with an http:// or https:// Aurora Gateway endpoint.',
+    evidence: 'Mobile browser setup is not connected yet.',
+    repair: 'Use a mobile browser with an Aurora address.',
   }
 }
 
@@ -703,10 +680,10 @@ function iosLocalLightState(snapshot: AuroraShellSnapshot): AvailabilityState {
 function iosLocalLightEvidence(snapshot: AuroraShellSnapshot): string {
   if (!snapshot.nativePlatform.toLowerCase().includes('ios')) return snapshot.nativePlatform
   const ids = (snapshot.nativeMobileIntegrations ?? []).filter((integration) => integration.platform === 'ios' && integration.id !== 'siriReplacement').map((integration) => integration.id)
-  return ids.length > 0 ? `iOS native manifest: ${ids.join(', ')}` : 'iOS native manifest missing'
+  return ids.length > 0 ? `iOS device features: ${ids.join(', ')}` : 'iOS device features are not available yet.'
 }
 
-function mode(id: string, label: string, routeLabel: string, description: string, state: AvailabilityState, evidence: string, repair: string): DeploymentModeCard {
+function mode(id: OnboardingProductModeId, label: string, routeLabel: string, description: string, state: AvailabilityState, evidence: string, repair: string): DeploymentModeCard {
   return {
     id,
     label,
@@ -734,7 +711,7 @@ function setupSteps(input: { session: AuthSessionSnapshot; snapshot: AuroraShell
       detail: 'Sign in, restore an access key, or approve this device.',
       state: input.authState === 'pending' ? input.pairingState : input.authState,
       progress: input.session.isAuthenticated ? 100 : input.session.state === 'pairing' ? 45 : null,
-      repair: input.session.isAuthenticated ? 'Session ready.' : 'If login fails, check endpoint reachability and retry Auth.Login, token restore, or Auth.PairingExchange.',
+      repair: input.session.isAuthenticated ? 'Access ready.' : 'If sign-in fails, check the address and try again.',
     },
     {
       title: 'Load capability graph',
@@ -767,7 +744,7 @@ function resumeSetupTitle(steps: OnboardingSetupStep[]): string {
 
 function resumeSetupDetail(steps: OnboardingSetupStep[]): string {
   const next = steps.find((step) => step.state === 'pending' || step.state === 'denied' || step.state === 'unsupported' || step.state === 'privacy-blocked')
-  return next?.repair ?? 'Setup prerequisites are complete from the current SDK session snapshot.'
+  return next?.repair ?? 'Setup is complete for this device.'
 }
 
 function isStepComplete(step: OnboardingSetupStep): boolean {
@@ -775,7 +752,13 @@ function isStepComplete(step: OnboardingSetupStep): boolean {
 }
 
 function androidAssistantRoleEvidence(assistant: NonNullable<AuroraShellSnapshot['nativeAssistantRole']>, fallbackCount: number): string {
-  return `${assistant.evidenceSource}; roleAvailable=${String(assistant.roleAvailable)}; roleHeld=${String(assistant.roleHeld)}; requestable=${String(assistant.requestable)}; fallback entrypoints=${fallbackCount}`
+  return assistant.roleHeld
+    ? 'Android assistant access is already enabled.'
+    : assistant.requestable
+      ? 'Android assistant access can be requested.'
+      : fallbackCount > 0
+        ? 'Android shortcut entry points are available.'
+        : 'Android assistant access is not available yet.'
 }
 
 function mobileFirstLaunchNotes(snapshot: AuroraShellSnapshot): MobileFirstLaunchNote[] {
@@ -785,8 +768,8 @@ function mobileFirstLaunchNotes(snapshot: AuroraShellSnapshot): MobileFirstLaunc
     {
       platform: 'Android',
       state: androidState,
-      detail: 'Aurora can request Android assistant role only when package qualification, OS availability, and user/OEM grant allow it; fallback entrypoints remain visible.',
-      evidence: snapshot.nativeAssistantRole ? androidAssistantRoleEvidence(snapshot.nativeAssistantRole, snapshot.nativeFallbackEntrypoints.length) : 'Android assistant-role manifest status not present in this runtime.',
+      detail: 'Aurora can ask to become the Android assistant only when this device allows it.',
+      evidence: snapshot.nativeAssistantRole ? androidAssistantRoleEvidence(snapshot.nativeAssistantRole, snapshot.nativeFallbackEntrypoints.length) : 'Android assistant access is not available yet.',
     },
     {
       platform: 'iOS',
@@ -800,7 +783,9 @@ function mobileFirstLaunchNotes(snapshot: AuroraShellSnapshot): MobileFirstLaunc
 function platformBehaviorNotes(snapshot: AuroraShellSnapshot, transportKind: string): PlatformBehaviorNote[] {
   const meshRoute = routeById(snapshot, 'mesh')
   const meshState = meshRoute?.state ?? 'unsupported'
-  const meshEvidence = meshRoute ? `${meshRoute.providerLabel}; routeable=${String(meshRoute.routeable)}; blockers=${presentableSignal(meshRoute.blockers.join(',') || 'none')}` : 'Mesh route is not present in the capability graph.'
+  const meshEvidence = meshRoute
+    ? (meshRoute.routeable ? 'Mesh is available for this device.' : 'Mesh needs attention before use.')
+    : 'Mesh is not available yet.'
   const desktopState: AvailabilityState = transportKind === 'tauri-local' && !meshRoute?.disabled ? 'available-local' : transportKind === 'tauri-local' ? 'degraded' : 'unsupported'
   const webState: AvailabilityState = transportKind === 'http' ? meshState : transportKind === 'mock' ? 'degraded' : 'unsupported'
   const androidState = androidMobileThinState(snapshot, transportKind).state
@@ -809,14 +794,14 @@ function platformBehaviorNotes(snapshot: AuroraShellSnapshot, transportKind: str
     {
       label: 'Desktop Tauri local',
       state: desktopState,
-      behavior: 'Desktop local can be a full node only when the local Gateway reports mesh enabled and routeable; otherwise it stays a supervised local shell with explicit repair status.',
-      evidence: transportKind === 'tauri-local' ? meshEvidence : `Current transport is ${transportKind}; desktop-local full-node behavior requires Tauri local Gateway status.`,
+      behavior: 'Desktop can run Aurora here when local services are available.',
+      evidence: transportKind === 'tauri-local' ? meshEvidence : 'Open the desktop app on the computer that should run Aurora.',
     },
     {
       label: 'Connected Aurora device',
       state: webState,
       behavior: 'This device can view and manage Aurora through the device it connects to.',
-      evidence: transportKind === 'http' ? meshEvidence : `Current transport is ${transportKind}; use HTTP Gateway transport for web-thin mesh management.`,
+      evidence: transportKind === 'http' ? meshEvidence : 'Connect this device to Aurora before managing mesh.',
     },
     {
       label: 'Android app',
@@ -847,12 +832,12 @@ function endpointState(endpoint: string | undefined, transportKind: string, load
 
 function endpointEvidence(endpoint: string | undefined, transportKind: string, loadState: string): string {
   if (loadState === 'error') return 'Aurora could not load the capability snapshot.'
-  if (transportKind === 'mock') return 'No Gateway URL is configured; the UI is using SDK demo modes as a degraded development fallback.'
-  if (!endpoint?.trim()) return `Current SDK transport is ${transportKind}; enter a URL only when changing Gateway targets.`
+  if (transportKind === 'mock') return 'Aurora is running with sample data.'
+  if (!endpoint?.trim()) return 'Enter an Aurora address only when changing devices.'
   try {
     const parsed = new URL(endpoint)
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return `Valid ${parsed.protocol} endpoint syntax; backend proof still requires Auth/Gateway response.`
-    return 'Endpoint must use http or https.'
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return 'Address format looks valid; Aurora still needs to respond.'
+    return 'Use an Aurora web address.'
   } catch {
     return 'Endpoint is not a valid URL.'
   }
@@ -867,13 +852,13 @@ function authAvailability(session: AuthSessionSnapshot): AvailabilityState {
 }
 
 function authExplanation(session: AuthSessionSnapshot): string {
-  if (session.isSystem) return 'AuthSession reports SYSTEM/API-key mode; expose this only for local development or auth-disabled backends.'
-  if (session.isAuthenticated) return 'AuthSession is authenticated from SDK/service status.'
-  if (session.state === 'pairing') return 'Pairing has started and remains pending until Auth reports exchange success or denial.'
+  if (session.isSystem) return 'Local development access is active.'
+  if (session.isAuthenticated) return 'Signed in.'
+  if (session.state === 'pairing') return 'Pairing is waiting for approval.'
   if (session.state === 'expired') return session.reason ?? 'Session expired; restore or log in again.'
   if (session.state === 'revoked') return session.reason ?? 'Session revoked; restore or log in again.'
   if (session.isDenied) return session.reason ?? 'Authentication or permission denied by backend.'
-  return 'No authenticated session is present. Login, restore a token, or exchange an approved pairing code.'
+  return 'Sign in, restore an access key, or enter an approved pairing code.'
 }
 
 function pairingAvailability(session: AuthSessionSnapshot, meshRoute: RouteAvailability | undefined): AvailabilityState {
@@ -884,9 +869,16 @@ function pairingAvailability(session: AuthSessionSnapshot, meshRoute: RouteAvail
 }
 
 function pairingExplanation(session: AuthSessionSnapshot, meshRoute: RouteAvailability | undefined): string {
-  if (session.isMeshPeer) return 'Pairing exchange returned mesh peer identity through AuthSession.'
-  if (session.state === 'pairing') return 'Pairing request is pending backend approval and exchange.'
-  return meshRoute?.explanation ?? 'Pairing is unavailable until Auth pairing methods and mesh capability status are exposed.'
+  if (session.isMeshPeer) return 'This device is approved.'
+  if (session.state === 'pairing') return 'Pairing is waiting for approval.'
+  return meshRoute?.explanation ?? 'Pairing is unavailable right now.'
+}
+
+function surfaceDeviceLabel(platform: string): string {
+  if (/android/iu.test(platform)) return 'Android'
+  if (/ios|iphone|ipad/iu.test(platform)) return 'iOS'
+  if (/mac|win|linux/iu.test(platform)) return 'Desktop'
+  return 'Device'
 }
 
 function routeById(snapshot: AuroraShellSnapshot, id: string): RouteAvailability | undefined {
@@ -899,16 +891,54 @@ function defaultModeId(transportKind: string, snapshot?: AuroraShellSnapshot, us
     nativePlatform: snapshot?.nativePlatform,
     userAgent,
   })
-  if (transportKind === 'tauri-local') return 'run-aurora-on-this-computer'
+  if (snapshot && canOfferFullLocalMode(transportKind, snapshot)) return 'run-aurora-on-this-computer'
   if (transportKind === 'native-mobile' || profile.isMobile) return 'make-this-device-available'
   return 'connect-to-aurora'
 }
 
-function isSupportedModeId(modeId: string): boolean {
+function isSupportedModeId(modeId: string): modeId is OnboardingProductModeId {
   return supportedModeIds.has(modeId)
 }
 
-const supportedModeIds = new Set(['connect-to-aurora', 'make-this-device-available', 'run-aurora-on-this-computer'])
+const supportedModeIds: ReadonlySet<string> = new Set(['connect-to-aurora', 'make-this-device-available', 'run-aurora-on-this-computer'])
+
+function storedModeToProductModeId(modeId: string): OnboardingProductModeId | null {
+  switch (modeId) {
+    case 'remote-console':
+    case 'desktop-thin':
+    case 'desktop-web-thin':
+    case 'mobile-web-thin':
+    case 'server-web':
+    case 'web-thin':
+      return 'connect-to-aurora'
+    case 'local-provider':
+    case 'mobile-native':
+    case 'mobile-thin':
+    case 'android-thin':
+    case 'ios-thin':
+      return 'make-this-device-available'
+    case 'full-local':
+    case 'desktop-local':
+    case 'desktop-native':
+      return 'run-aurora-on-this-computer'
+    default:
+      return isSupportedModeId(modeId) ? modeId : null
+  }
+}
+
+function productModeIdToNodeMode(modeId: OnboardingProductModeId): AuroraNodeMode {
+  if (modeId === 'run-aurora-on-this-computer') return 'full-local'
+  if (modeId === 'make-this-device-available') return 'local-provider'
+  return 'remote-console'
+}
+
+function availableProductModeId(modeId: OnboardingProductModeId, transportKind: string, snapshot: AuroraShellSnapshot, userAgent?: string): OnboardingProductModeId | null {
+  return deploymentModes(transportKind, snapshot, userAgent).some((mode) => mode.id === modeId && !mode.disabled) ? modeId : null
+}
+
+function canOfferFullLocalMode(transportKind: string, snapshot: AuroraShellSnapshot): boolean {
+  return transportKind === 'tauri-local' && snapshot.nativeAvailable
+}
 
 function modeLabel(modeId: string): string {
   return ({

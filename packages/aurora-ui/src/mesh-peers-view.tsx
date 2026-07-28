@@ -27,6 +27,7 @@ import {
   type AuroraSurfaceProfile,
 } from './platform-surface'
 import { presentableSignal } from './status-badges'
+import { safeErrorCopy } from './product-copy'
 import type { RouteAvailability } from './shell-data'
 import {
   isBrowserWebRtcConfigured,
@@ -243,9 +244,9 @@ const loadingSnapshot: MeshPeersSnapshot = {
   routeCount: 0,
   compatibilityFailures: [],
   listState: 'pending',
-  listReason: 'Loading mesh peers, pending requests, WebRTC state, and capability catalog through Aurora.',
+  listReason: 'Loading mesh peers and pending requests through Aurora.',
   statusState: 'pending',
-  statusReason: 'Loading Gateway.GetMeshStatus through Aurora.',
+  statusReason: 'Loading mesh status through Aurora.',
   mutationState: 'pending',
   mutationReason: 'Loading Auth mesh peer manage capabilities.',
   config: {
@@ -439,7 +440,7 @@ export function MeshPeersResource({
           setConfigPendingKey(change.key_path)
           await client.config.applyChange({
             change,
-            reason: `Update mesh configuration ${change.key_path}`,
+            reason: `Update mesh settings for ${snapshot.localNodeName}`,
             reauthConfirmed: true,
           })
         }
@@ -467,20 +468,20 @@ export function MeshPeersResource({
           const quiesceChanges = meshInviteQuiesceChanges()
           const quiesceDiff = await client.config.previewDiff({ changes: quiesceChanges })
           if (!quiesceDiff.ok || !quiesceDiff.data?.valid) {
-            throw new Error(quiesceDiff.ok ? quiesceDiff.data?.errors.join('; ') || 'Mesh transport could not be stopped safely before applying the invite.' : meshPeerErrorMessage(quiesceDiff.error))
+                throw new Error(quiesceDiff.ok ? 'Aurora could not pause existing connections before applying the invite.' : meshPeerErrorMessage(quiesceDiff.error))
           }
           await client.config.previewReloadImpact({ changes: quiesceChanges })
           for (const change of quiesceChanges) {
             await client.config.applyChange({
               change,
-              reason: `Pause mesh transport before invite: ${change.key_path}`,
+              reason: `Pause mesh connections before invite for ${snapshot.localNodeName}`,
               reauthConfirmed: true,
             })
           }
           for (const change of changes) {
             await client.config.applyChange({
               change,
-              reason: `Join mesh from invite: ${change.key_path}`,
+              reason: `Join mesh from invite for ${snapshot.localNodeName}`,
               reauthConfirmed: true,
             })
           }
@@ -599,7 +600,7 @@ export function meshInviteConfigChanges(invite: JsonObject): { key_path: string;
   const room = nonEmptyString(signaling.room)
   const roomPassword = nonEmptyString(signaling.room_password)
   if (!appId || !room || !roomPassword) {
-    throw new Error('Mesh invites require an app id, signaling room, and room password.')
+    throw new Error('This invite is incomplete. Ask the sender for a new invite.')
   }
   const changes: { key_path: string; value: JsonValue }[] = []
   const push = (key_path: string, value: JsonValue | undefined) => {
@@ -809,14 +810,14 @@ export async function buildMeshPeersSnapshot(client: AuroraClient, route: RouteA
     config: {
       fields: configFields,
       state: hasEditableConfigMetadata ? 'available-local' : configFields.length > 0 ? 'degraded' : 'unsupported',
-      reason: hasEditableConfigMetadata ? 'Mesh configuration loaded.' : 'Mesh settings are visible, but editable metadata was not reported.',
+      reason: hasEditableConfigMetadata ? 'Mesh settings loaded.' : 'Mesh settings are visible, but editing is unavailable.',
       secretsRedacted: configResponse?.secrets_redacted ?? true,
       editable: hasEditableConfigMetadata,
       warnings: configWarning ? [configWarning] : [],
     },
     warnings: failures,
-    error: denied ? 'Mesh peer lifecycle access was denied by Auth or Gateway.' : null,
-    evidenceSource: client.transport.kind === 'mock' ? 'Local preview data is not live runtime state' : 'Aurora mesh, auth, gateway, device, config, and capability responses',
+    error: denied ? 'Mesh access was denied.' : null,
+    evidenceSource: client.transport.kind === 'mock' ? 'Sample data' : 'Aurora mesh and device responses',
     transportKind: client.transport.kind,
     fixtureOnly: client.transport.kind === 'mock',
   }
@@ -870,11 +871,11 @@ export function reconcileMeshPeersWithThinPeer(
         nodeName: existingPeer.nodeName || nodeName,
         lifecycleState: peerState,
         lifecycleLabel: connected
-          ? 'authorized WebRTC thin peer'
-          : 'saved WebRTC thin peer is offline',
+          ? 'Approved device'
+          : 'Saved device is offline',
         connectionStatus,
         lastSeen: thinPeer.updatedAt,
-        lastEvidenceSource: `${existingPeer.lastEvidenceSource}; local thin WebRTC runtime`,
+        lastEvidenceSource: 'Saved device profile',
       }
     : {
         peerId,
@@ -882,12 +883,12 @@ export function reconcileMeshPeersWithThinPeer(
         roomName: 'saved invite profile',
         lifecycleState: peerState,
         lifecycleLabel: connected
-          ? 'authorized WebRTC thin peer'
-          : 'saved WebRTC thin peer is offline',
+          ? 'Approved device'
+          : 'Saved device is offline',
         trustState: connected ? 'available-remote' : peerState,
         trustLabel: connected
-          ? 'authenticated through the saved thin peer credential'
-          : 'saved peer identity; live trust state unavailable while offline',
+          ? 'Approved device'
+          : 'Saved device identity; live trust state unavailable while offline',
         outboundStatus: connected ? 'approved' : 'saved',
         inboundStatus: connected ? 'approved' : 'unknown',
         connectionStatus,
@@ -900,7 +901,7 @@ export function reconcileMeshPeersWithThinPeer(
         serviceCount: 0,
         services: [],
         lastSeen: thinPeer.updatedAt,
-        lastEvidenceSource: 'saved thin WebRTC profile and local runtime state',
+        lastEvidenceSource: 'Saved device profile',
         pendingPairing: null,
         approveAction: null,
         denyAction: null,
@@ -913,7 +914,7 @@ export function reconcileMeshPeersWithThinPeer(
   const warnings = uniqueStrings([
     ...base.warnings.filter((warning) => !isExpectedOfflineTransportMessage(warning)),
     ...(!connected
-      ? [`${nodeName} is offline. WebRTC remains enabled; saved peers and last-known capabilities stay visible until a trusted route reconnects.`]
+      ? [`${nodeName} is offline. Saved devices and last-known services stay visible until a trusted connection returns.`]
       : []),
   ])
 
@@ -943,12 +944,12 @@ export function reconcileMeshPeersWithThinPeer(
     statusState: connected ? base.statusState : 'degraded',
     statusReason: connected
       ? base.statusReason
-      : 'The thin WebRTC runtime is enabled and retrying its saved peer.',
+      : 'Aurora is retrying the saved device.',
     warnings,
     error: base.loadState === 'denied' ? base.error : null,
     evidenceSource: remoteUnavailable
-      ? 'saved thin peer profile and last-known redacted mesh state'
-      : `${base.evidenceSource}; local thin WebRTC runtime`,
+      ? 'Saved device profile'
+      : 'Aurora mesh and device responses',
   }
 }
 
@@ -1057,10 +1058,10 @@ export function MeshPeersView({
       </div>
 
       <div className="grid gap-2 empty:hidden" aria-live="polite">
-        {mutationError ? <p className="text-sm text-destructive">Peer action failed: {mutationError}</p> : null}
-        {configMutationError ? <p className="text-sm text-destructive">Configuration update failed: {configMutationError}</p> : null}
-        {inviteImport.error ? <p className="text-sm text-destructive">Invite import failed: {inviteImport.error}</p> : null}
-        {thinPeerMutationError ? <p className="text-sm text-destructive">Connection action failed: {thinPeerMutationError}</p> : null}
+        {mutationError ? <p className="text-sm text-destructive">{meshSafeErrorTitle(mutationError)}</p> : null}
+        {configMutationError ? <p className="text-sm text-destructive">{meshSafeErrorTitle(configMutationError)}</p> : null}
+        {inviteImport.error ? <p className="text-sm text-destructive">{meshSafeErrorTitle(inviteImport.error)}</p> : null}
+        {thinPeerMutationError ? <p className="text-sm text-destructive">{meshSafeErrorTitle(thinPeerMutationError)}</p> : null}
       </div>
 
       <ThinPeerConnectionStatus
@@ -1078,7 +1079,7 @@ export function MeshPeersView({
           </CardTitle>
           <CardDescription>
             {canManageLocalServiceConfiguration
-              ? <>Master switch for P2P mesh (<code>gateway.mesh_network.enabled</code>). Turning this off disconnects all peers.</>
+              ? <>Master switch for mesh networking. Turning this off disconnects all peers.</>
               : <>Mesh state reported by the connected Aurora device. This device cannot start or stop the remote mesh service.</>}
           </CardDescription>
           <CardAction>
@@ -1100,7 +1101,7 @@ export function MeshPeersView({
         {masterSwitchUnavailable || configPendingKey ? (
           <CardContent className="flex flex-col gap-1">
             {masterSwitchUnavailable ? <p className="text-sm text-muted-foreground">Mesh toggle is read-only right now.</p> : null}
-            {configPendingKey ? <p className="text-sm text-muted-foreground">Applying config through preview/apply…</p> : null}
+            {configPendingKey ? <p className="text-sm text-muted-foreground">Applying changes…</p> : null}
           </CardContent>
         ) : null}
       </Card>
@@ -1578,7 +1579,7 @@ function PeerTable({ peers, pendingPeerId, optimisticPeerId, mutationDisabled, o
                     </TableCell>
                     <TableCell>
                       {peer.permissions.length > 0 ? (
-                        <Badge variant="secondary">{peer.permissions.length === 1 ? peer.permissions[0] : `${peer.permissions[0]} +${peer.permissions.length - 1}`}</Badge>
+                        <Badge variant="secondary">{permissionSummary(peer.permissions)}</Badge>
                       ) : (
                         <span className="text-[11.5px] text-muted-foreground">no access</span>
                       )}
@@ -1627,7 +1628,7 @@ function RequestRow({ peer, pending, onReview }: { peer: MeshPeerRow; pending: b
       </CardHeader>
       <CardContent className="grid gap-2 sm:grid-cols-3">
         <DetailItem label="Peer ID" value={peer.fingerprint} />
-        <DetailItem label="Requested" value={peer.permissions.join(', ') || 'no requested scopes'} />
+        <DetailItem label="Requested" value={permissionSummary(peer.permissions)} />
         <DetailItem label="Status" value={peer.pendingPairing?.status ?? peer.outboundStatus} />
       </CardContent>
       <CardFooter className="justify-end">
@@ -1704,7 +1705,7 @@ function toCatalogEntry(id: string): PermissionCatalogEntry {
   const [service, action] = id.includes('.') ? [id.slice(0, id.indexOf('.')), id.slice(id.indexOf('.') + 1)] : [null, null]
   return {
     id,
-    label: id === '*' ? 'Full access' : id,
+    label: permissionLabel(id),
     description: '',
     service,
     action,
@@ -1755,7 +1756,7 @@ function RequestReviewDialog({ peer, open, disabled, pending, permissions, onOpe
             </div>
             {!verificationCode ? (
               <Alert variant="destructive" role="alert">
-                <AlertDescription>This pairing session did not report a verification code. Do not approve it until both Auroras show the same code.</AlertDescription>
+                <AlertDescription>This pairing request did not report a verification code. Do not approve it until both Auroras show the same code.</AlertDescription>
               </Alert>
             ) : null}
             <PermissionEditorTable
@@ -1802,14 +1803,14 @@ function EnumToggle({ value, options, disabled, onChange, ariaLabel }: { value: 
 }
 
 const SHARE_SCOPE_PRESETS: { value: string; label: string; permissions: string[] }[] = [
-  { value: 'preview-only', label: 'Preview only', permissions: [] },
+  { value: 'view-only', label: 'View only', permissions: [] },
   { value: 'assistant-use', label: 'Assistant use', permissions: ['Orchestrator.use'] },
   { value: 'full-tools', label: 'Full tool access', permissions: ['*'] },
 ]
 
 function currentShareScope(permissions: string[]): string {
   const match = SHARE_SCOPE_PRESETS.find((preset) => preset.permissions.length === permissions.length && preset.permissions.every((permission) => permissions.includes(permission)))
-  return match?.value ?? 'preview-only'
+  return match?.value ?? 'view-only'
 }
 
 function MeshSettingsDialog({ open, snapshot, disabled, pendingKey, mutationError, onConfigChange, onOpenChange }: { open: boolean; snapshot: MeshPeersSnapshot; disabled: boolean; pendingKey: string | null; mutationError: string | null; onConfigChange: ((changes: MeshConfigChange[]) => void) | undefined; onOpenChange: (open: boolean) => void }) {
@@ -1834,18 +1835,18 @@ function MeshSettingsDialog({ open, snapshot, disabled, pendingKey, mutationErro
             {mutationError ? (
               <Alert variant="destructive">
                 <AlertTriangle />
-                <AlertTitle>Configuration update failed</AlertTitle>
-                <AlertDescription>{mutationError}</AlertDescription>
+                <AlertTitle>{meshSafeErrorTitle(mutationError)}</AlertTitle>
+                <AlertDescription>Try again after Aurora finishes the current change.</AlertDescription>
               </Alert>
             ) : null}
-            {pendingKey ? <p className="text-sm text-muted-foreground">Applying config through preview/apply…</p> : null}
+            {pendingKey ? <p className="text-sm text-muted-foreground">Applying changes…</p> : null}
             {readOnly ? <p className="text-sm text-muted-foreground">Mesh settings are read-only right now.</p> : null}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
             <div>
               <p className="text-[13px] font-medium">Default share scope for new peers</p>
               <p className="text-[11.5px] text-muted-foreground">
-                Baseline permissions granted on approval (<code>auth.default_pairing_permissions</code>). Fine-tune per peer in Scopes.
+                Baseline permissions granted on approval. Fine-tune each device in Scopes.
               </p>
             </div>
             <EnumToggle
@@ -1892,7 +1893,7 @@ function MeshConfigurationPanel({ snapshot, disabled, pendingKey, onConfigChange
   }
 
   if (snapshot.config.fields.length === 0) {
-    return <EmptyPanel title="Settings" description="Mesh and WebRTC settings appear here when reported by this node." />
+    return <EmptyPanel title="Settings" description="Mesh settings appear here when Aurora reports them." />
   }
 
   return (
@@ -1929,16 +1930,13 @@ function MeshConfigurationPanel({ snapshot, disabled, pendingKey, onConfigChange
                 <Label htmlFor={field.key_path} className="text-sm font-semibold normal-case tracking-normal">
                   {field.title || configFieldFallbackTitle(field.key_path)}
                 </Label>
-                <p className="line-clamp-2 text-xs text-muted-foreground">{field.description || field.key_path}</p>
+                <p className="line-clamp-2 text-xs text-muted-foreground">{productConfigDescription(field)}</p>
                 <div className="flex flex-wrap gap-1">
                   {changed ? <Badge>changed</Badge> : null}
                   {field.secret ? <Badge variant="secondary">secret</Badge> : null}
-                  {field.reload_required ? <Badge variant="outline">reload</Badge> : null}
-                  {field.restart_required ? <Badge variant="outline">restart</Badge> : null}
+                  {field.reload_required ? <Badge variant="outline">needs refresh</Badge> : null}
+                  {field.restart_required ? <Badge variant="outline">needs attention</Badge> : null}
                 </div>
-                <code className="block truncate text-[10.5px] text-muted-foreground" title={field.key_path}>
-                  {field.key_path.replace(/^services\./, '')}
-                </code>
               </div>
               <ConfigFieldControl
                 field={field}
@@ -2083,7 +2081,7 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                   <KeyRound /> Invite
                 </CardTitle>
                 <CardDescription>
-                  Share the complete signaling configuration so the other device joins this exact room. Once the DataChannel opens, both devices automatically create the pairing requests they need.
+                  Share this private invite with the other device. Pairing starts after both devices are ready.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
@@ -2099,7 +2097,7 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                     <Link2 className="size-3.5" /> Invite link
                   </Label>
                   <Textarea id="mesh-invite-link" aria-label="Mesh invite link" className="min-h-16 break-all font-mono text-[11px]" value={inviteUrl ?? ''} placeholder="Enable mesh and wait for secure services to start." readOnly />
-                  <p className="text-[11px] text-muted-foreground">The link always includes the app id, room, and room password required to reach this signaling room.</p>
+                  <p className="text-[11px] text-muted-foreground">The link includes sensitive connection details. Share it only through a private channel.</p>
                 </div>
               </CardContent>
               <CardFooter className="justify-end">
@@ -2127,7 +2125,7 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                 <CardTitle className="flex items-center gap-2">
                   <RadioTower /> Join from an invite
                 </CardTitle>
-                <CardDescription>Paste or scan an invite to join the same signaling room. Pairing starts automatically only after the devices establish their DataChannel.</CardDescription>
+                <CardDescription>Paste or scan an invite to connect both devices. Pairing starts only after both devices are ready.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -2140,15 +2138,15 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                     ) : null}
                   </div>
                   <Textarea id="mesh-join-invite" className="min-h-16 break-all font-mono text-[11px]" placeholder="aurora://mesh/invite?i=amv1.…" value={joinText} disabled={inviteImport.pending} onChange={(event) => setJoinText(event.currentTarget.value)} />
-                  {scanError ? <p className="text-sm text-destructive">QR scan failed: {scanError}</p> : null}
+                  {scanError ? <p className="text-sm text-destructive">{meshSafeErrorTitle(scanError)}</p> : null}
                   {joinText && !joinInvite ? <p className="text-sm text-muted-foreground">Not a recognizable Aurora mesh invite yet. Paste the full link or the amv1 token.</p> : null}
                 </div>
                 {joinSummary ? (
                   <div className="grid gap-2 sm:grid-cols-3">
-                    <DetailItem label="Mesh node" value={joinSummary.nodeName} />
-                    <DetailItem label="Signaling room" value={joinSummary.room} />
-                    <DetailItem label="Signaling" value={`${joinSummary.signalingProvider} · ${joinSummary.brokerCount} broker${joinSummary.brokerCount === 1 ? '' : 's'}`} />
-                    <DetailItem label="Room password" value={joinSummary.includesPassword ? 'included in invite' : 'not included'} />
+                    <DetailItem label="Device" value={joinSummary.nodeName} />
+                    <DetailItem label="Invite" value="Ready" />
+                    <DetailItem label="Connection" value={joinSummary.brokerCount > 0 ? 'Available' : 'Needs attention'} />
+                    <DetailItem label="Sensitive details" value={joinSummary.includesPassword ? 'Included' : 'Missing'} />
                     <DetailItem label="Created" value={joinSummary.generatedAt ? formatRelative(joinSummary.generatedAt) : 'unknown'} />
                   </div>
                 ) : null}
@@ -2156,19 +2154,18 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                   <Alert variant="destructive">
                     <AlertTriangle />
                     <AlertTitle>Incomplete invite</AlertTitle>
-                    <AlertDescription>This invite has no room password and cannot securely join the signaling room. Ask the sender for a new invite.</AlertDescription>
+                    <AlertDescription>This invite is incomplete. Ask the sender for a new invite.</AlertDescription>
                   </Alert>
                 ) : null}
                 <Button type="button" disabled={!joinInvite || !joinSummary?.includesPassword || inviteImport.pending || !onApplyInvite} onClick={() => joinInvite && onApplyInvite?.(joinInvite)}>
-                  {inviteImport.pending ? 'Applying config…' : 'Apply secure mesh invite'}
+                  {inviteImport.pending ? 'Applying invite…' : 'Apply invite'}
                 </Button>
                 {inviteImport.appliedChangeCount !== null ? (
                   <Alert>
                     <ShieldCheck />
                     <AlertTitle>Invite applied</AlertTitle>
                     <AlertDescription>
-                      {inviteImport.appliedChangeCount} config value{inviteImport.appliedChangeCount === 1 ? '' : 's'} updated through config preview/apply.
-                      {' '}Aurora will join the room and surface the automatically created requests on both devices for approval.
+                      Invite details were saved. Aurora will connect and show approval requests on both devices.
                     </AlertDescription>
                   </Alert>
                 ) : null}
@@ -2179,7 +2176,7 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
         <Alert>
           <LockKeyhole />
           <AlertTitle>Private invitation</AlertTitle>
-          <AlertDescription>The room password is always included because it is required to reach the same encrypted signaling room. Share this invite only through a private channel.</AlertDescription>
+          <AlertDescription>The invite includes sensitive connection details. Share it only through a private channel.</AlertDescription>
         </Alert>
         <DialogFooter showCloseButton />
       </DialogContent>
@@ -2220,10 +2217,10 @@ function MeshRuntimeOverview({ snapshot, route, expanded = false }: { snapshot: 
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <DetailItem label="Mesh" value={snapshot.meshEnabled ? 'enabled' : 'disabled'} />
           <DetailItem label="Started" value={snapshot.meshStarted ? 'yes' : 'no'} />
-          <DetailItem label="WebRTC" value={snapshot.webrtcStarted ? 'started' : 'not started'} />
-          <DetailItem label="Page" value={`${route.state}: ${presentableSignal(route.explanation)}`} />
-          <DetailItem label="Peer list" value={`${snapshot.listState}: ${snapshot.listReason}`} />
-          <DetailItem label="Changes" value={`${snapshot.mutationState}: ${snapshot.mutationReason}`} />
+          <DetailItem label="Direct connections" value={snapshot.webrtcStarted ? 'ready' : 'off'} />
+          <DetailItem label="Page" value={route.disabled ? 'needs attention' : 'ready'} />
+          <DetailItem label="Peer list" value={meshStateLabel(snapshot.listState)} />
+          <DetailItem label="Changes" value={meshStateLabel(snapshot.mutationState)} />
         </CardContent>
       </Card>
       <Card>
@@ -2246,24 +2243,24 @@ function LiveSessionsPanel({ sessions, fixtureOnly }: { sessions: MeshLiveSessio
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Active WebRTC sessions</CardTitle>
+        <CardTitle>Active connections</CardTitle>
         <CardDescription>Active connection details are shown separately from saved device trust.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {sessions.length === 0 ? (
-          <EmptyPanel title="No active WebRTC sessions" description="Gateway.GetWebRTCDiagnostics did not report open sessions." />
+          <EmptyPanel title="No active connections" description="No active device connections were reported." />
         ) : (
           sessions.map((session) => (
             <Card key={session.sessionId} size="sm">
               <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <DetailItem label="Session" value={session.sessionId} />
-                <DetailItem label="Peer" value={`${session.nodeName} (${session.stablePeerId})`} />
-                <DetailItem label="Connection" value={`${session.connectionState}; ICE ${session.iceState}; channel ${session.dataChannelState}`} />
-                <DetailItem label="Auth" value={session.authState} />
+                <DetailItem label="Connection" value={session.nodeName} />
+                <DetailItem label="Device" value={session.nodeName} />
+                <DetailItem label="Status" value={meshStateLabel(session.state)} />
+                <DetailItem label="Access" value={productConnectionState(session.authState)} />
                 <DetailItem label="Latency" value={session.latencyMs === null ? 'measuring' : formatLatencyMs(session.latencyMs)} />
                 <DetailItem label="Pairing" value={session.pairingState} />
                 <DetailItem label="Linked peer" value={session.linkedPeerState} />
-                <DetailItem label="Status" value={fixtureOnly ? fixtureEvidence(session.evidenceSource) : session.evidenceSource} />
+                <DetailItem label="Details" value={fixtureOnly ? 'Sample data' : 'Available'} />
               </CardContent>
             </Card>
           ))
@@ -2282,7 +2279,7 @@ function DevicesPanel({ devices, fixtureOnly }: { devices: MeshDeviceRow[]; fixt
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {devices.length === 0 ? (
-          <EmptyPanel title="No Auth device records" description="Auth.ListDevices did not report devices for this mesh view." />
+          <EmptyPanel title="No saved devices" description="No saved devices were reported for this mesh view." />
         ) : (
           devices.map((device) => (
             <Card key={device.deviceId} size="sm">
@@ -2293,7 +2290,7 @@ function DevicesPanel({ devices, fixtureOnly }: { devices: MeshDeviceRow[]; fixt
                 <DetailItem label="Linked peer" value={device.linkedPeerLabel} />
                 <DetailItem label="Stable peer" value={device.linkedPeerId ?? 'not linked'} />
                 <DetailItem label="Last seen" value={formatDate(device.lastSeen)} />
-                <DetailItem label="Status" value={fixtureOnly ? fixtureEvidence(device.evidenceSource) : device.evidenceSource} />
+                <DetailItem label="Status" value={fixtureOnly ? 'Sample data' : 'Available'} />
               </CardContent>
             </Card>
           ))
@@ -2347,12 +2344,32 @@ function PermissionBadges({ permissions, empty, compact = false }: { permissions
     <div className="flex flex-wrap gap-1">
       {visible.map((permission) => (
         <Badge key={permission} variant="outline">
-          {permission}
+          {permissionLabel(permission)}
         </Badge>
       ))}
       {visible.length < permissions.length ? <Badge variant="secondary">+{permissions.length - visible.length}</Badge> : null}
     </div>
   )
+}
+
+function permissionSummary(permissions: string[]): string {
+  if (permissions.length === 0) return 'No access'
+  if (permissions.length === 1) return permissionLabel(permissions[0] ?? '')
+  return `${permissionLabel(permissions[0] ?? '')} +${permissions.length - 1}`
+}
+
+function permissionLabel(permission: string): string {
+  const labels: Record<string, string> = {
+    '*': 'Full access',
+    'Gateway.use': 'Device connection',
+    'Orchestrator.use': 'Assistant use',
+    'DB.use': 'Memory use',
+    'Tooling.use': 'Tool use',
+    'Scheduler.manage': 'Automation management',
+    'TTS.use': 'Speech output',
+    'STT.use': 'Speech input',
+  }
+  return labels[permission] ?? permission.replace(/^[A-Z]+\./, '').replace(/_/g, ' ')
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
@@ -2373,9 +2390,15 @@ function titleForConfigKey(keyPath: string): string {
 
 function descriptionForConfigKey(keyPath: string): string {
   if (keyPath.includes('.mesh_network.')) return 'Mesh network setting.'
-  if (keyPath.includes('.webrtc.')) return 'WebRTC signaling and transport setting.'
-  if (keyPath.includes('.signaling_mqtt.')) return 'MQTT signaling setting.'
+  if (keyPath.includes('.webrtc.')) return 'Direct connection setting.'
+  if (keyPath.includes('.signaling_mqtt.')) return 'Invite service setting.'
   return 'Pairing and authentication setting.'
+}
+
+function productConfigDescription(field: ConfigFieldMetadata): string {
+  return field.description && !hasInternalCopy(field.description)
+    ? field.description
+    : descriptionForConfigKey(field.key_path)
 }
 
 function typeForConfigValue(value: JsonValue, keyPath: string): string {
@@ -2390,14 +2413,14 @@ function buildRuntimeConfigFields(status: MeshStatusResponse | null, diagnostics
   return sortConfigFields([
     fallbackConfigField('services.gateway.mesh_network.enabled', 'Mesh enabled', 'Whether mesh routing is enabled.', 'boolean', status?.local.mesh_enabled ?? diagnostics?.mesh_enabled ?? null),
     fallbackConfigField('services.gateway.mesh_network.node_name', 'Node name', 'Local node name reported by Gateway.', 'string', status?.local.node_name ?? diagnostics?.local_node_name ?? null),
-    fallbackConfigField('services.gateway.mesh_network.version_policy', 'Version policy', 'Runtime version compatibility policy.', 'string', status?.local.version_policy ?? null),
-    fallbackConfigField('services.gateway.mesh_network.peer_selection', 'Peer selection', 'Runtime peer selection strategy.', 'string', status?.local.peer_selection ?? null),
-    fallbackConfigField('services.gateway.webrtc.enabled', 'WebRTC enabled', 'Whether WebRTC transport is enabled.', 'boolean', diagnostics?.enabled ?? status?.local.webrtc_started ?? null),
-    fallbackConfigField('services.gateway.webrtc.strategy', 'Signaling strategy', 'WebRTC signaling strategy.', 'string', diagnostics?.signaling.strategy ?? null),
+    fallbackConfigField('services.gateway.mesh_network.version_policy', 'Version policy', 'Device compatibility policy.', 'string', status?.local.version_policy ?? null),
+    fallbackConfigField('services.gateway.mesh_network.peer_selection', 'Peer selection', 'Device selection strategy.', 'string', status?.local.peer_selection ?? null),
+    fallbackConfigField('services.gateway.webrtc.enabled', 'Direct connections enabled', 'Whether direct connections are enabled.', 'boolean', diagnostics?.enabled ?? status?.local.webrtc_started ?? null),
+    fallbackConfigField('services.gateway.webrtc.strategy', 'Invite service strategy', 'Invite service strategy.', 'string', diagnostics?.signaling.strategy ?? null),
     fallbackConfigField('services.gateway.webrtc.encrypt_signaling', 'Encrypt signaling', 'Whether signaling presence is encrypted.', 'boolean', diagnostics?.signaling.encrypted_presence ?? null),
     fallbackConfigField('services.gateway.webrtc.enable_app_layer_e2ee', 'Application E2EE', 'Whether app-layer peer encryption is enabled.', 'boolean', diagnostics?.app_layer_e2ee_enabled ?? null),
-    fallbackConfigField('services.gateway.webrtc.legacy_event_broadcast', 'Legacy event broadcast', 'Temporary non-sensitive event compatibility for peers without scoped subscriptions.', 'boolean', null),
-    fallbackConfigField('services.auth.webrtc_auth_timeout_seconds', 'Auth timeout', 'WebRTC auth timeout in seconds.', 'integer', diagnostics?.auth_timeout_seconds ?? null),
+    fallbackConfigField('services.gateway.webrtc.legacy_event_broadcast', 'Event compatibility', 'Temporary compatibility for older approved devices.', 'boolean', null),
+    fallbackConfigField('services.auth.webrtc_auth_timeout_seconds', 'Access timeout', 'Access timeout in seconds.', 'integer', diagnostics?.auth_timeout_seconds ?? null),
     fallbackConfigField('services.auth.webrtc_pairing_timeout_seconds', 'Pairing timeout', 'Pairing approval timeout in seconds.', 'integer', diagnostics?.pairing_timeout_seconds ?? null),
   ])
 }
@@ -2414,7 +2437,7 @@ function fallbackConfigField(keyPath: string, title: string, description: string
     type,
     default: value,
     current_value: value,
-    source_layer: editable ? 'config' : 'runtime',
+    source_layer: editable ? 'user' : 'service',
     secret: false,
     reload_required: true,
     restart_required: false,
@@ -2431,7 +2454,7 @@ function sortConfigFields(fields: ConfigFieldMetadata[]): ConfigFieldMetadata[] 
 function groupConfigFields(fields: ConfigFieldMetadata[]): Record<string, ConfigFieldMetadata[]> {
   const groups: Record<string, ConfigFieldMetadata[]> = {}
   for (const field of fields) {
-    const group = field.key_path.includes('.mesh_network.') ? 'Mesh network' : field.key_path.includes('.webrtc.') ? 'WebRTC signaling' : field.key_path.includes('.signaling_mqtt.') ? 'MQTT signaling' : 'Pairing and auth'
+    const group = field.key_path.includes('.mesh_network.') ? 'Mesh network' : field.key_path.includes('.webrtc.') ? 'Direct connections' : field.key_path.includes('.signaling_mqtt.') ? 'Invite service' : 'Pairing and access'
     groups[group] = [...(groups[group] ?? []), field]
   }
   return groups
@@ -2486,13 +2509,13 @@ export function meshInviteReadiness(snapshot: MeshPeersSnapshot): MeshInviteRead
   const webrtcEnabled = configBoolean(fields, 'services.gateway.webrtc.enabled', snapshot.webrtcStarted)
   const signalingEncrypted = configBoolean(fields, 'services.gateway.webrtc.encrypt_signaling', false)
   const appLayerE2ee = configBoolean(fields, 'services.gateway.webrtc.enable_app_layer_e2ee', false)
-  if (!meshEnabled) return { ready: false, reason: 'Enable mesh networking. Aurora will generate secure signaling credentials and start the required services.' }
-  if (!webrtcEnabled) return { ready: false, reason: 'WebRTC is being enabled for the mesh. Wait for secure startup to complete.' }
-  if (!signalingEncrypted || !appLayerE2ee) return { ready: false, reason: 'Secure signaling and application encryption must be reported as enabled before creating an invite.' }
-  if (!appId || appId.toLowerCase() === 'aurora') return { ready: false, reason: 'Aurora is generating a unique signaling app id.' }
-  if (!room || room.toLowerCase() === 'default') return { ready: false, reason: 'Aurora is generating a unique signaling room.' }
-  if (!password || password === '[REDACTED]') return { ready: false, reason: 'Aurora is generating and loading the signaling room password.' }
-  if (!snapshot.webrtcStarted || !snapshot.meshStarted) return { ready: false, reason: 'Secure credentials are ready; wait for WebRTC and mesh services to finish starting.' }
+  if (!meshEnabled) return { ready: false, reason: 'Enable mesh networking. Aurora will prepare a private invite for this device.' }
+  if (!webrtcEnabled) return { ready: false, reason: 'Direct connections are being enabled. Wait for secure startup to complete.' }
+  if (!signalingEncrypted || !appLayerE2ee) return { ready: false, reason: 'Private invite protection must be ready before creating an invite.' }
+  if (!appId || appId.toLowerCase() === 'aurora') return { ready: false, reason: 'Aurora is preparing a unique invite identity.' }
+  if (!room || room.toLowerCase() === 'default') return { ready: false, reason: 'Aurora is preparing a private invite channel.' }
+  if (!password || password === '[REDACTED]') return { ready: false, reason: 'Aurora is loading private invite details.' }
+  if (!snapshot.webrtcStarted || !snapshot.meshStarted) return { ready: false, reason: 'Secure credentials are ready; wait for mesh services to finish starting.' }
   return { ready: true, reason: 'Secure mesh invite is ready.' }
 }
 
@@ -2619,7 +2642,7 @@ function matchDevicePeer(device: DeviceResponse, peers: MeshPeerRow[], sessions:
       return {
         peerId: session.stablePeerId,
         nodeName: session.nodeName,
-        source: 'live WebRTC session',
+        source: 'Active connection',
       }
     }
   }
@@ -2680,7 +2703,7 @@ function cleanupReason(peer: MeshPeerRow): string | null {
   const text = `${peer.nodeName} ${peer.roomName} ${peer.peerId}`.toLowerCase()
   if (peer.outboundStatus === 'removed') return 'Removed peer trust record should be reviewed for cleanup'
   if (peer.lifecycleState === 'stale' || peer.connectionStatus.includes('disconnected') || peer.routeQuality.toLowerCase().includes('stale')) {
-    return 'Stale peer requires manifest/heartbeat review before cleanup'
+    return 'Inactive peer should be reviewed before cleanup'
   }
   if (/\b(dev|test|lab|demo|demo)\b/.test(text)) return 'Dev/test peer should be retired when no longer needed'
   return null
@@ -2700,7 +2723,7 @@ function buildMeshPeerRow(peerId: string, persisted: MeshPeerInfo | null, runtim
     nodeName: persisted?.node_name || runtime?.node_name || pairing?.remote_node_name || pairing?.device_name || 'Unnamed mesh peer',
     roomName: persisted?.room_name ?? 'not reported',
     lifecycleState,
-    lifecycleLabel: runtime?.status ?? persisted?.connection_status ?? 'no runtime status',
+    lifecycleLabel: runtime?.status ?? persisted?.connection_status ?? 'No recent status',
     trustState,
     trustLabel: `outbound=${outboundStatus}; inbound=${inboundStatus}`,
     outboundStatus,
@@ -2851,13 +2874,24 @@ export function parseMeshPermissionList(value: string): string[] | null {
 
 export function meshPeerErrorMessage(error: unknown): string {
   if (error instanceof AuroraError) {
-    if (error.code === 'permission' || error.code === 'auth') return `Permission denied by Auth: ${error.message}`
-    if (error.code === 'unavailable_service') return `Mesh peer service unavailable: ${error.message}`
-    if (error.code === 'unsupported_feature') return `Mesh peer lifecycle unsupported by this backend: ${error.message}`
-    if (error.code === 'timeout') return `Aurora request timed out: ${error.message}`
-    return error.message
+    return meshSafeErrorTitle(error)
   }
-  return error instanceof Error ? error.message : 'Unknown mesh peer lifecycle error'
+  return meshSafeErrorTitle(error)
+}
+
+function meshSafeErrorTitle(error: unknown): string {
+  return safeErrorCopy(error).title
+}
+
+function hasInternalCopy(value: string): boolean {
+  return /\b(?:webrtc|gateway|transport|runtime|manifest|config|preview|schema|contract|fallback|provider|consumer|hybrid|sqlite|indexeddb|opfs|sidecar|thin|datachannel|signaling|room password)\b|(?:services|auth|gateway|config)\.[a-z0-9_.]+/iu.test(value)
+}
+
+function productConnectionState(value: string): string {
+  if (/authorized|authenticated|approved|connected|ready/iu.test(value)) return 'Ready'
+  if (/pending|pairing|connecting/iu.test(value)) return 'Waiting'
+  if (/denied|failed|error|closed|stale|timeout/iu.test(value)) return 'Needs attention'
+  return 'Checking'
 }
 
 function uniqueStrings(values: readonly string[]): string[] {
@@ -2878,7 +2912,7 @@ function MeshFact({ label, value }: { label: string; value: string }) {
 }
 
 function fixtureEvidence(value: string): string {
-  return `${value} (preview data)`
+  return `${value} (sample data)`
 }
 
 function responseDataOrNull<T>(result: PromiseSettledResult<{ ok: boolean; data?: T }>): T | null {
@@ -2965,7 +2999,7 @@ function routeQualityFor(peerId: string, routes: MeshRouteDiagnostic[]): string 
 }
 
 function compatibilityFor(peer: MeshPeerDiagnostic | null): string {
-  if (!peer) return 'no manifest compatibility status'
+  if (!peer) return 'No compatibility status'
   const c = peer.compatibility
   const failures = [...c.local_incompatible, ...c.remote_incompatible]
   if (failures.length > 0) return `incompatible: ${failures.join(', ')}`

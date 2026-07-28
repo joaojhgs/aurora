@@ -258,8 +258,8 @@ describe('Service sharing and outbound routing', () => {
   it('does not commit without atomic preview evidence and explains conflicts', async () => {
     const commitChangeSet = vi.fn()
     const missing = { config: { commitChangeSet } } as unknown as AuroraClient
-    await expect(commitServiceRoutingChanges(missing, row(), [{ keyPath: 'x', value: true }], previewEvidence(), { reauthConfirmed: false })).rejects.toThrow('reauthentication confirmation')
-    await expect(commitServiceRoutingChanges(missing, row(), [{ keyPath: 'x', value: true }], previewEvidence({ baseRevision: null, previewToken: null }), { reauthConfirmed: true })).rejects.toThrow('revision token')
+    await expect(commitServiceRoutingChanges(missing, row(), [{ keyPath: 'x', value: true }], previewEvidence(), { reauthConfirmed: false })).rejects.toThrow('Approve this save')
+    await expect(commitServiceRoutingChanges(missing, row(), [{ keyPath: 'x', value: true }], previewEvidence({ baseRevision: null, previewToken: null }), { reauthConfirmed: true })).rejects.toThrow('could not confirm')
     expect(commitChangeSet).not.toHaveBeenCalled()
     const conflict = { config: { commitChangeSet: vi.fn(async () => ({ data: { success: false, changed_paths: [], error_code: 'config_revision_conflict' } })) } } as unknown as AuroraClient
     await expect(commitServiceRoutingChanges(conflict, row(), [{ keyPath: 'x', value: true }], previewEvidence(), { reauthConfirmed: true })).rejects.toThrow('Refresh and review')
@@ -307,7 +307,8 @@ describe('Service sharing and outbound routing', () => {
     expect(onPreviewRow).toHaveBeenCalledTimes(1)
     expect(onSaveRow).not.toHaveBeenCalled()
     expect(container.textContent).toContain('No changes have been saved')
-    expect(container.textContent).toContain('services.tts.mesh_sharing.share')
+    expect(container.textContent).toContain('Device sharing')
+    expect(container.textContent).not.toContain('services.tts.mesh_sharing.share')
     expect(container.textContent).toContain('Ready to save')
     expect(container.textContent).not.toContain('Base revision')
     expect(container.textContent).not.toContain('Preview token')
@@ -376,9 +377,11 @@ describe('Service sharing and outbound routing', () => {
       previewToken: 'preview-22',
       diffs: [{ ...previewEvidence().diffs[0]!, key_path: 'services.tts.mesh_routing.prefer' }],
     })))
-    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
+    expect(container.textContent).toContain('Preferred device')
+    expect(container.textContent).not.toContain('services.tts.mesh_routing.prefer')
     await act(async () => first.resolve(previewEvidence({ baseRevision: 11, previewToken: 'preview-11' })))
-    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
+    expect(container.textContent).toContain('Preferred device')
+    expect(container.textContent).not.toContain('services.tts.mesh_routing.prefer')
     await act(async () => root.unmount())
   })
 
@@ -401,7 +404,8 @@ describe('Service sharing and outbound routing', () => {
       diffs: [{ ...previewEvidence().diffs[0]!, key_path: 'services.tts.mesh_routing.prefer' }],
     })))
     await act(async () => first.reject(new Error('stale preview failure')))
-    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
+    expect(container.textContent).toContain('Preferred device')
+    expect(container.textContent).not.toContain('services.tts.mesh_routing.prefer')
     expect(container.textContent).not.toContain('stale preview failure')
     expect(container.textContent).not.toContain('Review failed')
     await act(async () => root.unmount())
@@ -432,7 +436,8 @@ describe('Service sharing and outbound routing', () => {
       previewToken: 'preview-22',
       diffs: [{ ...previewEvidence().diffs[0]!, key_path: 'services.tts.mesh_routing.prefer' }],
     })))
-    expect(container.textContent).toContain('services.tts.mesh_routing.prefer')
+    expect(container.textContent).toContain('Preferred device')
+    expect(container.textContent).not.toContain('services.tts.mesh_routing.prefer')
     expect(onSaveRow).not.toHaveBeenCalled()
     await act(async () => root.unmount())
   })
