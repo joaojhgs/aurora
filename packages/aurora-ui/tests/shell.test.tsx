@@ -555,11 +555,11 @@ describe('Aurora production shell', () => {
     expect(model.remoteCount).toBe(2)
     expect(model.categoryRows).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        label: 'Currently selected provider',
+        label: 'Currently selected source',
         value: 'llama.cpp desktop'
       }),
       expect.objectContaining({
-        label: 'Configured providers',
+        label: 'Configured sources',
         value: '4 configured'
       }),
       expect.objectContaining({
@@ -573,11 +573,11 @@ describe('Aurora production shell', () => {
         detail: expect.stringContaining('No import or download is active')
       }),
       expect.objectContaining({
-        label: 'Benchmarkable providers',
+        label: 'Benchmarkable sources',
         value: '2 with benchmark status'
       }),
       expect.objectContaining({
-        label: 'Mesh/remote providers',
+        label: 'Connected or cloud sources',
         value: '2 remote-capable'
       }),
       expect.objectContaining({
@@ -589,7 +589,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         availability: 'available-local',
         canSelect: false,
-        selectReason: expect.stringContaining('Selected provider is reported by backend catalog status'),
+        selectReason: expect.stringContaining('Selected source is reported by Aurora'),
         privacyClass: 'public',
         routeQuality: expect.stringContaining('local; available-local; routeable from catalog status'),
         latencyContext: expect.stringContaining('1200 ms latency; 8192 token context; 2048 token generation limit'),
@@ -600,7 +600,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         availability: 'available-remote',
         canSelect: false,
-        selectReason: expect.stringContaining('Only local executable providers can be selected'),
+        selectReason: expect.stringContaining('Only local executable sources can be selected'),
         providerType: 'mesh',
         routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog'),
         routeQuality: expect.stringContaining('mesh remote; available-remote')
@@ -672,13 +672,13 @@ describe('Aurora production shell', () => {
     expect(model.providers.find((provider) => provider.id === 'mesh:studio-gpu:Orchestrator')).toEqual(
       expect.objectContaining({
         canSelect: false,
-        selectReason: expect.stringContaining('Only local executable providers can be selected')
+        selectReason: expect.stringContaining('Only local executable sources can be selected')
       })
     )
     expect(model.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
       expect.objectContaining({
         canSelect: false,
-        selectReason: expect.stringContaining('Only local executable providers can be selected')
+        selectReason: expect.stringContaining('Only local executable sources can be selected')
       })
     )
   })

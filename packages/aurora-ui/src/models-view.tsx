@@ -219,7 +219,7 @@ export function ModelsView({
       setReason('')
       setReauthConfirmed(false)
     } catch (nextError) {
-      setSelectionMessage(`Provider selection failed: ${modelErrorMessage(nextError)}`)
+      setSelectionMessage(`Model source selection failed: ${modelErrorMessage(nextError)}`)
     } finally {
       setSelectingProviderId(null)
     }
@@ -301,7 +301,7 @@ export function ModelsView({
       setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
       setSelectionMessage(
         receipts.length > 0
-          ? `Provider configuration applied. Audit receipt: ${receipts.join(', ')}`
+          ? `Model source settings applied. Audit receipt: ${receipts.join(', ')}`
           : 'No configuration changes were made.'
       )
       closeConfigureProvider()
@@ -317,8 +317,8 @@ export function ModelsView({
       <PageHeader
         id="models-title"
         eyebrow="Models"
-        title="Models & Runtime"
-        description="Local, cloud and mesh-peer providers, and which one handles requests by default."
+        title="Models & Sources"
+        description="Local, cloud, and connected model sources, and which one handles requests by default."
       />
 
       {model.loadState === 'loading' ? <ModelNotice icon="loading" message="Loading model sources from Aurora." /> : null}
@@ -332,11 +332,11 @@ export function ModelsView({
         <p
           className={cn(
             'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm',
-            selectionMessage.startsWith('Provider selection failed')
+            selectionMessage.startsWith('Model source selection failed')
               ? 'border-destructive/30 bg-destructive/5 text-destructive'
               : 'border-border bg-muted/30 text-muted-foreground'
           )}
-          role={selectionMessage.startsWith('Provider selection failed') ? 'alert' : 'status'}
+          role={selectionMessage.startsWith('Model source selection failed') ? 'alert' : 'status'}
         >
           <Route size={16} aria-hidden="true" />
           <span>{selectionMessage}</span>
@@ -350,7 +350,7 @@ export function ModelsView({
           items={[
             {
               value: 'providers',
-              label: 'Providers',
+              label: 'Sources',
               content: (
                 <div className="flex flex-col gap-6 py-4">
                   <ModelActiveProviderStrip activeProviderLabel={model.activeProviderLabel} preferredMeshPeerLabel={preferredMeshPeerLabel} />
@@ -376,7 +376,7 @@ export function ModelsView({
               label: 'Usage & Benchmarks',
               content: (
                 <div className="flex flex-col gap-3 py-4">
-                  <p className="text-sm text-muted-foreground">Accumulated usage across all providers used so far in this deployment.</p>
+                  <p className="text-sm text-muted-foreground">Accumulated usage across all model sources used so far in this deployment.</p>
                   <ModelUsageBenchmarkTable providers={model.providers} />
                 </div>
               )
@@ -403,7 +403,7 @@ export function ModelsView({
         <AdminConfirmDialog
           open
           title={`Select ${pendingProvider.name}`}
-          description={`Apply ${pendingProvider.selectConfigValue ?? 'provider'} as the selected model source.`}
+          description={`Apply ${pendingProvider.selectConfigValue ?? 'this source'} as the selected model source.`}
           methodId="Config.Set"
           actionLabel="Select model source"
           severity="standard"
@@ -488,10 +488,10 @@ function ModelActiveProviderStrip({
   return (
     <div
       className="flex flex-wrap items-center gap-5 rounded-xl border border-border bg-card px-4 py-3.5"
-      aria-label="Active provider and preferred mesh peer"
+      aria-label="Selected source and preferred connected device"
     >
       <div>
-        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Active provider (chat)</p>
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Selected source (chat)</p>
         <p className="mt-0.5 text-sm font-semibold">{activeProviderLabel}</p>
       </div>
       <div className="h-7 w-px bg-border" aria-hidden="true" />
@@ -653,12 +653,12 @@ function ModelProviderCompareTable({
   const columns: Array<DataColumn<ModelProviderViewModel>> = [
     {
       key: 'provider',
-      header: 'Provider',
+      header: 'Source',
       render: (provider) => (
         <span className="font-medium">
           {provider.name}
           {isActiveOrPreferredProvider(provider, preferredMeshPeerId) ? (
-            <span className="font-semibold text-primary" aria-label="active provider">
+            <span className="font-semibold text-primary" aria-label="selected source">
               {' '}
               &#9733;
             </span>
@@ -685,7 +685,7 @@ function ModelProviderCompareTable({
 
 function ModelUsageBenchmarkTable({ providers }: { providers: ModelProviderViewModel[] }) {
   const columns: Array<DataColumn<ModelProviderViewModel>> = [
-    { key: 'provider', header: 'Provider', render: (provider) => <span className="font-medium">{provider.name}</span> },
+    { key: 'provider', header: 'Source', render: (provider) => <span className="font-medium">{provider.name}</span> },
     {
       key: 'requests',
       header: 'Requests',
@@ -738,7 +738,7 @@ function ModelAction({
       disabled={!enabled}
       aria-label={label}
       title={reason}
-      data-action-reason={reason ? 'runtime-managed' : undefined}
+      data-action-reason={reason ? 'managed-by-aurora' : undefined}
       className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
     >
       <Icon size={13} aria-hidden="true" />
@@ -764,8 +764,7 @@ function ModelNotice({ icon, message, role = 'status' }: { icon: 'loading' | 'er
 }
 
 // ---------------------------------------------------------------------------
-// Configure provider dialog - fields generated per-backend from the real
-// services.orchestrator.llm option schema via Config.GetSchemaMetadata.
+// Configure source dialog - fields generated from Aurora settings details.
 // ---------------------------------------------------------------------------
 
 function providerConfigSection(configValue: string): string {
@@ -827,9 +826,9 @@ function ConfigureProviderDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Configure {provider.name}</DialogTitle>
-          <DialogDescription>Fields are generated from the backend option schema reported by Config.GetSchemaMetadata.</DialogDescription>
+          <DialogDescription>Fields are generated from Aurora settings details for this model source.</DialogDescription>
         </DialogHeader>
-        {loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading configuration schema.</p> : null}
+        {loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading settings details.</p> : null}
         {loadState === 'error' ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
@@ -970,26 +969,26 @@ function modelProviderGroups(providers: ModelProviderViewModel[]): ModelProvider
   const groups: ModelProviderGroup[] = [
     {
       id: 'local',
-      label: 'Local providers',
-      detail: 'Local desktop and native-device providers reported by the runtime catalog.',
+      label: 'Local sources',
+      detail: 'Local desktop and native-device model sources reported by Aurora.',
       providers: providers.filter((provider) => providerGroupId(provider) === 'local')
     },
     {
       id: 'cloud',
-      label: 'Cloud providers',
-      detail: 'External providers remain policy-gated by Aurora.',
+      label: 'Cloud sources',
+      detail: 'External sources remain policy-gated by Aurora.',
       providers: providers.filter((provider) => providerGroupId(provider) === 'cloud')
     },
     {
       id: 'mesh',
-      label: 'Mesh providers',
-      detail: 'Peer-backed providers are separate from the active chat provider and require route/privacy review.',
+      label: 'Connected sources',
+      detail: 'Peer-backed sources are separate from the active chat source and require review.',
       providers: providers.filter((provider) => providerGroupId(provider) === 'mesh')
     },
     {
       id: 'coding-agent',
-      label: 'Coding agent providers',
-      detail: 'Shown only when the SDK catalog advertises coding-agent provider data.',
+      label: 'Coding agent sources',
+      detail: 'Shown only when Aurora advertises coding-agent source data.',
       providers: providers.filter((provider) => providerGroupId(provider) === 'coding-agent')
     }
   ]
@@ -1079,14 +1078,14 @@ function providerModel(
   const blockers = sortedUnique([
     ...(candidate?.disabledReasons ?? []),
     nativeLocalLight?.reason,
-    ...(!provider.enabled ? [provider.health_reason ?? 'provider disabled by backend catalog'] : []),
+    ...(!provider.enabled ? [provider.health_reason ?? 'model source disabled by Aurora'] : []),
     ...(!provider.secrets_redacted ? ['secrets_redacted_false'] : [])
   ])
   const importActive = provider.import_progress.status !== 'idle'
   const downloadActive = provider.download_progress.status !== 'idle'
   return {
     id: provider.provider_id,
-    name: provider.display_name,
+    name: modelSourceDisplayName(provider.display_name),
     selected: provider.selected || provider.provider_id === selectedProviderId,
     availability,
     privacyClass,
@@ -1095,7 +1094,7 @@ function providerModel(
     routeLabel: nativeLocalLight?.routeLabel ?? routeLabel(provider, candidate),
     routeQuality: routeQualityLabel(provider, availability, candidate),
     health: provider.health,
-    healthReason: provider.health_reason ?? 'backend catalog did not provide a health reason',
+    healthReason: provider.health_reason ?? 'Aurora did not provide a health reason',
     latencyContext: latencyContextLabel(provider),
     hardware: hardwareLabel(provider.hardware),
     benchmark: benchmarkLabel(provider),
@@ -1111,13 +1110,13 @@ function providerModel(
     selectReason: selectReason(provider.provider_id === selectedProviderId || provider.selected, provider, candidate, availability),
     selectConfigValue: modelProviderConfigValue(provider),
     canImport: importActive,
-    importReason: importActive ? provider.import_progress.message : 'AdminAction model import contract is not active.',
+    importReason: importActive ? provider.import_progress.message : 'Model import is not ready yet.',
     canDownload: downloadActive,
-    downloadReason: downloadActive ? provider.download_progress.message : 'AdminAction model download contract is not active.',
+    downloadReason: downloadActive ? provider.download_progress.message : 'Model download is not ready yet.',
     canBenchmark: provider.benchmark.status === 'running',
     benchmarkReason: provider.benchmark.status === 'running'
-      ? provider.benchmark.reason ?? 'Benchmark is running through backend operation state.'
-      : 'Benchmark action stays disabled until backend operation status exists.'
+      ? provider.benchmark.reason ?? 'Benchmark is running through Aurora.'
+      : 'Benchmark is not ready yet.'
   }
 }
 
@@ -1149,6 +1148,13 @@ function modelProviderConfigValue(provider: Pick<ModelRuntimeProviderInfo, 'prov
   return null
 }
 
+function modelSourceDisplayName(name: string): string {
+  return name
+    .replace(/\bruntime\b/giu, 'source')
+    .replace(/\bproviders?\b/giu, 'source')
+    .replace(/\bbackend\b/giu, 'Aurora')
+}
+
 function availabilityForProvider(provider: ModelRuntimeProviderInfo, candidate: CapabilityProviderCandidate | undefined): AvailabilityState {
   if (candidate?.availability) return candidate.availability
   if (provider.health === 'stale') return 'stale'
@@ -1169,8 +1175,8 @@ function privacyForProvider(provider: ModelRuntimeProviderInfo): PrivacyClass {
 
 function routeLabel(provider: ModelRuntimeProviderInfo, candidate: CapabilityProviderCandidate | undefined): string {
   if (candidate) return `${candidate.providerIdentity} / ${candidate.module}.${candidate.method}`
-  if (provider.provider_type === 'local') return 'local / backend catalog'
-  return `${provider.provider_type} / backend catalog`
+  if (provider.provider_type === 'local') return 'local / Aurora list'
+  return `${provider.provider_type} / Aurora list`
 }
 
 function routeQualityLabel(
@@ -1191,7 +1197,7 @@ function routeQualityLabel(
     ? `blocked by ${candidate.disabledReasons.join(', ')}`
     : provider.enabled
       ? 'routeable from catalog status'
-      : 'disabled by backend catalog'
+      : 'disabled by Aurora'
   return `${routeKind}; ${availability}; ${policy}`
 }
 
@@ -1239,9 +1245,9 @@ function benchmarkSnapshotRows(providers: ModelProviderViewModel[]): ModelBenchm
   const unavailable = providers.filter((provider) => provider.benchmark.includes('unsupported') || provider.benchmark.includes('unavailable') || provider.benchmark.includes('idle'))
   return [
     {
-      label: 'Measured providers',
+      label: 'Measured sources',
       value: `${completed.length}/${providers.length}`,
-      detail: completed.length > 0 ? completed.map((provider) => provider.name).join(', ') : 'No completed benchmark status was returned by the backend catalog.',
+      detail: completed.length > 0 ? completed.map((provider) => provider.name).join(', ') : 'No completed benchmark status was returned by Aurora.',
       state: completed.length > 0 ? 'available-local' : 'pending'
     },
     {
@@ -1253,7 +1259,7 @@ function benchmarkSnapshotRows(providers: ModelProviderViewModel[]): ModelBenchm
     {
       label: 'Missing measurements',
       value: `${unavailable.length}`,
-      detail: unavailable.length > 0 ? unavailable.map((provider) => provider.name).join(', ') : 'All providers have benchmark status.',
+      detail: unavailable.length > 0 ? unavailable.map((provider) => provider.name).join(', ') : 'All sources have benchmark status.',
       state: unavailable.length > 0 ? 'degraded' : 'available-local'
     }
   ]
@@ -1275,16 +1281,16 @@ function modelCategoryRows(
   return [
     {
       id: 'selected-provider',
-      label: 'Currently selected provider',
+      label: 'Currently selected source',
       value: selected ? selected.name : 'not selected',
       detail: selected
-        ? `${selected.id}; ${selected.selectReason}`
-        : 'Backend catalog did not report a selected provider.',
+        ? selected.selectReason
+        : 'Aurora did not report a selected model source.',
       state: selected?.availability ?? 'pending'
     },
     {
       id: 'configured-providers',
-      label: 'Configured providers',
+      label: 'Configured sources',
       value: `${configured.length} configured`,
       detail: configured.length > 0
         ? configured.map((provider) => `${provider.name} (${provider.providerType})`).join(', ')
@@ -1297,7 +1303,7 @@ function modelCategoryRows(
       value: `${installedLocal.length} installed`,
       detail: installedLocal.length > 0
         ? installedLocal.map((provider) => `${provider.name}: ${provider.files}`).join(', ')
-        : 'No installed local model files were reported by the backend catalog.',
+        : 'No installed local model files were reported by Aurora.',
       state: installedLocal.length > 0 ? 'available-local' : 'unsupported'
     },
     {
@@ -1311,20 +1317,20 @@ function modelCategoryRows(
     },
     {
       id: 'benchmarkable-providers',
-      label: 'Benchmarkable providers',
+      label: 'Benchmarkable sources',
       value: `${benchmarkable.length} with benchmark status`,
       detail: benchmarkable.length > 0
         ? benchmarkable.map((provider) => `${provider.name}: ${provider.benchmark}`).join(', ')
-        : 'No benchmarkable providers or completed benchmark measurements were returned.',
+        : 'No benchmarkable sources or completed benchmark measurements were returned.',
       state: benchmarkable.length > 0 ? 'available-local' : 'pending'
     },
     {
       id: 'mesh-remote-providers',
-      label: 'Mesh/remote providers',
+      label: 'Connected or cloud sources',
       value: `${meshRemote.length} remote-capable`,
       detail: meshRemote.length > 0
         ? meshRemote.map((provider) => `${provider.name}: ${provider.routeLabel}`).join(', ')
-        : 'No mesh, cloud, or remote provider routes were reported.',
+        : 'No connected or cloud sources were reported.',
       state: meshRemote.some(providerRouteable) ? 'available-remote' : meshRemote.length > 0 ? 'privacy-blocked' : 'unsupported'
     },
     {
@@ -1362,15 +1368,15 @@ function selectReason(
   candidate: CapabilityProviderCandidate | undefined,
   availability: AvailabilityState
 ): string {
-  if (selected) return 'Selected provider is reported by backend catalog status.'
-  if (provider.provider_type !== 'local') return 'Only local executable providers can be selected from this cockpit; remote/cloud/native providers require their own policy flow.'
+  if (selected) return 'Selected source is reported by Aurora.'
+  if (provider.provider_type !== 'local') return 'Only local executable sources can be selected here; remote, cloud, and native sources require their own policy flow.'
   const configValue = modelProviderConfigValue(provider)
-  if (!configValue) return 'Backend provider is not mapped to services.orchestrator.llm.provider; selection stays disabled with repair required.'
-  if (!provider.enabled) return provider.health_reason ?? 'Backend catalog reports this provider disabled.'
-  if (!['available-local', 'degraded'].includes(availability)) return `Local provider is ${availability}; capability catalog must report executable local status before selection.`
-  if (candidate && !candidate.selectable) return 'Capability catalog marks this local provider as not selectable.'
-  if (candidate && candidate.providerKind !== 'local') return 'Capability catalog did not report this provider as a local executable provider.'
-  return `Selectable local provider; choosing it sets ${configValue} as the active model source after admin approval.`
+  if (!configValue) return 'This model source is not mapped for selection; repair is required.'
+  if (!provider.enabled) return provider.health_reason ?? 'Aurora reports this source disabled.'
+  if (!['available-local', 'degraded'].includes(availability)) return `Local source is ${availability}; Aurora must report executable local status before selection.`
+  if (candidate && !candidate.selectable) return 'Aurora marks this local source as not selectable.'
+  if (candidate && candidate.providerKind !== 'local') return 'Aurora did not report this source as a local executable source.'
+  return `Selectable local source; choosing it sets ${configValue} as the active model source after admin approval.`
 }
 
 function mobileLocalLight(
@@ -1389,7 +1395,7 @@ function mobileLocalLight(
   const permissionGranted = nativeManifest ? nativeManifest.permissions['aurora.android.localLightInference'] !== false : false
   if (manifestEnabled && permissionGranted) return { state: 'available-local', reason: `native:${nativeManifest?.platform}` }
   if (provider?.health_reason) return { state: availabilityForProvider(provider, undefined), reason: provider.health_reason }
-  return { state: 'unsupported', reason: 'Native mobile runtime provider proof is unavailable.' }
+  return { state: 'unsupported', reason: 'Native mobile model source status is unavailable.' }
 }
 
 function nativeLocalLightForProvider(
@@ -1418,5 +1424,5 @@ function sortedUnique(values: Array<string | null | undefined>): string[] {
 
 function modelErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message
-  return 'Aurora model runtime request failed.'
+  return 'Aurora model source request failed.'
 }

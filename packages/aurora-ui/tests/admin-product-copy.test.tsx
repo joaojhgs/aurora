@@ -1,5 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import {
+  buildCapabilityGraph,
+  capabilityGraphCatalogFixture,
+  gatewayRegistryFixture,
+  modelRuntimeCatalogFixture,
+} from '@aurora/client'
 import { AdminOverviewContent } from '../src/admin-overview-view'
 import { AdminServicesView, AdminContractsView, type AdminServicesSnapshot } from '../src/admin-services-view'
 import { ConfigEditorView, type ConfigEditorModel } from '../src/config-editor-view'
@@ -10,6 +16,7 @@ import { AdminPluginsView, type AdminPluginsSnapshot } from '../src/admin-plugin
 import { AdminRbacView, type AdminRbacSnapshot } from '../src/admin-rbac-view'
 import { AdminSchedulerView, type AdminSchedulerSnapshot } from '../src/admin-scheduler-view'
 import { AdminAuditView, type AdminAuditSnapshot } from '../src/admin-audit-view'
+import { ModelsView } from '../src/models-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -56,6 +63,24 @@ describe('admin product copy', () => {
     expect(markup).toContain('Protected detail preview')
     expectSafeProductCopy(markup)
   })
+
+  it('keeps models page copy and ARIA product-facing', () => {
+    const markup = renderToStaticMarkup(
+      <ModelsView
+        client={client()}
+        initialCatalog={modelRuntimeCatalogFixture}
+        initialGraph={buildCapabilityGraph({
+          catalog: capabilityGraphCatalogFixture,
+          registry: gatewayRegistryFixture,
+          transportKind: 'mock',
+        })}
+      />
+    )
+
+    expect(markup).toContain('Models &amp; Sources')
+    expect(markup).toContain('aria-label="Selected source and preferred connected device"')
+    expectModelsCopy(markup)
+  })
 })
 
 function expectSafeProductCopy(markup: string): void {
@@ -96,6 +121,14 @@ function attributeText(markup: string): string {
   return values.join(' ')
 }
 
+function expectModelsCopy(markup: string): void {
+  const text = copySurface(markup)
+  const findings = MODEL_FORBIDDEN_PRODUCT_TERMS
+    .filter((term) => term.pattern.test(text))
+    .map((term) => term.id)
+  expect(findings, text).toEqual([])
+}
+
 const EXTRA_FORBIDDEN_PRODUCT_TERMS = [
   { id: 'admin-action', pattern: /\bAdminAction\b/iu },
   { id: 'sdk', pattern: /\bSDK\b/iu },
@@ -103,6 +136,17 @@ const EXTRA_FORBIDDEN_PRODUCT_TERMS = [
   { id: 'gateway', pattern: /\bGateway\b/iu },
   { id: 'registry', pattern: /\bregistry\b/iu },
   { id: 'route', pattern: /\broute(?:able|s|d)?\b/iu },
+] as const
+
+const MODEL_FORBIDDEN_PRODUCT_TERMS = [
+  { id: 'runtime', pattern: /\bRuntime\b/iu },
+  { id: 'backend', pattern: /\bbackend\b/iu },
+  { id: 'provider', pattern: /\bproviders?\b/iu },
+  { id: 'backend-option-schema', pattern: /\bbackend option schema\b/iu },
+  { id: 'config-schema-method', pattern: /\bConfig\.GetSchemaMetadata\b/iu },
+  { id: 'configuration-schema', pattern: /\bconfiguration schema\b/iu },
+  { id: 'active-provider', pattern: /\bactive provider\b/iu },
+  { id: 'currently-selected-provider', pattern: /\bCurrently selected provider\b/iu },
 ] as const
 
 function route(): RouteAvailability {

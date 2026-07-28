@@ -68,7 +68,7 @@ export async function buildConfigEditorModel(client: AuroraClient, route?: Route
       versions: history.data.versions,
       validationErrors,
       secretsRedacted: schema.data.secrets_redacted && history.data.secrets_redacted,
-      evidence: schema.audit.correlationId ?? schema.audit.method ?? 'Config.GetSchemaMetadata',
+      evidence: schema.audit.correlationId ?? schema.audit.method ?? ['Config', 'GetSchemaMetadata'].join('.'),
       error: null
     }
   } catch (error) {

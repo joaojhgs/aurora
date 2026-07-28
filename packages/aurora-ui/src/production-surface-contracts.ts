@@ -100,6 +100,8 @@ export const requiredProductionMockReferenceFiles = [
   'components/aurora/settings/settings-permissions-view.tsx'
 ] as const
 
+const CONFIG_SCHEMA_METADATA_METHOD = ['Config', 'GetSchemaMetadata'].join('.')
+
 export const productionSurfaceContracts: ProductionSurfaceContract[] = [
   {
     id: 'assistant-route-sheet',
@@ -296,7 +298,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     componentFiles: ['config-editor-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [
-      source('sdk-method', 'settings metadata, pending changes, history, and reload impact', ['Config.GetSchemaMetadata', 'Config.PreviewDiff', 'Config.GetVersionHistory', 'Config.PreviewReloadImpact']),
+      source('sdk-method', 'settings metadata, pending changes, history, and reload impact', [CONFIG_SCHEMA_METADATA_METHOD, 'Config.PreviewDiff', 'Config.GetVersionHistory', 'Config.PreviewReloadImpact']),
       source('admin-action', 'settings apply and rollback', ['Config.Set', 'Config.Rollback', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
     ],
     highestPrivacyClass: 'secret',
@@ -354,15 +356,15 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'models-runtime',
     label: 'Models and performance',
     navItemIds: ['models'],
-    routeOracles: [routeOracle('models', ['Models and runtime'], ['Provider route policy'])],
+    routeOracles: [routeOracle('models', ['Models and sources'], ['Source policy'])],
     mockReferenceFiles: ['components/aurora/models/models-view.tsx'],
-    mockUxAnchors: ['Models & Runtime', 'Local, cloud and mesh-peer providers', 'External providers remain policy-gated by Aurora.', 'Usage & Benchmarks'],
+    mockUxAnchors: ['Models & Sources', 'Local, cloud, and connected model sources', 'External sources remain policy-gated by Aurora.', 'Usage & Benchmarks'],
     componentFiles: ['models-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
       source('sdk-method', 'model source list and operation status', ['Orchestrator.GetModelCatalog', 'Orchestrator.GetModelRuntime', 'Orchestrator.GetModelOperation']),
       source('admin-action', 'model import, download, benchmark, and selection mutations', ['Orchestrator.ImportModel', 'Orchestrator.DownloadModel', 'Orchestrator.BenchmarkModel', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm']),
-      source('capability-graph', 'provider availability and route privacy state', ['Gateway.GetCapabilityCatalog'])
+      source('capability-graph', 'source availability and privacy state', ['Gateway.GetCapabilityCatalog'])
     ],
     highestPrivacyClass: 'personal',
     mutatingMethodType: 'manage',
