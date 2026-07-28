@@ -1,12 +1,31 @@
 import { z } from 'zod/v4'
 
 import { encryptedDataEnvelopeV1Schema } from './encrypted-envelope.js'
+import { isJsonRoundTripStable, parseLocalDataBoundary } from './validation.js'
 
 export const localDataIdSchema = z.string().min(1).max(256)
 export const nonNegativeSafeIntSchema = z.number().int().safe().nonnegative()
 export const epochMsSchema = nonNegativeSafeIntSchema
 export const sha256HexSchema = z.string().regex(/^[a-f0-9]{64}$/u)
-export const jsonObjectSchema = z.record(z.string(), z.unknown())
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
+
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
+  z.null(),
+  z.boolean(),
+  z.number().finite().safe(),
+  z.string().max(64 * 1024),
+  z.array(jsonValueSchema).max(1024),
+  z.record(z.string().min(1).max(256), jsonValueSchema).refine((value) => Object.keys(value).length <= 256, {
+    message: 'JSON object has too many keys'
+  })
+])).refine(isJsonRoundTripStable, {
+  message: 'value must JSON round-trip exactly'
+})
+export const jsonObjectSchema = z.record(z.string().min(1).max(256), jsonValueSchema).refine((value) => Object.keys(value).length <= 256, {
+  message: 'JSON object has too many keys'
+}).refine(isJsonRoundTripStable, {
+  message: 'object must JSON round-trip exactly'
+})
 export const conversationMessageRoleSchema = z.enum(['system', 'user', 'assistant', 'tool'])
 export const conversationMessageStatusSchema = z.enum(['pending', 'complete', 'failed', 'cancelled'])
 
@@ -112,29 +131,29 @@ export type LocalAuditRecord = z.infer<typeof localAuditRecordSchema>
 export type LocalDataRecordCollections = z.infer<typeof localDataRecordCollectionsSchema>
 
 export function parseConversationRecord(value: unknown): ConversationRecord {
-  return conversationRecordSchema.parse(value)
+  return parseLocalDataBoundary(conversationRecordSchema, value, 'conversation record')
 }
 
 export function parseConversationMessageRecord(value: unknown): ConversationMessageRecord {
-  return conversationMessageRecordSchema.parse(value)
+  return parseLocalDataBoundary(conversationMessageRecordSchema, value, 'conversation message record')
 }
 
 export function parseLightweightMemoryRecord(value: unknown): LightweightMemoryRecord {
-  return lightweightMemoryRecordSchema.parse(value)
+  return parseLocalDataBoundary(lightweightMemoryRecordSchema, value, 'lightweight memory record')
 }
 
 export function parseLocalToolStateRecord(value: unknown): LocalToolStateRecord {
-  return localToolStateRecordSchema.parse(value)
+  return parseLocalDataBoundary(localToolStateRecordSchema, value, 'local tool state record')
 }
 
 export function parsePeerGrantMetadataRecord(value: unknown): PeerGrantMetadataRecord {
-  return peerGrantMetadataRecordSchema.parse(value)
+  return parseLocalDataBoundary(peerGrantMetadataRecordSchema, value, 'peer grant metadata record')
 }
 
 export function parseLocalAuditRecord(value: unknown): LocalAuditRecord {
-  return localAuditRecordSchema.parse(value)
+  return parseLocalDataBoundary(localAuditRecordSchema, value, 'local audit record')
 }
 
 export function parseLocalDataRecordCollections(value: unknown): LocalDataRecordCollections {
-  return localDataRecordCollectionsSchema.parse(value)
+  return parseLocalDataBoundary(localDataRecordCollectionsSchema, value, 'local data record collections')
 }

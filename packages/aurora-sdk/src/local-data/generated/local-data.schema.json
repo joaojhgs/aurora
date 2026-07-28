@@ -14,7 +14,7 @@
                   "type": "string"
                 },
                 "ciphertextAndTagB64Url": {
-                  "minLength": 22,
+                  "maxLength": 2097152,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -30,7 +30,6 @@
                 },
                 "nonceB64Url": {
                   "maxLength": 256,
-                  "minLength": 12,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -102,7 +101,7 @@
                   "type": "string"
                 },
                 "ciphertextAndTagB64Url": {
-                  "minLength": 22,
+                  "maxLength": 2097152,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -118,7 +117,6 @@
                 },
                 "nonceB64Url": {
                   "maxLength": 256,
-                  "minLength": 12,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -201,7 +199,7 @@
                   "type": "string"
                 },
                 "ciphertextAndTagB64Url": {
-                  "minLength": 22,
+                  "maxLength": 2097152,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -217,7 +215,6 @@
                 },
                 "nonceB64Url": {
                   "maxLength": 256,
-                  "minLength": 12,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -267,7 +264,7 @@
           "type": "string"
         },
         "ciphertextAndTagB64Url": {
-          "minLength": 22,
+          "maxLength": 2097152,
           "pattern": "^[A-Za-z0-9_-]+$",
           "type": "string"
         },
@@ -283,7 +280,6 @@
         },
         "nonceB64Url": {
           "maxLength": 256,
-          "minLength": 12,
           "pattern": "^[A-Za-z0-9_-]+$",
           "type": "string"
         },
@@ -346,7 +342,7 @@
               "type": "string"
             },
             "ciphertextAndTagB64Url": {
-              "minLength": 22,
+              "maxLength": 2097152,
               "pattern": "^[A-Za-z0-9_-]+$",
               "type": "string"
             },
@@ -362,7 +358,6 @@
             },
             "nonceB64Url": {
               "maxLength": 256,
-              "minLength": 12,
               "pattern": "^[A-Za-z0-9_-]+$",
               "type": "string"
             },
@@ -429,6 +424,45 @@
       "type": "object"
     },
     "LocalAuditRecord": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
@@ -507,8 +541,12 @@
           "type": "string"
         },
         "redactedDetailJson": {
-          "additionalProperties": {},
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
           "propertyNames": {
+            "maxLength": 256,
+            "minLength": 1,
             "type": "string"
           },
           "type": "object"
@@ -587,6 +625,45 @@
       "type": "object"
     },
     "LocalDataExportV1": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
@@ -743,7 +820,7 @@
                             "type": "string"
                           },
                           "ciphertextAndTagB64Url": {
-                            "minLength": 22,
+                            "maxLength": 2097152,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -759,7 +836,6 @@
                           },
                           "nonceB64Url": {
                             "maxLength": 256,
-                            "minLength": 12,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -881,8 +957,12 @@
                     "type": "string"
                   },
                   "redactedDetailJson": {
-                    "additionalProperties": {},
+                    "additionalProperties": {
+                      "$ref": "#/$defs/__schema0"
+                    },
                     "propertyNames": {
+                      "maxLength": 256,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "type": "object"
@@ -932,8 +1012,12 @@
                     "type": "string"
                   },
                   "descriptorJson": {
-                    "additionalProperties": {},
+                    "additionalProperties": {
+                      "$ref": "#/$defs/__schema0"
+                    },
                     "propertyNames": {
+                      "maxLength": 256,
+                      "minLength": 1,
                       "type": "string"
                     },
                     "type": "object"
@@ -966,7 +1050,7 @@
                             "type": "string"
                           },
                           "ciphertextAndTagB64Url": {
-                            "minLength": 22,
+                            "maxLength": 2097152,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -982,7 +1066,6 @@
                           },
                           "nonceB64Url": {
                             "maxLength": 256,
-                            "minLength": 12,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -1076,7 +1159,7 @@
                         "type": "string"
                       },
                       "ciphertextAndTagB64Url": {
-                        "minLength": 22,
+                        "maxLength": 2097152,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1092,7 +1175,6 @@
                       },
                       "nonceB64Url": {
                         "maxLength": 256,
-                        "minLength": 12,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1174,7 +1256,7 @@
                             "type": "string"
                           },
                           "ciphertextAndTagB64Url": {
-                            "minLength": 22,
+                            "maxLength": 2097152,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -1190,7 +1272,6 @@
                           },
                           "nonceB64Url": {
                             "maxLength": 256,
-                            "minLength": 12,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -1262,7 +1343,7 @@
                             "type": "string"
                           },
                           "ciphertextAndTagB64Url": {
-                            "minLength": 22,
+                            "maxLength": 2097152,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -1278,7 +1359,6 @@
                           },
                           "nonceB64Url": {
                             "maxLength": 256,
-                            "minLength": 12,
                             "pattern": "^[A-Za-z0-9_-]+$",
                             "type": "string"
                           },
@@ -1383,7 +1463,7 @@
                         "type": "string"
                       },
                       "ciphertextAndTagB64Url": {
-                        "minLength": 22,
+                        "maxLength": 2097152,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1399,7 +1479,6 @@
                       },
                       "nonceB64Url": {
                         "maxLength": 256,
-                        "minLength": 12,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1485,6 +1564,45 @@
       "type": "object"
     },
     "LocalDataRecordCollections": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
@@ -1534,7 +1652,7 @@
                         "type": "string"
                       },
                       "ciphertextAndTagB64Url": {
-                        "minLength": 22,
+                        "maxLength": 2097152,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1550,7 +1668,6 @@
                       },
                       "nonceB64Url": {
                         "maxLength": 256,
-                        "minLength": 12,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1672,8 +1789,12 @@
                 "type": "string"
               },
               "redactedDetailJson": {
-                "additionalProperties": {},
+                "additionalProperties": {
+                  "$ref": "#/$defs/__schema0"
+                },
                 "propertyNames": {
+                  "maxLength": 256,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "type": "object"
@@ -1723,8 +1844,12 @@
                 "type": "string"
               },
               "descriptorJson": {
-                "additionalProperties": {},
+                "additionalProperties": {
+                  "$ref": "#/$defs/__schema0"
+                },
                 "propertyNames": {
+                  "maxLength": 256,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "type": "object"
@@ -1757,7 +1882,7 @@
                         "type": "string"
                       },
                       "ciphertextAndTagB64Url": {
-                        "minLength": 22,
+                        "maxLength": 2097152,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1773,7 +1898,6 @@
                       },
                       "nonceB64Url": {
                         "maxLength": 256,
-                        "minLength": 12,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1867,7 +1991,7 @@
                     "type": "string"
                   },
                   "ciphertextAndTagB64Url": {
-                    "minLength": 22,
+                    "maxLength": 2097152,
                     "pattern": "^[A-Za-z0-9_-]+$",
                     "type": "string"
                   },
@@ -1883,7 +2007,6 @@
                   },
                   "nonceB64Url": {
                     "maxLength": 256,
-                    "minLength": 12,
                     "pattern": "^[A-Za-z0-9_-]+$",
                     "type": "string"
                   },
@@ -1965,7 +2088,7 @@
                         "type": "string"
                       },
                       "ciphertextAndTagB64Url": {
-                        "minLength": 22,
+                        "maxLength": 2097152,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -1981,7 +2104,6 @@
                       },
                       "nonceB64Url": {
                         "maxLength": 256,
-                        "minLength": 12,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -2053,7 +2175,7 @@
                         "type": "string"
                       },
                       "ciphertextAndTagB64Url": {
-                        "minLength": 22,
+                        "maxLength": 2097152,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -2069,7 +2191,6 @@
                       },
                       "nonceB64Url": {
                         "maxLength": 256,
-                        "minLength": 12,
                         "pattern": "^[A-Za-z0-9_-]+$",
                         "type": "string"
                       },
@@ -2174,7 +2295,7 @@
                     "type": "string"
                   },
                   "ciphertextAndTagB64Url": {
-                    "minLength": 22,
+                    "maxLength": 2097152,
                     "pattern": "^[A-Za-z0-9_-]+$",
                     "type": "string"
                   },
@@ -2190,7 +2311,6 @@
                   },
                   "nonceB64Url": {
                     "maxLength": 256,
-                    "minLength": 12,
                     "pattern": "^[A-Za-z0-9_-]+$",
                     "type": "string"
                   },
@@ -2288,6 +2408,45 @@
       "type": "object"
     },
     "LocalToolStateRecord": {
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "maxItems": 1024,
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              },
+              "propertyNames": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
@@ -2296,8 +2455,12 @@
           "type": "string"
         },
         "descriptorJson": {
-          "additionalProperties": {},
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
           "propertyNames": {
+            "maxLength": 256,
+            "minLength": 1,
             "type": "string"
           },
           "type": "object"
@@ -2330,7 +2493,7 @@
                   "type": "string"
                 },
                 "ciphertextAndTagB64Url": {
-                  "minLength": 22,
+                  "maxLength": 2097152,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -2346,7 +2509,6 @@
                 },
                 "nonceB64Url": {
                   "maxLength": 256,
-                  "minLength": 12,
                   "pattern": "^[A-Za-z0-9_-]+$",
                   "type": "string"
                 },
@@ -2460,7 +2622,7 @@
               "type": "string"
             },
             "ciphertextAndTagB64Url": {
-              "minLength": 22,
+              "maxLength": 2097152,
               "pattern": "^[A-Za-z0-9_-]+$",
               "type": "string"
             },
@@ -2476,7 +2638,6 @@
             },
             "nonceB64Url": {
               "maxLength": 256,
-              "minLength": 12,
               "pattern": "^[A-Za-z0-9_-]+$",
               "type": "string"
             },

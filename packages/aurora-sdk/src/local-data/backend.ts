@@ -20,15 +20,21 @@ export type LocalDataErrorCode =
   | 'identity_mismatch'
   | 'memory_session_only'
 
+export interface LocalDataErrorMetadata {
+  readonly validation?: 'redacted'
+  readonly issues?: Array<{ readonly code: string; readonly path: string }>
+  readonly reason?: string
+}
+
 export class LocalDataError extends Error {
   readonly code: LocalDataErrorCode
-  readonly detail: unknown
+  readonly metadata: LocalDataErrorMetadata | undefined
 
-  constructor(code: LocalDataErrorCode, message: string, detail?: unknown) {
+  constructor(code: LocalDataErrorCode, message: string, metadata?: LocalDataErrorMetadata) {
     super(message)
     this.name = 'LocalDataError'
     this.code = code
-    this.detail = detail
+    this.metadata = metadata
   }
 }
 

@@ -1,6 +1,6 @@
 import type { LocalDataBackend, LocalDataBackendStatus } from './backend.js'
 import { LocalDataError } from './backend.js'
-import { buildLocalDataExportV1, parseLocalDataExportV1, type LocalDataExportV1, type LocalDataImportResult } from './export-v1.js'
+import { buildLocalDataExportV1, compareUtf8, parseLocalDataExportV1, type LocalDataExportV1, type LocalDataImportResult } from './export-v1.js'
 import {
   cloneLocalDataCollections,
   emptyLocalDataCollections,
@@ -44,6 +44,8 @@ export class MemoryLocalDataBackend implements LocalDataBackend {
 
   async open(profileId: string, localNodeId: string): Promise<LocalDataSession> {
     if (this.closed) throw new LocalDataError('session_closed', 'Memory local data backend is closed')
+    assertNonemptyIdentity(profileId, 'profileId')
+    assertNonemptyIdentity(localNodeId, 'localNodeId')
     if (this.session !== null && (this.session.profileId !== profileId || this.session.localNodeId !== localNodeId)) {
       throw new LocalDataError('memory_session_only', 'Memory local data backend owns only the current session identity')
     }
@@ -98,6 +100,7 @@ class MemoryLocalDataSession implements LocalDataSession {
   private readonly nowMs: () => number
   private readonly closeBackendSession: () => void
   private collections: MutableLocalDataCollections
+  private transactionQueue: Promise<unknown> = Promise.resolve()
   private closed = false
 
   constructor(options: MemoryLocalDataSessionOptions) {
@@ -115,14 +118,19 @@ class MemoryLocalDataSession implements LocalDataSession {
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
-    this.assertOpen()
-    const snapshot = cloneLocalDataCollections(this.collections)
-    try {
-      return await work(this)
-    } catch (error) {
-      this.collections = snapshot
-      throw error
+    const run = async (): Promise<T> => {
+      this.assertOpen()
+      const snapshot = cloneLocalDataCollections(this.collections)
+      try {
+        return await work(this)
+      } catch (error) {
+        this.collections = snapshot
+        throw error
+      }
     }
+    const result = this.transactionQueue.then(run, run)
+    this.transactionQueue = result.then(() => undefined, () => undefined)
+    return result
   }
 
   async exportV1(): Promise<LocalDataExportV1> {
@@ -142,6 +150,9 @@ class MemoryLocalDataSession implements LocalDataSession {
     const parsed = parseLocalDataExportV1(document)
     if (parsed.profileId !== this.profileId || parsed.localNodeId !== this.localNodeId) {
       throw new LocalDataError('identity_mismatch', 'Local data export identity does not match the open session')
+    }
+    if (parsed.schemaVersion > this.schemaVersion) {
+      throw new LocalDataError('invalid_record', 'Local data export schema is newer than the open session', { reason: 'future_schema' })
     }
     this.collections = cloneLocalDataCollections(parsed.records)
     return {
@@ -194,12 +205,12 @@ class MemoryConversationRepository {
   }
 
   async listConversations(): Promise<ConversationRecord[]> {
-    return clone(this.session.mutable.conversations).sort((a, b) => b.updatedAtMs - a.updatedAtMs || a.id.localeCompare(b.id))
+    return clone(this.session.mutable.conversations).sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id))
   }
 
   async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
     return clone(this.session.mutable.messages.filter((message) => message.conversationId === conversationId))
-      .sort((a, b) => a.sequence - b.sequence || a.id.localeCompare(b.id))
+      .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
   }
 }
 
@@ -214,7 +225,7 @@ class MemoryLightweightMemoryRepository {
 
   async listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]> {
     return clone(this.session.mutable.memoryItems.filter((record) => namespace === undefined || record.namespace === namespace))
-      .sort((a, b) => a.namespace.localeCompare(b.namespace) || a.id.localeCompare(b.id))
+      .sort((a, b) => compareUtf8(a.namespace, b.namespace) || compareUtf8(a.id, b.id))
   }
 }
 
@@ -228,7 +239,7 @@ class MemoryLocalToolStateRepository {
   }
 
   async listLocalToolStates(): Promise<LocalToolStateRecord[]> {
-    return clone(this.session.mutable.localToolStates).sort((a, b) => a.toolContractId.localeCompare(b.toolContractId))
+    return clone(this.session.mutable.localToolStates).sort((a, b) => compareUtf8(a.toolContractId, b.toolContractId))
   }
 }
 
@@ -242,7 +253,7 @@ class MemoryPeerGrantMetadataRepository {
   }
 
   async listPeerGrants(): Promise<PeerGrantMetadataRecord[]> {
-    return clone(this.session.mutable.peerGrantMetadata).sort((a, b) => a.claimantPeerId.localeCompare(b.claimantPeerId) || a.tokenId.localeCompare(b.tokenId))
+    return clone(this.session.mutable.peerGrantMetadata).sort((a, b) => compareUtf8(a.claimantPeerId, b.claimantPeerId) || compareUtf8(a.tokenId, b.tokenId))
   }
 }
 
@@ -259,7 +270,7 @@ class MemoryLocalAuditRepository {
   }
 
   async listAudit(): Promise<LocalAuditRecord[]> {
-    return clone(this.session.mutable.localAudit).sort((a, b) => b.createdAtMs - a.createdAtMs || a.id.localeCompare(b.id))
+    return clone(this.session.mutable.localAudit).sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id))
   }
 }
 
@@ -274,4 +285,10 @@ function upsert<T>(items: T[], record: T, predicate: (item: T) => boolean): void
 
 function clone<T>(value: T): T {
   return structuredClone(value)
+}
+
+function assertNonemptyIdentity(value: string, label: string): void {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new LocalDataError('invalid_record', `${label} must be nonempty`, { reason: 'empty_identity' })
+  }
 }

@@ -42,11 +42,24 @@ export function assertStoredMigrationChecksums(
   manifest: LocalDataMigrationManifest,
   stored: Array<{ version: number; checksum: string }>,
 ): void {
+  let expectedVersion = 1
+  const seen = new Set<number>()
   for (const row of stored) {
+    if (!Number.isSafeInteger(row.version) || row.version < 1) {
+      throw new LocalDataError('migration_integrity', 'Stored migration version is invalid')
+    }
+    if (seen.has(row.version)) {
+      throw new LocalDataError('migration_integrity', 'Stored migration ledger contains a duplicate version')
+    }
+    seen.add(row.version)
+    if (row.version !== expectedVersion) {
+      throw new LocalDataError('migration_integrity', 'Stored migration ledger must be a contiguous prefix from version 1')
+    }
     const entry = manifest.migrations[row.version - 1]
     if (entry === undefined || entry.checksum !== row.checksum) {
       throw new LocalDataError('migration_integrity', 'Stored migration checksum does not match immutable manifest')
     }
+    expectedVersion += 1
   }
 }
 

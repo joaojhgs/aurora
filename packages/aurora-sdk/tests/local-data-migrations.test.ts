@@ -42,6 +42,21 @@ describe('local-data SQLite migration manifest', () => {
     expect(() => assertStoredMigrationChecksums(localDataMigrationManifest, [
       { version: 1, checksum: 'f'.repeat(64) }
     ])).toThrow(/checksum/u)
+    expect(() => assertStoredMigrationChecksums(localDataMigrationManifest, [
+      { version: 1, checksum: localDataMigrationManifest.migrations[0]?.checksum ?? '' },
+      { version: 1, checksum: localDataMigrationManifest.migrations[0]?.checksum ?? '' }
+    ])).toThrow(/duplicate/u)
+    expect(() => assertStoredMigrationChecksums(localDataMigrationManifest, [
+      { version: 2, checksum: localDataMigrationManifest.migrations[1]?.checksum ?? '' }
+    ])).toThrow(/contiguous prefix/u)
+    expect(() => assertStoredMigrationChecksums(localDataMigrationManifest, [
+      { version: 1, checksum: localDataMigrationManifest.migrations[0]?.checksum ?? '' },
+      { version: 3, checksum: localDataMigrationManifest.migrations[2]?.checksum ?? '' }
+    ])).toThrow(/contiguous prefix/u)
+    expect(() => assertStoredMigrationChecksums(localDataMigrationManifest, [
+      { version: 1, checksum: localDataMigrationManifest.migrations[0]?.checksum ?? '' },
+      { version: 4, checksum: '0'.repeat(64) }
+    ])).toThrow(/contiguous prefix/u)
   })
 
   it('keeps the checked JSON Schema artifact generated from the Zod schemas', () => {

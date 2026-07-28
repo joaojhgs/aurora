@@ -13,7 +13,7 @@ export const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
   algorithm: 'AES-GCM-256',
   keyId: 'key-local-structured-data-1',
   nonceB64Url: 'AAAAAAAAAAAAAAAA',
-  ciphertextAndTagB64Url: 'BBBBBBBBBBBBBBBBBBBBBB',
+  ciphertextAndTagB64Url: 'AAAAAAAAAAAAAAAAAAAAAA',
   createdAtMs: 1000
 })
 

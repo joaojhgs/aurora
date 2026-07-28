@@ -66,4 +66,49 @@ describe('local-data memory repository contract', () => {
     const reopened = await backend.open('profile-1', 'node-1')
     await expect(reopened.memory.listMemoryItems()).resolves.toEqual([])
   })
+
+  it('serializes concurrent transactions and isolates failed rollbacks', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture())
+    const gates: Array<() => void> = []
+
+    const first = session.transaction(async (repositories) => {
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-first' }))
+      await new Promise<void>((resolve) => gates.push(resolve))
+    })
+    const second = session.transaction(async (repositories) => {
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-second' }))
+    })
+    const third = session.transaction(async (repositories) => {
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'memory-third' }))
+      throw new Error('rollback third')
+    })
+
+    await Promise.resolve()
+    await expect(session.memory.listMemoryItems()).resolves.toHaveLength(1)
+    gates[0]?.()
+    await expect(first).resolves.toBeUndefined()
+    await expect(second).resolves.toBeUndefined()
+    await expect(third).rejects.toThrow(/rollback third/u)
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([
+      memoryFixture({ id: 'memory-first' }),
+      memoryFixture({ id: 'memory-second' })
+    ])
+  })
+
+  it('validates open identity and rejects future-schema imports before replacing state', async () => {
+    const backend = new MemoryLocalDataBackend({ schemaVersion: 3 })
+    await expect(backend.open('', 'node-1')).rejects.toMatchObject({ code: 'invalid_record' })
+    await expect(backend.open('profile-1', '')).rejects.toMatchObject({ code: 'invalid_record' })
+    const session = await backend.open('profile-1', 'node-1')
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-original' }))
+    const exported = await session.exportV1()
+
+    await expect(session.importV1({ ...exported, schemaVersion: 4 })).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { reason: 'future_schema' }
+    })
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-original' })])
+  })
 })

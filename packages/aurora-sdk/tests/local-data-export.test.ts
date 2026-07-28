@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { MemoryLocalDataBackend, parseLocalDataExportV1 } from '../src/local-data/index.js'
+import { hashLocalDataCollections, MemoryLocalDataBackend, parseLocalDataExportV1 } from '../src/local-data/index.js'
 import {
+  auditFixture,
   conversationFixture,
+  localToolStateFixture,
   memoryFixture,
   messageFixture,
   peerGrantFixture
@@ -39,5 +41,38 @@ describe('local-data export contract', () => {
       ...exported,
       collectionHashes: { ...exported.collectionHashes, memoryItems: '0'.repeat(64) }
     })).toThrow(/hashes/u)
+  })
+
+  it('rejects non-JSON-safe persisted objects before hashing can lose data', async () => {
+    const backend = new MemoryLocalDataBackend({ nowMs: () => 9999 })
+    const session = await backend.open('profile-1', 'node-1')
+
+    await expect(session.localTools.upsertLocalToolState(localToolStateFixture({
+      descriptorJson: { ok: true, nested: [1, 'two', null], missing: undefined } as never
+    }))).rejects.toThrow(/descriptorJson|missing/u)
+    await expect(session.localAudit.appendAudit(auditFixture({
+      redactedDetailJson: { fn: () => 'not-json' } as never
+    }))).rejects.toThrow(/redactedDetailJson|fn/u)
+  })
+
+  it('uses deterministic UTF-8 ordering for canonical collection hashes', () => {
+    const recordsA = {
+      conversations: [
+        conversationFixture({ id: 'é' }),
+        conversationFixture({ id: 'z' }),
+        conversationFixture({ id: '💡' })
+      ],
+      messages: [],
+      memoryItems: [],
+      localToolStates: [],
+      peerGrantMetadata: [],
+      localAudit: []
+    }
+    const recordsB = {
+      ...recordsA,
+      conversations: [...recordsA.conversations].reverse()
+    }
+    expect(hashLocalDataCollections(recordsA).conversations).toBe(hashLocalDataCollections(recordsB).conversations)
+    expect(hashLocalDataCollections(recordsA).conversations).toBe('d1f7bc470603d71fbb7cbb37d547a279ebd075b81d577cd648ef5e12868b4a49')
   })
 })
