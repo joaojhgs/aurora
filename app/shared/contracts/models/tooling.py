@@ -7,6 +7,8 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
+JS_SAFE_INTEGER_MAX = 2**53 - 1
+
 
 # Module identifier
 class ToolingModule:
@@ -146,15 +148,15 @@ class ToolingGetToolsRequest(IOModel):
     """Request to get available tools."""
 
     query: str | None = None
-    top_k: int = 100
+    top_k: int = Field(default=100, ge=0, le=JS_SAFE_INTEGER_MAX)
     mesh_selector: MeshAddressSelector | None = None
 
 
 class ToolingRateLimitHints(IOModel):
     """Optional rate-limit hints for a discovered tool provider."""
 
-    max_calls: int | None = None
-    window_seconds: int | None = None
+    max_calls: int | None = Field(default=None, ge=0, le=JS_SAFE_INTEGER_MAX)
+    window_seconds: int | None = Field(default=None, ge=0, le=JS_SAFE_INTEGER_MAX)
     policy: str | None = None
 
 
@@ -235,7 +237,7 @@ class ToolingGetToolsResponse(IOModel):
     """Response with available tools."""
 
     tools: list[ToolingToolInfo]
-    count: int
+    count: int = Field(ge=0, le=JS_SAFE_INTEGER_MAX)
 
 
 class ToolingGetToolCatalogRequest(IOModel):
@@ -382,7 +384,7 @@ class ToolingSharingPolicyRule(IOModel):
     provider_peer_id: str | None = None
     provider_service_instance_id: str | None = None
     route_privacy_class: str | None = None
-    token_ttl_seconds: int = 300
+    token_ttl_seconds: int = Field(default=300, ge=0, le=JS_SAFE_INTEGER_MAX)
 
 
 class ToolingSharingPolicy(IOModel):
@@ -409,7 +411,7 @@ class ToolingPolicyDecision(IOModel):
     effective_default: ToolingApprovalMode | None = None
     grant_id: str | None = None
     grant_scope: ToolingApprovalGrantScope | None = None
-    token_ttl_seconds: int = 300
+    token_ttl_seconds: int = Field(default=300, ge=0, le=JS_SAFE_INTEGER_MAX)
 
 
 class ToolingGetSharingPolicyRequest(IOModel):
@@ -1476,12 +1478,12 @@ class ToolingRemoteCatalogRefreshRequested(IOModel):
 class ToolingProjectionAuthorityRevision(IOModel):
     """Every authority dimension that makes one recipient projection current."""
 
-    catalog_revision: int = Field(ge=0)
-    export_policy_revision: int = Field(ge=0)
-    auth_grant_revision: int = Field(ge=0)
-    manifest_revision: int = Field(ge=0)
-    switch_revision: int = Field(ge=0)
-    protocol_revision: int = Field(default=1, ge=1)
+    catalog_revision: int = Field(ge=0, le=JS_SAFE_INTEGER_MAX)
+    export_policy_revision: int = Field(ge=0, le=JS_SAFE_INTEGER_MAX)
+    auth_grant_revision: int = Field(ge=0, le=JS_SAFE_INTEGER_MAX)
+    manifest_revision: int = Field(ge=0, le=JS_SAFE_INTEGER_MAX)
+    switch_revision: int = Field(ge=0, le=JS_SAFE_INTEGER_MAX)
+    protocol_revision: int = Field(default=1, ge=1, le=JS_SAFE_INTEGER_MAX)
 
 
 class ToolingGetExportCatalogRequest(IOModel):
@@ -1526,7 +1528,7 @@ class ToolingGetExportCatalogResponse(IOModel):
     authority_revision: ToolingProjectionAuthorityRevision
     projection_revision: str = Field(min_length=1, max_length=256)
     projection_digest: str = Field(min_length=1, max_length=128)
-    page_index: int = Field(ge=0)
+    page_index: int = Field(ge=0, le=JS_SAFE_INTEGER_MAX)
     page_size: int = Field(ge=1, le=256)
     page_hash: str = Field(min_length=1, max_length=128)
     tools: list[ToolingToolInfo] = Field(default_factory=list, max_length=256)
@@ -1534,7 +1536,7 @@ class ToolingGetExportCatalogResponse(IOModel):
     retirements: list[ToolingProjectionRetirement] = Field(default_factory=list, max_length=256)
     next_cursor: str | None = Field(default=None, min_length=1, max_length=4096)
     complete: bool = False
-    total_count: int | None = Field(default=None, ge=0)
+    total_count: int | None = Field(default=None, ge=0, le=JS_SAFE_INTEGER_MAX)
     final_checksum: str | None = Field(default=None, min_length=1, max_length=128)
 
     @field_validator("projection_digest", "page_hash", "final_checksum")

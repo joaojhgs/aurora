@@ -12,7 +12,12 @@ describe('validation boundary parsing', () => {
         { tool_name: 'echo', arguments: { message: 'hello' } },
         { boundary: 'http-request' }
       )
-    ).toEqual({ tool_name: 'echo', arguments: { message: 'hello' } })
+    ).toMatchObject({
+      tool_name: 'echo',
+      arguments: { message: 'hello' },
+      confirmed: false,
+      dry_run: false
+    })
   })
 
   it('throws redacted validation errors without raw values', () => {

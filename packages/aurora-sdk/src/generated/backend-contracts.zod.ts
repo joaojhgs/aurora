@@ -10,316 +10,332 @@ const auroraJsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 )
 
 const ToolingExecuteToolInputToolingExecuteToolRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "data_scope": z.string().nullable().optional(),
-  "hardware_target": z.string().nullable().optional(),
-  "peer_id": z.string().nullable().optional(),
-  "provider_id": z.string().nullable().optional(),
-  "resource_namespace": z.string().nullable().optional(),
-  "service_instance_id": z.string().nullable().optional(),
-  "tool_id": z.string().nullable().optional()
-}))
+  "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "peer_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "provider_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "resource_namespace": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "service_instance_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "tool_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingExecuteToolInputToolingExecuteToolRequestSchemaToolingResourceSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "data_scope": z.string().nullable().optional(),
-  "hardware_target": z.string().nullable().optional(),
-  "resource_id": z.string().nullable().optional(),
-  "resource_namespace": z.string().nullable().optional(),
-  "resource_type": z.string().nullable().optional()
-}))
+  "data_scope": z.string().nullable().default(null).optional(),
+  "hardware_target": z.string().nullable().default(null).optional(),
+  "resource_id": z.string().nullable().default(null).optional(),
+  "resource_namespace": z.string().nullable().default(null).optional(),
+  "resource_type": z.string().nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const ToolingExecuteToolInputToolingExecuteToolRequestSchema = z.object({
-  "approval_token": z.string().nullable().optional(),
-  "arguments": z.record(z.string(), auroraJsonValueSchema),
-  "caller_device_id": z.string().nullable().optional(),
-  "caller_peer_id": z.string().nullable().optional(),
-  "caller_permissions": z.array(z.string()).nullable().optional(),
-  "caller_principal_id": z.string().nullable().optional(),
-  "confirmed": z.boolean().optional(),
-  "correlation_id": z.string().nullable().optional(),
-  "dry_run": z.boolean().optional(),
-  "expected_args_schema_hash": z.string().nullable().optional(),
-  "mesh_selector": ToolingExecuteToolInputToolingExecuteToolRequestSchemaMeshAddressSelectorSchemaDef.nullable().optional(),
-  "resource_selector": ToolingExecuteToolInputToolingExecuteToolRequestSchemaToolingResourceSelectorSchemaDef.nullable().optional(),
-  "schedule_id": z.string().nullable().optional(),
-  "scheduled_action_hash": z.string().nullable().optional(),
+  "approval_token": z.string().nullable().default(null).optional(),
+  "arguments": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}),
+  "caller_device_id": z.string().nullable().default(null).optional(),
+  "caller_peer_id": z.string().nullable().default(null).optional(),
+  "caller_permissions": z.array(z.string()).nullable().default(null).optional(),
+  "caller_principal_id": z.string().nullable().default(null).optional(),
+  "confirmed": z.boolean().default(false).optional(),
+  "correlation_id": z.string().nullable().default(null).optional(),
+  "dry_run": z.boolean().default(false).optional(),
+  "expected_args_schema_hash": z.string().nullable().default(null).optional(),
+  "mesh_selector": ToolingExecuteToolInputToolingExecuteToolRequestSchemaMeshAddressSelectorSchemaDef.nullable().default(null).optional(),
+  "resource_selector": ToolingExecuteToolInputToolingExecuteToolRequestSchemaToolingResourceSelectorSchemaDef.nullable().default(null).optional(),
+  "schedule_id": z.string().nullable().default(null).optional(),
+  "scheduled_action_hash": z.string().nullable().default(null).optional(),
   "tool_name": z.string()
-})
+}).meta({"x-aurora-extra-behavior":"strip"})
 export type ToolingExecuteToolInputToolingExecuteToolRequest = z.infer<typeof ToolingExecuteToolInputToolingExecuteToolRequestSchema>
 
 export const ToolingExecuteToolOutputToolingExecuteToolResponseSchema = z.object({
-  "args_hash": z.string().nullable().optional(),
-  "correlation_id": z.string().nullable().optional(),
-  "data": auroraJsonValueSchema.nullable().optional(),
-  "display_args_preview": z.record(z.string(), auroraJsonValueSchema).optional(),
-  "error": z.string().nullable().optional(),
-  "error_code": z.string().nullable().optional(),
-  "global_tool_id": z.string().nullable().optional(),
+  "args_hash": z.string().nullable().default(null).optional(),
+  "correlation_id": z.string().nullable().default(null).optional(),
+  "data": auroraJsonValueSchema.meta({"x-aurora-json-value":true}).nullable().default(null).optional(),
+  "display_args_preview": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "error": z.string().nullable().default(null).optional(),
+  "error_code": z.string().nullable().default(null).optional(),
+  "global_tool_id": z.string().nullable().default(null).optional(),
   "ok": z.boolean(),
-  "policy_decision_id": z.string().nullable().optional(),
-  "provider_peer_id": z.string().nullable().optional(),
-  "status": z.enum(["denied", "dry_run", "failed", "not_found", "success"]).nullable().optional()
-})
+  "policy_decision_id": z.string().nullable().default(null).optional(),
+  "provider_peer_id": z.string().nullable().default(null).optional(),
+  "status": z.enum(["denied", "dry_run", "failed", "not_found", "success"]).nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
 export type ToolingExecuteToolOutputToolingExecuteToolResponse = z.infer<typeof ToolingExecuteToolOutputToolingExecuteToolResponseSchema>
 
 export const ToolingGetExportCatalogInputToolingGetExportCatalogRequestSchema = z.object({
-  "cursor": z.string().min(1).max(4096).nullable().optional(),
-  "last_projection_digest": z.string().max(128).nullable().optional(),
-  "last_projection_revision": z.string().max(256).nullable().optional(),
-  "page_size": z.number().int().finite().min(1).max(256).safe().optional(),
-  "protocol_tier": z.literal("projection_v1").optional()
-})
+  "cursor": z.string().min(1).max(4096).nullable().default(null).optional(),
+  "last_projection_digest": z.string().max(128).nullable().default(null).optional(),
+  "last_projection_revision": z.string().max(256).nullable().default(null).optional(),
+  "page_size": z.number().finite().multipleOf(1).min(1).max(256).default(100).optional(),
+  "protocol_tier": z.literal("projection_v1").default("projection_v1").optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
 export type ToolingGetExportCatalogInputToolingGetExportCatalogRequest = z.infer<typeof ToolingGetExportCatalogInputToolingGetExportCatalogRequestSchema>
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionAuthorityRevisionSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "auth_grant_revision": z.number().int().finite().min(0).max(9007199254740991).safe(),
-  "catalog_revision": z.number().int().finite().min(0).max(9007199254740991).safe(),
-  "export_policy_revision": z.number().int().finite().min(0).max(9007199254740991).safe(),
-  "manifest_revision": z.number().int().finite().min(0).max(9007199254740991).safe(),
-  "protocol_revision": z.number().int().finite().min(1).max(9007199254740991).safe().optional(),
-  "switch_revision": z.number().int().finite().min(0).max(9007199254740991).safe()
-}))
+  "auth_grant_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "catalog_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "export_policy_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "manifest_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "protocol_revision": z.number().finite().multipleOf(1).min(1).max(9007199254740991).default(1).optional(),
+  "switch_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991)
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionBlockedToolSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "missing_permissions": z.array(z.string()).optional(),
   "reason_code": z.literal("recipient_missing_tool_permissions"),
   "tool": ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingToolInfoSchemaDef
-}))
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionRetirementSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "availability": z.enum(["permission_blocked", "removed", "stale", "unshared"]),
   "global_tool_id": z.string().min(1).max(1024),
-  "last_schema_hash": z.string().max(128).nullable().optional(),
+  "last_schema_hash": z.string().max(128).nullable().default(null).optional(),
   "reason_code": z.string().min(1).max(128)
-}))
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingRateLimitHintsSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "max_calls": z.number().int().finite().min(-9007199254740991).max(9007199254740991).safe().nullable().optional(),
-  "policy": z.string().nullable().optional(),
-  "window_seconds": z.number().int().finite().min(-9007199254740991).max(9007199254740991).safe().nullable().optional()
-}))
+  "max_calls": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().default(null).optional(),
+  "policy": z.string().nullable().default(null).optional(),
+  "window_seconds": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingToolInfoSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "admin": z.boolean().optional(),
+  "admin": z.boolean().default(false).optional(),
   "aliases": z.array(z.string()).optional(),
-  "args_schema": z.record(z.string(), auroraJsonValueSchema).optional(),
+  "args_schema": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
   "argument_visibility": z.looseObject({
 
-}).catchall(z.enum(["display", "hash_only", "raw_never", "secret", "support_bundle_redacted"])).optional(),
-  "capability_class": z.enum(["admin", "device", "execute", "network", "read", "secrets", "write"]).optional(),
-  "confirmation_required": z.boolean().optional(),
-  "data_egress": z.boolean().optional(),
-  "description": z.string().optional(),
+}).catchall(z.enum(["display", "hash_only", "raw_never", "secret", "support_bundle_redacted"])).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "capability_class": z.enum(["admin", "device", "execute", "network", "read", "secrets", "write"]).default("read").optional(),
+  "confirmation_required": z.boolean().default(false).optional(),
+  "data_egress": z.boolean().default(false).optional(),
+  "description": z.string().default("").optional(),
   "display_name": z.string(),
-  "execution_location": z.enum(["local", "remote"]).optional(),
-  "exportable": z.boolean().optional(),
-  "external": z.boolean().optional(),
+  "execution_location": z.enum(["local", "remote"]).default("local").optional(),
+  "exportable": z.boolean().default(false).optional(),
+  "external": z.boolean().default(false).optional(),
   "global_tool_id": z.string(),
-  "legacy_global_tool_ids": z.array(z.string()).max(16).optional(),
+  "legacy_global_tool_ids": z.array(z.string().min(1).max(512)).max(16).superRefine((value, ctx) => { if (value.some((item) => item.length === 0 || item !== item.trim() || item.length > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => [...new Set(value)].sort()).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
   "local_name": z.string(),
-  "mutating": z.boolean().optional(),
+  "mutating": z.boolean().default(false).optional(),
   "name": z.string(),
   "namespace": z.string(),
   "privacy_hints": z.array(z.string()).optional(),
   "provenance": ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingToolProvenanceSchemaDef,
-  "provider_available": z.boolean().nullable().optional(),
-  "provider_granted_permissions": z.array(z.string()).nullable().optional(),
-  "provider_label": z.string().nullable().optional(),
+  "provider_available": z.boolean().nullable().default(null).optional(),
+  "provider_granted_permissions": z.array(z.string()).nullable().default(null).optional(),
+  "provider_label": z.string().nullable().default(null).optional(),
   "provider_peer_id": z.string(),
   "provider_service_instance_id": z.string(),
-  "rate_limit_hints": ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingRateLimitHintsSchemaDef.nullable().optional(),
+  "rate_limit_hints": ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingRateLimitHintsSchemaDef.nullable().default(null).optional(),
   "required_permissions": z.array(z.string()).optional(),
   "resource_scope": z.array(z.string()).optional(),
-  "risk_class": z.enum(["dangerous", "sensitive", "standard"]).optional(),
-  "safety_class": z.enum(["dangerous", "sensitive", "standard"]).optional(),
-  "schema": z.record(z.string(), auroraJsonValueSchema).optional(),
-  "share_group_id": z.string().optional(),
-  "share_group_label": z.string().optional(),
-  "source": z.enum(["core", "mcp", "mesh_peer", "plugin", "unknown"]).optional(),
-  "source_id": z.string().nullable().optional(),
-  "source_type": z.enum(["local", "mesh_peer"]).optional(),
-  "tool_contract_id": z.string().optional(),
-  "tool_id_scheme": z.enum(["aurora-tool", "legacy"]).optional(),
-  "tool_id_version": z.union([z.literal(0), z.literal(1)]).optional(),
-  "trust_tier": z.enum(["blocked", "trusted", "untrusted"]).optional()
-}))
+  "risk_class": z.enum(["dangerous", "sensitive", "standard"]).default("standard").optional(),
+  "safety_class": z.enum(["dangerous", "sensitive", "standard"]).default("standard").optional(),
+  "schema": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "share_group_id": z.string().default("").optional(),
+  "share_group_label": z.string().default("").optional(),
+  "source": z.enum(["core", "mcp", "mesh_peer", "plugin", "unknown"]).default("unknown").optional(),
+  "source_id": z.string().nullable().default(null).optional(),
+  "source_type": z.enum(["local", "mesh_peer"]).default("local").optional(),
+  "tool_contract_id": z.string().default("").optional(),
+  "tool_id_scheme": z.enum(["aurora-tool", "legacy"]).default("legacy").optional(),
+  "tool_id_version": z.union([z.literal(0), z.literal(1)]).default(0).optional(),
+  "trust_tier": z.enum(["blocked", "trusted", "untrusted"]).default("untrusted").optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingToolProvenanceSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "advertised_name": z.string(),
-  "provider_kind": z.enum(["local", "mesh_peer"]).optional(),
+  "provider_kind": z.enum(["local", "mesh_peer"]).default("local").optional(),
   "provider_peer_id": z.string(),
   "provider_service_instance_id": z.string(),
-  "provider_tool_id": z.string().nullable().optional(),
-  "source": z.enum(["core", "mcp", "plugin", "unknown"]).optional(),
-  "stable_source_id": z.string().nullable().optional()
-}))
+  "provider_tool_id": z.string().nullable().default(null).optional(),
+  "source": z.enum(["core", "mcp", "plugin", "unknown"]).default("unknown").optional(),
+  "stable_source_id": z.string().nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema = z.object({
   "authority_revision": ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionAuthorityRevisionSchemaDef,
   "blocked_tools": z.array(ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionBlockedToolSchemaDef).max(256).optional(),
-  "complete": z.boolean().optional(),
-  "final_checksum": z.string().min(1).max(128).nullable().optional(),
-  "next_cursor": z.string().min(1).max(4096).nullable().optional(),
-  "ok": z.boolean().optional(),
-  "page_hash": z.string().min(1).max(128),
-  "page_index": z.number().int().finite().min(0).max(9007199254740991).safe(),
-  "page_size": z.number().int().finite().min(1).max(256).safe(),
-  "projection_digest": z.string().min(1).max(128),
+  "complete": z.boolean().default(false).optional(),
+  "final_checksum": z.string().min(1).max(128).regex(new RegExp("^[0-9a-f]{64}$")).nullable().default(null).optional(),
+  "next_cursor": z.string().min(1).max(4096).regex(/^(?!\s)(?:[\s\S]*\S)?$/).meta({"x-aurora-string-trimmed":true}).nullable().default(null).optional(),
+  "ok": z.boolean().default(true).optional(),
+  "page_hash": z.string().min(1).max(128).regex(new RegExp("^[0-9a-f]{64}$")),
+  "page_index": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "page_size": z.number().finite().multipleOf(1).min(1).max(256),
+  "projection_digest": z.string().min(1).max(128).regex(new RegExp("^[0-9a-f]{64}$")),
   "projection_revision": z.string().min(1).max(256),
   "provider_peer_id": z.string().min(1).max(160),
-  "reason_code": z.string().max(128).nullable().optional(),
+  "reason_code": z.string().max(128).nullable().default(null).optional(),
   "retirements": z.array(ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionRetirementSchemaDef).max(256).optional(),
-  "selected_protocol_tier": z.literal("projection_v1").optional(),
+  "selected_protocol_tier": z.literal("projection_v1").default("projection_v1").optional(),
   "service_instance_id": z.string().min(1).max(256),
   "tools": z.array(ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingToolInfoSchemaDef).max(256).optional(),
-  "total_count": z.number().int().finite().min(0).max(9007199254740991).safe().nullable().optional()
-})
+  "total_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().default(null).optional()
+}).superRefine((value, ctx) => { let invalid = false; if (value.complete === true) { if (value.next_cursor !== null && value.next_cursor !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['next_cursor'], message: 'complete pages cannot carry next_cursor' }); } if (value.total_count === null || value.total_count === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['total_count'], message: 'complete pages require total_count' }); } if (value.final_checksum === null || value.final_checksum === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['final_checksum'], message: 'complete pages require final_checksum' }); } } else { if (value.next_cursor === null || value.next_cursor === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['next_cursor'], message: 'partial pages require next_cursor' }); } if (value.total_count !== null && value.total_count !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['total_count'], message: 'partial pages cannot carry total_count' }); } if (value.final_checksum !== null && value.final_checksum !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['final_checksum'], message: 'partial pages cannot carry final_checksum' }); } } if (invalid) ctx.addIssue({ code: 'custom', message: 'projection page termination invalid' });}).meta({"x-aurora-extra-behavior":"strip","x-aurora-projection-page-termination":true})
 export type ToolingGetExportCatalogOutputToolingGetExportCatalogResponse = z.infer<typeof ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema>
 
 const ToolingGetToolsInputToolingGetToolsRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "data_scope": z.string().nullable().optional(),
-  "hardware_target": z.string().nullable().optional(),
-  "peer_id": z.string().nullable().optional(),
-  "provider_id": z.string().nullable().optional(),
-  "resource_namespace": z.string().nullable().optional(),
-  "service_instance_id": z.string().nullable().optional(),
-  "tool_id": z.string().nullable().optional()
-}))
+  "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "peer_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "provider_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "resource_namespace": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "service_instance_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "tool_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const ToolingGetToolsInputToolingGetToolsRequestSchema = z.object({
-  "mesh_selector": ToolingGetToolsInputToolingGetToolsRequestSchemaMeshAddressSelectorSchemaDef.nullable().optional(),
-  "query": z.string().nullable().optional(),
-  "top_k": z.number().int().finite().min(-9007199254740991).max(9007199254740991).safe().optional()
-})
+  "mesh_selector": ToolingGetToolsInputToolingGetToolsRequestSchemaMeshAddressSelectorSchemaDef.nullable().default(null).optional(),
+  "query": z.string().nullable().default(null).optional(),
+  "top_k": z.number().finite().multipleOf(1).min(0).max(9007199254740991).default(100).optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
 export type ToolingGetToolsInputToolingGetToolsRequest = z.infer<typeof ToolingGetToolsInputToolingGetToolsRequestSchema>
 
 const ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingRateLimitHintsSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "max_calls": z.number().int().finite().min(-9007199254740991).max(9007199254740991).safe().nullable().optional(),
-  "policy": z.string().nullable().optional(),
-  "window_seconds": z.number().int().finite().min(-9007199254740991).max(9007199254740991).safe().nullable().optional()
-}))
+  "max_calls": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().default(null).optional(),
+  "policy": z.string().nullable().default(null).optional(),
+  "window_seconds": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingToolInfoSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "admin": z.boolean().optional(),
+  "admin": z.boolean().default(false).optional(),
   "aliases": z.array(z.string()).optional(),
-  "args_schema": z.record(z.string(), auroraJsonValueSchema).optional(),
+  "args_schema": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
   "argument_visibility": z.looseObject({
 
-}).catchall(z.enum(["display", "hash_only", "raw_never", "secret", "support_bundle_redacted"])).optional(),
-  "capability_class": z.enum(["admin", "device", "execute", "network", "read", "secrets", "write"]).optional(),
-  "confirmation_required": z.boolean().optional(),
-  "data_egress": z.boolean().optional(),
-  "description": z.string().optional(),
+}).catchall(z.enum(["display", "hash_only", "raw_never", "secret", "support_bundle_redacted"])).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "capability_class": z.enum(["admin", "device", "execute", "network", "read", "secrets", "write"]).default("read").optional(),
+  "confirmation_required": z.boolean().default(false).optional(),
+  "data_egress": z.boolean().default(false).optional(),
+  "description": z.string().default("").optional(),
   "display_name": z.string(),
-  "execution_location": z.enum(["local", "remote"]).optional(),
-  "exportable": z.boolean().optional(),
-  "external": z.boolean().optional(),
+  "execution_location": z.enum(["local", "remote"]).default("local").optional(),
+  "exportable": z.boolean().default(false).optional(),
+  "external": z.boolean().default(false).optional(),
   "global_tool_id": z.string(),
-  "legacy_global_tool_ids": z.array(z.string()).max(16).optional(),
+  "legacy_global_tool_ids": z.array(z.string().min(1).max(512)).max(16).superRefine((value, ctx) => { if (value.some((item) => item.length === 0 || item !== item.trim() || item.length > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => [...new Set(value)].sort()).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
   "local_name": z.string(),
-  "mutating": z.boolean().optional(),
+  "mutating": z.boolean().default(false).optional(),
   "name": z.string(),
   "namespace": z.string(),
   "privacy_hints": z.array(z.string()).optional(),
   "provenance": ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingToolProvenanceSchemaDef,
-  "provider_available": z.boolean().nullable().optional(),
-  "provider_granted_permissions": z.array(z.string()).nullable().optional(),
-  "provider_label": z.string().nullable().optional(),
+  "provider_available": z.boolean().nullable().default(null).optional(),
+  "provider_granted_permissions": z.array(z.string()).nullable().default(null).optional(),
+  "provider_label": z.string().nullable().default(null).optional(),
   "provider_peer_id": z.string(),
   "provider_service_instance_id": z.string(),
-  "rate_limit_hints": ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingRateLimitHintsSchemaDef.nullable().optional(),
+  "rate_limit_hints": ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingRateLimitHintsSchemaDef.nullable().default(null).optional(),
   "required_permissions": z.array(z.string()).optional(),
   "resource_scope": z.array(z.string()).optional(),
-  "risk_class": z.enum(["dangerous", "sensitive", "standard"]).optional(),
-  "safety_class": z.enum(["dangerous", "sensitive", "standard"]).optional(),
-  "schema": z.record(z.string(), auroraJsonValueSchema).optional(),
-  "share_group_id": z.string().optional(),
-  "share_group_label": z.string().optional(),
-  "source": z.enum(["core", "mcp", "mesh_peer", "plugin", "unknown"]).optional(),
-  "source_id": z.string().nullable().optional(),
-  "source_type": z.enum(["local", "mesh_peer"]).optional(),
-  "tool_contract_id": z.string().optional(),
-  "tool_id_scheme": z.enum(["aurora-tool", "legacy"]).optional(),
-  "tool_id_version": z.union([z.literal(0), z.literal(1)]).optional(),
-  "trust_tier": z.enum(["blocked", "trusted", "untrusted"]).optional()
-}))
+  "risk_class": z.enum(["dangerous", "sensitive", "standard"]).default("standard").optional(),
+  "safety_class": z.enum(["dangerous", "sensitive", "standard"]).default("standard").optional(),
+  "schema": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "share_group_id": z.string().default("").optional(),
+  "share_group_label": z.string().default("").optional(),
+  "source": z.enum(["core", "mcp", "mesh_peer", "plugin", "unknown"]).default("unknown").optional(),
+  "source_id": z.string().nullable().default(null).optional(),
+  "source_type": z.enum(["local", "mesh_peer"]).default("local").optional(),
+  "tool_contract_id": z.string().default("").optional(),
+  "tool_id_scheme": z.enum(["aurora-tool", "legacy"]).default("legacy").optional(),
+  "tool_id_version": z.union([z.literal(0), z.literal(1)]).default(0).optional(),
+  "trust_tier": z.enum(["blocked", "trusted", "untrusted"]).default("untrusted").optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingToolProvenanceSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "advertised_name": z.string(),
-  "provider_kind": z.enum(["local", "mesh_peer"]).optional(),
+  "provider_kind": z.enum(["local", "mesh_peer"]).default("local").optional(),
   "provider_peer_id": z.string(),
   "provider_service_instance_id": z.string(),
-  "provider_tool_id": z.string().nullable().optional(),
-  "source": z.enum(["core", "mcp", "plugin", "unknown"]).optional(),
-  "stable_source_id": z.string().nullable().optional()
-}))
+  "provider_tool_id": z.string().nullable().default(null).optional(),
+  "source": z.enum(["core", "mcp", "plugin", "unknown"]).default("unknown").optional(),
+  "stable_source_id": z.string().nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const ToolingGetToolsOutputToolingGetToolsResponseSchema = z.object({
-  "count": z.number().int().finite().min(-9007199254740991).max(9007199254740991).safe(),
+  "count": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
   "tools": z.array(ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingToolInfoSchemaDef)
-})
+}).meta({"x-aurora-extra-behavior":"strip"})
 export type ToolingGetToolsOutputToolingGetToolsResponse = z.infer<typeof ToolingGetToolsOutputToolingGetToolsResponseSchema>
 
 const ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "data_scope": z.string().nullable().optional(),
-  "hardware_target": z.string().nullable().optional(),
-  "peer_id": z.string().nullable().optional(),
-  "provider_id": z.string().nullable().optional(),
-  "resource_namespace": z.string().nullable().optional(),
-  "service_instance_id": z.string().nullable().optional(),
-  "tool_id": z.string().nullable().optional()
-}))
+  "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "peer_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "provider_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "resource_namespace": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "service_instance_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
+  "tool_id": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchemaToolingResourceSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
-  "data_scope": z.string().nullable().optional(),
-  "hardware_target": z.string().nullable().optional(),
-  "resource_id": z.string().nullable().optional(),
-  "resource_namespace": z.string().nullable().optional(),
-  "resource_type": z.string().nullable().optional()
-}))
+  "data_scope": z.string().nullable().default(null).optional(),
+  "hardware_target": z.string().nullable().default(null).optional(),
+  "resource_id": z.string().nullable().default(null).optional(),
+  "resource_namespace": z.string().nullable().default(null).optional(),
+  "resource_type": z.string().nullable().default(null).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema = z.object({
-  "approval_token": z.string().nullable().optional(),
-  "arguments": z.record(z.string(), auroraJsonValueSchema),
-  "caller_device_id": z.string().nullable().optional(),
-  "caller_peer_id": z.string().nullable().optional(),
-  "caller_permissions": z.array(z.string()).nullable().optional(),
-  "caller_principal_id": z.string().nullable().optional(),
-  "confirmed": z.boolean().optional(),
-  "correlation_id": z.string().nullable().optional(),
-  "dry_run": z.boolean().optional(),
-  "expected_args_schema_hash": z.string().nullable().optional(),
-  "mesh_selector": ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchemaMeshAddressSelectorSchemaDef.nullable().optional(),
-  "resource_selector": ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchemaToolingResourceSelectorSchemaDef.nullable().optional(),
-  "schedule_id": z.string().nullable().optional(),
-  "scheduled_action_hash": z.string().nullable().optional(),
+  "approval_token": z.string().nullable().default(null).optional(),
+  "arguments": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}),
+  "caller_device_id": z.string().nullable().default(null).optional(),
+  "caller_peer_id": z.string().nullable().default(null).optional(),
+  "caller_permissions": z.array(z.string()).nullable().default(null).optional(),
+  "caller_principal_id": z.string().nullable().default(null).optional(),
+  "confirmed": z.boolean().default(false).optional(),
+  "correlation_id": z.string().nullable().default(null).optional(),
+  "dry_run": z.boolean().default(false).optional(),
+  "expected_args_schema_hash": z.string().nullable().default(null).optional(),
+  "mesh_selector": ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchemaMeshAddressSelectorSchemaDef.nullable().default(null).optional(),
+  "resource_selector": ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchemaToolingResourceSelectorSchemaDef.nullable().default(null).optional(),
+  "schedule_id": z.string().nullable().default(null).optional(),
+  "scheduled_action_hash": z.string().nullable().default(null).optional(),
   "tool_name": z.string()
-})
+}).meta({"x-aurora-extra-behavior":"strip"})
 export type ToolingPrepareExecutionInputToolingPrepareExecutionRequest = z.infer<typeof ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema>
 
 const ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchemaToolingPolicyDecisionSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "allowed": z.boolean(),
   "approval_mode": z.enum(["allow_once", "allow_until_expiry", "approve_all_for_peer", "approve_all_for_session", "approve_all_local_safe", "ask_each_time", "deny_all", "dry_run_only"]),
   "approval_required": z.boolean(),
-  "auto_approved_reason": z.string().nullable().optional(),
+  "auto_approved_reason": z.string().nullable().default(null).optional(),
   "decision_id": z.string(),
-  "effective_default": z.enum(["allow_once", "allow_until_expiry", "approve_all_for_peer", "approve_all_for_session", "approve_all_local_safe", "ask_each_time", "deny_all", "dry_run_only"]).nullable().optional(),
-  "grant_id": z.string().nullable().optional(),
-  "grant_scope": z.enum(["always", "deny_always", "deny_once", "once", "scheduled_execution", "session", "until_expiry"]).nullable().optional(),
-  "policy_rule_id": z.string().nullable().optional(),
-  "reason": z.string().nullable().optional(),
+  "effective_default": z.enum(["allow_once", "allow_until_expiry", "approve_all_for_peer", "approve_all_for_session", "approve_all_local_safe", "ask_each_time", "deny_all", "dry_run_only"]).nullable().default(null).optional(),
+  "grant_id": z.string().nullable().default(null).optional(),
+  "grant_scope": z.enum(["always", "deny_always", "deny_once", "once", "scheduled_execution", "session", "until_expiry"]).nullable().default(null).optional(),
+  "policy_rule_id": z.string().nullable().default(null).optional(),
+  "reason": z.string().nullable().default(null).optional(),
   "share": z.boolean(),
-  "token_ttl_seconds": z.number().int().finite().min(-9007199254740991).max(9007199254740991).safe().optional()
-}))
+  "token_ttl_seconds": z.number().finite().multipleOf(1).min(0).max(9007199254740991).default(300).optional()
+}).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema = z.object({
   "args_hash": z.string(),
-  "args_schema_hash": z.string().nullable().optional(),
+  "args_schema_hash": z.string().nullable().default(null).optional(),
   "argument_visibility": z.looseObject({
 
-}).catchall(z.enum(["display", "hash_only", "raw_never", "secret", "support_bundle_redacted"])).optional(),
-  "capability_class": z.enum(["admin", "device", "execute", "network", "read", "secrets", "write"]).optional(),
+}).catchall(z.enum(["display", "hash_only", "raw_never", "secret", "support_bundle_redacted"])).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
+  "capability_class": z.enum(["admin", "device", "execute", "network", "read", "secrets", "write"]).default("read").optional(),
   "correlation_id": z.string(),
-  "display_args_preview": z.record(z.string(), auroraJsonValueSchema).optional(),
+  "display_args_preview": z.looseObject({
+
+}).catchall(auroraJsonValueSchema.meta({"x-aurora-json-value":true})).meta({"x-aurora-extra-behavior":"preserve"}).optional(),
   "global_tool_id": z.string(),
   "local_tool_name": z.string(),
   "ok": z.boolean(),
@@ -329,11 +345,11 @@ export const ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema 
   "resource_scope": z.array(z.string()).optional(),
   "resource_selector_hash": z.string(),
   "route_decision_id": z.string(),
-  "secrets_redacted": z.boolean().optional(),
-  "source": z.enum(["core", "mcp", "mesh_peer", "plugin", "unknown"]).optional(),
-  "source_id": z.string().nullable().optional(),
-  "trust_tier": z.enum(["blocked", "trusted", "untrusted"]).optional()
-})
+  "secrets_redacted": z.boolean().default(true).optional(),
+  "source": z.enum(["core", "mcp", "mesh_peer", "plugin", "unknown"]).default("unknown").optional(),
+  "source_id": z.string().nullable().default(null).optional(),
+  "trust_tier": z.enum(["blocked", "trusted", "untrusted"]).default("untrusted").optional()
+}).meta({"x-aurora-extra-behavior":"strip"})
 export type ToolingPrepareExecutionOutputToolingPrepareExecutionResponse = z.infer<typeof ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema>
 
 export const backendContractSchemas = {
@@ -345,4 +361,15 @@ export const backendContractSchemas = {
   ToolingGetToolsOutputToolingGetToolsResponseSchema,
   ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema,
   ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema,
+} as const
+
+export const backendContractSchemaById = {
+  "Tooling.ExecuteTool.input.ToolingExecuteToolRequest": ToolingExecuteToolInputToolingExecuteToolRequestSchema,
+  "Tooling.ExecuteTool.output.ToolingExecuteToolResponse": ToolingExecuteToolOutputToolingExecuteToolResponseSchema,
+  "Tooling.GetExportCatalog.input.ToolingGetExportCatalogRequest": ToolingGetExportCatalogInputToolingGetExportCatalogRequestSchema,
+  "Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse": ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema,
+  "Tooling.GetTools.input.ToolingGetToolsRequest": ToolingGetToolsInputToolingGetToolsRequestSchema,
+  "Tooling.GetTools.output.ToolingGetToolsResponse": ToolingGetToolsOutputToolingGetToolsResponseSchema,
+  "Tooling.PrepareExecution.input.ToolingPrepareExecutionRequest": ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema,
+  "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse": ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema,
 } as const

@@ -34,8 +34,11 @@ from app.shared.contracts.registry import (
 try:
     from scripts.sdk_zod_codegen import (
         GENERATOR_FORMAT_VERSION,
-        JS_SAFE_INTEGER_MAX,
-        JS_SAFE_INTEGER_MIN,
+        JSON_VALUE_MARKER,
+        PROJECTION_PAGE_TERMINATION_MARKER,
+        STRING_NON_BLANK_MARKER,
+        STRING_TRIMMED_MARKER,
+        UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
         canonical_json,
         normalize_schema,
         render_zod_module,
@@ -45,8 +48,11 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - direct script execution
     from sdk_zod_codegen import (
         GENERATOR_FORMAT_VERSION,
-        JS_SAFE_INTEGER_MAX,
-        JS_SAFE_INTEGER_MIN,
+        JSON_VALUE_MARKER,
+        PROJECTION_PAGE_TERMINATION_MARKER,
+        STRING_NON_BLANK_MARKER,
+        STRING_TRIMMED_MARKER,
+        UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
         canonical_json,
         normalize_schema,
         render_zod_module,
@@ -98,6 +104,16 @@ SERVICE_SOURCES: tuple[Path, ...] = tuple(
 
 STATIC_ONLY_SERVICES = {"Config"}
 SKIP_FIXTURE_COVERAGE = {"planned", "missing_contract", "internal_only", "mock_only"}
+VALIDATOR_EXTENSION_COVERAGE: dict[str, set[str]] = {
+    "MeshAddressSelector": {"_non_blank"},
+    "ToolingToolInfo": {"_bounded_unique_legacy_ids"},
+    "ToolingGetExportCatalogResponse": {
+        "_lowercase_digest",
+        "_trimmed_cursor",
+        "_final_checksum_only_on_complete",
+        "_validate_page_termination",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -121,6 +137,52 @@ def _model_name(model: Any) -> str | None:
     if isinstance(model, str):
         return model
     return getattr(model, "__name__", None) if model is not None else None
+
+
+def _validator_names(model: Any) -> set[str]:
+    decorators = getattr(model, "__pydantic_decorators__", None)
+    if decorators is None:
+        return set()
+    names: set[str] = set()
+    for attr in ("field_validators", "model_validators"):
+        values = getattr(decorators, attr, {}) or {}
+        names.update(str(name) for name in values)
+    return names
+
+
+def _assert_validator_extension_coverage(models: list[Any]) -> None:
+    by_name = {_model_name(model): model for model in models if _model_name(model)}
+    for model_name, expected in VALIDATOR_EXTENSION_COVERAGE.items():
+        model = by_name.get(model_name)
+        if model is None:
+            raise ValueError(
+                f"Validator extension coverage model is not in SDK graph: {model_name}"
+            )
+        actual = _validator_names(model)
+        if actual != expected:
+            raise ValueError(
+                f"{model_name}: Pydantic validators {sorted(actual)} do not match "
+                f"declared SDK validator extensions {sorted(expected)}"
+            )
+
+
+def _assert_no_unbounded_integer_schema(schema: Any, *, context: str, pointer: str = "#") -> None:
+    if isinstance(schema, list):
+        for index, item in enumerate(schema):
+            _assert_no_unbounded_integer_schema(item, context=context, pointer=f"{pointer}/{index}")
+        return
+    if not isinstance(schema, dict):
+        return
+    if (
+        schema.get("type") == "integer"
+        and "enum" not in schema
+        and "const" not in schema
+        and ("minimum" not in schema or "maximum" not in schema)
+    ):
+        raise ValueError(f"{context} {pointer}: integer schema must declare minimum and maximum")
+    for key, item in schema.items():
+        escaped = str(key).replace("~", "~0").replace("/", "~1")
+        _assert_no_unbounded_integer_schema(item, context=context, pointer=f"{pointer}/{escaped}")
 
 
 def _model_schema(model: Any) -> dict[str, Any] | None:
@@ -443,13 +505,18 @@ def _annotate_schema(schema: Any) -> Any:
         return [_annotate_schema(item) for item in schema]
     if not isinstance(schema, dict):
         return schema
+    if schema == {}:
+        return {JSON_VALUE_MARKER: True}
 
     annotated = {key: _annotate_schema(value) for key, value in schema.items()}
+    if (
+        annotated.get("type") == "object"
+        and not annotated.get("properties")
+        and annotated.get("additionalProperties") is True
+    ):
+        annotated["additionalProperties"] = {JSON_VALUE_MARKER: True}
     if annotated.get("type") == "object" or "properties" in annotated:
         annotated.setdefault("x-aurora-extra-behavior", _schema_extra_behavior(annotated))
-    if annotated.get("type") == "integer":
-        annotated.setdefault("minimum", JS_SAFE_INTEGER_MIN)
-        annotated.setdefault("maximum", JS_SAFE_INTEGER_MAX)
     return annotated
 
 
@@ -459,10 +526,122 @@ def _contract_schema_id(method_id: str, direction: str, model_name: str) -> str:
 
 def _model_wire_schema(model: Any, *, mode: str) -> dict[str, Any]:
     schema = model.model_json_schema(mode=mode)
-    return normalize_schema(_annotate_schema(schema))
+    return normalize_schema(
+        _annotate_lossless_model_schema(_model_name(model) or str(model), _annotate_schema(schema))
+    )
+
+
+def _tool_info_fixture() -> dict[str, Any]:
+    from app.services.tooling.identity import canonical_tool_global_id
+
+    tool_contract_id = "core.memory.upsert"
+    global_tool_id = canonical_tool_global_id(TOOLING_PROVIDER_PEER_ID, tool_contract_id)
+    return {
+        "name": "memory.upsert",
+        "local_name": "upsert_memory",
+        "global_tool_id": global_tool_id,
+        "tool_id_scheme": "aurora-tool",
+        "tool_id_version": 1,
+        "tool_contract_id": tool_contract_id,
+        "legacy_global_tool_ids": ["legacy-z", "legacy-a", "legacy-z"],
+        "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
+        "provider_service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
+        "namespace": "core.memory",
+        "display_name": "Memory",
+        "aliases": ["remember"],
+        "description": "Store a memory",
+        "args_schema": {"type": "object", "properties": {"text": {"type": "string"}}},
+        "schema": {"type": "object", "properties": {"text": {"type": "string"}}},
+        "argument_visibility": {},
+        "source": "core",
+        "source_id": "core:memory",
+        "trust_tier": "trusted",
+        "capability_class": "write",
+        "resource_scope": [],
+        "execution_location": "local",
+        "safety_class": "standard",
+        "risk_class": "standard",
+        "required_permissions": [],
+        "privacy_hints": [],
+        "provenance": {
+            "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
+            "provider_service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
+            "provider_kind": "local",
+            "source": "core",
+            "advertised_name": "upsert_memory",
+            "stable_source_id": "core:memory",
+            "provider_tool_id": "upsert_memory",
+        },
+    }
+
+
+def _annotate_lossless_model_schema(model_name: str, schema: dict[str, Any]) -> dict[str, Any]:
+    _annotate_mesh_address_selector_schemas(schema)
+    _annotate_tooling_tool_info_schemas(schema)
+    if model_name == "ToolingGetExportCatalogResponse":
+        schema[PROJECTION_PAGE_TERMINATION_MARKER] = True
+        properties = schema.get("properties")
+        if isinstance(properties, dict):
+            digest_pattern = "^[0-9a-f]{64}$"
+            for field_name in ("projection_digest", "page_hash"):
+                field_schema = properties.get(field_name)
+                if isinstance(field_schema, dict):
+                    field_schema.setdefault("pattern", digest_pattern)
+            next_cursor = properties.get("next_cursor")
+            if isinstance(next_cursor, dict):
+                for option in next_cursor.get("anyOf") or ():
+                    if isinstance(option, dict) and option.get("type") == "string":
+                        option[STRING_TRIMMED_MARKER] = True
+            final_checksum = properties.get("final_checksum")
+            if isinstance(final_checksum, dict):
+                for option in final_checksum.get("anyOf") or ():
+                    if isinstance(option, dict) and option.get("type") == "string":
+                        option.setdefault("pattern", digest_pattern)
+    return schema
+
+
+def _annotate_mesh_address_selector_schemas(schema: Any) -> None:
+    if isinstance(schema, list):
+        for item in schema:
+            _annotate_mesh_address_selector_schemas(item)
+        return
+    if not isinstance(schema, dict):
+        return
+    if schema.get("title") == "MeshAddressSelector":
+        properties = schema.get("properties")
+        if isinstance(properties, dict):
+            for field_schema in properties.values():
+                if isinstance(field_schema, dict):
+                    for option in field_schema.get("anyOf") or ():
+                        if isinstance(option, dict) and option.get("type") == "string":
+                            option[STRING_NON_BLANK_MARKER] = True
+    for item in schema.values():
+        _annotate_mesh_address_selector_schemas(item)
+
+
+def _annotate_tooling_tool_info_schemas(schema: Any) -> None:
+    if isinstance(schema, list):
+        for item in schema:
+            _annotate_tooling_tool_info_schemas(item)
+        return
+    if not isinstance(schema, dict):
+        return
+    if schema.get("title") == "ToolingToolInfo":
+        properties = schema.get("properties")
+        if isinstance(properties, dict):
+            legacy_ids = properties.get("legacy_global_tool_ids")
+            if isinstance(legacy_ids, dict):
+                legacy_ids[UNIQUE_STRING_ARRAY_NORMALIZE_MARKER] = True
+                items = legacy_ids.get("items")
+                if isinstance(items, dict):
+                    items.setdefault("minLength", 1)
+                    items.setdefault("maxLength", 512)
+    for item in schema.values():
+        _annotate_tooling_tool_info_schemas(item)
 
 
 def _positive_fixture(model_name: str) -> Any | None:
+    tool_info = _tool_info_fixture()
     fixtures: dict[str, Any] = {
         "ToolingExecuteToolRequest": {
             "tool_name": "echo",
@@ -481,12 +660,12 @@ def _positive_fixture(model_name: str) -> Any | None:
         },
         "ToolingGetToolsRequest": {
             "query": "echo",
-            "top_k": 1,
+            "top_k": 2**53 - 1,
             "unexpected": "stripped",
         },
         "ToolingGetToolsResponse": {
-            "tools": [],
-            "count": 0,
+            "tools": [tool_info],
+            "count": 1,
             "unexpected": "stripped",
         },
         "ToolingGetExportCatalogRequest": {
@@ -512,11 +691,11 @@ def _positive_fixture(model_name: str) -> Any | None:
             "page_index": 0,
             "page_size": 1,
             "page_hash": "2" * 64,
-            "tools": [],
+            "tools": [tool_info],
             "blocked_tools": [],
             "retirements": [],
             "complete": True,
-            "total_count": 0,
+            "total_count": 1,
             "final_checksum": "3" * 64,
             "unexpected": "stripped",
         },
@@ -546,6 +725,8 @@ def _positive_fixture(model_name: str) -> Any | None:
             "local_tool_name": "echo",
             "display_args_preview": {"message": "hello"},
             "secrets_redacted": True,
+            "resource_scope": [],
+            "argument_visibility": {},
             "unexpected": "stripped",
         },
     }
@@ -553,6 +734,8 @@ def _positive_fixture(model_name: str) -> Any | None:
 
 
 def _negative_fixture(model_name: str) -> Any | None:
+    tool_info = _tool_info_fixture()
+    bad_legacy_tool = {**tool_info, "legacy_global_tool_ids": [" not-trimmed "]}
     fixtures: dict[str, Any] = {
         "ToolingExecuteToolRequest": {
             "tool_name": 12,
@@ -565,8 +748,8 @@ def _negative_fixture(model_name: str) -> Any | None:
             "top_k": "one",
         },
         "ToolingGetToolsResponse": {
-            "count": "zero",
-            "tools": [],
+            "count": 1,
+            "tools": [bad_legacy_tool],
         },
         "ToolingGetExportCatalogRequest": {
             "protocol_tier": "projection_v1",
@@ -605,10 +788,46 @@ def _negative_fixture(model_name: str) -> Any | None:
     return fixtures.get(model_name)
 
 
+def _negative_fixtures(model_name: str) -> list[Any]:
+    first = _negative_fixture(model_name)
+    cases = [] if first is None else [first]
+    if model_name == "ToolingGetExportCatalogResponse":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            cases.extend(
+                [
+                    {
+                        **base,
+                        "next_cursor": " not-trimmed ",
+                        "complete": False,
+                        "total_count": None,
+                        "final_checksum": None,
+                    },
+                    {**base, "complete": False, "total_count": None},
+                    {
+                        **base,
+                        "complete": False,
+                        "next_cursor": None,
+                        "total_count": None,
+                        "final_checksum": None,
+                    },
+                ]
+            )
+    if model_name == "ToolingGetToolsRequest":
+        cases.extend(
+            [
+                {"mesh_selector": {"peer_id": " "}},
+                {"top_k": 2**53},
+                {"top_k": -(2**53)},
+            ]
+        )
+    return cases
+
+
 def _validation_vectors(model: Any, *, method_id: str, direction: str) -> dict[str, Any]:
     model_name = _model_name(model) or str(model)
     positive = _positive_fixture(model_name)
-    negative = _negative_fixture(model_name)
+    negative_cases = _negative_fixtures(model_name)
     vectors: dict[str, Any] = {}
     if positive is not None:
         parsed = model.model_validate(positive)
@@ -619,17 +838,20 @@ def _validation_vectors(model: Any, *, method_id: str, direction: str) -> dict[s
             "normalized": normalized,
             "normalized_hash": sha256_json(normalized),
         }
-    if negative is not None:
+    for index, negative in enumerate(negative_cases):
         try:
             model.model_validate(negative)
         except ValidationError as exc:
             first = exc.errors()[0]
-            vectors["negative"] = {
+            vector = {
                 "accepted": False,
                 "input": negative,
                 "issue_path": "$" + "".join(f".{part}" for part in first.get("loc", ())),
                 "issue_category": first.get("type"),
             }
+            if index == 0:
+                vectors["negative"] = vector
+            vectors.setdefault("negative_cases", []).append(vector)
         else:
             raise ValueError(
                 f"{method_id} {direction} {model_name}: negative fixture unexpectedly passed"
@@ -642,6 +864,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
     method_inventory = {method["bus_topic"]: method for method in methods}
     contracts = all_contracts()
     schemas: list[dict[str, Any]] = []
+    from app.shared.contracts.models.mesh import MeshAddressSelector
     from app.shared.contracts.models.tooling import (
         ToolingExecuteToolRequest,
         ToolingExecuteToolResponse,
@@ -651,6 +874,11 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         ToolingGetToolsResponse,
         ToolingPrepareExecutionRequest,
         ToolingPrepareExecutionResponse,
+        ToolingToolInfo,
+    )
+
+    _assert_validator_extension_coverage(
+        [MeshAddressSelector, ToolingToolInfo, ToolingGetExportCatalogResponse]
     )
 
     static_models = {
@@ -689,6 +917,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             model_name = _model_name(model) or str(model)
             schema = _model_wire_schema(model, mode=mode)
             schema_id = _contract_schema_id(method_id, direction, model_name)
+            _assert_no_unbounded_integer_schema(schema, context=schema_id)
             schemas.append(
                 {
                     "schema_id": schema_id,
@@ -714,6 +943,21 @@ def build_sdk_contract_schema() -> dict[str, Any]:
 
 
 def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, Any]:
+    from app.services.db.tooling_remote_catalog_store import (
+        compute_projection_checksum,
+        compute_projection_page_hash,
+        compute_tool_schema_hash,
+    )
+    from app.services.gateway.mesh.provider_export import canonical_digest
+    from app.services.tooling.identity import canonical_tool_global_id
+    from app.shared.contracts.models.tooling import (
+        ToolingGetExportCatalogResponse,
+        ToolingProjectionAuthorityRevision,
+        ToolingProjectionBlockedTool,
+        ToolingProjectionRetirement,
+        ToolingToolInfo,
+    )
+
     schema_hashes = {
         (item["method_id"], item["direction"]): item["schema_hash"]
         for item in contract_schema["schemas"]
@@ -728,7 +972,6 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
                 "input_schema_hash": schema_hashes.get((method_id, "input")),
                 "output_schema_hash": schema_hashes.get((method_id, "output")),
                 "required_permission": method_id,
-                "tool_id": f"aurora-tool:v1:{TOOLING_PROVIDER_SERVICE_INSTANCE_ID}:{method_id}",
             }
         )
     projection = {
@@ -736,13 +979,190 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
         "provider_service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
         "methods": methods,
     }
+    digest_tool = ToolingToolInfo.model_validate(_tool_info_fixture())
+    alternate_tool = ToolingToolInfo.model_validate(
+        {
+            **_tool_info_fixture(),
+            "name": "alpha.lookup",
+            "local_name": "lookup_alpha",
+            "global_tool_id": canonical_tool_global_id(
+                TOOLING_PROVIDER_PEER_ID, "core.alpha.lookup"
+            ),
+            "tool_contract_id": "core.alpha.lookup",
+            "legacy_global_tool_ids": ["legacy-beta", "legacy-alpha"],
+            "display_name": "Alpha lookup",
+            "args_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "options": {
+                        "type": "object",
+                        "properties": {"limit": {"type": "integer", "minimum": 0, "maximum": 5}},
+                    },
+                },
+            },
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "result": {"type": "string"},
+                    "metadata": {"type": "object", "properties": {}},
+                },
+            },
+        }
+    )
+    blocked_tool = ToolingProjectionBlockedTool(
+        tool=alternate_tool,
+        reason_code="recipient_missing_tool_permissions",
+        missing_permissions=["Tooling.ExecuteTool", "Tooling.GetTools"],
+    )
+    retirement = ToolingProjectionRetirement(
+        global_tool_id=canonical_tool_global_id(TOOLING_PROVIDER_PEER_ID, "core.retired.tool"),
+        availability="removed",
+        reason_code="removed_by_provider",
+        last_schema_hash=compute_tool_schema_hash(alternate_tool),
+    )
+    final_checksum = compute_projection_checksum([digest_tool], [], [])
+    digest_page = ToolingGetExportCatalogResponse(
+        provider_peer_id="peer-\u2603",
+        service_instance_id="local:peer-%E2%98%83:Tooling",
+        authority_revision=ToolingProjectionAuthorityRevision(
+            catalog_revision=2,
+            export_policy_revision=3,
+            auth_grant_revision=5,
+            manifest_revision=7,
+            switch_revision=11,
+            protocol_revision=13,
+        ),
+        projection_revision="projection-\u2603",
+        projection_digest=canonical_digest(
+            {"zeta": "\u2603", "alpha": ["schema", {"reordered": True}]}
+        ),
+        page_index=0,
+        page_size=1,
+        page_hash="0" * 64,
+        tools=[digest_tool],
+        blocked_tools=[],
+        retirements=[],
+        complete=True,
+        total_count=1,
+        final_checksum=final_checksum,
+    )
+    hostile_identity_cases = [
+        ("peer/slash", "core.tool/slash"),
+        ("peer space", "core.tool space"),
+        ("peer \u2603", "core.tool \u2603"),
+        ("peer%percent", "core.tool%percent"),
+        ("peer!bang", "core.tool!bang"),
+        ("peer'quote", "core.tool'quote"),
+        ("peer(paren)", "core.tool(paren)"),
+        ("peer*star", "core.tool*star"),
+    ]
+    digest_vectors = {
+        "canonical_tool_identity": {
+            "stable_peer_id": "peer \u2603",
+            "tool_contract_id": "core.memory/upsert \u2603",
+            "global_tool_id": canonical_tool_global_id("peer \u2603", "core.memory/upsert \u2603"),
+        },
+        "canonical_tool_identity_cases": [
+            {
+                "stable_peer_id": peer_id,
+                "tool_contract_id": tool_contract_id,
+                "global_tool_id": canonical_tool_global_id(peer_id, tool_contract_id),
+            }
+            for peer_id, tool_contract_id in hostile_identity_cases
+        ],
+        "canonical_digest_cases": [
+            {
+                "name": "reordered_nested",
+                "canonical_a": {"zeta": [3, {"snow": "\u2603", "bang": "!"}], "alpha": {}},
+                "canonical_b": {"alpha": {}, "zeta": [3, {"bang": "!", "snow": "\u2603"}]},
+                "digest": canonical_digest(
+                    {"zeta": [3, {"snow": "\u2603", "bang": "!"}], "alpha": {}}
+                ),
+            },
+            {
+                "name": "empty_projection",
+                "canonical_a": {"tools": [], "blocked_tools": [], "retirements": []},
+                "canonical_b": {"retirements": [], "tools": [], "blocked_tools": []},
+                "digest": canonical_digest({"retirements": [], "tools": [], "blocked_tools": []}),
+            },
+        ],
+        "identity_digest": {
+            "reordered_json_a": (
+                '{"provider_peer_id":"peer-\u2603",'
+                '"service_instance_id":"local:peer-%E2%98%83:Tooling"}'
+            ),
+            "reordered_json_b": (
+                '{"service_instance_id":"local:peer-%E2%98%83:Tooling",'
+                '"provider_peer_id":"peer-\u2603"}'
+            ),
+            "canonical_a": {
+                "provider_peer_id": "peer-\u2603",
+                "service_instance_id": "local:peer-%E2%98%83:Tooling",
+            },
+            "canonical_b": {
+                "service_instance_id": "local:peer-%E2%98%83:Tooling",
+                "provider_peer_id": "peer-\u2603",
+            },
+            "digest": canonical_digest(
+                {
+                    "service_instance_id": "local:peer-%E2%98%83:Tooling",
+                    "provider_peer_id": "peer-\u2603",
+                }
+            ),
+        },
+        "schema_digest": {
+            "reordered_json_a": '{"type":"object","properties":{"\u2603":{"type":"string"}}}',
+            "reordered_json_b": '{"properties":{"\u2603":{"type":"string"}},"type":"object"}',
+            "canonical_a": {"type": "object", "properties": {"\u2603": {"type": "string"}}},
+            "canonical_b": {"properties": {"\u2603": {"type": "string"}}, "type": "object"},
+            "digest": canonical_digest(
+                {"properties": {"\u2603": {"type": "string"}}, "type": "object"}
+            ),
+        },
+        "tool_schema_hash": {
+            "canonical_tool": digest_tool.model_dump(mode="json"),
+            "digest": compute_tool_schema_hash(digest_tool),
+        },
+        "page_hash": {
+            "canonical_page": digest_page.model_dump(mode="json"),
+            "digest": compute_projection_page_hash(digest_page),
+        },
+        "final_checksum": {
+            "canonical_tools": [digest_tool.model_dump(mode="json")],
+            "canonical_retirements": [],
+            "canonical_blocked_tools": [],
+            "digest": final_checksum,
+        },
+        "order_independent_final_checksum": {
+            "canonical_tools": [
+                alternate_tool.model_dump(mode="json"),
+                digest_tool.model_dump(mode="json"),
+            ],
+            "canonical_retirements": [retirement.model_dump(mode="json")],
+            "canonical_blocked_tools": [blocked_tool.model_dump(mode="json")],
+            "digest": compute_projection_checksum(
+                [alternate_tool, digest_tool], [retirement], [blocked_tool]
+            ),
+        },
+    }
     return {
         "artifact": "tooling_local_provider_v1",
         "version": 1,
         **projection,
+        "canonical_digest_vectors": digest_vectors,
         "projection_page_hash": sha256_json(projection),
         "final_checksum": sha256_json({"version": 1, **projection}),
     }
+
+
+def _sdk_zod_version() -> str:
+    package_path = REPO_ROOT / "packages/aurora-sdk/package.json"
+    package = json.loads(package_path.read_text())
+    zod_version = (package.get("dependencies") or {}).get("zod")
+    if not isinstance(zod_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", zod_version):
+        raise ValueError("packages/aurora-sdk must pin zod to an exact semver version")
+    return zod_version
 
 
 def build_sdk_manifest(
@@ -768,7 +1188,7 @@ def build_sdk_manifest(
         "schema_draft": contract_schema["schema_draft"],
         "python_version": sys.version.split()[0],
         "pydantic_version": PYDANTIC_VERSION,
-        "zod_version": "4.x",
+        "zod_version": _sdk_zod_version(),
         "generator_format_version": GENERATOR_FORMAT_VERSION,
         "generator_source_hash": source_hash,
         "allowlist_hash": contract_schema["allowlist_hash"],
@@ -792,15 +1212,31 @@ def write_sdk_contract_outputs(
         zod_source=zod_source,
         provider_inventory=provider_inventory,
     )
-    for path, payload in (
+    json_outputs = (
         (schema_output, contract_schema),
         (manifest_output, manifest),
         (tooling_provider_output, provider_inventory),
-    ):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
-    zod_output.parent.mkdir(parents=True, exist_ok=True)
-    zod_output.write_text(zod_source, encoding="utf-8")
+    )
+    tmp_paths: list[Path] = []
+    try:
+        for path, payload in json_outputs:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_name(f".{path.name}.tmp")
+            tmp_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            )
+            tmp_paths.append(tmp_path)
+        zod_output.parent.mkdir(parents=True, exist_ok=True)
+        zod_tmp = zod_output.with_name(f".{zod_output.name}.tmp")
+        zod_tmp.write_text(zod_source, encoding="utf-8")
+        tmp_paths.append(zod_tmp)
+        for path, _payload in json_outputs:
+            path.with_name(f".{path.name}.tmp").replace(path)
+        zod_tmp.replace(zod_output)
+    finally:
+        for tmp_path in tmp_paths:
+            with contextlib.suppress(FileNotFoundError):
+                tmp_path.unlink()
 
 
 def build_inventory() -> dict[str, Any]:

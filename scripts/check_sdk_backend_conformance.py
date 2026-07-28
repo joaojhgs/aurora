@@ -692,11 +692,11 @@ def _check_generated_contract_artifacts(
                     "method_id": method.get("method_id"),
                 }
             )
-        if not str(method.get("tool_id") or "").startswith("aurora-tool:v1:"):
+        if "tool_id" in method:
             issues.append(
                 {
                     "fatal": True,
-                    "kind": "tooling_method_tool_id_scheme_mismatch",
+                    "kind": "tooling_method_tool_id_unexpected",
                     "method_id": method.get("method_id"),
                     "tool_id": method.get("tool_id"),
                 }
