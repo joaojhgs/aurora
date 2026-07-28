@@ -56,6 +56,6 @@ describe('Aurora surface profile regression coverage', () => {
     expect(hosted.voiceCapture.wakewordRequiresFocus).toBe(true)
     expect(android.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
     expect(android.voiceCapture.wakewordOwner).toBe('webview-focused')
-    expect(android.voiceCapture.detail).toContain('focused foreground WebView microphone')
+    expect(android.voiceCapture.detail).toBe('Android capture is available while Aurora is open in the foreground.')
   })
 })
