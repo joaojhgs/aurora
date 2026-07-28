@@ -27,6 +27,8 @@ use thiserror::Error;
 use tokio::sync::watch;
 use url::Url;
 
+mod native_webrtc;
+
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
@@ -5032,6 +5034,7 @@ pub fn run() {
         .manage(sidecar_state.clone())
         .manage(subscription_state.clone())
         .manage(overlay_state.clone())
+        .manage(native_webrtc::NativeWebRtcState::default())
         .setup(|app| {
             #[cfg(desktop)]
             {
@@ -5151,6 +5154,18 @@ pub fn run() {
             aurora_overlay_move_by,
             aurora_overlay_unregister_hotkey,
             aurora_overlay_register_hotkey,
+            native_webrtc::aurora_native_webrtc_create,
+            native_webrtc::aurora_native_webrtc_create_offer,
+            native_webrtc::aurora_native_webrtc_create_answer,
+            native_webrtc::aurora_native_webrtc_set_local_description,
+            native_webrtc::aurora_native_webrtc_set_remote_description,
+            native_webrtc::aurora_native_webrtc_add_ice_candidate,
+            native_webrtc::aurora_native_webrtc_create_data_channel,
+            native_webrtc::aurora_native_webrtc_data_channel_send,
+            native_webrtc::aurora_native_webrtc_data_channel_close,
+            native_webrtc::aurora_native_webrtc_set_data_channel_buffered_amount_low_threshold,
+            native_webrtc::aurora_native_webrtc_get_stats,
+            native_webrtc::aurora_native_webrtc_close,
             aurora_shutdown
         ])
         .on_window_event(move |window, event| {

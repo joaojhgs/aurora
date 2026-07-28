@@ -2415,6 +2415,20 @@ describe('Aurora production shell', () => {
       'another trusted mesh route reconnects',
     )
     expect(coldOffline.error).toBeNull()
+
+    const connectedFailure = retainThinShellSnapshot(
+      ready,
+      failed,
+      {
+        ...thinPeerSnapshot,
+        state: 'authorized',
+        status: 'authorized',
+      },
+    )
+    expect(connectedFailure).toBe(failed)
+    expect(connectedFailure.error).toContain(
+      'WebRTC mesh transport is not connected',
+    )
   })
 
   it('keeps pending pairing requests out of the scopes approval path', async () => {

@@ -92,7 +92,7 @@ export interface ParserLimits {
 
 export const DEFAULT_PARSER_LIMITS: ParserLimits = Object.freeze({
   maxStringLength: 256 * 1024,
-  maxArrayLength: 256,
+  maxArrayLength: 4096,
   maxObjectKeys: 128,
   maxDepth: 16,
   maxTopicLength: 256,

@@ -29,6 +29,7 @@ const allowedSidecarServiceResource = 'app/services/config/config_defaults.json'
 const approvedClientFactoryFiles = new Set([
   'apps/aurora-tauri/src/aurora-client.ts',
   'apps/aurora-tauri/src/eventstream-smoke.tsx',
+  'apps/aurora-tauri/src/native-webrtc.ts',
   'apps/aurora-web/app/aurora-client.ts',
   'packages/aurora-sdk/src/http.ts',
   'packages/aurora-sdk/src/mock.ts',
@@ -145,6 +146,7 @@ describe('UI and Tauri service boundary contract', () => {
 
   it('documents the allowed live bridges as AuroraClient, Gateway transport, and Tauri invoke/listen only', () => {
     const runtimeBridge = readRepo('apps/aurora-tauri/src/aurora-client.ts')
+    const nativeWebRtcBridge = readRepo('apps/aurora-tauri/src/native-webrtc.ts')
     const tauriApp = readRepo('apps/aurora-tauri/src/tauri-app.tsx')
     const httpTransport = readRepo('packages/aurora-sdk/src/http.ts')
     const tauriTransport = readRepo('packages/aurora-sdk/src/tauri.ts')
@@ -153,6 +155,14 @@ describe('UI and Tauri service boundary contract', () => {
     expect(runtimeBridge).toContain('new TauriLocalTransport({ invoke, listen })')
     expect(runtimeBridge).toContain('new HttpGatewayTransport({')
     expect(runtimeBridge).toContain('new MockAuroraTransport()')
+    expect(nativeWebRtcBridge).toContain(
+      'createTauriNativePeerConnectionFactory',
+    )
+    expect(nativeWebRtcBridge).toContain(
+      '"aurora_native_webrtc_data_channel_send"',
+    )
+    expect(nativeWebRtcBridge).not.toMatch(/\bnew\s+AuroraClient\s*\(/)
+    expect(nativeWebRtcBridge).not.toMatch(/\bfetch\s*\(/)
     expect(tauriApp).toContain('createAuroraTauriRuntime')
     expect(httpTransport).toContain('class HttpGatewayTransport')
     expect(httpTransport).toContain('fetchImpl(`${this.baseUrl}${path}`, init)')

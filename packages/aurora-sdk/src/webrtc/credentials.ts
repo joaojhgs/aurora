@@ -83,11 +83,19 @@ export interface NativePeerCredentialCommandNames {
   delete: string
 }
 
+interface NativeStoredPeerCredentialMetadata extends Omit<
+StoredPeerCredentialMetadata,
+'createdAtMs' | 'expiresAtMs'
+> {
+  createdAtMs?: number | null
+  expiresAtMs?: number | null
+}
+
 interface NativeCredentialStatusResponse {
   peerId?: string
   found?: boolean
   hasBearerToken?: boolean
-  credential?: StoredPeerCredentialMetadata | null | undefined
+  credential?: NativeStoredPeerCredentialMetadata | null | undefined
   backend?: string
   persisted?: boolean
   secretsRedacted?: boolean
@@ -99,7 +107,7 @@ interface NativeReconnectProofResponse {
   found?: boolean
   matched?: boolean
   proof?: MeshReconnectProofMessage | null | undefined
-  credential?: StoredPeerCredentialMetadata | null | undefined
+  credential?: NativeStoredPeerCredentialMetadata | null | undefined
   backend?: string
   secretsRedacted?: boolean
   redactedFields?: string[]
@@ -161,7 +169,7 @@ function metadata(record: MeshPeerCredentialRecord, now = Date.now()): StoredPee
   return out
 }
 
-function cloneMeta(meta: StoredPeerCredentialMetadata): StoredPeerCredentialMetadata {
+function cloneMeta(meta: StoredPeerCredentialMetadata | NativeStoredPeerCredentialMetadata): StoredPeerCredentialMetadata {
   const out: StoredPeerCredentialMetadata = {
     tokenId: meta.tokenId,
     claimantPeerId: meta.claimantPeerId,
@@ -170,8 +178,8 @@ function cloneMeta(meta: StoredPeerCredentialMetadata): StoredPeerCredentialMeta
     verifierSignalingPeerId: meta.verifierSignalingPeerId,
     roomName: meta.roomName
   }
-  if (meta.createdAtMs !== undefined) out.createdAtMs = meta.createdAtMs
-  if (meta.expiresAtMs !== undefined) out.expiresAtMs = meta.expiresAtMs
+  if (typeof meta.createdAtMs === 'number') out.createdAtMs = meta.createdAtMs
+  if (typeof meta.expiresAtMs === 'number') out.expiresAtMs = meta.expiresAtMs
   return out
 }
 
@@ -396,11 +404,11 @@ export class DeterministicPeerCredentialStore extends MemoryPeerCredentialStore 
 }
 
 
-function isExpired(expiresAtMs: number | undefined, now: number): boolean {
-  return expiresAtMs !== undefined && expiresAtMs <= now
+function isExpired(expiresAtMs: number | null | undefined, now: number): boolean {
+  return typeof expiresAtMs === 'number' && expiresAtMs <= now
 }
 
-function assertNotExpired(expiresAtMs: number | undefined, now: number): void {
+function assertNotExpired(expiresAtMs: number | null | undefined, now: number): void {
   if (isExpired(expiresAtMs, now)) throw new Error('Peer credential is expired')
 }
 

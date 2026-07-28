@@ -4,7 +4,7 @@
 
 **Last reviewed:** 2026-07-28
 
-This document describes the implemented browser/WebView WebRTC protocol shared by hosted web thin, desktop Tauri thin, and Android thin. Python remains the reference peer for room/signaling/auth semantics; TypeScript implements the browser/WebView runtime and consumes Python-owned protocol fixtures.
+This document describes the implemented browser/WebView WebRTC protocol shared by hosted web thin, desktop Tauri thin, Android thin, and the iOS thin source path. Python remains the reference peer for room/signaling/auth semantics; TypeScript implements signaling, cryptography, pairing, reconnect, RPC, and transport policy and consumes Python-owned protocol fixtures. Linux desktop thin uses the same TypeScript protocol through a narrow native `RTCPeerConnection`/`RTCDataChannel` adapter when the system WebKitGTK build does not expose those DOM APIs.
 
 ## Runtime scope
 
@@ -23,6 +23,7 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 | TypeScript contract descriptor | `packages/aurora-sdk/src/webrtc-protocol-contract.ts` |
 | TypeScript runtime | `packages/aurora-sdk/src/webrtc/` |
 | Shared WebView wrapper | `packages/aurora-ui/src/web-thin-runtime.ts` |
+| Linux Tauri peer-primitive adapter | `apps/aurora-tauri/src/native-webrtc.ts`, `apps/aurora-tauri/src-tauri/src/native_webrtc.rs` |
 | Golden fixtures | `tests/fixtures/webrtc_web_thin_protocol_vectors.json` |
 | Fixture generator | `scripts/generate_webrtc_protocol_fixtures.py` |
 
@@ -63,6 +64,10 @@ broadcasts.
 - `packages/aurora-sdk/package.json` pins `mqtt@5.15.2` and `@noble/hashes@2.2.0`.
 - WebRTC modules stay behind `@aurora/client/webrtc` or lazy WebView runtime imports. HTTP-only and desktop-local code must not import MQTT/WebRTC dependencies at SDK root.
 - Native browser crypto/WebCrypto is used where available; test/runtime adapters inject deterministic crypto and fake peer connections.
+- The Linux Tauri fallback pins `webrtc@0.11.0` only under the Linux Cargo target. Its Rust DTLS/ICE/SCTP implementation is linked into the application binary; it does not add a GStreamer or system WebRTC runtime dependency. macOS/iOS use OS WKWebView, Android uses System WebView, and Windows installers provision WebView2.
+- The native bridge is deliberately not a second Aurora protocol implementation. It owns offer/answer descriptions, ICE candidates, connection state, one ordered DataChannel, backpressure state, and redacted stats only; MQTT signaling, SAS, application-layer encryption, reconnect proof, route authorization, and RPC framing remain in TypeScript.
+- Authenticated catalog/registry/graph replies can exceed one megabyte and include generated permission arrays larger than 256 entries. The bounded parser therefore allows arrays up to 4096 entries while retaining the negotiated 8 MiB logical-message cap; larger arrays still fail closed.
+- Linux native IPC uses a 90-second request budget and service-routing bootstrap uses 60 seconds so fragmented capability snapshots can complete without weakening protocol size limits or retry semantics.
 
 ## Verification
 
@@ -73,6 +78,8 @@ uv run python scripts/generate_webrtc_protocol_fixtures.py --check
 uv run pytest tests/unit/gateway/test_webrtc_web_thin_protocol_vectors.py
 pnpm --dir packages/aurora-sdk test -- tests/webrtc-protocol-vectors.test.ts
 pnpm --dir packages/aurora-sdk test -- tests/webrtc-runtime.test.ts
+pnpm --filter @aurora/tauri-ui exec vitest run src/native-webrtc.test.ts
+cargo test --manifest-path apps/aurora-tauri/src-tauri/Cargo.toml native_webrtc
 pnpm test:web-thin:live
 pnpm test:webrtc:interop
 pnpm test:webrtc:turn

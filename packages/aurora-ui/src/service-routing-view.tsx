@@ -795,10 +795,10 @@ function friendlyPolicyOption(value: string): string {
 function changeSummary(value: JsonValue): string { if (value === null) return 'Any eligible provider / unset'; if (Array.isArray(value)) return value.length ? `${value.length} selected value${value.length === 1 ? '' : 's'}` : 'None'; if (typeof value === 'boolean') return value ? 'Enabled' : 'Disabled'; return String(value) }
 function previewValue(value: JsonValue | undefined): string { return value === undefined ? 'unset' : changeSummary(value) }
 
-const SNAPSHOT_CALL_TIMEOUT_MS = 9_000
+export const SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS = 60_000
 function withSnapshotTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} did not respond within ${SNAPSHOT_CALL_TIMEOUT_MS}ms`)), SNAPSHOT_CALL_TIMEOUT_MS) })
+  const timeout = new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} did not respond within ${SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS}ms`)), SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS) })
   return Promise.race([promise, timeout]).finally(() => { if (timer) clearTimeout(timer) })
 }
 

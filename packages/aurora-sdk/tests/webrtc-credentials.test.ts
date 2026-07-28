@@ -173,7 +173,7 @@ describe('NativePeerCredentialStore', () => {
     ])
   })
 
-  it('delegates reconnect proof creation to an opaque native provider without raw-token load in JS', async () => {
+  it('keeps native credentials with JSON null timestamps and delegates opaque reconnect proof creation', async () => {
     const reconnect = reconnectFixture()
     const calls: Array<{ command: string; payload: Record<string, unknown> | undefined }> = []
     const invoke: NativePeerCredentialCommandInvoker = async (command, payload) => {
@@ -190,7 +190,9 @@ describe('NativePeerCredentialStore', () => {
             verifierPeerId: reconnect.inputs.verifier_peer_id,
             claimantSignalingPeerId: reconnect.inputs.claimant_signaling_peer_id,
             verifierSignalingPeerId: reconnect.inputs.verifier_signaling_peer_id,
-            roomName: reconnect.inputs.room_name
+            roomName: reconnect.inputs.room_name,
+            createdAtMs: null,
+            expiresAtMs: null
           },
           backend: 'platform-keychain',
           persisted: true,
@@ -215,6 +217,7 @@ describe('NativePeerCredentialStore', () => {
     const store = new NativePeerCredentialStore({ invoke })
     const status = await store.status('stable-answer')
     expect(status).toMatchObject({ found: true, hasBearerToken: true, persisted: true, secretsRedacted: true })
+    expect(status.credential).not.toHaveProperty('expiresAtMs')
     expect(JSON.stringify(status)).not.toContain('synthetic-reconnect-token')
     const proof = await store.createReconnectProof('stable-answer', reconnect.challenge.frame)
     expect(proof).toEqual(reconnect.proof.frame)

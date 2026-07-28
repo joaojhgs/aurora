@@ -9,6 +9,7 @@ import {
   commitServiceRoutingChanges,
   previewServiceRoutingChanges,
   reconcileServiceRoutingWithThinPeer,
+  SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS,
   serviceRoutingDraftChanges,
   serviceRoutingDraftFromRow,
   serviceRoutingProviderMode,
@@ -121,6 +122,10 @@ function snapshotClient(metadata = metadataFields()): AuroraClient {
 }
 
 describe('Service sharing and outbound routing', () => {
+  it('allows fragmented WebRTC registry snapshots to traverse native WebView IPC', () => {
+    expect(SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS).toBe(60_000)
+  })
+
   it('retains provider rows and suppresses expected transport errors while a configured peer is offline', () => {
     const previous = snapshot()
     const unavailable: ServiceRoutingSnapshot = {

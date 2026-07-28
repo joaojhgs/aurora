@@ -16,6 +16,13 @@ export {
   categorizeIceCandidate
 } from './peer-session.js'
 export type {
+  DataChannelEventLike,
+  DataChannelLike,
+  IceCandidateEventLike,
+  IceCandidateInitLike,
+  IceCandidateLike,
+  PeerConnectionLike,
+  PeerSessionPeerConnectionFactory,
   PeerSessionAuthContext,
   PeerSessionAuthPort,
   PeerSessionDiagnostics,
@@ -28,6 +35,7 @@ export type {
   PeerSessionSnapshot,
   PeerSessionState,
   PeerSessionTimeouts,
+  SessionDescriptionLike,
   SignalingEnvelope,
   SignalingMessage
 } from './peer-session.js'

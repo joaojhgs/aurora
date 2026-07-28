@@ -27,6 +27,7 @@ import {
 } from './nav'
 import {
   isBrowserWebRtcConfigured,
+  isBrowserWebRtcConnected,
   type BrowserWebRtcSnapshot,
 } from './web-thin-runtime'
 
@@ -260,6 +261,7 @@ export function retainThinShellSnapshot(
   peer: BrowserWebRtcSnapshot | null | undefined,
 ): AuroraShellSnapshot {
   if (next.loadState !== 'error' || !isBrowserWebRtcConfigured(peer)) return next
+  if (isBrowserWebRtcConnected(peer)) return next
 
   const hasLastKnownGraph =
     current.routes.length > 0

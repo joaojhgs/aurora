@@ -330,22 +330,29 @@ export function AuroraTauriApp({
   useEffect(() => {
     if (runtimeOverride || !requiresAsyncAuroraTauriBootstrap()) return;
     let cancelled = false;
-    void bootstrapAuroraTauriRuntime()
-      .then(async (nextRuntime) => {
-        if (cancelled) {
-          await nextRuntime.dispose();
-          return;
-        }
-        await runtime.dispose();
-        if (!cancelled) {
-          setRuntime(nextRuntime);
-          setProfileBootstrapReady(true);
-        }
-      })
-      .catch((error) => {
-        console.warn("desktop-thin profile bootstrap failed", error);
-        if (!cancelled) setProfileBootstrapReady(true);
-      });
+    // React StrictMode intentionally mounts, cleans up, and mounts effects
+    // again in development. Deferring the side-effectful runtime bootstrap
+    // lets the synthetic first cleanup cancel before it creates a second MQTT
+    // signaling peer and native RTCPeerConnection.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void bootstrapAuroraTauriRuntime()
+        .then(async (nextRuntime) => {
+          if (cancelled) {
+            await nextRuntime.dispose();
+            return;
+          }
+          await runtime.dispose();
+          if (!cancelled) {
+            setRuntime(nextRuntime);
+            setProfileBootstrapReady(true);
+          }
+        })
+        .catch((error) => {
+          console.warn("desktop-thin profile bootstrap failed", error);
+          if (!cancelled) setProfileBootstrapReady(true);
+        });
+    });
     return () => {
       cancelled = true;
     };

@@ -447,6 +447,12 @@
           "markdownDescription": "Allow the frontend SDK adapter to read the Aurora desktop native permission and capability status without granting denied OS surfaces."
         },
         {
+          "description": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime.",
+          "type": "string",
+          "const": "aurora-native-webrtc",
+          "markdownDescription": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
+        },
+        {
           "description": "Allow notification status checks and structured denied send responses without granting notification delivery by default.",
           "type": "string",
           "const": "aurora-notifications",

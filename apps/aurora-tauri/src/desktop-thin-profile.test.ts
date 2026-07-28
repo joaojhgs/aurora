@@ -39,6 +39,7 @@ import {
   installAndroidLifecyclePolicy,
   parseThinProfileDocument,
   serializeThinProfileDocument,
+  TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS,
   type AuroraTauriRuntime,
   type AuroraThinConnectionProfile,
   type AuroraThinProfileDocument,
@@ -141,6 +142,10 @@ function webRtcProfile(room: string): WebRtcPeerConnectionProfile {
 }
 
 describe('desktop-thin live connection profiles', () => {
+  it('allows native Linux DataChannel RPC to carry fragmented registry responses', () => {
+    expect(TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS).toBe(90_000)
+  })
+
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()

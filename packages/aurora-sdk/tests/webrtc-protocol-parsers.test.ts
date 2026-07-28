@@ -89,6 +89,45 @@ describe('WebRTC actual-G002 protocol parsers', () => {
     expect(() => parseWebRtcFrame({ type: 'call', id: 'x', method: 'm'.repeat(300) })).toThrow(/method/)
   })
 
+  it('accepts generated registry permission enums while retaining a bounded array ceiling', () => {
+    const generatedPermissionEnum = Array.from(
+      { length: 349 },
+      (_, index) => `Permission.${index}`,
+    )
+    expect(
+      parseWebRtcFrame({
+        type: 'result',
+        id: 'registry',
+        result: {
+          output_schema: {
+            properties: {
+              permissions: {
+                items: { enum: generatedPermissionEnum },
+              },
+            },
+          },
+        },
+      }),
+    ).toMatchObject({
+      result: {
+        output_schema: {
+          properties: {
+            permissions: {
+              items: { enum: generatedPermissionEnum },
+            },
+          },
+        },
+      },
+    })
+    expect(() =>
+      parseWebRtcFrame({
+        type: 'result',
+        id: 'oversized',
+        result: { values: Array.from({ length: 4097 }, () => null) },
+      }),
+    ).toThrow(/oversized array/)
+  })
+
 
 
   it('strictly parses reconnect challenge/proof frames and Python terminal statuses', () => {

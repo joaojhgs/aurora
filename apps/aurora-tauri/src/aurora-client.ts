@@ -41,6 +41,9 @@ import {
   type WebRtcPeerCredentialStore,
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
+import { createTauriNativePeerConnection } from "./native-webrtc";
+
+export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
 export interface AuroraTauriRuntime {
   client: AuroraClient;
@@ -711,6 +714,9 @@ function createTauriWebThinRuntime({
   localStablePeerId?: string | undefined;
 }): BrowserWebThinRuntime {
   let runtime: BrowserWebThinRuntime;
+  const usesNativePeerConnection =
+    isDesktopTauriRuntime() &&
+    typeof globalThis.RTCPeerConnection !== "function";
   runtime = createBrowserWebThinRuntime({
     mode,
     gatewayUrl,
@@ -729,6 +735,12 @@ function createTauriWebThinRuntime({
     nativePlatform: tauriNativePlatform(),
     nodeName,
     localStablePeerId,
+    ...(usesNativePeerConnection
+      ? { peerConnectionFactory: createTauriNativePeerConnection }
+      : {}),
+    ...(usesNativePeerConnection
+      ? { defaultTimeoutMs: TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS }
+      : {}),
     allowInsecureLoopback: truthy(
       import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
     ),
@@ -737,7 +749,13 @@ function createTauriWebThinRuntime({
     ),
     visibilityDocument: typeof document === "undefined" ? undefined : document,
     windowLocation: typeof window === "undefined" ? undefined : window.location,
-    createClient: (transport) => new AuroraClient({ transport }),
+    createClient: (transport) =>
+      new AuroraClient({
+        transport,
+        ...(usesNativePeerConnection
+          ? { defaultTimeoutMs: TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS }
+          : {}),
+      }),
     createDemoClient: () =>
       new AuroraClient({ transport: new MockAuroraTransport() }),
   });
