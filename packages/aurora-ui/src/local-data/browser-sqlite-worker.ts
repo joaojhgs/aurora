@@ -209,6 +209,7 @@ async function openDatabase(request: Extract<BrowserSqliteWorkerRequest, { comma
     exec(db, 'PRAGMA foreign_keys = ON;')
     applyMigrations(db, localDataMigrationManifest, request.migrationSql)
     ensureDatabaseIdentity(db, request.localNodeId, !hadIdentityTable && initialUserVersion === 0)
+    assertDatabaseProfileOwnership(db, request.profileId, request.localNodeId)
     validateForeignKeys(db)
     workerState.schemaVersion = getUserVersion(db)
     workerState.migrationState = 'idle'
@@ -446,6 +447,7 @@ function importV1(workerState: WorkerState, document: LocalDataExportV1): unknow
   if (parsed.schemaVersion > CURRENT_SCHEMA_VERSION) {
     throw new LocalDataError('invalid_record', 'Local data export schema is newer than the open session', { reason: 'future_schema' })
   }
+  assertDatabaseProfileOwnership(workerState.db, workerState.profileId, workerState.localNodeId)
   exec(workerState.db, 'BEGIN IMMEDIATE;')
   try {
     run(workerState.db, 'DELETE FROM aurora_local_audit WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
@@ -524,6 +526,21 @@ function assertTransaction(workerState: WorkerState, txId: string): void {
 function assertRecordIdentity(workerState: WorkerState, profileId: string, localNodeId: string): void {
   if (profileId !== workerState.profileId || localNodeId !== workerState.localNodeId) {
     throw new LocalDataError('identity_mismatch', 'Local data record identity does not match the open session')
+  }
+}
+
+function assertDatabaseProfileOwnership(db: SqliteDatabase | null, profileId: string, localNodeId: string): void {
+  const checks: Array<{ readonly source: string; readonly sql: string }> = [
+    { source: 'conversations', sql: 'SELECT id FROM aurora_conversations WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
+    { source: 'memory', sql: 'SELECT id FROM aurora_memory_items WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
+    { source: 'local_tools', sql: 'SELECT tool_contract_id FROM aurora_local_tool_state WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
+    { source: 'peer_grants', sql: 'SELECT grant_id FROM aurora_peer_grant_metadata WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
+    { source: 'local_audit', sql: 'SELECT id FROM aurora_local_audit WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' }
+  ]
+  for (const check of checks) {
+    if (selectObjects<Record<string, unknown>>(db, check.sql, [localNodeId, profileId]).length > 0) {
+      throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
+    }
   }
 }
 

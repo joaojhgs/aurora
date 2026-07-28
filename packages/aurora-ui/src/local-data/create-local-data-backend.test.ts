@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  LocalDataError,
+  localDataMigrationManifest,
   MemoryLocalDataBackend,
   type LocalDataBackend,
   type LocalDataBackendStatus,
@@ -8,7 +8,7 @@ import {
 } from '@aurora/client/local-data'
 
 import { createLocalDataBackend } from './create-local-data-backend'
-import type { BrowserLocalDataBackendPointer, BrowserLocalDataBackendPointerStore } from './browser-backend-transfer'
+import { LocalStorageBrowserLocalDataBackendPointerStore, type BrowserLocalDataBackendPointer, type BrowserLocalDataBackendPointerStore } from './browser-backend-transfer'
 import type { BrowserSqliteOwnership, BrowserSqliteOwnershipLock } from './browser-sqlite-opfs'
 import type { BrowserSqliteProtocolWorker } from './browser-sqlite-worker-client'
 import type { BrowserSqliteWorkerRequest, BrowserSqliteWorkerResponse } from './browser-sqlite-worker'
@@ -56,6 +56,24 @@ describe('createLocalDataBackend pointer selection', () => {
       sqliteAvailable: false,
       fallbackReason: 'committed_backend_open_failed'
     }])
+  })
+
+  it('fails closed on a present invalid pointer without probing, fallback, or rewrite', async () => {
+    const storage = new MapStorage()
+    const rawPointer = JSON.stringify({ ...pointer('indexeddb'), selectedBackend: 'memory' })
+    storage.setItem('factory.pointer:profile-1:node-1', rawPointer)
+    const indexedDbBackend = new KindOverrideBackend('indexeddb')
+
+    await expect(createLocalDataBackend('profile-1', 'node-1', {
+      pointerStore: new LocalStorageBrowserLocalDataBackendPointerStore({ storage, keyPrefix: 'factory.pointer' }),
+      indexedDbBackend,
+      lock: new ThrowIfUsedLock()
+    })).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { reason: 'pointer_backend' }
+    })
+    expect(indexedDbBackend.openCount).toBe(0)
+    expect(storage.getItem('factory.pointer:profile-1:node-1')).toBe(rawPointer)
   })
 })
 
@@ -131,6 +149,18 @@ class NoopWorker implements BrowserSqliteProtocolWorker {
   terminate(): void {}
 }
 
+class MapStorage implements Pick<Storage, 'getItem' | 'setItem'> {
+  private readonly values = new Map<string, string>()
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
+  }
+}
+
 function installBrowserStorageProbe(): void {
   vi.stubGlobal('location', {
     href: 'http://127.0.0.1/',
@@ -149,6 +179,7 @@ function pointer(selectedBackend: 'indexeddb' | 'sqlite-wasm-opfs'): BrowserLoca
     version: 1,
     profileId: 'profile-1',
     localNodeId: 'node-1',
+    schemaVersion: localDataMigrationManifest.latestVersion,
     selectedBackend,
     committedAtMs: 1000
   }

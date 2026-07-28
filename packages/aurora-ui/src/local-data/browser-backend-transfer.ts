@@ -1,6 +1,7 @@
 import {
   LocalDataError,
   localDataMigrationManifest,
+  localDataIdSchema,
   parseLocalDataExportV1,
   type LocalDataBackend,
   type LocalDataBackendKind,
@@ -17,6 +18,7 @@ export interface BrowserLocalDataBackendPointer {
   readonly version: 1
   readonly profileId: string
   readonly localNodeId: string
+  readonly schemaVersion: number
   readonly selectedBackend: BrowserTransferableBackendKind
   readonly committedAtMs: number
 }
@@ -56,7 +58,13 @@ export class LocalStorageBrowserLocalDataBackendPointerStore implements BrowserL
     const storage = this.requireStorage()
     const raw = storage.getItem(pointerKey(this.keyPrefix, profileId, localNodeId))
     if (raw === null) return null
-    return parsePointer(JSON.parse(raw), profileId, localNodeId)
+    let value: unknown
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      throw invalidPointer('pointer_json')
+    }
+    return parsePointer(value, profileId, localNodeId)
   }
 
   async write(pointer: BrowserLocalDataBackendPointer): Promise<void> {
@@ -85,6 +93,7 @@ export async function commitBrowserLocalDataBackendPointer(
     version: 1,
     profileId: input.profileId,
     localNodeId: input.localNodeId,
+    schemaVersion: localDataMigrationManifest.latestVersion,
     selectedBackend: input.selectedBackend,
     committedAtMs: (input.nowMs ?? (() => Date.now()))()
   }
@@ -145,7 +154,7 @@ export function validateBrowserLocalDataBackendPointer(
   value: unknown,
   profileId: string,
   localNodeId: string
-): BrowserLocalDataBackendPointer | null {
+): BrowserLocalDataBackendPointer {
   return parsePointer(value, profileId, localNodeId)
 }
 
@@ -190,27 +199,35 @@ function assertExportEquivalent(sourceExport: LocalDataExportV1, reopenedExport:
   }
 }
 
-function parsePointer(value: unknown, profileId: string, localNodeId: string): BrowserLocalDataBackendPointer | null {
-  if (value === null || typeof value !== 'object') return null
+function parsePointer(value: unknown, profileId: string, localNodeId: string): BrowserLocalDataBackendPointer {
+  if (value === null || typeof value !== 'object') throw invalidPointer('pointer_shape')
   const record = value as Partial<BrowserLocalDataBackendPointer>
+  if (record.version !== 1) throw invalidPointer('pointer_version')
+  if (!isLocalDataId(record.profileId) || !isLocalDataId(record.localNodeId)) throw invalidPointer('pointer_identity')
+  if (record.profileId !== profileId || record.localNodeId !== localNodeId) throw invalidPointer('pointer_identity')
+  if (record.schemaVersion !== localDataMigrationManifest.latestVersion) throw invalidPointer('pointer_schema')
+  if (record.selectedBackend !== 'sqlite-wasm-opfs' && record.selectedBackend !== 'indexeddb') throw invalidPointer('pointer_backend')
   if (
-    record.version !== 1
-    || record.profileId !== profileId
-    || record.localNodeId !== localNodeId
-    || (record.selectedBackend !== 'sqlite-wasm-opfs' && record.selectedBackend !== 'indexeddb')
-    || typeof record.committedAtMs !== 'number'
+    typeof record.committedAtMs !== 'number'
     || !Number.isSafeInteger(record.committedAtMs)
     || record.committedAtMs < 0
-  ) {
-    return null
-  }
+  ) throw invalidPointer('pointer_timestamp')
   return {
     version: 1,
     profileId,
     localNodeId,
+    schemaVersion: record.schemaVersion,
     selectedBackend: record.selectedBackend,
     committedAtMs: record.committedAtMs
   }
+}
+
+function invalidPointer(reason: string): LocalDataError {
+  return new LocalDataError('invalid_record', 'Browser local data selection is invalid', { reason })
+}
+
+function isLocalDataId(value: unknown): value is string {
+  return localDataIdSchema.safeParse(value).success
 }
 
 function asTransferableBackendKind(kind: LocalDataBackendKind): BrowserTransferableBackendKind {

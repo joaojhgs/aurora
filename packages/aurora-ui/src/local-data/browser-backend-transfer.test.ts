@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLocalDataExportV1,
+  localDataMigrationManifest,
   MemoryLocalDataBackend,
   LocalDataError,
   type ConversationRecord,
@@ -172,13 +173,67 @@ describe('browser backend transfer', () => {
     await expect(pointerStore.read('profile-1', 'node-1')).resolves.toMatchObject({ selectedBackend: 'indexeddb' })
   })
 
+  it('keeps source and pointer when target storage reports stale other-profile rows', async () => {
+    const pointerStore = new MapPointerStore(pointer('indexeddb'))
+    const source = new DurableFakeBackend('indexeddb')
+    const sourceSession = await source.open('profile-1', 'node-1')
+    await sourceSession.conversations.upsertConversation(conversationFixture({ id: 'conversation-collides' }))
+    await sourceSession.memory.upsertMemoryItem(memoryFixture())
+
+    await expect(transferBrowserLocalDataBackend({
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+      sourceBackend: source,
+      targetBackend: new DurableFakeBackend('sqlite-wasm-opfs', undefined, { rejectForProfileOwnerMismatch: true }),
+      reopenTargetBackend: () => new DurableFakeBackend('sqlite-wasm-opfs'),
+      pointerStore
+    })).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_owner_mismatch' }
+    })
+    await expect(sourceSession.conversations.listConversations()).resolves.toEqual([conversationFixture({ id: 'conversation-collides' })])
+    await expect(sourceSession.memory.listMemoryItems()).resolves.toEqual([memoryFixture()])
+    await expect(pointerStore.read('profile-1', 'node-1')).resolves.toMatchObject({ selectedBackend: 'indexeddb' })
+  })
+
   it('round trips pointer values through localStorage-compatible storage', async () => {
     const storage = new MapStorage()
     const store = new LocalStorageBrowserLocalDataBackendPointerStore({ storage, keyPrefix: 'test.pointer' })
     await store.write(pointer('sqlite-wasm-opfs'))
 
     await expect(store.read('profile-1', 'node-1')).resolves.toMatchObject({ selectedBackend: 'sqlite-wasm-opfs' })
-    await expect(store.read('profile-2', 'node-1')).resolves.toBeNull()
+    await expect(store.read('profile-missing', 'node-1')).resolves.toBeNull()
+  })
+
+  it('throws bounded errors for present invalid pointer values without rewriting storage', async () => {
+    const invalidCases: Array<{
+      readonly name: string
+      readonly raw: string
+      readonly reason: string
+    }> = [
+      { name: 'json', raw: '{', reason: 'pointer_json' },
+      { name: 'shape', raw: 'null', reason: 'pointer_shape' },
+      { name: 'version', raw: JSON.stringify({ ...pointer('indexeddb'), version: 2 }), reason: 'pointer_version' },
+      { name: 'profile', raw: JSON.stringify({ ...pointer('indexeddb'), profileId: 'profile-2' }), reason: 'pointer_identity' },
+      { name: 'node', raw: JSON.stringify({ ...pointer('indexeddb'), localNodeId: 'node-2' }), reason: 'pointer_identity' },
+      { name: 'backend', raw: JSON.stringify({ ...pointer('indexeddb'), selectedBackend: 'memory' }), reason: 'pointer_backend' },
+      { name: 'timestamp', raw: JSON.stringify({ ...pointer('indexeddb'), committedAtMs: -1 }), reason: 'pointer_timestamp' },
+      { name: 'schema', raw: JSON.stringify({ ...pointer('indexeddb'), schemaVersion: localDataMigrationManifest.latestVersion + 1 }), reason: 'pointer_schema' }
+    ]
+
+    for (const testCase of invalidCases) {
+      const storage = new MapStorage()
+      const keyPrefix = `test.pointer.${testCase.name}`
+      const key = `${keyPrefix}:profile-1:node-1`
+      storage.setItem(key, testCase.raw)
+      const store = new LocalStorageBrowserLocalDataBackendPointerStore({ storage, keyPrefix })
+
+      await expect(store.read('profile-1', 'node-1')).rejects.toMatchObject({
+        code: 'invalid_record',
+        metadata: { reason: testCase.reason }
+      })
+      expect(storage.getItem(key)).toBe(testCase.raw)
+    }
   })
 })
 
@@ -201,6 +256,7 @@ class DurableFakeBackend implements LocalDataBackend {
       readonly tamperExportRecords?: boolean
       readonly exportProfileId?: string
       readonly failAfterImport?: boolean
+      readonly rejectForProfileOwnerMismatch?: boolean
     } = {}
   ) {
     this.sqlite = kind === 'sqlite-wasm-opfs'
@@ -209,6 +265,9 @@ class DurableFakeBackend implements LocalDataBackend {
 
   async open(profileId: string, localNodeId: string): Promise<LocalDataSession> {
     if (this.closed) throw new Error('backend closed')
+    if (this.faults.rejectForProfileOwnerMismatch === true) {
+      throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
+    }
     if (this.session !== null) return this.session
     const memory = new MemoryLocalDataBackend({ nowMs: () => 1000 })
     const session = await memory.open(profileId, localNodeId)
@@ -258,6 +317,7 @@ class DurableFakeSession implements LocalDataSession {
       readonly tamperExportRecords?: boolean
       readonly exportProfileId?: string
       readonly failAfterImport?: boolean
+      readonly rejectForProfileOwnerMismatch?: boolean
     }
   ) {
     this.profileId = inner.profileId
@@ -370,7 +430,7 @@ const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
   createdAtMs: 1000
 })
 
-function conversationFixture(): ConversationRecord {
+function conversationFixture(overrides: Partial<ConversationRecord> = {}): ConversationRecord {
   return {
     id: 'conversation-1',
     profileId: 'profile-1',
@@ -378,7 +438,8 @@ function conversationFixture(): ConversationRecord {
     titleEnvelope: envelopeFixture,
     createdAtMs: 1000,
     updatedAtMs: 1100,
-    archivedAtMs: null
+    archivedAtMs: null,
+    ...overrides
   }
 }
 
@@ -403,6 +464,7 @@ function pointer(selectedBackend: BrowserTransferableBackendKind): BrowserLocalD
     version: 1,
     profileId: 'profile-1',
     localNodeId: 'node-1',
+    schemaVersion: localDataMigrationManifest.latestVersion,
     selectedBackend,
     committedAtMs: 1000
   }

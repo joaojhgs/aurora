@@ -151,6 +151,45 @@ test('real Chromium transfers local data between IndexedDB and Worker OPFS SQLit
     await bootstrappedIndexed.close()
     await sqliteSource.close()
 
+    const staleNodeId = `node-transfer-stale-${Date.now()}`
+    const staleOtherProfileId = `profile-transfer-other-${Date.now()}`
+    const staleSqlite = new BrowserSqliteLocalDataBackend(sqliteState)
+    const staleSqliteSession = await staleSqlite.open(staleOtherProfileId, staleNodeId)
+    await staleSqliteSession.memory.upsertMemoryItem(memoryFixture(staleOtherProfileId, staleNodeId, 'memory-stale-other-profile'))
+    await staleSqlite.close()
+
+    const staleIndexedSource = new BrowserIndexedDbLocalDataBackend({ origin: location.origin, ownerId: 'source-idb-stale' })
+    const staleIndexedSourceSession = await staleIndexedSource.open(profileId, staleNodeId)
+    await staleIndexedSourceSession.memory.upsertMemoryItem(memoryFixture(profileId, staleNodeId, 'memory-stale-source'))
+    const staleSourceExport = await staleIndexedSourceSession.exportV1()
+    await pointerStore.write({
+      version: 1,
+      profileId,
+      localNodeId: staleNodeId,
+      schemaVersion: staleSourceExport.schemaVersion,
+      selectedBackend: 'indexeddb',
+      committedAtMs: 5000
+    })
+    const staleFailureReason = await transferBrowserLocalDataBackend({
+      profileId,
+      localNodeId: staleNodeId,
+      sourceBackend: staleIndexedSource,
+      targetBackend: new BrowserSqliteLocalDataBackend(sqliteState),
+      reopenTargetBackend: () => new BrowserSqliteLocalDataBackend(sqliteState),
+      pointerStore
+    }).then(
+      () => null,
+      (error: unknown) => error instanceof Error && 'metadata' in error
+        ? (error as { metadata?: { reason?: string } }).metadata?.reason ?? null
+        : null
+    )
+    const staleSourceRetained = await staleIndexedSourceSession.memory.listMemoryItems()
+    await staleIndexedSource.close()
+    const staleSqliteReopened = new BrowserSqliteLocalDataBackend(sqliteState)
+    const staleSqliteReopenedSession = await staleSqliteReopened.open(staleOtherProfileId, staleNodeId)
+    const staleOtherProfileRetained = await staleSqliteReopenedSession.memory.listMemoryItems()
+    await staleSqliteReopened.close()
+
     return {
       retainedAfterFirstTransfer: retainedAfterFirstTransfer.map((record: { readonly id: string }) => record.id),
       bootstrappedSqliteSource: bootstrappedSqliteExport.sourceBackend,
@@ -160,6 +199,10 @@ test('real Chromium transfers local data between IndexedDB and Worker OPFS SQLit
       bootstrappedIndexedSource: bootstrappedIndexedExport.sourceBackend,
       bootstrappedIndexedCounts: bootstrappedIndexedExport.recordCounts,
       secondPointer: await pointerStore.read(profileId, secondNodeId),
+      staleFailureReason,
+      stalePointer: await pointerStore.read(profileId, staleNodeId),
+      staleSourceRetained: staleSourceRetained.map((record: { readonly id: string }) => record.id),
+      staleOtherProfileRetained: staleOtherProfileRetained.map((record: { readonly id: string }) => record.id),
     }
 
     function memoryFixture(profile: string, node: string, id: string) {
@@ -193,7 +236,11 @@ test('real Chromium transfers local data between IndexedDB and Worker OPFS SQLit
     retainedAfterSecondTransfer: ['memory-sqlite-source'],
     bootstrappedIndexedSource: 'indexeddb',
     bootstrappedIndexedCounts: { memoryItems: 1 },
-    secondPointer: { selectedBackend: 'indexeddb', committedAtMs: 4000 }
+    secondPointer: { selectedBackend: 'indexeddb', committedAtMs: 4000 },
+    staleFailureReason: 'profile_owner_mismatch',
+    stalePointer: { selectedBackend: 'indexeddb', committedAtMs: 5000 },
+    staleSourceRetained: ['memory-stale-source'],
+    staleOtherProfileRetained: ['memory-stale-other-profile']
   })
 })
 

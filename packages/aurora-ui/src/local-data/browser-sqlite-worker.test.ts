@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { buildLocalDataExportV1, type EncryptedDataEnvelopeV1 } from '@aurora/client/local-data'
 
 import { handleBrowserSqliteWorkerMessage, type BrowserSqliteWorkerResponse } from './browser-sqlite-worker.js'
 
@@ -46,6 +47,68 @@ describe('browser sqlite worker protocol guardrails', () => {
     }])
   })
 
+  it('rejects cross-profile existing rows before import deletes or overwrites colliding IDs', async () => {
+    const responses: BrowserSqliteWorkerResponse[] = []
+    const db = new FakeSqliteDatabase({
+      'SELECT id FROM aurora_conversations WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;': [{ id: 'conversation-1' }]
+    })
+    await handleBrowserSqliteWorkerMessage(
+      {
+        id: 'import-cross-profile-1',
+        command: 'importV1',
+        document: buildLocalDataExportV1({
+          sourceBackend: 'indexeddb',
+          schemaVersion: 3,
+          profileId: 'profile-1',
+          localNodeId: 'node-1',
+          exportedAtMs: 1000,
+          records: {
+            conversations: [{
+              id: 'conversation-1',
+              profileId: 'profile-1',
+              localNodeId: 'node-1',
+              titleEnvelope: envelopeFixture,
+              createdAtMs: 1000,
+              updatedAtMs: 1000,
+              archivedAtMs: null
+            }],
+            messages: [],
+            memoryItems: [],
+            localToolStates: [],
+            peerGrantMetadata: [],
+            localAudit: []
+          }
+        })
+      },
+      (response) => responses.push(response),
+      {
+        db,
+        profileId: 'profile-1',
+        localNodeId: 'node-1',
+        schemaVersion: 3,
+        migrationState: 'idle',
+        closed: false,
+        activeTransactionId: null,
+        operationQueue: Promise.resolve(),
+        cancelled: new Set()
+      } as never
+    )
+
+    expect(responses).toEqual([{
+      id: 'import-cross-profile-1',
+      result: {
+        ok: false,
+        error: {
+          code: 'identity_mismatch',
+          message: 'Local data database profile does not match the open session',
+          metadata: { reason: 'profile_owner_mismatch' }
+        }
+      }
+    }])
+    expect(db.statements.some((statement) => /\bDELETE\b/iu.test(statement))).toBe(false)
+    expect(db.statements.some((statement) => /\bINSERT\b/iu.test(statement))).toBe(false)
+  })
+
   it('keeps sqlite wasm imports private to approved local-data adapters', () => {
     const root = process.cwd()
     const offenders: string[] = []
@@ -63,6 +126,28 @@ describe('browser sqlite worker protocol guardrails', () => {
     }
     expect(offenders).toEqual([])
   })
+})
+
+class FakeSqliteDatabase {
+  readonly statements: string[] = []
+
+  constructor(private readonly rowsBySql: Record<string, Array<Record<string, unknown>>>) {}
+
+  exec(input: string | { readonly sql: string; readonly returnValue?: string }): unknown {
+    const sql = typeof input === 'string' ? input : input.sql
+    this.statements.push(sql)
+    if (typeof input !== 'string' && input.returnValue === 'resultRows') return this.rowsBySql[sql] ?? []
+    return undefined
+  }
+}
+
+const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
+  version: 1,
+  algorithm: 'AES-GCM-256',
+  keyId: 'key-local-structured-data-1',
+  nonceB64Url: 'AAAAAAAAAAAAAAAA',
+  ciphertextAndTagB64Url: 'AAAAAAAAAAAAAAAAAAAAAA',
+  createdAtMs: 1000
 })
 
 function walk(directory: string): string[] {
