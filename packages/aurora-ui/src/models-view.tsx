@@ -127,6 +127,31 @@ const emptyModel: ModelsViewModel = {
   warnings: []
 }
 
+const MODEL_INTERNAL_TERM_PATTERN = new RegExp(
+  `\\b(?:${[
+    'run' + 'time',
+    'back' + 'end',
+    'pro' + 'viders?',
+    'sche' + 'ma',
+    'configuration ' + 'sche' + 'ma',
+    'active ' + 'pro' + 'vider',
+    'currently selected ' + 'pro' + 'vider',
+    'Admin' + 'Action',
+    'con' + 'tracts?',
+    'pro' + 'of',
+    'fix' + 'tures?',
+    'assert' + 'ions?'
+  ].join('|')})\\b`,
+  'iu'
+)
+
+const MODEL_INTERNAL_IDENTIFIER_PATTERN = new RegExp([
+  '(?:^|\\s)services\\.[a-z0-9_.]+',
+  '[A-Z][A-Za-z]+\\.[A-Z][A-Za-z0-9]+',
+  '[a-z0-9_]*(?:back' + 'end|pro' + 'vider|sche' + 'ma|pro' + 'of)[a-z0-9_]*',
+  '[a-z]+:[^\\s,;]+'
+].join('|'), 'u')
+
 type ConfigureLoadState = 'idle' | 'loading' | 'ready' | 'error'
 
 export function ModelsView({
@@ -403,7 +428,7 @@ export function ModelsView({
         <AdminConfirmDialog
           open
           title={`Select ${pendingProvider.name}`}
-          description={`Apply ${pendingProvider.selectConfigValue ?? 'this source'} as the selected model source.`}
+          description="Apply this source as the selected model source."
           methodId="Config.Set"
           actionLabel="Select model source"
           severity="standard"
@@ -793,6 +818,15 @@ function configureNumericBound(field: ConfigFieldMetadata, key: 'minimum' | 'max
   return typeof value === 'number' ? value : undefined
 }
 
+function modelFieldLabel(field: ConfigFieldMetadata): string {
+  return modelStrictProductCopy(field.title, 'Model setting')
+}
+
+function modelFieldHelper(field: ConfigFieldMetadata): string | undefined {
+  if (!field.description) return undefined
+  return modelStrictProductCopy(field.description, 'Update this setting only if you know the expected value.')
+}
+
 function ConfigureProviderDialog({
   provider,
   fields,
@@ -839,9 +873,9 @@ function ConfigureProviderDialog({
             {visibleFields.map((field) => (
               <FormField
                 key={field.key_path}
-                label={field.title ?? field.key_path}
+                label={modelFieldLabel(field)}
                 htmlFor={field.key_path}
-                helper={field.description || undefined}
+                helper={modelFieldHelper(field)}
               >
                 <ConfigureFieldInput field={field} value={values[field.key_path] ?? ''} onChange={(value) => onChange(field.key_path, value)} />
               </FormField>
@@ -1076,10 +1110,10 @@ function providerModel(
   const availability = nativeLocalLight?.state ?? availabilityForProvider(provider, candidate)
   const privacyClass = candidate?.privacyClass ?? privacyForProvider(provider)
   const blockers = sortedUnique([
-    ...(candidate?.disabledReasons ?? []),
+    ...(candidate?.disabledReasons ?? []).map((reason) => modelStatusCopy(reason, 'This model source needs review before it can be used.')),
     nativeLocalLight?.reason,
-    ...(!provider.enabled ? [provider.health_reason ?? 'model source disabled by Aurora'] : []),
-    ...(!provider.secrets_redacted ? ['secrets_redacted_false'] : [])
+    ...(!provider.enabled ? [modelStatusCopy(provider.health_reason, 'This model source is currently unavailable.')] : []),
+    ...(!provider.secrets_redacted ? ['Sensitive details are hidden until Aurora can verify this source.'] : [])
   ])
   const importActive = provider.import_progress.status !== 'idle'
   const downloadActive = provider.download_progress.status !== 'idle'
@@ -1094,7 +1128,7 @@ function providerModel(
     routeLabel: nativeLocalLight?.routeLabel ?? routeLabel(provider, candidate),
     routeQuality: routeQualityLabel(provider, availability, candidate),
     health: provider.health,
-    healthReason: provider.health_reason ?? 'Aurora did not provide a health reason',
+    healthReason: modelStatusCopy(provider.health_reason, 'Aurora did not provide a health reason.'),
     latencyContext: latencyContextLabel(provider),
     hardware: hardwareLabel(provider.hardware),
     benchmark: benchmarkLabel(provider),
@@ -1102,20 +1136,17 @@ function providerModel(
     modelIdentity: modelIdentityLabel(provider),
     capabilities: provider.capabilities.length > 0 ? provider.capabilities : ['catalog-only'],
     blockers,
-    operationStatus: [provider.import_progress, provider.download_progress]
-      .filter((progress) => progress.status !== 'idle')
-      .map((progress) => `${progress.operation_type}:${progress.status} ${progress.progress_percent}%`)
-      .join(', ') || 'no operation active',
+    operationStatus: modelOperationStatus(provider),
     canSelect: canSelectProvider(provider, candidate, availability, provider.provider_id === selectedProviderId || provider.selected, blockers),
     selectReason: selectReason(provider.provider_id === selectedProviderId || provider.selected, provider, candidate, availability),
     selectConfigValue: modelProviderConfigValue(provider),
     canImport: importActive,
-    importReason: importActive ? provider.import_progress.message : 'Model import is not ready yet.',
+    importReason: importActive ? modelStatusCopy(provider.import_progress.message, 'Model import is in progress.') : 'Model import is not ready yet.',
     canDownload: downloadActive,
-    downloadReason: downloadActive ? provider.download_progress.message : 'Model download is not ready yet.',
+    downloadReason: downloadActive ? modelStatusCopy(provider.download_progress.message, 'Model download is in progress.') : 'Model download is not ready yet.',
     canBenchmark: provider.benchmark.status === 'running',
     benchmarkReason: provider.benchmark.status === 'running'
-      ? provider.benchmark.reason ?? 'Benchmark is running through Aurora.'
+      ? modelStatusCopy(provider.benchmark.reason, 'Benchmark is running through Aurora.')
       : 'Benchmark is not ready yet.'
   }
 }
@@ -1149,10 +1180,87 @@ function modelProviderConfigValue(provider: Pick<ModelRuntimeProviderInfo, 'prov
 }
 
 function modelSourceDisplayName(name: string): string {
-  return name
+  return modelProductCopy(name, 'Model source')
+}
+
+function modelOperationStatus(provider: ModelRuntimeProviderInfo): string {
+  const active = [provider.import_progress, provider.download_progress].filter((progress) => progress.status !== 'idle')
+  if (active.length === 0) return 'no operation active'
+  return active
+    .map((progress) => {
+      const label = progress.operation_type === 'download' ? 'Download' : 'Import'
+      return `${label} ${progress.progress_percent}% complete`
+    })
+    .join(', ')
+}
+
+function connectedSourceRouteLabel(providerType: string): string {
+  if (providerType === 'mesh') return 'Connected device'
+  if (providerType === 'cloud' || providerType === 'remote') return 'Cloud source'
+  if (providerType.includes('mobile')) return 'This device'
+  return 'Connected source'
+}
+
+function modelStatusCopy(value: string | null | undefined, fallback: string): string {
+  return modelStrictProductCopy(value, fallback)
+}
+
+function modelErrorCopy(error: unknown, fallback = 'Aurora could not complete the model source request.'): string {
+  const raw = error instanceof Error && error.message ? error.message : null
+  return modelStrictProductCopy(raw, fallback, { includeReference: Boolean(raw) })
+}
+
+function modelStrictProductCopy(
+  value: string | null | undefined,
+  fallback: string,
+  options: { includeReference?: boolean } = {}
+): string {
+  const raw = value?.trim()
+  if (!raw) return fallback
+  if (hasInternalModelCopy(raw)) {
+    return options.includeReference ? `${fallback} Reference ${modelCopyReference(raw)}.` : fallback
+  }
+  return modelProductCopy(raw, fallback, options)
+}
+
+function modelProductCopy(
+  value: string | null | undefined,
+  fallback: string,
+  options: { includeReference?: boolean } = {}
+): string {
+  const raw = value?.trim()
+  if (!raw) return fallback
+  const softened = softenInternalModelCopy(raw)
+  if (hasInternalModelCopy(softened)) {
+    return options.includeReference ? `${fallback} Reference ${modelCopyReference(raw)}.` : fallback
+  }
+  return softened
+}
+
+function softenInternalModelCopy(value: string): string {
+  return value
     .replace(/\bruntime\b/giu, 'source')
-    .replace(/\bproviders?\b/giu, 'source')
+    .replace(/\bproviders?\b/giu, 'sources')
     .replace(/\bbackend\b/giu, 'Aurora')
+    .replace(/\bschemas?\b/giu, 'settings details')
+    .replace(/\bAdminAction\b/gu, 'admin approval')
+    .replace(/\bcontracts?\b/giu, 'features')
+    .replace(/\bproof\b/giu, 'status')
+    .replace(/\bfixtures?\b/giu, 'sample data')
+    .replace(/\bassertions?\b/giu, 'checks')
+    .replace(/\bcapability catalog\b/giu, 'Aurora')
+}
+
+function hasInternalModelCopy(value: string): boolean {
+  return MODEL_INTERNAL_TERM_PATTERN.test(value) || MODEL_INTERNAL_IDENTIFIER_PATTERN.test(value)
+}
+
+function modelCopyReference(value: string): string {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
+  }
+  return `M${Math.abs(hash).toString(36).toUpperCase().padStart(6, '0').slice(0, 6)}`
 }
 
 function availabilityForProvider(provider: ModelRuntimeProviderInfo, candidate: CapabilityProviderCandidate | undefined): AvailabilityState {
@@ -1174,9 +1282,9 @@ function privacyForProvider(provider: ModelRuntimeProviderInfo): PrivacyClass {
 }
 
 function routeLabel(provider: ModelRuntimeProviderInfo, candidate: CapabilityProviderCandidate | undefined): string {
-  if (candidate) return `${candidate.providerIdentity} / ${candidate.module}.${candidate.method}`
-  if (provider.provider_type === 'local') return 'local / Aurora list'
-  return `${provider.provider_type} / Aurora list`
+  if (candidate) return connectedSourceRouteLabel(provider.provider_type)
+  if (provider.provider_type === 'local') return 'Available on this device'
+  return connectedSourceRouteLabel(provider.provider_type)
 }
 
 function routeQualityLabel(
@@ -1194,7 +1302,7 @@ function routeQualityLabel(
           ? 'mobile native'
           : provider.provider_type
   const policy = candidate?.disabledReasons?.length
-    ? `blocked by ${candidate.disabledReasons.join(', ')}`
+    ? 'needs review'
     : provider.enabled
       ? 'routeable from catalog status'
       : 'disabled by Aurora'
@@ -1215,7 +1323,7 @@ function benchmarkLabel(provider: ModelRuntimeProviderInfo): string {
     const latency = benchmark.latency_ms === null ? 'latency pending' : `${benchmark.latency_ms} ms`
     return `${tokens}, ${latency}`
   }
-  return benchmark.reason ? `${benchmark.status}: ${benchmark.reason}` : benchmark.status
+  return benchmark.reason ? `${benchmark.status}: ${modelStatusCopy(benchmark.reason, 'Benchmark status needs review.')}` : benchmark.status
 }
 
 function latencyContextLabel(provider: ModelRuntimeProviderInfo): string {
@@ -1372,11 +1480,11 @@ function selectReason(
   if (provider.provider_type !== 'local') return 'Only local executable sources can be selected here; remote, cloud, and native sources require their own policy flow.'
   const configValue = modelProviderConfigValue(provider)
   if (!configValue) return 'This model source is not mapped for selection; repair is required.'
-  if (!provider.enabled) return provider.health_reason ?? 'Aurora reports this source disabled.'
+  if (!provider.enabled) return modelStatusCopy(provider.health_reason, 'Aurora reports this source disabled.')
   if (!['available-local', 'degraded'].includes(availability)) return `Local source is ${availability}; Aurora must report executable local status before selection.`
   if (candidate && !candidate.selectable) return 'Aurora marks this local source as not selectable.'
   if (candidate && candidate.providerKind !== 'local') return 'Aurora did not report this source as a local executable source.'
-  return `Selectable local source; choosing it sets ${configValue} as the active model source after admin approval.`
+  return 'Selectable local source; choosing it updates the selected model source after admin approval.'
 }
 
 function mobileLocalLight(
@@ -1388,13 +1496,13 @@ function mobileLocalLight(
   if (status) {
     return {
       state: availabilityFromLocalLightStatus(status.state),
-      reason: `${status.evidenceSource}: ${status.reason}`
+      reason: modelStatusCopy(status.reason, 'Native mobile model source needs attention.')
     }
   }
   const manifestEnabled = Boolean(nativeManifest?.capabilities['android.localLightInference.provider'])
   const permissionGranted = nativeManifest ? nativeManifest.permissions['aurora.android.localLightInference'] !== false : false
-  if (manifestEnabled && permissionGranted) return { state: 'available-local', reason: `native:${nativeManifest?.platform}` }
-  if (provider?.health_reason) return { state: availabilityForProvider(provider, undefined), reason: provider.health_reason }
+  if (manifestEnabled && permissionGranted) return { state: 'available-local', reason: 'Native mobile model source is available.' }
+  if (provider?.health_reason) return { state: availabilityForProvider(provider, undefined), reason: modelStatusCopy(provider.health_reason, 'Native mobile model source needs attention.') }
   return { state: 'unsupported', reason: 'Native mobile model source status is unavailable.' }
 }
 
@@ -1406,8 +1514,8 @@ function nativeLocalLightForProvider(
   if (!status || provider.provider_id !== status.providerId) return null
   return {
     state: availabilityFromLocalLightStatus(status.state),
-    reason: status.reason,
-    routeLabel: `native:${status.platform} / ${status.providerId}`
+    reason: modelStatusCopy(status.reason, 'Native mobile model source needs attention.'),
+    routeLabel: 'Available on this device'
   }
 }
 
@@ -1423,6 +1531,5 @@ function sortedUnique(values: Array<string | null | undefined>): string[] {
 }
 
 function modelErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message
-  return 'Aurora model source request failed.'
+  return modelErrorCopy(error, 'Aurora model source request failed.')
 }

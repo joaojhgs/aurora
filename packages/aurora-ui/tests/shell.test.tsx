@@ -602,7 +602,7 @@ describe('Aurora production shell', () => {
         canSelect: false,
         selectReason: expect.stringContaining('Only local executable sources can be selected'),
         providerType: 'mesh',
-        routeLabel: expect.stringContaining('mesh / Orchestrator.GetModelCatalog'),
+        routeLabel: 'Connected device',
         routeQuality: expect.stringContaining('mesh remote; available-remote')
       })
     )
@@ -617,7 +617,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         availability: 'unsupported',
         canSelect: false,
-        blockers: expect.arrayContaining(['native_provider_missing'])
+        blockers: expect.arrayContaining(['This model source needs review before it can be used.'])
       })
     )
     expect(model.mobileLocalLightState).toBe('unsupported')
@@ -631,12 +631,12 @@ describe('Aurora production shell', () => {
     expect(nativeModel.providers.find((provider) => provider.id === 'native:mobile-local-light')).toEqual(
       expect.objectContaining({
         availability: 'degraded',
-        routeLabel: 'native:android / native:mobile-local-light',
-        blockers: expect.arrayContaining(['backend_model_catalog_and_device_model_proof_required'])
+        routeLabel: 'Available on this device',
+        blockers: expect.arrayContaining(['Native mobile model source needs attention.'])
       })
     )
     expect(nativeModel.mobileLocalLightState).toBe('degraded')
-    expect(nativeModel.mobileLocalLightReason).toContain('android-native-local-light-adapter')
+    expect(nativeModel.mobileLocalLightReason).toBe('Native mobile model source needs attention.')
   })
 
   it('marks an unselected executable local model provider selectable through admin approval status', () => {
