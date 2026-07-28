@@ -50,7 +50,7 @@ import {
 } from '#components/ui/message-scroller'
 import { ToolFallbackArgs, ToolFallbackContent, ToolFallbackResult, ToolFallbackRoot } from '#components/assistant-ui/tool-fallback'
 import { ModelSelector, type ModelOption } from '#components/assistant-ui/model-selector'
-import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
+import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
 
@@ -2566,9 +2566,9 @@ export function AssistantView({
             <div><dt>Model</dt><dd>{safeAssistantRuntimeValue(modelLabel, lastResult ? 'not reported' : 'model response pending')}</dd></div>
             <div><dt>Context</dt><dd>{contextSummary.ready} ready, {contextSummary.blocked} blocked</dd></div>
           </dl>
-          <p>{presentableSignal(route.explanation)}</p>
+          <p>{assistantRouteExplanationCopy(route)}</p>
           {remotePrivacyWarning ? <p className="aui-privacy-route-warning" role="status">{remotePrivacyWarning}</p> : null}
-          {route.disabled ? <p role="alert">Assistant send is disabled: {presentableSignal(route.blockers.join(', ') || 'capability unavailable')}.</p> : null}
+          {route.disabled ? <p role="alert">Assistant send is disabled: {assistantRouteBlockerCopy(route)}.</p> : null}
           {lastError ? <p role="alert">{lastError}</p> : null}
           {routeDetailsOpen ? (
             <RouteSheet
@@ -2666,7 +2666,11 @@ function routeStateShortLabel(state: RouteAvailability['state']): string {
   if (state === 'available-local') return 'Local'
   if (state === 'available-remote') return 'Remote'
   if (state === 'privacy-blocked') return 'Needs consent'
-  return presentableSignal(state)
+  if (state === 'denied') return 'Denied'
+  if (state === 'degraded') return 'Limited'
+  if (state === 'stale') return 'Needs refresh'
+  if (state === 'pending') return 'Pending'
+  return 'Unavailable'
 }
 
 function isAssistantToolCallCard(value: unknown): value is AssistantToolCallCard {
@@ -2813,9 +2817,9 @@ function VoiceModePanel({
             <p>{chip.detail}</p>
             <div className="aui-settings-inline">
               <PrivacyBadge privacy={chip.privacyClass} />
-              <EvidenceBadge label={chip.providerLabel} />
+              <EvidenceBadge label={voiceProviderCopy(chip.providerLabel)} />
             </div>
-            <small>{presentableSignal(chip.blockers.length > 0 ? chip.blockers.join(', ') : chip.evidence.join(', '))}</small>
+            <small>{voiceChipStatusCopy(chip)}</small>
           </article>
         ))}
       </div>
@@ -2855,7 +2859,7 @@ function VoiceModePanel({
             {model.controls.map((control) => (
               <li key={control.id}>
                 <StatusBadge state={control.state} />
-                <span>{presentableSignal(control.reason)}</span>
+                <span>{voiceControlReasonCopy(control)}</span>
               </li>
             ))}
           </ul>
@@ -2865,7 +2869,7 @@ function VoiceModePanel({
           <h3>Audio privacy</h3><span className="aui-sr-only">Route sheet</span>
           <dl>
             <div><dt>Privacy class</dt><dd>{model.privacyClass}</dd></div>
-            <div><dt>Destination</dt><dd>{presentableSignal(model.targetLabel)}</dd></div>
+            <div><dt>Destination</dt><dd>{voiceDestinationCopy(model.targetLabel)}</dd></div>
             <div><dt>Connection</dt><dd>{productConnectionCopy(model.transport)}</dd></div>
             <div><dt>Retention</dt><dd>{model.retentionPolicy}</dd></div>
             <div><dt>Session TTL</dt><dd>{model.sessionTtl}</dd></div>
@@ -4002,7 +4006,7 @@ function nativeCaptureState(
     label: 'Native capture',
     state,
     privacyClass: 'raw-audio',
-    providerLabel: nativeAvailable ? nativePlatform : 'Not available',
+    providerLabel: nativeAvailable ? 'This device' : 'Not available',
     detail: state === 'available-local'
       ? 'This device reports microphone or voice capture support.'
       : state === 'privacy-blocked'
@@ -4010,8 +4014,8 @@ function nativeCaptureState(
           ? 'iOS foreground capture is blocked until microphone permission, raw-audio consent, and a visible stop/revoke path are available.'
           : 'Native capture is blocked until the platform microphone permission is granted.'
         : 'Device capture stays disabled until Aurora can confirm microphone support.',
-    blockers: state === 'available-local' ? [] : [permission && !permission.granted ? `device permission missing: ${permission.name}` : 'voice capture unavailable'],
-    evidence: nativeAvailable ? ['native-manifest'] : []
+    blockers: state === 'available-local' ? [] : [permission && !permission.granted ? 'device_permission_missing' : 'voice_capture_unavailable'],
+    evidence: nativeAvailable ? ['device_voice_status'] : []
   }
 }
 
@@ -4147,7 +4151,7 @@ function voiceAction(
       label,
       state: route.state,
       enabled: false,
-      reason: presentableSignal(route.blockers.join(', ') || route.explanation),
+      reason: assistantRouteBlockerCopy(route),
       route
     }
   }
@@ -4731,6 +4735,52 @@ function assistantRouteModeLabel(route: RouteAvailability): string {
 function assistantRouteProviderCopy(route: RouteAvailability): string {
   if (route.state === 'available-remote' || /mesh|peer|remote|cloud/i.test(route.providerLabel)) return 'Connected Aurora device'
   return 'This device'
+}
+
+function assistantRouteExplanationCopy(route: RouteAvailability): string {
+  if (route.disabled) return assistantRouteBlockerCopy(route)
+  if (route.state === 'available-remote') return 'Assistant is available through a connected Aurora device.'
+  if (route.state === 'available-local') return 'Assistant is available on this device.'
+  if (route.state === 'privacy-blocked') return 'Assistant needs a privacy choice before continuing.'
+  if (route.state === 'degraded' || route.state === 'stale') return 'Assistant is available with limited status.'
+  return 'Assistant status is unavailable right now.'
+}
+
+function assistantRouteBlockerCopy(route: RouteAvailability): string {
+  const raw = `${route.state} ${route.blockers.join(' ')} ${route.explanation}`.toLowerCase()
+  if (/auth|permission|denied|forbidden/.test(raw)) return 'Review access before continuing'
+  if (/privacy|consent|selector/.test(raw)) return 'Make the required privacy choice before continuing'
+  if (/offline|timeout|stale|unavailable|unsupported|missing/.test(raw)) return 'This assistant route is unavailable right now'
+  return 'This assistant route is unavailable right now'
+}
+
+function voiceProviderCopy(value: string | null | undefined): string {
+  const raw = (value ?? '').toLowerCase()
+  if (!raw || raw === 'not available') return 'Not available'
+  if (/remote|peer|mesh|cloud/.test(raw)) return 'Connected Aurora device'
+  return 'This device'
+}
+
+function voiceDestinationCopy(value: string | null | undefined): string {
+  return voiceProviderCopy(value)
+}
+
+function voiceChipStatusCopy(chip: VoiceCapabilityChip): string {
+  if (chip.state === 'available-local' || chip.state === 'available-remote') return 'Ready'
+  if (chip.state === 'privacy-blocked') return 'Privacy choice needed'
+  if (chip.state === 'denied') return 'Permission needed'
+  if (chip.state === 'pending') return 'Waiting for confirmation'
+  if (chip.state === 'degraded' || chip.state === 'stale') return 'Needs attention'
+  return 'Unavailable'
+}
+
+function voiceControlReasonCopy(control: VoiceControlModel): string {
+  if (control.enabled) return 'Ready'
+  if (control.state === 'privacy-blocked') return 'Grant session consent before routing audio work to another device.'
+  if (control.state === 'denied') return 'Permission is needed before continuing.'
+  if (control.state === 'pending') return 'Start local capture before creating an audio session.'
+  if (control.state === 'degraded' || control.state === 'stale') return 'Audio is temporarily unavailable.'
+  return 'Audio can start after this device confirms microphone access.'
 }
 
 function selectedRuntimeProvider(

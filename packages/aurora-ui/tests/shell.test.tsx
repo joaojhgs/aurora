@@ -1183,7 +1183,7 @@ describe('Aurora production shell', () => {
 
     expect(model.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('available-local')
     expect(model.chips.find((chip) => chip.id === 'remote-processing')?.state).toBe('available-local')
-    expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('SDK audio/STT contracts')
+    expect(model.controls.find((control) => control.id === 'remote-transcription')?.reason).toContain('Audio can start')
     expect(model.events.map((event) => event.id)).toEqual(expect.arrayContaining(['partial', 'final', 'timeout', 'cancelled', 'remote-denied', 'peer-disconnect']))
 
     const eventDrivenModel = buildAssistantVoiceModel({
@@ -3023,7 +3023,7 @@ describe('Aurora production shell', () => {
     const controlsWithoutInterrupt = assistantControlsForRoute(assistantRoute, undefined, true)
 
     expect(controlsWithoutInterrupt.canCancel).toBe(false)
-    expect(controlsWithoutInterrupt.cancelReason).toContain('missing Orchestrator.Interrupt')
+    expect(controlsWithoutInterrupt.cancelReason).toContain('Stop is unavailable')
 
     const interruptRoute = {
       ...assistantRoute,
@@ -3039,7 +3039,7 @@ describe('Aurora production shell', () => {
     const controlsWithInterrupt = assistantControlsForRoute(assistantRoute, interruptRoute, true)
 
     expect(controlsWithInterrupt.canCancel).toBe(true)
-    expect(controlsWithInterrupt.cancelReason).toContain('supported')
+    expect(controlsWithInterrupt.cancelReason).toContain('Stop is available')
   })
 
   it('accumulates assistant stream deltas without replacing backend text with local-only state', () => {
@@ -3551,13 +3551,13 @@ describe('Aurora production shell', () => {
 
     expect(memoryModel.actions.export.supported).toBe(true)
     expect(memoryModel.actions.export.disabled).toBe(true)
-    expect(memoryModel.actions.export.reason).toContain('AdminAction')
+    expect(memoryModel.actions.export.reason).toContain('administrator or sharing approval')
     expect(memoryModel.actions.delete.supported).toBe(true)
     expect(memoryModel.actions.delete.disabled).toBe(true)
-    expect(memoryModel.actions.delete.reason).toContain('AdminAction')
+    expect(memoryModel.actions.delete.reason).toContain('administrator or sharing approval')
     expect(ragModel.actions.importPreview.supported).toBe(true)
     expect(ragModel.actions.importPreview.disabled).toBe(true)
-    expect(ragModel.actions.importPreview.reason).toContain('AdminAction')
+    expect(ragModel.actions.importPreview.reason).toContain('administrator or sharing approval')
   })
 
   it('shows denied and stale memory namespace states without labeling them local', async () => {

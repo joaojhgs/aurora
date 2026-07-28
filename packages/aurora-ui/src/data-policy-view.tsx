@@ -158,10 +158,10 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
   const retentionColumns: Array<DataColumn<DBRAGNamespaceInfo>> = [
     {
       key: 'namespace',
-      header: 'Namespace',
+      header: 'Collection',
       render: (namespace) => (
         <span className="flex flex-col gap-0.5">
-          <strong>{namespace.namespace}</strong>
+          <strong>{productNamespaceTitle(namespace)}</strong>
           <small className="text-xs text-muted-foreground">{namespace.record_count === null ? 'records unknown' : `${namespace.record_count} records`}</small>
         </span>
       )
@@ -172,8 +172,8 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       header: 'Retention and sharing',
       render: (namespace) => (
         <span className="flex flex-col gap-0.5">
-          <span>{namespace.policy.sharing_mode}</span>
-          <small className="text-xs text-muted-foreground">{namespace.freshness ?? 'freshness not reported'}</small>
+          <span>{productSharingBehaviorCopy(namespace.policy.sharing_mode)}</span>
+          <small className="text-xs text-muted-foreground">{productNamespaceFreshnessCopy(namespace.freshness)}</small>
         </span>
       )
     },
@@ -185,7 +185,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       hideAt: 'lg',
       render: (namespace) => (
         <span className="text-sm text-muted-foreground">
-          {namespace.policy.requires_admin_approval ? 'AdminAction required for export/import/delete' : namespace.policy.denial_reason ?? 'read/search policy only'}
+          {namespace.policy.requires_admin_approval ? 'Administrator review required for export/import/delete' : dataFlowText(namespace)}
         </span>
       )
     }
@@ -369,7 +369,7 @@ function policyCheck(
 }
 
 function dataPolicyTotals(namespaces: DBRAGNamespaceInfo[], conversations: NormalizedConversation[], checks: DataPolicyCheck[]) {
-  const retentionModes = [...new Set(namespaces.map((namespace) => namespace.policy.sharing_mode))].join(', ') || 'policy pending'
+  const retentionModes = [...new Set(namespaces.map((namespace) => productSharingBehaviorCopy(namespace.policy.sharing_mode)))].join(', ') || 'policy pending'
   const localNamespaces = namespaces.filter((namespace) => namespace.source_peer_id === namespace.owner_peer_id && namespace.owner_peer_id === 'local-peer').length
   const remoteNamespaces = namespaces.filter((namespace) => namespace.source_peer_id !== 'local-peer' || namespace.owner_peer_id !== 'local-peer').length
   const deniedNamespaces = namespaces.filter((namespace) => namespace.availability === 'denied' || namespace.availability === 'stale').length
@@ -403,7 +403,7 @@ function dataPolicyTotals(namespaces: DBRAGNamespaceInfo[], conversations: Norma
 
 function namespaceVisibility(namespace: DBRAGNamespaceInfo) {
   const origin = namespace.source_peer_id === 'local-peer' ? 'this device' : 'shared device'
-  return `${origin}; ${namespace.availability}; version ${namespace.schema_version}`
+  return `${origin}; ${productNamespaceAvailabilityCopy(namespace.availability)}`
 }
 
 function dataFlowText(namespace: DBRAGNamespaceInfo) {
@@ -413,11 +413,43 @@ function dataFlowText(namespace: DBRAGNamespaceInfo) {
     namespace.policy.import_supported ? 'import' : null,
     namespace.policy.delete_supported ? 'delete' : null
   ].filter((value): value is string => Boolean(value))
-  return flows.length > 0 ? flows.join(', ') : namespace.policy.denial_reason ?? 'no data flow allowed'
+  return flows.length > 0 ? flows.join(', ') : productNamespaceDenialCopy(namespace.policy.denial_reason)
 }
 
 function productDataPolicyErrorCopy(error: unknown): string {
   return safeErrorCopy(error).title
+}
+
+function productNamespaceTitle(namespace: DBRAGNamespaceInfo): string {
+  if (namespace.source_peer_id !== 'local-peer' || namespace.owner_peer_id !== 'local-peer') return 'Shared collection'
+  return 'Local collection'
+}
+
+function productNamespaceFreshnessCopy(value: string | null | undefined): string {
+  const normalized = normalizePolicyCopyToken(value)
+  if (!normalized) return 'Freshness not reported'
+  if (normalized === 'fresh' || normalized === 'current') return 'Current'
+  if (normalized === 'stale') return 'Needs refresh'
+  if (normalized === 'denied') return 'Access needed'
+  return 'Status reported'
+}
+
+function productNamespaceAvailabilityCopy(value: string): string {
+  const normalized = normalizePolicyCopyToken(value)
+  if (normalized === 'available' || normalized === 'ready') return 'Available'
+  if (normalized === 'denied') return 'Access needed'
+  if (normalized === 'stale') return 'Needs refresh'
+  if (normalized === 'degraded') return 'Limited'
+  if (normalized === 'pending') return 'Pending'
+  return 'Unavailable'
+}
+
+function productNamespaceDenialCopy(value: string | null | undefined): string {
+  const normalized = normalizePolicyCopyToken(value)
+  if (!normalized) return 'No data flow allowed'
+  if (normalized.includes('permission') || normalized.includes('auth') || normalized.includes('denied')) return 'Access needed before data can move'
+  if (normalized.includes('privacy') || normalized.includes('consent') || normalized.includes('selector')) return 'Privacy choice needed before data can move'
+  return 'No data flow allowed'
 }
 
 function productSharingBehaviorCopy(value: string): string {

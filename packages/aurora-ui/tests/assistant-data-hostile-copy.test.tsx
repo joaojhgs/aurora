@@ -18,7 +18,9 @@ import {
   RouteSheet,
   auroraEmbeddedNavItems,
   auroraNavSections,
+  buildAssistantVoiceModel,
   buildPairingQueueModel,
+  buildRoutePolicySnapshot,
   emptyMemoryViewModel,
   navItemSnapshot,
   routePolicyScenarios,
@@ -51,6 +53,16 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
 
     const surfaces = [
       renderToStaticMarkup(<AssistantView client={client} route={route} initialSession={assistantSession()} />),
+      renderToStaticMarkup(
+        <AssistantView
+          client={client}
+          route={disabledAssistantRoute()}
+          nativeAvailable
+          nativePlatform={hostile.routeReason}
+          nativePermissions={[{ name: hostile.routeReason, granted: false }]}
+          nativeCapabilities={[{ name: hostile.methodId, enabled: false }]}
+        />
+      ),
       renderToStaticMarkup(<MemoryView client={client} route={enabledRoute('memory')} initialModel={memoryModel()} />),
       renderToStaticMarkup(<DataPolicyView snapshot={dataPolicySnapshot(evaluation)} />),
       renderToStaticMarkup(<RoutePolicyView snapshot={routePolicySnapshot(evaluation)} />),
@@ -75,6 +87,46 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
       expect(rendered).not.toMatch(/\b(WebRTC|transport|fallback|runtime|provider|Tooling\.DeleteSecret|secret-token|api_key)\b/i)
       expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), `surface ${index}: ${rendered}`).toEqual([])
     }
+
+    const voiceModel = buildAssistantVoiceModel({
+      client,
+      route: disabledAssistantRoute(),
+      nativePlatform: hostile.routeReason,
+      nativeAvailable: true,
+      nativePermissions: [{ name: hostile.routeReason, granted: false }],
+      nativeCapabilities: [{ name: hostile.methodId, enabled: false }],
+      captureStatus: 'idle',
+      consentGranted: false,
+      voiceEvents: [],
+      waveformBars: []
+    })
+    const nativeCapture = voiceModel.chips.find((chip) => chip.id === 'native-capture')
+    const voiceCopy = JSON.stringify({
+      controls: voiceModel.controls.map((control) => ({ label: control.label, reason: control.reason })),
+      nativeCapture: nativeCapture ? {
+        label: nativeCapture.label,
+        providerLabel: nativeCapture.providerLabel,
+        detail: nativeCapture.detail,
+        blockers: nativeCapture.blockers,
+        evidence: nativeCapture.evidence
+      } : null
+    })
+    for (const value of hostileValues) expect(voiceCopy).not.toContain(value)
+    expect(voiceCopy).not.toContain('native-manifest')
+  })
+
+  it('keeps structured denied route-policy failures distinct from unavailable failures', async () => {
+    const deniedTransport = new MockAuroraTransport()
+      .fail('Gateway.ExplainRoute', 'unavailable_service', 'route explain down')
+      .fail('Gateway.GetCapabilityCatalog', 'permission', 'catalog denied')
+    const unavailableTransport = new MockAuroraTransport()
+      .fail('Gateway.ExplainRoute', 'unavailable_service', 'route explain down')
+      .fail('Gateway.GetCapabilityCatalog', 'unavailable_service', 'catalog down')
+
+    await expect(buildRoutePolicySnapshot(new AuroraClient({ transport: deniedTransport }), enabledRoute('admin')))
+      .resolves.toMatchObject({ loadState: 'denied' })
+    await expect(buildRoutePolicySnapshot(new AuroraClient({ transport: unavailableTransport }), enabledRoute('admin')))
+      .resolves.toMatchObject({ loadState: 'unavailable' })
   })
 })
 
@@ -167,7 +219,30 @@ function dataPolicySnapshot(evaluation: RoutePolicyEvaluation): DataPolicySnapsh
     loadState: 'ready',
     generatedAt: '2026-07-28T00:00:00Z',
     route: enabledRoute('data'),
-    namespaces: [],
+    namespaces: [
+      {
+        namespace: hostile.methodId,
+        source_peer_id: hostile.peerId,
+        owner_peer_id: 'local-peer',
+        provider_peer_id: hostile.providerId,
+        availability: 'denied',
+        policy: {
+          sharing_mode: 'remote_query',
+          privacy_class: 'sensitive',
+          allowed_operations: [],
+          explicit_selector_required: true,
+          export_supported: false,
+          import_supported: false,
+          delete_supported: false,
+          requires_admin_approval: false,
+          denial_reason: hostile.mixedReason
+        },
+        record_count: 3,
+        embedding_model: hostile.providerId,
+        schema_version: hostile.routeReason,
+        freshness: hostile.json
+      }
+    ],
     conversations: [],
     checks: [
       {
@@ -190,6 +265,19 @@ function dataPolicySnapshot(evaluation: RoutePolicyEvaluation): DataPolicySnapsh
     error: hostile.audio,
     warnings: [hostile.mixedReason],
     secretsRedacted: true
+  }
+}
+
+function disabledAssistantRoute(): RouteAvailability {
+  return {
+    ...enabledRoute('assistant'),
+    state: 'denied',
+    disabled: true,
+    routeable: false,
+    explanation: hostile.routeReason,
+    providerLabel: hostile.providerId,
+    blockers: [hostile.mixedReason],
+    evidenceSources: [hostile.json]
   }
 }
 

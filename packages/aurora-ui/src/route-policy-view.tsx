@@ -173,7 +173,7 @@ export async function buildRoutePolicySnapshot(
     }
     return {
       scenario,
-      state: route.disabled ? route.state : 'unsupported',
+      state: routePolicyFailureState(result?.reason, route),
       evaluation: null,
       error: routePolicyErrorMessage(result?.reason)
     }
@@ -491,7 +491,29 @@ function settledFailure(label: string, result: PromiseSettledResult<unknown> | u
 }
 
 function isDeniedFailure(result: PromiseSettledResult<unknown>): boolean {
-  return result.status === 'rejected' && routePolicyErrorMessage(result.reason).toLowerCase().includes('denied')
+  return result.status === 'rejected' && routePolicyFailureKind(result.reason) === 'denied'
+}
+
+function routePolicyFailureState(error: unknown, route: RouteAvailability): RouteAvailability['state'] {
+  if (route.disabled) return route.state
+  return routePolicyFailureKind(error) === 'denied' ? 'denied' : 'unsupported'
+}
+
+function routePolicyFailureKind(error: unknown): 'denied' | 'unavailable' {
+  if (typeof error === 'object' && error !== null) {
+    const record = error as Record<string, unknown>
+    const raw = [
+      record.code,
+      record.status,
+      record.status_code,
+      record.statusCode,
+      record.name
+    ].filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
+    if (raw.some((value) => value === 401 || value === 403)) return 'denied'
+    const normalized = raw.map((value) => String(value).toLowerCase())
+    if (normalized.some((value) => /auth|permission|denied|forbidden|unauthorized|privacy_blocked/.test(value))) return 'denied'
+  }
+  return 'unavailable'
 }
 
 function previewTarget(evaluation: RoutePolicyEvaluation): string {
