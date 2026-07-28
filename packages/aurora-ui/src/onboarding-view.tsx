@@ -7,6 +7,7 @@ import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { presentableSignal } from './status-badges'
 import { getAuroraSurfaceProfile } from './platform-surface'
 import { PRODUCT_COPY, productStatusCopy, safeErrorCopy } from './product-copy'
+import type { AuroraNodeMode, AuroraRuntimeTier } from './runtime-profile'
 import { Button, FormField } from './primitives'
 import { buttonVariants } from '#components/ui/button'
 import { Input } from '#components/ui/input'
@@ -24,10 +25,11 @@ export interface OnboardingModePreferenceStore {
   evidence: string
   readSelectedMode: () => Promise<string | null>
   writeSelectedMode: (modeId: string) => Promise<boolean>
+  readSelectedRuntimeTier?: (() => Promise<string | null>) | undefined
+  writeSelectedRuntimeTier?: ((runtimeTier: string) => Promise<boolean>) | undefined
 }
 
 type OnboardingProductModeId = 'connect-to-aurora' | 'make-this-device-available' | 'run-aurora-on-this-computer'
-type AuroraNodeMode = 'remote-console' | 'local-provider' | 'full-local'
 
 export interface DeploymentModeCard {
   id: string
@@ -97,6 +99,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [wizardStep, setWizardStep] = useState<'detect' | 'setup' | 'done'>('detect')
+  const [manualAddressVisible, setManualAddressVisible] = useState(false)
 
   const model = useMemo(
     () =>
@@ -126,10 +129,13 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     modeSelectionTouchedRef.current = false
     setModePreferenceReady(false)
     setModePreferenceEvidence('Checking saved choice')
-    void modePreferenceStore.readSelectedMode().then(
-      (modeId) => {
+    void Promise.all([
+      modePreferenceStore.readSelectedMode(),
+      modePreferenceStore.readSelectedRuntimeTier?.() ?? Promise.resolve(null),
+    ]).then(
+      ([modeId, runtimeTier]) => {
         if (cancelled) return
-        const productModeId = modeId ? storedModeToProductModeId(modeId) : null
+        const productModeId = modeId ? storedModeToProductModeId(modeId, runtimeTier) : null
         const availableModeId = productModeId ? availableProductModeId(productModeId, client.transport.kind, snapshot, userAgent) : null
         if (availableModeId && !modeSelectionTouchedRef.current) {
           setSelectedModeId(availableModeId)
@@ -158,10 +164,14 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     modeSelectionTouchedRef.current = true
     setSelectedModeId(modeId)
     if (!modePreferenceStore) return
+    const preference = productModePreference(modeId)
     setModePreferenceEvidence(`Saving ${modeLabel(modeId)}`)
-    void modePreferenceStore.writeSelectedMode(productModeIdToNodeMode(modeId)).then(
-      (ok) => {
-        setModePreferenceEvidence(ok ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
+    void Promise.all([
+      modePreferenceStore.writeSelectedMode(preference.nodeMode),
+      modePreferenceStore.writeSelectedRuntimeTier?.(preference.runtimeTier) ?? Promise.resolve(true),
+    ]).then(
+      ([modeOk, tierOk]) => {
+        setModePreferenceEvidence(modeOk && tierOk ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
       },
       () => setModePreferenceEvidence('Choice not saved'),
     )
@@ -238,6 +248,8 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
 
   const completedStepCount = model.setupSteps.filter(isStepComplete).length
   const allStepsComplete = model.setupSteps.length > 0 && completedStepCount === model.setupSteps.length
+  const manualAddressGated = setupRequired && Boolean(thinConnectionPanel)
+  const showManualAddress = !manualAddressGated || manualAddressVisible
 
   return (
     <section className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-10" aria-labelledby="onboarding-title">
@@ -309,6 +321,12 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
             </div>
           ) : null}
 
+          {manualAddressGated && !manualAddressVisible ? (
+            <Button variant="ghost" onClick={() => setManualAddressVisible(true)}>
+              {PRODUCT_COPY.onboarding.invite.advanced}
+            </Button>
+          ) : null}
+
           <section aria-labelledby="guided-setup-title" className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <h2 id="guided-setup-title" className="flex items-center gap-2 text-sm font-semibold">
@@ -348,23 +366,32 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
             </ol>
           </section>
 
-          <section aria-labelledby="gateway-title" className="flex flex-col gap-2.5">
-            <h2 id="gateway-title" className="text-sm font-semibold">
-              {PRODUCT_COPY.connection.addressLabel}
-            </h2>
-            <FormField label={PRODUCT_COPY.connection.addressLabel} htmlFor="aurora-endpoint">
-              <Input
-                id="aurora-endpoint"
-                value={endpoint}
-                onChange={(event) => setEndpoint(event.currentTarget.value)}
-                placeholder="Aurora address"
-                inputMode="url"
-              />
-            </FormField>
-            <Button variant="outline" disabled={!endpoint.trim()} onClick={() => setMessage('Address saved for this setup session.')}>
-              Use this address
-            </Button>
-          </section>
+          {showManualAddress ? (
+            <section aria-labelledby="gateway-title" className="flex flex-col gap-2.5">
+              <h2 id="gateway-title" className="text-sm font-semibold">
+                {PRODUCT_COPY.connection.addressLabel}
+              </h2>
+              <FormField label={PRODUCT_COPY.connection.addressLabel} htmlFor="aurora-endpoint">
+                <Input
+                  id="aurora-endpoint"
+                  value={endpoint}
+                  onChange={(event) => setEndpoint(event.currentTarget.value)}
+                  placeholder="Aurora address"
+                  inputMode="url"
+                />
+              </FormField>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" disabled={!endpoint.trim()} onClick={() => setMessage('Address saved for this setup session.')}>
+                  Use this address
+                </Button>
+                {manualAddressGated ? (
+                  <Button variant="ghost" onClick={() => setManualAddressVisible(false)}>
+                    Use invite instead
+                  </Button>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
           <section aria-labelledby="account-title" aria-live="polite" className="flex flex-col gap-2.5">
             <h2 id="account-title" className="text-sm font-semibold">
@@ -902,7 +929,7 @@ function isSupportedModeId(modeId: string): modeId is OnboardingProductModeId {
 
 const supportedModeIds: ReadonlySet<string> = new Set(['connect-to-aurora', 'make-this-device-available', 'run-aurora-on-this-computer'])
 
-function storedModeToProductModeId(modeId: string): OnboardingProductModeId | null {
+function storedModeToProductModeId(modeId: string, runtimeTier: string | null | undefined): OnboardingProductModeId | null {
   switch (modeId) {
     case 'remote-console':
     case 'desktop-thin':
@@ -911,6 +938,8 @@ function storedModeToProductModeId(modeId: string): OnboardingProductModeId | nu
     case 'server-web':
     case 'web-thin':
       return 'connect-to-aurora'
+    case 'mesh-node':
+      return runtimeTier === 'python-full' ? 'run-aurora-on-this-computer' : 'make-this-device-available'
     case 'local-provider':
     case 'mobile-native':
     case 'mobile-thin':
@@ -926,10 +955,10 @@ function storedModeToProductModeId(modeId: string): OnboardingProductModeId | nu
   }
 }
 
-function productModeIdToNodeMode(modeId: OnboardingProductModeId): AuroraNodeMode {
-  if (modeId === 'run-aurora-on-this-computer') return 'full-local'
-  if (modeId === 'make-this-device-available') return 'local-provider'
-  return 'remote-console'
+function productModePreference(modeId: OnboardingProductModeId): { nodeMode: AuroraNodeMode; runtimeTier: AuroraRuntimeTier } {
+  if (modeId === 'run-aurora-on-this-computer') return { nodeMode: 'mesh-node', runtimeTier: 'python-full' }
+  if (modeId === 'make-this-device-available') return { nodeMode: 'mesh-node', runtimeTier: 'lightweight-ts' }
+  return { nodeMode: 'remote-console', runtimeTier: 'none' }
 }
 
 function availableProductModeId(modeId: OnboardingProductModeId, transportKind: string, snapshot: AuroraShellSnapshot, userAgent?: string): OnboardingProductModeId | null {

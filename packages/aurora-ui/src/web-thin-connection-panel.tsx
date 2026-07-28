@@ -68,7 +68,7 @@ export function HomeNodeConnectionPanel({
 }: WebThinConnectionPanelProps) {
   const [snapshot, setSnapshot] = useState<BrowserWebRtcSnapshot>(() => peer.snapshot())
   const [inviteText, setInviteText] = useState(initialInviteText ?? '')
-  const [error, setError] = useState<string | null>(null)
+  const [productError, setProductError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profilePending, setProfilePending] = useState(false)
   const [invitePending, setInvitePending] = useState(false)
@@ -100,7 +100,7 @@ export function HomeNodeConnectionPanel({
   const visibleDiagnostic =
     snapshot.diagnostic
     && (!configuredPeerOffline || !isExpectedOfflineDiagnostic(snapshot.diagnostic))
-      ? snapshot.diagnostic
+      ? productDiagnosticMessage(snapshot.diagnostic)
       : null
   const connectDisabled = (!configureOnly && mode === 'http-only')
     || snapshot.status === 'disabled'
@@ -117,10 +117,10 @@ export function HomeNodeConnectionPanel({
 
   const connectInvite = async () => {
     if (!invite) {
-      setError('Paste a valid Aurora invite before continuing.')
+      setProductError('Paste a valid Aurora invite before continuing.')
       return
     }
-    setError(null)
+    setProductError(null)
     setInvitePending(true)
     try {
       const webRtcProfile = peer.importInvite(inviteText)
@@ -154,7 +154,7 @@ export function HomeNodeConnectionPanel({
       await onInviteAccepted?.(webRtcProfile, inviteText)
       if (!configureOnly) await peer.connect(nextProfile.webrtcProfile)
     } catch (nextError) {
-      setError(uiErrorMessage(nextError))
+      setProductError(uiErrorMessage(nextError))
     } finally {
       setInvitePending(false)
     }
@@ -164,7 +164,7 @@ export function HomeNodeConnectionPanel({
     const file = event.currentTarget.files?.[0]
     event.currentTarget.value = ''
     if (!file) return
-    setError(null)
+    setProductError(null)
     try {
       const text = await file.text()
       if (!decodeMeshInvite(text)) {
@@ -172,26 +172,26 @@ export function HomeNodeConnectionPanel({
       }
       setInviteText(text)
     } catch (nextError) {
-      setError(uiErrorMessage(nextError))
+      setProductError(uiErrorMessage(nextError))
     }
   }
 
   const scanQr = async () => {
     if (invitePending) return
-    setError(null)
+    setProductError(null)
     setInvitePending(true)
     try {
       const scanned = await (onScanQr ?? scanQrInviteWithBrowserCamera)()
       if (scanned) setInviteText(scanned)
     } catch (nextError) {
-      setError(uiErrorMessage(nextError))
+      setProductError(uiErrorMessage(nextError))
     } finally {
       setInvitePending(false)
     }
   }
 
   const reconnect = async () => {
-    setError(null)
+    setProductError(null)
     try {
       if (invite) {
         const profile = peer.importInvite(inviteText)
@@ -200,7 +200,7 @@ export function HomeNodeConnectionPanel({
         await peer.connect()
       }
     } catch (nextError) {
-      setError(uiErrorMessage(nextError))
+      setProductError(uiErrorMessage(nextError))
     }
   }
 
@@ -387,9 +387,9 @@ export function HomeNodeConnectionPanel({
               {PRODUCT_COPY.localData.temporary}
             </p>
           ) : null}
-          {error ? (
+          {productError ? (
             <p role="alert" className="text-sm text-destructive">
-              {error}
+              {productError}
             </p>
           ) : null}
 
@@ -591,7 +591,7 @@ export function HomeNodeConnectionPanel({
             {PRODUCT_COPY.localData.temporary}
           </p>
         ) : null}
-        {error ?? visibleDiagnostic ? <p role="alert" className="text-sm text-destructive">{error ?? visibleDiagnostic}</p> : null}
+        {productError ?? visibleDiagnostic ? <p role="alert" className="text-sm text-destructive">{productError ?? visibleDiagnostic}</p> : null}
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2">
         <Button type="button" disabled={connectDisabled || invitePending} onClick={() => void connectInvite()}>
@@ -670,6 +670,20 @@ function uiErrorMessage(error: unknown): string {
     return productStatusCopy('item-read-failed').title
   }
   return safeErrorCopy(error).title
+}
+
+function productDiagnosticMessage(value: string): string {
+  const diagnostic = redactUiDiagnostic(value)
+  if (/secure|https|localhost/iu.test(diagnostic)) {
+    return 'Open Aurora from a secure page, localhost, or the desktop app before joining.'
+  }
+  if (/invite|profile|room|pair/iu.test(diagnostic)) {
+    return 'Add a valid Aurora invite before connecting.'
+  }
+  if (/offline|closed|failed|not connected|unavailable|transport|runtime|thin|webrtc|datachannel|signaling|fallback/iu.test(diagnostic)) {
+    return productStatusCopy('connection-failed').title
+  }
+  return productStatusCopy('connection-failed').title
 }
 
 function connectionStatusLabel(status: BrowserWebRtcSnapshot['status']): string {

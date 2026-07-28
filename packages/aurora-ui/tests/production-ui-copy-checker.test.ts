@@ -153,6 +153,52 @@ describe('production UI copy checker', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  it('detects raw dynamic error messages in rendered alerts and setters', () => {
+    const dir = fixtureDir()
+    const file = join(dir, 'raw-error-message.tsx')
+    writeFileSync(file, `
+      export function RawErrorMessage({ error }: { error: Error }) {
+        setMessage(error.message)
+        return <AlertDescription>{error.message}</AlertDescription>
+      }
+    `)
+
+    const result = runChecker(file)
+    expect(result.ok).toBe(false)
+    expect(result.stderr).toContain('error.message')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('detects raw method identifiers in titles and disabled reasons', () => {
+    const dir = fixtureDir()
+    const file = join(dir, 'raw-method-id.tsx')
+    writeFileSync(file, `
+      export function RawMethodId({ method }: { method: { busTopic: string } }) {
+        return <Button title={method.busTopic} disabledReason={method.busTopic}>Run</Button>
+      }
+    `)
+
+    const result = runChecker(file)
+    expect(result.ok).toBe(false)
+    expect(result.stderr).toContain('method.busTopic')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('detects tooling-style JSX return expressions that render raw diagnostics', () => {
+    const dir = fixtureDir()
+    const file = join(dir, 'tooling-return.tsx')
+    writeFileSync(file, `
+      export function ToolingReturn({ error }: { error: string }) {
+        return <Card title="Tools"><AlertDescription>{error}</AlertDescription></Card>
+      }
+    `)
+
+    const result = runChecker(file)
+    expect(result.ok).toBe(false)
+    expect(result.stderr).toContain('error')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
   it('scans arbitrary production files without path bypasses', () => {
     const dir = fixtureDir()
     const nested = join(dir, 'feature-panel.tsx')
@@ -161,6 +207,22 @@ describe('production UI copy checker', () => {
     const result = runChecker(dir)
     expect(result.ok).toBe(false)
     expect(result.stderr).toContain('thin')
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('scans production ts files beyond the shared copy modules', () => {
+    const dir = fixtureDir()
+    const file = join(dir, 'copy-helper.ts')
+    writeFileSync(file, `
+      export function statusCopy() {
+        return { title: "Runtime transport failed" }
+      }
+    `)
+
+    const result = runChecker(file)
+    expect(result.ok).toBe(false)
+    expect(result.stderr).toContain('runtime')
+    expect(result.stderr).toContain('transport')
     rmSync(dir, { recursive: true, force: true })
   })
 

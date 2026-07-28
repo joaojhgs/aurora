@@ -236,6 +236,8 @@ export interface AuroraModePreferenceStore {
   evidence: string;
   readSelectedMode: () => Promise<string | null>;
   writeSelectedMode: (modeId: string) => Promise<boolean>;
+  readSelectedRuntimeTier?: () => Promise<string | null>;
+  writeSelectedRuntimeTier?: (runtimeTier: string) => Promise<boolean>;
 }
 
 export type AuroraOverlayRuntimeMode = "voice" | "text";
@@ -252,6 +254,7 @@ export interface AuroraOverlayCommandStatus {
 }
 
 const ONBOARDING_MODE_KEY = "aurora.session.onboarding-mode";
+const ONBOARDING_RUNTIME_TIER_KEY = "aurora.session.runtime-tier";
 const DEFAULT_THIN_CONNECTION_MODE: AuroraThinConnectionMode = "http-only";
 export const ANDROID_NATIVE_PLUGIN_NAME = "aurora-native";
 export const ANDROID_LIFECYCLE_EVENT = "aurora://android-lifecycle";
@@ -1005,10 +1008,21 @@ function secureModePreferenceStore(
       const result = await transport.secureStorageGet(ONBOARDING_MODE_KEY);
       return result.value;
     },
+    readSelectedRuntimeTier: async () => {
+      const result = await transport.secureStorageGet(ONBOARDING_RUNTIME_TIER_KEY);
+      return result.value;
+    },
     writeSelectedMode: async (modeId: string) => {
       const result = await transport.secureStorageSet(
         ONBOARDING_MODE_KEY,
         modeId,
+      );
+      return result.ok;
+    },
+    writeSelectedRuntimeTier: async (runtimeTier: string) => {
+      const result = await transport.secureStorageSet(
+        ONBOARDING_RUNTIME_TIER_KEY,
+        runtimeTier,
       );
       return result.ok;
     },
@@ -1019,11 +1033,17 @@ function memoryOnlyModePreferenceStore(
   evidence: string,
 ): AuroraModePreferenceStore {
   let selectedMode: string | null = null;
+  let selectedRuntimeTier: string | null = null;
   return {
     evidence,
     readSelectedMode: async () => selectedMode,
+    readSelectedRuntimeTier: async () => selectedRuntimeTier,
     writeSelectedMode: async (modeId: string) => {
       selectedMode = modeId;
+      return true;
+    },
+    writeSelectedRuntimeTier: async (runtimeTier: string) => {
+      selectedRuntimeTier = runtimeTier;
       return true;
     },
   };

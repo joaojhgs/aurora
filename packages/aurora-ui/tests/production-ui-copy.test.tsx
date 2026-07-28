@@ -73,6 +73,17 @@ describe('production UI copy', () => {
       buttonByText(container, 'Continue').click()
     })
     expect(container.querySelector('[data-testid="home-node-panel"]')).not.toBeNull()
+    expect(container.querySelector('#aurora-endpoint')).toBeNull()
+
+    await act(async () => {
+      buttonByText(container, 'Connect with an address').click()
+    })
+    expect(container.querySelector('#aurora-endpoint')).not.toBeNull()
+
+    await act(async () => {
+      buttonByText(container, 'Use invite instead').click()
+    })
+    expect(container.querySelector('#aurora-endpoint')).toBeNull()
     root.unmount()
     container.remove()
   })
@@ -98,11 +109,17 @@ describe('production UI copy', () => {
 
   it('restores legacy node modes into product choices and writes canonical node modes', async () => {
     const writes: string[] = []
+    const tiers: string[] = []
     const store: OnboardingModePreferenceStore = {
       evidence: 'Saved for this device',
       readSelectedMode: async () => 'remote-console',
+      readSelectedRuntimeTier: async () => 'none',
       writeSelectedMode: async (modeId) => {
         writes.push(modeId)
+        return true
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier)
         return true
       },
     }
@@ -122,19 +139,26 @@ describe('production UI copy', () => {
     await act(async () => {
       choiceByText(container, 'Make this device available').click()
     })
-    expect(writes).toEqual(['local-provider'])
+    expect(writes).toEqual(['mesh-node'])
+    expect(tiers).toEqual(['lightweight-ts'])
 
     root.unmount()
     container.remove()
   })
 
-  it('gates saved full-local choices until desktop local capability is available', async () => {
+  it('gates saved local runtime choices until desktop local capability is available', async () => {
     const writes: string[] = []
+    const tiers: string[] = []
     const store: OnboardingModePreferenceStore = {
       evidence: 'Saved for this device',
-      readSelectedMode: async () => 'full-local',
+      readSelectedMode: async () => 'mesh-node',
+      readSelectedRuntimeTier: async () => 'python-full',
       writeSelectedMode: async (modeId) => {
         writes.push(modeId)
+        return true
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier)
         return true
       },
     }
@@ -176,10 +200,26 @@ describe('production UI copy', () => {
     await act(async () => {
       choiceByText(container, 'Run Aurora on this computer').click()
     })
-    expect(writes).toEqual(['full-local'])
+    expect(writes).toEqual(['mesh-node'])
+    expect(tiers).toEqual(['python-full'])
 
     root.unmount()
     container.remove()
+  })
+
+  it('maps raw connection diagnostics to product-safe copy', () => {
+    const rawDiagnostic = 'WebRTC thin-client transport DataChannel failed'
+    const text = visibleText(renderToStaticMarkup(
+      <HomeNodeConnectionPanel
+        peer={peerController({ status: 'failed', diagnostic: rawDiagnostic })}
+        mode="webrtc-preferred"
+        transportKind="http"
+      />,
+    ))
+
+    expect(text).toContain('Could not connect to this Aurora device')
+    expect(text).not.toContain(rawDiagnostic)
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
   })
 })
 
@@ -265,7 +305,7 @@ function route(): RouteAvailability {
   }
 }
 
-function peerController(): BrowserWebRtcPeerController {
+function peerController(overrides: Partial<BrowserWebRtcSnapshot> = {}): BrowserWebRtcPeerController {
   const snapshot: BrowserWebRtcSnapshot = {
     state: 'closed',
     connectionMode: 'webrtc-preferred',
@@ -289,6 +329,7 @@ function peerController(): BrowserWebRtcPeerController {
     hasHttpFallback: true,
     secretsPersisted: true,
     persistenceBackend: 'platform-keychain',
+    ...overrides,
   }
   return {
     snapshot: () => snapshot,

@@ -1226,9 +1226,9 @@ describe("Aurora Tauri runtime wrapper", () => {
       />,
     );
 
-    expect(markup).toContain("Peer connection");
+    expect(markup).toContain("Connected Aurora device");
     expect(markup).toContain(
-      "Connection details come from the saved Aurora invite and can be changed at runtime",
+      "Connection details come from the saved Aurora invite and can be changed later",
     );
     expect(markup).toContain("Thin connection mode");
     expect(markup).toContain("webrtc-only");
@@ -1264,9 +1264,9 @@ describe("Aurora Tauri runtime wrapper", () => {
 
       expect(markup).toContain("Connect to Aurora");
       expect(markup).toContain("Node name");
-      expect(markup).toContain("Paste mesh invite");
+      expect(markup).toContain("Paste invite");
       expect(markup).toContain("Open invite file");
-      expect(markup.includes("Scan QR invite")).toBe(showsQrScanner);
+      expect(markup.includes("Scan invite")).toBe(showsQrScanner);
       expect(markup).not.toContain("HTTP Gateway endpoint");
       expect(markup).not.toContain("WebSocket signaling endpoint");
       expect(markup).not.toContain("Connection mode");
@@ -2438,13 +2438,19 @@ describe("Tauri CI/E2E route gates", () => {
 
   it("e2e:runtime restores onboarding mode through platform preference store without browser storage", async () => {
     const writes: string[] = [];
+    const tiers: string[] = [];
     const modePreferenceStore: NonNullable<
       AuroraTauriRuntime["modePreferenceStore"]
     > = {
       evidence: "test platform secure storage",
-      readSelectedMode: async () => "desktop-web-thin",
+      readSelectedMode: async () => "remote-console",
+      readSelectedRuntimeTier: async () => "none",
       writeSelectedMode: async (modeId) => {
         writes.push(modeId);
+        return true;
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier);
         return true;
       },
     };
@@ -2460,13 +2466,15 @@ describe("Tauri CI/E2E route gates", () => {
         const activeCard = container.querySelector<HTMLButtonElement>(
           'button[role="radio"][aria-checked="true"]',
         );
-        expect(activeCard?.textContent).toContain("Desktop Web thin");
-        expect(container.textContent).toContain("Desktop Web thin");
+        expect(activeCard?.textContent).toContain("Connect to Aurora");
+        expect(container.textContent).toContain("Connect to Aurora");
       });
       expect(writes).toEqual([]);
-      await clickButtonByLabel(container, "Desktop Web thin");
+      expect(tiers).toEqual([]);
+      await clickButtonByLabel(container, "Connect to Aurora");
       await waitUntil(() => {
-        expect(writes).toEqual(["desktop-web-thin"]);
+        expect(writes).toEqual(["remote-console"]);
+        expect(tiers).toEqual(["none"]);
       });
       expect(container.textContent).not.toContain("localStorage");
       expect(container.textContent).not.toContain("sessionStorage");
@@ -2478,13 +2486,19 @@ describe("Tauri CI/E2E route gates", () => {
 
   it("e2e:runtime rejects invalid stored onboarding modes and records failed saves", async () => {
     const writes: string[] = [];
+    const tiers: string[] = [];
     const modePreferenceStore: NonNullable<
       AuroraTauriRuntime["modePreferenceStore"]
     > = {
       evidence: "test platform secure storage",
-      readSelectedMode: async () => "mobile-thin",
+      readSelectedMode: async () => "not-a-node-mode",
+      readSelectedRuntimeTier: async () => "not-a-tier",
       writeSelectedMode: async (modeId) => {
         writes.push(modeId);
+        return false;
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier);
         return false;
       },
     };
@@ -2500,13 +2514,15 @@ describe("Tauri CI/E2E route gates", () => {
         const activeCard = container.querySelector<HTMLButtonElement>(
           'button[role="radio"][aria-checked="true"]',
         );
-        expect(activeCard?.textContent).toContain("Desktop Web thin");
-        expect(container.textContent).toContain("Desktop Web thin");
+        expect(activeCard?.textContent).toContain("Connect to Aurora");
+        expect(container.textContent).toContain("Connect to Aurora");
       });
       expect(writes).toEqual([]);
-      await clickButtonByLabel(container, "Desktop Web thin");
+      expect(tiers).toEqual([]);
+      await clickButtonByLabel(container, "Connect to Aurora");
       await waitUntil(() => {
-        expect(writes).toEqual(["desktop-web-thin"]);
+        expect(writes).toEqual(["remote-console"]);
+        expect(tiers).toEqual(["none"]);
       });
     } finally {
       await act(async () => root.unmount());
@@ -2517,6 +2533,7 @@ describe("Tauri CI/E2E route gates", () => {
   it("e2e:runtime keeps mode selection locked until preference restore completes", async () => {
     let resolveRead: (modeId: string | null) => void = () => undefined;
     const writes: string[] = [];
+    const tiers: string[] = [];
     const modePreferenceStore: NonNullable<
       AuroraTauriRuntime["modePreferenceStore"]
     > = {
@@ -2527,6 +2544,10 @@ describe("Tauri CI/E2E route gates", () => {
         }),
       writeSelectedMode: async (modeId) => {
         writes.push(modeId);
+        return true;
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier);
         return true;
       },
     };
@@ -2541,20 +2562,21 @@ describe("Tauri CI/E2E route gates", () => {
       const desktopThinButton = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button"),
       ).find((candidate) =>
-        candidate.textContent?.includes("Desktop Web thin"),
+        candidate.textContent?.includes("Connect to Aurora"),
       );
       expect(desktopThinButton?.disabled).toBe(true);
       await act(async () => {
-        resolveRead("desktop-web-thin");
+        resolveRead("remote-console");
         await flushReactWork();
       });
       await waitUntil(() => {
         const activeCard = container.querySelector<HTMLButtonElement>(
           'button[role="radio"][aria-checked="true"]',
         );
-        expect(activeCard?.textContent).toContain("Desktop Web thin");
+        expect(activeCard?.textContent).toContain("Connect to Aurora");
       });
       expect(writes).toEqual([]);
+      expect(tiers).toEqual([]);
     } finally {
       await act(async () => root.unmount());
       container.remove();

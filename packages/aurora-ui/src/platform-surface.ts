@@ -204,7 +204,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: false,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
-        detail: 'Desktop local uses STTCoordinator for daemon wakeword; focused push-to-talk uses WebView microphone capture to avoid duplicate wake/listen events.'
+        detail: 'Background listening can stay on this computer while the visible microphone button uses foreground capture.'
       }
     case 'desktop-thin':
     case 'web':
@@ -233,7 +233,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
-        detail: 'Mobile push-to-talk can use focused WebView capture now; durable wake/background capture requires the platform-native mobile adapter.'
+        detail: 'Mobile push-to-talk is available while Aurora is open. Background voice depends on device support.'
       }
     case 'mock':
     case 'unknown':
@@ -243,7 +243,7 @@ export function getAuroraVoiceCapturePolicy(kind: LegacyAuroraSurfaceKind): Auro
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: false,
         avoidCoordinatorPushToTalk: true,
-        detail: 'Voice capture is unavailable until the runtime surface is known and microphone permission is granted.'
+        detail: 'Voice capture is unavailable until microphone access is ready.'
       }
   }
 }

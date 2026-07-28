@@ -15,12 +15,9 @@ DEFAULT_PATHS = (
     "apps/aurora-web/app",
     "apps/aurora-tauri/src",
 )
-RENDER_SOURCE_TS_FILES = {
-    "product-copy.ts",
-    "shell-data.ts",
-}
 
 FORBIDDEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("raw-render-expression", re.compile(r"\braw-render-expression\b", re.I)),
     ("proof", re.compile(r"\bproof\b", re.I)),
     ("evidence", re.compile(r"\bevidence\b", re.I)),
     ("fixture", re.compile(r"\bfixtures?\b", re.I)),
@@ -121,9 +118,9 @@ def is_scan_target(path: pathlib.Path) -> bool:
         return False
     if "tests" in path.parts or re.search(r"\.test\.[tj]sx?$", path.name):
         return False
-    if path.suffix == ".tsx":
-        return True
-    return path.name in RENDER_SOURCE_TS_FILES
+    if path.name.endswith(".d.ts"):
+        return False
+    return True
 
 
 def scan_file(path: pathlib.Path) -> list[Finding]:
@@ -229,6 +226,8 @@ def rendered_literals(text: str, rel_path: str) -> list[tuple[int, str]]:
         if is_rendered_literal_context(context, rel_path):
             results.append((line_for(literal.start), literal.value))
 
+    results.extend(rendered_dynamic_expressions(text, line_for))
+
     return results
 
 
@@ -286,7 +285,7 @@ def is_rendered_literal_context(context: str, rel_path: str) -> bool:
         nearby = stripped[-320:]
         return bool(re.search(r"\b(?:copy|message|status|diagnostic|alert|toast|view|panel|card|dialog|label|title|description|detail|reason|repair|error|evidence)\b", nearby, re.I))
     current_line = stripped.splitlines()[-1] if stripped else ""
-    if current_line.endswith("?") or re.search(r"\?[^{};]*:\s*$", current_line):
+    if (current_line.endswith("?") and not current_line.endswith("??")) or re.search(r"\?[^{};]*:\s*$", current_line):
         nearby = stripped[-160:]
         return bool(
             (rel_path.endswith(".tsx") and re.search(r"\breturn\b", nearby))
@@ -295,6 +294,48 @@ def is_rendered_literal_context(context: str, rel_path: str) -> bool:
             or re.search(r"\b[A-Za-z]*(?:Label|Title|Description|Detail|Reason|Repair|Error|Message|Evidence|Copy)\b", nearby)
         )
     return False
+
+
+def rendered_dynamic_expressions(text: str, line_for) -> list[tuple[int, str]]:
+    results: list[tuple[int, str]] = []
+    jsx_sink_patterns = (
+        re.compile(r"<(?:AlertTitle|AlertDescription)\b[^>]*>\s*\{([^{}]+)\}", re.S),
+        re.compile(r"<[^>]*\brole\s*=\s*(?:\"alert\"|'alert')[^>]*>\s*\{([^{}]+)\}", re.S),
+        re.compile(r"\b(?:title|disabledReason|aria-label|label|description)\s*=\s*\{([^{}]+)\}", re.S),
+    )
+    call_sink_pattern = re.compile(
+        r"\b(?:setMessage|setError|set[A-Za-z]+Error|set[A-Za-z]+Message|toast|alert)\s*\(([^;\n]+)\)",
+        re.S,
+    )
+    for pattern in jsx_sink_patterns:
+        for match in pattern.finditer(text):
+            expression = normalize_expression(match.group(1))
+            if is_suspicious_render_expression(expression):
+                results.append((line_for(match.start(1)), f"raw-render-expression {expression}"))
+    for match in call_sink_pattern.finditer(text):
+        expression = normalize_expression(match.group(1))
+        if is_suspicious_render_expression(expression):
+            results.append((line_for(match.start(1)), f"raw-render-expression {expression}"))
+    return results
+
+
+def normalize_expression(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def is_suspicious_render_expression(expression: str) -> bool:
+    if not expression:
+        return False
+    if re.search(
+        r"\b(?:safeErrorCopy|productStatusCopy|uiErrorMessage|productDiagnosticMessage|onboardingErrorMessage|meshPeerErrorMessage|meshSafeErrorTitle|serviceRoutingSafeError|presentableSignal|permissionLabel|permissionSummary|product[A-Za-z]+Copy)\b",
+        expression,
+    ):
+        return False
+    return bool(
+        re.search(r"\.message\b", expression)
+        or re.search(r"\b(?:error|diagnostic|diagnostics|disabledReason|methodId|method_id|busTopic|topic|keyPath|key_path)\b", expression)
+        or re.search(r"\b[A-Z][A-Za-z0-9]*_METHODS\b|\b[A-Z][A-Za-z0-9]*Methods\b", expression)
+    )
 
 
 def normalize_literal(value: str) -> str:
