@@ -1,0 +1,440 @@
+{
+  "schema": "aurora.tooling.interop.vectors.v1",
+  "authority": "Python app.services.db.tool_identity_store and tooling_remote_catalog_store at base 97c81684454582d911a81141421e02b22aa867d9",
+  "stable_peer_id": "peer:台北/room 42?x=1#node",
+  "percent_encoded_stable_peer_id": "peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node",
+  "provider_service_instance_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+  "method_ids": {
+    "execute_tool": "Tooling.ExecuteTool",
+    "get_export_catalog": "Tooling.GetExportCatalog",
+    "get_tools": "Tooling.GetTools",
+    "prepare_execution": "Tooling.PrepareExecution"
+  },
+  "positive": [
+    {
+      "case": "unicode_nested_schema",
+      "tool_contract_id": "native.notes.search/v1:😀",
+      "percent_encoded_tool_contract_id": "native.notes.search%2Fv1%3A%F0%9F%98%80",
+      "global_tool_id": "aurora-tool:v1:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling:native.notes.search%2Fv1%3A%F0%9F%98%80",
+      "schema_hash": "392a589b39802465928be5cf635bb040474b103708a1f2b8de0157a74263dd85",
+      "reordered_schema_hash": "392a589b39802465928be5cf635bb040474b103708a1f2b8de0157a74263dd85",
+      "tool": {
+        "admin": false,
+        "aliases": [],
+        "args_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "filters": {
+              "additionalProperties": false,
+              "properties": {
+                "tags": {
+                  "default": [],
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "updatedAfter": {
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "query": {
+              "description": "Search text 😀",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "argument_visibility": {
+          "filters.updatedAfter": "hash_only",
+          "query": "display"
+        },
+        "capability_class": "read",
+        "confirmation_required": false,
+        "data_egress": false,
+        "description": "Search notes 日本語 from a lightweight node fixture",
+        "display_name": "Search notes 日本語",
+        "execution_location": "remote",
+        "exportable": true,
+        "external": false,
+        "global_tool_id": "aurora-tool:v1:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling:native.notes.search%2Fv1%3A%F0%9F%98%80",
+        "legacy_global_tool_ids": [
+          "legacy:notes.search"
+        ],
+        "local_name": "notes.search",
+        "mutating": false,
+        "name": "notes.search",
+        "namespace": "local.notes",
+        "privacy_hints": [
+          "local_device"
+        ],
+        "provenance": {
+          "advertised_name": "notes.search",
+          "provider_kind": "mesh_peer",
+          "provider_peer_id": "peer:台北/room 42?x=1#node",
+          "provider_service_instance_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+          "provider_tool_id": "native.notes.search/v1:😀",
+          "source": "unknown",
+          "stable_source_id": "local-notes-v1"
+        },
+        "provider_available": true,
+        "provider_granted_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "provider_label": "Aurora 台北 Laptop",
+        "provider_peer_id": "peer:台北/room 42?x=1#node",
+        "provider_service_instance_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+        "rate_limit_hints": {
+          "max_calls": 30,
+          "policy": "fixture",
+          "window_seconds": 60
+        },
+        "required_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "resource_scope": [
+          "device:notes"
+        ],
+        "risk_class": "standard",
+        "safety_class": "standard",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "snippet": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "share_group_id": "local-capability:notes",
+        "share_group_label": "Notes",
+        "source": "mesh_peer",
+        "source_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+        "source_type": "mesh_peer",
+        "tool_contract_id": "native.notes.search/v1:😀",
+        "tool_id_scheme": "aurora-tool",
+        "tool_id_version": 1,
+        "trust_tier": "trusted"
+      },
+      "reordered_tool": {
+        "admin": false,
+        "aliases": [],
+        "args_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "filters": {
+              "additionalProperties": false,
+              "properties": {
+                "updatedAfter": {
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tags": {
+                  "default": [],
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "query": {
+              "description": "Search text 😀",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "argument_visibility": {
+          "filters.updatedAfter": "hash_only",
+          "query": "display"
+        },
+        "capability_class": "read",
+        "confirmation_required": false,
+        "data_egress": false,
+        "description": "Search notes 日本語 from a lightweight node fixture",
+        "display_name": "Search notes 日本語",
+        "execution_location": "remote",
+        "exportable": true,
+        "external": false,
+        "global_tool_id": "aurora-tool:v1:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling:native.notes.search%2Fv1%3A%F0%9F%98%80",
+        "legacy_global_tool_ids": [
+          "legacy:notes.search"
+        ],
+        "local_name": "notes.search",
+        "mutating": false,
+        "name": "notes.search",
+        "namespace": "local.notes",
+        "privacy_hints": [
+          "local_device"
+        ],
+        "provenance": {
+          "advertised_name": "notes.search",
+          "provider_kind": "mesh_peer",
+          "provider_peer_id": "peer:台北/room 42?x=1#node",
+          "provider_service_instance_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+          "provider_tool_id": "native.notes.search/v1:😀",
+          "source": "unknown",
+          "stable_source_id": "local-notes-v1"
+        },
+        "provider_available": true,
+        "provider_granted_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "provider_label": "Aurora 台北 Laptop",
+        "provider_peer_id": "peer:台北/room 42?x=1#node",
+        "provider_service_instance_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+        "rate_limit_hints": {
+          "max_calls": 30,
+          "policy": "fixture",
+          "window_seconds": 60
+        },
+        "required_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "resource_scope": [
+          "device:notes"
+        ],
+        "risk_class": "standard",
+        "safety_class": "standard",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "snippet": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "type": "object"
+        },
+        "share_group_id": "local-capability:notes",
+        "share_group_label": "Notes",
+        "source": "mesh_peer",
+        "source_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+        "source_type": "mesh_peer",
+        "tool_contract_id": "native.notes.search/v1:😀",
+        "tool_id_scheme": "aurora-tool",
+        "tool_id_version": 1,
+        "trust_tier": "trusted"
+      }
+    },
+    {
+      "case": "empty_visibility",
+      "tool_contract_id": "native.empty.visibility.v1",
+      "percent_encoded_tool_contract_id": "native.empty.visibility.v1",
+      "global_tool_id": "aurora-tool:v1:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling:native.empty.visibility.v1",
+      "schema_hash": "ee9c5a0dc798b20faad40334a35fa830f6855f54a11850d039cc01cdccc82972",
+      "tool": {
+        "admin": false,
+        "aliases": [],
+        "args_schema": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "argument_visibility": {},
+        "capability_class": "read",
+        "confirmation_required": false,
+        "data_egress": false,
+        "description": "Count notes from a lightweight node fixture",
+        "display_name": "Count notes",
+        "execution_location": "remote",
+        "exportable": true,
+        "external": false,
+        "global_tool_id": "aurora-tool:v1:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling:native.empty.visibility.v1",
+        "legacy_global_tool_ids": [],
+        "local_name": "notes.count",
+        "mutating": false,
+        "name": "notes.count",
+        "namespace": "local.notes",
+        "privacy_hints": [
+          "local_device"
+        ],
+        "provenance": {
+          "advertised_name": "notes.count",
+          "provider_kind": "mesh_peer",
+          "provider_peer_id": "peer:台北/room 42?x=1#node",
+          "provider_service_instance_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+          "provider_tool_id": "native.empty.visibility.v1",
+          "source": "unknown",
+          "stable_source_id": "local-notes-v1"
+        },
+        "provider_available": true,
+        "provider_granted_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "provider_label": "Aurora 台北 Laptop",
+        "provider_peer_id": "peer:台北/room 42?x=1#node",
+        "provider_service_instance_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+        "rate_limit_hints": {
+          "max_calls": 30,
+          "policy": "fixture",
+          "window_seconds": 60
+        },
+        "required_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "resource_scope": [
+          "device:notes"
+        ],
+        "risk_class": "standard",
+        "safety_class": "standard",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count"
+          ],
+          "type": "object"
+        },
+        "share_group_id": "local-capability:notes",
+        "share_group_label": "Notes",
+        "source": "mesh_peer",
+        "source_id": "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling",
+        "source_type": "mesh_peer",
+        "tool_contract_id": "native.empty.visibility.v1",
+        "tool_id_scheme": "aurora-tool",
+        "tool_id_version": 1,
+        "trust_tier": "trusted"
+      }
+    }
+  ],
+  "projection": {
+    "authority_revision": {
+      "auth_grant_revision": 5,
+      "catalog_revision": 11,
+      "export_policy_revision": 7,
+      "manifest_revision": 3,
+      "protocol_revision": 1,
+      "switch_revision": 2
+    },
+    "projection_digest": "a0a1d7b3b37e99ab658883992a446500598d154322d394ae9ceea734e8cccf88",
+    "projection_revision": "projection-台北-11",
+    "page_hash": "79047d6945baba99751152a12ab3a61b289d9dc6784ef0a18d4817ae1d0b55a7",
+    "page_index": 0,
+    "page_size": 2,
+    "final_checksum": "1db104fb4e829eed38233f914b43155812eaf16db4655ef1008c02368f681729",
+    "retirements": [
+      {
+        "availability": "removed",
+        "global_tool_id": "aurora-tool:v1:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling:native.removed%2Fv1",
+        "last_schema_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "reason_code": "retired_by_fixture"
+      }
+    ],
+    "blocked_tools": [
+      {
+        "missing_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "reason_code": "recipient_missing_tool_permissions",
+        "tool_case": "empty_visibility"
+      }
+    ]
+  },
+  "negative": [
+    {
+      "case": "uppercase_page_hash_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "page_hash": "79047D6945BABA99751152A12AB3A61B289D9DC6784EF0A18D4817AE1D0B55A7"
+      },
+      "path": "page_hash"
+    },
+    {
+      "case": "partial_page_final_checksum_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "complete": false,
+        "final_checksum": "1db104fb4e829eed38233f914b43155812eaf16db4655ef1008c02368f681729",
+        "next_cursor": "next-page",
+        "total_count": null
+      },
+      "path": "final_checksum"
+    },
+    {
+      "case": "empty_provider_peer_rejected",
+      "expected_category": "pydantic_string_too_short",
+      "patch": {
+        "provider_peer_id": ""
+      },
+      "path": "provider_peer_id"
+    },
+    {
+      "case": "oversized_service_instance_rejected",
+      "expected_category": "pydantic_string_too_long",
+      "patch": {
+        "service_instance_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "path": "service_instance_id"
+    },
+    {
+      "case": "blank_cursor_rejected",
+      "expected_category": "pydantic_string_too_short",
+      "patch": {
+        "complete": false,
+        "final_checksum": null,
+        "next_cursor": " ",
+        "total_count": null
+      },
+      "path": "next_cursor"
+    }
+  ],
+  "current_dependency_gaps": [
+    "No production TypeScript API computes Tooling canonical global IDs, schema hashes, projection page hashes, or final checksums at this base; SDK tests consume Python-authoritative vectors through current projection-page parsing only.",
+    "Python ToolingToolInfo currently accepts non-aurora global_tool_id strings and provider_service_instance_id values without enforcing the local:<percent-encoded-peer>:Tooling pattern; stricter negative identity validation depends on the future generated contract/parser lane.",
+    "The current SDK projection-page parser accepts oversized service_instance_id values that Python rejects at max_length=256; full parity depends on the generated boundary parser lane."
+  ]
+}
