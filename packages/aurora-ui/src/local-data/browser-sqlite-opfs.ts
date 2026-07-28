@@ -177,6 +177,10 @@ async function requestPersistentStorage(): Promise<boolean | null> {
   }
 }
 
+export function sha256Hex(input: string): string {
+  return Array.from(sha256Bytes(new TextEncoder().encode(input)), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 function sha256Bytes(input: Uint8Array): Uint8Array {
   const words = new Uint32Array(64)
   const hash = new Uint32Array([

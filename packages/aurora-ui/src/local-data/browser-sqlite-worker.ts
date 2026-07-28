@@ -24,14 +24,14 @@ import {
   type PeerGrantMetadataRecord
 } from '@aurora/client/local-data'
 
-import type { BrowserSqliteStorageIdentity } from './browser-sqlite-opfs.js'
+import { sha256Hex, type BrowserSqliteStorageIdentity } from './browser-sqlite-opfs.js'
 
 type WorkerResult =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly error: RedactedWorkerError }
 
 export type BrowserSqliteWorkerRequest =
-  | { readonly id: string; readonly command: 'open'; readonly profileId: string; readonly localNodeId: string; readonly identity: BrowserSqliteStorageIdentity; readonly migrationSql: readonly BrowserSqliteMigrationSql[] }
+  | { readonly id: string; readonly command: 'open'; readonly profileId: string; readonly localNodeId: string; readonly identity: BrowserSqliteStorageIdentity; readonly migrationSql: readonly BrowserSqliteMigrationSql[]; readonly wasmAssetUrl: string }
   | { readonly id: string; readonly command: 'status' }
   | { readonly id: string; readonly command: 'close' }
   | { readonly id: string; readonly command: 'cancel'; readonly targetId: string }
@@ -192,18 +192,23 @@ async function openDatabase(request: Extract<BrowserSqliteWorkerRequest, { comma
   }
   workerState.migrationState = 'running'
   try {
-    const sqlite3 = await sqlite3InitModule() as unknown as SqliteModule
+    const initSqlite = sqlite3InitModule as unknown as (options: { locateFile: (path: string) => string }) => Promise<unknown>
+    const sqlite3 = await initSqlite({
+      locateFile: (path: string) => path.endsWith('.wasm') ? request.wasmAssetUrl : path
+    }) as unknown as SqliteModule
     const pool = await sqlite3.installOpfsSAHPoolVfs({
       directory: request.identity.sahPoolDirectory,
       clearOnInit: false
     })
     const db = new pool.OpfsSAHPoolDb(request.identity.databaseName)
+    const initialUserVersion = getUserVersion(db)
+    const hadIdentityTable = tableExists(db, 'aurora_database_identity')
     workerState.db = db
     workerState.profileId = request.profileId
     workerState.localNodeId = request.localNodeId
     exec(db, 'PRAGMA foreign_keys = ON;')
-    validateDatabaseIdentity(db, request.localNodeId)
     applyMigrations(db, localDataMigrationManifest, request.migrationSql)
+    ensureDatabaseIdentity(db, request.localNodeId, !hadIdentityTable && initialUserVersion === 0)
     validateForeignKeys(db)
     workerState.schemaVersion = getUserVersion(db)
     workerState.migrationState = 'idle'
@@ -252,12 +257,22 @@ function status(workerState: WorkerState): unknown {
   }
 }
 
-function validateDatabaseIdentity(db: SqliteDatabase, localNodeId: string): void {
-  const tableExists = selectObjects<{ name: string }>(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'aurora_database_identity';").length > 0
-  if (!tableExists) return
-  const rows = selectObjects<{ local_node_id: string }>(db, 'SELECT local_node_id FROM aurora_database_identity WHERE singleton_id = 1;')
-  if (rows.length === 0) return
-  if (rows[0]?.local_node_id !== localNodeId) {
+function ensureDatabaseIdentity(db: SqliteDatabase, localNodeId: string, freshDatabase: boolean): void {
+  if (!tableExists(db, 'aurora_database_identity')) {
+    throw new LocalDataError('migration_integrity', 'Local data identity table is missing', { reason: 'identity_table_missing' })
+  }
+  const rows = selectObjects<{ singleton_id: number; local_node_id: string }>(db, 'SELECT singleton_id, local_node_id FROM aurora_database_identity ORDER BY singleton_id ASC;')
+  if (rows.length === 0) {
+    if (!freshDatabase) {
+      throw new LocalDataError('identity_mismatch', 'Local data database identity is missing', { reason: 'identity_missing' })
+    }
+    run(db, 'INSERT INTO aurora_database_identity (singleton_id, local_node_id, created_at_ms) VALUES (1, ?, ?);', [localNodeId, Date.now()])
+    return
+  }
+  if (rows.length !== 1 || rows[0]?.singleton_id !== 1) {
+    throw new LocalDataError('identity_mismatch', 'Local data database identity is invalid', { reason: 'identity_invalid' })
+  }
+  if (rows[0].local_node_id !== localNodeId) {
     throw new LocalDataError('identity_mismatch', 'Local data database identity does not match this device')
   }
 }
@@ -276,6 +291,9 @@ function applyMigrations(db: SqliteDatabase, manifest: LocalDataMigrationManifes
   for (const migration of manifest.migrations.slice(ledgerRows.length)) {
     const sql = sqlByVersion.get(migration.version)
     if (sql === undefined) throw new LocalDataError('migration_integrity', 'Migration SQL is missing', { reason: 'missing_sql' })
+    if (sha256Hex(sql) !== migration.checksum) {
+      throw new LocalDataError('migration_integrity', 'Migration SQL does not match immutable manifest checksum', { reason: 'migration_sql_checksum' })
+    }
     exec(db, 'BEGIN IMMEDIATE;')
     try {
       exec(db, sql)
@@ -289,9 +307,12 @@ function applyMigrations(db: SqliteDatabase, manifest: LocalDataMigrationManifes
 }
 
 function getStoredLedgerRows(db: SqliteDatabase): Array<{ version: number; checksum: string }> {
-  const exists = selectObjects<{ name: string }>(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'aurora_schema_migrations';").length > 0
-  if (!exists) return []
+  if (!tableExists(db, 'aurora_schema_migrations')) return []
   return selectObjects<{ version: number; checksum: string }>(db, 'SELECT version, checksum FROM aurora_schema_migrations ORDER BY version ASC;')
+}
+
+function tableExists(db: SqliteDatabase, tableName: string): boolean {
+  return selectObjects<{ name: string }>(db, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?;", [tableName]).length > 0
 }
 
 function validateStoredLedger(manifest: LocalDataMigrationManifest, stored: Array<{ version: number; checksum: string }>): void {
@@ -336,6 +357,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     }
     case 'conversations.appendMessage': {
       const record = parseConversationMessageRecord(operation.record)
+      requireConversationInScope(db, workerState, record.conversationId)
       run(db, 'INSERT INTO aurora_messages (id, conversation_id, sequence, role, content_envelope_json, tool_envelope_json, status, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id, sequence = excluded.sequence, role = excluded.role, content_envelope_json = excluded.content_envelope_json, tool_envelope_json = excluded.tool_envelope_json, status = excluded.status, created_at_ms = excluded.created_at_ms;', [
         record.id, record.conversationId, record.sequence, record.role, jsonOrNull(record.contentEnvelope), jsonOrNull(record.toolEnvelope), record.status, record.createdAtMs
       ])
@@ -344,7 +366,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     case 'conversations.listConversations':
       return selectObjects<ConversationRow>(db, 'SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ? ORDER BY updated_at_ms DESC, id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToConversation)
     case 'conversations.listMessages':
-      return selectObjects<MessageRow>(db, 'SELECT * FROM aurora_messages WHERE conversation_id = ? ORDER BY sequence ASC, id ASC;', [operation.conversationId]).map(rowToMessage)
+      return selectObjects<MessageRow>(db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY messages.sequence ASC, messages.id ASC;', [operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToMessage)
     case 'memory.upsertMemoryItem': {
       const record = parseLightweightMemoryRecord(operation.record)
       assertRecordIdentity(workerState, record.profileId, record.localNodeId)
@@ -426,7 +448,12 @@ function importV1(workerState: WorkerState, document: LocalDataExportV1): unknow
   }
   exec(workerState.db, 'BEGIN IMMEDIATE;')
   try {
-    exec(workerState.db, 'DELETE FROM aurora_local_audit; DELETE FROM aurora_peer_grant_metadata; DELETE FROM aurora_local_tool_state; DELETE FROM aurora_memory_items; DELETE FROM aurora_messages; DELETE FROM aurora_conversations;')
+    run(workerState.db, 'DELETE FROM aurora_local_audit WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
+    run(workerState.db, 'DELETE FROM aurora_peer_grant_metadata WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
+    run(workerState.db, 'DELETE FROM aurora_local_tool_state WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
+    run(workerState.db, 'DELETE FROM aurora_memory_items WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
+    run(workerState.db, 'DELETE FROM aurora_messages WHERE conversation_id IN (SELECT id FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?);', [workerState.profileId, workerState.localNodeId])
+    run(workerState.db, 'DELETE FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
     for (const record of parsed.records.conversations) executeRepositoryOperation(workerState, { kind: 'conversations.upsertConversation', record })
     for (const record of parsed.records.messages) executeRepositoryOperation(workerState, { kind: 'conversations.appendMessage', record })
     for (const record of parsed.records.memoryItems) executeRepositoryOperation(workerState, { kind: 'memory.upsertMemoryItem', record })
@@ -451,7 +478,7 @@ function createSynchronousRepositories(workerState: WorkerState) {
   return {
     conversations: {
       listConversationsSync: () => executeRepositoryOperation(workerState, { kind: 'conversations.listConversations' }) as ConversationRecord[],
-      listAllMessagesSync: () => selectObjects<MessageRow>(workerState.db, 'SELECT * FROM aurora_messages ORDER BY conversation_id ASC, sequence ASC, id ASC;').map(rowToMessage)
+      listAllMessagesSync: () => selectObjects<MessageRow>(workerState.db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY messages.conversation_id ASC, messages.sequence ASC, messages.id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToMessage)
     },
     memory: {
       listMemoryItemsSync: () => executeRepositoryOperation(workerState, { kind: 'memory.listMemoryItems' }) as LightweightMemoryRecord[]
@@ -503,6 +530,13 @@ function assertRecordIdentity(workerState: WorkerState, profileId: string, local
 function requireIdentity(value: string | null): string {
   if (value === null) throw new LocalDataError('session_closed', 'Local data database is closed')
   return value
+}
+
+function requireConversationInScope(db: SqliteDatabase, workerState: WorkerState & { profileId: string; localNodeId: string }, conversationId: string): void {
+  const rows = selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [conversationId, workerState.profileId, workerState.localNodeId])
+  if (rows.length !== 1) {
+    throw new LocalDataError('invalid_record', 'Message conversation does not exist')
+  }
 }
 
 function jsonOrNull(value: unknown): string | null {

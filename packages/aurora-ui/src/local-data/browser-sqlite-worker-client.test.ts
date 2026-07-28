@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  localDataMigrationManifest,
   LocalDataError,
   MemoryLocalDataBackend,
   type ConversationMessageRecord,
@@ -14,18 +15,29 @@ import {
 } from '@aurora/client/local-data'
 
 import { createLocalDataBackend } from './create-local-data-backend.js'
-import { BrowserSqliteLocalDataBackend, BrowserSqliteWorkerClient, type BrowserSqliteProtocolWorker } from './browser-sqlite-worker-client.js'
+import { browserSqliteMigrationSql, BrowserSqliteLocalDataBackend, BrowserSqliteWorkerClient, type BrowserSqliteProtocolWorker } from './browser-sqlite-worker-client.js'
+import { sha256Hex } from './browser-sqlite-opfs.js'
 import type { BrowserSqliteOwnership, BrowserSqliteOwnershipLock } from './browser-sqlite-opfs.js'
 import type { BrowserSqliteRepositoryOperation, BrowserSqliteWorkerRequest, BrowserSqliteWorkerResponse } from './browser-sqlite-worker.js'
 
 describe('browser sqlite worker client backend', () => {
+  it('ships migration SQL bytes that match the immutable SDK manifest', () => {
+    for (const migration of localDataMigrationManifest.migrations) {
+      const sql = browserSqliteMigrationSql.find((entry) => entry.version === migration.version)?.sql
+      expect(sql).toBeDefined()
+      expect(sha256Hex(sql ?? '')).toBe(migration.checksum)
+      expect(sha256Hex(`${sql ?? ''} `)).not.toBe(migration.checksum)
+    }
+  })
+
   it('stores repository fixtures through the private typed worker protocol', async () => {
     installBrowserStorageProbe()
     const fakeWorker = new MemoryProtocolWorker()
     const backend = new BrowserSqliteLocalDataBackend({
       createWorker: () => fakeWorker,
       lock: new GrantedLock(),
-      timeoutMs: 1000
+      timeoutMs: 1000,
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
     })
     const session = await backend.open('profile-1', 'node-1')
 
@@ -51,7 +63,8 @@ describe('browser sqlite worker client backend', () => {
     const backend = new BrowserSqliteLocalDataBackend({
       createWorker: () => new MemoryProtocolWorker(),
       lock: new GrantedLock(),
-      timeoutMs: 1000
+      timeoutMs: 1000,
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
     })
     const session = await backend.open('profile-1', 'node-1')
     await expect(session.transaction(async (repositories) => {
@@ -88,6 +101,7 @@ describe('browser sqlite worker client backend', () => {
       indexedDbBackend,
       lock: new DeniedLock(),
       createWorker: () => new MemoryProtocolWorker(),
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm',
       onStorageHealth: (status) => health.push(status)
     })
 
@@ -105,6 +119,10 @@ describe('browser sqlite worker client backend', () => {
 })
 
 function installBrowserStorageProbe(): void {
+  vi.stubGlobal('location', {
+    href: 'http://127.0.0.1/',
+    origin: 'http://127.0.0.1'
+  })
   vi.stubGlobal('navigator', {
     storage: {
       getDirectory: async () => ({}),

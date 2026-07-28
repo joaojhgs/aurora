@@ -54,7 +54,10 @@ describe('browser sqlite worker protocol guardrails', () => {
       const source = readFileSync(file, 'utf8')
       const importsSqlite = source.includes('@sqlite.org/sqlite-wasm') || source.includes('installOpfsSAHPoolVfs')
       if (!importsSqlite) continue
-      if (rel !== 'src/local-data/browser-sqlite-worker.ts') {
+      if (
+        rel !== 'src/local-data/browser-sqlite-worker.ts'
+        && rel !== 'src/local-data/browser-sqlite-worker-client.ts'
+      ) {
         offenders.push(rel)
       }
     }

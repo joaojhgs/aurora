@@ -45,6 +45,7 @@ export interface BrowserSqliteLocalDataBackendOptions {
   readonly lock?: BrowserSqliteOwnershipLock
   readonly timeoutMs?: number
   readonly signal?: AbortSignal
+  readonly wasmAssetUrl?: string
 }
 
 export type BrowserSqliteWorkerConstructor = () => BrowserSqliteProtocolWorker
@@ -64,6 +65,7 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
   private readonly lock: BrowserSqliteOwnershipLock | undefined
   private readonly timeoutMs: number
   private readonly signal: AbortSignal | undefined
+  private readonly wasmAssetUrl: string
   private client: BrowserSqliteWorkerClient | null = null
   private session: BrowserSqliteLocalDataSession | null = null
   private statusValue: LocalDataBackendStatus = {
@@ -80,6 +82,7 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
     this.lock = options.lock
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.signal = options.signal
+    this.wasmAssetUrl = options.wasmAssetUrl ?? new URL('@sqlite.org/sqlite-wasm/sqlite3.wasm', import.meta.url).href
   }
 
   async open(profileId: string, localNodeId: string): Promise<LocalDataSession> {
@@ -92,6 +95,7 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
     const probe = await probeBrowserSqliteOpfs(localNodeId, {
       ...(this.lock === undefined ? {} : { lock: this.lock }),
       workerFactory: this.createWorker,
+      wasmAssetUrl: this.wasmAssetUrl,
       ...(this.signal === undefined ? {} : { signal: this.signal })
     })
     if (!probe.ok) {
@@ -108,7 +112,7 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
       ownership: probe.ownership
     })
     try {
-      const status = await client.open(profileId, localNodeId, probe.identity, browserSqliteMigrationSql)
+      const status = await client.open(profileId, localNodeId, probe.identity, browserSqliteMigrationSql, this.wasmAssetUrl)
       this.statusValue = status
       this.client = client
       this.session = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
@@ -169,9 +173,10 @@ export class BrowserSqliteWorkerClient {
     profileId: string,
     localNodeId: string,
     identity: BrowserSqliteStorageIdentity,
-    migrationSql: readonly BrowserSqliteMigrationSql[]
+    migrationSql: readonly BrowserSqliteMigrationSql[],
+    wasmAssetUrl: string
   ): Promise<LocalDataBackendStatus> {
-    return await this.request<LocalDataBackendStatus>({ command: 'open', profileId, localNodeId, identity, migrationSql })
+    return await this.request<LocalDataBackendStatus>({ command: 'open', profileId, localNodeId, identity, migrationSql, wasmAssetUrl })
   }
 
   async status(): Promise<LocalDataBackendStatus> {
@@ -473,7 +478,8 @@ CREATE INDEX idx_aurora_conversations_profile_node_updated
   ON aurora_conversations (profile_id, local_node_id, updated_at_ms DESC);
 
 CREATE INDEX idx_aurora_memory_profile_node_namespace_expiry
-  ON aurora_memory_items (profile_id, local_node_id, namespace, expires_at_ms);`
+  ON aurora_memory_items (profile_id, local_node_id, namespace, expires_at_ms);
+`
   },
   {
     version: 2,
@@ -493,7 +499,8 @@ CREATE TABLE aurora_local_tool_state (
 );
 
 CREATE INDEX idx_aurora_local_tools_profile_node_enabled
-  ON aurora_local_tool_state (profile_id, local_node_id, enabled);`
+  ON aurora_local_tool_state (profile_id, local_node_id, enabled);
+`
   },
   {
     version: 3,
@@ -532,7 +539,8 @@ CREATE INDEX idx_aurora_grants_profile_node_claimant_active
   ON aurora_peer_grant_metadata (profile_id, local_node_id, claimant_peer_id, token_id, revoked_at_ms, expires_at_ms);
 
 CREATE INDEX idx_aurora_audit_profile_node_created
-  ON aurora_local_audit (profile_id, local_node_id, created_at_ms DESC);`
+  ON aurora_local_audit (profile_id, local_node_id, created_at_ms DESC);
+`
   }
 ])
 

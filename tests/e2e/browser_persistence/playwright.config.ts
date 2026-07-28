@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'browser-peer-persistence.spec.ts',
+  testMatch: /browser-(?:peer-persistence|sqlite-opfs)\.spec\.ts/u,
   timeout: 60_000,
   expect: {
     timeout: 10_000,

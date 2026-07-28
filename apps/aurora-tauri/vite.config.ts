@@ -18,9 +18,16 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 1420,
     strictPort: true,
+    headers: {
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Opener-Policy': 'same-origin'
+    },
     fs: {
       allow: Array.from(new Set([repoRoot, leaderRepoRoot]))
     }
+  },
+  optimizeDeps: {
+    exclude: ['@sqlite.org/sqlite-wasm']
   },
   envPrefix: ['VITE_', 'AURORA_'],
   build: {
