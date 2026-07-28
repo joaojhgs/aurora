@@ -29,7 +29,7 @@ A Rust WebRTC implementation is not the default because it would duplicate the b
 
 ## Current progress marker
 
-As of 2026-07-27, the shared TypeScript/WebView WebRTC direction is no longer just roadmap work. The implemented runtime supports hosted web thin, desktop Tauri thin, Android thin, and the iOS thin source path with `http-only`, `webrtc-only`, and `webrtc-preferred` modes. Direct, configured-STUN, and forced-TURN live interop with the Python Gateway passes in Chromium, Firefox, and Playwright WebKit while the Python HTTP API is disabled. Lane classification comes from the browser `RTCPeerConnection.getStats()` selected candidate pair. Desktop and Android thin artifact proof passes without Python/sidecar content. Desktop, Android, and iOS thin packaging also accepts a WSS-only `webrtc-only` policy with no compiled HTTPS Gateway origin; a fresh desktop AppImage/deb was built and scanned in that mode. Android now has real packaged-WebView UI/native-payload E2E plus durable API 35 external-Python-peer WebRTC E2Es for both the packaged System WebView and standalone Android Chrome without CDP in the existing Android workflow. The iOS path has device-only Keychain reconnect credentials/proof, nonsecret profile storage, exact-origin Python-free overlay generation, a macOS simulator build/install/launch/screenshot/keep-alive lane, and one serial external-Python direct-path E2E covering both MobileSafari and a dedicated packaged Tauri WKWebView app. The new Android KVM and macOS simulator gates have not run on this unpushed branch. Physical Android/iOS runtime proof, durable mobile background wakeword, broader packaged-WebView network certification, and iOS signing proof remain unclaimed. See [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
+As of 2026-07-27, the shared TypeScript/WebView WebRTC direction is no longer just roadmap work. The implemented runtime supports hosted web thin, desktop Tauri thin, Android thin, and the iOS thin source path with `http-only`, `webrtc-only`, and `webrtc-preferred` modes. Direct, configured-STUN, and forced-TURN live interop with the Python Gateway passes in Chromium, Firefox, and Playwright WebKit while the Python HTTP API is disabled. Lane classification comes from the browser `RTCPeerConnection.getStats()` selected candidate pair. Desktop and Android thin artifact proof passes without Python/sidecar content. Desktop, Android, and iOS thin packaging uses runtime-configurable HTTP/HTTPS/WS/WSS endpoint profiles instead of compiling operator Gateway/signaling URLs into the artifact. Android now has real packaged-WebView UI/native-payload E2E plus durable API 35 external-Python-peer WebRTC E2Es for both the packaged System WebView and standalone Android Chrome without CDP in the existing Android workflow. The iOS path has device-only Keychain reconnect credentials/proof, device-only room-secret storage, nonsecret profile storage, runtime-configurable Python-free overlay generation, a macOS simulator build/install/launch/screenshot/keep-alive lane, and one serial external-Python direct-path E2E covering both MobileSafari and a dedicated packaged Tauri WKWebView app. The new Android KVM and macOS simulator gates have not run on this unpushed branch. Physical Android/iOS runtime proof, durable mobile background wakeword, broader packaged-WebView network certification, and iOS signing proof remain unclaimed. See [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
 
 ## Client catalog
 
@@ -131,13 +131,21 @@ Every supported client profile must preserve these rules:
 
 ### R1 — Production-grade HTTP thin shells
 
-- Make Gateway endpoint configuration runtime-editable and persistent rather than build-time only.
+- Keep Gateway/signaling endpoint configuration runtime-editable and
+  persistent; thin artifacts must never compile an operator endpoint.
+- Keep first-run onboarding ahead of the normal shell until a valid profile is
+  saved or imported by invite/QR/file/deep link.
 - Bind Tauri HTTP authentication to the live `AuthSession`, not a static build token.
-- Tailor Tauri `connect-src`, origin validation, CORS, and secure-storage policy for operator-selected remote endpoints; mode-specific packaging must not require or compile an unused Gateway origin into `webrtc-only` clients.
+- Keep Tauri `connect-src` general enough for runtime HTTP/HTTPS/WS/WSS
+  selection while preserving URL validation, secret-query rejection, native
+  secure storage, and explicit hosted-browser mixed-content/CORS limits.
 - Add a true no-sidecar Tauri bundle lane; verify the package contains no Python executable or Python runtime assets.
 - Certify desktop thin and hosted web HTTP paths before relying on them as WebRTC fallback.
 
-**Exit:** desktop/web thin clients work against an operator-managed HTTPS Gateway without a local Python runtime.
+**Current exit:** runtime profile/onboarding and Python-free desktop/Android
+package proof are implemented. Live operator endpoint, signed release, and
+physical-device certification remain deployment evidence rather than source
+claims.
 
 ### R2 — Shared WebView WebRTC core
 
@@ -151,7 +159,7 @@ Every supported client profile must preserve these rules:
 
 ### R3 — Hosted web direct-peer client
 
-- Keep `NEXT_PUBLIC_AURORA_CONNECTION_MODE=http-only|webrtc-only|webrtc-preferred` as the hosted web selection surface.
+- Keep hosted web endpoint and connection-mode selection in the saved runtime onboarding profile.
 - Keep browser imports SSR-safe and lazy; require secure contexts for microphone/WebRTC.
 - Maintain invite import, SAS confirmation, reconnect UX, TURN diagnostics, route badges, encrypted IndexedDB secret storage, validated nonsecret profile/stable-ID metadata, automatic refresh re-dial, and explicit memory-only fallback when persistence is unavailable.
 - Add user-verified WebAuthn PRF/passkey vault unlock and a public-key reconnect challenge so the browser no longer needs a reusable persisted bearer.
@@ -166,20 +174,26 @@ Every supported client profile must preserve these rules:
 - Ship no-sidecar artifacts distinct from all local Python bundle profiles and verify AppImage/deb contents.
 - Preserve desktop-local selection and wakeword ownership without transport-specific checks scattered through UI screens.
 
-**Current exit:** desktop thin profiles and Python-free AppImage/deb artifact proof pass, including a WSS-only `webrtc-only` package with no Gateway origin; desktop-local remains separate. Live desktop WebView WebRTC smoke is still separate from the shared browser-engine harness.
+**Current exit:** desktop thin profiles and Python-free AppImage/deb artifact
+proof pass with endpoint-agnostic HTTP/HTTPS/WS/WSS policy; desktop-local
+remains separate. Live desktop WebView WebRTC smoke is still separate from the
+shared browser-engine harness.
 
 ### R5 — Android and iOS foreground thin clients
 
 - Reuse the shared WebView transport and peer-session controller.
 - Keep Android QR/deep-link, Keystore peer credential/proof, explicit WebView microphone permission mediation, lifecycle release policy, and foreground/resume/reconnect behavior evidence-backed.
-- Preserve the implemented Android/iOS mode-specific Python-free wrappers, including WSS-only `webrtc-only` builds, plus the iOS Keychain/profile/proof integration; keep packaged WebView runtime evidence fail-closed before claiming live mobile WebRTC support.
+- Preserve the implemented Android/iOS Python-free wrappers with
+  endpoint-agnostic HTTP/HTTPS/WS/WSS policy, first-run runtime onboarding, and
+  iOS Keychain/profile/proof integration; keep packaged WebView runtime
+  evidence fail-closed before claiming live mobile WebRTC support.
 - Keep the Android API 30/API 35 packaged UI/native-payload E2E plus both API 35 WebRTC peers in the existing Android pipeline: the packaged System WebView and the standalone Android mobile browser must each pair with an external Python peer. The mobile tests must consume the same negotiation-direction, manifest, error, 512 KiB fragmentation, stream/cancel, pairing, RPC/event, reconnect, revocation, HTTP-disabled, and redaction assertions as browser interop; do not split their individual assertions into extra PR checks.
 - Keep iOS MobileSafari and the packaged Tauri WKWebView ↔ external-Python direct-path tests in the existing macOS iOS workflow and on the same shared assertion/scanner contract. Store separate reports for each surface without creating separate PR checks. Treat both as simulator evidence; physical-device direct/STUN/TURN remains a separate gate.
 - Do not claim durable background WebRTC, wakeword, or audio capture until native services and OS behavior are separately proven.
 - Run physical Android and iOS device tests that pair each mobile client with
   an external Python peer across direct, STUN, and TURN-relayed paths.
 
-**Current exit:** Android thin build/artifact and native-policy proof exist; packaged UI/native payload passes on the local API 30 emulator, and the KVM-backed API 35 CI lane now owns both packaged-WebView and no-CDP Android-browser ↔ Python WebRTC interop. A fresh CI run of those gates and physical/OEM proof remain pending. iOS thin source/permission/Keychain/profile wiring plus an exact-origin simulator build/runtime lane exist, and the same macOS job now owns MobileSafari and packaged-Tauri-WKWebView ↔ external-Python direct interop. Fresh macOS reports, physical-device, STUN, and TURN proof are still pending.
+**Current exit:** Android thin build/artifact and native-policy proof exist; packaged UI/native payload passes on the local API 30 emulator, and the KVM-backed API 35 CI lane now owns both packaged-WebView and no-CDP Android-browser ↔ Python WebRTC interop. A fresh CI run of those gates and physical/OEM proof remain pending. iOS thin source/permission/Keychain/profile wiring plus a runtime-configurable simulator build/runtime lane exist, and the same macOS job now owns MobileSafari and packaged-Tauri-WKWebView ↔ external-Python direct interop. Fresh macOS reports, physical-device, STUN, and TURN proof are still pending.
 
 ### R6 — Native-enhanced mobile capabilities
 

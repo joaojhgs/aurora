@@ -61,13 +61,11 @@ pnpm --filter @aurora/tauri-ui build:bundle:desktop-local-minimal
 For a remote/no-sidecar shell, use either Python-free thin command:
 
 ```bash
-AURORA_TAURI_ALLOWED_REMOTE_ORIGINS="wss://signaling.example.invalid" \
-AURORA_TAURI_THIN_CONNECTION_MODE=webrtc-only \
 pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
 pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
 ```
 
-The desktop-thin command (and its `build:bundle:thin` alias) uses Tauri's `--config src-tauri/tauri.thin.conf.json` flavor overlay. `prepare:bundle:desktop-thin` requires only the exact origins used by `AURORA_TAURI_THIN_CONNECTION_MODE`: HTTPS Gateway for `http-only`, WSS signaling for `webrtc-only`, or both for `webrtc-preferred`. A WebRTC-only package compiles no Gateway URL or HTTPS Gateway CSP source. The wrapper builds the frontend with the packaged-thin runtime marker, replaces the base capability list with `aurora-thin`, and omits `bundle.externalBin` plus `bundle.resources`. At runtime, the profile editor persists only mode, exact endpoints, label/node name, and stable peer ID. SDK session/pairing state owns bearer authentication; invite secrets are accepted only from the URL fragment and held in memory.
+The desktop-thin command (and its `build:bundle:thin` alias) uses Tauri's `--config src-tauri/tauri.thin.conf.json` flavor overlay. `prepare:bundle:desktop-thin` compiles no Gateway or signaling URL, generates a runtime-configurable `connect-src 'self' http: https: ws: wss:` policy, replaces the base capability list with `aurora-thin`, and omits `bundle.externalBin` plus `bundle.resources`. At runtime, onboarding/profile storage supplies the selected HTTP Gateway and/or WebRTC signaling profile.
 
 Local assistant variants are explicit:
 

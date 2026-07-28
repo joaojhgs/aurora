@@ -72,6 +72,31 @@ The production UI direction is SDK-first:
 
 See [`docs/FRONTEND_AND_UI_ARCHITECTURE.md`](docs/FRONTEND_AND_UI_ARCHITECTURE.md) and [`docs/TAURI_DESKTOP_BUILD.md`](docs/TAURI_DESKTOP_BUILD.md).
 
+Runtime development entrypoints:
+
+```bash
+# Desktop local: Tauri + Rust-supervised Python sidecar (default local mode)
+pnpm run tauri dev
+# Equivalent named shortcut
+pnpm dev:desktop-local
+
+# Desktop thin: Tauri/WebView only, no Python sidecar; configure HTTP/WebRTC in onboarding
+pnpm dev:desktop-thin
+
+# Hosted web thin on localhost; configure HTTP/WebRTC in onboarding
+pnpm dev:web-thin
+
+# Python services independently, using config.json/AURORA_CONFIG_FILE and no PyQt UI
+pnpm dev:python-service
+```
+
+Thin clients do not compile a Gateway or signaling endpoint into the artifact.
+On first launch they require a runtime profile entered manually or imported
+from an Aurora invite/QR code. Native shells keep nonsecret profile metadata
+in native storage and room/reconnect secrets in the platform credential store;
+hosted web uses browser metadata storage plus an AES-GCM IndexedDB vault with
+an explicitly reported memory-only fallback.
+
 ## Development checks
 
 ```bash
