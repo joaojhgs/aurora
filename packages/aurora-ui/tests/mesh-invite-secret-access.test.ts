@@ -73,7 +73,22 @@ describe('mesh invite secret access', () => {
 
     expect(rawConfigReads).toBe(0)
     expect(snapshot.inviteConfig).toBeNull()
-    expect(meshInviteReadiness(snapshot).ready).toBe(false)
-    expect(() => buildMeshInvitePayload(snapshot)).toThrow(/signaling|invite credentials/i)
+    const readiness = meshInviteReadiness(snapshot)
+    expect(readiness.ready).toBe(false)
+    expect(readiness.reason).toBe('Aurora is preparing a unique invite identity.')
+
+    let thrown: unknown
+    try {
+      buildMeshInvitePayload(snapshot)
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(Error)
+    const message = thrown instanceof Error ? thrown.message : String(thrown)
+    expect(message).toBe('Aurora is preparing a unique invite identity.')
+    expect(message).not.toMatch(/\b(signaling|credential|credentials|permission|gateway|config|manage|denied|required|webrtc)\b/i)
+    expect(message).not.toContain('Gateway.manage is required')
+    expect(message).not.toContain('must-not-fallback')
   })
 })
