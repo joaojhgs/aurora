@@ -20,6 +20,7 @@ import { AdminRbacView, type AdminRbacSnapshot } from '../src/admin-rbac-view'
 import { AdminSchedulerView, type AdminSchedulerSnapshot } from '../src/admin-scheduler-view'
 import { AdminAuditView, type AdminAuditSnapshot } from '../src/admin-audit-view'
 import { ModelsView } from '../src/models-view'
+import { adminReasonText, productAdminReasonCopy, sanitizeAdminText } from '../src/admin-product-copy'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -110,6 +111,30 @@ describe('admin product copy', () => {
     expect(overviewMarkup).toContain('actions across')
     expect(overviewMarkup).toContain('feature')
     expectSafeProductCopy(hostileMarkup)
+  })
+
+  it('enforces the canonical production forbidden list in admin copy helpers', () => {
+    const hostileValues = [
+      'proof evidence fixture assertion implementation tested debug fallback',
+      'protocol migration SQLite IndexedDB OPFS sidecar thin signaling DataChannel',
+      'room password services.orchestrator.llm.provider',
+      'Gateway.GetSchemaMetadata backend provider schema route manifest transport proof',
+      'mixed source uses services.gateway.webrtc.room_password with fallback transport debug details',
+    ]
+
+    for (const hostile of hostileValues) {
+      const reason = productAdminReasonCopy(hostile, 'Admin status needs attention.')
+      const directReason = adminReasonText(hostile, 'Admin status needs attention.')
+      const sanitized = sanitizeAdminText(hostile, 'Admin status needs attention.')
+      expectSafeProductCopy(reason)
+      expectSafeProductCopy(directReason)
+      expectSafeProductCopy(sanitized)
+    }
+
+    expect(productAdminReasonCopy('services.gateway.webrtc.room_password', 'Admin status needs attention.')).toBe('Admin status needs attention.')
+    expect(productAdminReasonCopy('Gateway.GetSchemaMetadata', 'Admin status needs attention.')).toBe('Admin status needs attention.')
+    expect(productAdminReasonCopy('provider is unavailable', 'Admin status needs attention.')).toBe('source is unavailable')
+    expect(sanitizeAdminText('Gateway registry transport provider')).toBe('Connection service list connection source')
   })
 })
 

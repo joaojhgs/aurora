@@ -1,5 +1,6 @@
 import type { AuroraError, AvailabilityState, CapabilitySummary, MethodDescriptor } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
+import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
 
 export interface AdminProductCopy {
   title: string
@@ -85,9 +86,9 @@ export function adminRouteCopy(route: Pick<RouteAvailability, 'state' | 'disable
 export function adminReasonText(value: string | null | undefined, fallback = 'This action needs attention before it can run.'): string {
   const text = value?.trim()
   if (!text) return fallback
-  if (/(Auth|Gateway|Scheduler|Config|Tooling|Orchestrator|Backup)\.[A-Za-z0-9_.-]+/u.test(text)) return fallback
-  if (/(AdminAction|SDK|backend|capability|catalog|contract|registry|route|transport|manifest|schema|provider)/iu.test(text)) return fallback
-  return sanitizeAdminText(text)
+  if (ADMIN_METHOD_PATTERN.test(text) || ADMIN_KEY_PATH_PATTERN.test(text)) return fallback
+  const softened = sanitizeAdminText(text, fallback)
+  return hasUnsafeAdminCopy(softened) ? fallback : softened
 }
 
 export function adminActionLabel(input: string | Pick<MethodDescriptor, 'module' | 'name' | 'busTopic'>): string {
@@ -106,12 +107,30 @@ export function adminModuleLabel(module: string): string {
   return humanizeAction(module)
 }
 
-export function sanitizeAdminText(value: string): string {
-  return value
+export function sanitizeAdminText(value: string, fallback = 'This item needs attention.'): string {
+  const softened = value
     .replace(/(Auth|Gateway|Scheduler|Config|Tooling|Orchestrator|Backup)\.([A-Za-z0-9_.-]+)/gu, (_match, module, action) => `${adminModuleLabel(String(module))} ${humanizeAction(String(action))}`)
     .replace(/\bAdminAction\b/giu, 'admin approval')
     .replace(/\bSDK\b/gu, 'Aurora')
     .replace(/\bbackend\b/giu, 'Aurora')
+    .replace(/\bproof\b/giu, 'status')
+    .replace(/\bevidence\b/giu, 'status')
+    .replace(/\bfixtures?\b/giu, 'sample')
+    .replace(/\bassertions?\b/giu, 'checks')
+    .replace(/\bimplement(?:ation|ed|ing)?\b/giu, 'setup')
+    .replace(/\btested\b/giu, 'checked')
+    .replace(/\bdebug(?:ging)?\b/giu, 'support')
+    .replace(/\bfallback\b/giu, 'backup option')
+    .replace(/\bprotocol\b/giu, 'connection method')
+    .replace(/\bmigrations?\b/giu, 'updates')
+    .replace(/\bsqlite\b/giu, 'local storage')
+    .replace(/\bindexeddb\b/giu, 'browser storage')
+    .replace(/\bopfs\b/giu, 'private browser storage')
+    .replace(/\bsidecar\b/giu, 'desktop helper')
+    .replace(/\bthin\b/giu, 'connected')
+    .replace(/\bsignaling\b/giu, 'connection setup')
+    .replace(/\bdatachannel\b/giu, 'secure session')
+    .replace(/\broom[_ -]?password\b/giu, 'protected room setting')
     .replace(/\bGateway\b/gu, 'Connection')
     .replace(/\bAuth\b/gu, 'Access')
     .replace(/\bConfig\b/gu, 'Settings')
@@ -127,6 +146,14 @@ export function sanitizeAdminText(value: string): string {
     .replace(/\btransport\b/giu, 'connection')
     .replace(/\bprovider\b/giu, 'source')
     .replace(/\broute(?:able|s|d)?\b/giu, 'path')
+  return hasUnsafeAdminCopy(softened) ? fallback : softened
+}
+
+const ADMIN_METHOD_PATTERN = /\b(?:Auth|Gateway|Scheduler|Config|Tooling|Orchestrator|Backup)\.[A-Za-z0-9_.-]+\b/u
+const ADMIN_KEY_PATH_PATTERN = /\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\.[a-z0-9_.]+\b/iu
+
+function hasUnsafeAdminCopy(value: string): boolean {
+  return findForbiddenProductionCopyTerms(value).length > 0 || ADMIN_METHOD_PATTERN.test(value) || ADMIN_KEY_PATH_PATTERN.test(value)
 }
 
 function humanizeAction(value: string): string {

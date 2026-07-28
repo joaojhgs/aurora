@@ -35,7 +35,8 @@ describe('AdminConfigView', () => {
 
     expect(model.state).toBe('ready')
     expect(markup).toContain('Configuration sections')
-    expect(markup).toContain('Settings section: services.connection')
+    expect(markup).toContain('Settings group: Connection settings')
+    expect(markup).not.toContain('services.gateway.api.port')
     expect(markup).toContain('type="number"')
     expect(markup).toContain('min="1024"')
     expect(markup).toContain('<select')
@@ -46,6 +47,64 @@ describe('AdminConfigView', () => {
     expect(markup).toContain('[REDACTED]')
     expect(markup).not.toContain('secret-token')
     expect(markup).not.toContain('raw-super-secret')
+  })
+
+  it('keeps hostile config key paths out of rendered text and attributes', async () => {
+    const client = new Aurora({ transport: hostileConfigTransport() })
+    const model = await buildAdminConfigModel(client, configRoute())
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AdminConfigView client={client} route={configRoute()} initialModel={model} />)
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+
+    expectUnsafeConfigCopyAbsent(container.innerHTML)
+    expect(container.textContent).toContain('LLM source')
+    expect(container.textContent).toContain('Protected setting')
+    expect(container.textContent).toContain('Setting 1')
+
+    const rollbackButton = findButtonByText(container, 'Rollback')
+    expect(rollbackButton).not.toBeNull()
+    await act(async () => {
+      rollbackButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+    expect(document.body.textContent).toContain('Roll back Setting 1 to a prior version.')
+    expect(document.body.textContent).toContain('Setting 1')
+    expectUnsafeConfigCopyAbsent(document.body.innerHTML)
+
+    const cancelButton = findButtonByText(document.body, 'Cancel')
+    await act(async () => {
+      cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+
+    const input = Array.from(container.querySelectorAll('input')).find((candidate) => candidate.value === 'openai')
+    expect(input).not.toBeNull()
+    await act(async () => {
+      setInputValue(input!, 'local')
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('LLM source')
+    expect(container.textContent).toContain('Assistant')
+    expectUnsafeConfigCopyAbsent(container.innerHTML)
+
+    const reviewButton = findButtonByText(container, 'Review and apply')
+    expect(reviewButton).not.toBeNull()
+    await act(async () => {
+      reviewButton!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+
+    expect(document.body.textContent).toContain('Apply staged config changes')
+    expect(document.body.textContent).toContain('LLM source')
+    expectUnsafeConfigCopyAbsent(document.body.innerHTML)
   })
 
   it('does not submit Config.Set until a staged change is reviewed and explicitly confirmed', async () => {
@@ -229,6 +288,64 @@ function configTransport(calls: string[] = []): MockAuroraTransport {
     })
 }
 
+function hostileConfigTransport(): MockAuroraTransport {
+  return MockAuroraTransport.empty()
+    .register('Config.GetSchemaMetadata', () => hostileSchemaFixture())
+    .register('Config.GetVersionHistory', () => ({
+      versions: [
+        {
+          version_id: 'cfgv-hostile-001',
+          timestamp: '2026-07-02T00:00:00Z',
+          key_path: 'services.unknown.room_password',
+          old_value: '[REDACTED]',
+          new_value: '[REDACTED]',
+          affected_sections: ['services.unknown'],
+          secret: true
+        }
+      ],
+      secrets_redacted: true
+    } satisfies ConfigVersionHistoryResponse))
+    .register('Config.Validate', () => ({
+      errors: [
+        'services.orchestrator.llm.provider uses fallback provider schema',
+        'Gateway.GetSchemaMetadata failed proof',
+        'services.gateway.webrtc.room_password invalid room password'
+      ]
+    }))
+    .register('Config.PreviewDiff', (request) => {
+      const payload = request.payload as { changes?: ConfigSetRequest[] }
+      return {
+        valid: true,
+        diffs: (payload.changes ?? []).map((change) => ({
+          key_path: change.key_path,
+          old_value: 'openai',
+          new_value: change.value,
+          changed: true,
+          source_layer: 'config.json',
+          secret: false,
+          reload_required: true,
+          restart_required: false,
+          affected_services: ['orchestrator']
+        })),
+        errors: [],
+        secrets_redacted: true,
+        changed_paths: (payload.changes ?? []).map((change) => change.key_path)
+      } satisfies ConfigDiffPreviewResponse
+    })
+    .register('Config.PreviewReloadImpact', (request) => {
+      const payload = request.payload as { changes?: ConfigSetRequest[] }
+      return {
+        impacts: (payload.changes ?? []).map((change) => ({
+          key_path: change.key_path,
+          reload_required: true,
+          restart_required: false,
+          affected_services: ['orchestrator'],
+          reason: 'services.orchestrator.llm.provider fallback protocol proof'
+        }))
+      } satisfies ConfigReloadImpactResponse
+    })
+}
+
 function schemaFixture(): ConfigSchemaMetadataResponse {
   return {
     secrets_redacted: true,
@@ -259,6 +376,42 @@ function schemaFixture(): ConfigSchemaMetadataResponse {
   }
 }
 
+function hostileSchemaFixture(): ConfigSchemaMetadataResponse {
+  return {
+    secrets_redacted: true,
+    fields: [
+      field({
+        key_path: 'services.orchestrator.llm.provider',
+        title: 'LLM provider',
+        description: 'Provider schema fallback proof from services.orchestrator.llm.provider.',
+        type: 'string',
+        current_value: 'openai',
+        source_layer: 'config.json',
+        affected_services: ['orchestrator']
+      }),
+      field({
+        key_path: 'Gateway.GetSchemaMetadata',
+        title: 'Gateway.GetSchemaMetadata',
+        description: 'Gateway.GetSchemaMetadata protocol proof.',
+        type: 'string',
+        current_value: 'ready',
+        source_layer: 'config.json',
+        affected_services: ['gateway']
+      }),
+      field({
+        key_path: 'services.gateway.webrtc.room_password',
+        title: 'room_password',
+        description: 'room password protocol',
+        type: 'string',
+        current_value: 'secret',
+        source_layer: 'config.json',
+        affected_services: ['gateway'],
+        secret: true
+      })
+    ]
+  }
+}
+
 function field(overrides: Partial<ConfigFieldMetadata>): ConfigFieldMetadata {
   return {
     key_path: 'services.example.enabled',
@@ -283,4 +436,8 @@ function setInputValue(input: HTMLInputElement, value: string): void {
 
 function findButtonByText(container: HTMLElement, text: string): HTMLButtonElement | null {
   return Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes(text)) ?? null
+}
+
+function expectUnsafeConfigCopyAbsent(markup: string): void {
+  expect(markup).not.toMatch(/services\.orchestrator|services\.gateway|services\.unknown|Gateway\.Get|room[_ -]?password|key_path|provider|schema|route|manifest|transport|proof|fallback|protocol/iu)
 }

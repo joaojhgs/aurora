@@ -109,8 +109,12 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       return [{ key_path, value: parseFieldValue(raw, field.type) }]
     })
   }, [edits, model.fields])
-  const localValidationErrors = useMemo(() => validateConfigChanges(model.fields, changes), [model.fields, changes])
   const sections = useMemo(() => groupConfigFields(model.fields), [model.fields])
+  const displayLabels = useMemo(
+    () => buildConfigDisplayLabels(model.fields, model.versions, diff, impact, changes),
+    [model.fields, model.versions, diff, impact, changes]
+  )
+  const localValidationErrors = useMemo(() => validateConfigChanges(model.fields, changes, displayLabels), [model.fields, changes, displayLabels])
   const restartCount = model.fields.filter((field) => field.restart_required).length
   const secretCount = model.fields.filter((field) => field.secret).length
   const reviewBlocked = changes.length === 0 || localValidationErrors.length > 0 || reason.trim().length === 0
@@ -150,7 +154,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
 
   function openRollbackDialog(version: ConfigVersionEntry) {
     setRollbackTarget(version)
-    setRollbackReason(`Rollback ${version.key_path} from Aurora UI`)
+    setRollbackReason(`Roll back ${configDisplayLabel(version.key_path, displayLabels)} from Aurora UI`)
     setDialogKind('rollback')
   }
 
@@ -203,7 +207,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       header: 'Field',
       render: (version) => (
         <span className="flex flex-col gap-0.5">
-          <strong>{version.key_path}</strong>
+          <strong>{configDisplayLabel(version.key_path, displayLabels)}</strong>
           <small className="font-mono text-xs text-muted-foreground">{version.version_id}</small>
         </span>
       )
@@ -262,7 +266,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       {model.validationErrors.length > 0 ? (
         <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
           <strong>Validation errors</strong>
-          <ul className="list-disc pl-4">{model.validationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+          <ul className="list-disc pl-4">{model.validationErrors.map((error, index) => <li key={`${index}-${error}`}>{configValidationErrorText(error, displayLabels)}</li>)}</ul>
         </div>
       ) : null}
       {message ? (
@@ -281,15 +285,15 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
           }
         >
           {sections.length === 0 ? <p className="text-sm text-muted-foreground">No settings sections are available.</p> : null}
-          <Accordion multiple defaultValue={sections.map(([section]) => section)}>
-            {sections.map(([section, fields]) => (
-              <AccordionItem key={section} value={section}>
+          <Accordion multiple defaultValue={sections.map((_, index) => `settings-group-${index + 1}`)}>
+            {sections.map(([section, fields], index) => (
+              <AccordionItem key={section} value={`settings-group-${index + 1}`}>
                 <AccordionTrigger>
                   <span className="flex flex-1 flex-col gap-0.5 text-left">
                     <strong className="text-sm font-semibold">{configSectionTitle(section)}</strong>
-                    <small className="text-xs font-normal text-muted-foreground">Settings section: {configKeyLabel(section)}</small>
+                    <small className="text-xs font-normal text-muted-foreground">Settings group: {configSectionLabel(section)}</small>
                   </span>
-                    <span className="flex flex-wrap items-center gap-1.5" aria-label={`${configKeyLabel(section)} section badges`}>
+                    <span className="flex flex-wrap items-center gap-1.5" aria-label={`${configSectionLabel(section)} section badges`}>
                     <Badge variant="secondary">{fields.length} fields</Badge>
                     <Badge variant="secondary">{countChanged(fields, changes)} staged</Badge>
                     {fields.some((field) => field.secret) ? <Badge variant="outline">secret redacted</Badge> : null}
@@ -305,7 +309,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                         <label key={field.key_path} className="grid grid-cols-1 gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_minmax(0,260px)] sm:items-start">
                           <span className="flex flex-col gap-1">
                             <strong className="text-sm font-medium">{configFieldTitle(field)}</strong>
-                            <code className="font-mono text-xs text-muted-foreground">{configKeyLabel(field.key_path)}</code>
+                            <span className="text-xs text-muted-foreground">{configDisplayLabel(field.key_path, displayLabels)}</span>
                             <small className="text-xs text-muted-foreground">{configFieldDescription(field.description)}</small>
                           </span>
                           <span className="flex flex-col gap-1">
@@ -313,14 +317,14 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                               field={field}
                               value={field.secret ? '[REDACTED]' : editedValue}
                               disabled={!canMutate || field.secret || busy}
-                              invalid={fieldHasValidationError(field.key_path, model.validationErrors, localValidationErrors)}
+                              invalid={fieldHasValidationError(field.key_path, model.validationErrors, localValidationErrors, displayLabels)}
                               changed={changed}
                               onChange={(value) => setEdits((current) => ({ ...current, [field.key_path]: value }))}
                             />
                             <em className="text-[11px] not-italic text-muted-foreground">
-                              {configKeyLabel(field.source_layer)}; {fieldModeLabel(field)}
+                              {configSourceLayerLabel(field.source_layer)}; {fieldModeLabel(field)}
                               {field.secret ? '; secret redacted' : ''}
-                              {field.affected_services.length > 0 ? `; affects ${field.affected_services.map(configKeyLabel).join(', ')}` : ''}
+                              {field.affected_services.length > 0 ? `; affects ${field.affected_services.map(configServiceLabel).join(', ')}` : ''}
                             </em>
                           </span>
                         </label>
@@ -339,12 +343,12 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
           description="Review pending changes and their refresh impact before applying them. Secret values stay protected."
         >
           <div className="flex flex-col gap-4">
-            <DiffList diff={diff} />
-            <ImpactList impact={impact} />
+            <DiffList diff={diff} labels={displayLabels} />
+            <ImpactList impact={impact} labels={displayLabels} />
             {localValidationErrors.length > 0 ? (
               <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
                 <strong>Staged validation</strong>
-                <ul className="list-disc pl-4">{localValidationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+                <ul className="list-disc pl-4">{localValidationErrors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul>
               </div>
             ) : null}
             <Button
@@ -375,11 +379,11 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
           description={
             dialogKind === 'apply'
               ? `Apply ${changes.length} staged change(s). Refresh impact is shown in the staged review card; secret values stay protected.`
-              : `Roll back ${rollbackTarget?.key_path ?? 'this field'} to a prior version.`
+              : `Roll back ${rollbackTarget ? configDisplayLabel(rollbackTarget.key_path, displayLabels) : 'this setting'} to a prior version.`
           }
           methodId="Config.Set"
           actionLabel={dialogKind === 'apply' ? 'Apply settings changes' : 'Roll back setting'}
-          affected={dialogKind === 'apply' ? changes.map((change) => change.key_path) : rollbackTarget ? [rollbackTarget.key_path] : []}
+          affected={dialogKind === 'apply' ? changes.map((change) => configDisplayLabel(change.key_path, displayLabels)) : rollbackTarget ? [configDisplayLabel(rollbackTarget.key_path, displayLabels)] : []}
           requireReason
           reasonValue={dialogKind === 'apply' ? reason : rollbackReason}
           onReasonChange={dialogKind === 'apply' ? setReason : setRollbackReason}
@@ -458,14 +462,14 @@ function ConfigFieldControl({
 const SELECT_CLASSNAME =
   'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20'
 
-function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
+function DiffList({ diff, labels }: { diff: ConfigDiffEntry[]; labels: ConfigDisplayLabels }) {
   return (
     <div className="flex flex-col gap-2" aria-label="Pending changes">
       <h3 id="config-diff-preview-title" className="text-sm font-semibold">Pending changes</h3>
       {diff.length === 0 ? <p className="text-sm text-muted-foreground">No staged changes.</p> : null}
       {diff.map((row) => (
         <div key={row.key_path} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
-          <code className="font-mono">{row.key_path}</code>
+          <span className="font-medium">{configDisplayLabel(row.key_path, labels)}</span>
           <span className="text-muted-foreground line-through">{displayDiffValue(row)}</span>
           <span className="font-medium">{displayDiffValue(row, 'new')}</span>
         </div>
@@ -474,14 +478,14 @@ function DiffList({ diff }: { diff: ConfigDiffEntry[] }) {
   )
 }
 
-function ImpactList({ impact }: { impact: ConfigReloadImpactEntry[] }) {
+function ImpactList({ impact, labels }: { impact: ConfigReloadImpactEntry[]; labels: ConfigDisplayLabels }) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold">Refresh impact</h3>
       {impact.length === 0 ? <p className="text-sm text-muted-foreground">No refresh impact reported.</p> : null}
       {impact.map((entry) => (
         <p key={entry.key_path} className="text-xs text-muted-foreground">
-          <strong className="font-mono text-foreground">{entry.key_path}</strong>: {entry.restart_required ? 'restart' : entry.reload_required ? 'reload' : 'hot update'}; {entry.affected_services.join(', ') || 'no service'}.
+          <strong className="text-foreground">{configDisplayLabel(entry.key_path, labels)}</strong>: {entry.restart_required ? 'restart' : entry.reload_required ? 'reload' : 'hot update'}; {entry.affected_services.map(configServiceLabel).join(', ') || 'no service'}.
         </p>
       ))}
     </div>
@@ -542,33 +546,72 @@ function displayDiffValue(row: ConfigDiffEntry, side: 'old' | 'new' = 'old'): st
   return displayValue(side === 'old' ? row.old_value : row.new_value)
 }
 
-function validateConfigChanges(fields: ConfigFieldMetadata[], changes: ConfigChange[]): string[] {
+interface ConfigDisplayLabels {
+  fields: Map<string, string>
+  unknown: Map<string, string>
+}
+
+function buildConfigDisplayLabels(
+  fields: ConfigFieldMetadata[],
+  versions: ConfigVersionEntry[],
+  diff: ConfigDiffEntry[],
+  impact: ConfigReloadImpactEntry[],
+  changes: ConfigChange[]
+): ConfigDisplayLabels {
+  const fieldLabels = new Map<string, string>()
+  fields.forEach((field) => {
+    fieldLabels.set(field.key_path, safeConfigFieldTitle(field))
+  })
+
+  const unknownPaths = new Set<string>()
+  for (const path of [
+    ...versions.map((version) => version.key_path),
+    ...diff.map((row) => row.key_path),
+    ...impact.map((entry) => entry.key_path),
+    ...changes.map((change) => change.key_path),
+  ]) {
+    if (!fieldLabels.has(path)) unknownPaths.add(path)
+  }
+  const unknown = new Map<string, string>()
+  Array.from(unknownPaths).sort().forEach((path, index) => {
+    unknown.set(path, `Setting ${index + 1}`)
+  })
+  return { fields: fieldLabels, unknown }
+}
+
+function configDisplayLabel(keyPath: string, labels: ConfigDisplayLabels): string {
+  return labels.fields.get(keyPath) ?? labels.unknown.get(keyPath) ?? 'Setting'
+}
+
+function validateConfigChanges(fields: ConfigFieldMetadata[], changes: ConfigChange[], labels: ConfigDisplayLabels): string[] {
   const fieldByKey = new Map(fields.map((field) => [field.key_path, field]))
   return changes.flatMap((change) => {
     const field = fieldByKey.get(change.key_path)
-    if (!field) return [`${change.key_path}: Aurora could not read this item`]
+    const label = configDisplayLabel(change.key_path, labels)
+    if (!field) return [`${label}: Aurora could not read this item`]
     const errors: string[] = []
-    if (field.secret) errors.push(`${field.key_path}: secret fields cannot be edited from the UI`)
+    if (field.secret) errors.push(`${label}: secret fields cannot be edited from the UI`)
     if ((field.type === 'integer' || field.type === 'number') && (typeof change.value !== 'number' || Number.isNaN(change.value))) {
-      errors.push(`${field.key_path}: must be a valid ${field.type}`)
+      errors.push(`${label}: must be a valid ${field.type}`)
     }
-    if (field.type === 'boolean' && typeof change.value !== 'boolean') errors.push(`${field.key_path}: must be true or false`)
+    if (field.type === 'boolean' && typeof change.value !== 'boolean') errors.push(`${label}: must be true or false`)
     if ((field.type === 'array' && !Array.isArray(change.value)) || (field.type === 'object' && !isPlainObject(change.value))) {
-      errors.push(`${field.key_path}: must be valid JSON ${field.type}`)
+      errors.push(`${label}: must be valid JSON ${field.type}`)
     }
     const minimum = numericConstraint(field, 'minimum')
     const maximum = numericConstraint(field, 'maximum')
-    if (typeof change.value === 'number' && minimum !== null && change.value < minimum) errors.push(`${field.key_path}: must be at least ${minimum}`)
-    if (typeof change.value === 'number' && maximum !== null && change.value > maximum) errors.push(`${field.key_path}: must be at most ${maximum}`)
+    if (typeof change.value === 'number' && minimum !== null && change.value < minimum) errors.push(`${label}: must be at least ${minimum}`)
+    if (typeof change.value === 'number' && maximum !== null && change.value > maximum) errors.push(`${label}: must be at most ${maximum}`)
     if (field.choices && field.choices.length > 0 && !field.choices.some((choice) => stringifyValue(choice) === stringifyValue(change.value))) {
-      errors.push(`${field.key_path}: choose one of the listed values`)
+      errors.push(`${label}: choose one of the listed values`)
     }
     return errors
   })
 }
 
-function fieldHasValidationError(keyPath: string, backendErrors: string[], localErrors: string[]): boolean {
-  return [...backendErrors, ...localErrors].some((error) => error.includes(keyPath))
+function fieldHasValidationError(keyPath: string, backendErrors: string[], localErrors: string[], labels: ConfigDisplayLabels): boolean {
+  const label = configDisplayLabel(keyPath, labels)
+  return backendErrors.some((error) => error.includes(keyPath)) || localErrors.some((error) => error.includes(label))
 }
 
 function numericBounds(field: ConfigFieldMetadata): { min?: number; max?: number } {
@@ -606,10 +649,11 @@ function configSectionName(keyPath: string): string {
 }
 
 function configSectionTitle(section: string): string {
-  return configKeyLabel(section)
-    .split('.')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' / ')
+  return configSectionLabel(section)
+}
+
+function configSectionLabel(section: string): string {
+  return `${configAreaLabel(section)} settings`
 }
 
 function countChanged(fields: ConfigFieldMetadata[], changes: ConfigChange[]): number {
@@ -629,25 +673,64 @@ function configEvidenceLabel(value: string): string {
 }
 
 function configFieldTitle(field: ConfigFieldMetadata): string {
-  return configKeyLabel(field.title ?? field.key_path)
+  return safeConfigFieldTitle(field)
 }
 
-function configKeyLabel(value: string): string {
-  return value
-    .replace(/\bgateway\b/giu, 'connection')
-    .replace(/\bconfig\.json\b/giu, 'saved settings')
-    .replace(/\bconfig\b/giu, 'settings')
-    .replace(/\bschema\b/giu, 'setting')
-    .replace(/\bmetadata\b/giu, 'details')
+function safeConfigFieldTitle(field: ConfigFieldMetadata): string {
+  if (isProtectedConfigPath(field.key_path) || isProtectedConfigText(field.title ?? undefined)) return 'Protected setting'
+  const title = field.title?.trim()
+  if (title) {
+    const softened = productAdminReasonCopy(title, '')
+    if (softened) return softened
+  }
+  return productConfigAreaSettingCopy(field.key_path)
+}
+
+function productConfigAreaSettingCopy(value: string): string {
+  return `${configAreaLabel(value)} setting`
+}
+
+function configValidationErrorText(error: string, labels: ConfigDisplayLabels): string {
+  let text = error
+  const orderedPaths = [...labels.fields.keys(), ...labels.unknown.keys()].sort((a, b) => b.length - a.length)
+  for (const path of orderedPaths) {
+    text = text.replaceAll(path, configDisplayLabel(path, labels))
+  }
+  return productAdminReasonCopy(text, 'Setting needs attention.')
+}
+
+function configSourceLayerLabel(value: string): string {
+  if (/config\.json/iu.test(value)) return 'Saved settings'
+  return productAdminReasonCopy(value, 'Saved settings')
+}
+
+function configServiceLabel(value: string): string {
+  return configAreaLabel(value)
+}
+
+function configAreaLabel(value: string): string {
+  if (/gateway|connection/iu.test(value)) return 'Connection'
+  if (/auth|access/iu.test(value)) return 'Access'
+  if (/orchestrator|assistant|llm/iu.test(value)) return 'Assistant'
+  if (/scheduler|schedule/iu.test(value)) return 'Scheduler'
+  if (/backup/iu.test(value)) return 'Backups'
+  if (/tooling|tools?|mcp|plugins?/iu.test(value)) return 'Tools'
+  if (/tts|stt|voice|audio/iu.test(value)) return 'Voice'
+  return 'General'
+}
+
+function isProtectedConfigPath(value: string): boolean {
+  return /(?:password|token|secret|credential|room[_ -]?password)/iu.test(value)
+}
+
+function isProtectedConfigText(value: string | undefined): boolean {
+  return /(?:room[_ -]?password)/iu.test(value ?? '')
 }
 
 function configFieldDescription(value: string | undefined): string {
   const trimmed = value?.trim()
   if (!trimmed) return 'No description provided.'
-  return trimmed
-    .replace(/\bschema\b/giu, 'setting')
-    .replace(/\bconfig metadata\b/giu, 'Aurora settings')
-    .replace(/\bmetadata\b/giu, 'details')
+  return productAdminReasonCopy(trimmed, 'No description provided.')
 }
 
 function errorMessage(error: unknown): string {

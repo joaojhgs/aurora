@@ -83,7 +83,8 @@ describe('admin route checkpoint status', () => {
     expect(model.state).toBe('degraded')
     expect(model.validationErrors).toEqual(['services.gateway.api.port must be between 1 and 65535'])
     expect(markup).toContain('Validation errors')
-    expect(markup).toContain('services.gateway.api.port must be between 1 and 65535')
+    expect(markup).toContain('Connection port must be between 1 and 65535')
+    expect(markup).not.toContain('services.gateway.api.port')
     expect(markup).toContain('aria-invalid="true"')
   })
 
