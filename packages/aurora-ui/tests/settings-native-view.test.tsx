@@ -151,58 +151,126 @@ it('maps hostile settings/native text and copy attributes across desktop, web, A
   }
 })
 
-it('keeps hostile advanced settings metadata and errors out of rendered copy while preserving mutation keys', async () => {
-  const snapshot = snapshotFor(nativeCapabilityManifestFixture, 'tauri-local')
-  const configRoute = {
-    ...snapshot.routes.find((route) => route.item.id === 'settings')!,
-    disabled: false,
-    state: 'available-local' as const,
-    explanation: 'Ready',
-    blockers: []
+it('keeps hostile advanced settings metadata and errors out of rendered copy while preserving mutation keys across surfaces', async () => {
+  const webGraph = buildCapabilityGraph({
+    catalog: capabilityGraphCatalogFixture,
+    registry: gatewayRegistryFixture,
+    nativeManifest: null,
+    transportKind: 'http'
+  })
+  const snapshots = [
+    snapshotFor(nativeCapabilityManifestFixture, 'tauri-local'),
+    snapshotFromGraph('http', webGraph, null),
+    snapshotFor(androidNativeCapabilityManifestFixture, 'native-mobile'),
+    snapshotFor(iosNativeCapabilityManifestFixture, 'native-mobile')
+  ]
+  const fields = hostileAdvancedFields()
+
+  for (const snapshot of snapshots) {
+    const configRoute = availableConfigRoute(snapshot)
+    const dataRoute = { ...configRoute, disabled: true, explanation: 'r-a-w provider manifest schema fallback permission error' }
+    const applied: unknown[] = []
+    const client = hostileSettingsClient(applied, fields)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <SettingsView
+          client={client}
+          snapshot={snapshot}
+          configRoute={configRoute}
+          dataRoute={dataRoute}
+          initialTab="advanced"
+        />
+      )
+    })
+    await flushReactWork()
+
+    const advancedMarkup = advancedSettingsMarkup(container)
+    const advancedText = visibleText(advancedMarkup)
+    assertNoForbiddenRenderedCopy(`${snapshot.transportKind}-advanced-settings`, advancedMarkup)
+    expect(advancedText).toContain('Automation')
+    expect(advancedText).toContain('More settings 1')
+    expect(advancedText).toContain('Model Choice')
+    expect(advancedText).toContain('Setting')
+    expect(Array.from(container.querySelectorAll('input')).some((candidate) => candidate.value === '[REDACTED]')).toBe(true)
+    expect(advancedText).not.toContain('scheduler')
+    expect(advancedText).not.toContain('arbitraryService')
+    expect(advancedText).not.toContain('services.orchestrator.llm.provider')
+    expect(advancedText).not.toContain('Orchestrator.ExternalUserInput')
+
+    const input = Array.from(container.querySelectorAll('input')).find((candidate) => candidate.value === 'remote') as HTMLInputElement
+    input.value = 'local'
+    await act(async () => {
+      input.focus()
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'local' }))
+      input.blur()
+    })
+    await flushReactWork()
+
+    expect(applied).toEqual([
+      expect.objectContaining({
+        change: expect.objectContaining({ key_path: 'services.scheduler.hostile_provider_choice' })
+      })
+    ])
+    assertNoForbiddenRenderedCopy(`${snapshot.transportKind}-advanced-settings-after-save`, advancedSettingsMarkup(container))
+
+    await act(async () => root.unmount())
+    container.remove()
   }
-  const dataRoute = { ...configRoute, disabled: true, explanation: 'provider manifest schema fallback permission error' }
-  const applied: unknown[] = []
-  const client = hostileSettingsClient(applied)
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
+})
+
+it('maps unavailable and load-error settings copy without echoing raw explanations or errors', async () => {
+  const snapshot = snapshotFor(nativeCapabilityManifestFixture, 'tauri-local')
+  const unavailableContainer = document.createElement('div')
+  document.body.appendChild(unavailableContainer)
+  const unavailableRoot = createRoot(unavailableContainer)
+  const unavailableRoute = {
+    ...availableConfigRoute(snapshot),
+    disabled: true,
+    explanation: 'r.a.w AdminAction provider manifest schema method services.scheduler.host'
+  }
 
   await act(async () => {
-    root.render(
+    unavailableRoot.render(
       <SettingsView
-        client={client}
+        client={hostileSettingsClient([], [])}
         snapshot={snapshot}
-        configRoute={configRoute}
-        dataRoute={dataRoute}
+        configRoute={unavailableRoute}
+        dataRoute={unavailableRoute}
         initialTab="advanced"
       />
     )
   })
   await flushReactWork()
+  assertNoForbiddenRenderedCopy('advanced-settings-unavailable', advancedSettingsMarkup(unavailableContainer))
+  expect(unavailableContainer.textContent).toContain('Review access and try again.')
 
-  assertNoForbiddenRenderedCopy('advanced-settings', advancedSettingsMarkup(container))
-  expect(container.textContent).toContain('Model Choice')
-  expect(container.textContent).toContain('Update how Aurora behaves on this device.')
-  expect(container.textContent).not.toContain('services.orchestrator.llm.provider')
+  await act(async () => unavailableRoot.unmount())
+  unavailableContainer.remove()
 
-  const input = container.querySelector('input') as HTMLInputElement
-  input.value = 'local'
+  const errorContainer = document.createElement('div')
+  document.body.appendChild(errorContainer)
+  const errorRoot = createRoot(errorContainer)
   await act(async () => {
-    input.focus()
-    input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'local' }))
-    input.blur()
+    errorRoot.render(
+      <SettingsView
+        client={errorSettingsClient()}
+        snapshot={snapshot}
+        configRoute={availableConfigRoute(snapshot)}
+        dataRoute={unavailableRoute}
+        initialTab="advanced"
+      />
+    )
   })
   await flushReactWork()
+  assertNoForbiddenRenderedCopy('advanced-settings-error', advancedSettingsMarkup(errorContainer))
+  expect(visibleText(advancedSettingsMarkup(errorContainer))).toContain('Connection lost. Reconnecting')
 
-  expect(applied).toEqual([
-    expect.objectContaining({
-      change: expect.objectContaining({ key_path: 'services.scheduler.hostile_provider_choice' })
-    })
-  ])
-  assertNoForbiddenRenderedCopy('advanced-settings-after-save', advancedSettingsMarkup(container))
-
-  await act(async () => root.unmount())
-  container.remove()
+  await act(async () => errorRoot.unmount())
+  errorContainer.remove()
 })
 
 it('builds stable JSON status for desktop local, web fallback, Android preflight, and iOS preflight without unsupported-available claims', () => {
@@ -340,11 +408,39 @@ function poisonSnapshot(snapshot: AuroraShellSnapshot): AuroraShellSnapshot {
   return poisoned
 }
 
-function hostileSettingsClient(applied: unknown[]): AuroraClient {
-  const field: ConfigFieldMetadata = {
-    key_path: 'services.scheduler.hostile_provider_choice',
-    title: 'Model Choice',
-    description: 'provider manifest schema fallback key_path services.orchestrator.llm.provider',
+function hostileAdvancedFields(): ConfigFieldMetadata[] {
+  return [
+    configField({
+      key_path: 'services.scheduler.hostile_provider_choice',
+      title: 'Model Choice',
+      description: 'provider manifest schema fallback key_path services.orchestrator.llm.provider',
+      current_value: 'remote'
+    }),
+    configField({
+      key_path: 'services.arbitraryService.raw_title',
+      title: 'r.a.w',
+      description: 'm-e-t-h-o-d Orchestrator.ExternalUserInput p-r-o-v-i-d-e-r'
+    }),
+    configField({
+      key_path: 'services.arbitraryService.secret_method_id',
+      title: 'Secret method id',
+      description: 'AdminAction schema permission evidence',
+      current_value: 'Orchestrator.ExternalUserInput',
+      secret: true
+    }),
+    configField({
+      key_path: 'customRoot.debug_manifest_setting',
+      title: 'Debug manifest setting',
+      description: 'f.a.l.l.b.a.c.k p.r.o.v.i.d.e.r schema'
+    })
+  ]
+}
+
+function configField(overrides: Partial<ConfigFieldMetadata>): ConfigFieldMetadata {
+  return {
+    key_path: 'services.scheduler.setting',
+    title: 'Setting',
+    description: 'Update how Aurora behaves on this device.',
     type: 'string',
     default: 'remote',
     current_value: 'remote',
@@ -353,11 +449,25 @@ function hostileSettingsClient(applied: unknown[]): AuroraClient {
     reload_required: false,
     restart_required: false,
     affected_services: [],
-    constraints: {}
+    constraints: {},
+    ...overrides
   }
+}
+
+function availableConfigRoute(snapshot: AuroraShellSnapshot): RouteAvailability {
+  return {
+    ...snapshot.routes.find((route) => route.item.id === 'settings')!,
+    disabled: false,
+    state: 'available-local' as const,
+    explanation: 'Ready',
+    blockers: []
+  }
+}
+
+function hostileSettingsClient(applied: unknown[], fields: ConfigFieldMetadata[]): AuroraClient {
   return {
     config: {
-      getSchemaMetadata: async () => ({ ok: true, data: { fields: [field], secrets_redacted: true } }),
+      getSchemaMetadata: async () => ({ ok: true, data: { fields, secrets_redacted: true } }),
       applyChange: async (change: unknown) => {
         applied.push(change)
         return { ok: true, data: { success: true } }
@@ -370,27 +480,43 @@ function hostileSettingsClient(applied: unknown[]): AuroraClient {
     capabilities: {
       listCatalog: async () => ({ ok: true, data: capabilityGraphCatalogFixture })
     },
-    routes: {
-      evaluatePolicy: async (request: { auditReceiptTarget?: string }) => ({
-        decision: 'allowed',
-        allowed: true,
-        availability: 'available-local',
-        reasonCode: 'ready',
-        repairPath: null,
-        privacyClass: 'personal',
-        dataClasses: ['personal'],
-        explicitSelectorRequired: false,
-        approval: { required: false, status: 'not-required', scopes: [] },
-        route: {},
-        selectedCandidate: null,
-        blockers: [],
-        preview: {
-          fallbackBehavior: 'none',
-          auditReceiptTarget: request.auditReceiptTarget ?? 'local'
-        }
-      })
-    }
+    routes: { evaluatePolicy: async (request: { auditReceiptTarget?: string }) => policyEvaluation(request) }
   } as unknown as AuroraClient
+}
+
+function errorSettingsClient(): AuroraClient {
+  return {
+    config: {
+      getSchemaMetadata: async () => ({
+        ok: false,
+        error: { message: 'r.a.w provider manifest schema method failure', code: 'connection_lost' }
+      })
+    },
+    memory: { listNamespaces: async () => ({ ok: true, data: { namespaces: [] } }), listMessages: async () => ({ ok: true, data: { conversations: [] } }) },
+    capabilities: { listCatalog: async () => ({ ok: true, data: capabilityGraphCatalogFixture }) },
+    routes: { evaluatePolicy: async (request: { auditReceiptTarget?: string }) => policyEvaluation(request) }
+  } as unknown as AuroraClient
+}
+
+function policyEvaluation(request: { auditReceiptTarget?: string }) {
+  return {
+    decision: 'allowed',
+    allowed: true,
+    availability: 'available-local',
+    reasonCode: 'ready',
+    repairPath: null,
+    privacyClass: 'personal',
+    dataClasses: ['personal'],
+    explicitSelectorRequired: false,
+    approval: { required: false, status: 'not-required', scopes: [] },
+    route: {},
+    selectedCandidate: null,
+    blockers: [],
+    preview: {
+      fallbackBehavior: 'none',
+      auditReceiptTarget: request.auditReceiptTarget ?? 'local'
+    }
+  }
 }
 
 function assertNoForbiddenRenderedCopy(name: string, markup: string): void {
@@ -409,7 +535,29 @@ function advancedSettingsMarkup(container: HTMLElement): string {
 
 function forbiddenCopyMatches(value: string): string[] {
   const matches = findForbiddenProductionCopyTerms(value).map((term) => term.id)
-  if (/\b(?:raw|permission|AdminAction|method)\b/i.test(value)) matches.push('raw-settings-detail')
+  const compact = value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  for (const term of [
+    'raw',
+    'permission',
+    'adminaction',
+    'method',
+    'provider',
+    'fallback',
+    'manifest',
+    'schema',
+    'evidence',
+    'debug',
+    'proof',
+    'assertion',
+    'runtime',
+    'transport',
+    'sidecar',
+    'thin',
+    'keypath'
+  ]) {
+    if (compact.includes(term)) matches.push('raw-settings-detail')
+  }
+  if (/\b[A-Z][A-Za-z0-9]+\s*[._-]\s*[A-Z][A-Za-z0-9]+\b/u.test(value)) matches.push('raw-settings-detail')
   return [...new Set(matches)]
 }
 
@@ -425,7 +573,7 @@ function visibleText(markup: string): string {
 
 function copyAttributeValues(markup: string): string[] {
   const values: string[] = []
-  for (const match of markup.matchAll(/\s(?:aria-label|title|placeholder)=["']([^"']*)["']/giu)) {
+  for (const match of markup.matchAll(/\s(?:aria-label|title|placeholder|data-[a-z0-9-]+)=["']([^"']*)["']/giu)) {
     values.push(match[1] ?? '')
   }
   return values

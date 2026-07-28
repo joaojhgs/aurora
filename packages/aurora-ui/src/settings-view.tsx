@@ -58,6 +58,11 @@ interface AdvancedSettingsTabProps {
 }
 
 type AdvancedFieldState = 'idle' | 'saving' | 'error'
+interface AdvancedSettingsSection {
+  id: string
+  label: string
+  fields: ConfigFieldMetadata[]
+}
 
 function AdvancedSettingsTab({ client, configRoute, dataRoute }: AdvancedSettingsTabProps) {
   const [fields, setFields] = useState<ConfigFieldMetadata[]>([])
@@ -140,10 +145,10 @@ function AdvancedSettingsTab({ client, configRoute, dataRoute }: AdvancedSetting
         <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">{message}</p>
       ) : null}
 
-      {sections.map(([section, sectionFields]) => (
-        <Card key={section} title={<span className="capitalize">{section}</span>} actions={<Badge variant="secondary">{sectionFields.length}</Badge>}>
+      {sections.map((section) => (
+        <Card key={section.id} title={section.label} actions={<Badge variant="secondary">{section.fields.length}</Badge>}>
           <div className="flex flex-col gap-4">
-            {sectionFields.map((field) => (
+            {section.fields.map((field) => (
               <AdvancedFieldRow
                 key={field.key_path}
                 field={field}
@@ -218,40 +223,55 @@ function isExcludedFromAdvanced(keyPath: string): boolean {
   )
 }
 
-function advancedGroupName(keyPath: string): string {
+function advancedGroupId(keyPath: string): string {
   const parts = keyPath.split('.')
   if (parts[0] === 'services' && parts.length > 1) return parts[1] ?? keyPath
   return parts[0] ?? keyPath
 }
 
-function groupAdvancedFields(fields: ConfigFieldMetadata[]): Array<[string, ConfigFieldMetadata[]]> {
+function groupAdvancedFields(fields: ConfigFieldMetadata[]): AdvancedSettingsSection[] {
   const groups = new Map<string, ConfigFieldMetadata[]>()
   for (const field of fields) {
     if (isExcludedFromAdvanced(field.key_path)) continue
-    const section = advancedGroupName(field.key_path)
+    const section = advancedGroupId(field.key_path)
     const current = groups.get(section) ?? []
     current.push(field)
     groups.set(section, current)
   }
-  return Array.from(groups.entries())
+  let unnamed = 0
+  return Array.from(groups.entries()).map(([id, sectionFields]) => {
+    const label = advancedGroupLabel(id)
+    if (label) return { id, label, fields: sectionFields }
+    unnamed += 1
+    return { id, label: `More settings ${unnamed}`, fields: sectionFields }
+  })
 }
 
 function advancedFieldTitle(field: ConfigFieldMetadata): string {
-  return safeSettingsText(field.title, titleFromPath(field.key_path))
+  const title = safeSettingsText(field.title, '')
+  return title || 'Setting'
 }
 
 function advancedFieldDescription(field: ConfigFieldMetadata): string {
   return safeSettingsText(field.description, 'Update how Aurora behaves on this device.')
 }
 
-function titleFromPath(keyPath: string): string {
-  const leaf = keyPath.split('.').filter(Boolean).at(-1) ?? 'setting'
-  return leaf
-    .replace(/[-_]/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+function advancedGroupLabel(groupId: string): string | null {
+  const labels: Record<string, string> = {
+    audio: 'Audio',
+    db: 'Memory',
+    memory: 'Memory',
+    scheduler: 'Automation',
+    stt: 'Voice input',
+    stt_coordinator: 'Voice input',
+    stt_transcription: 'Voice input',
+    stt_wakeword: 'Wake word',
+    tts: 'Spoken replies',
+    ui: 'Appearance',
+    backup: 'Backup',
+    auth: 'Account access'
+  }
+  return labels[groupId] ?? null
 }
 
 function safeSettingsText(value: unknown, replacement: string): string {
@@ -269,7 +289,48 @@ function sourceLayerLabel(value: unknown): string {
 }
 
 function containsInternalSettingsText(value: string): boolean {
-  return /\b(?:proof|evidence|fixtures?|assertions?|implement(?:ation|ed|ing)?|tested|debug(?:ging)?|fallback|provider|consumer|hybrid|manifest|contracts?|protocol|transport|runtime|schema|migrations?|sqlite|indexeddb|opfs|sidecar|thin|AdminAction|method|key[-_ ]?paths?|permission)\b|\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\.[a-z0-9_.]+\b/iu.test(value)
+  const compact = value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const compactForbidden = [
+    'proof',
+    'evidence',
+    'fixture',
+    'fixtures',
+    'assertion',
+    'assertions',
+    'implementation',
+    'implemented',
+    'implementing',
+    'tested',
+    'debug',
+    'debugging',
+    'fallback',
+    'provider',
+    'consumer',
+    'hybrid',
+    'manifest',
+    'contract',
+    'contracts',
+    'protocol',
+    'transport',
+    'runtime',
+    'schema',
+    'migration',
+    'migrations',
+    'sqlite',
+    'indexeddb',
+    'opfs',
+    'sidecar',
+    'thin',
+    'adminaction',
+    'method',
+    'keypath',
+    'keypaths',
+    'permission',
+    'raw'
+  ]
+  return compactForbidden.some((term) => compact.includes(term)) ||
+    /\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)\s*[._-]\s*[a-z0-9_.-]+\b/iu.test(value) ||
+    /\b[A-Z][A-Za-z0-9]+\s*[._-]\s*[A-Z][A-Za-z0-9]+\b/u.test(value)
 }
 
 function productSettingsErrorCopy(problem: unknown, backup = 'Aurora settings could not be loaded. Try again.'): string {
