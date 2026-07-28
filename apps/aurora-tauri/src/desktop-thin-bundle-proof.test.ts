@@ -174,7 +174,8 @@ describe('desktop-thin bundle artifact proof', () => {
       expect(envTypes).not.toContain(name)
     }
     expect(runtimeSource).toContain('thinProfileDocument')
-    expect(runtimeSource).toContain('requiresOnboarding: !thinProfileConfigured')
+    expect(runtimeSource).toContain('const runtimeProfileConfigured = configuredRuntimeProfile')
+    expect(runtimeSource).toContain('requiresOnboarding: !runtimeProfileConfigured')
   })
 
 })
