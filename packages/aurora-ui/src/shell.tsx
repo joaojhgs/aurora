@@ -15,7 +15,7 @@ import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from "./nav";
 import type { AuroraNavItem } from "./nav";
 import type { AuroraNavSection } from "./nav";
 import { getAuroraSurfaceProfile } from "./platform-surface";
-import { PRODUCT_COPY } from "./product-copy";
+import { PRODUCT_COPY, productStatusCopy } from "./product-copy";
 import type { AuroraShellSnapshot, RouteAvailability } from "./shell-data";
 import { CapabilityDrawer } from "./state-surface";
 import {
@@ -503,6 +503,7 @@ function ActivityRail({
   runtimeMode?: string | undefined;
 }) {
   const events = shellActivityEvents(snapshot, runtimeMode);
+  const shellAlertCopy = snapshot.error ? productStatusCopy("connection-failed").title : null;
   return (
     <aside className="flex h-full flex-col" aria-label="Aurora activity">
       <header className="flex items-center justify-between border-b border-border px-3.5 py-3">
@@ -524,9 +525,9 @@ function ActivityRail({
           </li>
         ))}
       </ul>
-      {snapshot.error ? (
+      {shellAlertCopy ? (
         <p role="alert" className="border-t border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-          {snapshot.error}
+          {shellAlertCopy}
         </p>
       ) : null}
     </aside>
@@ -631,7 +632,7 @@ function shellRuntimeStateLabel(snapshot: AuroraShellSnapshot): string {
 function shellRouteSummaryLabel(route: RouteAvailability): string {
   if (route.disabled) return "Operator workflow is configured for review.";
   if (route.selectorRequired)
-    return "Choose a preferred local provider before running.";
+    return "Choose a preferred local device before running.";
   return "Ready for operator workflow.";
 }
 

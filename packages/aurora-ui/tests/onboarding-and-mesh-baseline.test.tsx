@@ -9,9 +9,12 @@ import {
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import {
   buildMeshPeersSnapshot,
+  errorShellSnapshot,
   MeshPeersView,
+  OnboardingView,
   WebThinConnectionPanel,
   webRtcProfileFromInvite,
+  type AuroraShellSnapshot,
   type BrowserWebRtcSnapshot,
 } from '../src/index'
 import { encodeMeshInviteToken, encodeMeshInviteUrl } from '../src/mesh-invite'
@@ -33,7 +36,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
   it('offers device naming plus scan, open, paste, and deep-link invite setup on mobile surfaces', async () => {
     const peer = new FakeBrowserPeer({ status: 'needs-invite' })
     const scannedInvite = inviteToken('scan-room')
-    const container = render(
+    const container = renderOnboardingWithPanel(
       <WebThinConnectionPanel
         peer={peer as never}
         mode="webrtc-only"
@@ -46,15 +49,21 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       />,
     )
 
+    expect(findButton(container, 'Continue')).not.toBeNull()
+    expect(container.textContent).not.toContain('Scan invite')
+    await act(async () => {
+      findButton(container, 'Continue').click()
+      await Promise.resolve()
+    })
     expect(container.querySelector<HTMLInputElement>('#webthin-profile-node-name')).not.toBeNull()
-    expect(findButton(container, 'Scan QR invite')).not.toBeNull()
+    expect(findButton(container, 'Scan invite')).not.toBeNull()
     expect(findButton(container, 'Open invite file')).not.toBeNull()
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
       .toContain('aurora://mesh/invite?')
-    expect(container.textContent).toContain('Paste mesh invite')
+    expect(container.textContent).toContain('Paste invite')
 
     await act(async () => {
-      findButton(container, 'Scan QR invite').click()
+      findButton(container, 'Scan invite').click()
       await Promise.resolve()
     })
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
@@ -93,7 +102,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     ['empty scan', async () => ''],
   ])('restores mobile invite controls after %s without raw object text', async (_label, onScanQr) => {
     const peer = new FakeBrowserPeer({ status: 'needs-invite' })
-    const container = render(
+    const container = renderOnboardingWithPanel(
       <WebThinConnectionPanel
         peer={peer as never}
         mode="webrtc-only"
@@ -105,12 +114,18 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       />,
     )
 
+    expect(container.textContent).not.toContain('Scan invite')
     await act(async () => {
-      findButton(container, 'Scan QR invite').click()
+      findButton(container, 'Continue').click()
       await Promise.resolve()
     })
 
-    expect(findButton(container, 'Scan QR invite').disabled).toBe(false)
+    await act(async () => {
+      findButton(container, 'Scan invite').click()
+      await Promise.resolve()
+    })
+
+    expect(findButton(container, 'Scan invite').disabled).toBe(false)
     expect(findButton(container, 'Open invite file').disabled).toBe(false)
     expect(container.querySelector<HTMLInputElement>('#webthin-profile-node-name')?.disabled)
       .toBe(false)
@@ -218,6 +233,28 @@ function render(element: React.ReactElement): HTMLElement {
     root.render(element)
   })
   return container
+}
+
+function renderOnboardingWithPanel(panel: React.ReactElement): HTMLElement {
+  return render(
+    <OnboardingView
+      client={new Aurora({ transport: new MockAuroraTransport() })}
+      snapshot={onboardingSnapshot()}
+      setupRequired
+      thinConnectionPanel={panel}
+    />,
+  )
+}
+
+function onboardingSnapshot(): AuroraShellSnapshot {
+  return {
+    ...errorShellSnapshot('native-mobile', new Error('offline')),
+    loadState: 'ready',
+    transportKind: 'native-mobile',
+    error: null,
+    nativePlatform: 'android',
+    nativeAvailable: true,
+  }
 }
 
 function inviteToken(room: string): string {

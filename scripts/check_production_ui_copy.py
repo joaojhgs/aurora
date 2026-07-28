@@ -61,6 +61,21 @@ ATTRIBUTE_NAMES = {
     "disabledReason",
 }
 
+INTERNAL_DATA_FIELD_NAMES = {
+    "id",
+    "kind",
+    "mode",
+    "nodeMode",
+    "runtimeTier",
+    "transportKind",
+    "evidence",
+    "evidenceSource",
+    "source",
+    "roomSecretRef",
+    "localStablePeerId",
+    "nodeName",
+}
+
 ADVANCED_CONNECTION_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
     ("packages/aurora-ui/src/product-copy.ts", "Aurora address"),
     ("packages/aurora-ui/src/product-copy.ts", "Connection method"),
@@ -269,12 +284,14 @@ def string_literals(text: str) -> list[StringLiteral]:
     return literals
 
 
-def literal_context(text: str, start: int, width: int = 160) -> str:
+def literal_context(text: str, start: int, width: int = 480) -> str:
     return text[max(0, start - width):start]
 
 
 def is_rendered_literal_context(context: str, rel_path: str) -> bool:
     stripped = context.rstrip()
+    if is_internal_data_literal_context(stripped):
+        return False
     copy_field = r"(?:label|title|description|detail|reason|repair|error|message|evidence|summary|empty|action|placeholder|aria-label|disabledReason)"
     if re.search(r"\b(?:setMessage|setError|set[A-Za-z]+Error|set[A-Za-z]+Message|toast|alert)\s*\([^)]*$", stripped):
         return True
@@ -293,6 +310,28 @@ def is_rendered_literal_context(context: str, rel_path: str) -> bool:
             or re.search(r"\b(?:copy|message|status|diagnostic|alert|toast|view|panel|card|dialog)\b", nearby, re.I)
             or re.search(r"\b[A-Za-z]*(?:Label|Title|Description|Detail|Reason|Repair|Error|Message|Evidence|Copy)\b", nearby)
         )
+    return False
+
+
+def is_internal_data_literal_context(context: str) -> bool:
+    current_line = context.splitlines()[-1] if context else ""
+    field_names = "|".join(re.escape(name) for name in INTERNAL_DATA_FIELD_NAMES)
+    if re.search(rf"\b(?:{field_names})\s*:\s*$", current_line):
+        return True
+    if re.search(rf"\b(?:{field_names})\s*:\s*[^,;{{}}]*[?:]\s*$", current_line):
+        return True
+    nearby = context[-420:]
+    if re.search(r"\blabel\s*:\s*$", current_line) and re.search(
+        r"\b(?:ThinConnectionProfile|RuntimeProfile|thinSurfaceDefaults|defaultProfileForSurface|sanitizeThinConnectionProfile|currentAuroraSurfaceProfile|surface\.isAndroid|surface\.isIos|productionSurfaceContracts|ProductionSurfaceContract|mockUxAnchors|routeOracle)\b",
+        nearby,
+    ):
+        return True
+    if re.search(r"\blabel\s*:\s*$", current_line) and re.search(
+        r"\bid\s*:\s*['\"][a-z0-9-]+['\"],\s*\n\s*label\s*:\s*$",
+        nearby,
+        re.I,
+    ):
+        return True
     return False
 
 

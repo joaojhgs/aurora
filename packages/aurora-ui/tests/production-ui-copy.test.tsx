@@ -49,6 +49,51 @@ describe('production UI copy', () => {
     }
   })
 
+  it('maps hostile shell errors before the activity rail renders them', () => {
+    const raw = 'thin client HTTP Gateway WebRTC invite failed'
+    const snapshot = errorShellSnapshot('http', new Error(raw))
+    const text = visibleText(renderToStaticMarkup(
+      <AppShell snapshot={snapshot} runtimeMode="web-thin">
+        <main>Ready</main>
+      </AppShell>,
+    ))
+
+    expect(text).toContain('Could not connect to this Aurora device')
+    expect(text).not.toContain(raw)
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
+  })
+
+  it('does not render hostile onboarding store evidence', async () => {
+    const store: OnboardingModePreferenceStore = {
+      evidence: 'thin client HTTP Gateway WebRTC invite store evidence',
+      readSelectedMode: async () => 'remote-console',
+      readSelectedRuntimeTier: async () => 'none',
+      writeSelectedMode: async () => true,
+      writeSelectedRuntimeTier: async () => true,
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('http')}
+          snapshot={safeShellSnapshot()}
+          modePreferenceStore={store}
+          setupRequired
+        />,
+      )
+    })
+    await flushReactWork()
+
+    expect(container.textContent).toContain('Restored Connect to Aurora')
+    expect(container.textContent).not.toContain(store.evidence)
+    expect(findForbiddenProductionCopyTerms(container.textContent ?? '').map((term) => term.id)).toEqual([])
+    root.unmount()
+    container.remove()
+  })
+
   it('keeps setup-required onboarding on the role chooser before invite setup', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

@@ -374,7 +374,7 @@ describe('Aurora production shell', () => {
     expect(shellSource).toContain('Toggle activity rail')
     expect(shellSource).toContain('Route')
     expect(shellSource).toContain('Privacy')
-    expect(shellSource).toContain('Routes')
+    expect(shellSource).toContain('RouteMatrix')
     expect(shellSource).toContain('Aurora activity')
   })
 
@@ -396,7 +396,7 @@ describe('Aurora production shell', () => {
 
       for (const anchor of surface.mockUxAnchors) {
         expect(
-          sourceText.includes(anchor),
+          sourceText.includes(anchor) || productionAnchorAliasPresent(sourceText, anchor),
           `${surface.id} production components must retain mock-derived interaction anchor "${anchor}"`
         ).toBe(true)
       }
@@ -953,7 +953,7 @@ describe('Aurora production shell', () => {
     const snapshot = errorShellSnapshot('http', new Error('Gateway unavailable'))
     const model = buildSettingsPermissionsModel(snapshot)
 
-    expect(model.error).toBe('Gateway unavailable')
+    expect(model.error).toBe('Could not connect to this Aurora device. Try again.')
     expect(model.nativePermissions).toEqual([])
     expect(model.privacyControls.every((control) => control.disabled)).toBe(true)
   })
@@ -1315,15 +1315,15 @@ describe('Aurora production shell', () => {
     const mobileClient = new Aurora({ transport: mobileTransport })
     const snapshot = await buildShellSnapshot(mobileClient)
     const settings = buildSettingsPermissionsModel(snapshot)
-    const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'mobile-native' })
+    const onboarding = buildOnboardingViewModel({ client: mobileClient, snapshot, selectedModeId: 'make-this-device-available' })
 
     expect(settings.nativePermissions.map((permission) => permission.label)).toEqual(
       expect.arrayContaining(['iOS App Intents', 'iOS Shortcuts', 'iOS System Assistant Role'])
     )
     expect(settings.nativePermissions.find((permission) => permission.label === 'iOS System Assistant Role')?.state).toBe('unsupported')
-    const iosMode = onboarding.modes.find((mode) => mode.id === 'mobile-native')
-    expect(iosMode?.repair).toContain('Siri/Shortcuts/App Intents')
-    expect(iosMode?.repair).toContain('system assistant ownership is unavailable')
+    const iosMode = onboarding.modes.find((mode) => mode.id === 'make-this-device-available')
+    expect(iosMode?.repair).toContain('iOS shortcuts')
+    expect(iosMode?.repair).toContain('Aurora-owned surfaces')
     expect(iosMode?.repair).not.toContain('Siri replacement')
   })
 
@@ -1422,28 +1422,17 @@ describe('Aurora production shell', () => {
     const snapshot = await buildShellSnapshot(client)
     const model = buildOnboardingViewModel({ client, snapshot })
 
-    // The old 7-mode catalog (server-web/desktop-local/desktop-thin/mesh-shell/
-    // android-mobile-thin/ios-mobile-thin/offline-demo) was consolidated into 4
-    // modes matching the design prototype; Android/iOS nuance now lives inside
-    // mobile-native/mobile-web-thin evidence instead of separate top-level modes.
     expect(model.modes.map((mode) => mode.id)).toEqual([
-      'desktop-native',
-      'desktop-web-thin',
-      'mobile-native',
-      'mobile-web-thin'
+      'connect-to-aurora',
+      'make-this-device-available'
     ])
-    expect(model.modes.find((mode) => mode.id === 'desktop-native')).toEqual(
-      expect.objectContaining({
-        state: 'unsupported',
-        evidence: expect.stringContaining('no local sidecar status')
-      })
-    )
-    expect(model.modes.find((mode) => mode.id === 'desktop-web-thin')).toEqual(
+    expect(model.modes.find((mode) => mode.id === 'connect-to-aurora')).toEqual(
       expect.objectContaining({
         state: 'degraded',
-        repair: expect.stringContaining('runtime HTTP/WebRTC connection profile')
+        evidence: 'Local preview'
       })
     )
+    expect(model.modes.find((mode) => mode.id === 'make-this-device-available')?.repair).toContain('Open setup')
     expect(model.setupSteps.every((step) => step.repair.length > 0)).toBe(true)
   })
 
@@ -1454,7 +1443,7 @@ describe('Aurora production shell', () => {
     )
 
     expect(source).not.toMatch(/\b(localStorage|sessionStorage)\b/)
-    expect(source).toContain('token remains in memory for this session')
+    expect(source).toContain("const [token, setToken] = useState('')")
   })
 
   it('maps auth session matrix into onboarding availability without inventing success', async () => {
@@ -1480,7 +1469,7 @@ describe('Aurora production shell', () => {
     client.auth.updateFromTokenValidation({ valid: true, source: 'auth_disabled', permissions: ['*'], effective_perms: ['*'] })
     const system = buildOnboardingViewModel({ client, snapshot })
     expect(system.authState).toBe('degraded')
-    expect(system.authExplanation).toContain('SYSTEM/API-key mode')
+    expect(system.authExplanation).toContain('Local development access')
   })
 
   it('keeps invalid endpoints and SDK errors visible in onboarding state', async () => {
@@ -2330,7 +2319,7 @@ describe('Aurora production shell', () => {
         ),
       )
       expect(container.textContent).toContain('Aurora host is offline')
-      expect(container.textContent).toContain('WebRTC remains enabled')
+      expect(container.textContent).toContain('Saved devices and last-known services stay visible')
       expect(container.textContent).not.toContain(
         'Peer connection needs attention',
       )
@@ -2427,9 +2416,7 @@ describe('Aurora production shell', () => {
       },
     )
     expect(connectedFailure).toBe(failed)
-    expect(connectedFailure.error).toContain(
-      'WebRTC mesh transport is not connected',
-    )
+    expect(connectedFailure.error).toBe('Could not connect to this Aurora device. Try again.')
   })
 
   it('keeps pending pairing requests out of the scopes approval path', async () => {
@@ -2562,7 +2549,7 @@ describe('Aurora production shell', () => {
     }
 
     expect(snapshot.fixtureOnly).toBe(true)
-    expect(snapshot.evidenceSource).toContain('not live runtime state')
+    expect(snapshot.evidenceSource).toBe('Sample data')
     expect(snapshot.config.fields.some((field) => field.key_path === 'services.gateway.webrtc.room')).toBe(true)
     const buildMandatoryInvite = buildMeshInvitePayload as unknown as (input: typeof secureSnapshot) => ReturnType<typeof buildMeshInvitePayload>
     const invite = buildMandatoryInvite(secureSnapshot)
@@ -2616,8 +2603,8 @@ describe('Aurora production shell', () => {
     expect(snapshot.config.fields.length).toBeGreaterThan(0)
     expect(snapshot.config.editable).toBe(false)
     expect(snapshot.config.state).toBe('degraded')
-    expect(snapshot.config.reason).toContain('editable metadata')
-    expect(snapshot.config.warnings.join(' ')).toContain('metadata down')
+    expect(snapshot.config.reason).toContain('editing is unavailable')
+    expect(snapshot.config.warnings.join(' ')).toContain('Connection lost')
   })
 
   it('reports security settings as unknown when Config and diagnostics evidence are absent', async () => {
@@ -2632,7 +2619,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.config.editable).toBe(false)
     expect(snapshot.config.state).toBe('degraded')
     expect(meshInviteReadiness(snapshot)).toEqual(
-      expect.objectContaining({ ready: false, reason: expect.stringContaining('encryption') }),
+      expect.objectContaining({ ready: false, reason: expect.stringContaining('Private invite protection') }),
     )
   })
 
@@ -2750,14 +2737,14 @@ describe('Aurora production shell', () => {
       meshRoute()
     )
     expect(degradedSnapshot.loadState).toBe('degraded')
-    expect(degradedSnapshot.warnings.join(' ')).toContain('diagnostics down')
+    expect(degradedSnapshot.warnings.join(' ')).toContain('Could not connect to this Aurora device')
 
     const deviceDegradedSnapshot = await buildMeshPeersSnapshot(
       new Aurora({ transport: new MockAuroraTransport().fail('Auth.ListDevices', 'unavailable_service', 'devices down') }),
       meshRoute()
     )
     expect(deviceDegradedSnapshot.loadState).toBe('degraded')
-    expect(deviceDegradedSnapshot.warnings.join(' ')).toContain('devices down')
+    expect(deviceDegradedSnapshot.warnings.join(' ')).toContain('Could not connect to this Aurora device')
     expect(deviceDegradedSnapshot.peers.length).toBeGreaterThan(0)
   })
 
@@ -2958,7 +2945,7 @@ describe('Aurora production shell', () => {
         payload: { peer_id: 'peer-kitchen', revoke_token: false }
       })
     )
-    expect(meshPeerErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
+    expect(meshPeerErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('cannot use that feature yet')
   })
 
   it('builds route policy explain state matrix through Aurora route APIs', async () => {
@@ -3628,6 +3615,12 @@ function route(snapshot: Awaited<ReturnType<typeof buildShellSnapshot>>, id: str
     disabled: navItem.fallbackState === 'unsupported' || navItem.fallbackState === 'privacy-blocked',
     requiresAdminAction: navItem.methodType === 'manage'
   }
+}
+
+function productionAnchorAliasPresent(sourceText: string, anchor: string): boolean {
+  if (anchor === 'Welcome to Aurora') return sourceText.includes('PRODUCT_COPY.onboarding.title')
+  if (anchor === 'setup modes') return sourceText.includes('Aurora setup choice')
+  return false
 }
 
 function adminServicesTransport(): MockAuroraTransport {

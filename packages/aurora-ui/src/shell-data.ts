@@ -1,6 +1,5 @@
 import type {
   AuroraClient,
-  AuroraError,
   AndroidAssistantRoleStatus,
   AndroidFallbackEntrypoint,
   AndroidNativeReleaseStatus,
@@ -30,6 +29,7 @@ import {
   isBrowserWebRtcConnected,
   type BrowserWebRtcSnapshot,
 } from './web-thin-runtime'
+import { safeErrorCopy } from './product-copy'
 
 export type ShellLoadState = 'loading' | 'ready' | 'error'
 
@@ -242,7 +242,7 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
     evidenceSource: 'Aurora service error',
     routeCount: routes.length,
     blockedCount: routes.length,
-    error: errorMessage(error),
+    error: shellErrorMessage(error),
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes
@@ -305,8 +305,8 @@ export function retainThinShellSnapshot(
     nodeName: peerLabel,
     transportKind: 'mesh',
     evidenceSource: hasLastKnownGraph
-      ? 'last-known redacted capability graph and saved thin peer profile'
-      : 'saved thin peer profile; capability graph pending reconnect',
+      ? 'Last saved device state'
+      : 'Saved device connection',
     secretsRedacted: true,
     routeCount: routes.length,
     availableCount: 0,
@@ -491,7 +491,7 @@ function nativeRouteAvailability(
     providerCandidates: [],
     alternateProviders: [],
     disabledReason: blockers[0] ?? null,
-    nextRepairAction: state === 'privacy-blocked' ? 'grant required native permission' : 'enable native capability in manifest',
+    nextRepairAction: state === 'privacy-blocked' ? 'grant required device access' : 'enable device feature',
     selectorRequired: false,
     approvalRequired: false,
     routeable: state === 'available-local',
@@ -625,7 +625,6 @@ function nullToPending(value: string | null): string {
   return value ?? 'pending'
 }
 
-function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>
-  return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
+function shellErrorMessage(error: unknown): string {
+  return safeErrorCopy(error).title
 }

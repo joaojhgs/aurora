@@ -88,7 +88,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
   const [selectedModeId, setSelectedModeId] = useState(() => defaultModeId(client.transport.kind, snapshot, userAgent))
   const [modePreferenceReady, setModePreferenceReady] = useState(() => !modePreferenceStore)
-  const [modePreferenceEvidence, setModePreferenceEvidence] = useState(() => modePreferenceStore?.evidence ?? 'Saved for this session')
+  const [modePreferenceStatus, setModePreferenceStatus] = useState('Saved for this session')
   const modeSelectionTouchedRef = useRef(false)
   const [endpoint, setEndpoint] = useState('')
   const [username, setUsername] = useState('')
@@ -121,14 +121,14 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     let cancelled = false
     if (!modePreferenceStore) {
       setModePreferenceReady(true)
-      setModePreferenceEvidence('Saved for this session')
+      setModePreferenceStatus('Saved for this session')
       return () => {
         cancelled = true
       }
     }
     modeSelectionTouchedRef.current = false
     setModePreferenceReady(false)
-    setModePreferenceEvidence('Checking saved choice')
+    setModePreferenceStatus('Checking saved choice')
     void Promise.all([
       modePreferenceStore.readSelectedMode(),
       modePreferenceStore.readSelectedRuntimeTier?.() ?? Promise.resolve(null),
@@ -139,17 +139,17 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
         const availableModeId = productModeId ? availableProductModeId(productModeId, client.transport.kind, snapshot, userAgent) : null
         if (availableModeId && !modeSelectionTouchedRef.current) {
           setSelectedModeId(availableModeId)
-          setModePreferenceEvidence(`Restored ${modeLabel(availableModeId)}`)
+          setModePreferenceStatus(`Restored ${modeLabel(availableModeId)}`)
         } else if (modeId) {
-          setModePreferenceEvidence('Choose how to use this device')
+          setModePreferenceStatus('Choose how to use this device')
         } else {
-          setModePreferenceEvidence('Choose how to use this device')
+          setModePreferenceStatus('Choose how to use this device')
         }
         setModePreferenceReady(true)
       },
       () => {
         if (!cancelled) {
-          setModePreferenceEvidence('Choose how to use this device')
+          setModePreferenceStatus('Choose how to use this device')
           setModePreferenceReady(true)
         }
       },
@@ -165,15 +165,15 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     setSelectedModeId(modeId)
     if (!modePreferenceStore) return
     const preference = productModePreference(modeId)
-    setModePreferenceEvidence(`Saving ${modeLabel(modeId)}`)
+    setModePreferenceStatus(`Saving ${modeLabel(modeId)}`)
     void Promise.all([
       modePreferenceStore.writeSelectedMode(preference.nodeMode),
       modePreferenceStore.writeSelectedRuntimeTier?.(preference.runtimeTier) ?? Promise.resolve(true),
     ]).then(
       ([modeOk, tierOk]) => {
-        setModePreferenceEvidence(modeOk && tierOk ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
+        setModePreferenceStatus(modeOk && tierOk ? `Saved ${modeLabel(modeId)}` : 'Choice not saved')
       },
-      () => setModePreferenceEvidence('Choice not saved'),
+      () => setModePreferenceStatus('Choice not saved'),
     )
   }
 
@@ -296,7 +296,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
               })}
             </div>
           </div>
-          <p className="text-[11.5px] text-muted-foreground">{modePreferenceEvidence}</p>
+          <p className="text-[11.5px] text-muted-foreground">{modePreferenceStatus}</p>
           <Button variant="primary" onClick={() => setWizardStep('setup')} disabled={!modePreferenceReady}>
             Continue
           </Button>

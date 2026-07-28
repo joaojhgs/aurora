@@ -66,8 +66,15 @@ describe('production UI copy checker', () => {
       import { WebRTCMode } from "./runtime"
       const mode = "webrtc-preferred"
       const id = "aurora-thin-local"
+      const profile = {
+        mode: "webrtc-preferred",
+        evidence: "Tauri narrow nonsecret thin-client connection profile storage",
+        runtimeTier: "python-full",
+        nodeMode: "mesh-node",
+      }
       console.debug("runtime transport", mode, id)
       export function InternalOnly() {
+        void profile
         return <p>Ready</p>
       }
     `)

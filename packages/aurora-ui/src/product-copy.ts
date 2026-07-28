@@ -134,7 +134,7 @@ export function safeErrorCopy(error: unknown, supportId?: string | null): Produc
   if (isAbortError(error)) return { title: 'Action cancelled' }
   const code = errorCode(error)
   if (code === 'permission_denied') return productStatusCopy('local-permission-missing', { supportId })
-  if (code === 'unsupported') return productStatusCopy('unsupported-feature', { supportId })
+  if (code === 'unsupported' || code === 'unsupported_feature') return productStatusCopy('unsupported-feature', { supportId })
   if (code === 'connection_lost' || code === 'transport_loss') return productStatusCopy('connection-lost', { supportId })
   return productStatusCopy('connection-failed', { supportId })
 }

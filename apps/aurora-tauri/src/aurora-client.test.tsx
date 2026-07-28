@@ -1245,7 +1245,7 @@ describe("Aurora Tauri runtime wrapper", () => {
     ["iOS thin", "mobile-native", "ios", true],
   ] as const)(
     "gates an unconfigured %s runtime on first-run connection onboarding",
-    (_label, mode, nativePlatform, showsQrScanner) => {
+    (_label, mode, nativePlatform, _showsQrScanner) => {
       const transport = new RecordingMockAuroraTransport();
       const runtime = unconfiguredThinRuntime(
         mode,
@@ -1263,10 +1263,12 @@ describe("Aurora Tauri runtime wrapper", () => {
       );
 
       expect(markup).toContain("Connect to Aurora");
-      expect(markup).toContain("Node name");
-      expect(markup).toContain("Paste invite");
-      expect(markup).toContain("Open invite file");
-      expect(markup.includes("Scan invite")).toBe(showsQrScanner);
+      expect(markup).toContain("Make this device available");
+      expect(markup).toContain("Continue");
+      expect(markup).not.toContain("Node name");
+      expect(markup).not.toContain("Paste invite");
+      expect(markup).not.toContain("Open invite file");
+      expect(markup).not.toContain("Scan invite");
       expect(markup).not.toContain("HTTP Gateway endpoint");
       expect(markup).not.toContain("WebSocket signaling endpoint");
       expect(markup).not.toContain("Connection mode");
@@ -1286,6 +1288,8 @@ describe("Aurora Tauri runtime wrapper", () => {
     window.history.replaceState({}, "", "/");
     const mounted = await mountOutcomeApp(runtime);
     try {
+      await clickButtonByLabel(mounted.container, "Continue");
+      await flushReactWork();
       const invite = mounted.container.querySelector<HTMLTextAreaElement>(
         "#webthin-invite",
       );
@@ -1755,9 +1759,7 @@ describe("Tauri CI/E2E route gates", () => {
           "Pending pairing requests",
         );
         expect(mesh.container.textContent).toContain("Route policy");
-        expect(mesh.container.textContent).toContain(
-          "Service sharing and outbound routing",
-        );
+        expect(mesh.container.textContent).toContain("Service sharing");
         expect(mesh.container.textContent).toContain(
           "Outbound route decision preview (advanced)",
         );
@@ -2478,6 +2480,35 @@ describe("Tauri CI/E2E route gates", () => {
       });
       expect(container.textContent).not.toContain("localStorage");
       expect(container.textContent).not.toContain("sessionStorage");
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
+  it("e2e:runtime keeps onboarding preference store evidence out of rendered copy", async () => {
+    const hostileEvidence = "thin client HTTP Gateway WebRTC invite store evidence";
+    const modePreferenceStore: NonNullable<
+      AuroraTauriRuntime["modePreferenceStore"]
+    > = {
+      evidence: hostileEvidence,
+      readSelectedMode: async () => "remote-console",
+      readSelectedRuntimeTier: async () => "none",
+      writeSelectedMode: async () => true,
+      writeSelectedRuntimeTier: async () => true,
+    };
+    const runtime = testRuntime(
+      new Aurora({ transport: new MockAuroraTransport() }),
+      modePreferenceStore,
+    );
+    window.history.replaceState({}, "", "/onboarding");
+
+    const { container, root } = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => {
+        expect(container.textContent).toContain("Restored Connect to Aurora");
+      });
+      expect(container.textContent).not.toContain(hostileEvidence);
     } finally {
       await act(async () => root.unmount());
       container.remove();
