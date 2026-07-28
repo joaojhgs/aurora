@@ -40,7 +40,7 @@ requires-python = ">=3.10,<3.12"
 # Minimal core dependencies - only essential runtime requirements
 dependencies = [
     # Configuration & Logging (always needed)
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=1.2.2",
     "coloredlogs>=15.0.0",
     "click>=8.1.0",
     "colorama>=0.4.6",
@@ -85,7 +85,7 @@ runtime = [
     "langchain-community==0.3.24",
     "langchain-text-splitters==0.3.8",
     "langgraph==0.4.6",
-    "langgraph-checkpoint==2.0.26",
+    "langgraph-checkpoint==4.0.0",
     "langgraph-sdk==0.1.51",
     "langsmith==0.3.8",
     
@@ -102,9 +102,9 @@ runtime = [
     
     # Web & Network
     "requests==2.32.3",
-    "aiohttp==3.11.12",
+    "aiohttp==3.14.1",
     "httpx==0.28.1",
-    "urllib3==2.3.0",
+    "urllib3==2.7.0",
     "duckduckgo-search==7.5.2",
     
     # Utilities
@@ -151,7 +151,7 @@ service-config = [
 # Auth service (process mode): bus-only DB access; crypto + password hashing
 service-auth = [
     "passlib[argon2]>=1.7.4",
-    "cryptography>=43.0.0",
+    "cryptography>=48.0.1",
 ]
 
 service-db = [
@@ -186,7 +186,7 @@ service-tooling = [
     # Pomodoro tools import scheduler → SchedulerDatabaseService → aiosqlite (same as service-scheduler).
     "croniter==6.0.0",
     "aiosqlite>=0.19.0",
-    "aiohttp==3.11.12",
+    "aiohttp==3.14.1",
     "duckduckgo-search==7.5.2",
     "langchain-community==0.3.24",
     "langchain-core==0.3.62",
@@ -232,7 +232,7 @@ service-orchestrator = [
     "langchain-core==0.3.62",
     "langchain-openai==0.3.18",  # Lightweight API client (default provider)
     "langgraph==0.4.6",
-    "langgraph-checkpoint==2.0.26",
+    "langgraph-checkpoint==4.0.0",
     "langgraph-sdk==0.1.51",
     "Jinja2==3.1.6",
     "typing-extensions>=4.10.0",
@@ -296,10 +296,10 @@ mode-processes = [
 gateway = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
-    "python-multipart>=0.0.9",  # For form data handling
+    "python-multipart>=0.0.31",  # For form data handling
     "aiortc>=1.9.0",
     "av>=12.0.0",
-    "cryptography>=43.0.0",
+    "cryptography>=48.0.1",
     "paho-mqtt>=2.1.0",
     "passlib[argon2]>=1.7.4",
 ]
@@ -462,7 +462,7 @@ openrecall-macos = [
 # DEVELOPMENT DEPENDENCIES
 # ============================================================================
 dev = [
-    "pytest==8.3.5",
+    "pytest==9.0.3",
     "pytest-asyncio",
     "pytest-cov",
     "ruff>=0.8.4",
@@ -486,7 +486,7 @@ dev = [
 
 # Core test dependencies needed for all test types
 test = [
-    "pytest==8.3.5",
+    "pytest==9.0.3",
     "pytest-asyncio",
     "pytest-cov",
     "pytest-mock",
