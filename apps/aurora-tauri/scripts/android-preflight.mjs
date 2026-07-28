@@ -23,10 +23,31 @@ const generatedAndroidProject = process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR
       join(appDir, 'gen/android')
     ])
 const canonicalPluginSourceDir = join(appDir, 'src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin')
+const canonicalPluginResourceDir = join(appDir, 'src-tauri/android/aurora-native-plugin/src/main/res')
 const generatedPluginSourceDir = generatedAndroidProject
   ? join(generatedAndroidProject, 'app/src/main/java/dev/aurora/tauri/nativeplugin')
   : null
+const generatedPluginResourceDir = generatedAndroidProject
+  ? join(generatedAndroidProject, 'app/src/main/res')
+  : null
+const generatedManifestPath = generatedAndroidProject
+  ? join(generatedAndroidProject, 'app/src/main/AndroidManifest.xml')
+  : null
+const generatedTauriSettingsPath = generatedAndroidProject
+  ? join(generatedAndroidProject, 'tauri.settings.gradle')
+  : null
+const vendorBarcodeScannerDir = join(
+  appDir,
+  'src-tauri/vendor/tauri-plugin-barcode-scanner'
+)
+const vendorBarcodeScannerSourcePath = join(
+  vendorBarcodeScannerDir,
+  'android/src/main/java/BarcodeScannerPlugin.kt'
+)
 const pluginParity = androidNativePluginParity()
+const resourceParity = androidNativeResourceParity()
+const manifestIntegration = androidNativeManifestIntegration()
+const barcodeScannerCancellation = androidBarcodeScannerCancellationIntegration()
 const signingEvidence = signingInputs()
 const expectedCommands = {
   prepareThin: 'pnpm --filter @aurora/tauri-ui android:prepare:thin',
@@ -59,6 +80,24 @@ const checks = [
     'android-native-plugin-parity',
     pluginParity.matched,
     pluginParity.detail,
+    Boolean(generatedAndroidProject)
+  ),
+  check(
+    'android-native-resource-parity',
+    resourceParity.matched,
+    resourceParity.detail,
+    Boolean(generatedAndroidProject)
+  ),
+  check(
+    'android-native-manifest-integration',
+    manifestIntegration.matched,
+    manifestIntegration.detail,
+    Boolean(generatedAndroidProject)
+  ),
+  check(
+    'android-barcode-scanner-cancellation',
+    barcodeScannerCancellation.matched,
+    barcodeScannerCancellation.detail,
     Boolean(generatedAndroidProject)
   ),
   check('bundle-identifier', Boolean(tauriConfig.identifier), tauriConfig.identifier ?? 'missing identifier', true),
@@ -156,6 +195,9 @@ const report = {
   strict,
   generatedAndroidProject: generatedAndroidProject ? relative(generatedAndroidProject) : null,
   nativePluginParity: pluginParity.report,
+  nativeResourceParity: resourceParity.report,
+  nativeManifestIntegration: manifestIntegration.report,
+  barcodeScannerCancellation: barcodeScannerCancellation.report,
   commands: expectedCommands,
   checks,
   signing: {
@@ -263,6 +305,161 @@ function androidNativePluginParity() {
       missing,
       extra,
       mismatched,
+      matched
+    }
+  }
+}
+
+function androidNativeResourceParity() {
+  if (!generatedPluginResourceDir || !existsSync(generatedPluginResourceDir)) {
+    return {
+      matched: false,
+      detail: generatedAndroidProject
+        ? `generated Android native resources are missing at ${relative(generatedPluginResourceDir ?? '')}; run pnpm --filter @aurora/tauri-ui android:sync-native-plugin`
+        : 'generated Android project is missing; native resource parity is checked after android:init',
+      report: {
+        checked: false,
+        reason: generatedAndroidProject
+          ? 'generated-plugin-resources-missing'
+          : 'generated-android-project-missing'
+      }
+    }
+  }
+
+  const canonicalFiles = sourceFiles(canonicalPluginResourceDir)
+  const missing = []
+  const mismatched = []
+  for (const canonicalFile of canonicalFiles) {
+    const rel = pathRelative(canonicalPluginResourceDir, canonicalFile)
+    const generatedRel = rel === join('values', 'strings.xml')
+      ? join('values', 'aurora_native_strings.xml')
+      : rel
+    const generatedFile = join(generatedPluginResourceDir, generatedRel)
+    if (!existsSync(generatedFile)) {
+      missing.push(generatedRel)
+    } else if (!readFileSync(canonicalFile).equals(readFileSync(generatedFile))) {
+      mismatched.push(generatedRel)
+    }
+  }
+  const matched = missing.length === 0 && mismatched.length === 0
+  return {
+    matched,
+    detail: matched
+      ? `generated Android native resources match canonical resources (${canonicalFiles.length} files)`
+      : `generated Android native resources are stale: missing=${missing.join(',') || 'none'}; mismatched=${mismatched.join(',') || 'none'}`,
+    report: {
+      checked: true,
+      canonicalSource: relative(canonicalPluginResourceDir),
+      generatedSource: relative(generatedPluginResourceDir),
+      fileCount: canonicalFiles.length,
+      missing,
+      mismatched
+    }
+  }
+}
+
+function androidNativeManifestIntegration() {
+  if (!generatedManifestPath || !existsSync(generatedManifestPath)) {
+    return {
+      matched: false,
+      detail: generatedAndroidProject
+        ? `generated Android manifest is missing at ${relative(generatedManifestPath ?? '')}; run pnpm --filter @aurora/tauri-ui android:sync-native-plugin`
+        : 'generated Android project is missing; native manifest integration is checked after android:init',
+      report: {
+        checked: false,
+        reason: generatedAndroidProject
+          ? 'generated-android-manifest-missing'
+          : 'generated-android-project-missing'
+      }
+    }
+  }
+
+  const manifest = readFileSync(generatedManifestPath, 'utf8')
+  const required = [
+    'android.permission.INTERNET',
+    'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.RECORD_AUDIO',
+    'android.permission.MODIFY_AUDIO_SETTINGS',
+    'android.permission.POST_NOTIFICATIONS',
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+    'android.permission.USE_BIOMETRIC',
+    'dev.aurora.tauri.nativeplugin.AuroraVoiceForegroundService',
+    'dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionService',
+    'dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionSessionService',
+    'dev.aurora.tauri.nativeplugin.AuroraAssistActivity',
+    'dev.aurora.tauri.nativeplugin.AuroraEntrypointActivity',
+    'dev.aurora.tauri.nativeplugin.AuroraWidgetProvider',
+    'dev.aurora.tauri.nativeplugin.AuroraQuickSettingsTileService',
+    'android:scheme="aurora" android:host="mesh"',
+    '@xml/aurora_voice_interaction_service',
+    '@xml/aurora_shortcuts',
+    '@xml/aurora_widget_info'
+  ]
+  const missing = required.filter((entry) => !manifest.includes(entry))
+  return {
+    matched: missing.length === 0,
+    detail: missing.length === 0
+      ? `generated Android manifest includes ${required.length} required Aurora permission/component declarations`
+      : `generated Android manifest is missing: ${missing.join(', ')}`,
+    report: {
+      checked: true,
+      manifest: relative(generatedManifestPath),
+      requiredCount: required.length,
+      missing
+    }
+  }
+}
+
+function androidBarcodeScannerCancellationIntegration() {
+  if (
+    !generatedTauriSettingsPath ||
+    !existsSync(vendorBarcodeScannerSourcePath) ||
+    !existsSync(generatedTauriSettingsPath)
+  ) {
+    return {
+      matched: false,
+      detail: generatedAndroidProject
+        ? 'vendored Android barcode cancellation integration is missing; run pnpm --filter @aurora/tauri-ui android:sync-native-plugin'
+        : 'generated Android project is missing; barcode cancellation integration is checked after android:init',
+      report: {
+        checked: false,
+        reason: generatedAndroidProject
+          ? 'vendor-barcode-cancellation-integration-missing'
+          : 'generated-android-project-missing'
+      }
+    }
+  }
+
+  const source = readFileSync(vendorBarcodeScannerSourcePath, 'utf8')
+  const settings = readFileSync(generatedTauriSettingsPath, 'utf8')
+  const requiredSource = [
+    'val pendingScan = savedInvoke',
+    'destroy()',
+    'pendingScan?.reject("cancelled")',
+    'invoke.resolve()'
+  ]
+  const missing = requiredSource.filter((entry) => !source.includes(entry))
+  const cargoToml = readFileSync(join(appDir, 'src-tauri/Cargo.toml'), 'utf8')
+  const dependencyUsesVendor = cargoToml.includes(
+    'tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }'
+  )
+  const settingsUseVendor = settings.includes(
+    resolve(vendorBarcodeScannerDir, 'android')
+  )
+  const matched = missing.length === 0 && dependencyUsesVendor && settingsUseVendor
+  return {
+    matched,
+    detail: matched
+      ? 'generated Android build uses the cancellation-safe vendored barcode scanner source'
+      : `Android barcode cancellation integration is stale: missing=${missing.join(', ') || 'none'}; dependencyUsesVendor=${dependencyUsesVendor}; settingsUseVendor=${settingsUseVendor}`,
+    report: {
+      checked: true,
+      source: relative(vendorBarcodeScannerSourcePath),
+      settings: relative(generatedTauriSettingsPath),
+      missing,
+      dependencyUsesVendor,
+      settingsUseVendor,
       matched
     }
   }

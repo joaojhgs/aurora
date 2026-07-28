@@ -376,9 +376,9 @@ export function WebThinConnectionPanel({
               remain in memory only. {snapshot.persistenceFallbackReason}
             </p>
           ) : null}
-          {error ?? snapshot.diagnostic ? (
+          {error ? (
             <p role="alert" className="text-sm text-destructive">
-              {error ?? snapshot.diagnostic}
+              {error}
             </p>
           ) : null}
 

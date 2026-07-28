@@ -6259,6 +6259,11 @@ mod tests {
             "override fun onPermissionRequest",
             "request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))",
             "request.deny()",
+            "PluginManager.requestPermissions",
+            "microphonePermissionRequestInFlight",
+            "if (isTauriAppOrigin(origin)) return true",
+            "scheme != \"http\" && scheme != \"https\"",
+            "uri.host != \"tauri.localhost\"",
             "trigger(\"aurora://android-lifecycle\"",
         ] {
             assert!(plugin.contains(command), "{command}");
@@ -6440,6 +6445,7 @@ mod tests {
     #[test]
     fn android_thin_capability_is_least_privilege_for_native_security_surface() {
         let capability = include_str!("../capabilities/aurora-android-thin.json");
+        let mobile_mesh = include_str!("../capabilities/aurora-mobile-mesh.json");
         for required in [
             "aurora-thin-profile",
             "aurora-thin-peer-credentials",
@@ -6464,6 +6470,15 @@ mod tests {
         ] {
             assert!(!capability.contains(forbidden), "{forbidden}");
         }
+        for required in [
+            "deep-link:default",
+            "barcode-scanner:allow-scan",
+            "barcode-scanner:allow-cancel",
+            "barcode-scanner:allow-check-permissions",
+            "barcode-scanner:allow-request-permissions",
+        ] {
+            assert!(mobile_mesh.contains(required), "{required}");
+        }
     }
 
     #[test]
@@ -6476,7 +6491,10 @@ mod tests {
         let overlay_caps = overlay["app"]["security"]["capabilities"]
             .as_array()
             .unwrap();
-        assert_eq!(overlay_caps, &[json!("aurora-android-thin")]);
+        assert_eq!(
+            overlay_caps,
+            &[json!("aurora-android-thin"), json!("aurora-mobile-mesh")]
+        );
         assert!(!overlay_caps.iter().any(|cap| cap == "aurora-main"));
         assert!(!overlay_caps.iter().any(|cap| cap == "aurora-overlay"));
 
@@ -6503,7 +6521,7 @@ mod tests {
             },
             "app": {
                 "security": {
-                    "capabilities": ["aurora-android-thin"],
+                    "capabilities": ["aurora-android-thin", "aurora-mobile-mesh"],
                     "csp": "default-src 'self'; connect-src 'self' https://gateway.example wss://signal.example; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
                 }
             },

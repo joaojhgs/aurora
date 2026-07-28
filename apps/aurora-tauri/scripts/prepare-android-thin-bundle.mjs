@@ -17,7 +17,7 @@ const config = {
   },
   app: {
     security: {
-      capabilities: ['aurora-android-thin'],
+      capabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
       csp: `default-src 'self'; connect-src ${connectSrc.join(' ')}; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:`
     }
   },
@@ -41,7 +41,7 @@ writeAtomicJson(reportPath, {
   gatewayOrigin: null,
   signalingOrigin: null,
   runtimeConfiguredEndpoints: true,
-  expectedCapability: 'aurora-android-thin',
+  expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
   pythonSidecarStaged: false,
   externalBin: [],
   resources: {},

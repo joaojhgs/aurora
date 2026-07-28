@@ -29,8 +29,28 @@ export async function scanMeshInviteQr(): Promise<string | null> {
   if (permission !== 'granted') {
     throw new Error('Camera permission was not granted for QR scanning.')
   }
-  const scanned = await scanner.scan({ windowed: false, formats: [scanner.Format.QRCode] })
-  return scanned?.content ?? null
+  try {
+    const scanned = await scanner.scan({
+      windowed: false,
+      formats: [scanner.Format.QRCode],
+    })
+    return scanned?.content ?? null
+  } catch (error) {
+    if (isBarcodeScanCancellation(error)) return null
+    throw error
+  }
+}
+
+function isBarcodeScanCancellation(error: unknown): boolean {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object'
+      && error !== null
+      && 'message' in error
+      && typeof error.message === 'string'
+      ? error.message
+      : String(error)
+  return message.trim().toLowerCase() === 'cancelled'
 }
 
 /**

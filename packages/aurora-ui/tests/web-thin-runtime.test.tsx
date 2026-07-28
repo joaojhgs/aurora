@@ -538,7 +538,10 @@ describe('browser WebRTC thin-shell runtime', () => {
   })
 
   it('offers QR invite scanning only on mobile configure-only onboarding', async () => {
-    const peer = new FakeBrowserPeer({ status: 'needs-invite' })
+    const peer = new FakeBrowserPeer({
+      status: 'needs-invite',
+      diagnostic: 'http-only mode requires an HTTP endpoint',
+    })
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -560,6 +563,9 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(container.textContent).toContain('Scan QR invite')
     expect(container.textContent).toContain('Open invite file')
     expect(container.textContent).toContain('Paste mesh invite')
+    expect(container.textContent).not.toContain(
+      'http-only mode requires an HTTP endpoint',
+    )
   })
 
   it('fills the invite field from native/browser QR scan and an invite file', async () => {
@@ -607,6 +613,43 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
       .toBe(scannedInvite)
+  })
+
+  it('re-enables onboarding controls after a native QR scan is cancelled', async () => {
+    const peer = new FakeBrowserPeer({ status: 'needs-invite' })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const onScanQr = vi.fn(async () => null)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="webrtc-only"
+          transportKind="native-mobile"
+          nativePlatform="android"
+          configureOnly
+          onScanQr={onScanQr}
+          onSaveProfile={async () => undefined}
+        />
+      )
+    })
+    await act(async () => {
+      findButton(container, 'Scan QR invite').click()
+      await Promise.resolve()
+    })
+
+    expect(onScanQr).toHaveBeenCalledTimes(1)
+    expect(findButton(container, 'Scan QR invite').disabled).toBe(false)
+    expect(findButton(container, 'Open invite file').disabled).toBe(false)
+    expect(
+      container.querySelector<HTMLInputElement>('#webthin-profile-node-name')
+        ?.disabled,
+    ).toBe(false)
+    expect(container.textContent).not.toContain('Saving…')
+    expect(container.textContent).not.toContain('QR scan failed')
   })
 
   it('warns that hosted HTTPS cannot override browser mixed-content blocking', () => {

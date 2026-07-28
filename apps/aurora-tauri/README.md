@@ -5,7 +5,7 @@ This package is the official Tauri 2 desktop shell for Aurora. It hosts the prod
 ## Modes
 
 - Desktop local: uses the Tauri IPC bridge to start, monitor, and stop a Rust-supervised Python thread-mode sidecar while UI data still flows through `AuroraClient`.
-- Desktop thin: use onboarding/profile storage to select HTTP-only, WebRTC-only, or WebRTC-preferred at runtime. Thin packages compile no Gateway or signaling endpoint. The runtime profile contains endpoint and stable peer metadata; authentication stays in the live SDK session and mesh invites provide the WebRTC pairing material. Native shell probes remain local capability evidence only, and `build:bundle:desktop-thin` packages this mode without Python sidecar files.
+- Desktop thin: first-run onboarding asks only for the local node name and a mesh invite; profile storage and the normal connection settings select or edit HTTP-only, WebRTC-only, or WebRTC-preferred at runtime afterward. Thin packages compile no Gateway or signaling endpoint. The runtime profile contains endpoint and stable peer metadata; authentication stays in the live SDK session and mesh invites provide the WebRTC pairing material. Native shell probes remain local capability evidence only, and `build:bundle:desktop-thin` packages this mode without Python sidecar files.
 - Android/iOS thin: use the same TypeScript WebView HTTP/WebRTC runtime. Android stores peer reconnect material behind Keystore-backed proof commands; iOS uses a device-only, non-synchronizing Keychain item and computes the same canonical reconnect proof without returning the bearer to JavaScript. Both persist only sanitized nonsecret profile documents outside the credential store.
 - Browser/Tauri thin development: no endpoint environment variable selects the
   transport. An unconfigured preview opens the same runtime onboarding gate as
@@ -14,7 +14,7 @@ This package is the official Tauri 2 desktop shell for Aurora. It hosts the prod
 
 ## Thin endpoint policy
 
-Thin package wrappers no longer accept build-time Gateway or signaling origins. Desktop, Android, and iOS thin artifacts are endpoint-agnostic; onboarding stores the user-selected Gateway/signaling profile at runtime. The generated Tauri CSP uses `connect-src 'self' http: https: ws: wss:` so HTTP Gateway and WebSocket signaling URLs can be supplied after installation. Browser mixed-content rules and server CORS still apply to hosted web deployments.
+Thin package wrappers no longer accept build-time Gateway or signaling origins. Desktop, Android, and iOS thin artifacts are endpoint-agnostic; first-run onboarding imports connection and pairing material from an invite, while the normal connection settings edit the stored Gateway/signaling profile later. The generated Tauri CSP uses `connect-src 'self' http: https: ws: wss:` so HTTP Gateway and WebSocket signaling URLs can be supplied after installation. Browser mixed-content rules and server CORS still apply to hosted web deployments.
 
 | Mode | Runtime profile input | Aurora HTTP application server |
 | --- | --- | --- |
@@ -149,7 +149,7 @@ pnpm dev:python
 pnpm dev:python-service
 ```
 
-`dev:desktop-local` keeps the default Rust-supervised Python sidecar path. `dev:desktop-thin` starts the Tauri shell without auto-staging or launching the Python sidecar; use onboarding to enter or import the runtime HTTP/WebRTC endpoint profile. `dev:web-thin` hosts the browser thin shell on localhost with the same runtime onboarding profile path. `dev:python-service` starts the Python service independently so a thin desktop/web/mobile client can point at it.
+`dev:desktop-local` keeps the default Rust-supervised Python sidecar path. `dev:desktop-thin` starts the Tauri shell without auto-staging or launching the Python sidecar; first-run setup accepts a node name plus QR/file/deep-link/pasted invite, and advanced endpoint/profile editing remains in the normal connection settings. `dev:web-thin` hosts the browser thin shell on localhost with the same invite-first onboarding path. `dev:python-service` starts the Python service independently so a thin desktop/web/mobile client can point at it.
 
 `tauri:smoke:linux` delegates to `test:ci-regression-gates`, a fast policy/outcome gate. `dev:smoke` is the bounded desktop-local evidence command. The final gate should preserve `apps/aurora-tauri/reports/tauri-dev-smoke.json`, `apps/aurora-tauri/reports/e2e-outcomes/`, route screenshots when available, Android/iOS preflight reports, and review/architecture approvals. Mark missing external-platform evidence as pending instead of treating this README or Linux-only tests as approval.
 
@@ -183,11 +183,34 @@ pnpm --filter @aurora/tauri-ui build:bundle:desktop-local
 pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
 ```
 
-Use `build:bundle:desktop-thin` (or its Python-free compatibility alias `build:bundle:thin`) for the remote desktop shell. It writes `src-tauri/tauri.thin.conf.json`, runs Tauri with that flavor overlay, allows general runtime HTTP/HTTPS/WS/WSS endpoints in CSP, keeps endpoint selection in the runtime profile/onboarding flow, replaces desktop-local capabilities with `aurora-thin`, omits `bundle.externalBin` and `bundle.resources`, and runs `verify:bundle:desktop-thin`. Profile changes are loaded/saved asynchronously and close/recreate the shared WebView HTTP/WebRTC runtime. Authentication remains in the live SDK session; no build-time bearer fallback exists. `build:bundle` aliases `build:bundle:desktop-local`, whose minimal sidecar profile is `desktop-local-minimal`. See `docs/TAURI_DESKTOP_BUILD.md` for the full build flow.
+Use `build:bundle:desktop-thin` (or its Python-free compatibility alias `build:bundle:thin`) for the remote desktop shell. It writes `src-tauri/tauri.thin.conf.json`, runs Tauri with that flavor overlay, allows general runtime HTTP/HTTPS/WS/WSS endpoints in CSP, keeps endpoint selection in runtime profile storage, uses invite-only first-run bootstrap, replaces desktop-local capabilities with `aurora-thin`, omits `bundle.externalBin` and `bundle.resources`, and runs `verify:bundle:desktop-thin`. Profile changes are loaded/saved asynchronously and close/recreate the shared WebView HTTP/WebRTC runtime. Authentication remains in the live SDK session; no build-time bearer fallback exists. `build:bundle` aliases `build:bundle:desktop-local`, whose minimal sidecar profile is `desktop-local-minimal`. See `docs/TAURI_DESKTOP_BUILD.md` for the full build flow.
 
 ## Android preflight
 
 Android uses the official Tauri mobile project and plugin model. Run `pnpm --filter @aurora/tauri-ui tauri android init` before strict Android release verification so the generated Android project exists under Tauri's `gen/android` path. The native capability manifest is still the UI source of truth: assistant-role availability must come from Android RoleManager/package qualification probes, not from the Tauri shell existing.
+
+Every `android:sync-native-plugin` step also copies the tracked Android launcher
+assets generated from `src-tauri/icons/aurora-desktop-icon.png` into the
+generated Gradle project and removes Tauri's sample launcher vectors. Android
+and desktop packages therefore use the same Aurora owl artwork.
+
+The Python-free Android thin overlay selects both `aurora-android-thin` and
+`aurora-mobile-mesh`. The first capability keeps profile/credential/native
+status access narrow; the second grants the barcode scanner's scan,
+cancel, permission-check, and permission-request commands plus deep-link
+delivery. The generated manifest declares the currently implemented native
+surfaces: internet/network state, camera (from the barcode plugin), microphone,
+audio-routing control, notifications, biometric credential confirmation, and the generic plus
+microphone-specific foreground-service permissions. Camera and microphone
+remain runtime permissions and are requested only when the user invokes the
+related feature.
+
+The lockfile-selected barcode scanner is vendored under
+`src-tauri/vendor/tauri-plugin-barcode-scanner` with its upstream licenses. Its
+Android cancellation path captures the pending scan invocation before camera
+teardown so cancelling the native scanner settles the JavaScript promise,
+removes the camera surface, restores onboarding controls, and does not display
+the platform `{ message: "cancelled" }` object as an error.
 
 Release commands:
 

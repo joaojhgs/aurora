@@ -37,6 +37,7 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import app.tauri.plugin.PluginManager
 import org.json.JSONObject
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -72,16 +73,22 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private var micDenyFailureCount: Long = 0
     private var lastMicDenyFailureReason: String? = null
     private val pendingMicRequests = mutableSetOf<PermissionRequest>()
+    private var microphonePermissionRequestInFlight: Boolean = false
 
     override fun onResume() {
         foreground = true
         focused = true
+        if (!microphonePermissionRequestInFlight) {
+            resolvePendingMicRequests(allowRuntimePrompt = false)
+        }
         emitLifecycle("resume")
     }
 
     override fun onPause() {
         focused = false
-        denyPendingMicRequests()
+        if (!microphonePermissionRequestInFlight) {
+            denyPendingMicRequests()
+        }
         emitLifecycle("pause")
     }
 
@@ -1404,11 +1411,24 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     internal fun isTrustedMicOrigin(origin: String, configuredHttpsOrigins: Array<String>): Boolean {
+        if (isTauriAppOrigin(origin)) return true
         val normalized = normalizeOrigin(origin) ?: return false
-        if (normalized == "https://tauri.localhost") return true
         return configuredHttpsOrigins.any { configured ->
             configured.isNotBlank() && normalizeOrigin(configured) == normalized
         }
+    }
+
+    private fun isTauriAppOrigin(origin: String): Boolean {
+        val uri = try { Uri.parse(origin) } catch (_: Exception) { return false }
+        val scheme = uri.scheme ?: return false
+        if (scheme != "http" && scheme != "https") return false
+        if (uri.host != "tauri.localhost") return false
+        if (uri.port >= 0) return false
+        if (!uri.userInfo.isNullOrBlank()) return false
+        if (!uri.encodedPath.isNullOrBlank() && uri.encodedPath != "/") return false
+        if (!uri.encodedQuery.isNullOrBlank()) return false
+        if (!uri.encodedFragment.isNullOrBlank()) return false
+        return true
     }
 
     private fun normalizeOrigin(origin: String): String? {
@@ -1429,34 +1449,81 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     internal fun handleWebViewPermissionRequest(request: PermissionRequest) {
         synchronized(pendingMicRequests) { pendingMicRequests.add(request) }
         activity.runOnUiThread {
-            synchronized(pendingMicRequests) { pendingMicRequests.remove(request) }
-            try {
-                val args = WebviewMicrophonePermissionArgs().apply {
-                    origin = request.origin?.toString().orEmpty()
-                    resources = request.resources ?: emptyArray()
-                    configuredHttpsOrigins = configuredMicOrigins
-                    foreground = this@AuroraNativePlugin.foreground
-                    focused = this@AuroraNativePlugin.focused
-                }
-                val decision = evaluateWebviewMicrophonePermission(args)
-                if (decision.getBoolean("grant")) {
-                    request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-                } else {
-                    request.deny()
-                }
-            } catch (error: Exception) {
-                try {
-                    request.deny()
-                } catch (denyError: Exception) {
-                    recordMicDenyFailure("mic_exception_deny_failed", denyError)
-                }
-                recordMicDenyFailure("mic_permission_exception_denied", error)
-            }
+            resolveWebViewPermissionRequest(request, allowRuntimePrompt = true)
         }
     }
 
     internal fun handleWebViewPermissionRequestCanceled(request: PermissionRequest) {
         synchronized(pendingMicRequests) { pendingMicRequests.remove(request) }
+    }
+
+    private fun resolvePendingMicRequests(allowRuntimePrompt: Boolean) {
+        val pending = synchronized(pendingMicRequests) {
+            pendingMicRequests.toList()
+        }
+        pending.forEach { request ->
+            resolveWebViewPermissionRequest(request, allowRuntimePrompt)
+        }
+    }
+
+    private fun resolveWebViewPermissionRequest(
+        request: PermissionRequest,
+        allowRuntimePrompt: Boolean,
+    ) {
+        if (!synchronized(pendingMicRequests) { pendingMicRequests.contains(request) }) return
+        try {
+            val args = WebviewMicrophonePermissionArgs().apply {
+                origin = request.origin?.toString().orEmpty()
+                resources = request.resources ?: emptyArray()
+                configuredHttpsOrigins = configuredMicOrigins
+                foreground = this@AuroraNativePlugin.foreground
+                focused = this@AuroraNativePlugin.focused
+            }
+            val decision = evaluateWebviewMicrophonePermission(args)
+            if (decision.getBoolean("grant")) {
+                synchronized(pendingMicRequests) { pendingMicRequests.remove(request) }
+                request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                return
+            }
+            if (
+                allowRuntimePrompt &&
+                decision.getString("reason") == "record_audio_permission_missing"
+            ) {
+                requestMicrophonePermission()
+                return
+            }
+            synchronized(pendingMicRequests) { pendingMicRequests.remove(request) }
+            request.deny()
+        } catch (error: Exception) {
+            synchronized(pendingMicRequests) { pendingMicRequests.remove(request) }
+            try {
+                request.deny()
+            } catch (denyError: Exception) {
+                recordMicDenyFailure("mic_exception_deny_failed", denyError)
+            }
+            recordMicDenyFailure("mic_permission_exception_denied", error)
+        }
+    }
+
+    private fun requestMicrophonePermission() {
+        if (microphonePermissionRequestInFlight) return
+        microphonePermissionRequestInFlight = true
+        try {
+            PluginManager.requestPermissions(
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+            ) {
+                activity.runOnUiThread {
+                    microphonePermissionRequestInFlight = false
+                    if (foreground && focused) {
+                        resolvePendingMicRequests(allowRuntimePrompt = false)
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            microphonePermissionRequestInFlight = false
+            recordMicDenyFailure("mic_runtime_permission_request_failed", error)
+            denyPendingMicRequests()
+        }
     }
 
     private fun currentUnixMs(): Long = System.currentTimeMillis()

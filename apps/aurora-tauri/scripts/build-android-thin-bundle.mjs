@@ -9,6 +9,14 @@ import { fileURLToPath } from 'node:url'
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
 const srcTauriRoot = join(packageRoot, 'src-tauri')
+const artifactOutputRoot = join(
+  srcTauriRoot,
+  'gen',
+  'android',
+  'app',
+  'build',
+  'outputs',
+)
 const sourceConfigPath = resolve(
   process.env.AURORA_TAURI_ANDROID_THIN_SOURCE_CONFIG_PATH
     ?? join(srcTauriRoot, 'tauri.android-thin.conf.json'),
@@ -44,6 +52,7 @@ try {
   const configSha256 = createHash('sha256').update(configRaw).digest('hex')
 
   run('pnpm', ['android:sync-native-plugin'])
+  cleanAndroidBuildOutputs()
 
   const buildArgs = ['tauri', 'android', 'build', '--debug']
   if (kind === 'apk') buildArgs.push('--apk')
@@ -70,8 +79,9 @@ try {
       configPath: '<temp-android-thin-config>',
     },
     command: ['pnpm', ...buildArgs.map((value) => value === tempConfigPath ? '<temp-android-thin-config>' : value)],
-    artifactRoot: redacted(join(srcTauriRoot, 'gen', 'android', 'app', 'build', 'outputs')),
-    expectedCapability: 'aurora-android-thin',
+    artifactRoot: redacted(artifactOutputRoot),
+    cleanBuildOutputs: true,
+    expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
     pythonSidecarStaged: false,
     externalBin: config.bundle?.externalBin ?? [],
     resources: config.bundle?.resources ?? {},
@@ -100,6 +110,10 @@ function run(command, commandArgs, env = process.env) {
   if (result.status !== 0) {
     throw new Error(`${command} ${commandArgs.join(' ')} failed with status ${result.status}`)
   }
+}
+
+function cleanAndroidBuildOutputs() {
+  rmSync(artifactOutputRoot, { recursive: true, force: true })
 }
 
 function writeAtomicJson(path, value) {

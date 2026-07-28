@@ -37,4 +37,4 @@ tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
-tauri-plugin-barcode-scanner = "2.4.0"
+tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }

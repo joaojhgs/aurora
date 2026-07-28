@@ -14,7 +14,11 @@ const buildThin = join(packageRoot, 'scripts', 'build-android-thin-bundle.mjs')
 const proof = join(packageRoot, 'scripts', 'assert-android-thin-artifact-clean.mjs')
 const buildFrontend = join(packageRoot, 'scripts', 'build-android-thin-frontend.mjs')
 const androidPreflight = join(packageRoot, 'scripts', 'android-preflight.mjs')
+const syncNativePlugin = join(packageRoot, 'scripts', 'install-android-native-plugin.mjs')
 const canonicalPluginSource = join(packageRoot, 'src-tauri', 'android', 'aurora-native-plugin', 'src', 'main', 'java', 'dev', 'aurora', 'tauri', 'nativeplugin')
+const canonicalPluginResources = join(packageRoot, 'src-tauri', 'android', 'aurora-native-plugin', 'src', 'main', 'res')
+const vendorBarcodeScanner = join(packageRoot, 'src-tauri', 'vendor', 'tauri-plugin-barcode-scanner')
+const vendorBarcodeScannerSource = join(vendorBarcodeScanner, 'android', 'src', 'main', 'java', 'BarcodeScannerPlugin.kt')
 
 type AndroidThinKind = 'apk' | 'aab'
 
@@ -262,7 +266,7 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     process.exit(3)
   }
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-  if (config.app.security.capabilities[0] !== 'aurora-android-thin') process.exit(4)
+  if (JSON.stringify(config.app.security.capabilities) !== JSON.stringify(['aurora-android-thin', 'aurora-mobile-mesh'])) process.exit(4)
 }
 `)
     chmodSync(pnpmStub, 0o755)
@@ -291,9 +295,12 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
       kind: 'aab',
       target: 'universal',
       sourceConfigWritten: false,
-      expectedCapability: 'aurora-android-thin',
+      expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
     })
-    expect(provenance.config.app.security.capabilities).toEqual(['aurora-android-thin'])
+    expect(provenance.config.app.security.capabilities).toEqual([
+      'aurora-android-thin',
+      'aurora-mobile-mesh',
+    ])
     expect(provenance.configSha256).toBe(createHash('sha256').update(`${JSON.stringify(provenance.config, null, 2)}\n`).digest('hex'))
   })
 
@@ -367,6 +374,62 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
       expect(command, `${name} must use the temp-config build wrapper`).toMatch(/^node \.\/scripts\/build-android-thin-bundle\.mjs --kind (apk|aab)$/)
     }
     expect(readFileSync(buildThin, 'utf8')).toContain("run('pnpm', ['android:sync-native-plugin'])")
+    const syncSource = readFileSync(syncNativePlugin, 'utf8')
+    expect(syncSource).toContain("resolve('src-tauri/icons/android')")
+    expect(syncSource).toContain("resolve('src-tauri/android/aurora-native-plugin/src/main/res')")
+    expect(syncSource).toContain('syncCanonicalAndroidLauncherIcons')
+    expect(syncSource).toContain('syncAuroraAndroidNativeResources')
+    expect(syncSource).toContain('aurora_native_strings.xml')
+    expect(syncSource).toContain('repairGeneratedBaseStrings')
+    expect(syncSource).toContain('Synced canonical Aurora launcher icons')
+    expect(syncSource).toContain('configureVendorBarcodeScanner')
+    expect(syncSource).toContain(
+      'Configured the generated Android project to use Aurora’s cancellation-safe barcode scanner vendor.',
+    )
+    const cargoToml = readFileSync(
+      join(packageRoot, 'src-tauri', 'Cargo.toml'),
+      'utf8',
+    )
+    expect(cargoToml).toContain(
+      'tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }',
+    )
+    const barcodeScannerSource = readFileSync(vendorBarcodeScannerSource, 'utf8')
+    expect(barcodeScannerSource).toContain('val pendingScan = savedInvoke')
+    expect(barcodeScannerSource).toContain('pendingScan?.reject("cancelled")')
+    expect(existsSync(join(vendorBarcodeScanner, 'LICENSE_APACHE-2.0'))).toBe(true)
+    expect(existsSync(join(vendorBarcodeScanner, 'LICENSE_MIT'))).toBe(true)
+    for (const permission of [
+      'android.permission.RECORD_AUDIO',
+      'android.permission.MODIFY_AUDIO_SETTINGS',
+      'android.permission.POST_NOTIFICATIONS',
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+      'android.permission.ACCESS_NETWORK_STATE',
+      'android.permission.USE_BIOMETRIC',
+    ]) {
+      expect(syncSource).toContain(permission)
+    }
+    for (const component of [
+      'AuroraVoiceForegroundService',
+      'AuroraVoiceInteractionService',
+      'AuroraVoiceInteractionSessionService',
+      'AuroraAssistActivity',
+      'AuroraEntrypointActivity',
+      'AuroraWidgetProvider',
+      'AuroraQuickSettingsTileService',
+    ]) {
+      expect(syncSource).toContain(component)
+    }
+    for (const resource of [
+      'drawable/ic_aurora_entrypoint.xml',
+      'layout/aurora_widget.xml',
+      'xml/aurora_shortcuts.xml',
+      'xml/aurora_voice_interaction_service.xml',
+      'xml/aurora_widget_info.xml',
+    ]) {
+      expect(existsSync(join(canonicalPluginResources, resource))).toBe(true)
+    }
+    expect(readFileSync(buildThin, 'utf8')).toContain('cleanAndroidBuildOutputs')
   })
 
   it('fails Android preflight when generated native plugin source differs from canonical source', () => {

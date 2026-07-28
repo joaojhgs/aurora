@@ -4,6 +4,24 @@ This directory holds the Android side of the future Aurora Tauri mobile plugin. 
 
 The skeleton is intentionally evidence-only. It reports Android package, permission, role, and fallback-entrypoint state to the Rust/JS bridge, but it does not claim assistant-role availability, microphone capture, notification delivery, or foreground-service behavior without Android OS evidence.
 
+`pnpm android:sync-native-plugin` copies this source into the generated Tauri
+Android app and applies the canonical Aurora manifest fragments. The app
+declares `INTERNET`, `ACCESS_NETWORK_STATE`, `RECORD_AUDIO`,
+`MODIFY_AUDIO_SETTINGS`, `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`,
+`FOREGROUND_SERVICE_MICROPHONE`, and `USE_BIOMETRIC`; the official barcode
+scanner plugin contributes `CAMERA` and `VIBRATE`. The Android thin build also
+selects `aurora-mobile-mesh`, which authorizes the scanner's permission and scan
+commands. Dangerous camera/microphone/notification grants still remain
+user-controlled Android runtime permissions.
+
+Aurora vendors the lockfile-selected barcode-scanner plugin version because the
+upstream Android `cancel` implementation tears down its saved scan invocation
+before rejecting it. The one-line lifecycle correction captures the pending
+invocation first, tears down the camera surface, and then rejects the pending
+scan as cancelled. This keeps QR cancellation silent and lets onboarding leave
+its pending state. Do not patch the generated Gradle copy: Tauri regenerates
+that path during every mobile build.
+
 ## Commands
 
 - `nativeCapabilityManifest`: returns Android native capability and permission states for SDK/native manifest ingestion. The payload keeps backward-compatible boolean `permissions`/`capabilities` maps and also includes `permissionStates`/`capabilityStates` so UI can distinguish `available`, `needs_native_permission`, `unsupported_platform`, `degraded`, and `fallback`.

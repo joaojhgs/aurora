@@ -12,6 +12,12 @@ const configPath = resolve(
     ?? join(srcTauriRoot, 'tauri.android-thin.conf.json'),
 )
 const capabilityPath = join(srcTauriRoot, 'capabilities', 'aurora-android-thin.json')
+const mobileMeshCapabilityPath = join(
+  srcTauriRoot,
+  'capabilities',
+  'aurora-mobile-mesh.json',
+)
+const expectedCapabilities = ['aurora-android-thin', 'aurora-mobile-mesh']
 
 const args = process.argv.slice(2)
 const kind = readOption('--kind') ?? 'apk'
@@ -75,8 +81,9 @@ const proof = {
   forbiddenMatches: [],
   configPath: redacted(configPath),
   buildProvenancePath: redacted(buildProvenancePath),
-  expectedCapability: 'aurora-android-thin',
+  expectedCapabilities,
   capabilityFilePresent: existsSync(capabilityPath),
+  mobileMeshCapabilityFilePresent: existsSync(mobileMeshCapabilityPath),
   secretsRedacted: true
 }
 
@@ -135,8 +142,16 @@ function checkAndroidThinConfig() {
     failures.push('Android-thin config contains sidecar/config resource references')
   }
   const capabilities = config.app?.security?.capabilities ?? []
-  if (!Array.isArray(capabilities) || capabilities.length !== 1 || capabilities[0] !== 'aurora-android-thin') {
-    failures.push('Android-thin config must replace base capabilities with aurora-android-thin only')
+  if (
+    !Array.isArray(capabilities)
+    || capabilities.length !== expectedCapabilities.length
+    || capabilities.some(
+      (capability, index) => capability !== expectedCapabilities[index],
+    )
+  ) {
+    failures.push(
+      `Android-thin config must select exactly ${expectedCapabilities.join(', ')}`,
+    )
   }
   const csp = config.app?.security?.csp ?? ''
   checkRuntimeConfigurableConnectSrc(csp)
@@ -186,6 +201,29 @@ function checkCapabilityIfPresent() {
   const forbidden = permissions.filter((permission) => /sidecar|aurora-request|aurora-subscribe|local-file|audio-bridge|secure-file/i.test(permission))
   if (forbidden.length) failures.push(`Android-thin capability includes forbidden local/sidecar permissions: ${forbidden.join(', ')}`)
   proof.thinCapabilityPermissions = permissions
+
+  if (!existsSync(mobileMeshCapabilityPath)) {
+    failures.push('Android-thin mobile mesh capability is missing')
+    return
+  }
+  const mobileMeshCapability = JSON.parse(
+    readFileSync(mobileMeshCapabilityPath, 'utf8'),
+  )
+  const mobileMeshPermissions = mobileMeshCapability.permissions ?? []
+  for (const permission of [
+    'deep-link:default',
+    'barcode-scanner:allow-scan',
+    'barcode-scanner:allow-cancel',
+    'barcode-scanner:allow-check-permissions',
+    'barcode-scanner:allow-request-permissions',
+  ]) {
+    if (!mobileMeshPermissions.includes(permission)) {
+      failures.push(
+        `Android-thin mobile mesh capability is missing ${permission}`,
+      )
+    }
+  }
+  proof.mobileMeshCapabilityPermissions = mobileMeshPermissions
 }
 
 function checkArtifact() {

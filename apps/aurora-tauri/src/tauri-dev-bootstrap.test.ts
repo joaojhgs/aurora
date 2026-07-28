@@ -113,7 +113,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(prepare).toContain("sidecarProfile === 'desktop-local-minimal' ? 'thin'")
     expect(readme).toContain('pnpm --filter @aurora/tauri-ui tauri dev')
     expect(readme).toContain('You should not need to run `prepare:sidecar`, build a PyInstaller sidecar, or export `AURORA_TAURI_SIDECAR_SOURCE` for day-to-day development.')
-    expect(readme).toContain('Desktop thin: use onboarding/profile storage')
+    expect(readme).toContain('Desktop thin: first-run onboarding asks only')
     expect(buildDocs).toContain('Desktop thin')
     expect(buildDocs).toContain('nonsecret connection profile')
   })
