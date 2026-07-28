@@ -543,14 +543,14 @@ function assertRecordIdentity(workerState: WorkerState, profileId: string, local
 
 function assertDatabaseProfileOwnership(db: SqliteDatabase | null, profileId: string, localNodeId: string): void {
   const checks: Array<{ readonly source: string; readonly sql: string }> = [
-    { source: 'conversations', sql: 'SELECT id FROM aurora_conversations WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
-    { source: 'memory', sql: 'SELECT id FROM aurora_memory_items WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
-    { source: 'local_tools', sql: 'SELECT tool_contract_id FROM aurora_local_tool_state WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
-    { source: 'peer_grants', sql: 'SELECT grant_id FROM aurora_peer_grant_metadata WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' },
-    { source: 'local_audit', sql: 'SELECT id FROM aurora_local_audit WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;' }
+    { source: 'conversations', sql: 'SELECT id FROM aurora_conversations WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
+    { source: 'memory', sql: 'SELECT id FROM aurora_memory_items WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
+    { source: 'local_tools', sql: 'SELECT tool_contract_id FROM aurora_local_tool_state WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
+    { source: 'peer_grants', sql: 'SELECT grant_id FROM aurora_peer_grant_metadata WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
+    { source: 'local_audit', sql: 'SELECT id FROM aurora_local_audit WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' }
   ]
   for (const check of checks) {
-    if (selectObjects<Record<string, unknown>>(db, check.sql, [localNodeId, profileId]).length > 0) {
+    if (selectObjects<Record<string, unknown>>(db, check.sql, [profileId, localNodeId]).length > 0) {
       throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
     }
   }
@@ -565,20 +565,38 @@ export function assertExistingSqliteProfileOwnership(db: SqliteDatabase, profile
     { tableName: 'aurora_local_audit', idColumn: 'id' }
   ]
   for (const check of checks) {
-    if (!tableHasColumns(db, check.tableName, ['local_node_id', 'profile_id', check.idColumn])) continue
-    const rows = selectObjects<Record<string, unknown>>(
-      db,
-      `SELECT ${quoteIdentifier(check.idColumn)} FROM ${quoteIdentifier(check.tableName)} WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;`,
-      [localNodeId, profileId]
-    )
-    if (rows.length > 0) {
-      throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
-    }
+    if (!tableExists(db, check.tableName) || !tableHasRows(db, check.tableName)) continue
+    const hasProfileId = columnExists(db, check.tableName, 'profile_id')
+    const hasLocalNodeId = columnExists(db, check.tableName, 'local_node_id')
+    if (hasProfileId && hasMismatchedOwnershipColumn(db, check.tableName, 'profile_id', profileId)) throw profileOwnerMismatch()
+    if (hasLocalNodeId && hasMismatchedOwnershipColumn(db, check.tableName, 'local_node_id', localNodeId)) throw profileOwnerMismatch()
+    if (!hasProfileId || !hasLocalNodeId) throw ambiguousProfileOwnership()
   }
 }
 
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`
+}
+
+function tableHasRows(db: SqliteDatabase, tableName: string): boolean {
+  return selectObjects<Record<string, unknown>>(db, `SELECT 1 FROM ${quoteIdentifier(tableName)} LIMIT 1;`).length > 0
+}
+
+function hasMismatchedOwnershipColumn(db: SqliteDatabase, tableName: string, columnName: 'profile_id' | 'local_node_id', expectedValue: string): boolean {
+  const column = quoteIdentifier(columnName)
+  return selectObjects<Record<string, unknown>>(
+    db,
+    `SELECT 1 FROM ${quoteIdentifier(tableName)} WHERE ${column} IS NULL OR ${column} <> ? LIMIT 1;`,
+    [expectedValue]
+  ).length > 0
+}
+
+function profileOwnerMismatch(): LocalDataError {
+  return new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
+}
+
+function ambiguousProfileOwnership(): LocalDataError {
+  return new LocalDataError('identity_mismatch', 'Local data database profile ownership is incomplete', { reason: 'profile_owner_ambiguous' })
 }
 
 function requireIdentity(value: string | null): string {

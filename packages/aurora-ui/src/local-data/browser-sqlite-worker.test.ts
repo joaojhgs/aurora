@@ -54,7 +54,7 @@ describe('browser sqlite worker protocol guardrails', () => {
   it('rejects cross-profile existing rows before import deletes or overwrites colliding IDs', async () => {
     const responses: BrowserSqliteWorkerResponse[] = []
     const db = new FakeSqliteDatabase({
-      'SELECT id FROM aurora_conversations WHERE local_node_id = ? AND profile_id <> ? LIMIT 1;': [{ id: 'conversation-1' }]
+      'SELECT id FROM aurora_conversations WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;': [{ id: 'conversation-1' }]
     })
     await handleBrowserSqliteWorkerMessage(
       {
@@ -114,37 +114,73 @@ describe('browser sqlite worker protocol guardrails', () => {
   })
 
   it('preflights existing profile ownership without changing schema, ledger, identity, user_version, or records', () => {
-    const db = new SnapshotSqliteDatabase({
-      userVersion: 1,
-      schema: {
-        aurora_schema_migrations: ['version', 'name', 'checksum', 'applied_at_ms'],
-        aurora_database_identity: ['singleton_id', 'local_node_id', 'created_at_ms'],
-        aurora_conversations: ['id', 'profile_id', 'local_node_id', 'title_envelope_json']
+    for (const testCase of [
+      {
+        name: 'different-profile-same-node',
+        record: { id: 'conversation-1', profile_id: 'profile-2', local_node_id: 'node-1', title_envelope_json: '{}' },
+        reason: 'profile_owner_mismatch'
       },
-      ledger: [{ version: 1, checksum: 'a'.repeat(64) }],
-      identity: { singleton_id: 1, local_node_id: 'node-1', created_at_ms: 1000 },
-      records: {
-        aurora_conversations: [{
-          id: 'conversation-1',
-          profile_id: 'profile-2',
-          local_node_id: 'node-1',
-          title_envelope_json: '{}'
-        }]
+      {
+        name: 'same-profile-different-node',
+        record: { id: 'conversation-1', profile_id: 'profile-1', local_node_id: 'node-2', title_envelope_json: '{}' },
+        reason: 'profile_owner_mismatch'
+      },
+      {
+        name: 'different-profile-different-node',
+        record: { id: 'conversation-1', profile_id: 'profile-2', local_node_id: 'node-2', title_envelope_json: '{}' },
+        reason: 'profile_owner_mismatch'
       }
-    })
-    const before = db.snapshot()
-
-    expect(() => assertExistingSqliteProfileOwnership(db, 'profile-1', 'node-1')).toThrowError(
-      expect.objectContaining({
-        code: 'identity_mismatch',
-        metadata: { reason: 'profile_owner_mismatch' }
+    ]) {
+      const db = new SnapshotSqliteDatabase({
+        userVersion: 1,
+        schema: {
+          aurora_schema_migrations: ['version', 'name', 'checksum', 'applied_at_ms'],
+          aurora_database_identity: ['singleton_id', 'local_node_id', 'created_at_ms'],
+          aurora_conversations: ['id', 'profile_id', 'local_node_id', 'title_envelope_json']
+        },
+        ledger: [{ version: 1, checksum: 'a'.repeat(64) }],
+        identity: { singleton_id: 1, local_node_id: 'node-1', created_at_ms: 1000 },
+        records: {
+          aurora_conversations: [testCase.record]
+        }
       })
-    )
-    expect(db.snapshot()).toEqual(before)
-    expect(db.statements.some((statement) => /\b(?:BEGIN|COMMIT|ROLLBACK|CREATE|INSERT|UPDATE|DELETE|DROP|ALTER)\b|PRAGMA\s+user_version\s*=/iu.test(statement))).toBe(false)
+      assertPreflightRejectsWithoutMutation(db, testCase.reason)
+    }
   })
 
-  it('allows empty or partially old schemas through read-only profile ownership preflight', () => {
+  it('fails closed without mutation when nonempty legacy tables cannot establish exact ownership', () => {
+    for (const testCase of [
+      {
+        name: 'missing-profile',
+        schema: { aurora_conversations: ['id', 'local_node_id'] },
+        record: { id: 'conversation-legacy', local_node_id: 'node-1' }
+      },
+      {
+        name: 'missing-node',
+        schema: { aurora_memory_items: ['id', 'profile_id'] },
+        record: { id: 'memory-legacy', profile_id: 'profile-1' }
+      },
+      {
+        name: 'missing-both',
+        schema: { aurora_local_audit: ['id'] },
+        record: { id: 'audit-legacy' }
+      }
+    ]) {
+      const tableName = Object.keys(testCase.schema)[0] ?? 'aurora_conversations'
+      const db = new SnapshotSqliteDatabase({
+        userVersion: 1,
+        schema: testCase.schema,
+        ledger: [],
+        identity: null,
+        records: {
+          [tableName]: [testCase.record]
+        }
+      })
+      assertPreflightRejectsWithoutMutation(db, 'profile_owner_ambiguous')
+    }
+  })
+
+  it('allows empty or ownership-establishable legacy schemas through read-only profile ownership preflight', () => {
     const empty = new SnapshotSqliteDatabase({
       userVersion: 0,
       schema: {},
@@ -153,29 +189,30 @@ describe('browser sqlite worker protocol guardrails', () => {
       records: {}
     })
     expect(() => assertExistingSqliteProfileOwnership(empty, 'profile-1', 'node-1')).not.toThrow()
-    expect(empty.snapshot()).toEqual({
+    const emptySnapshot: SnapshotSqliteState = {
       userVersion: 0,
       schema: {},
       ledger: [],
       identity: null,
       records: {}
-    })
+    }
+    expect(empty.snapshot()).toEqual(emptySnapshot)
 
-    const partial = new SnapshotSqliteDatabase({
+    const legacy = new SnapshotSqliteDatabase({
       userVersion: 1,
       schema: {
-        aurora_conversations: ['id', 'local_node_id']
+        aurora_conversations: ['profile_id', 'local_node_id']
       },
       ledger: [],
       identity: null,
       records: {
-        aurora_conversations: [{ id: 'conversation-legacy', local_node_id: 'node-1' }]
+        aurora_conversations: [{ profile_id: 'profile-1', local_node_id: 'node-1' }]
       }
     })
-    const beforePartial = partial.snapshot()
-    expect(() => assertExistingSqliteProfileOwnership(partial, 'profile-1', 'node-1')).not.toThrow()
-    expect(partial.snapshot()).toEqual(beforePartial)
-    expect(partial.statements.some((statement) => /\b(?:CREATE|INSERT|UPDATE|DELETE|DROP|ALTER)\b|PRAGMA\s+user_version\s*=/iu.test(statement))).toBe(false)
+    const beforeLegacy = legacy.snapshot()
+    expect(() => assertExistingSqliteProfileOwnership(legacy, 'profile-1', 'node-1')).not.toThrow()
+    expect(legacy.snapshot()).toEqual(beforeLegacy)
+    expect(legacy.statements.some(isWriteStatement)).toBe(false)
   })
 
   it('keeps sqlite wasm imports private to approved local-data adapters', () => {
@@ -248,17 +285,20 @@ class SnapshotSqliteDatabase {
       const tableName = tableInfoMatch[1] ?? ''
       return (this.state.schema[tableName] ?? []).map((name: string) => ({ name }))
     }
-    const ownershipMatch = /^SELECT "([^"]+)" FROM "([^"]+)" WHERE local_node_id = \? AND profile_id <> \? LIMIT 1;$/u.exec(sql)
+    const tableRowsMatch = /^SELECT 1 FROM "([^"]+)" LIMIT 1;$/u.exec(sql)
+    if (tableRowsMatch !== null) {
+      return (this.state.records[tableRowsMatch[1] ?? ''] ?? []).length > 0 ? [{ 1: 1 }] : []
+    }
+    const ownershipMatch = /^SELECT 1 FROM "([^"]+)" WHERE "([^"]+)" IS NULL OR "[^"]+" <> \? LIMIT 1;$/u.exec(sql)
     if (ownershipMatch !== null) {
-      const idColumn = ownershipMatch[1] ?? ''
-      const tableName = ownershipMatch[2] ?? ''
+      const tableName = ownershipMatch[1] ?? ''
+      const columnName = ownershipMatch[2] ?? ''
       const bind = Array.isArray(input.bind) ? input.bind : []
-      const localNodeId = bind[0]
-      const profileId = bind[1]
+      const expectedValue = bind[0]
       return (this.state.records[tableName] ?? [])
-        .filter((record) => record.local_node_id === localNodeId && record.profile_id !== profileId)
+        .filter((record) => record[columnName] === null || record[columnName] === undefined || record[columnName] !== expectedValue)
         .slice(0, 1)
-        .map((record) => ({ [idColumn]: record[idColumn] }))
+        .map(() => ({ 1: 1 }))
     }
     if (sql === 'SELECT singleton_id, local_node_id FROM aurora_database_identity ORDER BY singleton_id ASC;') {
       return this.state.identity === null ? [] : [structuredClone(this.state.identity)]
@@ -272,6 +312,22 @@ class SnapshotSqliteDatabase {
   snapshot(): SnapshotSqliteState {
     return structuredClone(this.state)
   }
+}
+
+function assertPreflightRejectsWithoutMutation(db: SnapshotSqliteDatabase, reason: string): void {
+  const before = db.snapshot()
+  expect(() => assertExistingSqliteProfileOwnership(db, 'profile-1', 'node-1')).toThrowError(
+    expect.objectContaining({
+      code: 'identity_mismatch',
+      metadata: { reason }
+    })
+  )
+  expect(db.snapshot()).toEqual(before)
+  expect(db.statements.some(isWriteStatement)).toBe(false)
+}
+
+function isWriteStatement(statement: string): boolean {
+  return /\b(?:BEGIN|COMMIT|ROLLBACK|CREATE|INSERT|UPDATE|DELETE|DROP|ALTER)\b|PRAGMA\s+user_version\s*=/iu.test(statement)
 }
 
 const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({

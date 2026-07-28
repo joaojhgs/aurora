@@ -75,6 +75,45 @@ describe('createLocalDataBackend pointer selection', () => {
     expect(indexedDbBackend.openCount).toBe(0)
     expect(storage.getItem('factory.pointer:profile-1:node-1')).toBe(rawPointer)
   })
+
+  it('does not fallback or write a pointer when uncommitted SQLite open hits ownership rejection', async () => {
+    installBrowserStorageProbe()
+    const pointerStore = new CountingPointerStore(null)
+    const indexedDbBackend = new KindOverrideBackend('indexeddb')
+
+    await expect(createLocalDataBackend('profile-1', 'node-1', {
+      pointerStore,
+      indexedDbBackend,
+      lock: new GrantedLock(),
+      createWorker: () => new ErrorOpenWorker('identity_mismatch', 'profile_owner_mismatch'),
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
+    })).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_owner_mismatch' }
+    })
+    expect(indexedDbBackend.openCount).toBe(0)
+    expect(pointerStore.writes).toBe(0)
+  })
+
+  it('does not fallback or rewrite a committed pointer when SQLite open hits ownership integrity rejection', async () => {
+    installBrowserStorageProbe()
+    const pointerStore = new CountingPointerStore(pointer('sqlite-wasm-opfs'))
+    const indexedDbBackend = new KindOverrideBackend('indexeddb')
+
+    await expect(createLocalDataBackend('profile-1', 'node-1', {
+      pointerStore,
+      indexedDbBackend,
+      lock: new GrantedLock(),
+      createWorker: () => new ErrorOpenWorker('migration_integrity', 'profile_owner_ambiguous'),
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
+    })).rejects.toMatchObject({
+      code: 'migration_integrity',
+      metadata: { reason: 'profile_owner_ambiguous' }
+    })
+    expect(indexedDbBackend.openCount).toBe(0)
+    expect(pointerStore.writes).toBe(0)
+    await expect(pointerStore.read('profile-1', 'node-1')).resolves.toMatchObject({ selectedBackend: 'sqlite-wasm-opfs' })
+  })
 })
 
 class KindOverrideBackend implements LocalDataBackend {
@@ -115,6 +154,22 @@ class MapPointerStore implements BrowserLocalDataBackendPointerStore {
   }
 }
 
+class CountingPointerStore implements BrowserLocalDataBackendPointerStore {
+  writes = 0
+
+  constructor(private current: BrowserLocalDataBackendPointer | null) {}
+
+  async read(profileId: string, localNodeId: string): Promise<BrowserLocalDataBackendPointer | null> {
+    if (this.current?.profileId !== profileId || this.current.localNodeId !== localNodeId) return null
+    return this.current
+  }
+
+  async write(pointerValue: BrowserLocalDataBackendPointer): Promise<void> {
+    this.writes += 1
+    this.current = pointerValue
+  }
+}
+
 class ThrowIfUsedLock implements BrowserSqliteOwnershipLock {
   async acquire(): Promise<BrowserSqliteOwnership> {
     throw new Error('SQLite should not be probed')
@@ -124,6 +179,12 @@ class ThrowIfUsedLock implements BrowserSqliteOwnershipLock {
 class DeniedLock implements BrowserSqliteOwnershipLock {
   async acquire(): Promise<BrowserSqliteOwnership> {
     throw new Error('busy')
+  }
+}
+
+class GrantedLock implements BrowserSqliteOwnershipLock {
+  async acquire(key: string): Promise<BrowserSqliteOwnership> {
+    return { key, ownerId: 'owner-1', release: async () => undefined }
   }
 }
 
@@ -140,6 +201,31 @@ class NoopWorker implements BrowserSqliteProtocolWorker {
           error: {
             code: 'unsupported_backend',
             message: 'not available'
+          }
+        }
+      }
+    } as MessageEvent<BrowserSqliteWorkerResponse>)
+  }
+
+  terminate(): void {}
+}
+
+class ErrorOpenWorker implements BrowserSqliteProtocolWorker {
+  onmessage: ((event: MessageEvent<BrowserSqliteWorkerResponse>) => void) | null = null
+  onerror: ((event: ErrorEvent) => void) | null = null
+
+  constructor(private readonly code: string, private readonly reason: string) {}
+
+  postMessage(message: BrowserSqliteWorkerRequest): void {
+    this.onmessage?.({
+      data: {
+        id: message.id,
+        result: {
+          ok: false,
+          error: {
+            code: this.code,
+            message: 'ownership rejected',
+            metadata: { reason: this.reason }
           }
         }
       }

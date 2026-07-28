@@ -60,6 +60,7 @@ export async function createLocalDataBackend(
     return sqliteBackend
   } catch (error) {
     await sqliteBackend.close().catch(() => undefined)
+    if (isTerminalSqliteOpenError(error)) throw error
     const fallbackReason = fallbackReasonFromError(error)
     const fallback = options.indexedDbBackend ?? new BrowserIndexedDbLocalDataBackend()
     try {
@@ -107,6 +108,7 @@ async function openCommittedBackend(
       sqliteAvailable: false,
       fallbackReason: 'committed_backend_open_failed'
     })
+    if (isTerminalSqliteOpenError(error)) throw error
     throw new LocalDataError('unsupported_backend', 'Local data storage is unavailable', {
       reason: error instanceof LocalDataError ? error.code : 'committed_backend_open_failed'
     })
@@ -132,4 +134,16 @@ async function commitSelectedBackendPointer(
     localNodeId,
     selectedBackend
   }).catch(() => undefined)
+}
+
+function isTerminalSqliteOpenError(error: unknown): boolean {
+  if (!(error instanceof LocalDataError)) return false
+  if (error.code === 'identity_mismatch') return true
+  if (error.code !== 'migration_integrity' && error.code !== 'invalid_record') return false
+  const reason = error.metadata?.reason
+  return reason === 'profile_owner_mismatch'
+    || reason === 'profile_owner_ambiguous'
+    || reason === 'identity_missing'
+    || reason === 'identity_invalid'
+    || reason === 'identity_table_missing'
 }
