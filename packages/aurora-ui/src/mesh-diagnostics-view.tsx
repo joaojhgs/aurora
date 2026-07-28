@@ -267,8 +267,68 @@ function productConnectionDetail(row: MeshTransportRow): string {
 function productSupportReference(value: string | null | undefined): string {
   const redacted = redactDiagnosticText(value).trim()
   if (!redacted) return 'Pending'
-  if (/^[A-Za-z0-9._:-]{3,80}$/u.test(redacted)) return redacted
+  if (isUnsafeRenderedValue(redacted)) return 'Reference available'
+  if (/^(?:support|receipt|audit|ref)-[a-z0-9][a-z0-9-]{2,39}$/iu.test(redacted)) return redacted
   return 'Reference available'
+}
+
+function productRedactionLabel(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase()
+  if (normalized === 'credential values') return 'Account details'
+  if (normalized === 'audio capture data') return 'Voice data'
+  if (normalized === 'personal memory snippets') return 'Saved memory'
+  if (!normalized || isUnsafeRenderedValue(normalized)) return 'Privacy item'
+  return productDiagnosticCopy(value, 'Privacy item')
+}
+
+function productRedactionDetail(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase().replace(/[_-]+/gu, ' ')
+  if (/\b(?:credential|secret|password|token|key|url|account)\b/iu.test(normalized)) return 'Account details are hidden before export.'
+  if (/\b(?:audio|voice|capture|media)\b/iu.test(normalized)) return 'Voice data is excluded before export.'
+  if (/\b(?:rag|memory|personal)\b/iu.test(normalized)) return 'Saved memory content is excluded before export.'
+  return productDiagnosticCopy(value, 'Sensitive details are protected before export.')
+}
+
+function productRedactionProgressLabel(label: string, value: number): string {
+  return `${productRedactionLabel(label)} protection ${value}%`
+}
+
+function productTrustCopy(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase().replace(/[_-]+/gu, ' ')
+  if (!normalized) return 'Access status unavailable'
+  if (isUnsafeRenderedValue(value)) return 'Access status unavailable'
+  if (/\b(?:denied|failed|unauthorized|forbidden)\b/iu.test(normalized)) return 'Access needed'
+  if (/\b(?:pairing|pending|approval)\b/iu.test(normalized)) return 'Approval pending'
+  if (/\b(?:admin|administrator)\b/iu.test(normalized)) return 'Administrator access approved'
+  if (/\b(?:authenticated|trusted|approved)\b/iu.test(normalized)) return 'Device approved'
+  if (/\b(?:stale|offline|unavailable)\b/iu.test(normalized)) return 'May be out of date'
+  return productDiagnosticCopy(value, 'Access status unavailable')
+}
+
+function productQualityCopy(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase().replace(/[_-]+/gu, ' ')
+  if (!normalized) return 'Quality unavailable'
+  if (normalized === 'healthy' || normalized === 'connected') return 'Strong'
+  if (normalized === 'degraded') return 'Needs attention'
+  if (normalized === 'poor') return 'Poor'
+  if (normalized === 'stale') return 'May be out of date'
+  if (normalized === 'offline') return 'Offline'
+  if (normalized === 'latency unknown') return 'Response time unavailable'
+  if (isUnsafeRenderedValue(value)) return 'Quality unavailable'
+  return productDiagnosticCopy(value, 'Quality unavailable')
+}
+
+function safeMetricTitle(value: string): string {
+  return isUnsafeRenderedValue(value) ? 'Status available' : value
+}
+
+function isUnsafeRenderedValue(value: string | null | undefined): boolean {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted) return false
+  return INTERNAL_RENDER_TERM_PATTERN.test(redacted)
+    || /\b[A-Z][A-Za-z]+(?:\.[A-Z][A-Za-z0-9]+)+\b/u.test(redacted)
+    || /\b(?:AdminAction|Gateway|Get[A-Z][A-Za-z0-9]*|Confirm[A-Z][A-Za-z0-9]*|Draft[A-Z][A-Za-z0-9]*|Action[A-Z][A-Za-z0-9]*)\b/u.test(redacted)
+    || /\b(?:mesh:peer|peer[-_:][A-Za-z0-9._:-]+)\b/iu.test(redacted)
 }
 
 export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
@@ -613,11 +673,11 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
             {snapshot.redactionRows.map((row) => (
               <div key={row.label}>
                 <div className="flex items-center justify-between text-sm">
-                  <span>{row.label}</span>
+                  <span>{productRedactionLabel(row.label)}</span>
                   <strong>{row.value}%</strong>
                 </div>
-                <Progress value={row.value} className="mt-1" aria-label={`${row.label} redaction ${row.value}%`} />
-                <p className="mt-1 text-xs text-muted-foreground">{row.detail}</p>
+                <Progress value={row.value} className="mt-1" aria-label={productRedactionProgressLabel(row.label, row.value)} />
+                <p className="mt-1 text-xs text-muted-foreground">{productRedactionDetail(row.detail)}</p>
               </div>
             ))}
           </div>
@@ -788,13 +848,13 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
                     </div>
                   </TableCell>
                   <TableCell>
-                    <strong className="text-sm font-medium">{peer.trustLabel}</strong>
+                    <strong className="text-sm font-medium">{productTrustCopy(peer.trustLabel)}</strong>
                     <div className="text-xs text-muted-foreground">
                       {productDiagnosticCopy(peer.authState, 'Access status unavailable')}; {productDiagnosticCopy(peer.permissions, 'Permissions unavailable')}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <strong className="text-sm font-medium">{peer.routeQuality}</strong>
+                    <strong className="text-sm font-medium">{productQualityCopy(peer.routeQuality)}</strong>
                     <div className="text-xs text-muted-foreground">
                       {productDiagnosticCopy(peer.routeProvider, 'Feature readiness unavailable')}; {productDiagnosticCopy(peer.compatibility, 'Compatibility check unavailable')}; {productDiagnosticCopy(peer.lastSeen, 'Last check unavailable')}
                     </div>
@@ -825,7 +885,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
                     <StatusBadge state={row.state} />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Metric label="quality" value={row.routeQuality} />
+                    <Metric label="quality" value={productQualityCopy(row.routeQuality)} />
                     <Metric label="latency" value={row.latency} />
                     <Metric label="backup option" value={productDiagnosticCopy(row.fallback, 'No backup option reported')} />
                     <Metric label="devices" value={productDiagnosticCopy(row.providerSummary, 'Device readiness unavailable')} />
@@ -1310,10 +1370,11 @@ function formatMs(value: number | null): string {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
+  const title = safeMetricTitle(value)
   return (
     <div className="min-w-0 rounded-lg bg-muted/40 p-2">
       <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="truncate text-sm" title={value}>
+      <dd className="truncate text-sm" title={title}>
         {value}
       </dd>
     </div>

@@ -65,6 +65,40 @@ describe('mesh diagnostics product copy', () => {
     expect(rendered).not.toMatch(HOSTILE_RENDER_TERMS)
   })
 
+  it('sanitizes unsafe support references, redaction rows, trust labels, and quality labels in text and attributes', () => {
+    const snapshot = hostileSnapshot()
+    snapshot.supportBundleCorrelationId = 'Gateway.GetSupportBundle'
+    snapshot.supportBundleAuditReceipt = 'mesh:peer-Gateway.AdminActionConfirm'
+    snapshot.redactionRows = [{
+      label: 'Gateway.AdminActionConfirm credential provider fallback',
+      value: 57,
+      detail: 'AdminAction WebRTC transport provider fallback redaction row',
+    }]
+    snapshot.transportRows[0]!.trustLabel = 'AdminAction provider route trusted'
+    snapshot.transportRows[0]!.routeQuality = 'WebRTC transport provider fallback quality'
+    snapshot.routeRows[0]!.routeQuality = 'Gateway.GetSupportBundle mesh:peer route quality'
+
+    const markup = renderToStaticMarkup(<MeshDiagnosticsView snapshot={snapshot} route={hostileRoute()} reauthConfirmed />)
+    const rendered = `${visibleText(markup)} ${renderedAttributeText(markup)}`
+
+    expect(rendered).toContain('Reference available')
+    expect(rendered).toContain('Privacy item')
+    expect(rendered).toContain('Quality unavailable')
+    expect(rendered).toContain('Access status unavailable')
+    for (const leaked of [
+      'Gateway.GetSupportBundle',
+      'Gateway.AdminActionConfirm',
+      'AdminAction',
+      'mesh:peer',
+      'provider fallback',
+      'WebRTC transport',
+    ]) {
+      expect(rendered).not.toContain(leaked)
+    }
+    expect(rendered).not.toMatch(HOSTILE_RENDER_TERMS)
+    expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id)).toEqual([])
+  })
+
   it('requires explicit approval before export while preserving the export action', async () => {
     const onExport = vi.fn()
     const container = document.createElement('div')
@@ -119,6 +153,7 @@ const HOSTILE_BACKEND_STRINGS = [
   'transport',
   'provider',
   'fallback',
+  'mesh:peer',
   'sidecar_manifest_provider',
   'Gateway.AdminActionConfirm',
 ] as const
