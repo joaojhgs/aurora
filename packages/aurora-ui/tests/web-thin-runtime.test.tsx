@@ -494,6 +494,25 @@ describe('browser WebRTC thin-shell runtime', () => {
       )
     })
 
+    expect(container.querySelector('[data-thin-invite-onboarding="true"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Thin connection profile"]')).toBeNull()
+    expect(container.querySelector('#webthin-profile-mode')).toBeNull()
+    expect(container.querySelector('#webthin-profile-gateway')).toBeNull()
+    expect(container.querySelector('#webthin-profile-signaling')).toBeNull()
+    expect(container.querySelector('#webthin-profile-stable-peer')).toBeNull()
+    expect(container.textContent).not.toContain('Thin transport diagnostics')
+    expect(container.textContent).not.toContain('Scan QR invite')
+
+    const nodeName = container.querySelector<HTMLInputElement>('#webthin-profile-node-name')!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      setter?.call(nodeName, 'Kitchen tablet')
+      nodeName.dispatchEvent(new Event('input', { bubbles: true }))
+      nodeName.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     await act(async () => {
       findButton(container, 'Save invite and continue').click()
       await Promise.resolve()
@@ -503,9 +522,11 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(onSaveProfile.mock.calls[0]?.[0]).toMatchObject({
       mode: 'webrtc-only',
       signalingUrl: 'wss://broker.example/mqtt',
+      nodeName: 'Kitchen tablet',
       webrtcProfile: {
         room: 'studio-room',
         roomSecretRef: 'ref:memory:studio-room',
+        nodeName: 'Kitchen tablet',
       },
     })
     expect(onSaveProfile.mock.calls[0]?.[1]).toEqual({
@@ -514,6 +535,31 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
     expect(actions).toEqual(['saved', 'accepted'])
     expect(peer.connectedProfiles).toHaveLength(0)
+  })
+
+  it('offers QR invite scanning only on mobile configure-only onboarding', async () => {
+    const peer = new FakeBrowserPeer({ status: 'needs-invite' })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <WebThinConnectionPanel
+          peer={peer as unknown as BrowserWebRtcPeerController}
+          mode="http-only"
+          transportKind="native-mobile"
+          nativePlatform="android"
+          configureOnly
+          onSaveProfile={async () => undefined}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain('Scan QR invite')
+    expect(container.textContent).toContain('Open invite file')
+    expect(container.textContent).toContain('Paste mesh invite')
   })
 
   it('fills the invite field from native/browser QR scan and an invite file', async () => {

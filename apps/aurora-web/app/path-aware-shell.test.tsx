@@ -107,11 +107,19 @@ describe('hosted web thin first-run shell', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Connect this Aurora client')
-    expect(container.textContent).toContain('HTTP Gateway endpoint')
-    expect(container.textContent).toContain('Scan QR invite')
+    expect(container.textContent).toContain('Connect to Aurora')
+    expect(container.textContent).toContain('Node name')
+    expect(container.textContent).toContain('Paste mesh invite')
     expect(container.textContent).toContain('Open invite file')
+    expect(container.textContent).not.toContain('Scan QR invite')
+    expect(container.textContent).not.toContain('HTTP Gateway endpoint')
+    expect(container.textContent).not.toContain('WebSocket signaling endpoint')
+    expect(container.textContent).not.toContain('Connection mode')
+    expect(container.textContent).not.toContain('Stable peer ID')
     expect(container.textContent).not.toContain('configured shell content')
+    expect(
+      container.querySelector('[data-onboarding-scroll-viewport="true"]'),
+    ).not.toBeNull()
     expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value)
       .toBe(invite)
     expect(window.location.hash).not.toContain('invite=')

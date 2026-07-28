@@ -9508,6 +9508,7 @@
 * { box-sizing:border-box }
 html,body,#root { min-height:100%;height:100% }
 body { margin:0;overflow:hidden;background:var(--aui-bg);color:var(--aui-ink);font-family:var(--font-sans) }
+.aui-onboarding-scroll-viewport { width:100%;height:100vh;height:100dvh;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch }
 a { color:inherit;text-decoration:none }
 button,input,select,textarea { font:inherit }
 :focus-visible { outline:3px solid color-mix(in srgb,var(--aui-focus) 70%,var(--aui-bg));outline-offset:2px }

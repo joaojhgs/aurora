@@ -76,6 +76,14 @@ Platform playback rules:
 | Desktop thin WebRTC | Shared WebView runtime supports WebRTC-only with runtime-configured WS/WSS signaling and no Gateway origin, or WebRTC-preferred with optional HTTP/HTTPS Gateway plus WS/WSS signaling; invite secrets are promoted into native secure storage when available and browser encrypted storage otherwise. |
 | Profiled local bundles | Sidecar profile selects desktop-local-minimal/local CPU/GPU/full dependency sets. |
 
+First-run thin setup is invite-first on every shared WebView surface. It asks
+only for the local node name and a QR/file/deep-link/pasted mesh invite; the
+invite supplies signaling and pairing material. Connection mode, profile name,
+Gateway/signaling endpoints, and stable peer metadata remain editable from the
+normal connection settings after the shell is unlocked. The full-screen gate
+owns an explicit touch-scroll viewport rather than changing the fixed-shell
+document overflow contract.
+
 Default bundles are unsigned and use the lean `desktop-local-minimal` sidecar profile. Every `*:thin` bundle command is the Python-free desktop-thin lane. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), and `apps/aurora-tauri/README.md`.
 
 ## Platform capability truth matrix

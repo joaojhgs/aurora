@@ -446,6 +446,9 @@ describe('Aurora production shell', () => {
     expect(css).toContain('[data-slot="card-footer"]')
     expect(css).toContain('[data-slot="button"]')
     expect(css).toContain('.aui-mesh')
+    expect(css).toContain(
+      '.aui-onboarding-scroll-viewport { width:100%;height:100vh;height:100dvh;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch }'
+    )
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {

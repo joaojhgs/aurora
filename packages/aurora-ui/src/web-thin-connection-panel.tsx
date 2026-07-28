@@ -85,7 +85,11 @@ export function WebThinConnectionPanel({
     draftProfile,
     typeof window === 'undefined' ? null : window.location.protocol,
   )
-  const connectDisabled = (!configureOnly && mode === 'http-only') || snapshot.status === 'disabled' || !invite || !snapshot.secureContext
+  const connectDisabled = (!configureOnly && mode === 'http-only')
+    || snapshot.status === 'disabled'
+    || !invite
+    || !snapshot.secureContext
+    || (configureOnly && !draftProfile?.nodeName.trim())
   useEffect(() => peer.subscribe(setSnapshot), [peer])
   useEffect(() => {
     if (initialInviteText) setInviteText(initialInviteText)
@@ -215,6 +219,184 @@ export function WebThinConnectionPanel({
       ? crypto.randomUUID()
       : `${Date.now()}`
     setDraftProfile(defaultProfileForSurface(surface, suffix))
+  }
+
+  if (configureOnly) {
+    return (
+      <Card
+        aria-label="Aurora invite onboarding"
+        className="overflow-hidden border-border/80 bg-card/95 shadow-xl shadow-black/10"
+        data-thin-invite-onboarding="true"
+      >
+        <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex items-start gap-3.5">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted text-primary">
+              <Network size={19} aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight">
+                Join an Aurora node
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Your invite supplies signaling and connection details
+                automatically.
+              </p>
+            </div>
+          </div>
+
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="webthin-profile-node-name">
+                Node name
+              </FieldLabel>
+              <Input
+                id="webthin-profile-node-name"
+                value={draftProfile?.nodeName ?? ''}
+                onChange={(event) => setDraftProfile({
+                  ...(draftProfile ?? defaultProfileForSurface(surface)),
+                  nodeName: event.currentTarget.value,
+                })}
+                disabled={profilePending || invitePending}
+                autoComplete="off"
+                placeholder="Kitchen tablet"
+              />
+              <FieldDescription>
+                The name other Aurora devices will see for this client.
+              </FieldDescription>
+            </Field>
+
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5">
+              <p className="text-sm font-medium">Add your invite</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Use the invite created by the Aurora node you want to connect
+                to.
+              </p>
+              <input
+                ref={inviteFileRef}
+                type="file"
+                accept=".aurora,.txt,.json,text/plain,application/json,application/vnd.aurora.context+json"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(event) => void openInviteFile(event)}
+              />
+              <div
+                className={`mt-3 grid gap-2 ${surface.isMobile ? 'grid-cols-2' : 'grid-cols-1'}`}
+              >
+                {surface.isMobile ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-auto min-h-10"
+                    onClick={() => void scanQr()}
+                    disabled={invitePending}
+                  >
+                    <QrCode size={16} aria-hidden /> Scan QR invite
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-auto min-h-10"
+                  onClick={() => inviteFileRef.current?.click()}
+                  disabled={invitePending}
+                >
+                  <FileUp size={16} aria-hidden /> Open invite file
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3" aria-hidden>
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                or
+              </span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
+            <Field>
+              <FieldLabel htmlFor="webthin-invite">
+                Paste mesh invite
+              </FieldLabel>
+              <Textarea
+                id="webthin-invite"
+                value={inviteText}
+                onChange={(event) => setInviteText(event.currentTarget.value)}
+                placeholder="aurora://mesh/invite?…"
+                rows={3}
+                spellCheck={false}
+                className="min-h-24 resize-y font-mono text-xs"
+              />
+            </Field>
+          </FieldGroup>
+
+          {summary ? (
+            <div
+              className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
+              aria-label="Invite preview"
+            >
+              <CheckCircle2
+                className="shrink-0 text-primary"
+                size={18}
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">
+                  Invite from {summary.nodeName}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {summary.room} · {summary.brokerCount} signaling broker
+                  {summary.brokerCount === 1 ? '' : 's'}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {!snapshot.secureContext ? (
+            <Alert variant="destructive">
+              <AlertTriangle size={16} aria-hidden />
+              <AlertTitle>Secure context required</AlertTitle>
+              <AlertDescription>
+                Use HTTPS, localhost, or a trusted native WebView to join with
+                WebRTC.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {snapshot.status === 'disabled' ? (
+            <Alert>
+              <WifiOff size={16} aria-hidden />
+              <AlertTitle>WebRTC is unavailable</AlertTitle>
+              <AlertDescription>
+                {snapshot.diagnostic ?? 'This client cannot import a mesh invite right now.'}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {snapshot.persistenceFallbackReason ? (
+            <p role="status" className="text-xs leading-relaxed text-muted-foreground">
+              Secure persistent storage is unavailable; this connection will
+              remain in memory only. {snapshot.persistenceFallbackReason}
+            </p>
+          ) : null}
+          {error ?? snapshot.diagnostic ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error ?? snapshot.diagnostic}
+            </p>
+          ) : null}
+
+          <Button
+            type="button"
+            className="h-auto min-h-11 w-full"
+            disabled={connectDisabled || invitePending}
+            onClick={() => void connectInvite()}
+          >
+            {invitePending ? 'Saving…' : 'Save invite and continue'}
+          </Button>
+          <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+            Connection details come from the invite. You can edit advanced
+            transport settings later.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

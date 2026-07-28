@@ -134,7 +134,9 @@ Every supported client profile must preserve these rules:
 - Keep Gateway/signaling endpoint configuration runtime-editable and
   persistent; thin artifacts must never compile an operator endpoint.
 - Keep first-run onboarding ahead of the normal shell until a valid profile is
-  saved or imported by invite/QR/file/deep link.
+  saved from a node name plus invite/QR/file/deep link. Keep manual connection
+  mode, endpoint, profile-name, and stable-peer controls in post-onboarding
+  settings rather than the first-run gate.
 - Bind Tauri HTTP authentication to the live `AuthSession`, not a static build token.
 - Keep Tauri `connect-src` general enough for runtime HTTP/HTTPS/WS/WSS
   selection while preserving URL validation, secret-query rejection, native

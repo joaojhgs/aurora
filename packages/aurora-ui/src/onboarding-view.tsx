@@ -235,17 +235,35 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
 
   if (setupRequired && thinConnectionPanel) {
     return (
-      <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 pt-6 pb-10 sm:px-6" aria-labelledby="onboarding-title">
-        <div className="text-center">
-          <h1 id="onboarding-title" className="text-xl font-semibold tracking-tight">
-            Connect this Aurora client
-          </h1>
-          <p className="mt-1.5 text-[13px] text-muted-foreground">
-            Choose HTTP, WebRTC, or WebRTC with HTTP fallback. This client stores the selected runtime profile on this device; endpoints are not compiled into the app.
-          </p>
-        </div>
-        <div data-step="thin-connection">{thinConnectionPanel}</div>
-      </section>
+      <div
+        className="aui-onboarding-scroll-viewport"
+        data-onboarding-scroll-viewport="true"
+      >
+        <section
+          className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-center gap-5 px-4 py-8 sm:px-6 sm:py-12"
+          aria-labelledby="onboarding-title"
+        >
+          <div className="text-center">
+            <div className="mx-auto mb-3 grid size-10 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <KeyRound size={19} aria-hidden />
+            </div>
+            <p className="text-[11px] font-semibold tracking-[0.12em] text-primary uppercase">
+              First-run setup
+            </p>
+            <h1
+              id="onboarding-title"
+              className="mt-1.5 text-2xl font-semibold tracking-tight"
+            >
+              Connect to Aurora
+            </h1>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              Name this device, then use the invite from the Aurora node you
+              want to join.
+            </p>
+          </div>
+          <div data-step="thin-connection">{thinConnectionPanel}</div>
+        </section>
+      </div>
     )
   }
 

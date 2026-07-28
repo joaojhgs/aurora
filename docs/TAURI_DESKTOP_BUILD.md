@@ -65,7 +65,7 @@ pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
 pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
 ```
 
-The desktop-thin command (and its `build:bundle:thin` alias) uses Tauri's `--config src-tauri/tauri.thin.conf.json` flavor overlay. `prepare:bundle:desktop-thin` compiles no Gateway or signaling URL, generates a runtime-configurable `connect-src 'self' http: https: ws: wss:` policy, replaces the base capability list with `aurora-thin`, and omits `bundle.externalBin` plus `bundle.resources`. At runtime, onboarding/profile storage supplies the selected HTTP Gateway and/or WebRTC signaling profile.
+The desktop-thin command (and its `build:bundle:thin` alias) uses Tauri's `--config src-tauri/tauri.thin.conf.json` flavor overlay. `prepare:bundle:desktop-thin` compiles no Gateway or signaling URL, generates a runtime-configurable `connect-src 'self' http: https: ws: wss:` policy, replaces the base capability list with `aurora-thin`, and omits `bundle.externalBin` plus `bundle.resources`. At runtime, invite-first onboarding supplies the local node name and signaling/pairing material; normal connection settings edit the selected HTTP Gateway and/or WebRTC signaling profile afterward.
 
 Local assistant variants are explicit:
 

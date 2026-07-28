@@ -1232,12 +1232,12 @@ describe("Aurora Tauri runtime wrapper", () => {
   });
 
   it.each([
-    ["desktop thin", "desktop-thin", "desktop"],
-    ["Android thin", "mobile-native", "android"],
-    ["iOS thin", "mobile-native", "ios"],
+    ["desktop thin", "desktop-thin", "desktop", false],
+    ["Android thin", "mobile-native", "android", true],
+    ["iOS thin", "mobile-native", "ios", true],
   ] as const)(
     "gates an unconfigured %s runtime on first-run connection onboarding",
-    (_label, mode, nativePlatform) => {
+    (_label, mode, nativePlatform, showsQrScanner) => {
       const transport = new RecordingMockAuroraTransport();
       const runtime = unconfiguredThinRuntime(
         mode,
@@ -1254,11 +1254,16 @@ describe("Aurora Tauri runtime wrapper", () => {
         />,
       );
 
-      expect(markup).toContain("Connect this Aurora client");
-      expect(markup).toContain("HTTP Gateway endpoint");
-      expect(markup).toContain("WebSocket signaling endpoint");
-      expect(markup).toContain("Scan QR invite");
+      expect(markup).toContain("Connect to Aurora");
+      expect(markup).toContain("Node name");
+      expect(markup).toContain("Paste mesh invite");
       expect(markup).toContain("Open invite file");
+      expect(markup.includes("Scan QR invite")).toBe(showsQrScanner);
+      expect(markup).not.toContain("HTTP Gateway endpoint");
+      expect(markup).not.toContain("WebSocket signaling endpoint");
+      expect(markup).not.toContain("Connection mode");
+      expect(markup).not.toContain("Stable peer ID");
+      expect(markup).toContain('data-onboarding-scroll-viewport="true"');
       expect(markup).not.toContain('aria-label="Primary navigation"');
       expect(markup).not.toContain('id="content"');
       expect(transport.requests).toHaveLength(0);

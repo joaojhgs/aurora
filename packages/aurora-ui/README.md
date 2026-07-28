@@ -27,6 +27,14 @@ stores. UI components receive typed controller state and actions and never
 hold raw MQTT clients, peer connections, room passwords, long-lived peer
 tokens, SDP, or ICE credentials.
 
+Thin first-run onboarding is intentionally invite-first. It asks only for the
+local node name and an Aurora mesh invite supplied by QR on mobile, file import,
+deep link, or paste. The invite fills signaling and pairing material
+automatically; profile names, modes, Gateway/signaling endpoints, and stable
+peer identifiers remain available from the normal connection settings after
+onboarding. Full-screen onboarding owns its own touch-scroll viewport because
+the production application shell intentionally locks document scrolling.
+
 `BrowserThinRuntimeConfig.rolloutFlags` provides reversible gates for the
 WebRTC entry point, scoped subscriptions, fragmentation/backpressure, and
 optional application-layer E2EE. Defaults preserve the current protocol.
