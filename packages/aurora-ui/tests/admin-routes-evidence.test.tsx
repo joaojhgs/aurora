@@ -50,20 +50,23 @@ describe('admin route checkpoint status', () => {
     expect(model.state).toBe('denied')
     expect(model.fields).toEqual([])
     expect(markup).toContain('Configuration editor is unavailable')
-    expect(markup).toContain('missing:Config.manage')
+    expect(markup).toContain('Permission is needed')
+    expect(markup).not.toContain('missing:Config.manage')
     expect(markup).toContain('disabled=""')
   })
 
   it('renders contract detail status from the SDK registry and capability catalog', async () => {
     const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminContractsView snapshot={snapshot} />)
+    const copy = renderedCopy(markup)
 
     expect(snapshot.loadState).toBe('ready')
     expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Auth.AuditLog')
-    expect(markup).toContain('Contracts')
-    expect(markup).toContain('Auth.AuditLog')
-    expect(markup).toContain('Backend')
-    expect(markup).toContain('Permissions')
+    expect(copy).toContain('Service actions')
+    expect(copy).toContain('Access Audit Log')
+    expect(copy).not.toContain('Auth.AuditLog')
+    expect(copy).not.toContain('Backend')
+    expect(copy).toContain('Permissions')
   })
 
   it('surfaces config validation errors as a degraded editor state', async () => {
@@ -83,7 +86,38 @@ describe('admin route checkpoint status', () => {
     expect(markup).toContain('services.gateway.api.port must be between 1 and 65535')
     expect(markup).toContain('aria-invalid="true"')
   })
+
+  it('maps config validation request failures before rendering them', async () => {
+    const transport = new MockAuroraTransport()
+    transport.fail('Config.Validate', 'validation', 'Config.Validate schema backend exploded')
+    const client = new Aurora({ transport })
+    const snapshot = await buildShellSnapshot(client)
+    const configRoute = { ...route(snapshot.routes, 'config'), disabled: false, state: 'available-local' as const }
+    const model = await buildConfigEditorModel(client, configRoute)
+    const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={configRoute} initialModel={model} />)
+
+    expect(model.state).toBe('degraded')
+    expect(markup).toContain('Validation errors')
+    expect(markup).toContain('Could not connect to this Aurora device. Try again.')
+    expect(markup).not.toContain('Config.Validate')
+    expect(markup).not.toContain('schema backend exploded')
+  })
 })
+
+function renderedCopy(markup: string): string {
+  return markup
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&apos;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 function route(routes: RouteAvailability[], id: string): RouteAvailability {
   const match = routes.find((candidate) => candidate.item.id === id)

@@ -588,6 +588,7 @@ export interface AdminConfirmDialogProps {
   title: string
   description: string
   methodId?: string | undefined
+  actionLabel?: string | undefined
   severity?: 'standard' | 'destructive' | undefined
   affected?: string[] | undefined
   requireReason?: boolean | undefined
@@ -612,6 +613,7 @@ export function AdminConfirmDialog({
   title,
   description,
   methodId,
+  actionLabel,
   severity = 'standard',
   affected,
   requireReason,
@@ -653,7 +655,7 @@ export function AdminConfirmDialog({
         ) : null}
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          {methodId ? <p className="font-mono text-xs text-muted-foreground">{methodId}</p> : null}
+          {methodId ? <p className="text-xs text-muted-foreground">Action: {actionLabel ?? 'Protected admin action'}</p> : null}
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         {affected && affected.length > 0 ? (

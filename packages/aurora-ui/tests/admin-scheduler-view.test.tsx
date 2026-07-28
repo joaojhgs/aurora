@@ -177,6 +177,25 @@ describe('AdminSchedulerView', () => {
     )
     expect(markup).toContain('Permission is needed')
     expect(markup).toContain('Create schedule')
+    expect(markup).not.toMatch(/Scheduler\.[A-Za-z]+/)
+
+    const missingMethodClient = new Aurora({ transport: schedulerTransport([], registryWithoutSchedulerMutations()) })
+    const missingMethodSnapshot = await buildAdminSchedulerSnapshot(missingMethodClient, schedulerRoute())
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AdminSchedulerView client={missingMethodClient} route={schedulerRoute()} initialSnapshot={missingMethodSnapshot} />)
+    })
+
+    const disabledTitles = Array.from(container.querySelectorAll('button[disabled][title]'))
+      .map((button) => button.getAttribute('title') ?? '')
+      .join(' ')
+    expect(disabledTitles).toContain('Cancel is not ready for this job.')
+    expect(disabledTitles).toContain('Pause is not ready for this job.')
+    expect(disabledTitles).not.toMatch(/Scheduler\.[A-Za-z]+/)
   })
 })
 
@@ -295,6 +314,24 @@ function registryWithoutSchedulerManage(): GetRegistryResponse {
           methods: module.methods.map((method) => method.bus_topic?.startsWith('Scheduler.') === true && method.method_type === 'manage'
             ? { ...method, required_perms: ['Scheduler.use'] }
             : method)
+        })
+  }
+}
+
+function registryWithoutSchedulerMutations(): GetRegistryResponse {
+  const registry = cloneFixture(gatewayRegistryFixture)
+  const omittedMethods = new Set<string>([
+    SCHEDULER_METHODS.cancel,
+    SCHEDULER_METHODS.pause,
+    SCHEDULER_METHODS.resume
+  ])
+  return {
+    ...registry,
+    modules: registry.modules.map((module) => module.module !== 'Scheduler'
+      ? module
+      : {
+          ...module,
+          methods: module.methods.filter((method) => !omittedMethods.has(method.bus_topic ?? ''))
         })
   }
 }

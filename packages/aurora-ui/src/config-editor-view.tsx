@@ -22,6 +22,7 @@ import { Badge } from '#components/ui/badge'
 import { Input } from '#components/ui/input'
 import { Textarea } from '#components/ui/textarea'
 import { safeErrorCopy } from './product-copy'
+import { adminRouteCopy } from './admin-product-copy'
 
 export interface ConfigEditorViewProps {
   client: AuroraClient
@@ -48,7 +49,7 @@ export async function buildConfigEditorModel(client: AuroraClient, route?: Route
       validationErrors: [],
       secretsRedacted: true,
       evidence: route.providerLabel,
-      error: presentableSignal(route.blockers.join(', ') || route.explanation)
+      error: adminRouteCopy(route)
     }
   }
 
@@ -60,7 +61,7 @@ export async function buildConfigEditorModel(client: AuroraClient, route?: Route
     ])
     if (!schema.ok) return errorModel(schema.error, 'configuration details')
     if (!history.ok) return errorModel(history.error, 'version history')
-    const validationErrors = validation.ok ? validation.data.errors : [validation.error.message]
+    const validationErrors = validation.ok ? validation.data.errors : [safeErrorCopy(validation.error).title]
     return {
       state: schema.data.fields.length === 0 ? 'empty' : validationErrors.length > 0 ? 'degraded' : 'ready',
       fields: schema.data.fields,
@@ -379,6 +380,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
               : `Roll back ${rollbackTarget?.key_path ?? 'this field'} to a prior version.`
           }
           methodId="Config.Set"
+          actionLabel={dialogKind === 'apply' ? 'Apply settings changes' : 'Roll back setting'}
           affected={dialogKind === 'apply' ? changes.map((change) => change.key_path) : rollbackTarget ? [rollbackTarget.key_path] : []}
           requireReason
           reasonValue={dialogKind === 'apply' ? reason : rollbackReason}

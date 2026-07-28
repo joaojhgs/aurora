@@ -207,14 +207,14 @@ export function ModelsView({
           key_path: 'services.orchestrator.llm.provider',
           value: provider.selectConfigValue
         },
-        reason: reason.trim() || `Select model provider ${provider.name} from Aurora Models runtime`,
+        reason: reason.trim() || `Select model source ${provider.name}`,
         reauthConfirmed
       })
-      if (!result.data.success) throw new Error(result.data.error ?? 'Config.Set did not accept the provider selection')
+      if (!result.data.success) throw new Error(result.data.error ?? 'Aurora did not accept the model source selection')
       const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
       setCatalog(nextCatalog)
       setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
-      setSelectionMessage(`Provider selection applied through Config.Set AdminAction. Audit receipt: ${result.confirmation.audit_receipt}`)
+      setSelectionMessage(`Model source selection applied. Audit receipt: ${result.confirmation.audit_receipt}`)
       setPendingProvider(null)
       setReason('')
       setReauthConfirmed(false)
@@ -227,7 +227,7 @@ export function ModelsView({
 
   function requestProviderSelection(provider: ModelProviderViewModel) {
     if (!provider.canSelect || provider.selected || selectingProviderId) return
-    setReason(`Select model provider ${provider.name} from Aurora Models runtime`)
+    setReason(`Select model source ${provider.name}`)
     setReauthConfirmed(false)
     setPendingProvider(provider)
   }
@@ -290,10 +290,10 @@ export function ModelsView({
         }
         const result = await client.config.applyChange({
           change: { key_path: field.key_path, value: parseConfigureFieldValue(raw, field.type) },
-          reason: `Configure ${provider.name} from Aurora Models runtime`,
+          reason: `Configure model source ${provider.name}`,
           reauthConfirmed: true
         })
-        if (!result.data.success) throw new Error(result.data.error ?? `Config.Set did not accept ${field.key_path}`)
+        if (!result.data.success) throw new Error(result.data.error ?? `Aurora did not accept ${field.key_path}`)
         receipts.push(result.confirmation.audit_receipt)
       }
       const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
@@ -301,7 +301,7 @@ export function ModelsView({
       setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
       setSelectionMessage(
         receipts.length > 0
-          ? `Provider configuration applied through Config.Set AdminAction. Audit receipt: ${receipts.join(', ')}`
+          ? `Provider configuration applied. Audit receipt: ${receipts.join(', ')}`
           : 'No configuration changes were made.'
       )
       closeConfigureProvider()
@@ -321,12 +321,12 @@ export function ModelsView({
         description="Local, cloud and mesh-peer providers, and which one handles requests by default."
       />
 
-      {model.loadState === 'loading' ? <ModelNotice icon="loading" message="Loading model runtime catalog from Aurora." /> : null}
+      {model.loadState === 'loading' ? <ModelNotice icon="loading" message="Loading model sources from Aurora." /> : null}
       {model.loadState === 'error' ? (
-        <ModelNotice icon="error" message={model.error ?? 'Model runtime catalog could not be loaded.'} role="alert" />
+        <ModelNotice icon="error" message={model.error ?? 'Model sources could not be loaded.'} role="alert" />
       ) : null}
       {model.loadState === 'empty' ? (
-        <ModelNotice icon="empty" message="No model runtime providers were returned by the backend catalog." />
+        <ModelNotice icon="empty" message="No model sources were returned by Aurora." />
       ) : null}
       {selectionMessage ? (
         <p
@@ -403,8 +403,9 @@ export function ModelsView({
         <AdminConfirmDialog
           open
           title={`Select ${pendingProvider.name}`}
-          description={`Apply ${pendingProvider.selectConfigValue ?? 'provider'} through Config.Set AdminAction.`}
+          description={`Apply ${pendingProvider.selectConfigValue ?? 'provider'} as the selected model source.`}
           methodId="Config.Set"
+          actionLabel="Select model source"
           severity="standard"
           affected={[pendingProvider.id]}
           requireReason
@@ -419,12 +420,12 @@ export function ModelsView({
           }}
           busy={selectingProviderId === pendingProvider.id}
           extraValid={reauthConfirmed}
-          extraInvalidReason="Confirm AdminAction reauthentication before selecting a model provider."
+          extraInvalidReason="Confirm recent admin unlock before selecting a model source."
         >
           <Checkbox
             checked={reauthConfirmed}
             onChange={setReauthConfirmed}
-            label="I confirm recent AdminAction reauthentication for model provider changes."
+            label="I confirm recent admin unlock for model source changes."
           />
         </AdminConfirmDialog>
       ) : null}
@@ -1287,7 +1288,7 @@ function modelCategoryRows(
       value: `${configured.length} configured`,
       detail: configured.length > 0
         ? configured.map((provider) => `${provider.name} (${provider.providerType})`).join(', ')
-        : 'No providers were returned by the model runtime catalog.',
+        : 'No model sources were returned by Aurora.',
       state: configured.length > 0 ? 'available-local' : 'unsupported'
     },
     {
@@ -1305,7 +1306,7 @@ function modelCategoryRows(
       value: `${activeImportDownload.length} active operations`,
       detail: activeImportDownload.length > 0
         ? activeImportDownload.map((provider) => `${provider.name}: ${provider.operationStatus}`).join(', ')
-        : 'No import/download operation is active; AdminAction import and download contracts remain disabled.',
+        : 'No import or download is active.',
       state: activeImportDownload.length > 0 ? 'degraded' : 'pending'
     },
     {
@@ -1369,7 +1370,7 @@ function selectReason(
   if (!['available-local', 'degraded'].includes(availability)) return `Local provider is ${availability}; capability catalog must report executable local status before selection.`
   if (candidate && !candidate.selectable) return 'Capability catalog marks this local provider as not selectable.'
   if (candidate && candidate.providerKind !== 'local') return 'Capability catalog did not report this provider as a local executable provider.'
-  return `Selectable local provider; choosing it writes ${configValue} to services.orchestrator.llm.provider through Config.Set AdminAction.`
+  return `Selectable local provider; choosing it sets ${configValue} as the active model source after admin approval.`
 }
 
 function mobileLocalLight(

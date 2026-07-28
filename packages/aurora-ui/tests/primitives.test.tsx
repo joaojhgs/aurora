@@ -195,6 +195,23 @@ describe('foundation primitives', () => {
     expect(confirmed).toBe(1)
   })
 
+  it('AdminConfirmDialog shows a product-facing action label instead of the raw method id', () => {
+    mount(
+      <AdminConfirmDialog
+        open
+        title="Apply settings"
+        description="Apply the staged setting changes."
+        methodId="Config.Set"
+        actionLabel="Apply settings changes"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />
+    )
+
+    expect(document.body.textContent).toContain('Action: Apply settings changes')
+    expect(document.body.textContent).not.toContain('Config.Set')
+  })
+
   it('ToastProvider renders a polite live region', () => {
     const markup = renderToStaticMarkup(
       <ToastProvider>

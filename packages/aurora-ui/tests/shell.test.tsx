@@ -570,7 +570,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         label: 'Downloadable/importable models',
         value: '0 active operations',
-        detail: expect.stringContaining('AdminAction import and download contracts remain disabled')
+        detail: expect.stringContaining('No import or download is active')
       }),
       expect.objectContaining({
         label: 'Benchmarkable providers',
@@ -639,7 +639,7 @@ describe('Aurora production shell', () => {
     expect(nativeModel.mobileLocalLightReason).toContain('android-native-local-light-adapter')
   })
 
-  it('marks an unselected executable local model provider selectable through Config.Set AdminAction status', () => {
+  it('marks an unselected executable local model provider selectable through admin approval status', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
@@ -666,7 +666,7 @@ describe('Aurora production shell', () => {
         selected: false,
         canSelect: true,
         selectConfigValue: 'llama_cpp',
-        selectReason: expect.stringContaining('Config.Set AdminAction')
+        selectReason: expect.stringContaining('admin approval')
       })
     )
     expect(model.providers.find((provider) => provider.id === 'mesh:studio-gpu:Orchestrator')).toEqual(

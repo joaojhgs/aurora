@@ -352,15 +352,15 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
   },
   {
     id: 'models-runtime',
-    label: 'Models and runtime catalog',
+    label: 'Models and performance',
     navItemIds: ['models'],
     routeOracles: [routeOracle('models', ['Models and runtime'], ['Provider route policy'])],
     mockReferenceFiles: ['components/aurora/models/models-view.tsx'],
-    mockUxAnchors: ['Models & Runtime', 'Model runtime catalog', 'External providers remain policy-gated by Aurora.', 'Usage & Benchmarks'],
+    mockUxAnchors: ['Models & Runtime', 'Local, cloud and mesh-peer providers', 'External providers remain policy-gated by Aurora.', 'Usage & Benchmarks'],
     componentFiles: ['models-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [
-      source('sdk-method', 'model runtime catalog and operation status', ['Orchestrator.GetModelCatalog', 'Orchestrator.GetModelRuntime', 'Orchestrator.GetModelOperation']),
+      source('sdk-method', 'model source list and operation status', ['Orchestrator.GetModelCatalog', 'Orchestrator.GetModelRuntime', 'Orchestrator.GetModelOperation']),
       source('admin-action', 'model import, download, benchmark, and selection mutations', ['Orchestrator.ImportModel', 'Orchestrator.DownloadModel', 'Orchestrator.BenchmarkModel', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm']),
       source('capability-graph', 'provider availability and route privacy state', ['Gateway.GetCapabilityCatalog'])
     ],

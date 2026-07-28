@@ -622,7 +622,7 @@ function editOperationControl(methods: MethodDescriptor[]): SchedulerOperationCo
     state: baseSupport.state,
     requiresAdminAction: true,
     reason: method
-      ? `${methodId} is listed, but editing is not ready in this version.`
+      ? 'Editing is listed, but it is not ready in this version.'
       : 'Editing is not ready in this version.'
   }
 }
@@ -640,14 +640,14 @@ function operationControl(
   const supportAvailable = Boolean(support && !support.disabled)
   const available = methodSupported && supportAvailable
   const reason = !method
-    ? `${methodId} is not ready.`
+    ? schedulerActionUnavailableReason(action)
     : !method.availableOverHttp
       ? 'This action is only available inside Aurora.'
       : !hasSchedulerManagePermission(method)
         ? 'Permission is needed to use this feature.'
         : !methodSupported
         ? 'This action is not ready for admin changes.'
-        : support?.reason ?? (available ? 'Available after admin confirmation.' : `${action} is not available for this job.`)
+        : adminReasonText(support?.reason, available ? 'Available after admin confirmation.' : schedulerActionUnavailableReason(action))
   return {
     action,
     methodId,
@@ -656,6 +656,12 @@ function operationControl(
     requiresAdminAction: true,
     reason
   }
+}
+
+function schedulerActionUnavailableReason(action: 'cancel' | 'pause' | 'resume'): string {
+  if (action === 'cancel') return 'Cancel is not ready for this job.'
+  if (action === 'pause') return 'Pause is not ready for this job.'
+  return 'Resume is not ready for this job.'
 }
 
 function createControl(

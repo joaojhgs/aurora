@@ -10,7 +10,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '#components/ui
 import { cn } from '#lib/utils'
 
 /**
- * Shared route-surface chrome (page header, loading/empty/error banners, capability
+ * Shared page chrome (page header, loading/empty/error banners, capability
  * diagnostics drawer) used across ~12 screens. Composed from real shadcn/ui primitives
  * instead of the old `.aui-*` class system -- same exported names/props as before.
  */
@@ -72,7 +72,7 @@ export interface EmptyStateProps {
   actionLabel?: string | null | undefined
 }
 
-export function PageHeader({ title, description, eyebrow = 'Route surface', id, badges, actions, className, badgesLabel }: PageHeaderProps) {
+export function PageHeader({ title, description, eyebrow = 'Page', id, badges, actions, className, badgesLabel }: PageHeaderProps) {
   const titleId = id ?? pageHeaderId(title)
   return (
     <header className={cn('flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4', className)} aria-labelledby={titleId}>
@@ -130,16 +130,16 @@ export function RouteStateNotice({ title, state, message, evidence, actionLabel 
 
 export function RouteBadge({ route, compact = false }: RouteBadgeProps) {
   return (
-    <span className={cn('inline-flex items-center gap-1.5', compact && 'gap-1')} aria-label={`${route.item.label} route badge`}>
+    <span className={cn('inline-flex items-center gap-1.5', compact && 'gap-1')} aria-label={`${route.item.label} status badge`}>
       <StatusBadge state={route.state} />
       <PrivacyBadge privacy={route.item.privacyClass} />
     </span>
   )
 }
 
-export function AdminActionButton({ label = 'AdminAction', required, disabledReason, onClick }: AdminActionButtonProps) {
+export function AdminActionButton({ label = 'Admin approval', required, disabledReason, onClick }: AdminActionButtonProps) {
   const disabled = !required || !onClick
-  const reason = disabledReason ?? (required ? 'AdminAction confirmation must be requested through Aurora Auth.' : 'AdminAction is not required for this route.')
+  const reason = disabledReason ?? (required ? 'Admin approval must be requested through Aurora Access.' : 'Admin approval is not required for this page.')
   return (
     <Button
       type="button"
@@ -156,7 +156,7 @@ export function AdminActionButton({ label = 'AdminAction', required, disabledRea
   )
 }
 
-export function CapabilityDrawer({ route, title = 'Route details' }: CapabilityDrawerProps) {
+export function CapabilityDrawer({ route, title = 'Page details' }: CapabilityDrawerProps) {
   return (
     <details className="group rounded-xl border border-border">
       <summary className="cursor-pointer list-none px-3.5 py-2.5 text-sm font-medium select-none">{title}</summary>
@@ -180,10 +180,10 @@ export function CapabilityDrawer({ route, title = 'Route details' }: CapabilityD
           </div>
         </section>
         <section aria-label={`${route.item.label} capability blockers`}>
-          <h4 className="mb-1.5 text-xs font-semibold text-muted-foreground uppercase">Routing</h4>
+          <h4 className="mb-1.5 text-xs font-semibold text-muted-foreground uppercase">Readiness</h4>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <div className="flex justify-between gap-2">
-              <dt className="text-muted-foreground">Routeable</dt>
+              <dt className="text-muted-foreground">Ready</dt>
               <dd>{route.routeable ? 'yes' : 'no'}</dd>
             </div>
             <div className="flex justify-between gap-2">
@@ -200,7 +200,7 @@ export function CapabilityDrawer({ route, title = 'Route details' }: CapabilityD
             </div>
           </dl>
         </section>
-        <section aria-label={`${route.item.label} provider candidates`}>
+        <section aria-label={`${route.item.label} available options`}>
           <h4 className="mb-1.5 text-xs font-semibold text-muted-foreground uppercase">Options</h4>
           {route.candidateProviders.length > 0 ? (
             <ul className="flex flex-col gap-1.5">
@@ -213,7 +213,7 @@ export function CapabilityDrawer({ route, title = 'Route details' }: CapabilityD
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">No alternate provider is available.</p>
+            <p className="text-sm text-muted-foreground">No other option is available.</p>
           )}
         </section>
       </div>
@@ -221,7 +221,7 @@ export function CapabilityDrawer({ route, title = 'Route details' }: CapabilityD
   )
 }
 
-export function SurfaceSkeleton({ title = 'Loading route', lines = 3 }: SurfaceSkeletonProps) {
+export function SurfaceSkeleton({ title = 'Loading page', lines = 3 }: SurfaceSkeletonProps) {
   return (
     <section className="flex flex-col gap-2" aria-label={title} aria-live="polite">
       <EvidenceBadge label="loading" />
@@ -279,11 +279,11 @@ function stateSurfaceNoticeState(state: StateSurfaceProps['state']): RouteNotice
 }
 
 function stateSurfaceMessage(state: StateSurfaceProps['state'], fallback: string): string {
-  if (state === 'loading') return 'Loading route.'
+  if (state === 'loading') return 'Loading page.'
   if (state === 'error') return 'Aurora is unavailable.'
-  if (state === 'offline') return 'This route is offline.'
-  if (state === 'denied') return 'Permission is required for this route.'
-  if (state === 'privacy-blocked') return 'Privacy or native permission is required for this route.'
+  if (state === 'offline') return 'This page is offline.'
+  if (state === 'denied') return 'Permission is required for this page.'
+  if (state === 'privacy-blocked') return 'Privacy or native permission is required for this page.'
   return fallback
 }
 
