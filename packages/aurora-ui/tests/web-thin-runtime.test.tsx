@@ -634,6 +634,70 @@ describe('browser WebRTC thin-shell runtime', () => {
     )
   })
 
+  it('keeps hostile HTTP errors safe without an injected client factory', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createDemoClient,
+      mode: 'http-only',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: hostileGatewayFetch,
+    })
+
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(
+      'Could not connect to this Aurora device. Try again from Connection settings.',
+    )
+    await expect(runtime.client.capabilities.listCatalog()).rejects.not.toThrow(
+      /WebRTC|runtime|transport|provider|manifest|protocol|token=secret/i,
+    )
+    await runtime.close()
+  })
+
+  it('keeps hostile WebRTC setup errors safe without an injected client factory', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      signalingFactory: () => {
+        throw new Error('WebRTC runtime transport provider manifest protocol token=secret')
+      },
+      scryptDeriver: async () => new Uint8Array(32).fill(7),
+      randomId: () => 'local-hostile-default',
+    })
+
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(
+      'Could not connect to this Aurora device. Try again from Connection settings.',
+    )
+    await expect(runtime.client.capabilities.listCatalog()).rejects.not.toThrow(
+      /WebRTC|runtime|transport|provider|manifest|protocol|token=secret/i,
+    )
+    await runtime.close()
+  })
+
+  it('keeps hostile rollout HTTP fallback errors safe without an injected client factory', async () => {
+    const runtime = createBrowserWebThinRuntime({
+      createDemoClient,
+      mode: 'webrtc-preferred',
+      inviteText: inviteText(),
+      gatewayUrl: 'https://aurora.example',
+      rolloutFlags: { webrtc_thin_client: false },
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      fetchImpl: hostileGatewayFetch,
+    })
+
+    expect(runtime.client.transport.kind).toBe('http')
+    expect(runtime.peer.snapshot()).toMatchObject({
+      status: 'disabled',
+      hasHttpFallback: true,
+    })
+    await expect(runtime.client.capabilities.listCatalog()).rejects.toThrow(
+      'Could not connect to this Aurora device. Try again from Connection settings.',
+    )
+    await expect(runtime.client.capabilities.listCatalog()).rejects.not.toThrow(
+      /WebRTC|runtime|transport|provider|manifest|protocol|token=secret/i,
+    )
+    await runtime.close()
+  })
+
   it('maps async stream setup failures through fixed copy while preserving metadata', async () => {
     let safeTransport: (AuroraTransport & {
       source?: AuroraTransport
@@ -1333,6 +1397,18 @@ function hostileAuroraError(correlationId = 'corr-hostile'): AuroraError {
     },
     message: 'WebRTC runtime transport provider manifest protocol token=secret',
   })
+}
+
+async function hostileGatewayFetch(): Promise<Response> {
+  return new Response(
+    JSON.stringify({
+      message: 'WebRTC runtime transport provider manifest protocol token=secret',
+      detail: {
+        reason: 'WebRTC runtime transport provider manifest protocol token=secret',
+      },
+    }),
+    { status: 502 },
+  )
 }
 
 function streamRequest(): AuroraStreamRequest {

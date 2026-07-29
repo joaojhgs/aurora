@@ -95,6 +95,7 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   fallbackPeerIds?: string[] | undefined
   credentialStore?: InternalPeerCredentialStore | undefined
   initialCredentials?: MeshPeerCredentialRecord[] | undefined
+  mapClientTransport?: (transport: AuroraTransport) => AuroraTransport
   createClient?: (transport: AuroraTransport) => TClient
   createPeerConnection?: PeerSessionPeerConnectionFactory | undefined
   signalingFactory?: (options: MqttSignalingOptions) => MqttWebSocketSignalingClient
@@ -117,6 +118,15 @@ function clientOptions(transport: AuroraTransport, defaultTimeoutMs?: number): {
   return out
 }
 
+function createRuntimeClient<TClient>(
+  options: Pick<BrowserWebRtcRuntimeOptions<TClient>, 'createClient' | 'defaultTimeoutMs' | 'mapClientTransport'>,
+  transport: AuroraTransport
+): TClient {
+  const clientTransport = options.mapClientTransport ? options.mapClientTransport(transport) : transport
+  if (options.createClient) return options.createClient(clientTransport)
+  return new AuroraClient(clientOptions(clientTransport, options.defaultTimeoutMs)) as TClient
+}
+
 export interface BrowserWebRtcRuntime<TClient = AuroraClient> extends WebRtcAuroraRuntime<TClient> {
   readonly transport: AuroraTransport
   readonly httpTransport?: HttpGatewayTransport | undefined
@@ -130,7 +140,7 @@ export function createBrowserWebRtcAuroraRuntime<TClient = AuroraClient>(
   if (options.mode === 'http-only') {
     if (!httpTransport) throw new AuroraError({ code: 'validation', message: 'http-only mode requires an HTTP endpoint' })
     const peer = new WebRtcPeerConnectionController(options.mode, undefined, undefined, options.visibilityDocument, options as BrowserWebRtcRuntimeOptions<unknown>)
-    const client = (options.createClient ?? ((transport: AuroraTransport) => new AuroraClient(clientOptions(transport, options.defaultTimeoutMs)) as TClient))(httpTransport)
+    const client = createRuntimeClient(options, httpTransport)
     return {
       client,
       peer,
@@ -148,7 +158,7 @@ export function createBrowserWebRtcAuroraRuntime<TClient = AuroraClient>(
   const credentialStore = options.credentialStore ?? new MemoryPeerCredentialStore()
   const peer = new WebRtcPeerConnectionController(options.mode, options.profile, credentialStore, options.visibilityDocument, options as BrowserWebRtcRuntimeOptions<unknown>)
   const dynamic = new WebRtcPreferredTransport({ mode: options.mode, peer, http: httpTransport })
-  const client = (options.createClient ?? ((transport: AuroraTransport) => new AuroraClient(clientOptions(transport, options.defaultTimeoutMs)) as TClient))(dynamic)
+  const client = createRuntimeClient(options, dynamic)
   return {
     client,
     peer,

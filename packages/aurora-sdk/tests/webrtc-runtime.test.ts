@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { AuroraError, type AuroraTransport, type AuroraTransportRequest, type AuroraTransportResponse, type AuroraEventSubscription, createEventSubscription } from '../src/index.js'
+import { AuroraClient, AuroraError, type AuroraTransport, type AuroraTransportRequest, type AuroraTransportResponse, type AuroraEventSubscription, type AuroraStreamRequest, createEventSubscription } from '../src/index.js'
 import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, type BrowserWebRtcRuntime, type WebRtcPeerConnectionProfile } from '../src/webrtc/index.js'
 
 const secureLocation = { protocol: 'https:', hostname: 'app.example.test' }
@@ -38,6 +38,32 @@ class FakeHttpTransport implements AuroraTransport {
   }
 }
 
+class RuntimeClientTransportWrapper implements AuroraTransport {
+  readonly kind: AuroraTransport['kind']
+
+  constructor(readonly source: AuroraTransport) {
+    this.kind = source.kind
+  }
+
+  request<TData = unknown, TPayload = unknown>(
+    request: AuroraTransportRequest<TPayload>
+  ): Promise<AuroraTransportResponse<TData>> {
+    return this.source.request<TData, TPayload>(request)
+  }
+
+  subscribe<TEventPayload = unknown, TPayload = unknown>(
+    request: AuroraStreamRequest<TPayload>
+  ): AuroraEventSubscription<TEventPayload> | Promise<AuroraEventSubscription<TEventPayload>> {
+    const source = this.source as AuroraTransport & {
+      subscribe?: <TNextEventPayload = TEventPayload, TNextPayload = TPayload>(
+        request: AuroraStreamRequest<TNextPayload>,
+      ) => AuroraEventSubscription<TNextEventPayload> | Promise<AuroraEventSubscription<TNextEventPayload>>
+    }
+    if (!source.subscribe) throw new AuroraError({ code: 'unsupported_feature', message: 'source does not support subscriptions' })
+    return source.subscribe<TEventPayload, TPayload>(request)
+  }
+}
+
 
 describe('browser WebRTC Aurora runtime facade', () => {
   it('constructs http-only without touching WebRTC profile, RTCPeerConnection, or signaling', async () => {
@@ -59,6 +85,72 @@ describe('browser WebRTC Aurora runtime facade', () => {
     } finally {
       if (oldRtc !== undefined) (globalThis as Record<string, unknown>).RTCPeerConnection = oldRtc
     }
+  })
+
+  it('maps client-facing transports before the default SDK client factory without replacing runtime internals', async () => {
+    const wrapped: RuntimeClientTransportWrapper[] = []
+    const mapClientTransport = vi.fn((transport: AuroraTransport) => {
+      const wrapper = new RuntimeClientTransportWrapper(transport)
+      wrapped.push(wrapper)
+      return wrapper
+    })
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as unknown as typeof fetch
+
+    const httpRuntime = createBrowserWebRtcAuroraRuntime({
+      mode: 'http-only',
+      http: { baseUrl: 'https://gateway.example.test', fetchImpl },
+      mapClientTransport,
+      windowLocation: secureLocation
+    })
+    const meshRuntime = createBrowserWebRtcAuroraRuntime({
+      mode: 'webrtc-preferred',
+      profile: profile(),
+      http: { baseUrl: 'https://gateway.example.test', fetchImpl },
+      mapClientTransport,
+      windowLocation: secureLocation
+    })
+
+    expect(httpRuntime.client).toBeInstanceOf(AuroraClient)
+    expect(meshRuntime.client).toBeInstanceOf(AuroraClient)
+    expect(mapClientTransport).toHaveBeenNthCalledWith(1, httpRuntime.transport)
+    expect(mapClientTransport).toHaveBeenNthCalledWith(2, meshRuntime.transport)
+    expect(httpRuntime.client.transport).toBe(wrapped[0])
+    expect(meshRuntime.client.transport).toBe(wrapped[1])
+    expect(wrapped[0]?.source).toBe(httpRuntime.transport)
+    expect(wrapped[1]?.source).toBe(meshRuntime.transport)
+    expect(httpRuntime.httpTransport).toBe(httpRuntime.transport)
+    expect(meshRuntime.httpTransport).not.toBe(wrapped[1])
+    expect(meshRuntime.meshTransport).toBeUndefined()
+
+    await httpRuntime.close()
+    await meshRuntime.close()
+  })
+
+  it('maps client-facing transports before an injected runtime client factory', async () => {
+    const wrapped: RuntimeClientTransportWrapper[] = []
+    const mapClientTransport = vi.fn((transport: AuroraTransport) => {
+      const wrapper = new RuntimeClientTransportWrapper(transport)
+      wrapped.push(wrapper)
+      return wrapper
+    })
+    const createClient = vi.fn((transport: AuroraTransport) => ({ transport }))
+
+    const runtime = createBrowserWebRtcAuroraRuntime<{ transport: AuroraTransport }>({
+      mode: 'webrtc-only',
+      mapClientTransport,
+      createClient,
+      windowLocation: secureLocation
+    })
+
+    expect(mapClientTransport).toHaveBeenCalledTimes(1)
+    expect(createClient).toHaveBeenCalledTimes(1)
+    expect(mapClientTransport.mock.invocationCallOrder[0]!).toBeLessThan(createClient.mock.invocationCallOrder[0]!)
+    expect(createClient).toHaveBeenCalledWith(wrapped[0])
+    expect(runtime.client.transport).toBe(wrapped[0])
+    expect(wrapped[0]?.source).toBe(runtime.transport)
+    expect(runtime.transport).not.toBe(wrapped[0])
+
+    await runtime.close()
   })
 
   it('constructs a WebRTC thin runtime before an invite supplies its profile', async () => {
