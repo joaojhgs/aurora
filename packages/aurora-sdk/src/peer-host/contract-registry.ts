@@ -102,7 +102,7 @@ export function createToolingPeerHostRegistry(handlers: {
       outputSchemaId: 'Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse',
       inputSchema: ToolingGetExportCatalogInputToolingGetExportCatalogRequestSchema,
       outputSchema: ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema,
-      requiredPermissions: [TOOLING_METHODS.getExportCatalog],
+      requiredPermissions: ['Tooling.GetTools'],
       maxRequestBytes: DEFAULT_METHOD_BYTES,
       timeoutMs: DEFAULT_TIMEOUT_MS,
       handler: handlers.getExportCatalog

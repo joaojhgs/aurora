@@ -83,6 +83,9 @@ SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
 )
 TOOLING_PROVIDER_PEER_ID = "aurora-sdk-local-provider-v1"
 TOOLING_PROVIDER_SERVICE_INSTANCE_ID = f"local:{quote(TOOLING_PROVIDER_PEER_ID, safe='')}:Tooling"
+SDK_PROVIDER_REQUIRED_PERMISSION_OVERRIDES = {
+    "Tooling.GetExportCatalog": "Tooling.GetTools",
+}
 
 SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("Config", "app.services.config.service", "ConfigService"),
@@ -1203,7 +1206,9 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
                 "provider_service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
                 "input_schema_hash": schema_hashes.get((method_id, "input")),
                 "output_schema_hash": schema_hashes.get((method_id, "output")),
-                "required_permission": method_id,
+                "required_permission": SDK_PROVIDER_REQUIRED_PERMISSION_OVERRIDES.get(
+                    method_id, method_id
+                ),
             }
         )
     projection = {

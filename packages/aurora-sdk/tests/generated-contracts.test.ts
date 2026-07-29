@@ -14,7 +14,7 @@ const generatedRoot = resolve(process.cwd(), 'src/generated')
 const manifest = JSON.parse(readFileSync(resolve(generatedRoot, 'backend-contracts.manifest.json'), 'utf8'))
 const contractSchema = JSON.parse(readFileSync(resolve(generatedRoot, 'backend-contracts.schema.json'), 'utf8'))
 const providerInventory = JSON.parse(readFileSync(resolve(generatedRoot, 'tooling-local-provider-v1.json'), 'utf8'))
-type ProviderMethod = { method_id: string }
+type ProviderMethod = { method_id: string, required_permission: string }
 type ContractSchemaItem = {
   schema_id: keyof typeof backendContractSchemaById
   method_id: string
@@ -405,6 +405,8 @@ describe('generated backend contracts', () => {
     expect(manifest.zod_version).toBe('4.4.3')
     expect(providerInventory.provider_service_instance_id).toBe('local:aurora-sdk-local-provider-v1:Tooling')
     expect(providerInventory.methods.map((method: ProviderMethod) => method.method_id)).toEqual(contractSchema.allowlist)
+    const providerMethods = Object.fromEntries(providerInventory.methods.map((method: ProviderMethod) => [method.method_id, method]))
+    expect(providerMethods['Tooling.GetExportCatalog'].required_permission).toBe('Tooling.GetTools')
     expect(providerInventory.canonical_digest_vectors.identity_digest.reordered_json_a).not.toEqual(
       providerInventory.canonical_digest_vectors.identity_digest.reordered_json_b
     )

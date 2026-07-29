@@ -258,6 +258,8 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert {item["method_id"] for item in provider["methods"]} == set(
         generate_backend_inventory.SDK_CONTRACT_ALLOWLIST
     )
+    provider_methods = {item["method_id"]: item for item in provider["methods"]}
+    assert provider_methods["Tooling.GetExportCatalog"]["required_permission"] == "Tooling.GetTools"
     assert schema["allowlist"] == [
         "Tooling.GetTools",
         "Tooling.GetExportCatalog",

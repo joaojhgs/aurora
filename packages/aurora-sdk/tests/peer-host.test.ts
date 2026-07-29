@@ -129,6 +129,32 @@ async function waitForTimeoutWork(): Promise<void> {
 }
 
 describe('WebRtcPeerHost', () => {
+  it('keeps generated Tooling registry permissions aligned for export catalog reads', () => {
+    const registry = createToolingPeerHostRegistry({
+      getTools: async () => ({ count: 0, tools: [] }),
+      getExportCatalog: async () => ({
+        provider_peer_id: 'local-peer',
+        service_instance_id: 'local:local-peer:Tooling',
+        selected_protocol_tier: 'projection_v1',
+        authority_revision: { auth_grant_revision: 0, catalog_revision: 0, export_policy_revision: 0, manifest_revision: 0, switch_revision: 0 },
+        projection_revision: '0',
+        projection_digest: '0'.repeat(64),
+        page_index: 0,
+        page_size: 100,
+        page_hash: '0'.repeat(64),
+        tools: [],
+        retirements: [],
+        complete: true,
+        total_count: 0,
+        final_checksum: '0'.repeat(64)
+      }),
+      prepareExecution: async () => { throw new Error('not implemented') },
+      executeTool: async () => { throw new Error('not implemented') }
+    })
+
+    expect(registry.get('Tooling.GetExportCatalog')?.requiredPermissions).toEqual(['Tooling.GetTools'])
+  })
+
   it('parses generated Tooling schemas before dispatching an authorized handler', async () => {
     const handler = vi.fn(async (_input: unknown, context: PeerHostCallContext) => {
       expect(context.identity.callerPeerId).toBe('peer-a')

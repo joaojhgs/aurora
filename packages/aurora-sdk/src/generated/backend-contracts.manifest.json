@@ -4,11 +4,11 @@
   "content_hashes": {
     "backend-contracts.schema.json": "96d738a66b39e4bfac7dcb76be0933958c339cfb9cc2d9d46dabbfef0f1aa50e",
     "backend-contracts.zod.ts": "52a354148427197d1f668290750161f91bf528ef1446a8c1ab5b09faed38900b",
-    "tooling-local-provider-v1.json": "d29c82ee6e806305729c1b7e7a57e8ba479fc877a10529f90c557154181f4a14"
+    "tooling-local-provider-v1.json": "5d7d4975546859cd235e24907f5810ff60f16dae7fe99476433c449c1ef47902"
   },
-  "final_checksum": "5d06730ccebec352e29c504cc6fc450aa846c939de43edade34e257c48369584",
+  "final_checksum": "1c7f84f8bb891553a12ac7076582bc4418df1a4695834cb7faabd358385e6a69",
   "generator_format_version": "aurora-sdk-zod-codegen-v1",
-  "generator_source_hash": "428ea0ae96358fb79f1796a63e2945b03dddf070e0ae162be6b4f97319a393ce",
+  "generator_source_hash": "03b482b09463dd0aa9ed5e9f264352ea31e598820d41ce1a9635e622b5f6ed0f",
   "pydantic_version": "2.12.5",
   "python_version": "3.11.14",
   "schema_draft": "https://json-schema.org/draft/2020-12/schema",
