@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 from app.messaging import Envelope, QueryResult
 from app.services.tooling.identity import source_tool_identity, stamp_tool
 from app.services.tooling.projection_cursor import ProjectionCursor
+from app.services.tooling.service import _derive_js_safe_catalog_revision
 from app.shared.contracts.models.db import (
     DBGetToolingExportPolicySnapshotResponse,
     DBGetToolingExposureLedgerResponse,
@@ -25,6 +26,7 @@ from app.shared.contracts.models.db import (
 from app.shared.contracts.models.gateway import GatewayFetchToolingExportCatalogPageResponse
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
+    JS_SAFE_INTEGER_MAX,
     ToolingExecuteToolRequest,
     ToolingExportPolicy,
     ToolingGetExportCatalogRequest,
@@ -281,6 +283,43 @@ def _execution_envelope(topic: str, peer: str = "peer-a") -> Envelope:
     envelope.type = topic
     envelope.projected_method_id = topic
     return envelope
+
+
+def test_catalog_revision_helper_is_js_safe_stable_and_material_sensitive():
+    revision = _derive_js_safe_catalog_revision("same material")
+
+    assert 0 <= revision <= JS_SAFE_INTEGER_MAX
+    assert revision == _derive_js_safe_catalog_revision("same material")
+    assert revision != _derive_js_safe_catalog_revision("different material")
+
+
+@pytest.mark.asyncio
+async def test_export_catalog_revision_is_safe_stable_and_catalog_sensitive(export_service):
+    service, _state, _alpha, beta = export_service
+
+    first = await service._on_get_export_catalog(
+        ToolingGetExportCatalogRequest(),
+        _authority_envelope(),
+    )
+    await service._announce_local_tool_catalog(reason="reload")
+    invalidation = service.bus.publish.await_args.args[1]
+    second = await service._on_get_export_catalog(
+        ToolingGetExportCatalogRequest(),
+        _authority_envelope(),
+    )
+    beta.description = "materially different beta catalog"
+    changed = await service._on_get_export_catalog(
+        ToolingGetExportCatalogRequest(),
+        _authority_envelope(),
+    )
+
+    assert 0 <= first.authority_revision.catalog_revision <= JS_SAFE_INTEGER_MAX
+    assert (
+        invalidation.authority_revision.catalog_revision
+        == first.authority_revision.catalog_revision
+    )
+    assert second.authority_revision.catalog_revision == first.authority_revision.catalog_revision
+    assert changed.authority_revision.catalog_revision != first.authority_revision.catalog_revision
 
 
 @pytest.mark.asyncio

@@ -103,6 +103,7 @@ from app.shared.contracts.models.mesh import (
     MeshPeerListRequest,
 )
 from app.shared.contracts.models.tooling import (
+    JS_SAFE_INTEGER_MAX,
     TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT,
     ToolingAcceptRemoteToolSchemaRequest,
     ToolingAcceptRemoteToolSchemaResponse,
@@ -242,6 +243,15 @@ _ERROR_REDACT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b"),
 )
 TOOLING_AUDIT_REQUEST_TIMEOUT_SECONDS = 0.5
+_CATALOG_REVISION_DIGEST_BITS = 53
+
+
+def _derive_js_safe_catalog_revision(catalog_material: str) -> int:
+    """Return a deterministic SHA-256 revision that fits JSON safe integers."""
+
+    digest_prefix = hashlib.sha256(catalog_material.encode()).digest()[:8]
+    revision = int.from_bytes(digest_prefix, "big") >> (64 - _CATALOG_REVISION_DIGEST_BITS)
+    return min(revision, JS_SAFE_INTEGER_MAX)
 
 
 _TOOL_LEXICAL_STOPWORDS = {
@@ -1244,6 +1254,44 @@ class ToolingService(BaseService):
                     else None
                 ),
             ),
+        )
+
+    def _provider_visible_export_tools(self) -> list[ToolingToolInfo]:
+        """Serialize the local catalog as it appears through mesh export authority."""
+
+        export_service_instance_id = (
+            f"remote:{self._stable_peer_id}:Tooling" if self._stable_peer_id else "local:Tooling"
+        )
+        all_tools = []
+        for loaded_tool in self.tools_manager.get_tools(None, 10_000):
+            tool = self._serialize_tool(loaded_tool, ToolingGetToolsRequest(top_k=10_000))
+            if tool.source_type == "local":
+                tool = tool.model_copy(
+                    update={
+                        "provider_peer_id": self._stable_peer_id,
+                        "provider_service_instance_id": export_service_instance_id,
+                        "provenance": tool.provenance.model_copy(
+                            update={
+                                "provider_peer_id": self._stable_peer_id,
+                                "provider_service_instance_id": export_service_instance_id,
+                            }
+                        ),
+                    }
+                )
+            all_tools.append(tool)
+        return all_tools
+
+    @staticmethod
+    def _export_catalog_material(tools: list[ToolingToolInfo]) -> str:
+        """Return the canonical material hashed for catalog authority revisions."""
+
+        return json.dumps(
+            [
+                item.model_dump(mode="json")
+                for item in sorted(tools, key=lambda x: x.global_tool_id)
+            ],
+            sort_keys=True,
+            default=str,
         )
 
     @staticmethod
@@ -2491,13 +2539,14 @@ class ToolingService(BaseService):
         if not self._stable_peer_id:
             return
         snapshot = await self._tool_export_snapshot(include_rules=False)
+        catalog_material = self._export_catalog_material(self._provider_visible_export_tools())
         await self.bus.publish(
             ToolingMethods.PROJECTION_INVALIDATED,
             ToolingProjectionInvalidated(
                 provider_peer_id=self._stable_peer_id,
                 service_instance_id="local:Tooling",
                 authority_revision=ToolingProjectionAuthorityRevision(
-                    catalog_revision=int(time.time_ns()),
+                    catalog_revision=_derive_js_safe_catalog_revision(catalog_material),
                     export_policy_revision=snapshot.policy.revision,
                     auth_grant_revision=0,
                     manifest_revision=0,
@@ -5993,38 +6042,9 @@ class ToolingService(BaseService):
         if not snapshot.mesh_switches.provider_mesh_tooling_enabled:
             raise PermissionError("provider_mesh_tooling_disabled")
 
-        export_service_instance_id = f"remote:{self._stable_peer_id}:Tooling"
-        all_tools = []
-        for loaded_tool in self.tools_manager.get_tools(None, 10_000):
-            tool = self._serialize_tool(loaded_tool, ToolingGetToolsRequest(top_k=10_000))
-            if tool.source_type == "local":
-                # ``local:Tooling`` is meaningful only inside this process. A
-                # projection crossing the mesh must bind every tool and its
-                # provenance to the provider's stable, receiver-visible
-                # service instance or the consumer correctly rejects the page
-                # as an authority mismatch.
-                tool = tool.model_copy(
-                    update={
-                        "provider_peer_id": self._stable_peer_id,
-                        "provider_service_instance_id": export_service_instance_id,
-                        "provenance": tool.provenance.model_copy(
-                            update={
-                                "provider_peer_id": self._stable_peer_id,
-                                "provider_service_instance_id": export_service_instance_id,
-                            }
-                        ),
-                    }
-                )
-            all_tools.append(tool)
-        catalog_material = json.dumps(
-            [
-                item.model_dump(mode="json")
-                for item in sorted(all_tools, key=lambda x: x.global_tool_id)
-            ],
-            sort_keys=True,
-            default=str,
-        )
-        catalog_revision = int(hashlib.sha256(catalog_material.encode()).hexdigest()[:15], 16)
+        all_tools = self._provider_visible_export_tools()
+        catalog_material = self._export_catalog_material(all_tools)
+        catalog_revision = _derive_js_safe_catalog_revision(catalog_material)
         authority = ToolingProjectionAuthorityRevision(
             catalog_revision=catalog_revision,
             export_policy_revision=snapshot.policy.revision,
@@ -6160,7 +6180,7 @@ class ToolingService(BaseService):
         )
         response = ToolingGetExportCatalogResponse(
             provider_peer_id=self._stable_peer_id,
-            service_instance_id=export_service_instance_id,
+            service_instance_id=f"remote:{self._stable_peer_id}:Tooling",
             authority_revision=authority,
             projection_revision=revision,
             projection_digest=digest,

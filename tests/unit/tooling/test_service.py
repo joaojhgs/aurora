@@ -19,12 +19,14 @@ from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.db import DBMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
+    JS_SAFE_INTEGER_MAX,
     ToolingGetToolCatalogRequest,
     ToolingGetToolsResponse,
     ToolingMeshProjectionReadiness,
     ToolingMethods,
     ToolingModule,
     ToolingPrepareExecutionRequest,
+    ToolingProjectionInvalidated,
     ToolingRemoteCatalogAnnounced,
     ToolingRemoteCatalogDeltaAnnounced,
     ToolingRequestApprovalRequest,
@@ -244,6 +246,63 @@ async def test_startup_recovery_failure_blocks_normalized_binding(tooling_servic
     tooling_service.bus.request.reset_mock()
     assert await tooling_service._load_normalized_bindable_remote_catalogs() == []
     tooling_service.bus.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_local_catalog_invalidation_publishes_js_safe_deterministic_revision(
+    tooling_service,
+):
+    tool = _DummyTool("alpha", "Local exported tool")
+    stamp_tool(
+        tool,
+        source_tool_identity(
+            source_kind="plugin",
+            stable_source_id="local-suite",
+            provider_tool_id=tool.name,
+            share_group_id="plugin:local-suite",
+            share_group_label="Local suite",
+        ),
+    )
+    tooling_service._stable_peer_id = "provider"
+    tooling_service.tools_manager.get_tools.return_value = [tool]
+    tooling_service._tool_export_snapshot = AsyncMock(
+        return_value=SimpleNamespace(
+            policy=SimpleNamespace(revision=7),
+            mesh_switches=SimpleNamespace(revision=11),
+        )
+    )
+
+    await tooling_service._announce_local_tool_catalog(
+        reason="reload",
+        affected_peer_ids=["peer-a"],
+    )
+    first_call = tooling_service.bus.publish.await_args
+    first = first_call.args[1]
+    first_revision = first.authority_revision.catalog_revision
+
+    await tooling_service._announce_local_tool_catalog(reason="reload")
+    second = tooling_service.bus.publish.await_args.args[1]
+    tool.description = "Updated local exported tool"
+    await tooling_service._announce_local_tool_catalog(reason="reload")
+    changed = tooling_service.bus.publish.await_args.args[1]
+
+    assert first_call.args[0] == ToolingMethods.PROJECTION_INVALIDATED
+    assert isinstance(first, ToolingProjectionInvalidated)
+    assert ToolingProjectionInvalidated.model_validate(first.model_dump(mode="python"))
+    assert first.provider_peer_id == "provider"
+    assert first.service_instance_id == "local:Tooling"
+    assert first.reason_code == "reload"
+    assert first.affected_peer_ids == ["peer-a"]
+    assert first.authority_revision.export_policy_revision == 7
+    assert first.authority_revision.auth_grant_revision == 0
+    assert first.authority_revision.manifest_revision == 0
+    assert first.authority_revision.switch_revision == 11
+    assert 0 <= first_revision <= JS_SAFE_INTEGER_MAX
+    assert second.authority_revision.catalog_revision == first_revision
+    assert changed.authority_revision.catalog_revision != first_revision
+    assert first_call.kwargs["event"] is True
+    assert first_call.kwargs["mesh"] is False
+    assert first_call.kwargs["origin"] == "internal"
 
 
 @pytest.mark.asyncio
