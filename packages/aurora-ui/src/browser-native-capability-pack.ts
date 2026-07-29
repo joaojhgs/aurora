@@ -33,6 +33,7 @@ export interface BrowserNativeCapabilityPackOptions {
   readonly window?: BrowserWindowPort | null
   readonly notification?: BrowserNotificationPort | null
   readonly filePicker?: BrowserFilePickerPort | null
+  readonly crypto?: BrowserCryptoPort | null
   readonly now?: () => string
   readonly randomId?: () => string
   readonly permissionStates?: BrowserNativePermissionStates
@@ -104,6 +105,11 @@ export interface BrowserBatteryStatus {
   readonly charging?: boolean
 }
 
+export interface BrowserCryptoPort {
+  randomUUID?: () => string
+  getRandomValues?: <T extends ArrayBufferView>(array: T) => T
+}
+
 interface DocumentGrant {
   readonly handle: BrowserFileHandle
   readonly name: string | null
@@ -136,7 +142,7 @@ export function createBrowserNativeCapabilityPack(options: BrowserNativeCapabili
     source: 'core',
     sourceId: 'browser-native-capability-pack',
   })
-  const randomId = options.randomId ?? defaultRandomId
+  const randomId = options.randomId ?? (() => secureRandomId(options.crypto ?? undefined))
   const documents = new Map<string, DocumentGrant>()
   const snapshot = buildBrowserNativeCapabilitySnapshot(options)
   const handlers = buildBrowserNativeCapabilityHandlers(options, documents, randomId)
@@ -205,10 +211,11 @@ function buildBrowserNativeCapabilityHandlers(
 ): LocalNativeCapabilityHandlers {
   return {
     [AURORA_NATIVE_TOOL_IDS.shareText]: async (args) => {
-      const nav = requirePort(options.navigator?.share, 'capability_unavailable')
+      const nav = requirePort(options.navigator, 'capability_unavailable')
+      if (!nav.share) throw nativeCapabilityError('capability_unavailable')
       try {
         const title = optionalString(args.title)
-        await nav({ text: requireString(args.text), ...(title ? { title } : {}) })
+        await nav.share({ text: requireString(args.text), ...(title ? { title } : {}) })
         return { shared: true }
       } catch (error) {
         throw redactedNativeError(error)
@@ -239,10 +246,11 @@ function buildBrowserNativeCapabilityHandlers(
       }
     },
     [AURORA_NATIVE_TOOL_IDS.pickDocument]: async (args) => {
-      const picker = requirePort(options.filePicker?.showOpenFilePicker, 'unsupported_platform')
+      const filePicker = requirePort(options.filePicker, 'unsupported_platform')
+      if (!filePicker.showOpenFilePicker) throw nativeCapabilityError('unsupported_platform')
       try {
         const types = acceptPickerTypes(args.accept)
-        const handles = await picker({ multiple: args.multiple === true, ...(types ? { types } : {}) })
+        const handles = await filePicker.showOpenFilePicker({ multiple: args.multiple === true, ...(types ? { types } : {}) })
         const picked = handles.slice(0, args.multiple === true ? 25 : 1).map((handle) => {
           const documentId = newDocumentId(randomId)
           const grant = sanitizeGrant(handle)
@@ -276,17 +284,17 @@ function buildBrowserNativeCapabilityHandlers(
       }
     },
     [AURORA_NATIVE_TOOL_IDS.getClipboardText]: async () => {
-      const clipboard = requirePort(options.navigator?.clipboard?.readText, 'permission_unavailable')
+      const clipboard = requirePort(options.navigator?.clipboard, 'permission_unavailable')
       try {
-        return { text: await clipboard() }
+        return { text: await clipboard.readText() }
       } catch (error) {
         throw redactedNativeError(error)
       }
     },
     [AURORA_NATIVE_TOOL_IDS.setClipboardText]: async (args) => {
-      const clipboard = requirePort(options.navigator?.clipboard?.writeText, 'permission_unavailable')
+      const clipboard = requirePort(options.navigator?.clipboard, 'permission_unavailable')
       try {
-        await clipboard(requireString(args.text))
+        await clipboard.writeText(requireString(args.text))
         return { written: true }
       } catch (error) {
         throw redactedNativeError(error)
@@ -500,13 +508,23 @@ function isDomExceptionName(error: unknown, name: string): boolean {
 
 function newDocumentId(randomId: () => string): string {
   const id = randomId().replace(/[^A-Za-z0-9_-]/gu, '')
+  if (id.length < 16) throw nativeCapabilityError('capability_unavailable')
   return `doc_${id.padEnd(16, '0').slice(0, 96)}`
 }
 
-function defaultRandomId(): string {
-  const cryptoRef = globalThis.crypto
+function secureRandomId(cryptoRef: BrowserCryptoPort | undefined = globalThis.crypto): string {
   if (cryptoRef?.randomUUID) return cryptoRef.randomUUID()
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
+  if (cryptoRef?.getRandomValues) {
+    const bytes = cryptoRef.getRandomValues(new Uint8Array(24))
+    return base64Url(bytes)
+  }
+  throw nativeCapabilityError('capability_unavailable')
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/u, '')
 }
 
 function clamp(value: number, min: number, max: number): number {

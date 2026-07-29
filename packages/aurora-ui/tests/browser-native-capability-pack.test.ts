@@ -224,6 +224,88 @@ describe('browser native capability pack', () => {
     expect(written).toBe('updated')
   })
 
+  it('mints opaque document grant IDs from crypto.getRandomValues when randomUUID is unavailable', async () => {
+    const handle: BrowserFileHandle = {
+      name: 'grant.txt',
+      getFile: async () => ({ name: 'grant.txt', type: 'text/plain', text: async () => 'grant' }),
+    }
+    const pack = createBrowserNativeCapabilityPack(withoutInjectedRandomId(fullOptions({
+      filePicker: { showOpenFilePicker: async () => [handle] },
+      crypto: {
+        getRandomValues: (array) => {
+          const bytes = array as unknown as Uint8Array
+          bytes.fill(0x2a)
+          return array
+        },
+      },
+    })))
+    const pick = pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.pickDocument)!
+
+    await expect(pick.handler(callInput({}))).resolves.toEqual({
+      documents: [{ documentId: 'doc_KioqKioqKioqKioqKioqKioqKioqKioq', name: 'grant.txt' }],
+    })
+  })
+
+  it('fails closed when no secure RNG can mint opaque document grant IDs', async () => {
+    const pack = createBrowserNativeCapabilityPack(withoutInjectedRandomId(fullOptions({
+      crypto: {},
+    })))
+    const pick = pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.pickDocument)!
+
+    await expect(pick.handler(callInput({}))).rejects.toMatchObject({
+      name: 'LocalToolHandlerError',
+      reasonCode: 'capability_unavailable',
+      message: 'Tool execution failed',
+    })
+  })
+
+  it('preserves Web API receivers for share, picker, and clipboard methods', async () => {
+    const navigator = {
+      share(data: ShareData) {
+        expect(this).toBe(navigator)
+        expect(data.text).toBe('hello')
+        return Promise.resolve()
+      },
+      canShare() {
+        expect(this).toBe(navigator)
+        return true
+      },
+      clipboard: {
+        readText() {
+          expect(this).toBe(navigator.clipboard)
+          return Promise.resolve('receiver clip')
+        },
+        writeText(text: string) {
+          expect(this).toBe(navigator.clipboard)
+          expect(text).toBe('updated')
+          return Promise.resolve()
+        },
+      },
+      onLine: true,
+    }
+    const filePicker = {
+      showOpenFilePicker() {
+        expect(this).toBe(filePicker)
+        return Promise.resolve([{
+          name: 'receiver.txt',
+          getFile: async () => ({ name: 'receiver.txt', type: 'text/plain', text: async () => 'receiver' }),
+        }] satisfies BrowserFileHandle[])
+      },
+    }
+    const pack = createBrowserNativeCapabilityPack(fullOptions({
+      navigator,
+      filePicker,
+      randomId: () => 'receiver12345678',
+    }))
+
+    await expect(pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.shareText)?.handler(callInput({ text: 'hello' }))).resolves.toEqual({ shared: true })
+    await expect(pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.pickDocument)?.handler(callInput({}))).resolves.toEqual({
+      documents: [{ documentId: 'doc_receiver12345678', name: 'receiver.txt' }],
+    })
+    await expect(pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.getClipboardText)?.handler(callInput({}))).resolves.toEqual({ text: 'receiver clip' })
+    await expect(pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.setClipboardText)?.handler(callInput({ text: 'updated' }))).resolves.toEqual({ written: true })
+  })
+
   it('does not expose raw paths, arbitrary protocols, shell, process, or direct handles', async () => {
     const pack = createBrowserNativeCapabilityPack(fullOptions({
       filePicker: {
@@ -275,6 +357,11 @@ function fullOptions(overrides: Partial<BrowserNativeCapabilityPackOptions> = {}
     now: () => '2026-07-29T00:00:00.000Z',
     ...overrides,
   }
+}
+
+function withoutInjectedRandomId(options: BrowserNativeCapabilityPackOptions): BrowserNativeCapabilityPackOptions {
+  const { randomId: _randomId, ...rest } = options
+  return rest
 }
 
 function callInput(arguments_: JsonObject) {
