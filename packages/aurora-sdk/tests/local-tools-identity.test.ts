@@ -72,5 +72,14 @@ describe('local tool descriptor v1', () => {
     expect(() => parseLocalToolDescriptorV1({ ...descriptor, safetyClass: 'dangerous', confirmationPolicy: 'sensitive' })).toThrow()
     expect(() => parseLocalToolDescriptorV1({ ...descriptor, argumentVisibility: { missing: 'secret' } })).toThrow()
     expect(() => parseLocalToolDescriptorV1({ ...descriptor, argsSchema: { type: 'object', constructor: 'polluted' } })).toThrow()
+    expect(() => parseLocalToolDescriptorV1({ ...descriptor, argsSchema: { type: 'object', multipleOf: 0.25 } })).toThrow()
+    expect(() => parseLocalToolDescriptorV1({ ...descriptor, argsSchema: { type: 'object', maximum: 1e20 } })).toThrow()
+    expect(() => parseLocalToolDescriptorV1({ ...descriptor, argsSchema: { type: 'object', enum: sparseArray() } })).toThrow()
   })
 })
+
+function sparseArray(): unknown[] {
+  const value = ['first', 'third']
+  delete value[1]
+  return value
+}

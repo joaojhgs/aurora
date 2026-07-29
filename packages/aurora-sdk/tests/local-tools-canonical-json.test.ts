@@ -24,10 +24,22 @@ describe('local-tools canonical JSON', () => {
 
   it('rejects values that Python catalog hashes must not accept silently', () => {
     expect(() => canonicalJson({ a: undefined })).toThrow(CanonicalJsonError)
-    expect(() => canonicalJson({ a: Number.NaN })).toThrow(CanonicalJsonError)
-    expect(() => canonicalJson({ a: -0 })).toThrow(CanonicalJsonError)
+    expectCanonicalJsonReason({ a: Number.NaN }, 'non_finite_number')
+    expectCanonicalJsonReason({ a: Number.POSITIVE_INFINITY }, 'non_finite_number')
+    expectCanonicalJsonReason({ a: Number.NEGATIVE_INFINITY }, 'non_finite_number')
+    expectCanonicalJsonReason({ a: -0 }, 'negative_zero')
+    expectCanonicalJsonReason({ a: 1.25 }, 'non_integer_number')
+    expectCanonicalJsonReason({ a: 1e20 }, 'unsafe_integer')
+    expectCanonicalJsonReason({ a: Number.MAX_SAFE_INTEGER + 1 }, 'unsafe_integer')
+    expectCanonicalJsonReason(sparseArray(), 'sparse_array')
+    expectCanonicalJsonReason([['ok'], sparseArray()], 'sparse_array')
+    expect(() => canonicalJson([undefined])).toThrow(CanonicalJsonError)
     expect(() => canonicalJson({ constructor: 'polluted' })).toThrow(CanonicalJsonError)
     expect(() => canonicalJson(Object.create(null))).toThrow(CanonicalJsonError)
+  })
+
+  it('renders ordinary safe integers in the same canonical form as Python json.dumps', () => {
+    expect(canonicalJson({ z: 42, a: [-1, 0, 9007199254740991] })).toBe('{"a":[-1,0,9007199254740991],"z":42}')
   })
 
   it('uses the exact Python Tooling schema-hash payload', () => {
@@ -35,6 +47,23 @@ describe('local-tools canonical JSON', () => {
     expect(toolSchemaHash(tool)).toBe(providerInventory.canonical_digest_vectors.tool_schema_hash.digest)
   })
 })
+
+function expectCanonicalJsonReason(value: unknown, reasonCode: string): void {
+  try {
+    canonicalJson(value)
+  } catch (error) {
+    expect(error).toBeInstanceOf(CanonicalJsonError)
+    expect((error as CanonicalJsonError).reasonCode).toBe(reasonCode)
+    return
+  }
+  throw new Error(`Expected canonicalJson to fail with ${reasonCode}`)
+}
+
+function sparseArray(): unknown[] {
+  const value = ['first', 'third']
+  delete value[1]
+  return value
+}
 
 describe('local-tools identity', () => {
   it('uses Python-compatible RFC3986 UTF-8 percent encoding', () => {

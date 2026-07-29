@@ -23,7 +23,7 @@ const jsonSchemaValue: z.ZodType<unknown> = z.lazy(() =>
     z.null(),
     z.boolean(),
     z.string(),
-    z.number().finite().refine((value) => !Object.is(value, -0)),
+    z.number().finite().int().safe().refine((value) => !Object.is(value, -0)),
     z.array(jsonSchemaValue).max(10_000),
     z.record(z.string().min(1).max(256), jsonSchemaValue).superRefine((value, context) => {
       for (const key of Object.keys(value)) {

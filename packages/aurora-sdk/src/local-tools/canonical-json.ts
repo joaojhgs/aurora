@@ -71,13 +71,20 @@ function renderCanonicalJson(
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new CanonicalJsonError('non_finite_number')
     if (Object.is(value, -0)) throw new CanonicalJsonError('negative_zero')
+    if (!Number.isInteger(value)) throw new CanonicalJsonError('non_integer_number')
+    if (!Number.isSafeInteger(value)) throw new CanonicalJsonError('unsafe_integer')
     const encoded = JSON.stringify(value)
     if (encoded === undefined) throw new CanonicalJsonError('unsupported_number')
     return encoded
   }
   if (Array.isArray(value)) {
     if (value.length > limits.maxArrayItems) throw new CanonicalJsonError('max_array_items')
-    return `[${value.map((item) => renderCanonicalJson(item, depth + 1, state, limits, options)).join(',')}]`
+    const rendered: string[] = []
+    for (let index = 0; index < value.length; index += 1) {
+      if (!Object.prototype.hasOwnProperty.call(value, index)) throw new CanonicalJsonError('sparse_array')
+      rendered.push(renderCanonicalJson(value[index], depth + 1, state, limits, options))
+    }
+    return `[${rendered.join(',')}]`
   }
   if (typeof value === 'object') {
     if (Object.getPrototypeOf(value) !== Object.prototype) throw new CanonicalJsonError('non_plain_object')
