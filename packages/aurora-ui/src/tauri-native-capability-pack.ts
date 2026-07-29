@@ -188,7 +188,7 @@ function androidForegroundVoiceReady(
 }
 
 function stateAvailable(state: AndroidNativeState | undefined): boolean {
-  return state === undefined || state === 'available'
+  return state === 'available'
 }
 
 function nativeStateReason(state: AndroidNativeState | string): string {

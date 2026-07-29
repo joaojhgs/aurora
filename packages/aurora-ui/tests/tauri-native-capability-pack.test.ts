@@ -37,6 +37,14 @@ describe('tauri native capability pack adapter', () => {
         'native.notifications': true,
         'native.filesystem': true,
         'native.audioCapture': true
+      },
+      permissionStates: {
+        ...nativeCapabilityManifestFixture.permissionStates,
+        'aurora.nativeCapabilityManifest': 'available'
+      },
+      capabilityStates: {
+        ...nativeCapabilityManifestFixture.capabilityStates,
+        'native.permissionsManifest': 'available'
       }
     }
     const transport = transportFor({ manifest, sidecar: { running: true } })
@@ -97,6 +105,63 @@ describe('tauri native capability pack adapter', () => {
     expect(deniedRegistry.publicTools()).toEqual([])
   })
 
+  it('requires explicit state proof even when manifest booleans are true', async () => {
+    const desktopRegistry = new LocalToolRegistry({ stablePeerId: 'desktop-missing-states' })
+    await registerTauriNativeCapabilityPack({
+      registry: desktopRegistry,
+      transport: transportFor({
+        manifest: {
+          ...nativeCapabilityManifestFixture,
+          permissions: {
+            ...nativeCapabilityManifestFixture.permissions,
+            'aurora.nativeCapabilityManifest': true
+          },
+          capabilities: {
+            ...nativeCapabilityManifestFixture.capabilities,
+            'native.permissionsManifest': true
+          },
+          permissionStates: {},
+          capabilityStates: {}
+        }
+      })
+    })
+    expect(desktopRegistry.publicTools()).toEqual([])
+
+    const status = readyVoiceStatus()
+    const androidRegistry = new LocalToolRegistry({ stablePeerId: 'android-missing-states' })
+    await registerTauriNativeCapabilityPack({
+      registry: androidRegistry,
+      transport: transportFor({
+        manifest: {
+          ...readyAndroidManifest(status),
+          permissionStates: {
+            'aurora.nativeCapabilityManifest': 'available'
+          },
+          capabilityStates: {
+            'native.permissionsManifest': 'available'
+          }
+        },
+        foregroundStatus: status
+      })
+    })
+    expect(androidRegistry.publicTools().map((tool) => tool.tool_contract_id)).toEqual([
+      AURORA_NATIVE_TOOL_IDS.getDeviceStatus
+    ])
+
+    const explicitRegistry = new LocalToolRegistry({ stablePeerId: 'android-explicit-states' })
+    await registerTauriNativeCapabilityPack({
+      registry: explicitRegistry,
+      transport: transportFor({
+        manifest: readyAndroidManifest(status),
+        foregroundStatus: status
+      })
+    })
+    expect(explicitRegistry.publicTools().map((tool) => tool.tool_contract_id).sort()).toEqual([
+      AURORA_NATIVE_TOOL_IDS.getDeviceStatus,
+      AURORA_NATIVE_TOOL_IDS.startForegroundVoiceCapture
+    ].sort())
+  })
+
   it('registers Android foreground voice only when manifest and service status prove it startable', async () => {
     const registry = new LocalToolRegistry({ stablePeerId: 'android-peer' })
     const status = readyVoiceStatus()
@@ -142,6 +207,27 @@ describe('tauri native capability pack adapter', () => {
       data: { started: true }
     })
     expect(transport.startAndroidVoiceForegroundService).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires local approval before invoking Android foreground voice', async () => {
+    const registry = new LocalToolRegistry({ stablePeerId: 'android-peer' })
+    const status = readyVoiceStatus()
+    const transport = transportFor({
+      manifest: readyAndroidManifest(status),
+      foregroundStatus: status,
+      startResult: { started: true, status, reason: 'started' }
+    })
+    await registerTauriNativeCapabilityPack({ registry, transport })
+    const provider = providerFor(registry)
+
+    await expect(provider.executeTool({
+      tool_name: AURORA_NATIVE_TOOL_IDS.startForegroundVoiceCapture,
+      arguments: {}
+    }, context(['Tooling.ExecuteTool', 'Native.StartForegroundVoiceCapture']))).resolves.toMatchObject({
+      ok: false,
+      status: 'denied'
+    })
+    expect(transport.startAndroidVoiceForegroundService).not.toHaveBeenCalled()
   })
 
   it('omits Android foreground voice unless both manifest and current status are available', async () => {
