@@ -19,6 +19,12 @@ export {
   PeerPairingIssuer,
   createReconnectProofForBearer
 } from './authority.js'
+export {
+  EncryptedPeerGrantRepository,
+  LocalDataPeerAuditSink,
+  SecureInboundCredentialVerifierStore,
+  inboundVerifierSecretKey
+} from './local-data-authority-adapters.js'
 export type {
   AuthenticatedPeerContext,
   InboundCredentialVerifierStore,
@@ -46,6 +52,12 @@ export type {
   VerifyReconnectProofRequest,
   VerifyReconnectProofResult
 } from './authority.js'
+export type {
+  EncryptedPeerGrantRepositoryOptions,
+  InboundVerifierSecretStoragePort,
+  LocalDataPeerAuditSinkOptions,
+  SecureInboundCredentialVerifierStoreOptions
+} from './local-data-authority-adapters.js'
 export {
   PeerHostContractRegistry,
   createToolingPeerHostRegistry
