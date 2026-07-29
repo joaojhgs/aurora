@@ -1,0 +1,125 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  LocalToolRegistry,
+  buildLocalToolExportCatalogPage,
+  computeProjectionChecksum,
+  computeProjectionPageHash,
+  projectionDigest,
+  type LocalToolDescriptorV1,
+  type LocalToolProjectionContext
+} from '../src/local-tools/index.js'
+
+const authority = {
+  catalog_revision: 1,
+  export_policy_revision: 2,
+  auth_grant_revision: 3,
+  manifest_revision: 4,
+  switch_revision: 5,
+  protocol_revision: 1
+}
+
+const descriptor: LocalToolDescriptorV1 = {
+  version: 1,
+  toolContractId: 'core.scheduler.list',
+  localName: 'schedule.list',
+  displayName: 'List scheduled tasks',
+  description: 'List scheduled tasks',
+  argsSchema: { type: 'object', properties: {} },
+  outputSchema: { type: 'object', properties: { items: { type: 'array' } } },
+  argumentVisibility: {},
+  requiredPermissions: ['Scheduler.List'],
+  resourceScopes: ['scheduler.local'],
+  safetyClass: 'standard',
+  privacyClass: 'personal',
+  mutating: false,
+  dataEgress: false,
+  nativeRequirements: { capabilityIds: ['scheduler.read'], osPermissions: [] },
+  confirmationPolicy: 'never',
+  handlerId: 'core.scheduler.list'
+}
+
+describe('local tool export catalog', () => {
+  it('filters by trusted recipient grants and emits deterministic Python-shaped hashes', () => {
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registry.register({ descriptor, handler: () => ({ items: [] }) })
+    const context: LocalToolProjectionContext = {
+      recipientPeerId: 'recipient',
+      recipientPermissions: ['Tooling.GetTools', 'Tooling.ExecuteTool', 'Scheduler.List'],
+      authorityRevision: authority,
+      providerEnabled: true,
+      serviceExported: true,
+      discoveryExported: true,
+      executionExported: true
+    }
+
+    const page = buildLocalToolExportCatalogPage({
+      protocol_tier: 'projection_v1',
+      page_size: 100
+    }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: registry.publicTools(),
+      context,
+      cursorSecret: 'test-secret',
+      nowSeconds: () => 10,
+      nonce: () => 'nonce'
+    })
+
+    expect(page.complete).toBe(true)
+    expect(page.tools).toHaveLength(1)
+    expect(page.blocked_tools).toEqual([])
+    expect(page.retirements).toEqual([])
+    expect(page.final_checksum).toBe(computeProjectionChecksum(page.tools, [], []))
+    expect(page.page_hash).toBe(computeProjectionPageHash(page))
+    expect(page.projection_digest).toBe(page.final_checksum)
+    expect(projectionDigest(page.tools, 'recipient', authority)).toMatch(/^[0-9a-f]{64}$/u)
+  })
+
+  it('fails closed on cursor tamper and authority changes', () => {
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registry.register({ descriptor, handler: () => ({ items: [] }) })
+    const context: LocalToolProjectionContext = {
+      recipientPeerId: 'recipient',
+      recipientPermissions: ['Tooling.GetTools', 'Tooling.ExecuteTool', 'Scheduler.List'],
+      authorityRevision: authority,
+      providerEnabled: true,
+      serviceExported: true,
+      discoveryExported: true,
+      executionExported: true
+    }
+    const firstTool = registry.publicTools()[0]!
+    const secondTool = {
+      ...firstTool,
+      global_tool_id: 'aurora-tool:v1:provider:Tooling:core.scheduler.other',
+      tool_contract_id: 'core.scheduler.other',
+      local_name: 'schedule.other',
+      name: 'schedule.other'
+    }
+    const first = buildLocalToolExportCatalogPage({ page_size: 1 }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: [firstTool, secondTool],
+      context,
+      cursorSecret: 'test-secret',
+      nowSeconds: () => 10,
+      nonce: () => 'nonce'
+    })
+    expect(first.complete).toBe(false)
+    expect(first.next_cursor).toBeTruthy()
+    expect(() => buildLocalToolExportCatalogPage({ page_size: 1, cursor: `${first.next_cursor ?? ''}A` }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: registry.publicTools(),
+      context,
+      cursorSecret: 'test-secret'
+    })).toThrow(/projection_restart_required/)
+    expect(() => buildLocalToolExportCatalogPage({ page_size: 2, cursor: first.next_cursor ?? null }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: registry.publicTools(),
+      context,
+      cursorSecret: 'test-secret'
+    })).toThrow(/projection_restart_required/)
+  })
+})
