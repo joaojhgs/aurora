@@ -7,10 +7,12 @@ import {
   MemoryPeerRevocationBroadcaster,
   MemoryPeerRevocationController,
   MemoryReconnectChallengeStore,
+  NoopReconnectChallengeStore,
   PeerAuthorityResolver,
   PeerPairingIssuer,
   createReconnectProofForBearer,
   type LocalPeerGrantV1,
+  type PeerRelationshipIdentity,
   type PeerRelationshipSelector,
   type ReconnectTransportAttestation
 } from '../src/peer-host/authority.js'
@@ -20,6 +22,12 @@ const selector: PeerRelationshipSelector = {
   claimantPeerId: 'peer-claimant',
   verifierPeerId: 'peer-verifier',
   roomName: 'room-a'
+}
+
+const relationship: PeerRelationshipIdentity = {
+  claimantPeerId: selector.claimantPeerId,
+  verifierPeerId: selector.verifierPeerId,
+  roomName: selector.roomName
 }
 
 const otherSelector: PeerRelationshipSelector = {
@@ -75,9 +83,11 @@ describe('memory provider authority', () => {
     const store = new MemoryReconnectChallengeStore({
       randomBytes: () => new Uint8Array(32).fill(3)
     })
-    const challenge = await store.issueChallenge(selector, transport, 1_000)
+    const challenge = await store.issueChallenge(relationship, transport, 1_000)
 
     expect(challenge.challenge).toBe('03'.repeat(32))
+    expect(challenge).toMatchObject({ identity: relationship })
+    expect(challenge).not.toHaveProperty('selector')
     expect(challenge.expiresAtMs - challenge.issuedAtMs).toBe(20_000)
     await expect(store.consumeChallenge(challenge.challenge, otherSelector, transport, 1_001)).resolves.toMatchObject({ status: 'selector_mismatch' })
     await expect(store.consumeChallenge(challenge.challenge, selector, otherTransport, 1_001)).resolves.toMatchObject({ status: 'transport_mismatch' })
@@ -94,16 +104,21 @@ describe('memory provider authority', () => {
         return new Uint8Array(32).fill(calls === 1 ? 4 : 5)
       }
     })
-    await store.issueChallenge(selector, transport, 1)
-    const second = await store.issueChallenge(selector, transport, 2)
+    await store.issueChallenge(relationship, transport, 1)
+    const second = await store.issueChallenge(relationship, transport, 2)
     expect(second.challenge).toBe('05'.repeat(32))
     expect(calls).toBe(2)
 
     const exhausted = new MemoryReconnectChallengeStore({
       randomBytes: () => new Uint8Array(32).fill(9)
     })
-    await exhausted.issueChallenge(selector, transport, 1)
-    await expect(exhausted.issueChallenge(selector, transport, 2)).rejects.toThrow(/collision retry/u)
+    await exhausted.issueChallenge(relationship, transport, 1)
+    await expect(exhausted.issueChallenge(relationship, transport, 2)).rejects.toThrow(/collision retry/u)
+  })
+
+  it('fails unavailable instead of issuing a placeholder Noop reconnect challenge', async () => {
+    const store = new NoopReconnectChallengeStore()
+    await expect(store.issueChallenge(relationship, transport, 1)).rejects.toThrow(/unavailable/u)
   })
 
   it('resolves grants by exact selector, active coverage, and deterministic order', async () => {
@@ -182,7 +197,7 @@ describe('memory provider authority', () => {
       now: () => 1
     })
     const issued = await issuer.issue(selector)
-    const challenge = await challengeStore.issueChallenge(selector, transport, 2)
+    const challenge = await challengeStore.issueChallenge(relationship, transport, 2)
     const proofHex = await createReconnectProofForBearer(issued.bearerToken, selector, transport, challenge.challenge)
     const resolver = new PeerAuthorityResolver({
       verifierStore,
@@ -229,7 +244,7 @@ describe('memory provider authority', () => {
 
     await new PeerPairingIssuer({ verifierStore, now: () => 1, randomBytes: () => new Uint8Array(32).fill(11) }).issue(selector)
     await grantRepository.upsertGrant(grant())
-    const challenge = await challengeStore.issueChallenge(selector, transport, 2)
+    const challenge = await challengeStore.issueChallenge(relationship, transport, 2)
     const controller = new MemoryPeerRevocationController({
       verifierStore,
       grantRepository,
@@ -250,5 +265,43 @@ describe('memory provider authority', () => {
     expect(events).toHaveLength(1)
     expect(JSON.stringify(events[0])).not.toMatch(/tokenHashHex|bearer|proofHex/u)
     expect(auditSink.records).toEqual([expect.objectContaining({ action: 'grant.revoke', decision: 'revoked', redacted: true })])
+  })
+
+  it('audits tokenless resolver challenge issuance and rejects failed durable pairing persistence', async () => {
+    const auditSink = new MemoryPeerAuditSink()
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository: new MemoryPeerGrantRepository(),
+      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(12) }),
+      auditSink
+    })
+
+    await expect(resolver.issueReconnectChallenge({ identity: relationship, transport, nowMs: 5 })).resolves.toMatchObject({
+      challenge: '0c'.repeat(32),
+      identity: relationship
+    })
+    expect(auditSink.records).toEqual([
+      expect.objectContaining({
+        action: 'challenge.issue',
+        decision: 'issued',
+        selector: relationship,
+        redacted: true
+      })
+    ])
+    expect(JSON.stringify(auditSink.records[0]?.selector)).not.toMatch(/tokenId|bearer|proof|tokenHashHex/u)
+
+    const failingIssuer = new PeerPairingIssuer({
+      verifierStore: {
+        getVerifier: async () => undefined,
+        upsertVerifier: async () => { throw new Error('durable persistence failed') },
+        revokeVerifier: async () => undefined,
+        deleteVerifier: async () => undefined
+      },
+      auditSink,
+      randomBytes: () => new Uint8Array(32).fill(13),
+      now: () => 10
+    })
+    await expect(failingIssuer.issue(selector)).rejects.toThrow(/persistence failed/u)
+    expect(auditSink.records.filter((record) => record.action === 'credential.issue')).toHaveLength(0)
   })
 })

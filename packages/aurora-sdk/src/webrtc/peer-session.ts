@@ -268,12 +268,14 @@ function redactError(error: unknown): string {
 }
 
 function cloneAuthenticatedPeerContext(context: AuthenticatedPeerContext): AuthenticatedPeerContext {
-  return {
+  const cloned: AuthenticatedPeerContext = {
     selector: { ...context.selector },
     transport: { ...context.transport },
     credentialRevision: context.credentialRevision,
     authenticatedAtMs: context.authenticatedAtMs
   }
+  if (context.connectionEpoch !== undefined) Object.assign(cloned, { connectionEpoch: context.connectionEpoch })
+  return cloned
 }
 
 export function categorizeIceCandidate(candidate: string | null | undefined): IcePathCategory {
@@ -704,8 +706,11 @@ export class WebRtcPeerSession {
     const result = await auth.handleFrame(frame, this.authContext())
     if (result === true) return true
     if (typeof result === 'object' && result !== null) {
+      if (result.authenticated === true) {
+        this.updateAuthenticatedContext(result.authenticatedPeerContext)
+        return true
+      }
       if (result.handled === true) return true
-      if (result.authenticated === true) return true
       if (result.denied === true || result.terminal === true) {
         this.terminalNoReconnect = true
         this.fail('authorized auth frame denied', false)
@@ -853,6 +858,14 @@ export class WebRtcPeerSession {
         this.fail(error, false)
       }
     }
+  }
+
+  private updateAuthenticatedContext(authenticatedPeerContext: AuthenticatedPeerContext | undefined): void {
+    if (authenticatedPeerContext === undefined) return
+    const next = cloneAuthenticatedPeerContext(authenticatedPeerContext)
+    if (JSON.stringify(this.authenticatedPeerContext) === JSON.stringify(next)) return
+    this.authenticatedPeerContext = next
+    this.emit()
   }
 
   private deliverFrame(frame: unknown): void {

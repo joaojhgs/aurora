@@ -22,6 +22,7 @@ import {
   type ProviderLocalPeerGrantV1,
   type PeerRelationshipSelector
 } from '../src/peer-host/index.js'
+import type { PeerRelationshipIdentity } from '../src/peer-host/authority.js'
 
 const selector: PeerRelationshipSelector = {
   tokenId: 'token-1',
@@ -33,6 +34,12 @@ const selector: PeerRelationshipSelector = {
 const otherSelector: PeerRelationshipSelector = {
   ...selector,
   roomName: 'room-b'
+}
+
+const relationship: PeerRelationshipIdentity = {
+  claimantPeerId: selector.claimantPeerId,
+  verifierPeerId: selector.verifierPeerId,
+  roomName: selector.roomName
 }
 
 const profileId = 'profile-1'
@@ -373,6 +380,42 @@ describe('local-data peer authority adapters', () => {
     ])
     const auditText = JSON.stringify(await session.localAudit.listAudit())
     expect(auditText).not.toMatch(/peer-verifier|room-a|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u)
+  })
+
+  it('writes tokenless challenge audit records without token, verifier hash, proof, or bearer material', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open(profileId, localNodeId)
+    const sink = new LocalDataPeerAuditSink({
+      auditRepository: session.localAudit,
+      profileId,
+      localNodeId,
+      randomId: () => 'audit-challenge'
+    })
+
+    await sink.record({
+      action: 'challenge.issue',
+      selector: relationship,
+      decision: 'issued',
+      createdAtMs: 400,
+      redacted: true,
+      redactedFields: ['bearerToken', 'tokenHashHex', 'proofHex']
+    })
+
+    const audits = await session.localAudit.listAudit()
+    expect(audits).toEqual([
+      expect.objectContaining({
+        id: 'audit-challenge',
+        peerId: relationship.claimantPeerId,
+        action: 'challenge.issue',
+        decision: 'issued',
+        resultStatus: 'complete',
+        redactedDetailJson: expect.objectContaining({
+          redacted: true,
+          secretsRedacted: true
+        })
+      })
+    ])
+    expect(JSON.stringify(audits)).not.toMatch(/tokenId|token_id|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u)
   })
 })
 

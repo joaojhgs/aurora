@@ -147,6 +147,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private asyncDispatchFailureCount = 0
   private lastAsyncDispatchFailure: AsyncDispatchFailure | null = null
   private authenticatedPeerContext: AuthenticatedPeerContext | undefined
+  private readonly startedAuthorityEpochKeys = new Set<string>()
   private unsubscribeFrames: (() => void) | undefined
   private unsubscribeSession: (() => void) | undefined
 
@@ -499,6 +500,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.remoteProtocol = null
     this.manifest = null
     this.authenticatedPeerContext = undefined
+    this.startedAuthorityEpochKeys.clear()
     this.remoteAvailability = 'unknown'
     this.remoteLeaseCursor = null
     this.remoteLeaseFloor = null
@@ -515,7 +517,10 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       this.resetEpoch(`session ${snapshot.state}`)
       return
     }
+    const previousKey = authorityContextKey(this.authenticatedPeerContext)
     this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(snapshot)
+    const nextKey = authorityContextKey(this.authenticatedPeerContext)
+    if (previousKey !== nextKey) this.maybeStartPeerHostEpoch()
   }
 
   private handleFrame(raw: unknown): void {
@@ -616,11 +621,17 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.remoteProtocol = negotiateProtocol(this.localProtocol, protocol)
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.reassembler = new FragmentReassembler({ limits: this.remoteProtocol.limits, clock: this.clock })
-    if (this.peerHost && this.remoteProtocol.capabilities.has(CAP_PROVIDER_LEASE_V1)) {
-      void this.peerHost.startEpoch(this.remotePeerId, this.authenticatedPeerContext)
-        .then((frame) => this.sendLogicalFrame(frame))
-        .catch(() => undefined)
-    }
+    this.maybeStartPeerHostEpoch()
+  }
+
+  private maybeStartPeerHostEpoch(): void {
+    if (!this.peerHost || !this.remoteProtocol?.capabilities.has(CAP_PROVIDER_LEASE_V1)) return
+    const key = authorityContextKey(this.authenticatedPeerContext)
+    if (this.startedAuthorityEpochKeys.has(key)) return
+    this.startedAuthorityEpochKeys.add(key)
+    void this.peerHost.startEpoch(this.remotePeerId, this.authenticatedPeerContext)
+      .then((frame) => this.sendLogicalFrame(frame))
+      .catch(() => undefined)
   }
 
   private resolvePending(id: string, value: unknown): void {
@@ -1078,6 +1089,20 @@ function isLeaseBearingFrame(frame: Record<string, unknown>): boolean {
 
 function leaseCursor(frame: ProviderLeaseFrame): RemoteLeaseCursor {
   return { epoch: frame.connection_epoch, revision: frame.availability_revision }
+}
+
+function authorityContextKey(context: AuthenticatedPeerContext | undefined): string {
+  if (context === undefined) return 'legacy-session-authority'
+  return JSON.stringify([
+    context.selector.tokenId,
+    context.selector.claimantPeerId,
+    context.selector.verifierPeerId,
+    context.selector.roomName,
+    context.transport.channelBinding,
+    context.transport.claimantSignalingPeerId,
+    context.transport.verifierSignalingPeerId,
+    context.credentialRevision
+  ])
 }
 
 function parserLimitsFor(protocol: NegotiatedPeerProtocol | null): Partial<typeof DEFAULT_PARSER_LIMITS> {

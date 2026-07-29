@@ -18,6 +18,7 @@ import type {
   PeerAuditSink,
   PeerGrantRepository,
   PeerGrantResolutionRequest,
+  PeerRelationshipIdentity,
   PeerRelationshipSelector
 } from './authority.js'
 
@@ -33,6 +34,11 @@ const connectionEpochSchema = z.string().min(1).max(MAX_ID_LENGTH)
 const epochMsSchema = z.number().int().safe().nonnegative().refine((value) => !Object.is(value, -0))
 const selectorSchema = z.object({
   tokenId: safeIdSchema,
+  claimantPeerId: safeIdSchema,
+  verifierPeerId: safeIdSchema,
+  roomName: roomNameSchema
+}).strict()
+const relationshipIdentitySchema = z.object({
   claimantPeerId: safeIdSchema,
   verifierPeerId: safeIdSchema,
   roomName: roomNameSchema
@@ -298,7 +304,7 @@ export class LocalDataPeerAuditSink implements PeerAuditSink {
   }
 
   async record(record: LocalPeerAuditRecord): Promise<void> {
-    const selector = parseSelector(record.selector)
+    const selector = parseSelectorOrIdentity(record.selector)
     await this.auditRepository.appendAudit({
       id: parseStorageIdentity(this.randomId(), 'auditId'),
       profileId: this.profileId,
@@ -330,6 +336,12 @@ export function inboundVerifierSecretKey(selector: PeerRelationshipSelector, key
 
 function parseSelector(value: unknown): PeerRelationshipSelector {
   return parseLocalDataBoundary(selectorSchema, value, 'peer_authority.selector')
+}
+
+function parseSelectorOrIdentity(value: unknown): PeerRelationshipSelector | PeerRelationshipIdentity {
+  const record = value as { tokenId?: unknown }
+  if (typeof record?.tokenId === 'string') return parseSelector(value)
+  return parseLocalDataBoundary(relationshipIdentitySchema, value, 'peer_authority.identity')
 }
 
 function parseVerifier(value: unknown): LocalPeerCredentialVerifierV1 {

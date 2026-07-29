@@ -219,6 +219,32 @@ describe('WebRtcPeerSession', () => {
     expect(session.getSnapshot().authenticatedPeerContext).toBeUndefined()
   })
 
+  it('updates authenticated peer context from a later authorized auth result and emits a snapshot', async () => {
+    const nextContext = authenticatedContext()
+    const snapshots: Array<ReturnType<WebRtcPeerSession['getSnapshot']>> = []
+    const { session, channel } = await authorizedAnswerer({
+      auth: {
+        tryReconnect: async () => true,
+        handleFrame: async (frame: unknown) => {
+          if (typeof frame === 'object' && frame !== null && (frame as { type?: unknown }).type === 'mesh_auth_proof_v1') {
+            return { handled: true, authenticated: true, authenticatedPeerContext: nextContext }
+          }
+          return undefined
+        }
+      },
+      localStableId: 'stable-z',
+      expectedRemoteStableId: 'stable-a'
+    })
+    session.subscribe((snapshot) => snapshots.push(snapshot))
+
+    expect(session.getSnapshot().authenticatedPeerContext).toBeUndefined()
+    channel.onmessage?.({ data: JSON.stringify({ type: 'mesh_auth_proof_v1' }) })
+    await flush()
+
+    expect(session.getSnapshot().authenticatedPeerContext).toEqual(nextContext)
+    expect(snapshots.some((snapshot) => snapshot.authenticatedPeerContext?.selector.tokenId === 'token-1')).toBe(true)
+  })
+
   it('preserves selected prflx evidence even when a configured STUN server gathered srflx', async () => {
     const { session, pc } = await authorizedAnswerer({
       iceServers: [{ urls: ['stun:127.0.0.1:3478'] }]

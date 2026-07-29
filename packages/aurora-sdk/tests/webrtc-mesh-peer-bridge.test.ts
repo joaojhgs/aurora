@@ -421,6 +421,58 @@ describe('WebRtcMeshPeerBridge', () => {
     bridge.close()
   })
 
+  it('starts provider epochs once per authority-context key and keeps pre-context calls denied', async () => {
+    const handler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: handler,
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: (() => { let index = 0; return () => `epoch-auth-${++index}` })()
+    })
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(1)
+    session.emit({ type: 'call', id: 'pre-context', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
+    await flush()
+    expect(handler).not.toHaveBeenCalled()
+    expect(session.sent.find((frame) => (frame as any).type === 'error' && (frame as any).id === 'pre-context')).toMatchObject({ error: { code: 425 } })
+
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(1)
+
+    session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(2)
+    expect(session.sent.at(-1)).toMatchObject({ type: 'manifest' })
+
+    session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(2)
+
+    session.setSnapshot({ authenticatedPeerContext: authenticatedContext({ credentialRevision: 5 }) })
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(3)
+    expect(session.sent.at(-1)).toMatchObject({ type: 'manifest' })
+    bridge.close()
+  })
+
   it('closes provider epoch and clears stale authority when authenticated snapshot assertion fails', async () => {
     const session = new FakeSession()
     session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })

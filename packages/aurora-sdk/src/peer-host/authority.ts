@@ -18,6 +18,12 @@ export interface PeerRelationshipSelector {
   readonly roomName: string
 }
 
+export interface PeerRelationshipIdentity {
+  readonly claimantPeerId: string
+  readonly verifierPeerId: string
+  readonly roomName: string
+}
+
 export interface ReconnectTransportAttestation {
   readonly channelBinding: string
   readonly claimantSignalingPeerId: string
@@ -106,7 +112,7 @@ export type LocalPeerAuditAction =
 
 export interface LocalPeerAuditRecord {
   readonly action: LocalPeerAuditAction
-  readonly selector: PeerRelationshipSelector
+  readonly selector: PeerRelationshipSelector | PeerRelationshipIdentity
   readonly decision: 'accepted' | 'rejected' | 'revoked' | 'issued'
   readonly reasonCode?: string
   readonly methodId?: string
@@ -156,7 +162,7 @@ export type ReconnectChallengeConsumeStatus =
 
 export interface ReconnectChallengeRecord {
   readonly challenge: string
-  readonly selector: PeerRelationshipSelector
+  readonly identity: PeerRelationshipIdentity
   readonly transport: ReconnectTransportAttestation
   readonly issuedAtMs: number
   readonly expiresAtMs: number
@@ -170,9 +176,9 @@ export interface ReconnectChallengeConsumeResult {
 }
 
 export interface ReconnectChallengeStore {
-  issueChallenge(selector: PeerRelationshipSelector, transport: ReconnectTransportAttestation, nowMs: number): Promise<ReconnectChallengeRecord>
+  issueChallenge(identity: PeerRelationshipIdentity, transport: ReconnectTransportAttestation, nowMs: number): Promise<ReconnectChallengeRecord>
   consumeChallenge(challenge: string, selector: PeerRelationshipSelector, transport: ReconnectTransportAttestation, nowMs: number): Promise<ReconnectChallengeConsumeResult>
-  rejectChallenges(selector: PeerRelationshipSelector, rejectedAtMs: number): Promise<number>
+  rejectChallenges(identity: PeerRelationshipIdentity, rejectedAtMs: number): Promise<number>
 }
 
 export interface PeerAuditSink {
@@ -217,6 +223,12 @@ export interface VerifyReconnectProofRequest {
   readonly nowMs: number
 }
 
+export interface IssueReconnectChallengeRequest {
+  readonly identity: PeerRelationshipIdentity
+  readonly transport: ReconnectTransportAttestation
+  readonly nowMs: number
+}
+
 export interface VerifyReconnectProofResult {
   readonly ok: boolean
   readonly context?: AuthenticatedPeerContext
@@ -251,23 +263,17 @@ export class DenyAllPeerGrantRepository implements PeerGrantRepository {
 }
 
 export class NoopReconnectChallengeStore implements ReconnectChallengeStore {
-  async issueChallenge(selector: PeerRelationshipSelector, transport: ReconnectTransportAttestation, nowMs: number): Promise<ReconnectChallengeRecord> {
-    validateSelector(selector)
+  async issueChallenge(identity: PeerRelationshipIdentity, transport: ReconnectTransportAttestation, _nowMs: number): Promise<ReconnectChallengeRecord> {
+    validateIdentity(identity)
     validateTransport(transport)
-    return {
-      challenge: '0'.repeat(64),
-      selector: cloneSelector(selector),
-      transport: cloneTransport(transport),
-      issuedAtMs: nowMs,
-      expiresAtMs: nowMs
-    }
+    throw new Error('Reconnect challenge store is unavailable')
   }
 
   async consumeChallenge(_challenge: string, _selector: PeerRelationshipSelector, _transport: ReconnectTransportAttestation, _nowMs: number): Promise<ReconnectChallengeConsumeResult> {
     return { status: 'not_found' }
   }
 
-  async rejectChallenges(_selector: PeerRelationshipSelector, _rejectedAtMs: number): Promise<number> {
+  async rejectChallenges(_identity: PeerRelationshipIdentity, _rejectedAtMs: number): Promise<number> {
     return 0
   }
 }
@@ -297,6 +303,12 @@ export class PeerAuthorityResolver {
     this.challengeStore = options.challengeStore ?? new NoopReconnectChallengeStore()
     this.auditSink = options.auditSink ?? new NoopPeerAuditSink()
     this.manifestProvider = options.manifestProvider
+  }
+
+  async issueReconnectChallenge(request: IssueReconnectChallengeRequest): Promise<ReconnectChallengeRecord> {
+    const challenge = await this.challengeStore.issueChallenge(request.identity, request.transport, request.nowMs)
+    await this.auditSink.record(auditRecord('challenge.issue', request.identity, 'issued', request.nowMs))
+    return challenge
   }
 
   async verifyReconnectProof(request: VerifyReconnectProofRequest): Promise<VerifyReconnectProofResult> {
@@ -465,8 +477,8 @@ export class MemoryReconnectChallengeStore implements ReconnectChallengeStore {
     this.random = options.randomBytes ?? randomBytes
   }
 
-  async issueChallenge(selector: PeerRelationshipSelector, transport: ReconnectTransportAttestation, nowMs: number): Promise<ReconnectChallengeRecord> {
-    validateSelector(selector)
+  async issueChallenge(identity: PeerRelationshipIdentity, transport: ReconnectTransportAttestation, nowMs: number): Promise<ReconnectChallengeRecord> {
+    validateIdentity(identity)
     validateTransport(transport)
     this.prune(nowMs)
     for (let attempt = 0; attempt <= MAX_CHALLENGE_COLLISION_RETRIES; attempt += 1) {
@@ -475,7 +487,7 @@ export class MemoryReconnectChallengeStore implements ReconnectChallengeStore {
       if (this.challenges.has(challenge)) continue
       const record: ReconnectChallengeRecord = {
         challenge,
-        selector: cloneSelector(selector),
+        identity: cloneIdentity(identity),
         transport: cloneTransport(transport),
         issuedAtMs: nowMs,
         expiresAtMs: nowMs + DEFAULT_CHALLENGE_TTL_MS
@@ -494,7 +506,7 @@ export class MemoryReconnectChallengeStore implements ReconnectChallengeStore {
       return { status: 'expired' }
     }
     if (record.rejectedAtMs !== undefined) return { status: 'rejected', challenge: cloneChallenge(record) }
-    if (!selectorEquals(record.selector, selector)) return { status: 'selector_mismatch', challenge: cloneChallenge(record) }
+    if (!identityEquals(record.identity, selector)) return { status: 'selector_mismatch', challenge: cloneChallenge(record) }
     if (!transportEquals(record.transport, transport)) return { status: 'transport_mismatch', challenge: cloneChallenge(record) }
     if (record.consumedAtMs !== undefined) return { status: 'replay', challenge: cloneChallenge(record) }
     const consumed = { ...record, consumedAtMs: nowMs }
@@ -502,10 +514,11 @@ export class MemoryReconnectChallengeStore implements ReconnectChallengeStore {
     return { status: 'accepted', challenge: cloneChallenge(consumed) }
   }
 
-  async rejectChallenges(selector: PeerRelationshipSelector, rejectedAtMs: number): Promise<number> {
+  async rejectChallenges(identity: PeerRelationshipIdentity, rejectedAtMs: number): Promise<number> {
+    validateIdentity(identity)
     let rejected = 0
     for (const [challenge, record] of this.challenges) {
-      if (!selectorEquals(record.selector, selector)) continue
+      if (!identityEquals(record.identity, identity)) continue
       if (record.expiresAtMs <= rejectedAtMs) {
         this.challenges.delete(challenge)
         continue
@@ -527,7 +540,7 @@ export class MemoryPeerAuditSink implements PeerAuditSink {
   readonly records: LocalPeerAuditRecord[] = []
 
   async record(record: LocalPeerAuditRecord): Promise<void> {
-    this.records.push({ ...record, selector: cloneSelector(record.selector), redactedFields: [...record.redactedFields] })
+    this.records.push({ ...record, selector: cloneSelectorOrIdentity(record.selector), redactedFields: [...record.redactedFields] })
   }
 }
 
@@ -650,9 +663,40 @@ export async function createReconnectProofForBearer(rawBearerToken: string, sele
 
 function validateSelector(selector: PeerRelationshipSelector): void {
   assertNonEmpty('tokenId', selector.tokenId, 128)
-  assertNonEmpty('claimantPeerId', selector.claimantPeerId)
-  assertNonEmpty('verifierPeerId', selector.verifierPeerId)
-  assertNonEmpty('roomName', selector.roomName, 512)
+  validateIdentity(selector)
+}
+
+function validateIdentity(identity: PeerRelationshipIdentity): void {
+  assertNonEmpty('claimantPeerId', identity.claimantPeerId)
+  assertNonEmpty('verifierPeerId', identity.verifierPeerId)
+  assertNonEmpty('roomName', identity.roomName, 512)
+}
+
+function identityEquals(left: PeerRelationshipIdentity, right: PeerRelationshipIdentity): boolean {
+  return left.claimantPeerId === right.claimantPeerId &&
+    left.verifierPeerId === right.verifierPeerId &&
+    left.roomName === right.roomName
+}
+
+function selectorHasTokenId(selector: PeerRelationshipSelector | PeerRelationshipIdentity): selector is PeerRelationshipSelector {
+  return typeof (selector as PeerRelationshipSelector).tokenId === 'string'
+}
+
+function cloneIdentity(identity: PeerRelationshipIdentity): PeerRelationshipIdentity {
+  return {
+    claimantPeerId: identity.claimantPeerId,
+    verifierPeerId: identity.verifierPeerId,
+    roomName: identity.roomName
+  }
+}
+
+function cloneSelectorOrIdentity(selector: PeerRelationshipSelector | PeerRelationshipIdentity): PeerRelationshipSelector | PeerRelationshipIdentity {
+  return selectorHasTokenId(selector) ? cloneSelector(selector) : cloneIdentity(selector)
+}
+
+function validateSelectorOrIdentity(selector: PeerRelationshipSelector | PeerRelationshipIdentity): void {
+  if (selectorHasTokenId(selector)) validateSelector(selector)
+  else validateIdentity(selector)
 }
 
 function validateTransport(transport: ReconnectTransportAttestation): void {
@@ -698,9 +742,7 @@ function selectorKey(selector: PeerRelationshipSelector): string {
 
 function selectorEquals(left: PeerRelationshipSelector, right: PeerRelationshipSelector): boolean {
   return left.tokenId === right.tokenId &&
-    left.claimantPeerId === right.claimantPeerId &&
-    left.verifierPeerId === right.verifierPeerId &&
-    left.roomName === right.roomName
+    identityEquals(left, right)
 }
 
 function transportEquals(left: ReconnectTransportAttestation, right: ReconnectTransportAttestation): boolean {
@@ -725,7 +767,7 @@ function grantCoverageFailure(grant: LocalPeerGrantV1, request: PeerGrantResolut
 
 function auditRecord(
   action: LocalPeerAuditAction,
-  selector: PeerRelationshipSelector,
+  selector: PeerRelationshipSelector | PeerRelationshipIdentity,
   decision: LocalPeerAuditRecord['decision'],
   createdAtMs: number,
   reasonCode?: string,
@@ -734,9 +776,10 @@ function auditRecord(
   correlationId?: string,
   authorityState?: string
 ): LocalPeerAuditRecord {
+  validateSelectorOrIdentity(selector)
   const record: LocalPeerAuditRecord = {
     action,
-    selector: cloneSelector(selector),
+    selector: cloneSelectorOrIdentity(selector),
     decision,
     createdAtMs,
     redacted: true,
@@ -784,7 +827,7 @@ function cloneGrant(grant: LocalPeerGrantV1): LocalPeerGrantV1 {
 function cloneChallenge(record: ReconnectChallengeRecord): ReconnectChallengeRecord {
   return {
     ...record,
-    selector: cloneSelector(record.selector),
+    identity: cloneIdentity(record.identity),
     transport: cloneTransport(record.transport)
   }
 }

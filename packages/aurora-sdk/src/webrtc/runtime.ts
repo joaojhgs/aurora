@@ -14,7 +14,7 @@ import {
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   buildProtocolHello
 } from './peer-protocol.js'
-import { bytesToBase64Url, constantTimeEqual, decodeJsonPayload, deriveRoomKeys, encodeJsonPayload, randomBytes, type AuroraScryptDeriver, type RoomKeys, type ScryptWorkerFactory } from './crypto.js'
+import { bytesToBase64Url, constantTimeEqual, decodeJsonPayload, deriveRoomKeys, encodeJsonPayload, hexToBytes, randomBytes, sha256Bytes, type AuroraScryptDeriver, type RoomKeys, type ScryptWorkerFactory } from './crypto.js'
 import { zeroBytes } from './encoding.js'
 import {
   MemoryPeerCredentialStore,
@@ -56,7 +56,7 @@ import {
 } from './peer-session.js'
 import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import type { WebRtcPeerHost } from '../peer-host/index.js'
-import type { PeerAuthorityResolver } from '../peer-host/authority.js'
+import type { PeerAuthorityResolver, PeerPairingIssuer, PeerRelationshipSelector } from '../peer-host/authority.js'
 import type {
   AuroraConnectionMode,
   PeerConnectionController,
@@ -107,6 +107,7 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   localProtocolCapabilities?: readonly string[] | undefined
   peerHost?: WebRtcPeerHost | undefined
   peerAuthorityResolver?: PeerAuthorityResolver | undefined
+  peerPairingIssuer?: PeerPairingIssuer | undefined
   appLayerE2eeAllowed?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
   pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
@@ -326,7 +327,8 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
         onDiagnostic: (code, message) => this.recordDiagnostic(code, message),
         randomId: this.options.randomId,
         pairingConnectPoll: this.options.pairingConnectPoll,
-        peerAuthorityResolver: this.options.peerAuthorityResolver
+        peerAuthorityResolver: this.options.peerAuthorityResolver,
+        peerPairingIssuer: this.options.peerPairingIssuer
       })
       const sessionOptions: PeerSessionOptions = {
         localSignalingId,
@@ -541,7 +543,18 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
   private awaitingGatewayHello = false
   private pairingHandle: string | null = null
   private inboundPairingHandle: string | null = null
-  private issuedInboundCredential: { token: string; tokenId: string; pairingSessionId: string } | null = null
+  private issuedInboundCredential: {
+    mode: 'legacy'
+    token: string
+    tokenId: string
+    pairingSessionId: string
+  } | {
+    mode: 'durable'
+    selector: PeerRelationshipSelector
+    tokenHashHex: string
+    credentialRevision: number
+    pairingSessionId: string
+  } | null = null
   private localSasConfirmed = false
   private pairingConnectPromise: Promise<PeerSessionAuthFrameResult> | null = null
   private readonly pairingConnectPoll: PairingConnectPollOptions
@@ -559,11 +572,22 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     randomId?: (() => string) | undefined
     pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
     peerAuthorityResolver?: PeerAuthorityResolver | undefined
+    peerPairingIssuer?: PeerPairingIssuer | undefined
   }) {
     this.pairingConnectPoll = { ...DEFAULT_PAIRING_CONNECT_POLL, ...options.pairingConnectPoll }
   }
 
-  async tryReconnect(): Promise<PeerSessionAuthFrameResult> {
+  async tryReconnect(context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+    if (this.options.peerAuthorityResolver !== undefined) {
+      const issued = await this.issueVerifierReconnectChallenge(context)
+      if (issued) {
+        this.resolveReconnectWait(undefined)
+        return await new Promise<PeerSessionAuthFrameResult>((resolve) => {
+          this.reconnectWaiter = resolve
+          this.reconnectTimer = setTimeout(() => this.resolveReconnectWait(undefined), 1500)
+        })
+      }
+    }
     const peerId = this.options.profile.expectedStablePeerId ?? ''
     if (!peerId || !this.options.credentialStore) return undefined
     try {
@@ -781,7 +805,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       } else if (method === AUTH_METHODS.pairingConnect) {
         result = this.handleInboundPairingConnect(params)
       } else {
-        result = this.handleInboundPairingExchange(params, context)
+        result = await this.handleInboundPairingExchange(params, context)
       }
       await context.sendControlFrame({ type: 'result', id, result })
     } catch (error) {
@@ -817,17 +841,50 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     }
   }
 
-  private handleInboundPairingExchange(params: Record<string, unknown>, context: PeerSessionAuthContext): Record<string, unknown> {
+  private async handleInboundPairingExchange(params: Record<string, unknown>, context: PeerSessionAuthContext): Promise<Record<string, unknown>> {
     const pairing = this.requireInboundPairingContext(params, false)
     this.assertInboundHandle(params)
     if (!this.localSasConfirmed) throw new PairingProtocolError('Pairing has not been approved locally')
+    if (this.options.peerPairingIssuer !== undefined) {
+      if (this.issuedInboundCredential !== null) throw new PairingProtocolError('Pairing credential was already issued')
+      const selector: PeerRelationshipSelector = {
+        tokenId: boundedTokenId(),
+        claimantPeerId: pairing.remoteStablePeerId,
+        verifierPeerId: this.options.localStablePeerId,
+        roomName: this.options.profile.room
+      }
+      const issued = await this.options.peerPairingIssuer.issue(selector)
+      this.issuedInboundCredential = {
+        mode: 'durable',
+        selector: {
+          tokenId: issued.verifier.tokenId,
+          claimantPeerId: issued.verifier.claimantPeerId,
+          verifierPeerId: issued.verifier.verifierPeerId,
+          roomName: issued.verifier.roomName
+        },
+        tokenHashHex: issued.verifier.tokenHashHex,
+        credentialRevision: issued.verifier.credentialRevision,
+        pairingSessionId: pairing.pairingSessionId
+      }
+      return {
+        token: issued.bearerToken,
+        token_id: issued.tokenId,
+        device_id: context.localStableId ?? this.options.localStablePeerId,
+        user_id: this.options.localStablePeerId,
+        permissions: [],
+        peer_id: this.options.localStablePeerId,
+        node_name: this.options.localNodeName
+      }
+    }
     if (this.issuedInboundCredential === null) {
       this.issuedInboundCredential = {
+        mode: 'legacy',
         token: `thin-token-${bytesToBase64Url(randomBytes(32))}`,
         tokenId: `thin-token-row-${bytesToBase64Url(randomBytes(18))}`,
         pairingSessionId: pairing.pairingSessionId
       }
     }
+    if (this.issuedInboundCredential.mode !== 'legacy') throw new PairingProtocolError('Pairing credential was already issued')
     return {
       token: this.issuedInboundCredential.token,
       token_id: this.issuedInboundCredential.tokenId,
@@ -839,11 +896,38 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     }
   }
 
-  private handleInboundAuthFrame(frame: Record<string, unknown>, context: PeerSessionAuthContext): PeerSessionAuthFrameResult {
+  private async handleInboundAuthFrame(frame: Record<string, unknown>, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
     const pairing = this.pairing
     const credential = this.issuedInboundCredential
     if (!pairing || !credential) return undefined
     const token = typeof frame.token === 'string' ? frame.token : ''
+    if (credential.mode === 'durable') {
+      const transport = await this.currentInboundTransport(context)
+      const actualHash = await sha256Bytes(token)
+      const expectedHash = hexToBytes(credential.tokenHashHex)
+      try {
+        const matches = frame.pairing_session_id === credential.pairingSessionId &&
+          frame.peer_id === pairing.remoteStablePeerId &&
+          frame.signaling_peer_id === context.remoteSignalingId &&
+          transport.claimantSignalingPeerId === context.remoteSignalingId &&
+          transport.verifierSignalingPeerId === context.localSignalingId &&
+          constantTimeEqual(actualHash, expectedHash)
+        if (!matches) return { handled: true, denied: true, terminal: true }
+        return {
+          handled: true,
+          authenticated: true,
+          authenticatedPeerContext: {
+            selector: { ...credential.selector },
+            transport,
+            credentialRevision: credential.credentialRevision,
+            authenticatedAtMs: Date.now()
+          }
+        }
+      } finally {
+        zeroBytes(actualHash)
+        zeroBytes(expectedHash)
+      }
+    }
     const expectedToken = new TextEncoder().encode(credential.token)
     const actualToken = new TextEncoder().encode(token)
     const matches = frame.pairing_session_id === credential.pairingSessionId &&
@@ -854,6 +938,40 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     expectedToken.fill(0)
     if (!matches) return { handled: true, denied: true, terminal: true }
     return { handled: true, authenticated: true }
+  }
+
+  private async issueVerifierReconnectChallenge(context: PeerSessionAuthContext): Promise<boolean> {
+    const claimantPeerId = this.options.profile.expectedStablePeerId ?? context.remoteStableId
+    if (!claimantPeerId || !context.offerSdp || !context.answerSdp) return false
+    const transport = await this.currentInboundTransport(context)
+    const challenge = await this.options.peerAuthorityResolver!.issueReconnectChallenge({
+      identity: {
+        claimantPeerId,
+        verifierPeerId: this.options.localStablePeerId,
+        roomName: this.options.profile.room
+      },
+      transport,
+      nowMs: Date.now()
+    })
+    await context.sendControlFrame({
+      type: 'mesh_auth_challenge_v1',
+      challenge: challenge.challenge,
+      channel_binding: transport.channelBinding,
+      claimant_peer_id: claimantPeerId,
+      verifier_peer_id: this.options.localStablePeerId,
+      claimant_signaling_peer_id: transport.claimantSignalingPeerId,
+      verifier_signaling_peer_id: transport.verifierSignalingPeerId,
+      room_name: this.options.profile.room
+    })
+    return true
+  }
+
+  private async currentInboundTransport(context: PeerSessionAuthContext) {
+    return {
+      channelBinding: await reconnectChannelBinding(this.options.profile, context),
+      claimantSignalingPeerId: context.remoteSignalingId,
+      verifierSignalingPeerId: context.localSignalingId
+    }
   }
 
   private async handleInboundReconnectProof(frame: Record<string, unknown>, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
@@ -1119,6 +1237,10 @@ function randomBrowserId(): string {
   globalThis.crypto?.getRandomValues(bytes)
   if (bytes.some((byte) => byte !== 0)) return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
   return `thin-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
+}
+
+function boundedTokenId(): string {
+  return `thin-token-row-${bytesToBase64Url(randomBytes(18))}`
 }
 
 function bytesFromDataChannel(data: string | ArrayBuffer | ArrayBufferView): Uint8Array {

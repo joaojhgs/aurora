@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AuroraClient, AuroraError, type AuroraTransport, type AuroraTransportRequest, type AuroraTransportResponse, type AuroraEventSubscription, type AuroraStreamRequest, createEventSubscription } from '../src/index.js'
 import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, type BrowserWebRtcRuntime, type WebRtcPeerConnectionProfile } from '../src/webrtc/index.js'
+import {
+  MemoryInboundCredentialVerifierStore,
+  MemoryPeerGrantRepository,
+  MemoryReconnectChallengeStore,
+  PeerAuthorityResolver,
+  PeerPairingIssuer,
+  createReconnectProofForBearer
+} from '../src/peer-host/authority.js'
 
 const secureLocation = { protocol: 'https:', hostname: 'app.example.test' }
 
@@ -638,6 +646,8 @@ function makeRuntimeHarness(options: {
   credentialStore?: MemoryPeerCredentialStore
   localProtocolCapabilities?: readonly string[]
   appLayerE2eeAllowed?: boolean
+  peerAuthorityResolver?: PeerAuthorityResolver
+  peerPairingIssuer?: PeerPairingIssuer
 } = {}): RuntimeHarness {
   const signaling = new RuntimeFakeSignaling()
   const pc = new RuntimeFakePeerConnection('offer-sdp', 'answer-sdp')
@@ -658,6 +668,8 @@ function makeRuntimeHarness(options: {
     randomId: () => (id++ === 0 ? 'a-local' : `rpc-${id}`),
     localProtocolCapabilities: options.localProtocolCapabilities,
     appLayerE2eeAllowed: options.appLayerE2eeAllowed,
+    peerAuthorityResolver: options.peerAuthorityResolver,
+    peerPairingIssuer: options.peerPairingIssuer,
     windowLocation: secureLocation
   })
   return { runtime, signaling, pc, store, runtimeProfile }
@@ -1200,5 +1212,144 @@ describe('browser WebRTC runtime Python gateway auth interop', () => {
     expect(runtime.peer.snapshot().state).toBe('authorized')
     expect(runtime.peer.snapshot().protocolCapabilities).toContain(CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1)
     await runtime.close()
+  })
+
+  it('issues verifier-side tokenless reconnect challenges and accepts full-selector proofs with context', async () => {
+    const verifierStore = new MemoryInboundCredentialVerifierStore()
+    const issuer = new PeerPairingIssuer({
+      verifierStore,
+      randomBytes: () => new Uint8Array(32).fill(15),
+      now: () => 100
+    })
+    const issued = await issuer.issue({
+      tokenId: 'token-row-remote',
+      claimantPeerId: 'peer-remote',
+      verifierPeerId: 'local-stable',
+      roomName: 'room-1'
+    })
+    const resolver = new PeerAuthorityResolver({
+      verifierStore,
+      grantRepository: new MemoryPeerGrantRepository(),
+      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(16) })
+    })
+    const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
+
+    await harness.runtime.peer.connect(harness.runtimeProfile)
+    harness.signaling.emit({ channel: 'presence', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'presence', stable_peer_id: 'peer-remote' } })
+    await flushRuntime()
+    harness.signaling.emit({ channel: 'answer', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'answer', sdp: 'answer-sdp' } })
+    await flushRuntime()
+    const channel = harness.pc.channels[0] as RuntimeFakeChannel
+    channel.open()
+    const challenge = await decodeSent(channel, 0)
+    expect(challenge).toMatchObject({
+      type: 'mesh_auth_challenge_v1',
+      challenge: '10'.repeat(32),
+      claimant_peer_id: 'peer-remote',
+      verifier_peer_id: 'local-stable',
+      claimant_signaling_peer_id: 'z-remote',
+      verifier_signaling_peer_id: 'a-local',
+      room_name: 'room-1'
+    })
+    expect(challenge).not.toHaveProperty('token_id')
+    const proof = await createReconnectProofForBearer(
+      issued.bearerToken,
+      issued.verifier,
+      {
+        channelBinding: String(challenge.channel_binding),
+        claimantSignalingPeerId: 'z-remote',
+        verifierSignalingPeerId: 'a-local'
+      },
+      String(challenge.challenge)
+    )
+    channel.receive(await encodeInbound({
+      type: 'mesh_auth_proof_v1',
+      token_id: issued.tokenId,
+      challenge: challenge.challenge,
+      proof,
+      channel_binding: challenge.channel_binding,
+      claimant_peer_id: 'peer-remote',
+      verifier_peer_id: 'local-stable',
+      claimant_signaling_peer_id: 'z-remote',
+      verifier_signaling_peer_id: 'a-local',
+      room_name: 'room-1'
+    }))
+    await waitForRuntimeState(harness.runtime, 'authorized')
+    expect((harness.runtime.peer as any).session.getSnapshot().authenticatedPeerContext).toMatchObject({
+      selector: { tokenId: issued.tokenId, claimantPeerId: 'peer-remote', verifierPeerId: 'local-stable', roomName: 'room-1' },
+      transport: { channelBinding: challenge.channel_binding, claimantSignalingPeerId: 'z-remote', verifierSignalingPeerId: 'a-local' }
+    })
+    await harness.runtime.close()
+  })
+
+  it('durably issues inbound PairingExchange verifier hashes and fresh auth yields context', async () => {
+    const verifierStore = new MemoryInboundCredentialVerifierStore()
+    const pairingIssuer = new PeerPairingIssuer({
+      verifierStore,
+      randomBytes: () => new Uint8Array(32).fill(17),
+      now: () => 200
+    })
+    const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerPairingIssuer: pairingIssuer })
+    const { channel, remoteSas, pairingStart } = await prepareSasPairing(harness)
+    channel.receive(await encodeInbound({ type: 'result', id: pairingStart.id, result: { code: 'opaque-handle', pairing_session_id: remoteSas.pairingSessionId, verification_code: remoteSas.verificationCode } }))
+    const confirm = harness.runtime.peer.confirmPairing(remoteSas.pairingSessionId)
+    const pairingConnect = await decodeSent(channel, 3)
+    channel.receive(await encodeInbound({ type: 'result', id: pairingConnect.id, result: { status: 'approved', pairing_session_id: remoteSas.pairingSessionId, verification_code: remoteSas.verificationCode } }))
+    const browserExchange = await decodeSent(channel, 4)
+    channel.receive(await encodeInbound({ type: 'result', id: browserExchange.id, result: { token: 'fresh-token', token_id: 'token-row-1', peer_id: 'peer-remote', node_name: 'Remote node' } }))
+    await decodeSent(channel, 5)
+    await confirm
+
+    channel.receive(await encodeInbound({
+      type: 'call',
+      id: 'python-start-durable',
+      method: 'Auth.PairingStart',
+      params: {
+        device_name: 'Remote node',
+        remote_peer_id: 'peer-remote',
+        remote_node_name: 'Remote node',
+        room_name: 'room-1',
+        pairing_session_id: remoteSas.pairingSessionId,
+        verification_code: remoteSas.verificationCode
+      }
+    }))
+    const reverseStart = await decodeSent(channel, 6)
+    const reverseHandle = (reverseStart.result as Record<string, unknown>).code
+    channel.receive(await encodeInbound({ type: 'call', id: 'python-connect-durable', method: 'Auth.PairingConnect', params: { code: reverseHandle, pairing_session_id: remoteSas.pairingSessionId } }))
+    await decodeSent(channel, 7)
+    channel.receive(await encodeInbound({ type: 'call', id: 'python-exchange-durable', method: 'Auth.PairingExchange', params: { code: reverseHandle, pairing_session_id: remoteSas.pairingSessionId } }))
+    const reverseExchange = await decodeSent(channel, 8)
+    const issuedToken = String((reverseExchange.result as Record<string, unknown>).token)
+    const issuedTokenId = String((reverseExchange.result as Record<string, unknown>).token_id)
+    const verifier = await verifierStore.getVerifier({
+      tokenId: issuedTokenId,
+      claimantPeerId: 'peer-remote',
+      verifierPeerId: 'local-stable',
+      roomName: 'room-1'
+    }, 201)
+    expect(verifier?.tokenHashHex).toMatch(/^[0-9a-f]{64}$/u)
+    expect(JSON.stringify(verifier)).not.toContain(issuedToken)
+    channel.receive(await encodeInbound({
+      type: 'call',
+      id: 'python-exchange-repeat',
+      method: 'Auth.PairingExchange',
+      params: { code: reverseHandle, pairing_session_id: remoteSas.pairingSessionId }
+    }))
+    await expect(decodeSent(channel, 9)).resolves.toMatchObject({ type: 'error', id: 'python-exchange-repeat' })
+
+    channel.receive(await encodeInbound({
+      type: 'auth',
+      peer_name: 'Remote node',
+      peer_id: 'peer-remote',
+      signaling_peer_id: 'z-remote',
+      pairing_session_id: remoteSas.pairingSessionId,
+      token: issuedToken
+    }))
+    await waitForRuntimeState(harness.runtime, 'authorized')
+    expect((harness.runtime.peer as any).session.getSnapshot().authenticatedPeerContext).toMatchObject({
+      selector: { tokenId: issuedTokenId, claimantPeerId: 'peer-remote', verifierPeerId: 'local-stable', roomName: 'room-1' },
+      transport: { claimantSignalingPeerId: 'z-remote', verifierSignalingPeerId: 'a-local' }
+    })
+    await harness.runtime.close()
   })
 })
