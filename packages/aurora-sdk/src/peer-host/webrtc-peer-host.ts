@@ -1,5 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 
+import { providerServiceInstanceId } from '../local-tools/identity.js'
 import { AuroraValidationError } from '../validation/index.js'
 import { bytesToHex, canonicalJson } from '../webrtc/encoding.js'
 import type { CallFrame, SubscribeFrame } from '../webrtc/protocol.js'
@@ -99,6 +100,7 @@ export class WebRtcPeerHost {
   }
 
   buildManifest(): Record<string, unknown> {
+    const serviceInstanceId = providerServiceInstanceId(this.options.localPeerId)
     const methods = this.options.registry.list().map((method) => ({
       bus_topic: method.methodId,
       method_type: method.methodType,
@@ -133,8 +135,8 @@ export class WebRtcPeerHost {
       required_services: requiredServices,
       shared_services: [{
         module: 'Tooling',
-        provider_id: `local:${encodeURIComponent(this.options.localPeerId)}:Tooling`,
-        service_instance_id: `local:${encodeURIComponent(this.options.localPeerId)}:Tooling`,
+        provider_id: serviceInstanceId,
+        service_instance_id: serviceInstanceId,
         methods,
         capabilities: ['provider_lease_v1'],
         connection_epoch: this.connectionEpoch,

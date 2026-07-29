@@ -12,6 +12,7 @@ import {
   type PeerHostAuthorizationStore,
   type PeerHostCallContext
 } from '../src/webrtc/index.js'
+import { providerServiceInstanceId } from '../src/local-tools/identity.js'
 import { PeerAuthorityHostAuthorizationStore } from '../src/peer-host/authorization.js'
 import { DenyAllInboundCredentialVerifierStore, NoopReconnectChallengeStore, type AuthenticatedPeerContext, type LocalPeerGrantV1 as AuthorityGrant } from '../src/peer-host/authority.js'
 
@@ -117,6 +118,14 @@ function ackFromManifest(manifest: Record<string, unknown>, patch: Record<string
   }
 }
 
+function firstSharedService(manifest: Record<string, unknown>): Record<string, unknown> {
+  expect(Array.isArray(manifest.shared_services)).toBe(true)
+  const [service] = manifest.shared_services as Record<string, unknown>[]
+  expect(service).toBeDefined()
+  if (!service) throw new Error('manifest shared service missing')
+  return service
+}
+
 async function flush(): Promise<void> {
   await Promise.resolve()
   await Promise.resolve()
@@ -129,6 +138,28 @@ async function waitForTimeoutWork(): Promise<void> {
 }
 
 describe('WebRtcPeerHost', () => {
+  it('uses canonical local tool provider identity in manifests for RFC3986-sensitive peer ids', () => {
+    const localPeerId = "peer \u2603!'()*"
+    const expectedServiceInstanceId = providerServiceInstanceId(localPeerId)
+    expect(expectedServiceInstanceId).toBe('local:peer%20%E2%98%83%21%27%28%29%2A:Tooling')
+    const peerHost = new WebRtcPeerHost({
+      localPeerId,
+      nodeName: 'Local',
+      registry: new PeerHostContractRegistry(),
+      authorizationStore: new SessionPeerHostAuthorizationStore(),
+      clock: () => 1000,
+      randomId: () => 'epoch-identity'
+    })
+
+    const firstService = firstSharedService(peerHost.startEpoch())
+    const secondService = firstSharedService(peerHost.startEpoch())
+
+    expect(firstService.provider_id).toBe(expectedServiceInstanceId)
+    expect(firstService.service_instance_id).toBe(expectedServiceInstanceId)
+    expect(secondService.provider_id).toBe(expectedServiceInstanceId)
+    expect(secondService.service_instance_id).toBe(expectedServiceInstanceId)
+  })
+
   it('keeps generated Tooling registry permissions aligned for export catalog reads', () => {
     const registry = createToolingPeerHostRegistry({
       getTools: async () => ({ count: 0, tools: [] }),
