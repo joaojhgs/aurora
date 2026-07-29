@@ -3,6 +3,41 @@ export {
   SessionPeerHostAuthorizationStore
 } from './authorization.js'
 export {
+  DenyAllInboundCredentialVerifierStore,
+  DenyAllPeerGrantRepository,
+  NoopPeerAuditSink,
+  NoopPeerRevocationBroadcaster,
+  NoopReconnectChallengeStore,
+  PeerAuthorityResolver
+} from './authority.js'
+export type {
+  AuthenticatedPeerContext,
+  InboundCredentialVerifierStore,
+  IssuedPeerBearerCredential,
+  LocalPeerApprovalRequest,
+  LocalPeerAuditAction,
+  LocalPeerAuditRecord,
+  LocalPeerCredentialVerifierV1 as ProviderLocalPeerCredentialVerifierV1,
+  LocalPeerGrantV1 as ProviderLocalPeerGrantV1,
+  PeerAuthorityDecision,
+  PeerAuthorityDecisionReason,
+  PeerAuthorityResolverOptions,
+  PeerGrantRepository,
+  PeerGrantResolutionRequest,
+  PeerPairingIssuerOptions,
+  PeerRelationshipSelector,
+  PeerRevocationBroadcaster,
+  PeerRevocationController,
+  PeerRevocationEvent,
+  ReconnectChallengeConsumeResult,
+  ReconnectChallengeConsumeStatus,
+  ReconnectChallengeRecord,
+  ReconnectChallengeStore,
+  ReconnectTransportAttestation,
+  VerifyReconnectProofRequest,
+  VerifyReconnectProofResult
+} from './authority.js'
+export {
   PeerHostContractRegistry,
   createToolingPeerHostRegistry
 } from './contract-registry.js'
