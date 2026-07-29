@@ -15,6 +15,10 @@ on:
       - "tests/e2e/webrtc_interop/**"
       - "tests/e2e/hosted_thin_shell/**"
       - "tests/e2e/browser_persistence/**"
+      - "packages/aurora-ui/tests/browser-*.playwright.config.ts"
+      - "packages/aurora-ui/tests/browser-*.pw.ts"
+      - "scripts/run_browser_storage_gate.mjs"
+      - "scripts/run_browser_storage_gate.test.mjs"
       - "scripts/hosted_thin_shell_e2e.sh"
       - "scripts/webrtc_interop*"
       - "package.json"
@@ -46,7 +50,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
-      - name: Run encrypted browser persistence E2E tests
+      - name: Run consolidated browser storage E2E gate
+        env:
+          BROWSER_STORAGE_REPORT_ROOT: reports/browser-storage
         run: pnpm test:web-persistence
 
       - name: Run the hosted thin-shell UI against the full Python service
@@ -61,6 +67,7 @@ jobs:
         with:
           name: webrtc-interop-e2e
           path: |
+            reports/browser-storage/
             reports/webrtc-interop/
             reports/hosted-thin-shell/
           if-no-files-found: warn
