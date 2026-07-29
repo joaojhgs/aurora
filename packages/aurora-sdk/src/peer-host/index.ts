@@ -1,5 +1,6 @@
 export {
   DenyAllPeerHostAuthorizationStore,
+  PeerAuthorityHostAuthorizationStore,
   SessionPeerHostAuthorizationStore
 } from './authorization.js'
 export {

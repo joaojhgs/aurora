@@ -40,6 +40,9 @@ export type {
   LocalToolPolicyPorts
 } from './execution-policy.js'
 export {
+  createPeerAuthorityLocalToolPolicyPorts
+} from './authority-policy.js'
+export {
   LocalToolHandlerError,
   createLocalToolingProviderHandlers
 } from './tooling-provider.js'

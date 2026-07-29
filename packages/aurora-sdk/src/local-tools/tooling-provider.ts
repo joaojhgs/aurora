@@ -258,6 +258,7 @@ function executionContext(context: PeerHostCallContext): LocalToolExecutionConte
   return {
     callerPeerId: context.identity.callerPeerId,
     callerPrincipalId: context.identity.principalId ?? null,
+    ...(context.authenticatedPeerContext !== undefined ? { authenticatedPeerContext: context.authenticatedPeerContext } : {}),
     permissions: [...context.identity.effectivePermissions],
     methodId: context.methodId,
     nowMs: context.receivedAtMs

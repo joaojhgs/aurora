@@ -6,6 +6,7 @@ import type {
   ToolingSourceClass,
   ToolingTrustTier
 } from '../types.js'
+import type { AuthenticatedPeerContext } from '../peer-host/authority.js'
 import {
   localToolProjectionIdentity,
   parseLocalToolDescriptorV1,
@@ -28,6 +29,7 @@ export interface LocalToolExecutionContext {
   readonly callerPeerId: string
   readonly callerPrincipalId?: string | null
   readonly callerDeviceId?: string | null
+  readonly authenticatedPeerContext?: AuthenticatedPeerContext | undefined
   readonly permissions: readonly string[]
   readonly methodId: string
   readonly nowMs: number
