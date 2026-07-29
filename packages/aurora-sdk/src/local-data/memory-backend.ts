@@ -321,9 +321,10 @@ class MemoryLightweightMemoryRepository {
 
   async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
     return await this.session.withRepositoryAccess(this.access, () => {
+      const cutoffMs = requireDeleteNowMs(nowMs)
       const normalizedLimit = requireDeleteLimit(limit)
       const expiredIds = this.session.mutable.memoryItems
-        .filter((record) => record.expiresAtMs !== null && record.expiresAtMs <= nowMs)
+        .filter((record) => record.expiresAtMs !== null && record.expiresAtMs <= cutoffMs)
         .sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id))
         .slice(0, normalizedLimit)
         .map((record) => record.id)
@@ -410,6 +411,13 @@ function upsert<T>(items: T[], record: T, predicate: (item: T) => boolean): void
 
 function clone<T>(value: T): T {
   return structuredClone(value)
+}
+
+function requireDeleteNowMs(nowMs: number): number {
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+    throw new LocalDataError('invalid_record', 'Delete cutoff must be a non-negative safe integer', { reason: 'delete_now_ms' })
+  }
+  return nowMs
 }
 
 function requireDeleteLimit(limit: number): number {

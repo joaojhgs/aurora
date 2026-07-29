@@ -274,6 +274,39 @@ describe('browser sqlite worker protocol guardrails', () => {
     expect(expiredDb.statements.filter((statement) => statement === 'DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;')).toHaveLength(2)
   })
 
+  it('rejects invalid expired-memory cutoffs before sqlite delete statements', async () => {
+    for (const nowMs of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1000.5]) {
+      const db = new FakeSqliteDatabase({
+        'SELECT id FROM aurora_memory_items WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?;': [
+          { id: 'memory-expired' }
+        ]
+      })
+      const responses: BrowserSqliteWorkerResponse[] = []
+      await handleBrowserSqliteWorkerMessage(
+        {
+          id: `invalid-now-${String(nowMs)}`,
+          command: 'repo',
+          operation: { kind: 'memory.deleteExpiredMemoryItems', nowMs, limit: 1 }
+        },
+        (response) => responses.push(response),
+        openWorkerState(db, 'profile-1', 'node-1') as never
+      )
+
+      expect(responses).toEqual([{
+        id: `invalid-now-${String(nowMs)}`,
+        result: {
+          ok: false,
+          error: {
+            code: 'invalid_record',
+            message: 'Delete cutoff must be a non-negative safe integer',
+            metadata: { reason: 'delete_now_ms' }
+          }
+        }
+      }])
+      expect(db.statements.some((statement) => statement.startsWith('DELETE FROM aurora_memory_items'))).toBe(false)
+    }
+  })
+
   it('preflights existing local-node ownership without changing schema, ledger, identity, user_version, or records', () => {
     for (const testCase of [
       {

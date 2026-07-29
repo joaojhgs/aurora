@@ -273,6 +273,27 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     await reopenedFirst.close()
   })
 
+  it('rejects invalid expired-memory cutoffs before persisting deletes', async () => {
+    for (const nowMs of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1000.5]) {
+      const leases = new MapBrowserStorageLeaseStore()
+      const store = new MapBrowserLocalDataDocumentStore()
+      const session = await openSession(store, leases)
+      await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired', expiresAtMs: 1000 }))
+
+      await expect(session.memory.deleteExpiredMemoryItems(nowMs, 1)).rejects.toMatchObject({
+        code: 'invalid_record',
+        metadata: { reason: 'delete_now_ms' }
+      })
+      await session.close()
+
+      const reopened = await openSession(store, leases, `owner-reopen-${String(nowMs)}`)
+      await expect(reopened.memory.listMemoryItems()).resolves.toEqual([
+        memoryFixture({ id: 'memory-expired', expiresAtMs: 1000 })
+      ])
+      await reopened.close()
+    }
+  })
+
   it('rejects same-node different-profile global ID collisions without changing the first profile records', async () => {
     const leases = new MapBrowserStorageLeaseStore()
     const store = new MapBrowserLocalDataDocumentStore()

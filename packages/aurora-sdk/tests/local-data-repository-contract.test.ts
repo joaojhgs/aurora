@@ -72,6 +72,22 @@ describe('local-data memory repository contract', () => {
     })
   })
 
+  it('rejects invalid expired-memory cutoffs before deleting records', async () => {
+    for (const nowMs of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1000.5]) {
+      const backend = new MemoryLocalDataBackend()
+      const session = await backend.open('profile-1', 'node-1')
+      await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired', expiresAtMs: 1000 }))
+
+      await expect(session.memory.deleteExpiredMemoryItems(nowMs, 1)).rejects.toMatchObject({
+        code: 'invalid_record',
+        metadata: { reason: 'delete_now_ms' }
+      })
+      await expect(session.memory.listMemoryItems()).resolves.toEqual([
+        memoryFixture({ id: 'memory-expired', expiresAtMs: 1000 })
+      ])
+    }
+  })
+
   it('rolls back transaction writes and enforces local node identity', async () => {
     const backend = new MemoryLocalDataBackend()
     const session = await backend.open('profile-1', 'node-1')

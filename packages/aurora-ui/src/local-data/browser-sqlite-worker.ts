@@ -408,11 +408,12 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
       return { deleted: true }
     }
     case 'memory.deleteExpiredMemoryItems': {
+      const cutoffMs = requireDeleteNowMs(operation.nowMs)
       const normalizedLimit = requireDeleteLimit(operation.limit)
       const rows = selectObjects<{ id: string }>(
         db,
         'SELECT id FROM aurora_memory_items WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?;',
-        [workerState.profileId, workerState.localNodeId, operation.nowMs, normalizedLimit]
+        [workerState.profileId, workerState.localNodeId, cutoffMs, normalizedLimit]
       )
       for (const row of rows) {
         run(db, 'DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [row.id, workerState.profileId, workerState.localNodeId])
@@ -709,6 +710,13 @@ function ambiguousProfileOwnership(): LocalDataError {
 function requireIdentity(value: string | null): string {
   if (value === null) throw new LocalDataError('session_closed', 'Local data database is closed')
   return value
+}
+
+function requireDeleteNowMs(nowMs: number): number {
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+    throw new LocalDataError('invalid_record', 'Delete cutoff must be a non-negative safe integer', { reason: 'delete_now_ms' })
+  }
+  return nowMs
 }
 
 function requireDeleteLimit(limit: number): number {
