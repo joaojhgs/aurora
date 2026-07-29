@@ -62,6 +62,74 @@ describe('local-data product search facade', () => {
     })
   })
 
+  it('searches authorized message tool envelopes with exact AAD and total byte bounds', async () => {
+    const toolEnvelope = { ...envelopeFixture, keyId: 'key-local-structured-data-tool' }
+    const crypto = new MapEnvelopeCryptoPort(new Map([
+      [envelopeFixture.keyId, 'ordinary message text'],
+      [toolEnvelope.keyId, 'tool-only searchable payload']
+    ]))
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-1' }))
+    await session.conversations.appendMessage(messageFixture({ id: 'message-tool', conversationId: 'conversation-1', toolEnvelope }))
+
+    const result = await searchLocalData(session, {
+      scope,
+      query: 'tool-only',
+      nowMs: 2000,
+      domains: ['messages'],
+      decrypt: { crypto, authorized: true }
+    })
+
+    expect(result.results).toMatchObject([
+      {
+        domain: 'messages',
+        id: 'message-tool',
+        matchField: 'decrypted_content',
+        matchedTextPreview: 'tool-only searchable payload',
+        provenance: { redactedFields: ['contentEnvelope', 'toolEnvelope'] }
+      }
+    ])
+    expect(result.summary).toMatchObject({ decryptedRecords: 2, decryptedBytes: 49 })
+    expect(crypto.aad.map((aad) => JSON.parse(new TextDecoder().decode(aad)).field)).toEqual([
+      'content_envelope_json',
+      'tool_envelope_json'
+    ])
+
+    await expect(searchLocalData(session, {
+      scope,
+      query: 'tool-only',
+      nowMs: 2000,
+      domains: ['messages'],
+      maxTotalDecryptedBytes: 48,
+      decrypt: { crypto: new MapEnvelopeCryptoPort(new Map([
+        [envelopeFixture.keyId, 'ordinary message text'],
+        [toolEnvelope.keyId, 'tool-only searchable payload']
+      ])), authorized: true }
+    })).rejects.toMatchObject({ code: 'invalid_record', metadata: { reason: 'search_decrypted_total_bytes' } })
+  })
+
+  it('cancels authorized tool-envelope search before returning decrypted matches', async () => {
+    const controller = new AbortController()
+    const crypto = new AbortingEnvelopeCryptoPort(new Map([[envelopeFixture.keyId, 'tool-only searchable payload']]), controller)
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-1' }))
+    await session.conversations.appendMessage(messageFixture({
+      id: 'message-tool',
+      conversationId: 'conversation-1',
+      contentEnvelope: null,
+      toolEnvelope: envelopeFixture
+    }))
+
+    await expect(searchLocalData(session, {
+      scope,
+      query: 'tool-only',
+      nowMs: 2000,
+      domains: ['messages'],
+      decrypt: { crypto, authorized: true },
+      signal: controller.signal
+    })).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('fails closed for hostile query bounds, duplicates, expired items, oversized content, and cancellation', async () => {
     const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
     await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired', namespace: 'notes', createdAtMs: 900, updatedAtMs: 1000, expiresAtMs: 1000 }))
@@ -107,5 +175,17 @@ class MapEnvelopeCryptoPort implements EnvelopeCryptoPort {
 
   async rotateKey(_keyPurpose: LocalDataKeyPurpose): Promise<{ previousKeyId: string; newKeyId: string }> {
     return { previousKeyId: 'old', newKeyId: 'new' }
+  }
+}
+
+class AbortingEnvelopeCryptoPort extends MapEnvelopeCryptoPort {
+  constructor(plaintextByKeyId: Map<string, string>, private readonly controller: AbortController) {
+    super(plaintextByKeyId)
+  }
+
+  override async decrypt(envelope: EncryptedDataEnvelopeV1, aad: Uint8Array): Promise<Uint8Array> {
+    const plaintext = await super.decrypt(envelope, aad)
+    this.controller.abort()
+    return plaintext
   }
 }

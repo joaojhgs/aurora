@@ -140,12 +140,14 @@ class SessionLocalConversationsFacade implements LocalConversationsFacade {
     throwIfAborted(input.signal)
     const record = parseConversationMessageRecord(input.record)
     await this.requireConversation(record.conversationId, scope)
-    const existing = await this.session.conversations.listMessages(record.conversationId)
+    const scopedConversations = (await this.session.conversations.listConversations())
+      .filter((conversation) => conversation.profileId === scope.profileId && conversation.localNodeId === scope.localNodeId)
+    const scopedMessages = (await Promise.all(scopedConversations.map(async (conversation) => await this.session.conversations.listMessages(conversation.id)))).flat()
     throwIfAborted(input.signal)
-    if (existing.some((message) => message.id === record.id)) {
-      throw new LocalDataError('invalid_record', 'Message IDs must be unique within local history', { reason: 'duplicate_message_id' })
+    if (scopedMessages.some((message) => message.id === record.id)) {
+      throw new LocalDataError('invalid_record', 'Message IDs must be unique within scoped local history', { reason: 'duplicate_message_id' })
     }
-    if (existing.some((message) => message.sequence === record.sequence)) {
+    if (scopedMessages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence)) {
       throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
     }
     await this.session.conversations.appendMessage(record)

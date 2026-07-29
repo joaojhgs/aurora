@@ -55,6 +55,27 @@ describe('local-data product conversation facade', () => {
     await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([])
   })
 
+  it('rejects duplicate message IDs across scoped conversations without mutating local history', async () => {
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const conversations = createLocalConversations(session)
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'conversation-a' }) })
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'conversation-b' }) })
+    await conversations.appendMessage({ scope, record: messageFixture({ id: 'message-global', conversationId: 'conversation-a', sequence: 0 }) })
+
+    await expect(conversations.appendMessage({
+      scope,
+      record: messageFixture({ id: 'message-global', conversationId: 'conversation-b', sequence: 0, role: 'assistant' })
+    })).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { reason: 'duplicate_message_id' }
+    })
+
+    await expect(session.conversations.listMessages('conversation-a')).resolves.toEqual([
+      messageFixture({ id: 'message-global', conversationId: 'conversation-a', sequence: 0 })
+    ])
+    await expect(session.conversations.listMessages('conversation-b')).resolves.toEqual([])
+  })
+
   it('fails closed for hostile scopes, duplicate ordering, bad limits, and Python history merge hints', async () => {
     const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
     const conversations = createLocalConversations(session)

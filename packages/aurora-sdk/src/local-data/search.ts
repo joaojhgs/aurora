@@ -169,6 +169,19 @@ export async function searchLocalData(session: LocalDataSession, options: LocalD
             signal: options.signal
           })
         }
+        if (contentAuthorized && record.toolEnvelope !== null) {
+          await addDecryptedResult(options.decrypt?.crypto, summary, results, query, maxDecryptedRecordBytes, maxTotalDecryptedBytes, {
+            envelope: record.toolEnvelope,
+            aad: buildEnvelopeAad({ table: 'aurora_messages', recordId: record.id, field: 'tool_envelope_json', profileId: scope.profileId, localNodeId: scope.localNodeId }),
+            domain: 'messages',
+            id: record.id,
+            conversationId: record.conversationId,
+            sequence: record.sequence,
+            namespace: null,
+            provenance: buildMessageProvenance(record, scope),
+            signal: options.signal
+          })
+        }
         if (!checkBounds()) break
       }
     }
