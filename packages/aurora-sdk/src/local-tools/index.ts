@@ -46,6 +46,14 @@ export type {
   PeerAuthorityLocalToolPolicyPortsOptions
 } from './authority-policy.js'
 export {
+  MESH_NODE_TOOLING_METHOD_IDS,
+  createMeshNodeLocalToolProvider
+} from './mesh-node-provider.js'
+export type {
+  MeshNodeLocalToolProviderComposition,
+  MeshNodeLocalToolProviderOptions
+} from './mesh-node-provider.js'
+export {
   LocalToolHandlerError,
   createLocalToolingProviderHandlers
 } from './tooling-provider.js'
