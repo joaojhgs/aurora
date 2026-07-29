@@ -339,6 +339,24 @@
           "markdownDescription": "Enables the aurora_native_capability_manifest command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_native_open_deep_link command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-open-deep-link",
+          "markdownDescription": "Enables the aurora_native_open_deep_link command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_share_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-share-text",
+          "markdownDescription": "Enables the aurora_native_share_text command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_show_notification command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-show-notification",
+          "markdownDescription": "Enables the aurora_native_show_notification command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_remote_origin_policy command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-remote-origin-policy",
@@ -459,10 +477,10 @@
           "markdownDescription": "Enables the native_capabilities command without any pre-configured scope."
         },
         {
-          "description": "Allow Android thin/mobile runtime to read native Android status and policy wrappers. Wrappers call the native plugin without exposing raw Kotlin commands or secret getters.",
+          "description": "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability.",
           "type": "string",
           "const": "aurora-android-native-plugin",
-          "markdownDescription": "Allow Android thin/mobile runtime to read native Android status and policy wrappers. Wrappers call the native plugin without exposing raw Kotlin commands or secret getters."
+          "markdownDescription": "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability."
         },
         {
           "description": "Allow audio bridge status checks for raw-audio permission UX without granting microphone capture, live streaming, or playback control.",
@@ -483,10 +501,10 @@
           "markdownDescription": "Allow dialog capability status checks without granting native open/save dialogs by default."
         },
         {
-          "description": "Allow the frontend SDK adapter to invoke the Aurora iOS Swift native plugin capability, status, and concrete action handoff methods.",
+          "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability.",
           "type": "string",
           "const": "aurora-ios-native-plugin",
-          "markdownDescription": "Allow the frontend SDK adapter to invoke the Aurora iOS Swift native plugin capability, status, and concrete action handoff methods."
+          "markdownDescription": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability."
         },
         {
           "description": "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or system assistant ownership.",
@@ -517,6 +535,12 @@
           "type": "string",
           "const": "aurora-log-tail",
           "markdownDescription": "Allow the frontend SDK adapter to query non-secret sidecar log-tail availability without reading arbitrary files."
+        },
+        {
+          "description": "Allow Android and iOS WebViews to invoke bounded outgoing share, link, and notification wrappers. Platform capability selection keeps these commands unavailable to desktop WebViews.",
+          "type": "string",
+          "const": "aurora-mobile-native-actions",
+          "markdownDescription": "Allow Android and iOS WebViews to invoke bounded outgoing share, link, and notification wrappers. Platform capability selection keeps these commands unavailable to desktop WebViews."
         },
         {
           "description": "Allow the frontend SDK adapter to read the Tauri shell capability manifest.",
@@ -781,6 +805,24 @@
           "type": "string",
           "const": "deny-aurora-native-capability-manifest",
           "markdownDescription": "Denies the aurora_native_capability_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_open_deep_link command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-open-deep-link",
+          "markdownDescription": "Denies the aurora_native_open_deep_link command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_share_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-share-text",
+          "markdownDescription": "Denies the aurora_native_share_text command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_show_notification command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-show-notification",
+          "markdownDescription": "Denies the aurora_native_show_notification command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_remote_origin_policy command without any pre-configured scope.",

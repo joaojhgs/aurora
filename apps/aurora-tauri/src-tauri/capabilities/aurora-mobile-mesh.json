@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "aurora-mobile-mesh",
-  "description": "Mobile-only mesh onboarding capability: QR scanning for mesh invites and aurora:// deep-link events.",
+  "description": "Mobile-only mesh onboarding and bounded outgoing action capability: QR scanning for mesh invites, aurora:// deep-link events, sharing, safe link opening, and notifications.",
   "windows": ["main"],
   "platforms": ["android", "iOS"],
   "permissions": [
@@ -9,6 +9,7 @@
     "barcode-scanner:allow-scan",
     "barcode-scanner:allow-cancel",
     "barcode-scanner:allow-check-permissions",
-    "barcode-scanner:allow-request-permissions"
+    "barcode-scanner:allow-request-permissions",
+    "aurora-mobile-native-actions"
   ]
 }

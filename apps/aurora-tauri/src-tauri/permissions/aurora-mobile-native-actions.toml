@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "aurora-mobile-native-actions"
+description = "Allow Android and iOS WebViews to invoke bounded outgoing share, link, and notification wrappers. Platform capability selection keeps these commands unavailable to desktop WebViews."
+commands.allow = [
+  "aurora_native_share_text",
+  "aurora_native_open_deep_link",
+  "aurora_native_show_notification"
+]

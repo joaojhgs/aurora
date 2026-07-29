@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "aurora-android-native-plugin"
-description = "Allow Android thin/mobile runtime to read native Android status and policy wrappers. Wrappers call the native plugin without exposing raw Kotlin commands or secret getters."
+description = "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability."
 commands.allow = [
   "aurora_android_baseline_status",
   "aurora_android_native_plugin_payload",

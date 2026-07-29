@@ -262,7 +262,12 @@ public final class AuroraNativePlugin: Plugin {
   ]
 
   @objc public func nativeCapabilityManifest(_ invoke: Invoke) throws {
-    invoke.resolve([
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
+      let notificationReady = AuroraNativePlugin.notificationsAlreadyAuthorized(
+        settings.authorizationStatus
+      )
+      let notificationState = notificationReady ? "available" : "needs_native_permission"
+      invoke.resolve([
       "platform": "ios",
       "permissions": [
         "aurora.iosAppIntents": true,
@@ -275,7 +280,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosLocalLightInference": false,
         "aurora.ios.shareText": true,
         "aurora.ios.openDeepLink": true,
-        "aurora.ios.showNotification": true,
+        "aurora.ios.showNotification": notificationReady,
         "aurora.nativeCapabilityManifest": true,
         "native.permissionsManifest": true,
         "native.deviceStatus": true,
@@ -304,7 +309,7 @@ public final class AuroraNativePlugin: Plugin {
         "ios.localLightInference.fallback": true,
         "ios.shareText": true,
         "ios.openDeepLink": true,
-        "ios.showNotification": true,
+        "ios.showNotification": notificationReady,
         "native.permissionsManifest": true,
         "native.deviceStatus": true,
         "ios.keychain.secureCredentialStorage": true,
@@ -312,7 +317,7 @@ public final class AuroraNativePlugin: Plugin {
         "ios.thinProfile": true,
         "ios.biometric.adminUnlock": true,
         "ios.voiceForegroundCapture": false,
-        "ios.notifications": false,
+        "ios.notifications": notificationReady,
         "ios.backgroundVoice": false,
         "ios.appOwnedInvocation": true,
         "ios.siriReplacement": false,
@@ -330,7 +335,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosLocalLightInference": "degraded",
         "aurora.ios.shareText": "available",
         "aurora.ios.openDeepLink": "available",
-        "aurora.ios.showNotification": "needs_native_permission",
+        "aurora.ios.showNotification": notificationState,
         "aurora.nativeCapabilityManifest": "available",
         "native.permissionsManifest": "available",
         "native.deviceStatus": "available",
@@ -355,7 +360,7 @@ public final class AuroraNativePlugin: Plugin {
         "ios.localLightInference.fallback": "fallback",
         "ios.shareText": "available",
         "ios.openDeepLink": "available",
-        "ios.showNotification": "needs_native_permission",
+        "ios.showNotification": notificationState,
         "native.permissionsManifest": "available",
         "native.deviceStatus": "available",
         "ios.keychain.secureCredentialStorage": "available",
@@ -363,12 +368,12 @@ public final class AuroraNativePlugin: Plugin {
         "ios.thinProfile": "available",
         "ios.biometric.adminUnlock": "available",
         "ios.voiceForegroundCapture": "needs_native_permission",
-        "ios.notifications": "needs_native_permission",
+        "ios.notifications": notificationState,
         "ios.backgroundVoice": "unsupported_platform",
         "ios.appOwnedInvocation": "available",
         "ios.siriReplacement": "unsupported_platform"
       ],
-      "mobileIntegrations": mobileIntegrations,
+      "mobileIntegrations": self.mobileIntegrations,
       "iosInvocation": [
         "platform": "ios",
         "appIntentsAvailable": true,
@@ -408,7 +413,8 @@ public final class AuroraNativePlugin: Plugin {
       ],
       "evidenceSource": "IOS-003 native plugin manifest",
       "secretsRedacted": true
-    ])
+      ])
+    }
   }
 
   @objc public func invocationStatus(_ invoke: Invoke) throws {
@@ -459,7 +465,7 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func notificationStatus(_ invoke: Invoke) throws {
     UNUserNotificationCenter.current().getNotificationSettings { settings in
-      let available = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+      let available = AuroraNativePlugin.notificationsAlreadyAuthorized(settings.authorizationStatus)
       let reason: Any = available
         ? NSNull()
         : "iOS notifications require explicit user authorization and cannot provide always-on assistant wake."
@@ -990,6 +996,9 @@ public final class AuroraNativePlugin: Plugin {
     }
     if scheme == "https", components.host?.isEmpty != false {
       throw NSError(domain: "AuroraNativePlugin", code: 3, userInfo: ["field": "url"])
+    }
+    if (scheme == "mailto" || scheme == "tel"), components.path.isEmpty {
+      throw NSError(domain: "AuroraNativePlugin", code: 4, userInfo: ["field": "url"])
     }
     return url
   }

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  AuroraError,
   androidNativeCapabilityManifestFixture,
+  iosNativeCapabilityManifestFixture,
   nativeCapabilityManifestFixture,
   type AndroidVoiceForegroundServiceRequestResult,
   type AndroidVoiceForegroundServiceStatus,
@@ -323,6 +325,84 @@ describe('tauri native capability pack adapter', () => {
     expect(JSON.stringify(response)).not.toMatch(/manifest|permissions|details|microphone_permission_missing/u)
     expect(transport.startAndroidVoiceForegroundService).not.toHaveBeenCalled()
   })
+
+  it('registers only manifest-proven Android and iOS outgoing actions', async () => {
+    for (const platform of ['android', 'ios'] as const) {
+      const registry = new LocalToolRegistry({ stablePeerId: `${platform}-actions` })
+      const transport = transportFor({ manifest: readyNativeActionsManifest(platform) })
+
+      const result = await registerTauriNativeCapabilityPack({ registry, transport })
+
+      expect(result.registered).toEqual(expect.arrayContaining([
+        AURORA_NATIVE_TOOL_IDS.shareText,
+        AURORA_NATIVE_TOOL_IDS.openDeepLink,
+        AURORA_NATIVE_TOOL_IDS.showNotification
+      ]))
+      for (const toolId of [
+        AURORA_NATIVE_TOOL_IDS.shareText,
+        AURORA_NATIVE_TOOL_IDS.openDeepLink,
+        AURORA_NATIVE_TOOL_IDS.showNotification
+      ]) {
+        expect(registry.resolvePublicId(toolId)?.toolInfo).toMatchObject({
+          confirmation_required: true
+        })
+      }
+      expect(registry.resolvePublicId(AURORA_NATIVE_TOOL_IDS.shareText)?.descriptor.nativeRequirements.capabilityIds)
+        .toEqual([`${platform}.shareText`])
+    }
+
+    const desktopRegistry = new LocalToolRegistry({ stablePeerId: 'desktop-actions' })
+    await registerTauriNativeCapabilityPack({
+      registry: desktopRegistry,
+      transport: transportFor({ manifest: nativeCapabilityManifestFixture })
+    })
+    expect(desktopRegistry.publicTools().map((tool) => tool.tool_contract_id)).not.toEqual(expect.arrayContaining([
+      AURORA_NATIVE_TOOL_IDS.shareText,
+      AURORA_NATIVE_TOOL_IDS.openDeepLink,
+      AURORA_NATIVE_TOOL_IDS.showNotification
+    ]))
+  })
+
+  it('requires local approval and maps revoked native permission to a structured denial', async () => {
+    const registry = new LocalToolRegistry({ stablePeerId: 'android-actions' })
+    const transport = transportFor({ manifest: readyNativeActionsManifest('android') })
+    await registerTauriNativeCapabilityPack({ registry, transport })
+    const policy = policyFor()
+    const provider = providerFor(registry, policy)
+    const request = {
+      tool_name: AURORA_NATIVE_TOOL_IDS.shareText,
+      arguments: { text: 'hello' }
+    }
+    const permissions = ['Tooling.ExecuteTool', 'Native.ShareText']
+
+    await expect(provider.executeTool(request, context(permissions))).resolves.toMatchObject({
+      ok: false,
+      status: 'denied'
+    })
+    expect(transport.shareNativeText).not.toHaveBeenCalled()
+
+    const prepared = await policy.prepare(
+      registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.shareText)!,
+      request,
+      execution(permissions)
+    )
+    const approvalToken = policy.issueApprovalToken(prepared, request, execution(permissions))
+    transport.shareNativeText.mockRejectedValueOnce(new AuroraError({
+      code: 'permission',
+      message: 'permission denied'
+    }))
+
+    await expect(provider.executeTool({
+      ...request,
+      approval_token: approvalToken
+    }, context(permissions))).resolves.toMatchObject({
+      ok: false,
+      status: 'failed',
+      error_code: 'permission_denied',
+      error: 'Tool execution failed'
+    })
+    expect(transport.shareNativeText).toHaveBeenCalledWith({ text: 'hello' })
+  })
 })
 
 function transportFor(input: {
@@ -332,6 +412,9 @@ function transportFor(input: {
   foregroundStatus?: AndroidVoiceForegroundServiceStatus
   foregroundStatusError?: boolean
   startResult?: AndroidVoiceForegroundServiceRequestResult
+  shareResult?: { shared: boolean }
+  openResult?: { opened: boolean }
+  notificationResult?: { shown: boolean }
 }) {
   const status = input.foregroundStatus ?? readyVoiceStatus()
   return {
@@ -344,12 +427,56 @@ function transportFor(input: {
       if (input.foregroundStatusError) throw new Error('missing')
       return status
     }),
-    startAndroidVoiceForegroundService: vi.fn(async () => input.startResult ?? { started: true, status, reason: 'started' })
+    startAndroidVoiceForegroundService: vi.fn(async () => input.startResult ?? { started: true, status, reason: 'started' }),
+    shareNativeText: vi.fn(async () => input.shareResult ?? { shared: true }),
+    openNativeDeepLink: vi.fn(async () => input.openResult ?? { opened: true }),
+    showNativeNotification: vi.fn(async () => input.notificationResult ?? { shown: true })
   } satisfies TauriNativeCapabilityTransport & {
     getNativeCapabilityManifest: ReturnType<typeof vi.fn<() => Promise<NativeCapabilityManifest>>>
     getSidecarStatus: ReturnType<typeof vi.fn<() => Promise<TauriSidecarStatus>>>
     getAndroidVoiceForegroundServiceStatus: ReturnType<typeof vi.fn<() => Promise<AndroidVoiceForegroundServiceStatus>>>
     startAndroidVoiceForegroundService: ReturnType<typeof vi.fn<() => Promise<AndroidVoiceForegroundServiceRequestResult>>>
+    shareNativeText: ReturnType<typeof vi.fn<(request: { text: string, title?: string }) => Promise<{ shared: boolean }>>>
+    openNativeDeepLink: ReturnType<typeof vi.fn<(request: { url: string }) => Promise<{ opened: boolean }>>>
+    showNativeNotification: ReturnType<typeof vi.fn<(request: { title: string, body?: string }) => Promise<{ shown: boolean }>>>
+  }
+}
+
+function readyNativeActionsManifest(platform: 'android' | 'ios'): NativeCapabilityManifest {
+  const base = platform === 'android'
+    ? androidNativeCapabilityManifestFixture
+    : iosNativeCapabilityManifestFixture
+  return {
+    ...base,
+    platform,
+    permissions: {
+      ...base.permissions,
+      'aurora.nativeCapabilityManifest': true,
+      [`aurora.${platform}.shareText`]: true,
+      [`aurora.${platform}.openDeepLink`]: true,
+      [`aurora.${platform}.showNotification`]: true
+    },
+    capabilities: {
+      ...base.capabilities,
+      'native.permissionsManifest': true,
+      [`${platform}.shareText`]: true,
+      [`${platform}.openDeepLink`]: true,
+      [`${platform}.showNotification`]: true
+    },
+    permissionStates: {
+      ...base.permissionStates,
+      'aurora.nativeCapabilityManifest': 'available',
+      [`aurora.${platform}.shareText`]: 'available',
+      [`aurora.${platform}.openDeepLink`]: 'available',
+      [`aurora.${platform}.showNotification`]: 'available'
+    },
+    capabilityStates: {
+      ...base.capabilityStates,
+      'native.permissionsManifest': 'available',
+      [`${platform}.shareText`]: 'available',
+      [`${platform}.openDeepLink`]: 'available',
+      [`${platform}.showNotification`]: 'available'
+    }
   }
 }
 

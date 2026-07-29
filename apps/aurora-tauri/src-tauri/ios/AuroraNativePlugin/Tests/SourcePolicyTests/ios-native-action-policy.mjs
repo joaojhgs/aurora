@@ -23,7 +23,6 @@ for (const command of ['shareText', 'openDeepLink', 'showNotification']) {
 for (const permission of [
   '"aurora.ios.shareText": true',
   '"aurora.ios.openDeepLink": true',
-  '"aurora.ios.showNotification": true',
   '"aurora.nativeCapabilityManifest": true',
   '"native.permissionsManifest": true',
   '"native.deviceStatus": true',
@@ -34,7 +33,6 @@ for (const permission of [
 for (const capability of [
   '"ios.shareText": true',
   '"ios.openDeepLink": true',
-  '"ios.showNotification": true',
   '"native.permissionsManifest": true',
   '"native.deviceStatus": true',
 ]) {
@@ -44,11 +42,23 @@ for (const capability of [
 for (const state of [
   '"aurora.ios.shareText": "available"',
   '"aurora.ios.openDeepLink": "available"',
-  '"aurora.ios.showNotification": "needs_native_permission"',
-  '"ios.showNotification": "needs_native_permission"',
   '"native.deviceStatus": "available"',
 ]) {
   assert(source.includes(state), `missing iOS manifest state ${state}`)
+}
+
+for (const dynamicNotificationEntry of [
+  '"aurora.ios.showNotification": notificationReady',
+  '"ios.showNotification": notificationReady',
+  '"ios.notifications": notificationReady',
+  '"aurora.ios.showNotification": notificationState',
+  '"ios.showNotification": notificationState',
+  '"ios.notifications": notificationState',
+]) {
+  assert(
+    source.includes(dynamicNotificationEntry),
+    `iOS notification manifest entry must use current authorization: ${dynamicNotificationEntry}`,
+  )
 }
 
 for (const scheme of ['"https"', '"mailto"', '"tel"', '"aurora"', '"aurora-local"']) {
@@ -59,7 +69,19 @@ assert(source.includes('UIActivityViewController'), 'shareText must use the syst
 assert(source.includes('UIApplication.shared.open'), 'openDeepLink must use UIApplication.open')
 assert(
   source.includes('UNUserNotificationCenter.current().getNotificationSettings'),
-  'showNotification must inspect existing notification settings',
+  'manifest discovery and showNotification must inspect existing notification settings',
+)
+assert(
+  source.includes(
+    'let notificationReady = AuroraNativePlugin.notificationsAlreadyAuthorized(',
+  ),
+  'native manifest must derive notification availability from current authorization',
+)
+assert(
+  source.includes(
+    'let notificationState = notificationReady ? "available" : "needs_native_permission"',
+  ),
+  'native manifest must expose the current notification permission state',
 )
 assert(
   source.includes('UNUserNotificationCenter.current().add(request)'),

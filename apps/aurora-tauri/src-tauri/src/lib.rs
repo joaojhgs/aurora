@@ -586,6 +586,28 @@ struct NativeNotificationRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct NativeShareTextRequest {
+    text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeOpenDeepLinkRequest {
+    url: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeShowNotificationRequest {
+    title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    body: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct IosAdminUnlockRequest {
     reason: String,
     action: Option<String>,
@@ -1298,6 +1320,99 @@ async fn aurora_notification_send(
 ) -> Result<NativeFeatureStatus, AuroraCommandError> {
     let _ = (request.title, request.body);
     Err(native_permission_missing("aurora.notificationsSend"))
+}
+
+#[tauri::command]
+async fn aurora_native_share_text(
+    request: NativeShareTextRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_native_text(&request.text, 8_192, "share text")?;
+    if let Some(title) = &request.title {
+        validate_native_text(title, 120, "share title")?;
+    }
+    let payload =
+        serde_json::to_value(&request).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "shareText", payload);
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "shareText", payload);
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = (native, payload);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Native text sharing is only available through Android or iOS platform handlers"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_native_open_deep_link(
+    request: NativeOpenDeepLinkRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_native_deep_link(&request.url)?;
+    let payload =
+        serde_json::to_value(&request).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "openDeepLink", payload);
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "openDeepLink", payload);
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = (native, payload);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Native link opening is only available through Android or iOS platform handlers"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_native_show_notification(
+    request: NativeShowNotificationRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_native_text(&request.title, 120, "notification title")?;
+    if let Some(body) = &request.body {
+        validate_native_text(body, 512, "notification body")?;
+    }
+    let payload =
+        serde_json::to_value(&request).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "showNotification", payload);
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "showNotification", payload);
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        let _ = (native, payload);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Native notifications are only available through Android or iOS platform handlers"
+                .to_string(),
+        ))
+    }
 }
 
 #[tauri::command]
@@ -3259,6 +3374,44 @@ impl AuroraCommandError {
 
 fn native_permission_missing(permission: &'static str) -> AuroraCommandError {
     AuroraCommandError::NativePermissionMissing(permission.to_string())
+}
+
+fn validate_native_text(
+    value: &str,
+    max_len: usize,
+    label: &str,
+) -> Result<(), AuroraCommandError> {
+    if value.trim().is_empty() || value.chars().count() > max_len {
+        return Err(AuroraCommandError::UnsupportedFeature(format!(
+            "{label} must be between 1 and {max_len} characters"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_native_deep_link(value: &str) -> Result<(), AuroraCommandError> {
+    validate_native_text(value, 2_048, "native deep link")?;
+    let url =
+        Url::parse(value).map_err(|_| native_permission_missing("aurora.nativeOpenDeepLink"))?;
+    match url.scheme() {
+        "https" if url.host_str().is_some() && has_explicit_url_authority(value) => Ok(()),
+        "mailto" | "tel" if !url.path().is_empty() => Ok(()),
+        "aurora" | "aurora-local" => Ok(()),
+        _ => Err(native_permission_missing("aurora.nativeOpenDeepLink")),
+    }
+}
+
+fn has_explicit_url_authority(value: &str) -> bool {
+    let Some((_, remainder)) = value.split_once(':') else {
+        return false;
+    };
+    let Some(authority_and_path) = remainder.strip_prefix("//") else {
+        return false;
+    };
+    authority_and_path
+        .split(['/', '?', '#'])
+        .next()
+        .is_some_and(|authority| !authority.is_empty())
 }
 
 fn envelope(method: String, data: Value) -> AuroraEnvelope {
@@ -5655,6 +5808,9 @@ pub fn run() {
             aurora_tray_status,
             aurora_notification_status,
             aurora_notification_send,
+            aurora_native_share_text,
+            aurora_native_open_deep_link,
+            aurora_native_show_notification,
             aurora_ios_voice_status,
             aurora_ios_background_status,
             aurora_dialog_status,
@@ -7507,5 +7663,35 @@ mod tests {
         assert!(
             matches!(err, AuroraCommandError::SecureStorageKeyInvalid(message) if message == "profileId is invalid")
         );
+    }
+
+    #[test]
+    fn bounded_native_action_inputs_reject_empty_and_oversized_values() {
+        assert!(validate_native_text("hello", 5, "text").is_ok());
+        assert!(validate_native_text("   ", 5, "text").is_err());
+        assert!(validate_native_text("sixxxx", 5, "text").is_err());
+    }
+
+    #[test]
+    fn native_deep_links_accept_only_bounded_platform_routes() {
+        for allowed in [
+            "https://aurora.example/path",
+            "mailto:hello@aurora.example",
+            "tel:+15551234567",
+            "aurora://device/peer-1",
+            "aurora-local://device/peer-1",
+        ] {
+            assert!(validate_native_deep_link(allowed).is_ok(), "{allowed}");
+        }
+        for denied in [
+            "http://aurora.example",
+            "file:///tmp/secret",
+            "javascript:alert(1)",
+            "https:///missing-host",
+            "mailto:",
+            "tel:",
+        ] {
+            assert!(validate_native_deep_link(denied).is_err(), "{denied}");
+        }
     }
 }

@@ -7,6 +7,7 @@ import type {
   NativeCapabilityManifest,
   TauriSidecarStatus
 } from '@aurora/client'
+import { AuroraError } from '@aurora/client'
 import {
   AURORA_NATIVE_TOOL_IDS,
   LocalToolHandlerError,
@@ -21,6 +22,9 @@ export interface TauriNativeCapabilityTransport {
   getSidecarStatus(): Promise<TauriSidecarStatus>
   getAndroidVoiceForegroundServiceStatus(): Promise<AndroidVoiceForegroundServiceStatus>
   startAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult>
+  shareNativeText(request: { text: string, title?: string }): Promise<{ shared: boolean }>
+  openNativeDeepLink(request: { url: string }): Promise<{ opened: boolean }>
+  showNativeNotification(request: { title: string, body?: string }): Promise<{ shown: boolean }>
 }
 
 export interface RegisterTauriNativeCapabilityPackOptions {
@@ -34,6 +38,26 @@ export interface TauriNativeCapabilityPackResult {
 
 const DEVICE_STATUS_CAPABILITY_ID = 'native.deviceStatus'
 const ANDROID_FOREGROUND_VOICE_CAPABILITY_ID = 'android.voiceForegroundService.start'
+const NATIVE_ACTIONS = Object.freeze([
+  {
+    toolId: AURORA_NATIVE_TOOL_IDS.shareText,
+    permissionName: 'shareText',
+    capabilityName: 'shareText',
+    osPermissions: []
+  },
+  {
+    toolId: AURORA_NATIVE_TOOL_IDS.openDeepLink,
+    permissionName: 'openDeepLink',
+    capabilityName: 'openDeepLink',
+    osPermissions: []
+  },
+  {
+    toolId: AURORA_NATIVE_TOOL_IDS.showNotification,
+    permissionName: 'showNotification',
+    capabilityName: 'showNotification',
+    osPermissions: ['notifications']
+  }
+] as const)
 const GET_DEVICE_STATUS_OUTPUT_SCHEMA: JsonObject = {
   type: 'object',
   properties: {
@@ -67,6 +91,18 @@ export async function registerTauriNativeCapabilityPack(
       handler: async () => buildDeviceStatus(options.transport)
     })
     registered.push(AURORA_NATIVE_TOOL_IDS.getDeviceStatus)
+  }
+
+  for (const action of NATIVE_ACTIONS) {
+    if (!nativeActionReady(manifest, action)) continue
+    options.registry.register({
+      descriptor: descriptorFor(action.toolId, {
+        capabilityId: platformCapabilityId(manifest, action.capabilityName),
+        osPermissions: action.osPermissions
+      }),
+      handler: async (input) => invokeNativeAction(options.transport, manifest.platform, action, input.arguments)
+    })
+    registered.push(action.toolId)
   }
 
   const foregroundStatus = manifest.platform === 'android'
@@ -187,6 +223,108 @@ function androidForegroundVoiceReady(
     stateAvailable(manifest.capabilityStates?.['android.voiceForegroundService.start'])
 }
 
+function nativeActionReady(
+  manifest: NativeCapabilityManifest,
+  action: typeof NATIVE_ACTIONS[number]
+): boolean {
+  const platform = nativeActionPlatform(manifest.platform)
+  if (!platform) return false
+  const permissionId = `aurora.${platform}.${action.permissionName}`
+  const capabilityId = `${platform}.${action.capabilityName}`
+  return manifest.permissions[permissionId] === true &&
+    manifest.capabilities[capabilityId] === true &&
+    stateAvailable(manifest.permissionStates?.[permissionId]) &&
+    stateAvailable(manifest.capabilityStates?.[capabilityId])
+}
+
+function nativeActionPlatform(platform: string): 'android' | 'ios' | null {
+  if (platform === 'android' || platform === 'ios') return platform
+  return null
+}
+
+function platformCapabilityId(
+  manifest: NativeCapabilityManifest,
+  capabilityName: string
+): string {
+  const platform = nativeActionPlatform(manifest.platform)
+  if (!platform) throw new LocalToolHandlerError('unsupported_platform')
+  return `${platform}.${capabilityName}`
+}
+
+async function invokeNativeAction(
+  transport: TauriNativeCapabilityTransport,
+  expectedPlatform: string,
+  action: typeof NATIVE_ACTIONS[number],
+  args: JsonObject
+): Promise<JsonObject> {
+  const manifest = await readManifest(transport)
+  if (manifest.platform !== expectedPlatform || !nativeActionReady(manifest, action)) {
+    throw new LocalToolHandlerError(nativeActionStateReason(manifest, action))
+  }
+  try {
+    if (action.toolId === AURORA_NATIVE_TOOL_IDS.shareText) {
+      const text = requiredString(args.text)
+      const title = optionalString(args.title)
+      const result = await transport.shareNativeText({ text, ...(title ? { title } : {}) })
+      if (!result.shared) throw new LocalToolHandlerError('capability_unavailable')
+      return { shared: true }
+    }
+    if (action.toolId === AURORA_NATIVE_TOOL_IDS.openDeepLink) {
+      const result = await transport.openNativeDeepLink({ url: requiredString(args.url) })
+      if (!result.opened) throw new LocalToolHandlerError('capability_unavailable')
+      return { opened: true }
+    }
+    const title = requiredString(args.title)
+    const body = optionalString(args.body)
+    const result = await transport.showNativeNotification({ title, ...(body ? { body } : {}) })
+    if (!result.shown) throw new LocalToolHandlerError('capability_unavailable')
+    return { shown: true }
+  } catch (error) {
+    if (error instanceof LocalToolHandlerError) throw error
+    throw new LocalToolHandlerError(nativeActionInvokeError(error))
+  }
+}
+
+function nativeActionStateReason(
+  manifest: NativeCapabilityManifest,
+  action: typeof NATIVE_ACTIONS[number]
+): string {
+  const platform = nativeActionPlatform(manifest.platform)
+  if (!platform) return 'unsupported_platform'
+  const permissionState = manifest.permissionStates?.[`aurora.${platform}.${action.permissionName}`]
+  const capabilityState = manifest.capabilityStates?.[`${platform}.${action.capabilityName}`]
+  if (permissionState === 'needs_native_permission' || capabilityState === 'needs_native_permission') {
+    return 'permission_unavailable'
+  }
+  if (permissionState === 'unsupported_platform' || capabilityState === 'unsupported_platform') {
+    return 'unsupported_platform'
+  }
+  return 'capability_unavailable'
+}
+
+function nativeActionInvokeError(error: unknown): string {
+  if (error instanceof AuroraError) {
+    if (error.code === 'permission' || error.code === 'native_permission_missing' || error.code === 'privacy_blocked') {
+      return 'permission_denied'
+    }
+    if (error.code === 'unsupported_feature') return 'unsupported_platform'
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  if (message.includes('permission') || message.includes('user_cancelled')) return 'permission_denied'
+  if (message.includes('unsupported')) return 'unsupported_platform'
+  return 'capability_unavailable'
+}
+
+function requiredString(value: JsonValue | undefined): string {
+  if (typeof value !== 'string' || value.length === 0) throw new LocalToolHandlerError('capability_unavailable')
+  return value
+}
+
+function optionalString(value: JsonValue | undefined): string | undefined {
+  if (value === undefined) return undefined
+  return requiredString(value)
+}
+
 function stateAvailable(state: AndroidNativeState | undefined): boolean {
   return state === 'available'
 }
@@ -209,6 +347,9 @@ async function availableToolCapabilities(
     if (foregroundStatus && androidForegroundVoiceReady(manifest, foregroundStatus)) {
       capabilities.push(AURORA_NATIVE_TOOL_IDS.startForegroundVoiceCapture)
     }
+  }
+  for (const action of NATIVE_ACTIONS) {
+    if (nativeActionReady(manifest, action)) capabilities.push(action.toolId)
   }
   return capabilities.sort().slice(0, 128)
 }

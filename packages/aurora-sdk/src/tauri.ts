@@ -66,6 +66,9 @@ export interface TauriCommandNames {
   iosInvocationStatus: string
   iosLocalLightInferenceStatus: string
   iosInvokeAction: string
+  nativeShareText: string
+  nativeOpenDeepLink: string
+  nativeShowNotification: string
   logTail: string
   secureStorageGet: string
   secureStorageSet: string
@@ -194,6 +197,32 @@ export interface TauriNotificationRequest {
   body: string
 }
 
+export interface TauriNativeShareTextRequest {
+  text: string
+  title?: string
+}
+
+export interface TauriNativeShareTextResult {
+  shared: boolean
+}
+
+export interface TauriNativeOpenDeepLinkRequest {
+  url: string
+}
+
+export interface TauriNativeOpenDeepLinkResult {
+  opened: boolean
+}
+
+export interface TauriNativeShowNotificationRequest {
+  title: string
+  body?: string
+}
+
+export interface TauriNativeShowNotificationResult {
+  shown: boolean
+}
+
 export interface SecureStorageGetResult {
   key: string
   value: string | null
@@ -299,6 +328,9 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   iosInvocationStatus: 'aurora_ios_invocation_status',
   iosLocalLightInferenceStatus: 'aurora_ios_local_light_inference_status',
   iosInvokeAction: 'aurora_ios_invoke_action',
+  nativeShareText: 'aurora_native_share_text',
+  nativeOpenDeepLink: 'aurora_native_open_deep_link',
+  nativeShowNotification: 'aurora_native_show_notification',
   logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
@@ -476,6 +508,21 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<TauriIosInvokeActionResult>(this.commands.iosInvokeAction, { request })
   }
 
+  async shareNativeText(request: TauriNativeShareTextRequest): Promise<TauriNativeShareTextResult> {
+    const result = await this.invokeCommand<unknown>(this.commands.nativeShareText, { request })
+    return requireNativeActionSuccess(result, 'shared', this.commands.nativeShareText)
+  }
+
+  async openNativeDeepLink(request: TauriNativeOpenDeepLinkRequest): Promise<TauriNativeOpenDeepLinkResult> {
+    const result = await this.invokeCommand<unknown>(this.commands.nativeOpenDeepLink, { request })
+    return requireNativeActionSuccess(result, 'opened', this.commands.nativeOpenDeepLink)
+  }
+
+  async showNativeNotification(request: TauriNativeShowNotificationRequest): Promise<TauriNativeShowNotificationResult> {
+    const result = await this.invokeCommand<unknown>(this.commands.nativeShowNotification, { request })
+    return requireNativeActionSuccess(result, 'shown', this.commands.nativeShowNotification)
+  }
+
   getLogTail(request: TauriLogTailRequest = {}): Promise<TauriLogTailResult> {
     return this.invokeCommand<TauriLogTailResult>(this.commands.logTail, { request })
   }
@@ -649,6 +696,20 @@ function withSubscribeSidecarHeader<TPayload>(
       'x-aurora-sidecar-token': session.token
     }
   }
+}
+
+function requireNativeActionSuccess<TKey extends 'shared' | 'opened' | 'shown'>(
+  value: unknown,
+  key: TKey,
+  command: string
+): Record<TKey, boolean> {
+  if (typeof value !== 'object' || value === null || (value as Record<string, unknown>)[key] !== true) {
+    throw new AuroraError({
+      code: 'validation',
+      message: `Tauri command ${command} returned an invalid native action result`
+    })
+  }
+  return { [key]: true } as Record<TKey, boolean>
 }
 
 interface TauriSubscriptionDescriptor {

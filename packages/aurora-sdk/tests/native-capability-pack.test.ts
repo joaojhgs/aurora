@@ -180,6 +180,9 @@ describe('native capability local tool pack', () => {
       'data:text/plain,secret',
       'javascript:alert(1)',
       'random-app://open',
+      'https:///missing-host',
+      'mailto:',
+      'tel:',
       'not-a-url'
     ]) {
       const unsafeRequest = { tool_name: AURORA_NATIVE_TOOL_IDS.openDeepLink, arguments: { url } }

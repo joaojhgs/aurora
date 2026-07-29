@@ -163,7 +163,11 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val assistantRoleOemUnavailable = assistantRole.getBoolean("oemUnavailable")
         val localLightInference = localLightInferenceStatusObject()
         val shareTextReady = canResolveIntent(Intent(Intent.ACTION_SEND).setType("text/plain"))
-        val deepLinkReady = true
+        val deepLinkReady = canResolveIntent(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://aurora.local/"))
+                .addCategory(Intent.CATEGORY_BROWSABLE),
+        )
+        val notificationActionReady = canPostNotifications()
 
         val permissions = JSObject()
         permissions.put("aurora.nativeCapabilityManifest", true)
@@ -191,7 +195,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.deepLink", true)
         permissions.put("aurora.android.shareText", shareTextReady)
         permissions.put("aurora.android.openDeepLink", deepLinkReady)
-        permissions.put("aurora.android.showNotification", notificationsGranted)
+        permissions.put("aurora.android.showNotification", notificationActionReady)
         permissions.put("aurora.android.appWidget", true)
         permissions.put("aurora.android.appShortcut", true)
         permissions.put("aurora.android.quickTile", true)
@@ -231,7 +235,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.deepLink", true)
         capabilities.put("android.shareText", shareTextReady)
         capabilities.put("android.openDeepLink", deepLinkReady)
-        capabilities.put("android.showNotification", notificationsGranted)
+        capabilities.put("android.showNotification", notificationActionReady)
         capabilities.put("android.appWidget", true)
         capabilities.put("android.appShortcut", true)
         capabilities.put("android.quickTile", true)
@@ -266,8 +270,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.shareIntent", "available")
         permissionStates.put("aurora.android.deepLink", "available")
         permissionStates.put("aurora.android.shareText", if (shareTextReady) "available" else "unsupported_platform")
-        permissionStates.put("aurora.android.openDeepLink", "available")
-        permissionStates.put("aurora.android.showNotification", permissionState(notificationsGranted))
+        permissionStates.put("aurora.android.openDeepLink", if (deepLinkReady) "available" else "unsupported_platform")
+        permissionStates.put("aurora.android.showNotification", permissionState(notificationActionReady))
         permissionStates.put("aurora.android.appWidget", "fallback")
         permissionStates.put("aurora.android.appShortcut", "fallback")
         permissionStates.put("aurora.android.quickTile", "fallback")
@@ -306,8 +310,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.shareIntent", "available")
         capabilityStates.put("android.deepLink", "available")
         capabilityStates.put("android.shareText", if (shareTextReady) "available" else "unsupported_platform")
-        capabilityStates.put("android.openDeepLink", "available")
-        capabilityStates.put("android.showNotification", permissionState(notificationsGranted))
+        capabilityStates.put("android.openDeepLink", if (deepLinkReady) "available" else "unsupported_platform")
+        capabilityStates.put("android.showNotification", permissionState(notificationActionReady))
         capabilityStates.put("android.appWidget", "fallback")
         capabilityStates.put("android.appShortcut", "fallback")
         capabilityStates.put("android.quickTile", "fallback")
@@ -547,7 +551,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun showNotification(invoke: Invoke) {
         val args = invoke.parseArgs(AndroidShowNotificationArgs::class.java)
         try {
-            if (!hasPostNotificationsPermission()) {
+            if (!canPostNotifications()) {
                 invoke.reject("permission_denied")
                 return
             }
@@ -1124,6 +1128,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun hasPostNotificationsPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || hasRuntimePermission(Manifest.permission.POST_NOTIFICATIONS)
+
+    private fun canPostNotifications(): Boolean =
+        hasPostNotificationsPermission() && NotificationManagerCompat.from(activity).areNotificationsEnabled()
 
     private fun hasForegroundServiceMicrophonePermission(): Boolean =
         Build.VERSION.SDK_INT < 34 || hasRuntimePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE)

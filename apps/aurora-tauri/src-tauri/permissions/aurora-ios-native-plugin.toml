@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "aurora-ios-native-plugin"
-description = "Allow the frontend SDK adapter to invoke the Aurora iOS Swift native plugin capability, status, and concrete action handoff methods."
+description = "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability."
 commands.allow = [
   "aurora_ios_native_plugin_manifest",
   "aurora_ios_invocation_status",

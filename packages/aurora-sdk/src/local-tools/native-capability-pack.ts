@@ -76,8 +76,8 @@ export function nativeCapabilityError(reasonCode: string): LocalToolHandlerError
   return new LocalToolHandlerError(reasonCode)
 }
 
-const stringSchema = { type: 'string', minLength: 1, maxLength: 16_384 } as const
-const textSchema = { type: 'string', minLength: 1, maxLength: 100_000 } as const
+const stringSchema = { type: 'string', minLength: 1, maxLength: 120 } as const
+const textSchema = { type: 'string', minLength: 1, maxLength: 8_192 } as const
 const booleanSchema = { type: 'boolean' } as const
 const documentIdSchema = { type: 'string', minLength: 1, maxLength: 256 } as const
 const platformSchema = { type: 'string', minLength: 1, maxLength: 64 } as const
@@ -124,7 +124,7 @@ export const NATIVE_TOOL_DESCRIPTORS: readonly LocalToolDescriptorV1[] = Object.
     localName: 'native.show_notification',
     displayName: 'Show notification',
     description: 'Show a local notification on this device.',
-    argsSchema: objectSchema({ title: stringSchema, body: { type: 'string', maxLength: 16_384 } }, ['title']),
+    argsSchema: objectSchema({ title: stringSchema, body: { type: 'string', minLength: 1, maxLength: 512 } }, ['title']),
     outputSchema: okOutput('shown'),
     requiredPermissions: ['Native.ShowNotification'],
     safetyClass: 'sensitive',
@@ -313,4 +313,13 @@ function validateSafeDeepLink(value: JsonValue | undefined): void {
     throw new LocalToolHandlerError('permission_denied')
   }
   if (!SAFE_DEEP_LINK_PROTOCOLS.has(parsed.protocol)) throw new LocalToolHandlerError('permission_denied')
+  if (parsed.protocol === 'https:' && (
+    parsed.hostname.length === 0 ||
+    !/^https:\/\/[^/?#]/iu.test(value)
+  )) {
+    throw new LocalToolHandlerError('permission_denied')
+  }
+  if ((parsed.protocol === 'mailto:' || parsed.protocol === 'tel:') && parsed.pathname.length === 0) {
+    throw new LocalToolHandlerError('permission_denied')
+  }
 }

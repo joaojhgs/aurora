@@ -554,4 +554,94 @@ describe('Tauri CI native evidence contract', () => {
     expect(workflow).toContain('if: matrix.needs_python')
   })
 
+  it('keeps outgoing mobile actions behind bounded platform commands and generated ACLs', () => {
+    const rust = repoText('apps/aurora-tauri/src-tauri/src/lib.rs')
+    const buildManifest = repoText('apps/aurora-tauri/src-tauri/build.rs')
+    const kotlin = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
+    )
+    const swift = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',
+    )
+    const androidPermission = repoText(
+      'apps/aurora-tauri/src-tauri/permissions/aurora-android-native-plugin.toml',
+    )
+    const iosPermission = repoText(
+      'apps/aurora-tauri/src-tauri/permissions/aurora-ios-native-plugin.toml',
+    )
+    const mobileActionsPermission = repoText(
+      'apps/aurora-tauri/src-tauri/permissions/aurora-mobile-native-actions.toml',
+    )
+    const capabilities = JSON.parse(
+      repoText('apps/aurora-tauri/src-tauri/gen/schemas/capabilities.json'),
+    ) as Record<string, { permissions: string[]; platforms?: string[] }>
+    const mobileSchemas = [
+      repoText('apps/aurora-tauri/src-tauri/gen/schemas/android-schema.json'),
+      repoText('apps/aurora-tauri/src-tauri/gen/schemas/mobile-schema.json'),
+    ]
+    const acl = JSON.parse(
+      repoText('apps/aurora-tauri/src-tauri/gen/schemas/acl-manifests.json'),
+    ) as {
+      '__app-acl__': {
+        permissions: Record<string, { commands: { allow: string[] } }>
+      }
+    }
+    const commands = [
+      'aurora_native_share_text',
+      'aurora_native_open_deep_link',
+      'aurora_native_show_notification',
+    ]
+    for (const command of commands) {
+      expect(rust).toContain(`async fn ${command}`)
+      expect(buildManifest).toContain(`"${command}"`)
+      expect(mobileActionsPermission).toContain(`"${command}"`)
+      expect(androidPermission).not.toContain(`"${command}"`)
+      expect(iosPermission).not.toContain(`"${command}"`)
+      expect(
+        acl['__app-acl__'].permissions['aurora-android-native-plugin']?.commands.allow,
+      ).not.toContain(command)
+      expect(
+        acl['__app-acl__'].permissions['aurora-ios-native-plugin']?.commands.allow,
+      ).not.toContain(command)
+      expect(
+        acl['__app-acl__'].permissions['aurora-mobile-native-actions']?.commands.allow,
+      ).toContain(command)
+      for (const schema of mobileSchemas) {
+        expect(schema).toContain(`allow-${command.replaceAll('_', '-')}`)
+        expect(schema).toContain(`deny-${command.replaceAll('_', '-')}`)
+      }
+    }
+    for (const schema of mobileSchemas) {
+      expect(schema).toContain('"const": "aurora-mobile-native-actions"')
+    }
+
+    expect(capabilities['aurora-mobile-mesh']?.platforms).toEqual(['android', 'iOS'])
+    expect(capabilities['aurora-mobile-mesh']?.permissions).toContain(
+      'aurora-mobile-native-actions',
+    )
+    for (const identifier of ['aurora-main', 'aurora-thin']) {
+      const capability = capabilities[identifier]
+      expect(capability?.permissions).not.toContain('aurora-mobile-native-actions')
+      const allowedDesktopCommands = (capability?.permissions ?? []).flatMap(
+        (permission) =>
+          acl['__app-acl__'].permissions[permission]?.commands.allow ?? [],
+      )
+      for (const command of commands) {
+        expect(allowedDesktopCommands, `${identifier} must not grant ${command}`).not.toContain(
+          command,
+        )
+      }
+    }
+
+    for (const action of ['shareText', 'openDeepLink', 'showNotification']) {
+      expect(kotlin).toContain(`fun ${action}(invoke: Invoke)`)
+      expect(swift).toContain(`@objc public func ${action}(_ invoke: Invoke)`)
+    }
+    expect(kotlin).toContain('NotificationManagerCompat.from(activity).areNotificationsEnabled()')
+    expect(swift).toContain('UNUserNotificationCenter.current().getNotificationSettings')
+    expect(`${kotlin}\n${swift}`).not.toMatch(/requestAuthorization\(/u)
+    expect(`${kotlin}\n${swift}`).not.toMatch(/(?:Runtime|getRuntime)\.exec|ProcessBuilder|\/bin\/sh/u)
+    expect(rust).not.toContain('aurora_native_invoke')
+  })
+
 })
