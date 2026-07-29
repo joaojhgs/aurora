@@ -10,6 +10,8 @@ import {
   DenyAllInboundCredentialVerifierStore,
   EncryptedPeerGrantRepository,
   LocalDataPeerAuditSink,
+  MemoryPeerRevocationController,
+  MemoryReconnectChallengeStore,
   PeerAuthorityResolver,
   SecureInboundCredentialVerifierStore,
   inboundVerifierSecretKey,
@@ -204,6 +206,56 @@ describe('local-data peer authority adapters', () => {
     })
   })
 
+  it('revokes readable matching grants and audits unreadable evidence when another matching row is corrupt', async () => {
+    const { session, repository } = await grantRepositoryFixture()
+    await repository.upsertGrant(grant({ grantId: 'readable', grantRevision: 1 }))
+    await repository.upsertGrant(grant({ grantId: 'corrupt', grantRevision: 2 }))
+    await corruptGrantEnvelope(session, 'corrupt')
+    const auditSink = new LocalDataPeerAuditSink({
+      auditRepository: session.localAudit,
+      profileId,
+      localNodeId,
+      randomId: sequentialIds('audit-mixed')
+    })
+    const controller = new MemoryPeerRevocationController({
+      verifierStore: new DenyAllInboundCredentialVerifierStore(),
+      grantRepository: repository,
+      challengeStore: new MemoryReconnectChallengeStore(),
+      auditSink,
+      now: () => 260
+    })
+
+    await expect(controller.revoke(selector, 'operator_revoked')).resolves.toMatchObject({
+      revokedGrantIds: ['readable'],
+      reasonCode: 'operator_revoked'
+    })
+    await expect(repository.resolveGrant({ selector, methodId: 'Tooling.GetTools', nowMs: 261 })).resolves.toEqual({
+      allowed: false,
+      reasonCode: 'grant_store_unreadable'
+    })
+    const [readable] = (await session.peerGrants.listPeerGrants()).filter((record) => record.grantId === 'readable')
+    expect(readable).toMatchObject({ revokedAtMs: 260, revision: 2 })
+    await expect(session.localAudit.listAudit()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: 'grant.revoke',
+        decision: 'rejected',
+        redactedDetailJson: expect.objectContaining({
+          redacted: true,
+          secretsRedacted: true,
+          reasonCode: 'grant_store_unreadable'
+        })
+      }),
+      expect.objectContaining({
+        action: 'grant.revoke',
+        decision: 'revoked',
+        redactedDetailJson: expect.objectContaining({
+          reasonCode: 'operator_revoked'
+        })
+      })
+    ]))
+    expect(JSON.stringify(await session.localAudit.listAudit())).not.toMatch(/peer-verifier|room-a|tokenHashHex|proofHex|bearer|tampered|[a-f0-9]{64}/u)
+  })
+
   it('fails closed when grant envelope AAD or ciphertext is wrong', async () => {
     const { session, repository, crypto } = await grantRepositoryFixture()
     await repository.upsertGrant(grant())
@@ -219,14 +271,7 @@ describe('local-data peer authority adapters', () => {
       reasonCode: 'grant_not_found'
     })
 
-    const [record] = await session.peerGrants.listPeerGrants()
-    await session.peerGrants.upsertPeerGrant({
-      ...record!,
-      scopeEnvelope: {
-        ...record!.scopeEnvelope,
-        ciphertextAndTagB64Url: 'tamperedtamperedtampered'
-      }
-    })
+    await corruptGrantEnvelope(session, 'grant-1')
     await expect(repository.resolveGrant({ selector, methodId: 'Tooling.GetTools', nowMs: 201 })).resolves.toEqual({
       allowed: false,
       reasonCode: 'grant_store_unreadable'
@@ -342,6 +387,23 @@ async function grantRepositoryFixture() {
     localNodeId
   })
   return { backend, session, crypto, repository }
+}
+
+async function corruptGrantEnvelope(session: Awaited<ReturnType<MemoryLocalDataBackend['open']>>, grantId: string): Promise<void> {
+  const record = (await session.peerGrants.listPeerGrants()).find((item) => item.grantId === grantId)
+  if (record === undefined) throw new Error(`missing test grant ${grantId}`)
+  await session.peerGrants.upsertPeerGrant({
+    ...record,
+    scopeEnvelope: {
+      ...record.scopeEnvelope,
+      ciphertextAndTagB64Url: 'tamperedtamperedtampered'
+    }
+  })
+}
+
+function sequentialIds(prefix: string): () => string {
+  let counter = 0
+  return () => `${prefix}-${++counter}`
 }
 
 class RecordingSecretStorage implements InboundVerifierSecretStoragePort {

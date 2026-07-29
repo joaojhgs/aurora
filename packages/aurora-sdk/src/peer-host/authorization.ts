@@ -55,7 +55,7 @@ export class SessionPeerHostAuthorizationStore implements PeerHostAuthorizationS
       : { allowed: false, reasonCode: 'grant_not_found' }
   }
 
-  snapshotManifestAuthority(request: { readonly remotePeerId?: string; readonly authenticatedPeerContext?: PeerHostAuthorizeRequest['authenticatedPeerContext']; readonly nowMs: number }): PeerHostManifestAuthoritySnapshot {
+  snapshotManifestAuthority(request: { readonly remotePeerId?: string; readonly authenticatedPeerContext?: PeerHostAuthorizeRequest['authenticatedPeerContext']; readonly nowMs: number; readonly correlationId?: string }): PeerHostManifestAuthoritySnapshot {
     const grants = [...this.grants.values()]
       .filter((grant) => {
         if (request.remotePeerId !== undefined && grant.claimantPeerId !== request.remotePeerId) return false
@@ -103,7 +103,7 @@ export class PeerAuthorityHostAuthorizationStore implements PeerHostAuthorizatio
     }
   }
 
-  async snapshotManifestAuthority(request: { readonly remotePeerId?: string; readonly authenticatedPeerContext?: AuthenticatedPeerContext; readonly nowMs: number }): Promise<PeerHostManifestAuthoritySnapshot> {
+  async snapshotManifestAuthority(request: { readonly remotePeerId?: string; readonly authenticatedPeerContext?: AuthenticatedPeerContext; readonly nowMs: number; readonly correlationId?: string }): Promise<PeerHostManifestAuthoritySnapshot> {
     const context = request.authenticatedPeerContext
     if (context === undefined) {
       return { ...(request.remotePeerId !== undefined ? { recipientPeerId: request.remotePeerId } : {}), grantedMethodIds: [], authGrantRevision: 0, authGrantState: 'unknown' }
@@ -111,7 +111,7 @@ export class PeerAuthorityHostAuthorizationStore implements PeerHostAuthorizatio
     if (request.remotePeerId !== undefined && context.selector.claimantPeerId !== request.remotePeerId) {
       return { recipientPeerId: request.remotePeerId, grantedMethodIds: [], authGrantRevision: 0, authGrantState: 'unknown' }
     }
-    const grants = await this.resolver.listRecipientGrants(context, request.nowMs)
+    const grants = await this.resolver.snapshotRecipientGrants(context, request.nowMs, request.correlationId)
     const active = grants
       .filter((grant) => {
         if (grant.revokedAtMs !== undefined && grant.revokedAtMs <= request.nowMs) return false

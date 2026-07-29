@@ -233,7 +233,6 @@ export class EncryptedPeerGrantRepository implements PeerGrantRepository {
     assertEpochMs(revokedAtMs, 'revokedAtMs')
     const revoked: LocalPeerGrantV1[] = []
     const result = await this.readMatchingGrants(selector)
-    if (result.unreadable) return []
     for (const grant of result.grants) {
       const next = parseGrant({
         ...grant,
@@ -450,6 +449,7 @@ function redactedAuditDetails(record: LocalPeerAuditRecord): Record<string, Loca
     redactedFields: ['sensitivePeerAuthorityMaterial']
   }
   if (record.reasonCode !== undefined) details.reasonCode = boundedJsonString(record.reasonCode)
+  if (record.authorityState !== undefined) details.authorityState = boundedJsonString(record.authorityState)
   if (record.capabilityPackId !== undefined) details.capabilityPackId = boundedJsonString(record.capabilityPackId)
   if (record.resourceScope !== undefined) details.resourceScope = boundedJsonString(record.resourceScope)
   return scrubForbiddenAuditDetails(details)

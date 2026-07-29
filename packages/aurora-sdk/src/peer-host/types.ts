@@ -104,6 +104,7 @@ export interface PeerHostAuthorizationStore {
     readonly remotePeerId?: string
     readonly authenticatedPeerContext?: AuthenticatedPeerContext
     readonly nowMs: number
+    readonly correlationId?: string
   }): PeerHostManifestAuthoritySnapshot | Promise<PeerHostManifestAuthoritySnapshot>
 }
 

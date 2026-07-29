@@ -436,6 +436,7 @@ export class WebRtcPeerHost {
     return await (this.options.authorizationStore.snapshotManifestAuthority?.({
       ...(peerId !== undefined ? { remotePeerId: peerId } : {}),
       ...(context !== undefined ? { authenticatedPeerContext: context } : {}),
+      correlationId: `manifest:${this.connectionEpoch}`,
       nowMs
     }) ?? {
       ...(peerId !== undefined ? { recipientPeerId: peerId } : {}),

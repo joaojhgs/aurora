@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod/v4'
 
+import { MemoryLocalDataBackend } from '../src/local-data/index.js'
 import {
   MemoryPeerGrantRepository,
   PeerAuthorityResolver,
@@ -14,6 +15,7 @@ import {
 } from '../src/webrtc/index.js'
 import { PeerAuthorityHostAuthorizationStore } from '../src/peer-host/authorization.js'
 import { DenyAllInboundCredentialVerifierStore, NoopReconnectChallengeStore, type AuthenticatedPeerContext, type LocalPeerGrantV1 as AuthorityGrant } from '../src/peer-host/authority.js'
+import { LocalDataPeerAuditSink } from '../src/peer-host/local-data-authority-adapters.js'
 
 function grant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
   return {
@@ -234,6 +236,47 @@ describe('WebRtcPeerHost', () => {
     for (const field of ['registry_digest', 'policy_digest', 'auth_grant_digest', 'grants_digest', 'projection_digest', 'evidence_digest']) {
       expect((manifest.recipient_projection_evidence as Record<string, unknown>)[field]).toMatch(/^[0-9a-f]{64}$/)
     }
+  })
+
+  it('writes a redacted epoch-bearing audit row for authority manifest evaluation', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    const grants = new MemoryPeerGrantRepository()
+    await grants.upsertGrant(authorityGrant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new DenyAllInboundCredentialVerifierStore(),
+      grantRepository: grants,
+      challengeStore: new NoopReconnectChallengeStore(),
+      auditSink: new LocalDataPeerAuditSink({
+        auditRepository: session.localAudit,
+        profileId: 'profile-1',
+        localNodeId: 'node-1',
+        randomId: () => 'audit-manifest'
+      })
+    })
+
+    await host(
+      vi.fn(async () => ({ count: 0, tools: [] })),
+      new PeerAuthorityHostAuthorizationStore(resolver),
+      authenticatedContext()
+    )
+
+    await expect(session.localAudit.listAudit()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'audit-manifest',
+        peerId: 'peer-a',
+        action: 'manifest.snapshot',
+        decision: 'accepted',
+        connectionEpoch: 'epoch-1',
+        correlationId: 'manifest:epoch-1',
+        redactedDetailJson: expect.objectContaining({
+          redacted: true,
+          secretsRedacted: true,
+          authorityState: 'active'
+        })
+      })
+    ])
+    expect(JSON.stringify(await session.localAudit.listAudit())).not.toMatch(/peer-verifier|room-a|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u)
   })
 
   it('keeps generated Tooling registry permissions aligned for export catalog reads', () => {

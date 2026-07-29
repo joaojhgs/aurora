@@ -98,6 +98,7 @@ export type LocalPeerAuditAction =
   | 'credential.verify'
   | 'grant.check'
   | 'grant.revoke'
+  | 'manifest.snapshot'
   | 'challenge.issue'
   | 'challenge.consume'
   | 'challenge.reject'
@@ -114,6 +115,7 @@ export interface LocalPeerAuditRecord {
   readonly resourceScope?: string
   readonly correlationId?: string
   readonly connectionEpoch?: string
+  readonly authorityState?: string
   readonly createdAtMs: number
   readonly redacted: true
   readonly redactedFields: readonly string[]
@@ -344,8 +346,29 @@ export class PeerAuthorityResolver {
     return await this.grantRepository.listRecipientGrants(context.selector, nowMs)
   }
 
-  async getRecipientManifest(context: AuthenticatedPeerContext, nowMs: number): Promise<unknown> {
+  async snapshotRecipientGrants(context: AuthenticatedPeerContext, nowMs: number, correlationId?: string): Promise<readonly LocalPeerGrantV1[]> {
     const grants = await this.listRecipientGrants(context, nowMs)
+    const active = grants.filter((grant) =>
+      (grant.revokedAtMs === undefined || grant.revokedAtMs > nowMs) &&
+      (grant.expiresAtMs === undefined || grant.expiresAtMs > nowMs)
+    )
+    const state = active.length > 0 ? 'active' : 'unknown'
+    await this.auditSink.record(auditRecord(
+      'manifest.snapshot',
+      context.selector,
+      state === 'active' ? 'accepted' : 'rejected',
+      nowMs,
+      state === 'active' ? undefined : 'grant_not_found',
+      undefined,
+      context.connectionEpoch,
+      correlationId,
+      state
+    ))
+    return grants
+  }
+
+  async getRecipientManifest(context: AuthenticatedPeerContext, nowMs: number): Promise<unknown> {
+    const grants = await this.snapshotRecipientGrants(context, nowMs)
     if (grants.length === 0 || this.manifestProvider === undefined) {
       return { shared_services: [], grants: [] }
     }
@@ -595,6 +618,10 @@ export class MemoryPeerRevocationController implements PeerRevocationController 
     const verifier = await this.verifierStore.revokeVerifier(selector, revokedAtMs)
     const grants = await this.grantRepository.revokeGrants(selector, revokedAtMs)
     await this.challengeStore.rejectChallenges(selector, revokedAtMs)
+    const postRevokeDecision = await this.grantRepository.resolveGrant({ selector, nowMs: revokedAtMs })
+    if (postRevokeDecision.reasonCode === 'grant_store_unreadable') {
+      await this.auditSink.record(auditRecord('grant.revoke', selector, 'rejected', revokedAtMs, 'grant_store_unreadable'))
+    }
     const event: PeerRevocationEvent = {
       type: 'peer_authority_revoked_v1',
       selector: cloneSelector(selector),
@@ -703,7 +730,9 @@ function auditRecord(
   createdAtMs: number,
   reasonCode?: string,
   methodId?: string,
-  connectionEpoch?: string
+  connectionEpoch?: string,
+  correlationId?: string,
+  authorityState?: string
 ): LocalPeerAuditRecord {
   const record: LocalPeerAuditRecord = {
     action,
@@ -716,6 +745,8 @@ function auditRecord(
   if (reasonCode !== undefined) Object.assign(record, { reasonCode })
   if (methodId !== undefined) Object.assign(record, { methodId })
   if (connectionEpoch !== undefined) Object.assign(record, { connectionEpoch })
+  if (correlationId !== undefined) Object.assign(record, { correlationId })
+  if (authorityState !== undefined) Object.assign(record, { authorityState })
   return record
 }
 
