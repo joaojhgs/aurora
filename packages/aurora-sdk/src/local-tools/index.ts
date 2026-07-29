@@ -17,6 +17,7 @@ export {
   buildVisibleProjection,
   computeProjectionChecksum,
   computeProjectionPageHash,
+  normalizeProjectionToolAuthority,
   projectionDigest
 } from './export-catalog.js'
 export type {
@@ -42,8 +43,17 @@ export {
   createLocalToolingProviderHandlers
 } from './tooling-provider.js'
 export type {
+  LocalToolAuditAction,
+  LocalToolAuditPort,
+  LocalToolAuditRecord,
+  LocalToolAuditResult,
   LocalToolingProviderOptions
 } from './tooling-provider.js'
+export {
+  LocalToolJsonSchemaError,
+  assertSupportedJsonSchema,
+  validateJsonAgainstSchema
+} from './json-schema.js'
 export {
   canonicalJson,
   canonicalJsonBytes,

@@ -15,7 +15,8 @@ const descriptor: LocalToolDescriptorV1 = {
       apiKey: { type: 'string' },
       note: { type: 'string' }
     },
-    required: ['text']
+    required: ['text'],
+    additionalProperties: false
   },
   outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
   argumentVisibility: { text: 'public', apiKey: 'secret', note: 'private' },
@@ -68,5 +69,27 @@ describe('local tool registry', () => {
       descriptor: { ...descriptor, toolContractId: 'core.memory.third', localName: 'memory.third' },
       handler: () => null
     })).toThrow(/duplicate_handler_id/)
+  })
+
+  it('rejects unsupported schemas before tools become dispatchable', () => {
+    const registry = new LocalToolRegistry({ stablePeerId: 'peer-provider' })
+    expect(() => registry.register({
+      descriptor: {
+        ...descriptor,
+        argsSchema: {
+          type: 'object',
+          properties: {
+            text: { type: 'string' },
+            apiKey: { type: 'string' },
+            note: { type: 'string' }
+          },
+          required: ['text'],
+          additionalProperties: false,
+          oneOf: [{ required: ['text'] }]
+        } as unknown as LocalToolDescriptorV1['argsSchema']
+      },
+      handler: () => ({ ok: true })
+    })).toThrow(/unsupported_keyword/)
+    expect(registry.publicTools()).toEqual([])
   })
 })

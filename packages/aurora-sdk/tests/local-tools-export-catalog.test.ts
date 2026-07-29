@@ -25,8 +25,8 @@ const descriptor: LocalToolDescriptorV1 = {
   localName: 'schedule.list',
   displayName: 'List scheduled tasks',
   description: 'List scheduled tasks',
-  argsSchema: { type: 'object', properties: {} },
-  outputSchema: { type: 'object', properties: { items: { type: 'array' } } },
+  argsSchema: { type: 'object', properties: {}, additionalProperties: false },
+  outputSchema: { type: 'object', properties: { items: { type: 'array' } }, required: ['items'], additionalProperties: false },
   argumentVisibility: {},
   requiredPermissions: ['Scheduler.List'],
   resourceScopes: ['scheduler.local'],
@@ -61,13 +61,23 @@ describe('local tool export catalog', () => {
       serviceInstanceId: 'remote:provider:Tooling',
       tools: registry.publicTools(),
       context,
-      cursorSecret: 'test-secret',
+      exportDecision: allowExport,
+      cursorSecret: 'test-cursor-secret',
       nowSeconds: () => 10,
       nonce: () => 'nonce'
     })
 
     expect(page.complete).toBe(true)
     expect(page.tools).toHaveLength(1)
+    expect(page.service_instance_id).toBe('remote:provider:Tooling')
+    expect(page.tools[0]).toMatchObject({
+      provider_peer_id: 'provider',
+      provider_service_instance_id: 'remote:provider:Tooling',
+      provenance: {
+        provider_peer_id: 'provider',
+        provider_service_instance_id: 'remote:provider:Tooling'
+      }
+    })
     expect(page.blocked_tools).toEqual([])
     expect(page.retirements).toEqual([])
     expect(page.final_checksum).toBe(computeProjectionChecksum(page.tools, [], []))
@@ -101,7 +111,8 @@ describe('local tool export catalog', () => {
       serviceInstanceId: 'remote:provider:Tooling',
       tools: [firstTool, secondTool],
       context,
-      cursorSecret: 'test-secret',
+      exportDecision: allowExport,
+      cursorSecret: 'test-cursor-secret',
       nowSeconds: () => 10,
       nonce: () => 'nonce'
     })
@@ -112,14 +123,77 @@ describe('local tool export catalog', () => {
       serviceInstanceId: 'remote:provider:Tooling',
       tools: registry.publicTools(),
       context,
-      cursorSecret: 'test-secret'
+      exportDecision: allowExport,
+      cursorSecret: 'test-cursor-secret'
     })).toThrow(/projection_restart_required/)
     expect(() => buildLocalToolExportCatalogPage({ page_size: 2, cursor: first.next_cursor ?? null }, {
       providerPeerId: 'provider',
       serviceInstanceId: 'remote:provider:Tooling',
       tools: registry.publicTools(),
       context,
-      cursorSecret: 'test-secret'
+      exportDecision: allowExport,
+      cursorSecret: 'test-cursor-secret'
+    })).toThrow(/projection_restart_required/)
+  })
+
+  it('denies exports by default and rejects missing or expired cursor secrets', () => {
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registry.register({ descriptor, handler: () => ({ items: [] }) })
+    const context: LocalToolProjectionContext = {
+      recipientPeerId: 'recipient',
+      recipientPermissions: ['*'],
+      authorityRevision: authority,
+      providerEnabled: true,
+      serviceExported: true,
+      discoveryExported: true,
+      executionExported: true
+    }
+    const firstTool = registry.publicTools()[0]!
+    const secondTool = {
+      ...firstTool,
+      global_tool_id: 'aurora-tool:v1:provider:Tooling:core.scheduler.other',
+      tool_contract_id: 'core.scheduler.other',
+      local_name: 'schedule.other',
+      name: 'schedule.other'
+    }
+
+    const empty = buildLocalToolExportCatalogPage({ page_size: 100 }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: [firstTool],
+      context
+    })
+    expect(empty).toMatchObject({ complete: true, total_count: 0, tools: [] })
+
+    expect(() => buildLocalToolExportCatalogPage({ page_size: 1 }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: [firstTool, secondTool],
+      context,
+      exportDecision: allowExport
+    })).toThrow(/projection_cursor_secret_required/)
+
+    const first = buildLocalToolExportCatalogPage({ page_size: 1 }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: [firstTool, secondTool],
+      context,
+      exportDecision: allowExport,
+      cursorSecret: 'test-cursor-secret',
+      cursorTtlSeconds: 1,
+      nowSeconds: () => 10,
+      nonce: () => 'nonce'
+    })
+    expect(() => buildLocalToolExportCatalogPage({ page_size: 1, cursor: first.next_cursor ?? null }, {
+      providerPeerId: 'provider',
+      serviceInstanceId: 'remote:provider:Tooling',
+      tools: [firstTool, secondTool],
+      context,
+      exportDecision: allowExport,
+      cursorSecret: 'test-cursor-secret',
+      nowSeconds: () => 11
     })).toThrow(/projection_restart_required/)
   })
 })
+
+const allowExport = { isShared: () => true }

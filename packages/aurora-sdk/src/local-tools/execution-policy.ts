@@ -3,7 +3,9 @@ import type {
   JsonValue,
   ToolingPrepareExecutionResponse
 } from '../types.js'
+import { hasPermission } from '../permissions.js'
 import { canonicalJson, canonicalJsonSha256Hex } from './canonical-json.js'
+import { validateJsonAgainstSchema } from './json-schema.js'
 import type { LocalToolDispatchEntry, LocalToolExecutionContext } from './tool-registry.js'
 
 const SECRET_KEY_PARTS = ['secret', 'token', 'password', 'api_key', 'apikey', 'credential', 'private_key']
@@ -235,22 +237,17 @@ export class LocalToolExecutionPolicy {
   }
 
   private async firstGrantDenial(entry: LocalToolDispatchEntry, request: LocalToolExecuteRequest, context: LocalToolExecutionContext): Promise<string | null> {
-    const permissions = new Set(context.permissions)
-    if (!permissions.has('Tooling.ExecuteTool')) return 'recipient_missing_execute_permission'
+    if (!hasPermission('Tooling.ExecuteTool', context.permissions, 'use')) return 'recipient_missing_execute_permission'
     for (const permission of entry.toolInfo.required_permissions) {
-      if (!permissions.has(permission)) return 'recipient_missing_tool_permissions'
+      if (!hasPermission(permission, context.permissions, 'use')) return 'recipient_missing_tool_permissions'
     }
     if (this.options.ports?.hasMethodGrant && !await this.options.ports.hasMethodGrant('Tooling.ExecuteTool', context)) return 'method_not_granted'
-    if (this.options.ports?.hasToolGrant && !await this.options.ports.hasToolGrant(entry.descriptor.toolContractId, context)) return 'tool_not_granted'
-    if (this.options.ports?.hasCapabilityGrant) {
-      for (const capabilityId of entry.descriptor.nativeRequirements.capabilityIds) {
-        if (!await this.options.ports.hasCapabilityGrant(capabilityId, context)) return 'capability_not_granted'
-      }
+    if (!this.options.ports?.hasToolGrant || !await this.options.ports.hasToolGrant(entry.descriptor.toolContractId, context)) return 'tool_not_granted'
+    for (const capabilityId of entry.descriptor.nativeRequirements.capabilityIds) {
+      if (!this.options.ports?.hasCapabilityGrant || !await this.options.ports.hasCapabilityGrant(capabilityId, context)) return 'capability_not_granted'
     }
-    if (this.options.ports?.hasResourceGrant) {
-      for (const resourceScope of entry.toolInfo.resource_scope) {
-        if (!await this.options.ports.hasResourceGrant(resourceScope, context, request)) return 'resource_not_granted'
-      }
+    for (const resourceScope of entry.toolInfo.resource_scope) {
+      if (!this.options.ports?.hasResourceGrant || !await this.options.ports.hasResourceGrant(resourceScope, context, request)) return 'resource_not_granted'
     }
     return null
   }
@@ -282,7 +279,8 @@ export function displayArgumentsPreview(argumentsValue: JsonObject, visibility: 
 
 export function sanitizeHandlerData(value: JsonValue | undefined): JsonValue | null {
   if (value === undefined) return null
-  return redactNested(value)
+  canonicalJson(value)
+  return value
 }
 
 export function safeToolError(): string {
@@ -303,31 +301,7 @@ function isApprovalRequired(entry: LocalToolDispatchEntry): boolean {
 }
 
 function validateArguments(entry: LocalToolDispatchEntry, args: JsonObject): string | null {
-  const schema = entry.descriptor.argsSchema
-  const required = Array.isArray(schema.required) ? schema.required.filter((item): item is string => typeof item === 'string') : []
-  for (const key of required) {
-    if (!(key in args)) return 'argument_schema_invalid'
-  }
-  const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
-    ? schema.properties as Record<string, { type?: string; enum?: unknown[] }>
-    : {}
-  for (const [key, value] of Object.entries(args)) {
-    const property = properties[key]
-    if (!property) continue
-    if (property.enum && !property.enum.some((item) => item === value)) return 'argument_schema_invalid'
-    if (property.type && !matchesJsonSchemaType(value, property.type)) return 'argument_schema_invalid'
-  }
-  return null
-}
-
-function matchesJsonSchemaType(value: JsonValue | undefined, type: string): boolean {
-  if (type === 'string') return typeof value === 'string'
-  if (type === 'number' || type === 'integer') return typeof value === 'number' && Number.isFinite(value) && (type !== 'integer' || Number.isInteger(value))
-  if (type === 'boolean') return typeof value === 'boolean'
-  if (type === 'object') return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-  if (type === 'array') return Array.isArray(value)
-  if (type === 'null') return value === null
-  return true
+  return validateJsonAgainstSchema(entry.descriptor.argsSchema as JsonObject, args) ? 'argument_schema_invalid' : null
 }
 
 function routeDecisionId(value: JsonObject): string {

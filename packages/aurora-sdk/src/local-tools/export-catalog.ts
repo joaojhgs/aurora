@@ -1,4 +1,5 @@
-import { createHmac } from 'node:crypto'
+import { hmac } from '@noble/hashes/hmac.js'
+import { sha256 } from '@noble/hashes/sha2.js'
 
 import type {
   ToolingExportCatalogCompletePage,
@@ -10,6 +11,7 @@ import type {
   ToolingProjectionRetirement,
   ToolingProjectionToolInfo
 } from '../types.js'
+import { hasPermission } from '../permissions.js'
 import { base64UrlDecode, base64UrlEncode, bytesToUtf8, concatBytes, utf8ToBytes } from '../webrtc/encoding.js'
 import { canonicalJson, canonicalJsonSha256Hex } from './canonical-json.js'
 
@@ -71,7 +73,8 @@ export function buildLocalToolExportCatalogPage(
   if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 256) {
     throw new LocalToolProjectionError('invalid_page_size')
   }
-  const visible = buildVisibleProjection(options.tools, options.context, options.exportDecision)
+  const candidates = options.tools.map((tool) => normalizeProjectionToolAuthority(tool, options.providerPeerId, options.serviceInstanceId))
+  const visible = buildVisibleProjection(candidates, options.context, options.exportDecision)
   const blockedTools: ToolingProjectionBlockedTool[] = []
   const retirements = [...(options.retirements ?? [])].sort((left, right) => left.global_tool_id.localeCompare(right.global_tool_id))
   const digest = computeProjectionChecksum(visible, retirements, blockedTools)
@@ -89,7 +92,7 @@ export function buildLocalToolExportCatalogPage(
   let offset = 0
   let pageIndex = 0
   if (request.cursor) {
-    const cursor = decodeProjectionCursor(request.cursor, options.cursorSecret)
+    const cursor = decodeProjectionCursor(request.cursor, requireCursorSecret(options.cursorSecret), Math.floor(options.nowSeconds?.() ?? Date.now() / 1000))
     const expected = [
       options.context.recipientPeerId,
       options.providerPeerId,
@@ -151,7 +154,7 @@ export function buildLocalToolExportCatalogPage(
           page_index: pageIndex + 1,
           expires_at: Math.floor(options.nowSeconds?.() ?? Date.now() / 1000) + (options.cursorTtlSeconds ?? 300),
           nonce: options.nonce?.() ?? Math.random().toString(16).slice(2)
-        }, options.cursorSecret)
+        }, requireCursorSecret(options.cursorSecret))
       } satisfies ToolingExportCatalogPartialPage
   return { ...response, page_hash: computeProjectionPageHash(response) } as ToolingGetExportCatalogResponse
 }
@@ -159,10 +162,10 @@ export function buildLocalToolExportCatalogPage(
 export function buildVisibleProjection(
   tools: readonly ToolingProjectionToolInfo[],
   context: LocalToolProjectionContext,
-  exportDecision: LocalToolExportDecisionPort = { isShared: () => true }
+  exportDecision?: LocalToolExportDecisionPort
 ): ToolingProjectionToolInfo[] {
   if (!context.providerEnabled || !context.serviceExported || !context.discoveryExported || !context.executionExported || !context.recipientPeerId) return []
-  const grants = new Set(context.recipientPermissions)
+  if (!exportDecision) return []
   return tools
     .filter((tool) => tool.source_type === 'local'
       && tool.execution_location === 'local'
@@ -170,7 +173,7 @@ export function buildVisibleProjection(
       && tool.provider_peer_id !== context.recipientPeerId
       && Boolean(tool.global_tool_id)
       && Boolean(tool.share_group_id)
-      && ['Tooling.GetTools', 'Tooling.ExecuteTool', ...tool.required_permissions].every((permission) => grants.has(permission))
+      && ['Tooling.GetTools', 'Tooling.ExecuteTool', ...tool.required_permissions].every((permission) => hasPermission(permission, context.recipientPermissions, 'use'))
       && exportDecision.isShared(tool, context))
     .sort((left, right) => left.global_tool_id.localeCompare(right.global_tool_id))
 }
@@ -218,26 +221,57 @@ export function projectionDigest(
   })
 }
 
-function encodeProjectionCursor(cursor: ProjectionCursor, secret: Uint8Array | string = 'aurora-local-tool-projection-dev-secret'): string {
+function encodeProjectionCursor(cursor: ProjectionCursor, secret: Uint8Array | string): string {
   const raw = canonicalJson(cursor)
-  const signature = new Uint8Array(createHmac('sha256', secret).update(raw).digest())
+  const signature = hmac(sha256, secretBytes(secret), utf8ToBytes(raw))
   return base64UrlEncode(concatBytes(utf8ToBytes(raw), signature))
 }
 
-function decodeProjectionCursor(token: string, secret: Uint8Array | string = 'aurora-local-tool-projection-dev-secret'): ProjectionCursor {
+function decodeProjectionCursor(token: string, secret: Uint8Array | string, nowSeconds: number): ProjectionCursor {
   try {
     const packed = base64UrlDecode(token)
     const raw = packed.subarray(0, packed.length - 32)
     const supplied = packed.subarray(packed.length - 32)
-    const expected = new Uint8Array(createHmac('sha256', secret).update(raw).digest())
-    if (supplied.length !== expected.length || !supplied.every((byte, index) => byte === expected[index])) {
+    const expected = hmac(sha256, secretBytes(secret), raw)
+    if (!constantTimeEqual(supplied, expected)) {
       throw new Error('cursor signature mismatch')
     }
     const cursor = JSON.parse(bytesToUtf8(raw)) as ProjectionCursor
-    if (Math.floor(Date.now() / 1000) >= cursor.expires_at) throw new Error('cursor expired')
+    if (nowSeconds >= cursor.expires_at) throw new Error('cursor expired')
     return cursor
   } catch {
     throw new LocalToolProjectionError('projection_restart_required')
+  }
+}
+
+function requireCursorSecret(secret: Uint8Array | string | undefined): Uint8Array | string {
+  if (secret === undefined || (typeof secret === 'string' && secret.length < 16) || (secret instanceof Uint8Array && secret.byteLength < 16)) {
+    throw new LocalToolProjectionError('projection_cursor_secret_required')
+  }
+  return secret
+}
+
+function secretBytes(secret: Uint8Array | string): Uint8Array {
+  return typeof secret === 'string' ? utf8ToBytes(secret) : secret
+}
+
+function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
+  let diff = left.byteLength ^ right.byteLength
+  const length = Math.max(left.byteLength, right.byteLength)
+  for (let index = 0; index < length; index += 1) diff |= (left[index] ?? 0) ^ (right[index] ?? 0)
+  return diff === 0
+}
+
+export function normalizeProjectionToolAuthority(tool: ToolingProjectionToolInfo, providerPeerId: string, serviceInstanceId: string): ToolingProjectionToolInfo {
+  return {
+    ...tool,
+    provider_peer_id: providerPeerId,
+    provider_service_instance_id: serviceInstanceId,
+    provenance: {
+      ...tool.provenance,
+      provider_peer_id: providerPeerId,
+      provider_service_instance_id: serviceInstanceId
+    }
   }
 }
 

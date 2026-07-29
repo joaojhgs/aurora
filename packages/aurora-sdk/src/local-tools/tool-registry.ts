@@ -12,6 +12,8 @@ import {
   publicLocalToolDescriptorV1,
   type LocalToolDescriptorV1
 } from './descriptor-v1.js'
+import { toolSchemaHash } from './identity.js'
+import { assertSupportedJsonSchema } from './json-schema.js'
 
 export type LocalToolHandler = (
   input: Readonly<{
@@ -89,29 +91,36 @@ export class LocalToolRegistry {
   }
 
   register(registration: LocalToolRegistration): RegisteredLocalTool {
-    const descriptor = parseLocalToolDescriptorV1(registration.descriptor)
+    const descriptor = deepFreeze(structuredClone(parseLocalToolDescriptorV1(registration.descriptor)))
+    assertSupportedJsonSchema(descriptor.argsSchema)
+    assertSupportedJsonSchema(descriptor.outputSchema)
     const publicDescriptor = publicLocalToolDescriptorV1(descriptor)
     const identity = localToolProjectionIdentity(this.options.stablePeerId, descriptor)
     this.rejectDuplicate(this.byContractId, descriptor.toolContractId, 'duplicate_tool_contract_id')
     this.rejectDuplicate(this.byGlobalToolId, identity.globalToolId, 'duplicate_global_tool_id')
     this.rejectDuplicate(this.byLocalName, descriptor.localName, 'duplicate_local_name')
     this.rejectDuplicate(this.byHandlerId, descriptor.handlerId, 'duplicate_handler_id')
+    const toolInfo = descriptorToToolInfo(removeUndefined({
+      descriptor,
+      stablePeerId: this.options.stablePeerId,
+      providerServiceInstanceId: identity.providerServiceInstanceId,
+      globalToolId: identity.globalToolId,
+      providerLabel: this.options.providerLabel,
+      source: this.options.source,
+      sourceId: this.options.sourceId
+    }))
 
     const entry: LocalToolDispatchEntry = {
       descriptor,
       publicDescriptor,
       handler: registration.handler,
-      schemaHash: identity.schemaHash,
+      schemaHash: toolSchemaHash({
+        args_schema: toolInfo.args_schema,
+        schema: toolInfo.schema,
+        argument_visibility: toolInfo.argument_visibility
+      }),
       descriptorHash: identity.descriptorHash,
-      toolInfo: descriptorToToolInfo(removeUndefined({
-        descriptor,
-        stablePeerId: this.options.stablePeerId,
-        providerServiceInstanceId: identity.providerServiceInstanceId,
-        globalToolId: identity.globalToolId,
-        providerLabel: this.options.providerLabel,
-        source: this.options.source,
-        sourceId: this.options.sourceId
-      }))
+      toolInfo
     }
     this.byContractId.set(descriptor.toolContractId, entry)
     this.byGlobalToolId.set(identity.globalToolId, entry)
@@ -146,6 +155,14 @@ export class LocalToolRegistry {
   private rejectDuplicate(map: Map<string, unknown>, key: string, reasonCode: string): void {
     if (map.has(key)) throw new LocalToolRegistryError(reasonCode)
   }
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    Object.freeze(value)
+    for (const item of Object.values(value as Record<string, unknown>)) deepFreeze(item)
+  }
+  return value
 }
 
 function descriptorToToolInfo(input: {
