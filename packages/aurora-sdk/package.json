@@ -34,6 +34,11 @@
       "import": "./dist/local-data/index.js",
       "default": "./dist/local-data/index.js"
     },
+    "./local-tools": {
+      "types": "./dist/local-tools/index.d.ts",
+      "import": "./dist/local-tools/index.js",
+      "default": "./dist/local-tools/index.js"
+    },
     "./generated": {
       "types": "./dist/generated/index.d.ts",
       "import": "./dist/generated/index.js",
