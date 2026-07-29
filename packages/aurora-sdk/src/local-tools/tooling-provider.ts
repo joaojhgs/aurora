@@ -29,6 +29,15 @@ import {
 import { validateJsonAgainstSchema } from './json-schema.js'
 import { LocalToolRegistry, type LocalToolExecutionContext } from './tool-registry.js'
 
+const LOCAL_TOOL_HANDLER_ERROR_CODES = new Set([
+  'capability_unavailable',
+  'local_confirmation_required',
+  'permission_denied',
+  'permission_unavailable',
+  'unsupported_platform',
+  'user_activation_required'
+])
+
 export type LocalToolAuditAction = 'prepare' | 'execute'
 export type LocalToolAuditResult = 'allowed' | 'denied' | 'dry_run' | 'success' | 'failure' | 'cancelled' | 'not_found'
 
@@ -72,6 +81,16 @@ export interface LocalToolingProviderOptions {
     readonly manifest_revision: number
     readonly switch_revision: number
     readonly protocol_revision: number
+  }
+}
+
+export class LocalToolHandlerError extends Error {
+  readonly reasonCode: string
+
+  constructor(reasonCode: string, message = safeToolError()) {
+    super(message)
+    this.name = 'LocalToolHandlerError'
+    this.reasonCode = LOCAL_TOOL_HANDLER_ERROR_CODES.has(reasonCode) ? reasonCode : 'handler_failed'
   }
 }
 
@@ -200,8 +219,9 @@ export function createLocalToolingProviderHandlers(options: LocalToolingProvider
         }, { boundary: 'webrtc-frame' })
         await audit(options, context, auditFromExecuteResponse('execute', response, request, context, options, 'success'))
         return response
-      } catch {
-        const response = failedExecute(prepared, 'handler_failed')
+      } catch (error) {
+        const reason = error instanceof LocalToolHandlerError ? error.reasonCode : 'handler_failed'
+        const response = failedExecute(prepared, reason)
         await audit(options, context, auditFromExecuteResponse('execute', response, request, context, options, 'failure'))
         return response
       }
@@ -330,7 +350,7 @@ function cancelledExecute(prepared: ToolingPrepareExecutionResponse): ToolingExe
   }, { boundary: 'webrtc-frame' }) as ToolingExecuteToolOutputToolingExecuteToolResponse
 }
 
-function failedExecute(prepared: ToolingPrepareExecutionResponse, reason: 'handler_failed' | 'output_schema_invalid'): ToolingExecuteToolOutputToolingExecuteToolResponse {
+function failedExecute(prepared: ToolingPrepareExecutionResponse, reason: 'handler_failed' | 'output_schema_invalid' | string): ToolingExecuteToolOutputToolingExecuteToolResponse {
   return parseBoundary('Tooling.ExecuteTool.output.ToolingExecuteToolResponse', ToolingExecuteToolOutputToolingExecuteToolResponseSchema, {
     ok: false,
     data: null,

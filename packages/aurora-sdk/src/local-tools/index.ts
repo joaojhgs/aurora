@@ -40,6 +40,7 @@ export type {
   LocalToolPolicyPorts
 } from './execution-policy.js'
 export {
+  LocalToolHandlerError,
   createLocalToolingProviderHandlers
 } from './tooling-provider.js'
 export type {
@@ -49,6 +50,21 @@ export type {
   LocalToolAuditResult,
   LocalToolingProviderOptions
 } from './tooling-provider.js'
+export {
+  AURORA_NATIVE_TOOL_IDS,
+  NATIVE_TOOL_DESCRIPTORS,
+  nativeCapabilityError,
+  registerNativeCapabilityTools
+} from './native-capability-pack.js'
+export type {
+  AuroraNativeToolId,
+  LocalNativeCapabilityEvidence,
+  LocalNativeCapabilityHandlers,
+  LocalNativeCapabilitySnapshot,
+  LocalNativeCapabilityState,
+  LocalNativeHandler,
+  RegisterNativeCapabilityToolsOptions
+} from './native-capability-pack.js'
 export {
   LocalToolJsonSchemaError,
   assertSupportedJsonSchema,
