@@ -319,7 +319,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     await this.memory.clear()
     await this.pendingWrites
     let inboundVerifierClearError: unknown
-    if (this.storageUsable && this.storage !== null) {
+    if (this.storage !== null) {
       let keys: string[] = []
       try {
         keys = await this.storage.keys()
@@ -480,6 +480,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.assertDurableInboundVerifierStorage()
     try {
       await this.pendingWrites
+      this.assertDurableInboundVerifierStorage()
       const value = await this.storage!.get(key)
       if (value === undefined || value === null) return undefined
       if (!isEncryptedVaultRecord(value)) throw new Error('Persistent inbound verifier secret is unreadable')

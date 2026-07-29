@@ -298,6 +298,20 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     expect(await queuedFailure.keys()).not.toContain(verifierSecretKey)
     await queuedStore.close()
 
+    const queuedReadFailure = new MapVaultStorage()
+    const queuedReadStore = new BrowserPersistentPeerCredentialStore({
+      storage: queuedReadFailure,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+    await queuedReadStore.setOpaqueSecret(verifierSecretKey, verifierSecret)
+    queuedReadFailure.failWrites = true
+    queuedReadStore.setRoomSecret(profile.roomSecretRef, 'queued-room-secret')
+    await expect(queuedReadStore.getOpaqueSecret(verifierSecretKey))
+      .rejects.toThrow('Persistent inbound verifier storage is unavailable')
+    await queuedReadStore.close()
+
     const failingWrites = new MapVaultStorage()
     failingWrites.failWrites = true
     const writeStore = new BrowserPersistentPeerCredentialStore({
@@ -355,6 +369,25 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     expect(await storage.keys()).not.toContain(verifierSecretKey)
     expect((await storage.keys()).some((key) => key.startsWith('credential:') || key.startsWith('room:'))).toBe(false)
     await expect(store.getOpaqueSecret(verifierSecretKey)).resolves.toBeUndefined()
+    await store.close()
+  })
+
+  it('clears inbound verifier secrets after an unrelated queued vault downgrade when storage deletes still work', async () => {
+    const storage = new MapVaultStorage()
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+
+    await store.setOpaqueSecret(verifierSecretKey, verifierSecret)
+    storage.failWrites = true
+    store.setRoomSecret(profile.roomSecretRef, 'queued-room-secret')
+
+    await expect(store.clear()).resolves.toBeUndefined()
+
+    expect(await storage.keys()).not.toContain(verifierSecretKey)
     await store.close()
   })
 
