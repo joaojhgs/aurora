@@ -1,56 +1,8 @@
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+#!/usr/bin/env node
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const srcTauriRoot = join(packageRoot, 'src-tauri')
-const configPath = resolve(process.env.AURORA_TAURI_THIN_CONFIG_PATH ?? join(srcTauriRoot, 'tauri.thin.conf.json'))
-const reportPath = resolve(process.env.AURORA_TAURI_THIN_REPORT_PATH ?? join(packageRoot, 'reports', 'desktop-thin-bundle-prepare.json'))
-const reportDir = dirname(reportPath)
+process.env.AURORA_TAURI_CLIENT_CONFIG_PATH ??=
+  process.env.AURORA_TAURI_THIN_CONFIG_PATH
+process.env.AURORA_TAURI_CLIENT_REPORT_PATH ??=
+  process.env.AURORA_TAURI_THIN_REPORT_PATH
 
-const connectSrc = ["'self'", 'http:', 'https:', 'ws:', 'wss:']
-
-const config = {
-  build: {
-    beforeBuildCommand: 'pnpm build:frontend:desktop-thin'
-  },
-  app: {
-    security: {
-      capabilities: ['aurora-thin'],
-      csp: `default-src 'self'; connect-src ${connectSrc.join(' ')}; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:`
-    }
-  },
-  bundle: {
-    longDescription:
-      'Aurora desktop thin packages the official Tauri 2 shell without a Python sidecar. Gateway and signaling endpoints are configured at runtime during onboarding and are not compiled into the artifact.'
-  }
-}
-
-mkdirSync(dirname(configPath), { recursive: true })
-mkdirSync(reportDir, { recursive: true })
-writeAtomicJson(configPath, config)
-writeAtomicJson(reportPath, {
-  generatedAt: new Date().toISOString(),
-  bundleMode: 'desktop-thin',
-  configPath: redact(configPath),
-  connectSrc,
-  connectionMode: 'runtime-configurable',
-  gatewayOrigin: null,
-  signalingOrigin: null,
-  runtimeConfiguredEndpoints: true,
-  pythonSidecarStaged: false,
-  secretsRedacted: true
-})
-
-console.log(`Prepared Python-free desktop-thin Tauri overlay: ${configPath}`)
-console.log(`Wrote ${reportPath}`)
-
-function writeAtomicJson(path, value) {
-  const tmp = `${path}.tmp`
-  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`)
-  renameSync(tmp, path)
-}
-
-function redact(path) {
-  return path.replace(packageRoot, '<package-root>')
-}
+await import('./prepare-client-bundle.mjs')

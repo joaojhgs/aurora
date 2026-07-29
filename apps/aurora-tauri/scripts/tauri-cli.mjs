@@ -81,7 +81,7 @@ function applyDevSidecarDefaults(env) {
 function printDevBanner(env) {
   console.log('[tauri] dev bootstrap')
   if (env.AURORA_TAURI_DEV_AUTOSIDECAR === '0') {
-    console.log('[tauri] thin stack: enabled (Vite + Tauri shell, no Rust-supervised Python sidecar)')
+    console.log('[tauri] desktop client: enabled (Vite + Tauri shell, no Rust-supervised Python sidecar)')
     console.log('[tauri] endpoints: runtime-configured by onboarding/profile storage')
     return
   }

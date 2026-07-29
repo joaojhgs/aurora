@@ -23,22 +23,25 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(regressionGate).toContain('test:dev-bootstrap')
   })
 
-  it('exposes distinct local, desktop-thin, hosted-web, and standalone Python dev entrypoints', () => {
+  it('exposes neutral web, desktop-client, desktop-full, and standalone Python dev entrypoints', () => {
     const rootPackage = JSON.parse(repoText('package.json')) as { scripts: Record<string, string> }
     const tauriPackage = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
     const webPackage = JSON.parse(repoText('apps/aurora-web/package.json')) as { scripts: Record<string, string> }
     const wrapper = repoText('apps/aurora-tauri/scripts/tauri-cli.mjs')
 
     expect(rootPackage.scripts.tauri).toBe('pnpm --filter @aurora/tauri-ui tauri')
-    expect(rootPackage.scripts['dev:desktop-local']).toBe(
-      'pnpm --filter @aurora/tauri-ui dev:desktop-local',
+    expect(rootPackage.scripts['dev:web']).toBe(
+      'pnpm --filter @aurora/web dev:web',
     )
-    expect(rootPackage.scripts['dev:desktop-thin']).toBe(
-      'pnpm --filter @aurora/tauri-ui dev:desktop-thin',
+    expect(rootPackage.scripts['dev:desktop-client']).toBe(
+      'pnpm --filter @aurora/tauri-ui dev:desktop-client',
     )
-    expect(rootPackage.scripts['dev:web-thin']).toBe(
-      'pnpm --filter @aurora/web dev:web-thin',
+    expect(rootPackage.scripts['dev:desktop-full']).toBe(
+      'pnpm --filter @aurora/tauri-ui dev:desktop-full',
     )
+    expect(rootPackage.scripts['dev:desktop-local']).toBe('pnpm dev:desktop-full')
+    expect(rootPackage.scripts['dev:desktop-thin']).toBe('pnpm dev:desktop-client')
+    expect(rootPackage.scripts['dev:web-thin']).toBe('pnpm dev:web')
     expect(rootPackage.scripts['dev:python']).toBe('pnpm dev:python-service')
     expect(rootPackage.scripts['dev:python-service']).toContain(
       'AURORA_ARCHITECTURE_MODE=threads',
@@ -50,25 +53,26 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
       'uv run python main.py',
     )
 
-    expect(tauriPackage.scripts['dev:desktop-local']).toBe('pnpm tauri dev')
-    expect(tauriPackage.scripts['dev:desktop-thin']).toContain(
+    expect(tauriPackage.scripts['dev:desktop-full']).toBe('pnpm tauri dev')
+    expect(tauriPackage.scripts['dev:desktop-local']).toBe('pnpm dev:desktop-full')
+    expect(tauriPackage.scripts['dev:desktop-client']).toContain(
       'AURORA_TAURI_DEV_AUTOSIDECAR=0',
     )
-    expect(tauriPackage.scripts['dev:desktop-thin']).toContain(
-      'VITE_AURORA_RUNTIME_MODE=desktop-thin',
+    expect(tauriPackage.scripts['dev:desktop-client']).toContain(
+      '--config src-tauri/tauri.client.conf.json',
     )
-    expect(tauriPackage.scripts['dev:desktop-thin']).toContain(
-      '--config src-tauri/tauri.thin.conf.json',
+    expect(tauriPackage.scripts['dev:desktop-client']).not.toMatch(
+      /THIN|desktop-thin|WEBRTC_THIN_CLIENT|prepare-sidecar|AURORA_TAURI_SIDECAR_/,
     )
-    expect(tauriPackage.scripts['dev:desktop-thin']).not.toMatch(
-      /prepare-sidecar|AURORA_TAURI_SIDECAR_/,
-    )
-    expect(webPackage.scripts['dev:web-thin']).toContain('next dev')
+    expect(tauriPackage.scripts['dev:desktop-thin']).toBe('pnpm dev:desktop-client')
+    expect(webPackage.scripts['dev:web']).toContain('next dev')
+    expect(webPackage.scripts['dev:web']).not.toMatch(/THIN|WEBRTC_THIN_CLIENT/)
+    expect(webPackage.scripts['dev:web-thin']).toBe('pnpm dev:web')
     expect(wrapper).toContain(
       "if (env.AURORA_TAURI_DEV_AUTOSIDECAR !== '0') applyDevSidecarDefaults(env)",
     )
     expect(wrapper).toContain(
-      'thin stack: enabled (Vite + Tauri shell, no Rust-supervised Python sidecar)',
+      'desktop client: enabled (Vite + Tauri shell, no Rust-supervised Python sidecar)',
     )
   })
 
@@ -102,7 +106,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     const buildDocs = repoText('docs/TAURI_DESKTOP_BUILD.md')
 
     expect(packageJson.scripts['build:bundle']).toBe('pnpm build:bundle:desktop-local')
-    expect(packageJson.scripts['build:bundle:thin']).toBe('pnpm build:bundle:desktop-thin')
+    expect(packageJson.scripts['build:bundle:thin']).toBe('pnpm build:bundle:desktop-client')
     expect(packageJson.scripts['build:bundle:thin']).not.toContain('prepare-sidecar')
     for (const profile of ['desktop-local-minimal', 'local-cpu', 'local-cuda', 'local-rocm', 'local-metal', 'local-vulkan', 'local-sycl', 'local-rpc', 'full']) {
       expect(packageJson.scripts[`build:bundle:${profile}`]).toContain(`node ./scripts/prepare-sidecar.mjs --profile ${profile}`)
