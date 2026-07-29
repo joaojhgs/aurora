@@ -25,6 +25,7 @@ import {
   emptyMemoryViewModel,
   navItemSnapshot,
   routePolicyScenarios,
+  assistantRemotePrivacyWarning,
   type AssistantSessionSnapshot,
   type DataPolicySnapshot,
   type MemoryViewModel,
@@ -133,6 +134,33 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
       .resolves.toMatchObject({ loadState: 'denied' })
     await expect(buildRoutePolicySnapshot(new AuroraClient({ transport: unavailableTransport }), enabledRoute('admin')))
       .resolves.toMatchObject({ loadState: 'unavailable' })
+  })
+
+  it('keeps microphone route warnings product-safe while preserving the privacy class value', () => {
+    const route = {
+      ...enabledRoute('assistant'),
+      item: { ...enabledRoute('assistant').item, privacyClass: 'raw-audio' as PrivacyClass },
+      state: 'available-remote',
+      providerLabel: 'peer-WebRTC-runtime',
+      explanation: 'remote WebRTC transport runtime fallback',
+      candidateProviders: [{
+        id: 'remote:peer-WebRTC-runtime:Orchestrator',
+        label: 'remote WebRTC runtime',
+        state: 'available-remote',
+        reason: 'transport ready',
+        providerKind: 'remote',
+        selectable: true,
+        requiredAction: null,
+      }],
+    } satisfies RouteAvailability
+
+    const warning = assistantRemotePrivacyWarning(route)
+
+    expect(route.item.privacyClass).toBe('raw-audio')
+    expect(warning).toContain('Microphone audio')
+    expect(warning).not.toContain('Raw audio')
+    expect(warning).not.toMatch(/\braw\b/iu)
+    expect(findForbiddenProductionCopyTerms(warning ?? '').map((term) => term.id)).toEqual([])
   })
 })
 

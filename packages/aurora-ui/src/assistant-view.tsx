@@ -3625,7 +3625,7 @@ export function assistantRemotePrivacyWarning(route: RouteAvailability): string 
     /remote|mesh|peer|cloud|http|fallback/i.test(remoteOrMeshEvidence)
   if (!remoteOrMeshFallback) return null
   const label = privacyClass === 'raw-audio'
-    ? 'Raw audio'
+    ? 'Microphone audio'
     : privacyClass.charAt(0).toUpperCase() + privacyClass.slice(1)
   return `${label} data needs privacy review before another device can help; nothing leaves until consent, privacy indicator, and policy allow it.`
 }

@@ -10,6 +10,7 @@ import {
   modelRuntimeCatalogFixture,
 } from '@aurora/client'
 import { buildModelsViewModel, ModelsView } from '../src/models-view'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -42,6 +43,7 @@ describe('models view product copy', () => {
     expect(text).toContain('Model download is in progress.')
     expect(text).toContain('Benchmark is running through Aurora.')
     expect(text).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
 
     const model = buildModelsViewModel({
       catalog,
@@ -79,8 +81,8 @@ describe('models view product copy', () => {
       data: {
         fields: [{
           key_path: 'services.orchestrator.llm.local.llama_cpp.options.temperature',
-          title: 'Runtime backend provider schema Config.GetSchemaMetadata',
-          description: 'services.orchestrator.llm.provider backend option schema proof',
+          title: 'Raw runtime backend provider schema Config.GetSchemaMetadata',
+          description: 'raw services.orchestrator.llm.provider backend option schema proof',
           type: 'float',
           default: 0.7,
           current_value: 0.5,
@@ -126,6 +128,7 @@ describe('models view product copy', () => {
     expect(document.body.textContent).toContain('Model setting')
     expect(document.body.textContent).toContain('Update this setting only if you know the expected value.')
     expect(copySurface(document.body)).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
+    expect(findForbiddenProductionCopyTerms(copySurface(document.body)).map((term) => term.id)).toEqual([])
 
     await act(async () => {
       root.unmount()
@@ -135,7 +138,7 @@ describe('models view product copy', () => {
   it('redacts hostile settings error messages with a useful reference', async () => {
     const getSchemaMetadata = vi.fn().mockResolvedValue({
       ok: false,
-      error: { message: 'Config.GetSchemaMetadata backend option schema provider runtime failed' },
+      error: { message: 'Raw Config.GetSchemaMetadata backend option schema provider runtime failed' },
     })
     const rootNode = document.createElement('div')
     document.body.append(rootNode)
@@ -161,6 +164,7 @@ describe('models view product copy', () => {
 
     expect(document.body.textContent).toContain('Aurora model source request failed. Reference M')
     expect(copySurface(document.body)).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
+    expect(findForbiddenProductionCopyTerms(copySurface(document.body)).map((term) => term.id)).toEqual([])
 
     await act(async () => {
       root.unmount()
@@ -190,16 +194,17 @@ function client(getSchemaMetadata: ReturnType<typeof vi.fn>) {
 function copySurface(root: ParentNode): string {
   const attributes: string[] = []
   root.querySelectorAll('*').forEach((node) => {
-    for (const attribute of ['aria-label', 'title', 'alt', 'placeholder']) {
-      const value = node.getAttribute(attribute)
-      if (value) attributes.push(value)
+    for (const { name, value } of Array.from(node.attributes)) {
+      if (/^(?:aria-label|title|alt|placeholder|data-(?!slot|variant|size|state)[a-z0-9-]+)$/iu.test(name) && value) {
+        attributes.push(value)
+      }
     }
   })
   return `${document.body.textContent ?? ''} ${attributes.join(' ')}`
 }
 
 const MODEL_FORBIDDEN_PRODUCT_TERMS =
-  /\b(Runtime|backend|providers?|schema|backend option schema|Config\.GetSchemaMetadata|configuration schema|active provider|Currently selected provider|AdminAction|contract|proof|fixture|assertion)\b|services\.orchestrator|Orchestrator\.[A-Za-z]+|Gateway\.[A-Za-z]+|native:[^\s,;]+|local:Orchestrator|cloud:openai|mesh:studio/iu
+  /\b(raw|Runtime|backend|providers?|schema|backend option schema|Config\.GetSchemaMetadata|configuration schema|active provider|Currently selected provider|AdminAction|contract|proof|fixture|assertion)\b|services\.orchestrator|Orchestrator\.[A-Za-z]+|Gateway\.[A-Za-z]+|native:[^\s,;]+|local:Orchestrator|cloud:openai|mesh:studio/iu
 
 function hostileCatalog() {
   const catalog = cloneFixture(modelRuntimeCatalogFixture)

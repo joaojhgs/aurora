@@ -269,7 +269,7 @@ function visibleText(markup: string): string {
 }
 
 function renderedAttributeText(markup: string): string {
-  return decodeHtml(Array.from(markup.matchAll(/\s(?:aria-label|title|placeholder|alt)="([^"]*)"/giu))
+  return decodeHtml(Array.from(markup.matchAll(/\s(?:aria-label|title|placeholder|alt|data-(?!slot|variant|size|state)[a-z0-9-]+)="([^"]*)"/giu))
     .map((match) => match[1])
     .join(' '))
 }

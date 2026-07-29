@@ -736,7 +736,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
         <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Device permissions" description="Desktop and mobile permission checks are shown without sensitive details.">
           <DetailGrid rows={snapshot.nativeCapabilityRows} label="Device permission checks" empty="No device permission checks are available yet." />
         </Panel>
-        <Panel icon={<Bug size={18} aria-hidden />} title="App logs" description="Only safe log summaries are previewed; raw logs, tokens, and media payloads are excluded.">
+        <Panel icon={<Bug size={18} aria-hidden />} title="App logs" description="Only safe summaries are previewed; full log text, tokens, and media payloads are excluded.">
           <DetailGrid rows={[...snapshot.sidecarLogRows, ...snapshot.frontendLogRows]} label="App log checks" empty="No app log summaries are available yet." />
         </Panel>
       </div>

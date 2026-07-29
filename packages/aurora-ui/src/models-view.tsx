@@ -1210,8 +1210,8 @@ function modelStatusCopy(value: string | null | undefined, defaultCopy: string):
 }
 
 function modelErrorCopy(error: unknown, defaultCopy = 'Aurora could not complete the model source request.'): string {
-  const raw = error instanceof Error && error.message ? error.message : null
-  return modelStrictProductCopy(raw, defaultCopy, { includeReference: Boolean(raw) })
+  const sourceMessage = error instanceof Error && error.message ? error.message : null
+  return modelStrictProductCopy(sourceMessage, defaultCopy, { includeReference: Boolean(sourceMessage) })
 }
 
 function modelStrictProductCopy(
@@ -1219,12 +1219,12 @@ function modelStrictProductCopy(
   defaultCopy: string,
   options: { includeReference?: boolean } = {}
 ): string {
-  const raw = value?.trim()
-  if (!raw) return defaultCopy
-  if (hasInternalModelCopy(raw)) {
-    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(raw)}.` : defaultCopy
+  const sourceText = value?.trim()
+  if (!sourceText) return defaultCopy
+  if (hasInternalModelCopy(sourceText)) {
+    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(sourceText)}.` : defaultCopy
   }
-  return modelProductCopy(raw, defaultCopy, options)
+  return modelProductCopy(sourceText, defaultCopy, options)
 }
 
 function modelProductCopy(
@@ -1232,11 +1232,11 @@ function modelProductCopy(
   defaultCopy: string,
   options: { includeReference?: boolean } = {}
 ): string {
-  const raw = value?.trim()
-  if (!raw) return defaultCopy
-  const softened = softenInternalModelCopy(raw)
+  const sourceText = value?.trim()
+  if (!sourceText) return defaultCopy
+  const softened = softenInternalModelCopy(sourceText)
   if (hasInternalModelCopy(softened)) {
-    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(raw)}.` : defaultCopy
+    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(sourceText)}.` : defaultCopy
   }
   return softened
 }
