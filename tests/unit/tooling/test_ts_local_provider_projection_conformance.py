@@ -26,7 +26,9 @@ PROVIDER_ID = "typescript-local-tooling-provider-v1"
 
 
 def _provider_document() -> dict[str, object]:
-    return json.loads(PROVIDER_ARTIFACT.read_text(encoding="utf-8"))
+    document = json.loads(PROVIDER_ARTIFACT.read_text(encoding="utf-8"))
+    assert isinstance(document, dict)
+    return document
 
 
 def _canonical_page() -> ToolingGetExportCatalogResponse:
