@@ -30,6 +30,8 @@ const RUNTIME_PROFILE_DOCUMENT_KEY = 'aurora.runtimeProfiles.v2'
 const STABLE_PEER_KEY = 'aurora.webThin.localStablePeerId.v1'
 const CREDENTIAL_PREFIX = 'credential:'
 const ROOM_PREFIX = 'room:'
+const INBOUND_VERIFIER_PREFIX = 'aurora.peer-host.inbound-verifier.v1'
+const INBOUND_VERIFIER_KEY_PREFIX = `${INBOUND_VERIFIER_PREFIX}:`
 const volatileMetadata = new Map<string, string>()
 
 type PersistedProfile = Omit<WebRtcPeerConnectionProfile, 'signalingBrokers' | 'stunServers' | 'turnServers'> & {
@@ -288,16 +290,39 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     await this.deleteSafely(`${CREDENTIAL_PREFIX}${peerId}`)
   }
 
+  async getOpaqueSecret(key: string): Promise<string | undefined> {
+    this.assertOpen()
+    const storageKey = normalizeInboundVerifierSecretKey(key)
+    const persisted = await this.readEncryptedRequired<{ value?: unknown }>(storageKey)
+    if (persisted === undefined) return undefined
+    if (typeof persisted.value !== 'string') throw new Error('Persistent inbound verifier secret is unreadable')
+    return persisted.value
+  }
+
+  async setOpaqueSecret(key: string, value: string): Promise<void> {
+    this.assertOpen()
+    const storageKey = normalizeInboundVerifierSecretKey(key)
+    if (typeof value !== 'string' || value.length === 0 || value.length > 16_384) throw new Error('Invalid inbound verifier secret value')
+    await this.writeEncryptedRequired(storageKey, { value })
+  }
+
+  async deleteOpaqueSecret(key: string): Promise<void> {
+    this.assertOpen()
+    const storageKey = normalizeInboundVerifierSecretKey(key)
+    await this.deleteEncryptedRequired(storageKey)
+  }
+
   async clear(): Promise<void> {
     this.assertOpen()
     for (const secret of this.roomSecrets.values()) secret.fill(0)
     this.roomSecrets.clear()
     await this.memory.clear()
+    await this.pendingWrites
     if (this.storageUsable && this.storage !== null) {
       try {
         const keys = await this.storage.keys()
         await Promise.all(keys
-          .filter((key) => key.startsWith(CREDENTIAL_PREFIX) || key.startsWith(ROOM_PREFIX))
+          .filter((key) => key.startsWith(CREDENTIAL_PREFIX) || key.startsWith(ROOM_PREFIX) || key.startsWith(INBOUND_VERIFIER_KEY_PREFIX))
           .map(async (key) => await this.storage!.delete(key)))
       } catch (error) {
         this.fallbackToMemory(error)
@@ -400,6 +425,51 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     }
   }
 
+  private async writeEncryptedRequired(key: string, value: unknown): Promise<void> {
+    this.assertDurableInboundVerifierStorage()
+    try {
+      await this.pendingWrites
+      await this.writeEncrypted(key, value)
+    } catch (error) {
+      this.fallbackToMemory(error)
+      throw error
+    }
+  }
+
+  private async readEncryptedRequired<T>(key: string): Promise<T | undefined> {
+    this.assertDurableInboundVerifierStorage()
+    try {
+      await this.pendingWrites
+      const value = await this.storage!.get(key)
+      if (value === undefined || value === null) return undefined
+      if (!isEncryptedVaultRecord(value)) throw new Error('Persistent inbound verifier secret is unreadable')
+      const plaintext = new Uint8Array(await this.cryptoImpl!.subtle.decrypt(
+        { name: 'AES-GCM', iv: fromBase64Url(value.nonce), additionalData: this.aad(key) },
+        await this.vaultKey(),
+        fromBase64Url(value.ciphertext),
+      ))
+      try {
+        return JSON.parse(new TextDecoder().decode(plaintext)) as T
+      } finally {
+        plaintext.fill(0)
+      }
+    } catch (error) {
+      this.fallbackToMemory(error)
+      throw error
+    }
+  }
+
+  private async deleteEncryptedRequired(key: string): Promise<void> {
+    this.assertDurableInboundVerifierStorage()
+    try {
+      await this.pendingWrites
+      await this.storage!.delete(key)
+    } catch (error) {
+      this.fallbackToMemory(error)
+      throw error
+    }
+  }
+
   private async vaultKey(): Promise<CryptoKey> {
     if (this.keyPromise !== null) return await this.keyPromise
     if (this.storage === null || this.cryptoImpl === null) throw new Error('Persistent browser vault is unavailable')
@@ -482,6 +552,12 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
 
   private assertOpen(): void {
     if (this.closed) throw new Error('Browser peer credential store is closed')
+  }
+
+  private assertDurableInboundVerifierStorage(): void {
+    if (!this.storageUsable || this.storage === null || this.cryptoImpl === null || this.cryptoImpl.subtle === undefined) {
+      throw new Error('Persistent inbound verifier storage is unavailable')
+    }
   }
 }
 
@@ -613,6 +689,28 @@ function randomIdentifier(cryptoImpl: Crypto | null): string {
 
 function assertStorageKey(name: string, value: string, maxLength = 1024): void {
   if (!value || value.length > maxLength) throw new Error(`Invalid ${name}`)
+}
+
+function normalizeInboundVerifierSecretKey(key: string): string {
+  if (!key.startsWith(INBOUND_VERIFIER_KEY_PREFIX) || key.length > 2048) throw new Error('Invalid inbound verifier secret key')
+  const parts = key.split(':')
+  if (parts.length !== 5 || parts[0] !== INBOUND_VERIFIER_PREFIX) throw new Error('Invalid inbound verifier secret key')
+  for (const part of parts.slice(1)) {
+    if (part.length === 0 || part.length > 768) throw new Error('Invalid inbound verifier secret key')
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(part)
+    } catch {
+      throw new Error('Invalid inbound verifier secret key')
+    }
+    if (!/^[A-Za-z0-9_.:@/-]{1,256}$/u.test(decoded)) throw new Error('Invalid inbound verifier secret key')
+    if (encodeInboundVerifierKeyPart(decoded) !== part) throw new Error('Invalid inbound verifier secret key')
+  }
+  return key
+}
+
+function encodeInboundVerifierKeyPart(value: string): string {
+  return encodeURIComponent(value).replace(/\./gu, '%2E')
 }
 
 function normalizeProfile(value: unknown): PersistedProfile {
