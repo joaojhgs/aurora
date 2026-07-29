@@ -2691,16 +2691,7 @@ async fn aurora_local_data_envelope_decrypt(
     request: LocalDataEnvelopeDecryptRequest,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
-    validate_local_data_envelope(&request.envelope)?;
-    let bound = parse_local_data_envelope_key_id(&request.envelope.key_id)?;
-    if bound.profile_hash != sha256_hex(request.profile_id.as_bytes())
-        || bound.local_node_hash != sha256_hex(request.local_node_id.as_bytes())
-        || bound.purpose != LOCAL_DATA_ENVELOPE_KEY_PURPOSE
-    {
-        return Err(AuroraCommandError::SecureStorage(
-            "local data envelope key does not match this profile".to_string(),
-        ));
-    }
+    validate_local_data_decrypt_request(&request)?;
 
     #[cfg(target_os = "android")]
     {
@@ -3989,6 +3980,24 @@ fn validate_local_data_id(field: &str, value: &str) -> Result<(), AuroraCommandE
         return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
             "{field} is invalid"
         )));
+    }
+    Ok(())
+}
+
+fn validate_local_data_decrypt_request(
+    request: &LocalDataEnvelopeDecryptRequest,
+) -> Result<(), AuroraCommandError> {
+    validate_local_data_id("profileId", &request.profile_id)?;
+    validate_local_data_id("localNodeId", &request.local_node_id)?;
+    validate_local_data_envelope(&request.envelope)?;
+    let bound = parse_local_data_envelope_key_id(&request.envelope.key_id)?;
+    if bound.profile_hash != sha256_hex(request.profile_id.as_bytes())
+        || bound.local_node_hash != sha256_hex(request.local_node_id.as_bytes())
+        || bound.purpose != LOCAL_DATA_ENVELOPE_KEY_PURPOSE
+    {
+        return Err(AuroraCommandError::SecureStorage(
+            "local data envelope key does not match this profile".to_string(),
+        ));
     }
     Ok(())
 }
@@ -7458,5 +7467,45 @@ mod tests {
             "node_1.:@/-"
         )
         .is_ok());
+    }
+
+    #[test]
+    fn local_data_envelope_decrypt_rejects_malformed_scope_before_key_lookup() {
+        let malformed_profile_id = "profile with spaces";
+        let local_node_id = "node-1";
+        let key_id = local_data_envelope_key_id(
+            malformed_profile_id,
+            local_node_id,
+            LOCAL_DATA_ENVELOPE_KEY_PURPOSE,
+            1,
+        );
+        let binding = parse_local_data_envelope_key_id(&key_id).unwrap();
+        assert_eq!(
+            binding.profile_hash,
+            sha256_hex(malformed_profile_id.as_bytes())
+        );
+        assert_eq!(
+            binding.local_node_hash,
+            sha256_hex(local_node_id.as_bytes())
+        );
+
+        let request = LocalDataEnvelopeDecryptRequest {
+            profile_id: malformed_profile_id.to_string(),
+            local_node_id: local_node_id.to_string(),
+            envelope: LocalDataEnvelopeV1 {
+                version: 1,
+                algorithm: LOCAL_DATA_ENVELOPE_ALGORITHM.to_string(),
+                key_id,
+                nonce_b64_url: encode_base64url_bytes(&[1_u8; 12]),
+                ciphertext_and_tag_b64_url: encode_base64url_bytes(&[2_u8; 16]),
+                created_at_ms: 1,
+            },
+            aad_b64_url: encode_base64url_bytes(b"{}"),
+        };
+
+        let err = validate_local_data_decrypt_request(&request).unwrap_err();
+        assert!(
+            matches!(err, AuroraCommandError::SecureStorageKeyInvalid(message) if message == "profileId is invalid")
+        );
     }
 }
