@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
-import { constants as osConstants } from 'node:os'
-import { resolve } from 'node:path'
+import { constants as osConstants, tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const browserStorageSteps = Object.freeze([
@@ -55,7 +55,10 @@ export function spawnStep(step) {
   return new Promise((resolve, reject) => {
     const child = spawn(step.command, step.args, {
       stdio: 'inherit',
-      env: process.env,
+      env: {
+        ...process.env,
+        BROWSER_STORAGE_REPORT_ROOT: resolveBrowserStorageReportRoot(),
+      },
     })
     child.once('error', reject)
     child.once('exit', (code, signal) => {
@@ -66,6 +69,18 @@ export function spawnStep(step) {
       resolve({ status: code ?? 1 })
     })
   })
+}
+
+export function resolveBrowserStorageReportRoot({
+  cwd = process.cwd(),
+  env = process.env,
+  defaultRoot = join(tmpdir(), 'aurora-browser-storage'),
+} = {}) {
+  const configuredRoot = env.BROWSER_STORAGE_REPORT_ROOT
+  if (configuredRoot === undefined || configuredRoot === '') {
+    return defaultRoot
+  }
+  return resolve(cwd, configuredRoot)
 }
 
 export async function main() {

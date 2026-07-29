@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { browserStorageSteps, runBrowserStorageGate } from './run_browser_storage_gate.mjs'
+import {
+  browserStorageSteps,
+  resolveBrowserStorageReportRoot,
+  runBrowserStorageGate,
+} from './run_browser_storage_gate.mjs'
 
 test('browser storage gate builds once before Playwright suites', async () => {
   const observed = []
@@ -48,4 +52,22 @@ test('browser storage gate returns child signals to the caller', async () => {
   })
 
   assert.deepEqual(result, { status: 1, signal: 'SIGTERM' })
+})
+
+test('browser storage report root resolves relative roots from the current working directory', () => {
+  const reportRoot = resolveBrowserStorageReportRoot({
+    cwd: '/repo/root',
+    env: { BROWSER_STORAGE_REPORT_ROOT: 'reports/browser-storage' },
+  })
+
+  assert.equal(reportRoot, '/repo/root/reports/browser-storage')
+})
+
+test('browser storage report root preserves absolute roots', () => {
+  const reportRoot = resolveBrowserStorageReportRoot({
+    cwd: '/repo/root',
+    env: { BROWSER_STORAGE_REPORT_ROOT: '/tmp/browser-storage' },
+  })
+
+  assert.equal(reportRoot, '/tmp/browser-storage')
 })

@@ -7,6 +7,9 @@ on:
       - "apps/aurora-web/**"
       - "apps/aurora-tauri/**"
       - "packages/**"
+      - "tests/e2e/browser_persistence/**"
+      - "scripts/run_browser_storage_gate.mjs"
+      - "scripts/run_browser_storage_gate.test.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -16,6 +19,9 @@ on:
       - "apps/aurora-web/**"
       - "apps/aurora-tauri/**"
       - "packages/**"
+      - "tests/e2e/browser_persistence/**"
+      - "scripts/run_browser_storage_gate.mjs"
+      - "scripts/run_browser_storage_gate.test.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -43,8 +49,8 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Chromium runtime
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright browser runtimes
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
 
       - name: Build, test, and typecheck SDK
         run: |
@@ -58,7 +64,11 @@ jobs:
           pnpm --filter @aurora/ui test
           pnpm --filter @aurora/ui test:accessibility
           pnpm --filter @aurora/ui typecheck
-          pnpm --filter @aurora/ui build
+
+      - name: Run consolidated browser storage E2E gate
+        env:
+          BROWSER_STORAGE_REPORT_ROOT: reports/browser-storage
+        run: pnpm test:web-persistence
 
       - name: Test, typecheck, and build web app
         run: |
@@ -80,6 +90,7 @@ jobs:
           name: frontend-sdk-reports
           path: |
             packages/aurora-ui/reports/
+            reports/browser-storage/
             apps/aurora-tauri/reports/
             apps/aurora-tauri/test-results/
             apps/aurora-tauri/playwright-report/
