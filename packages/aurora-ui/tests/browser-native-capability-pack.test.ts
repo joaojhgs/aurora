@@ -13,7 +13,7 @@ import {
   mapBrowserNativeCapabilityError,
   type BrowserFileHandle,
   type BrowserNativeCapabilityPackOptions,
-} from '../src/browser-native-capability-pack'
+} from '../src/index'
 
 const executionContext: LocalToolExecutionContext = {
   callerPeerId: 'peer-caller',

@@ -17,7 +17,7 @@ import {
 import {
   registerTauriNativeCapabilityPack,
   type TauriNativeCapabilityTransport
-} from '../src/tauri-native-capability-pack'
+} from '../src/index'
 
 type PeerHostCallContext = Parameters<ReturnType<typeof createLocalToolingProviderHandlers>['executeTool']>[1]
 
