@@ -110,21 +110,27 @@ describe('BrowserEnvelopeCryptoPort', () => {
 
   it('serializes concurrent rotations and selects one final active key', async () => {
     const indexedDB = new MemoryIndexedDbFactory()
-    const first = createPort({ indexedDB })
+    const observer = createPort({ indexedDB })
+    const firstRotationGate = createDeferred()
+    const first = createPort({ indexedDB, crypto: createGenerateKeyGateCrypto(firstRotationGate.promise) })
     const second = createPort({ indexedDB })
     const aad = bytes('aad')
-    const original = await first.encrypt('local-structured-data', bytes('original secret'), aad)
+    const original = await observer.encrypt('local-structured-data', bytes('original secret'), aad)
 
-    const rotations = await Promise.all([
-      first.rotateKey('local-structured-data'),
-      second.rotateKey('local-structured-data')
-    ])
-    const afterRotation = await first.encrypt('local-structured-data', bytes('active secret'), aad)
+    const firstRotation = first.rotateKey('local-structured-data')
+    await Promise.resolve()
+    const secondRotation = await second.rotateKey('local-structured-data')
+    firstRotationGate.resolve()
+    const rotations = await Promise.all([firstRotation, Promise.resolve(secondRotation)])
+    const afterRotation = await observer.encrypt('local-structured-data', bytes('active secret'), aad)
 
     expect(rotations[0]?.newKeyId).not.toBe(rotations[1]?.newKeyId)
-    expect(afterRotation.keyId).toBe(rotations[1]?.newKeyId)
-    await expect(first.decrypt(original, aad)).resolves.toEqual(bytes('original secret'))
-    await expect(first.decrypt(afterRotation, aad)).resolves.toEqual(bytes('active secret'))
+    expect(rotations[1]?.previousKeyId).toBe(original.keyId)
+    expect(rotations[0]?.previousKeyId).toBe(rotations[1]?.newKeyId)
+    expect(keyVersion(rotations[0]!.newKeyId)).toBeGreaterThan(keyVersion(rotations[1]!.newKeyId))
+    expect(afterRotation.keyId).toBe(rotations[0]?.newKeyId)
+    await expect(observer.decrypt(original, aad)).resolves.toEqual(bytes('original secret'))
+    await expect(observer.decrypt(afterRotation, aad)).resolves.toEqual(bytes('active secret'))
   })
 
   it('isolates keys by origin, profile, and local node', async () => {
@@ -175,7 +181,7 @@ describe('BrowserEnvelopeCryptoPort', () => {
 })
 
 function createPort(
-  overrides: Partial<{ origin: string; profileId: string; localNodeId: string; indexedDB: MemoryIndexedDbFactory }> = {},
+  overrides: Partial<{ origin: string; profileId: string; localNodeId: string; indexedDB: MemoryIndexedDbFactory; crypto: Crypto }> = {},
 ): BrowserEnvelopeCryptoPort {
   const indexedDB = overrides.indexedDB ?? new MemoryIndexedDbFactory()
   return new BrowserEnvelopeCryptoPort({
@@ -183,9 +189,41 @@ function createPort(
     profileId: overrides.profileId ?? 'profile-1',
     localNodeId: overrides.localNodeId ?? 'node-1',
     indexedDB: indexedDB as unknown as IDBFactory,
-    crypto: cryptoImpl,
+    crypto: overrides.crypto ?? cryptoImpl,
     nowMs: () => 1_000
   })
+}
+
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
+function createGenerateKeyGateCrypto(gate: Promise<void>): Crypto {
+  return {
+    getRandomValues: cryptoImpl.getRandomValues.bind(cryptoImpl),
+    subtle: {
+      generateKey: async (
+        algorithm: AlgorithmIdentifier | RsaHashedKeyGenParams | EcKeyGenParams | HmacKeyGenParams | AesKeyGenParams,
+        extractable: boolean,
+        keyUsages: readonly KeyUsage[],
+      ) => {
+        await gate
+        return await cryptoImpl.subtle.generateKey(algorithm, extractable, keyUsages)
+      },
+      encrypt: cryptoImpl.subtle.encrypt.bind(cryptoImpl.subtle),
+      decrypt: cryptoImpl.subtle.decrypt.bind(cryptoImpl.subtle)
+    } as unknown as SubtleCrypto
+  } as Crypto
+}
+
+function keyVersion(keyId: string): number {
+  const match = /\.v([1-9][0-9]*)$/u.exec(keyId)
+  if (match === null) throw new Error(`Missing key version: ${keyId}`)
+  return Number(match[1])
 }
 
 function readMemoryKey(indexedDB: MemoryIndexedDbFactory, keyId: string): CryptoKey | undefined {
