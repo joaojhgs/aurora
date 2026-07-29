@@ -10,6 +10,9 @@ import {
   parsePeerGrantMetadataRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
+  type DeleteConversationResult,
+  type DeleteExpiredMemoryItemsResult,
+  type DeleteRecordResult,
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalDataBackend,
@@ -352,6 +355,10 @@ class BrowserSqliteConversationRepository {
     await this.client.repositoryOperation({ kind: 'conversations.appendMessage', record: parseConversationMessageRecord(record) }, this.txId)
   }
 
+  async deleteConversation(conversationId: string): Promise<DeleteConversationResult> {
+    return await this.client.repositoryOperation<DeleteConversationResult>({ kind: 'conversations.deleteConversation', conversationId }, this.txId)
+  }
+
   async listConversations(): Promise<ConversationRecord[]> {
     return (await this.client.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations' }, this.txId)).map(parseConversationRecord)
   }
@@ -366,6 +373,14 @@ class BrowserSqliteMemoryRepository {
 
   async upsertMemoryItem(record: LightweightMemoryRecord): Promise<void> {
     await this.client.repositoryOperation({ kind: 'memory.upsertMemoryItem', record: parseLightweightMemoryRecord(record) }, this.txId)
+  }
+
+  async deleteMemoryItem(memoryItemId: string): Promise<DeleteRecordResult> {
+    return await this.client.repositoryOperation<DeleteRecordResult>({ kind: 'memory.deleteMemoryItem', memoryItemId }, this.txId)
+  }
+
+  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+    return await this.client.repositoryOperation<DeleteExpiredMemoryItemsResult>({ kind: 'memory.deleteExpiredMemoryItems', nowMs, limit }, this.txId)
   }
 
   async listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]> {

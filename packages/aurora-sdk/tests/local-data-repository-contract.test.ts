@@ -32,6 +32,46 @@ describe('local-data memory repository contract', () => {
     await expect(session.localAudit.listAudit()).resolves.toEqual([auditFixture()])
   })
 
+  it('deletes conversations with messages and memory items with deterministic bounds', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture())
+    await session.conversations.appendMessage(messageFixture({ id: 'message-1', sequence: 0 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'message-2', sequence: 1 }))
+
+    await expect(session.conversations.deleteConversation('missing-conversation')).resolves.toEqual({
+      deleted: false,
+      deletedMessages: 0
+    })
+    await expect(session.conversations.deleteConversation('conversation-1')).resolves.toEqual({
+      deleted: true,
+      deletedMessages: 2
+    })
+    await expect(session.conversations.listConversations()).resolves.toEqual([])
+    await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([])
+
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-keep', expiresAtMs: null }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-new', expiresAtMs: 3000 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired-b', expiresAtMs: 1000 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired-a', expiresAtMs: 1000 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired-old', expiresAtMs: 900 }))
+
+    await expect(session.memory.deleteMemoryItem('missing-memory')).resolves.toEqual({ deleted: false })
+    await expect(session.memory.deleteMemoryItem('memory-keep')).resolves.toEqual({ deleted: true })
+    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([
+      memoryFixture({ id: 'memory-expired-b', expiresAtMs: 1000 }),
+      memoryFixture({ id: 'memory-new', expiresAtMs: 3000 })
+    ])
+    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 1 })
+    await expect(session.memory.deleteExpiredMemoryItems(3000, 5)).resolves.toEqual({ deleted: 1 })
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([])
+    await expect(session.memory.deleteExpiredMemoryItems(1000, 0)).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { reason: 'delete_limit' }
+    })
+  })
+
   it('rolls back transaction writes and enforces local node identity', async () => {
     const backend = new MemoryLocalDataBackend()
     const session = await backend.open('profile-1', 'node-1')

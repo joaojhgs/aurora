@@ -208,6 +208,72 @@ describe('browser sqlite worker protocol guardrails', () => {
     expect(db.statements.some(isWriteStatement)).toBe(false)
   })
 
+  it('executes repository deletes through scoped sqlite statements with observable counts', async () => {
+    const conversationDb = new FakeSqliteDatabase({
+      'SELECT id FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?;': [{ id: 'conversation-1' }],
+      'SELECT COUNT(*) AS count FROM aurora_messages WHERE conversation_id = ?;': [{ count: 2 }]
+    })
+    const conversationResponses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage(
+      {
+        id: 'delete-conversation',
+        command: 'repo',
+        operation: { kind: 'conversations.deleteConversation', conversationId: 'conversation-1' }
+      },
+      (response) => conversationResponses.push(response),
+      openWorkerState(conversationDb, 'profile-1', 'node-1') as never
+    )
+
+    expect(conversationResponses).toEqual([{
+      id: 'delete-conversation',
+      result: { ok: true, value: { deleted: true, deletedMessages: 2 } }
+    }])
+    expect(conversationDb.statements).toContain('DELETE FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?;')
+
+    const scopedNoopDb = new FakeSqliteDatabase({
+      'SELECT id FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;': []
+    })
+    const scopedNoopResponses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage(
+      {
+        id: 'delete-cross-profile-memory',
+        command: 'repo',
+        operation: { kind: 'memory.deleteMemoryItem', memoryItemId: 'memory-profile-1' }
+      },
+      (response) => scopedNoopResponses.push(response),
+      openWorkerState(scopedNoopDb, 'profile-2', 'node-1') as never
+    )
+
+    expect(scopedNoopResponses).toEqual([{
+      id: 'delete-cross-profile-memory',
+      result: { ok: true, value: { deleted: false } }
+    }])
+    expect(scopedNoopDb.statements.some((statement) => statement.startsWith('DELETE FROM aurora_memory_items'))).toBe(false)
+
+    const expiredDb = new FakeSqliteDatabase({
+      'SELECT id FROM aurora_memory_items WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?;': [
+        { id: 'memory-old' },
+        { id: 'memory-a' }
+      ]
+    })
+    const expiredResponses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage(
+      {
+        id: 'delete-expired-memory',
+        command: 'repo',
+        operation: { kind: 'memory.deleteExpiredMemoryItems', nowMs: 1000, limit: 2 }
+      },
+      (response) => expiredResponses.push(response),
+      openWorkerState(expiredDb, 'profile-1', 'node-1') as never
+    )
+
+    expect(expiredResponses).toEqual([{
+      id: 'delete-expired-memory',
+      result: { ok: true, value: { deleted: 2 } }
+    }])
+    expect(expiredDb.statements.filter((statement) => statement === 'DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;')).toHaveLength(2)
+  })
+
   it('preflights existing local-node ownership without changing schema, ledger, identity, user_version, or records', () => {
     for (const testCase of [
       {
@@ -471,7 +537,7 @@ const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
   createdAtMs: 1000
 })
 
-function openWorkerState(db: SnapshotSqliteDatabase, profileId: string, localNodeId: string) {
+function openWorkerState(db: FakeSqliteDatabase | SnapshotSqliteDatabase, profileId: string, localNodeId: string) {
   return {
     db,
     profileId,

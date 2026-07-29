@@ -58,6 +58,39 @@ describe('browser sqlite worker client backend', () => {
     await backend.close()
   })
 
+  it('forwards observable delete repository operations through the typed worker protocol', async () => {
+    installBrowserStorageProbe()
+    const fakeWorker = new MemoryProtocolWorker()
+    const backend = new BrowserSqliteLocalDataBackend({
+      createWorker: () => fakeWorker,
+      lock: new GrantedLock(),
+      timeoutMs: 1000,
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
+    })
+    const session = await backend.open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture())
+    await session.conversations.appendMessage(messageFixture({ id: 'message-1', sequence: 0 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'message-2', sequence: 1 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-old', expiresAtMs: 900 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-a', expiresAtMs: 1000 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-b', expiresAtMs: 1000 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-live', expiresAtMs: null }))
+
+    await expect(session.conversations.deleteConversation('conversation-1')).resolves.toEqual({
+      deleted: true,
+      deletedMessages: 2
+    })
+    await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([])
+    await expect(session.memory.deleteMemoryItem('memory-live')).resolves.toEqual({ deleted: true })
+    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([
+      memoryFixture({ id: 'memory-b', expiresAtMs: 1000 })
+    ])
+    expect(fakeWorker.messages.filter((message) => message.command === 'repo').map((message) => message.operation.kind)).toContain('conversations.deleteConversation')
+    expect(fakeWorker.messages.filter((message) => message.command === 'repo').map((message) => message.operation.kind)).toContain('memory.deleteExpiredMemoryItems')
+    await backend.close()
+  })
+
   it('rolls back failed transactions and rejects oversized worker messages', async () => {
     installBrowserStorageProbe()
     const backend = new BrowserSqliteLocalDataBackend({
@@ -201,12 +234,18 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
         return await session.conversations.upsertConversation(operation.record)
       case 'conversations.appendMessage':
         return await session.conversations.appendMessage(operation.record)
+      case 'conversations.deleteConversation':
+        return await session.conversations.deleteConversation(operation.conversationId)
       case 'conversations.listConversations':
         return await session.conversations.listConversations()
       case 'conversations.listMessages':
         return await session.conversations.listMessages(operation.conversationId)
       case 'memory.upsertMemoryItem':
         return await session.memory.upsertMemoryItem(operation.record)
+      case 'memory.deleteMemoryItem':
+        return await session.memory.deleteMemoryItem(operation.memoryItemId)
+      case 'memory.deleteExpiredMemoryItems':
+        return await session.memory.deleteExpiredMemoryItems(operation.nowMs, operation.limit)
       case 'memory.listMemoryItems':
         return await session.memory.listMemoryItems(operation.namespace)
       case 'localTools.upsertLocalToolState':

@@ -55,9 +55,12 @@ export interface BrowserSqliteMigrationSql {
 export type BrowserSqliteRepositoryOperation =
   | { readonly kind: 'conversations.upsertConversation'; readonly record: ConversationRecord }
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
+  | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
   | { readonly kind: 'conversations.listConversations' }
   | { readonly kind: 'conversations.listMessages'; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
+  | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
+  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly nowMs: number; readonly limit: number }
   | { readonly kind: 'memory.listMemoryItems'; readonly namespace?: string }
   | { readonly kind: 'localTools.upsertLocalToolState'; readonly record: LocalToolStateRecord }
   | { readonly kind: 'localTools.listLocalToolStates' }
@@ -382,6 +385,13 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
       return selectObjects<ConversationRow>(db, 'SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ? ORDER BY updated_at_ms DESC, id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToConversation)
     case 'conversations.listMessages':
       return selectObjects<MessageRow>(db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY messages.sequence ASC, messages.id ASC;', [operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToMessage)
+    case 'conversations.deleteConversation': {
+      const rows = selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.conversationId, workerState.profileId, workerState.localNodeId])
+      if (rows.length === 0) return { deleted: false, deletedMessages: 0 }
+      const messageCount = selectCount(db, 'SELECT COUNT(*) AS count FROM aurora_messages WHERE conversation_id = ?;', [operation.conversationId])
+      run(db, 'DELETE FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.conversationId, workerState.profileId, workerState.localNodeId])
+      return { deleted: true, deletedMessages: messageCount }
+    }
     case 'memory.upsertMemoryItem': {
       const record = parseLightweightMemoryRecord(operation.record)
       assertRecordIdentity(workerState, record.profileId, record.localNodeId)
@@ -390,6 +400,24 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
         record.id, record.profileId, record.localNodeId, record.namespace, JSON.stringify(record.payloadEnvelope), record.sourceType, record.sourceId, record.createdAtMs, record.updatedAtMs, record.expiresAtMs
       ])
       return undefined
+    }
+    case 'memory.deleteMemoryItem': {
+      const rows = selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.memoryItemId, workerState.profileId, workerState.localNodeId])
+      if (rows.length === 0) return { deleted: false }
+      run(db, 'DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.memoryItemId, workerState.profileId, workerState.localNodeId])
+      return { deleted: true }
+    }
+    case 'memory.deleteExpiredMemoryItems': {
+      const normalizedLimit = requireDeleteLimit(operation.limit)
+      const rows = selectObjects<{ id: string }>(
+        db,
+        'SELECT id FROM aurora_memory_items WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?;',
+        [workerState.profileId, workerState.localNodeId, operation.nowMs, normalizedLimit]
+      )
+      for (const row of rows) {
+        run(db, 'DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [row.id, workerState.profileId, workerState.localNodeId])
+      }
+      return { deleted: rows.length }
     }
     case 'memory.listMemoryItems': {
       const rows = operation.namespace === undefined
@@ -528,6 +556,11 @@ function exec(db: SqliteDatabase | null, sql: string): void {
 function selectObjects<T extends Record<string, unknown>>(db: SqliteDatabase | null, sql: string, bind: readonly unknown[] = []): T[] {
   if (db === null) throw new LocalDataError('session_closed', 'Local data database is closed')
   return db.exec({ sql, bind, returnValue: 'resultRows', rowMode: 'object' }) as T[]
+}
+
+function selectCount(db: SqliteDatabase | null, sql: string, bind: readonly unknown[] = []): number {
+  const row = selectObjects<{ count: number }>(db, sql, bind)[0]
+  return row?.count ?? 0
 }
 
 function assertOpenState(workerState: WorkerState): asserts workerState is WorkerState & { db: SqliteDatabase; profileId: string; localNodeId: string } {
@@ -676,6 +709,13 @@ function ambiguousProfileOwnership(): LocalDataError {
 function requireIdentity(value: string | null): string {
   if (value === null) throw new LocalDataError('session_closed', 'Local data database is closed')
   return value
+}
+
+function requireDeleteLimit(limit: number): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new LocalDataError('invalid_record', 'Delete limit must be a positive safe integer', { reason: 'delete_limit' })
+  }
+  return limit
 }
 
 function requireConversationInScope(db: SqliteDatabase, workerState: WorkerState & { profileId: string; localNodeId: string }, conversationId: string): void {

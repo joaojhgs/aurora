@@ -15,6 +15,9 @@ import {
   parsePeerGrantMetadataRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
+  type DeleteConversationResult,
+  type DeleteExpiredMemoryItemsResult,
+  type DeleteRecordResult,
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalDataBackend,
@@ -538,6 +541,25 @@ export class BrowserConversationRepository {
     })
   }
 
+  async deleteConversation(conversationId: string): Promise<DeleteConversationResult> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const conversationIndex = this.session.mutable.conversations.findIndex((conversation) =>
+        conversation.id === conversationId
+        && conversation.profileId === this.session.profileId
+        && conversation.localNodeId === this.session.localNodeId
+      )
+      if (conversationIndex === -1) return { deleted: false, deletedMessages: 0 }
+      this.session.mutable.conversations.splice(conversationIndex, 1)
+      let deletedMessages = 0
+      this.session.mutable.messages = this.session.mutable.messages.filter((message) => {
+        if (message.conversationId !== conversationId) return true
+        deletedMessages += 1
+        return false
+      })
+      return { deleted: true, deletedMessages }
+    })
+  }
+
   async listConversations(): Promise<ConversationRecord[]> {
     return await this.session.withRepositoryAccess(this.access, false, () => clone(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId))
       .sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
@@ -569,6 +591,37 @@ export class BrowserLightweightMemoryRepository {
         this.session.localNodeId
       )
       upsert(this.session.mutable.memoryItems, record, (item) => item.id === record.id)
+    })
+  }
+
+  async deleteMemoryItem(memoryItemId: string): Promise<DeleteRecordResult> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const before = this.session.mutable.memoryItems.length
+      this.session.mutable.memoryItems = this.session.mutable.memoryItems.filter((record) =>
+        record.id !== memoryItemId
+        || record.profileId !== this.session.profileId
+        || record.localNodeId !== this.session.localNodeId
+      )
+      return { deleted: this.session.mutable.memoryItems.length !== before }
+    })
+  }
+
+  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const normalizedLimit = requireDeleteLimit(limit)
+      const expiredIds = this.session.mutable.memoryItems
+        .filter((record) =>
+          record.profileId === this.session.profileId
+          && record.localNodeId === this.session.localNodeId
+          && record.expiresAtMs !== null
+          && record.expiresAtMs <= nowMs
+        )
+        .sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id))
+        .slice(0, normalizedLimit)
+        .map((record) => record.id)
+      const expiredIdSet = new Set(expiredIds)
+      this.session.mutable.memoryItems = this.session.mutable.memoryItems.filter((record) => !expiredIdSet.has(record.id))
+      return { deleted: expiredIdSet.size }
     })
   }
 
@@ -977,6 +1030,13 @@ function upsert<T>(items: T[], record: T, predicate: (item: T) => boolean): void
 
 function clone<T>(value: T): T {
   return structuredClone(value)
+}
+
+function requireDeleteLimit(limit: number): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new LocalDataError('invalid_record', 'Delete limit must be a positive safe integer', { reason: 'delete_limit' })
+  }
+  return limit
 }
 
 function transactionScopeError(reason: string): LocalDataError {

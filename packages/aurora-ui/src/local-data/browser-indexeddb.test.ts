@@ -231,6 +231,48 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     await reopenedFirst.close()
   })
 
+  it('deletes only active-profile conversations and bounded expired memory in shared storage', async () => {
+    const leases = new MapBrowserStorageLeaseStore()
+    const store = new MapBrowserLocalDataDocumentStore()
+    const first = await openSession(store, leases, 'owner-1', 'profile-1', 'node-1')
+    await first.conversations.upsertConversation(conversationFixture({ id: 'conversation-profile-1' }))
+    await first.conversations.appendMessage(messageFixture({ id: 'message-profile-1', conversationId: 'conversation-profile-1' }))
+    await first.memory.upsertMemoryItem(memoryFixture({ id: 'memory-profile-1-expired', expiresAtMs: 1000 }))
+    await first.close()
+
+    const second = await openSession(store, leases, 'owner-2', 'profile-2', 'node-1')
+    await second.conversations.upsertConversation(conversationFixture({ id: 'conversation-profile-2', profileId: 'profile-2' }))
+    await second.conversations.appendMessage(messageFixture({ id: 'message-profile-2', conversationId: 'conversation-profile-2' }))
+    await second.memory.upsertMemoryItem(memoryFixture({ id: 'memory-profile-2-old', profileId: 'profile-2', expiresAtMs: 900 }))
+    await second.memory.upsertMemoryItem(memoryFixture({ id: 'memory-profile-2-a', profileId: 'profile-2', expiresAtMs: 1000 }))
+    await second.memory.upsertMemoryItem(memoryFixture({ id: 'memory-profile-2-b', profileId: 'profile-2', expiresAtMs: 1000 }))
+
+    await expect(second.conversations.deleteConversation('conversation-profile-1')).resolves.toEqual({
+      deleted: false,
+      deletedMessages: 0
+    })
+    await expect(second.conversations.deleteConversation('conversation-profile-2')).resolves.toEqual({
+      deleted: true,
+      deletedMessages: 1
+    })
+    await expect(second.memory.deleteMemoryItem('memory-profile-1-expired')).resolves.toEqual({ deleted: false })
+    await expect(second.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(second.memory.listMemoryItems()).resolves.toEqual([
+      memoryFixture({ id: 'memory-profile-2-b', profileId: 'profile-2', expiresAtMs: 1000 })
+    ])
+    await expect(second.memory.deleteExpiredMemoryItems(1000, 0)).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { reason: 'delete_limit' }
+    })
+    await second.close()
+
+    const reopenedFirst = await openSession(store, leases, 'owner-3', 'profile-1', 'node-1')
+    await expect(reopenedFirst.conversations.listConversations()).resolves.toEqual([conversationFixture({ id: 'conversation-profile-1' })])
+    await expect(reopenedFirst.conversations.listMessages('conversation-profile-1')).resolves.toEqual([messageFixture({ id: 'message-profile-1', conversationId: 'conversation-profile-1' })])
+    await expect(reopenedFirst.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-profile-1-expired', expiresAtMs: 1000 })])
+    await reopenedFirst.close()
+  })
+
   it('rejects same-node different-profile global ID collisions without changing the first profile records', async () => {
     const leases = new MapBrowserStorageLeaseStore()
     const store = new MapBrowserLocalDataDocumentStore()

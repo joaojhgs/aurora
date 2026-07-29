@@ -4,6 +4,9 @@ import { buildLocalDataExportV1, compareUtf8, parseLocalDataExportV1, type Local
 import {
   cloneLocalDataCollections,
   emptyLocalDataCollections,
+  type DeleteConversationResult,
+  type DeleteExpiredMemoryItemsResult,
+  type DeleteRecordResult,
   type LocalDataRepositories,
   type MutableLocalDataCollections
 } from './repositories.js'
@@ -269,6 +272,21 @@ class MemoryConversationRepository {
     })
   }
 
+  async deleteConversation(conversationId: string): Promise<DeleteConversationResult> {
+    return await this.session.withRepositoryAccess(this.access, () => {
+      const conversationIndex = this.session.mutable.conversations.findIndex((conversation) => conversation.id === conversationId)
+      if (conversationIndex === -1) return { deleted: false, deletedMessages: 0 }
+      this.session.mutable.conversations.splice(conversationIndex, 1)
+      let deletedMessages = 0
+      this.session.mutable.messages = this.session.mutable.messages.filter((message) => {
+        if (message.conversationId !== conversationId) return true
+        deletedMessages += 1
+        return false
+      })
+      return { deleted: true, deletedMessages }
+    })
+  }
+
   async listConversations(): Promise<ConversationRecord[]> {
     return this.session.withRepositoryAccess(this.access, () => clone(this.session.mutable.conversations).sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
   }
@@ -290,6 +308,28 @@ class MemoryLightweightMemoryRepository {
       const record = parseLightweightMemoryRecord(input)
       this.session.assertIdentity(record.profileId, record.localNodeId)
       upsert(this.session.mutable.memoryItems, record, (item) => item.id === record.id)
+    })
+  }
+
+  async deleteMemoryItem(memoryItemId: string): Promise<DeleteRecordResult> {
+    return await this.session.withRepositoryAccess(this.access, () => {
+      const before = this.session.mutable.memoryItems.length
+      this.session.mutable.memoryItems = this.session.mutable.memoryItems.filter((record) => record.id !== memoryItemId)
+      return { deleted: this.session.mutable.memoryItems.length !== before }
+    })
+  }
+
+  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+    return await this.session.withRepositoryAccess(this.access, () => {
+      const normalizedLimit = requireDeleteLimit(limit)
+      const expiredIds = this.session.mutable.memoryItems
+        .filter((record) => record.expiresAtMs !== null && record.expiresAtMs <= nowMs)
+        .sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id))
+        .slice(0, normalizedLimit)
+        .map((record) => record.id)
+      const expiredIdSet = new Set(expiredIds)
+      this.session.mutable.memoryItems = this.session.mutable.memoryItems.filter((record) => !expiredIdSet.has(record.id))
+      return { deleted: expiredIdSet.size }
     })
   }
 
@@ -370,6 +410,13 @@ function upsert<T>(items: T[], record: T, predicate: (item: T) => boolean): void
 
 function clone<T>(value: T): T {
   return structuredClone(value)
+}
+
+function requireDeleteLimit(limit: number): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new LocalDataError('invalid_record', 'Delete limit must be a positive safe integer', { reason: 'delete_limit' })
+  }
+  return limit
 }
 
 function validateImportedCollections(records: LocalDataRecordCollections, profileId: string, localNodeId: string): void {

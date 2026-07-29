@@ -11,13 +11,29 @@ import type {
 export interface ConversationRepository {
   upsertConversation(record: ConversationRecord): Promise<void>
   appendMessage(record: ConversationMessageRecord): Promise<void>
+  deleteConversation(conversationId: string): Promise<DeleteConversationResult>
   listConversations(): Promise<ConversationRecord[]>
   listMessages(conversationId: string): Promise<ConversationMessageRecord[]>
 }
 
 export interface LightweightMemoryRepository {
   upsertMemoryItem(record: LightweightMemoryRecord): Promise<void>
+  deleteMemoryItem(memoryItemId: string): Promise<DeleteRecordResult>
+  deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult>
   listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]>
+}
+
+export interface DeleteConversationResult {
+  readonly deleted: boolean
+  readonly deletedMessages: number
+}
+
+export interface DeleteRecordResult {
+  readonly deleted: boolean
+}
+
+export interface DeleteExpiredMemoryItemsResult {
+  readonly deleted: number
 }
 
 export interface LocalToolStateRepository {
