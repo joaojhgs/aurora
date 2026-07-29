@@ -19,7 +19,16 @@ from app.services.gateway.webrtc.pairing_sas import (
     PAIRING_TERMINAL_TYPE,
     PairingSAS,
 )
-from app.services.gateway.webrtc.rtc_client import RTCClient, _PairingDeniedError
+from app.services.gateway.webrtc.peer_protocol import (
+    CAP_PROVIDER_LEASE_V1,
+    build_protocol_hello,
+    negotiate_protocol,
+)
+from app.services.gateway.webrtc.rtc_client import (
+    RTCClient,
+    _ManifestAckExpectation,
+    _PairingDeniedError,
+)
 from app.shared.contracts.models.auth import build_mesh_reconnect_proof_message
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.tooling import ToolingMethods
@@ -1016,15 +1025,37 @@ async def test_rtc_client_structured_ack_must_match_last_sent_projection(mock_de
     client._peer_registry = MagicMock()
     client._peer_registry.update_manifest_ack = AsyncMock()
     client._remember_stable_peer_id("session-peer", "stable-remote-peer", "remote-node")
-    client._manifest_ack_expectations["stable-remote-peer"] = (
-        "expected-projection",
-        "expected-export",
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-peer"] = protocol
+    client._peer_protocols["stable-remote-peer"] = protocol
+    client._manifest_ack_expectations["stable-remote-peer"] = _ManifestAckExpectation(
+        session_peer_id="session-peer",
+        connection_epoch="local-epoch-1",
+        projection_digest="expected-projection",
+        active_protocol="projection-v1",
+        active_version="v1",
+        active_tier="projection",
+        protocol_revision="v1",
+        registry_revision="expected-registry",
+        export_policy_revision="expected-export",
+        auth_grant_revision=7,
+        advertised_services=("TTS",),
+        compatible_services=(),
     )
     payload = {
         "type": "manifest_ack",
         "compatible_services": ["TTS"],
-        "projection_digest": "expected-projection",
+        "incompatible_services": [],
+        "unused_services": [],
+        "active_protocol": "projection-v1",
+        "active_version": "v1",
+        "active_tier": "projection",
+        "protocol_revision": "v1",
+        "registry_revision": "expected-registry",
         "export_policy_revision": "expected-export",
+        "auth_grant_revision": 7,
+        "projection_digest": "expected-projection",
         "services": [
             {
                 "service_id": "TTS",
@@ -1044,6 +1075,7 @@ async def test_rtc_client_structured_ack_must_match_last_sent_projection(mock_de
         {
             **payload,
             "projection_digest": "stale-projection",
+            "registry_revision": "stale-registry",
             "export_policy_revision": "stale-export",
         },
     )
