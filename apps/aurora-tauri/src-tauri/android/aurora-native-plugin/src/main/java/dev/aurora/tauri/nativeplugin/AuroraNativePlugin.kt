@@ -1229,11 +1229,21 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun validateLocalDataEnvelopeScope(purpose: String, profileId: String, localNodeId: String) {
         if (purpose != LOCAL_DATA_ENVELOPE_PURPOSE) throw IllegalArgumentException("local_data_key_purpose_unsupported")
-        validateNonEmpty("profileId", profileId, 256)
-        validateNonEmpty("localNodeId", localNodeId, 256)
+        validateLocalDataId("profileId", profileId)
+        validateLocalDataId("localNodeId", localNodeId)
+    }
+
+    private fun validateLocalDataId(field: String, value: String) {
+        val valid = value.isNotEmpty() &&
+            value.toByteArray(Charsets.UTF_8).size <= 256 &&
+            value.all { it.isLetterOrDigit() || it == '_' || it == '.' || it == ':' || it == '@' || it == '/' || it == '-' } &&
+            value.all { it.code <= 0x7f }
+        if (!valid) throw IllegalArgumentException("${field}_invalid")
     }
 
     private fun validateLocalDataEnvelopeBinding(profileId: String, localNodeId: String, keyId: String) {
+        validateLocalDataId("profileId", profileId)
+        validateLocalDataId("localNodeId", localNodeId)
         val expectedPrefix = "aurora.local-data-envelope.v1.${sha256Hex(profileId.toByteArray(Charsets.UTF_8))}.${sha256Hex(localNodeId.toByteArray(Charsets.UTF_8))}.${LOCAL_DATA_ENVELOPE_PURPOSE}.k"
         if (!keyId.startsWith(expectedPrefix)) throw IllegalArgumentException("local_data_envelope_key_mismatch")
         validateLocalDataEnvelopeKeyId(keyId)

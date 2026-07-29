@@ -747,6 +747,14 @@ fn run_repository_operation(
                 &record.profile_id,
                 &record.local_node_id,
             )?;
+            ensure_scoped_global_key_available(
+                conn,
+                "aurora_conversations",
+                "id",
+                &record.id,
+                profile_id,
+                local_node_id,
+            )?;
             conn.execute(
                 "INSERT INTO aurora_conversations (id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms)
                  VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -772,6 +780,7 @@ fn run_repository_operation(
             if rows.is_empty() {
                 return Err(local_data_error("conversation not found for identity"));
             }
+            ensure_message_id_available(conn, &record.id, profile_id, local_node_id)?;
             conn.execute(
                 "INSERT INTO aurora_messages (id, conversation_id, sequence, role, content_envelope_json, tool_envelope_json, status, created_at_ms)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -834,6 +843,14 @@ fn run_repository_operation(
                 local_node_id,
                 &record.profile_id,
                 &record.local_node_id,
+            )?;
+            ensure_scoped_global_key_available(
+                conn,
+                "aurora_memory_items",
+                "id",
+                &record.id,
+                profile_id,
+                local_node_id,
             )?;
             conn.execute(
                 "INSERT INTO aurora_memory_items (id, profile_id, local_node_id, namespace, payload_envelope_json, source_type, source_id, created_at_ms, updated_at_ms, expires_at_ms)
@@ -916,6 +933,14 @@ fn run_repository_operation(
                 &record.profile_id,
                 &record.local_node_id,
             )?;
+            ensure_scoped_global_key_available(
+                conn,
+                "aurora_peer_grant_metadata",
+                "grant_id",
+                &record.grant_id,
+                profile_id,
+                local_node_id,
+            )?;
             conn.execute(
                 "INSERT INTO aurora_peer_grant_metadata (grant_id, profile_id, local_node_id, claimant_peer_id, token_id, scope_envelope_json, revision, created_at_ms, expires_at_ms, revoked_at_ms)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -948,6 +973,14 @@ fn run_repository_operation(
                 local_node_id,
                 &record.profile_id,
                 &record.local_node_id,
+            )?;
+            ensure_scoped_global_key_available(
+                conn,
+                "aurora_local_audit",
+                "id",
+                &record.id,
+                profile_id,
+                local_node_id,
             )?;
             conn.execute(
                 "INSERT INTO aurora_local_audit (id, profile_id, local_node_id, peer_id, action, decision, result_status, connection_epoch, method_id, tool_contract_id, correlation_id, redacted_detail_json, created_at_ms)
@@ -982,6 +1015,7 @@ fn import_records(
     local_node_id: &str,
     document: &LocalDataExportDocument,
 ) -> Result<Value, AuroraCommandError> {
+    ensure_import_global_keys_available(conn, profile_id, local_node_id, document)?;
     conn.execute(
         "DELETE FROM aurora_local_audit WHERE profile_id = ? AND local_node_id = ?",
         &[json!(profile_id), json!(local_node_id)],
@@ -1085,6 +1119,105 @@ fn export_records(
         "peerGrantMetadata": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::PeerGrantsListPeerGrants { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
         "localAudit": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::LocalAuditListAudit { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
     }))
+}
+
+fn ensure_import_global_keys_available(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+    document: &LocalDataExportDocument,
+) -> Result<(), AuroraCommandError> {
+    for record in &document.records.conversations {
+        ensure_scoped_global_key_available(
+            conn,
+            "aurora_conversations",
+            "id",
+            &record.id,
+            profile_id,
+            local_node_id,
+        )?;
+    }
+    for record in &document.records.messages {
+        ensure_message_id_available(conn, &record.id, profile_id, local_node_id)?;
+    }
+    for record in &document.records.memory_items {
+        ensure_scoped_global_key_available(
+            conn,
+            "aurora_memory_items",
+            "id",
+            &record.id,
+            profile_id,
+            local_node_id,
+        )?;
+    }
+    for record in &document.records.peer_grant_metadata {
+        ensure_scoped_global_key_available(
+            conn,
+            "aurora_peer_grant_metadata",
+            "grant_id",
+            &record.grant_id,
+            profile_id,
+            local_node_id,
+        )?;
+    }
+    for record in &document.records.local_audit {
+        ensure_scoped_global_key_available(
+            conn,
+            "aurora_local_audit",
+            "id",
+            &record.id,
+            profile_id,
+            local_node_id,
+        )?;
+    }
+    Ok(())
+}
+
+fn ensure_scoped_global_key_available(
+    conn: &SqliteConnection,
+    table: &str,
+    id_column: &str,
+    id: &str,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    let sql =
+        format!("SELECT profile_id, local_node_id FROM {table} WHERE {id_column} = ? LIMIT 1");
+    let rows = conn.query(&sql, &[json!(id)])?;
+    ensure_existing_row_scope(rows.first(), profile_id, local_node_id)
+}
+
+fn ensure_message_id_available(
+    conn: &SqliteConnection,
+    id: &str,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    let rows = conn.query(
+        "SELECT c.profile_id, c.local_node_id
+         FROM aurora_messages m
+         INNER JOIN aurora_conversations c ON c.id = m.conversation_id
+         WHERE m.id = ?
+         LIMIT 1",
+        &[json!(id)],
+    )?;
+    ensure_existing_row_scope(rows.first(), profile_id, local_node_id)
+}
+
+fn ensure_existing_row_scope(
+    row: Option<&Value>,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    if let Some(row) = row {
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &row_string(row, "profile_id")?,
+            &row_string(row, "local_node_id")?,
+        )?;
+    }
+    Ok(())
 }
 
 fn export_messages(
@@ -2512,10 +2645,176 @@ mod tests {
         }
     }
 
+    #[test]
+    fn same_node_different_profile_records_coexist_with_distinct_global_keys() {
+        let conn = migrated_test_connection();
+        seed_complete_profile(&conn, "profile-1", "node-1", "one").unwrap();
+        let profile_one_before = export_records(&conn, "profile-1", "node-1").unwrap();
+
+        seed_complete_profile(&conn, "profile-2", "node-1", "two").unwrap();
+
+        assert_eq!(
+            export_records(&conn, "profile-1", "node-1").unwrap(),
+            profile_one_before
+        );
+        assert_eq!(
+            record_counts(&export_records(&conn, "profile-2", "node-1").unwrap()),
+            json!({
+                "conversations": 1,
+                "messages": 1,
+                "memoryItems": 1,
+                "localToolStates": 1,
+                "peerGrantMetadata": 1,
+                "localAudit": 1,
+            })
+        );
+    }
+
+    #[test]
+    fn global_key_repository_writes_reject_cross_profile_collisions_without_mutation() {
+        let conn = migrated_test_connection();
+        seed_complete_profile(&conn, "profile-1", "node-1", "one").unwrap();
+        run_repository_operation(
+            &conn,
+            "profile-2",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsUpsertConversation {
+                record: test_conversation_for("profile-2", "node-1", "profile-2-conversation"),
+            },
+        )
+        .unwrap();
+        let profile_one_before = export_records(&conn, "profile-1", "node-1").unwrap();
+
+        let cases = [
+            LocalDataRepositoryOperation::ConversationsUpsertConversation {
+                record: test_conversation_for("profile-2", "node-1", "conversation-one"),
+            },
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: test_message_for("message-one", "profile-2-conversation"),
+            },
+            LocalDataRepositoryOperation::MemoryUpsertMemoryItem {
+                record: test_memory_for("profile-2", "node-1", "memory-one"),
+            },
+            LocalDataRepositoryOperation::PeerGrantsUpsertPeerGrant {
+                record: test_grant_for("profile-2", "node-1", "grant-one"),
+            },
+            LocalDataRepositoryOperation::LocalAuditAppendAudit {
+                record: test_audit_for("profile-2", "node-1", "audit-one"),
+            },
+        ];
+
+        for operation in cases {
+            assert!(run_repository_operation(&conn, "profile-2", "node-1", operation).is_err());
+            assert_eq!(
+                export_records(&conn, "profile-1", "node-1").unwrap(),
+                profile_one_before
+            );
+        }
+    }
+
+    #[test]
+    fn import_rejects_cross_profile_global_key_collisions_before_deleting_current_profile() {
+        let conn = migrated_test_connection();
+        seed_complete_profile(&conn, "profile-1", "node-1", "one").unwrap();
+        seed_complete_profile(&conn, "profile-2", "node-1", "existing-two").unwrap();
+        let profile_one_before = export_records(&conn, "profile-1", "node-1").unwrap();
+        let profile_two_before = export_records(&conn, "profile-2", "node-1").unwrap();
+
+        let mut document = valid_import_document_value();
+        rewrite_document_identity(&mut document, "profile-2", "node-1");
+        document["records"]["conversations"][0]["id"] = json!("conversation-one");
+        document["records"]["messages"][0]["id"] = json!("message-one");
+        document["records"]["messages"][0]["conversationId"] = json!("conversation-one");
+        document["records"]["memoryItems"][0]["id"] = json!("memory-one");
+        document["records"]["peerGrantMetadata"][0]["grantId"] = json!("grant-one");
+        document["records"]["localAudit"][0]["id"] = json!("audit-one");
+        refresh_counts_and_hashes(&mut document);
+        let parsed = validate_import_document(document, "profile-2", "node-1", 3).unwrap();
+
+        assert!(import_records(&conn, "profile-2", "node-1", &parsed).is_err());
+        assert_eq!(
+            export_records(&conn, "profile-1", "node-1").unwrap(),
+            profile_one_before
+        );
+        assert_eq!(
+            export_records(&conn, "profile-2", "node-1").unwrap(),
+            profile_two_before
+        );
+    }
+
     fn test_connection() -> SqliteConnection {
         let (_, path) = test_db_path("connection");
         let _ = std::fs::remove_file(&path);
         SqliteConnection::open(path).unwrap()
+    }
+
+    fn migrated_test_connection() -> SqliteConnection {
+        let conn = test_connection();
+        apply_generated_migrations(&conn).unwrap();
+        ensure_identity(&conn, "node-1").unwrap();
+        conn
+    }
+
+    fn seed_complete_profile(
+        conn: &SqliteConnection,
+        profile_id: &str,
+        local_node_id: &str,
+        suffix: &str,
+    ) -> Result<(), AuroraCommandError> {
+        let conversation_id = format!("conversation-{suffix}");
+        run_repository_operation(
+            conn,
+            profile_id,
+            local_node_id,
+            LocalDataRepositoryOperation::ConversationsUpsertConversation {
+                record: test_conversation_for(profile_id, local_node_id, &conversation_id),
+            },
+        )?;
+        run_repository_operation(
+            conn,
+            profile_id,
+            local_node_id,
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: test_message_for(&format!("message-{suffix}"), &conversation_id),
+            },
+        )?;
+        run_repository_operation(
+            conn,
+            profile_id,
+            local_node_id,
+            LocalDataRepositoryOperation::MemoryUpsertMemoryItem {
+                record: test_memory_for(profile_id, local_node_id, &format!("memory-{suffix}")),
+            },
+        )?;
+        run_repository_operation(
+            conn,
+            profile_id,
+            local_node_id,
+            LocalDataRepositoryOperation::LocalToolsUpsertLocalToolState {
+                record: test_tool_for(
+                    profile_id,
+                    local_node_id,
+                    &format!("Tooling.Search.{suffix}"),
+                ),
+            },
+        )?;
+        run_repository_operation(
+            conn,
+            profile_id,
+            local_node_id,
+            LocalDataRepositoryOperation::PeerGrantsUpsertPeerGrant {
+                record: test_grant_for(profile_id, local_node_id, &format!("grant-{suffix}")),
+            },
+        )?;
+        run_repository_operation(
+            conn,
+            profile_id,
+            local_node_id,
+            LocalDataRepositoryOperation::LocalAuditAppendAudit {
+                record: test_audit_for(profile_id, local_node_id, &format!("audit-{suffix}")),
+            },
+        )?;
+        Ok(())
     }
 
     fn test_db_path(label: &str) -> (PathBuf, PathBuf) {
@@ -2584,12 +2883,94 @@ mod tests {
         document["collectionHashes"] = collection_hashes(&records).unwrap();
     }
 
+    fn rewrite_document_identity(document: &mut Value, profile_id: &str, local_node_id: &str) {
+        document["profileId"] = json!(profile_id);
+        document["localNodeId"] = json!(local_node_id);
+        for collection in [
+            "conversations",
+            "memoryItems",
+            "localToolStates",
+            "peerGrantMetadata",
+            "localAudit",
+        ] {
+            for record in document["records"][collection].as_array_mut().unwrap() {
+                record["profileId"] = json!(profile_id);
+                record["localNodeId"] = json!(local_node_id);
+            }
+        }
+
+        let key_id = canonical_test_key_id(profile_id, local_node_id, 1);
+        for record in document["records"]["memoryItems"].as_array_mut().unwrap() {
+            record["payloadEnvelope"]["keyId"] = json!(key_id);
+        }
+        for record in document["records"]["peerGrantMetadata"]
+            .as_array_mut()
+            .unwrap()
+        {
+            record["scopeEnvelope"]["keyId"] = json!(key_id);
+        }
+        refresh_counts_and_hashes(document);
+    }
+
     fn test_conversation(id: &str) -> ConversationRecord {
         serde_json::from_value(test_conversation_value(id)).unwrap()
     }
 
     fn test_memory(id: &str) -> LightweightMemoryRecord {
         serde_json::from_value(test_memory_value(id)).unwrap()
+    }
+
+    fn test_conversation_for(
+        profile_id: &str,
+        local_node_id: &str,
+        id: &str,
+    ) -> ConversationRecord {
+        let mut value = test_conversation_value(id);
+        value["profileId"] = json!(profile_id);
+        value["localNodeId"] = json!(local_node_id);
+        serde_json::from_value(value).unwrap()
+    }
+
+    fn test_message_for(id: &str, conversation_id: &str) -> ConversationMessageRecord {
+        serde_json::from_value(test_message_value(id, conversation_id)).unwrap()
+    }
+
+    fn test_memory_for(profile_id: &str, local_node_id: &str, id: &str) -> LightweightMemoryRecord {
+        let mut value = test_memory_value(id);
+        value["profileId"] = json!(profile_id);
+        value["localNodeId"] = json!(local_node_id);
+        value["payloadEnvelope"]["keyId"] =
+            json!(canonical_test_key_id(profile_id, local_node_id, 1));
+        serde_json::from_value(value).unwrap()
+    }
+
+    fn test_tool_for(
+        profile_id: &str,
+        local_node_id: &str,
+        tool_contract_id: &str,
+    ) -> LocalToolStateRecord {
+        let mut value = test_tool_value();
+        value["profileId"] = json!(profile_id);
+        value["localNodeId"] = json!(local_node_id);
+        value["toolContractId"] = json!(tool_contract_id);
+        value["descriptorJson"]["id"] = json!(tool_contract_id);
+        serde_json::from_value(value).unwrap()
+    }
+
+    fn test_grant_for(profile_id: &str, local_node_id: &str, id: &str) -> PeerGrantMetadataRecord {
+        let mut value = test_grant_value(id);
+        value["profileId"] = json!(profile_id);
+        value["localNodeId"] = json!(local_node_id);
+        value["scopeEnvelope"]["keyId"] =
+            json!(canonical_test_key_id(profile_id, local_node_id, 1));
+        serde_json::from_value(value).unwrap()
+    }
+
+    fn test_audit_for(profile_id: &str, local_node_id: &str, id: &str) -> LocalAuditRecord {
+        let mut value = test_audit_value(id);
+        value["profileId"] = json!(profile_id);
+        value["localNodeId"] = json!(local_node_id);
+        serde_json::from_value(value).unwrap()
     }
 
     fn test_conversation_value(id: &str) -> Value {

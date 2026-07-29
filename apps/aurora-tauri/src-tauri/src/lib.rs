@@ -3974,8 +3974,22 @@ fn validate_local_data_key_scope(
             "local data key purpose is unsupported".to_string(),
         ));
     }
-    validate_non_empty_field("profileId", profile_id, 256)?;
-    validate_non_empty_field("localNodeId", local_node_id, 256)?;
+    validate_local_data_id("profileId", profile_id)?;
+    validate_local_data_id("localNodeId", local_node_id)?;
+    Ok(())
+}
+
+fn validate_local_data_id(field: &str, value: &str) -> Result<(), AuroraCommandError> {
+    if value.is_empty()
+        || value.len() > 256
+        || !value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | ':' | '@' | '/' | '-'))
+    {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
+            "{field} is invalid"
+        )));
+    }
     Ok(())
 }
 
@@ -6873,6 +6887,14 @@ mod tests {
         assert!(plugin.contains("origin.contains(\"*\")"));
         assert!(plugin.contains("backgroundWakeword",));
         assert!(!plugin.contains(r#"rawBearerToken", record.getString"#));
+        for invariant in [
+            "validateLocalDataId(\"profileId\", profileId)",
+            "validateLocalDataId(\"localNodeId\", localNodeId)",
+            "value.toByteArray(Charsets.UTF_8).size <= 256",
+            "it.code <= 0x7f",
+        ] {
+            assert!(plugin.contains(invariant), "{invariant}");
+        }
     }
 
     #[test]
@@ -6915,6 +6937,10 @@ mod tests {
             "\"redactedFields\": [\"rawBearerToken\"]",
             "UserDefaults.standard",
             "value.utf8.count <= 65_536",
+            "try validateLocalDataId(profileId)",
+            "try validateLocalDataId(localNodeId)",
+            "value.utf8.count <= 256",
+            "$0 == 95 || $0 == 46 || $0 == 58 || $0 == 64 || $0 == 47 || $0 == 45",
         ] {
             assert!(storage.contains(invariant), "{invariant}");
         }
@@ -7398,5 +7424,39 @@ mod tests {
         assert_eq!(binding.purpose, LOCAL_DATA_ENVELOPE_KEY_PURPOSE);
         assert_eq!(binding.version, 1);
         assert!(parse_local_data_envelope_key_id("aurora.secure-storage.raw").is_err());
+    }
+
+    #[test]
+    fn local_data_envelope_scope_uses_repository_id_rules_before_key_handles() {
+        let oversized = "a".repeat(257);
+        for invalid in [
+            "",
+            "profile with spaces",
+            "profile#1",
+            "profilé",
+            &oversized,
+        ] {
+            assert!(
+                validate_local_data_key_scope(LOCAL_DATA_ENVELOPE_KEY_PURPOSE, invalid, "node-1")
+                    .is_err(),
+                "profileId {invalid:?}"
+            );
+            assert!(
+                validate_local_data_key_scope(
+                    LOCAL_DATA_ENVELOPE_KEY_PURPOSE,
+                    "profile-1",
+                    invalid
+                )
+                .is_err(),
+                "localNodeId {invalid:?}"
+            );
+        }
+
+        assert!(validate_local_data_key_scope(
+            LOCAL_DATA_ENVELOPE_KEY_PURPOSE,
+            "profile_1.:@/-",
+            "node_1.:@/-"
+        )
+        .is_ok());
     }
 }

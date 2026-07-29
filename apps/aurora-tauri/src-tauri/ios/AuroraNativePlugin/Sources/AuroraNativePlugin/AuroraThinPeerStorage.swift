@@ -523,8 +523,20 @@ enum AuroraThinPeerStorage {
 
   private static func validateLocalDataEnvelopeScope(_ purpose: String, _ profileId: String, _ localNodeId: String) throws {
     guard purpose == auroraLocalDataEnvelopePurpose else { throw AuroraThinStorageError.invalidInput }
-    try validateNonEmpty(profileId, maxBytes: 256)
-    try validateNonEmpty(localNodeId, maxBytes: 256)
+    try validateLocalDataId(profileId)
+    try validateLocalDataId(localNodeId)
+  }
+
+  private static func validateLocalDataId(_ value: String) throws {
+    guard !value.isEmpty,
+          value.utf8.count <= 256,
+          value.utf8.allSatisfy({
+            ($0 >= 48 && $0 <= 57) || ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) ||
+              $0 == 95 || $0 == 46 || $0 == 58 || $0 == 64 || $0 == 47 || $0 == 45
+          })
+    else {
+      throw AuroraThinStorageError.invalidInput
+    }
   }
 
   private static func validateLocalDataEnvelope(_ envelope: AuroraLocalDataEnvelopeV1) throws {
@@ -541,6 +553,8 @@ enum AuroraThinPeerStorage {
   }
 
   private static func validateLocalDataEnvelopeBinding(profileId: String, localNodeId: String, keyId: String) throws {
+    try validateLocalDataId(profileId)
+    try validateLocalDataId(localNodeId)
     let expected = "aurora.local-data-envelope.v1.\(Data(SHA256.hash(data: Data(profileId.utf8))).lowercaseHex).\(Data(SHA256.hash(data: Data(localNodeId.utf8))).lowercaseHex).\(auroraLocalDataEnvelopePurpose).k"
     guard keyId.hasPrefix(expected) else { throw AuroraThinStorageError.invalidInput }
     try validateLocalDataEnvelopeKeyId(keyId)
