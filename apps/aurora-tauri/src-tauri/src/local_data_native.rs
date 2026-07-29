@@ -189,11 +189,15 @@ struct LocalDataRecordCollections {
 
 #[derive(Deserialize)]
 #[serde(tag = "kind")]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all_fields = "camelCase")]
 enum LocalDataRepositoryOperation {
     #[serde(rename = "conversations.upsertConversation")]
     ConversationsUpsertConversation { record: ConversationRecord },
     #[serde(rename = "conversations.appendMessage")]
     ConversationsAppendMessage { record: ConversationMessageRecord },
+    #[serde(rename = "conversations.deleteConversation")]
+    ConversationsDeleteConversation { conversation_id: String },
     #[serde(rename = "conversations.listConversations")]
     ConversationsListConversations {
         profile_id: String,
@@ -207,6 +211,10 @@ enum LocalDataRepositoryOperation {
     },
     #[serde(rename = "memory.upsertMemoryItem")]
     MemoryUpsertMemoryItem { record: LightweightMemoryRecord },
+    #[serde(rename = "memory.deleteMemoryItem")]
+    MemoryDeleteMemoryItem { memory_item_id: String },
+    #[serde(rename = "memory.deleteExpiredMemoryItems")]
+    MemoryDeleteExpiredMemoryItems { now_ms: i64, limit: i64 },
     #[serde(rename = "memory.listMemoryItems")]
     MemoryListMemoryItems {
         profile_id: String,
@@ -816,6 +824,26 @@ fn run_repository_operation(
                 &[json!(profile_id), json!(local_node_id)],
             )?.into_iter().map(conversation_from_row).collect::<Result<Vec<_>, _>>()?))
         }
+        LocalDataRepositoryOperation::ConversationsDeleteConversation { conversation_id } => {
+            validate_id(&conversation_id, "conversation.id")?;
+            let rows = conn.query(
+                "SELECT id FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1",
+                &[json!(conversation_id), json!(profile_id), json!(local_node_id)],
+            )?;
+            if rows.is_empty() {
+                return Ok(json!({ "deleted": false, "deletedMessages": 0 }));
+            }
+            let message_count = select_count(
+                conn,
+                "SELECT COUNT(*) AS count FROM aurora_messages WHERE conversation_id = ?",
+                &[json!(conversation_id)],
+            )?;
+            conn.execute(
+                "DELETE FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?",
+                &[json!(conversation_id), json!(profile_id), json!(local_node_id)],
+            )?;
+            Ok(json!({ "deleted": true, "deletedMessages": message_count }))
+        }
         LocalDataRepositoryOperation::ConversationsListMessages {
             profile_id: requested_profile,
             local_node_id: requested_node,
@@ -859,6 +887,43 @@ fn run_repository_operation(
                 &[json!(record.id), json!(record.profile_id), json!(record.local_node_id), json!(record.namespace), json_or_null(Some(record.payload_envelope))?, option_string(record.source_type), option_string(record.source_id), json!(record.created_at_ms), json!(record.updated_at_ms), option_i64(record.expires_at_ms)],
             )?;
             Ok(Value::Null)
+        }
+        LocalDataRepositoryOperation::MemoryDeleteMemoryItem { memory_item_id } => {
+            validate_id(&memory_item_id, "memory.id")?;
+            let rows = conn.query(
+                "SELECT id FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1",
+                &[json!(memory_item_id), json!(profile_id), json!(local_node_id)],
+            )?;
+            if rows.is_empty() {
+                return Ok(json!({ "deleted": false }));
+            }
+            conn.execute(
+                "DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?",
+                &[json!(memory_item_id), json!(profile_id), json!(local_node_id)],
+            )?;
+            Ok(json!({ "deleted": true }))
+        }
+        LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems { now_ms, limit } => {
+            validate_delete_now_ms(now_ms)?;
+            let normalized_limit = validate_delete_limit(limit)?;
+            conn.execute(
+                "DELETE FROM aurora_memory_items
+                 WHERE profile_id = ? AND local_node_id = ? AND id IN (
+                    SELECT id FROM aurora_memory_items
+                    WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ?
+                    ORDER BY expires_at_ms ASC, id ASC
+                    LIMIT ?
+                 )",
+                &[
+                    json!(profile_id),
+                    json!(local_node_id),
+                    json!(profile_id),
+                    json!(local_node_id),
+                    json!(now_ms),
+                    json!(normalized_limit),
+                ],
+            )?;
+            Ok(json!({ "deleted": sqlite_changes(conn)? }))
         }
         LocalDataRepositoryOperation::MemoryListMemoryItems {
             profile_id: requested_profile,
@@ -2062,6 +2127,37 @@ fn validate_optional_safe_int(value: Option<i64>, context: &str) -> Result<(), A
     Ok(())
 }
 
+fn validate_delete_now_ms(value: i64) -> Result<(), AuroraCommandError> {
+    if !(0..=MAX_SAFE_INTEGER).contains(&value) {
+        return Err(local_data_error("delete_now_ms"));
+    }
+    Ok(())
+}
+
+fn validate_delete_limit(value: i64) -> Result<i64, AuroraCommandError> {
+    if !(1..=MAX_SAFE_INTEGER).contains(&value) {
+        return Err(local_data_error("delete_limit"));
+    }
+    Ok(value)
+}
+
+fn select_count(
+    conn: &SqliteConnection,
+    sql: &str,
+    params: &[Value],
+) -> Result<i64, AuroraCommandError> {
+    let rows = conn.query(sql, params)?;
+    row_i64(
+        rows.first()
+            .ok_or_else(|| local_data_error("count query returned no rows"))?,
+        "count",
+    )
+}
+
+fn sqlite_changes(conn: &SqliteConnection) -> Result<i64, AuroraCommandError> {
+    select_count(conn, "SELECT changes() AS count", &[])
+}
+
 fn validate_optional_text(
     value: Option<&str>,
     max_len: usize,
@@ -2740,6 +2836,305 @@ mod tests {
             export_records(&conn, "profile-2", "node-1").unwrap(),
             profile_two_before
         );
+    }
+
+    #[test]
+    fn repository_operations_deserialize_js_camel_case_shapes() {
+        match serde_json::from_value::<LocalDataRepositoryOperation>(json!({
+            "kind": "conversations.deleteConversation",
+            "conversationId": "conversation-1"
+        }))
+        .unwrap()
+        {
+            LocalDataRepositoryOperation::ConversationsDeleteConversation { conversation_id } => {
+                assert_eq!(conversation_id, "conversation-1");
+            }
+            _ => panic!("conversation delete payload deserialized to the wrong operation"),
+        }
+
+        match serde_json::from_value::<LocalDataRepositoryOperation>(json!({
+            "kind": "memory.deleteMemoryItem",
+            "memoryItemId": "memory-1"
+        }))
+        .unwrap()
+        {
+            LocalDataRepositoryOperation::MemoryDeleteMemoryItem { memory_item_id } => {
+                assert_eq!(memory_item_id, "memory-1");
+            }
+            _ => panic!("memory delete payload deserialized to the wrong operation"),
+        }
+
+        match serde_json::from_value::<LocalDataRepositoryOperation>(json!({
+            "kind": "memory.deleteExpiredMemoryItems",
+            "nowMs": 1000,
+            "limit": 2
+        }))
+        .unwrap()
+        {
+            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems { now_ms, limit } => {
+                assert_eq!(now_ms, 1000);
+                assert_eq!(limit, 2);
+            }
+            _ => panic!("expired memory delete payload deserialized to the wrong operation"),
+        }
+
+        match serde_json::from_value::<LocalDataRepositoryOperation>(json!({
+            "kind": "conversations.listMessages",
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "conversationId": "conversation-1"
+        }))
+        .unwrap()
+        {
+            LocalDataRepositoryOperation::ConversationsListMessages {
+                profile_id,
+                local_node_id,
+                conversation_id,
+            } => {
+                assert_eq!(profile_id, "profile-1");
+                assert_eq!(local_node_id, "node-1");
+                assert_eq!(conversation_id, "conversation-1");
+            }
+            _ => panic!("list messages payload deserialized to the wrong operation"),
+        }
+    }
+
+    #[test]
+    fn delete_conversation_is_scoped_and_reports_cascade_count() {
+        let conn = migrated_test_connection();
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsUpsertConversation {
+                record: test_conversation("conversation-1"),
+            },
+        )
+        .unwrap();
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: test_message_for("message-1", "conversation-1"),
+            },
+        )
+        .unwrap();
+        let mut second = test_message_for("message-2", "conversation-1");
+        second.sequence = 1;
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsAppendMessage { record: second },
+        )
+        .unwrap();
+        run_repository_operation(
+            &conn,
+            "profile-2",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsUpsertConversation {
+                record: test_conversation_for("profile-2", "node-1", "conversation-foreign"),
+            },
+        )
+        .unwrap();
+        run_repository_operation(
+            &conn,
+            "profile-2",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: test_message_for("message-foreign", "conversation-foreign"),
+            },
+        )
+        .unwrap();
+        let foreign_before = export_records(&conn, "profile-2", "node-1").unwrap();
+
+        assert_eq!(
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::ConversationsDeleteConversation {
+                    conversation_id: "conversation-foreign".to_string(),
+                },
+            )
+            .unwrap(),
+            json!({ "deleted": false, "deletedMessages": 0 })
+        );
+        assert_eq!(
+            export_records(&conn, "profile-2", "node-1").unwrap(),
+            foreign_before
+        );
+
+        assert_eq!(
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::ConversationsDeleteConversation {
+                    conversation_id: "conversation-1".to_string(),
+                },
+            )
+            .unwrap(),
+            json!({ "deleted": true, "deletedMessages": 2 })
+        );
+        assert_eq!(
+            record_counts(&export_records(&conn, "profile-1", "node-1").unwrap()),
+            json!({
+                "conversations": 0,
+                "messages": 0,
+                "memoryItems": 0,
+                "localToolStates": 0,
+                "peerGrantMetadata": 0,
+                "localAudit": 0,
+            })
+        );
+        assert_eq!(
+            export_records(&conn, "profile-2", "node-1").unwrap(),
+            foreign_before
+        );
+    }
+
+    #[test]
+    fn memory_deletes_are_scoped_bounded_and_ordered_by_expiry_then_id() {
+        let conn = migrated_test_connection();
+        for mut memory in [
+            test_memory_for("profile-1", "node-1", "memory-live"),
+            test_memory_for("profile-1", "node-1", "memory-b"),
+            test_memory_for("profile-1", "node-1", "memory-a"),
+            test_memory_for("profile-1", "node-1", "memory-later"),
+            test_memory_for("profile-2", "node-1", "memory-foreign"),
+        ] {
+            memory.expires_at_ms = match memory.id.as_str() {
+                "memory-live" => None,
+                "memory-later" => Some(900),
+                "memory-foreign" => Some(1),
+                _ => Some(500),
+            };
+            run_repository_operation(
+                &conn,
+                &memory.profile_id.clone(),
+                &memory.local_node_id.clone(),
+                LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record: memory },
+            )
+            .unwrap();
+        }
+        let foreign_before = export_records(&conn, "profile-2", "node-1").unwrap();
+
+        assert_eq!(
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::MemoryDeleteMemoryItem {
+                    memory_item_id: "memory-foreign".to_string(),
+                },
+            )
+            .unwrap(),
+            json!({ "deleted": false })
+        );
+        assert_eq!(
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                    now_ms: 1000,
+                    limit: 2,
+                },
+            )
+            .unwrap(),
+            json!({ "deleted": 2 })
+        );
+
+        let remaining = export_records(&conn, "profile-1", "node-1").unwrap();
+        let mut remaining_ids: Vec<_> = remaining["memoryItems"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|record| record["id"].as_str().unwrap())
+            .collect();
+        remaining_ids.sort_unstable();
+        assert_eq!(remaining_ids, ["memory-later", "memory-live"]);
+        assert_eq!(
+            export_records(&conn, "profile-2", "node-1").unwrap(),
+            foreign_before
+        );
+    }
+
+    #[test]
+    fn malformed_expired_memory_delete_fails_before_mutation() {
+        let conn = migrated_test_connection();
+        let mut expired = test_memory("memory-expired");
+        expired.expires_at_ms = Some(1);
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record: expired },
+        )
+        .unwrap();
+        let before = export_records(&conn, "profile-1", "node-1").unwrap();
+
+        for malformed in [
+            json!({
+                "kind": "memory.deleteExpiredMemoryItems",
+                "nowMs": 1.5,
+                "limit": 1
+            }),
+            json!({
+                "kind": "memory.deleteExpiredMemoryItems",
+                "nowMs": 1000,
+                "limit": "2"
+            }),
+            json!({
+                "kind": "memory.deleteExpiredMemoryItems",
+                "nowMs": 1000,
+                "limit": null
+            }),
+            json!({
+                "kind": "memory.deleteExpiredMemoryItems",
+                "now_ms": 1000,
+                "limit": 1
+            }),
+            json!({
+                "kind": "memory.deleteExpiredMemoryItems",
+                "nowMs": 1000,
+                "limit": 1,
+                "rawSql": "DELETE FROM aurora_memory_items"
+            }),
+        ] {
+            assert!(serde_json::from_value::<LocalDataRepositoryOperation>(malformed).is_err());
+            assert_eq!(
+                export_records(&conn, "profile-1", "node-1").unwrap(),
+                before
+            );
+        }
+
+        for operation in [
+            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                now_ms: -1,
+                limit: 1,
+            },
+            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                now_ms: MAX_SAFE_INTEGER + 1,
+                limit: 1,
+            },
+            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                now_ms: 1000,
+                limit: 0,
+            },
+            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                now_ms: 1000,
+                limit: MAX_SAFE_INTEGER + 1,
+            },
+        ] {
+            assert!(run_repository_operation(&conn, "profile-1", "node-1", operation).is_err());
+            assert_eq!(
+                export_records(&conn, "profile-1", "node-1").unwrap(),
+                before
+            );
+        }
     }
 
     fn test_connection() -> SqliteConnection {

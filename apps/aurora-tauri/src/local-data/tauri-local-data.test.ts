@@ -20,9 +20,12 @@ import { TauriSqliteLocalDataBackend } from './tauri-sqlite-backend.js'
 type RepositoryOperation =
   | { readonly kind: 'conversations.upsertConversation'; readonly record: ConversationRecord }
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
+  | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
   | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
+  | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
+  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly nowMs: number; readonly limit: number }
   | { readonly kind: 'memory.listMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly namespace?: string }
   | { readonly kind: 'localTools.upsertLocalToolState'; readonly record: LocalToolStateRecord }
   | { readonly kind: 'localTools.listLocalToolStates'; readonly profileId: string; readonly localNodeId: string }
@@ -90,6 +93,62 @@ describe('Tauri local data adapter', () => {
     })).rejects.toThrow(/rollback/u)
     await expect(session.memory.listMemoryItems()).resolves.toEqual([])
     await expect(session.memory.upsertMemoryItem(memoryFixture({ profileId: 'profile-2' }))).rejects.toMatchObject({ code: 'identity_mismatch' })
+  })
+
+  it('deletes conversations with scoped cascade counts and keeps foreign-profile rows', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture())
+    await session.conversations.appendMessage(messageFixture({ id: 'message-1', sequence: 0 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'message-2', sequence: 1 }))
+    bridge.seedForeignProfile({
+      conversations: [conversationFixture({ id: 'conversation-foreign', profileId: 'profile-2' })],
+      messages: [messageFixture({ id: 'message-foreign', conversationId: 'conversation-foreign' })]
+    })
+
+    await expect(session.conversations.deleteConversation('conversation-foreign')).resolves.toEqual({ deleted: false, deletedMessages: 0 })
+    await expect(session.conversations.deleteConversation('conversation-1')).resolves.toEqual({ deleted: true, deletedMessages: 2 })
+    await expect(session.conversations.listConversations()).resolves.toEqual([])
+    expect(bridge.foreignRecords()).toMatchObject({
+      conversations: [conversationFixture({ id: 'conversation-foreign', profileId: 'profile-2' })],
+      messages: [messageFixture({ id: 'message-foreign', conversationId: 'conversation-foreign' })]
+    })
+  })
+
+  it('deletes memory through scoped item and deterministic bounded expiry operations', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-live', expiresAtMs: null }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-b', expiresAtMs: 500 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-a', expiresAtMs: 500 }))
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-later', expiresAtMs: 900 }))
+    bridge.seedForeignProfile({ memory: [memoryFixture({ id: 'memory-foreign', profileId: 'profile-2', expiresAtMs: 1 })] })
+
+    await expect(session.memory.deleteMemoryItem('memory-foreign')).resolves.toEqual({ deleted: false })
+    await expect(session.memory.deleteMemoryItem('memory-live')).resolves.toEqual({ deleted: true })
+    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-later', expiresAtMs: 900 })])
+    expect(bridge.deletedMemoryIds).toEqual(['memory-live', 'memory-a', 'memory-b'])
+    expect(bridge.foreignRecords().memory).toEqual([memoryFixture({ id: 'memory-foreign', profileId: 'profile-2', expiresAtMs: 1 })])
+  })
+
+  it('rejects malformed expired-memory deletes before mutation', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
+    await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired', expiresAtMs: 1 }))
+    const before = await session.memory.listMemoryItems()
+
+    for (const [nowMs, limit] of [
+      [Number.NaN, 1],
+      [Number.POSITIVE_INFINITY, 1],
+      [-1, 1],
+      [1.5, 1],
+      [1000, 0],
+      [1000, Number.MAX_SAFE_INTEGER + 1]
+    ] as const) {
+      await expect(session.memory.deleteExpiredMemoryItems(nowMs, limit)).rejects.toMatchObject({ code: 'invalid_record' })
+      await expect(session.memory.listMemoryItems()).resolves.toEqual(before)
+    }
   })
 
   it('serializes operations, rejects nested transactions, and expires leaked transaction repositories', async () => {
@@ -220,6 +279,7 @@ class FakeTauriLocalDataBridge {
   private snapshot: FakeTauriLocalDataSnapshot | null = null
   private activeTxId: string | null = null
   private txCounter = 0
+  readonly deletedMemoryIds: string[] = []
 
   readonly invoke = async (command: string, args: Record<string, unknown>): Promise<unknown> => {
     this.calls.push({ command, args })
@@ -294,19 +354,64 @@ class FakeTauriLocalDataBridge {
       case 'conversations.appendMessage':
         upsert(this.messages, operation.record)
         return null
+      case 'conversations.deleteConversation': {
+        const conversation = this.conversations.find((record) =>
+          record.id === operation.conversationId
+          && record.profileId === this.profileId
+          && record.localNodeId === this.localNodeId
+        )
+        if (conversation === undefined) return { deleted: false, deletedMessages: 0 }
+        const beforeMessages = this.messages.length
+        this.conversations = this.conversations.filter((record) => record.id !== operation.conversationId)
+        this.messages = this.messages.filter((record) => record.conversationId !== operation.conversationId)
+        return { deleted: true, deletedMessages: beforeMessages - this.messages.length }
+      }
       case 'conversations.listConversations':
         this.assertScope(operation)
-        return this.conversations
+        return this.conversations.filter((record) => record.profileId === this.profileId && record.localNodeId === this.localNodeId)
       case 'conversations.listMessages':
         this.assertScope(operation)
+        if (!this.conversations.some((record) => record.id === operation.conversationId && record.profileId === this.profileId && record.localNodeId === this.localNodeId)) return []
         return this.messages.filter((record) => record.conversationId === operation.conversationId)
       case 'memory.upsertMemoryItem':
         this.assertScope(operation.record)
         upsert(this.memory, operation.record)
         return null
+      case 'memory.deleteMemoryItem': {
+        const before = this.memory.length
+        this.memory = this.memory.filter((record) =>
+          record.id !== operation.memoryItemId
+          || record.profileId !== this.profileId
+          || record.localNodeId !== this.localNodeId
+        )
+        if (this.memory.length !== before) this.deletedMemoryIds.push(operation.memoryItemId)
+        return { deleted: this.memory.length !== before }
+      }
+      case 'memory.deleteExpiredMemoryItems': {
+        const cutoffMs = requireDeleteNowMs(operation.nowMs)
+        const limit = requireDeleteLimit(operation.limit)
+        const expiredIds = this.memory
+          .filter((record) =>
+            record.profileId === this.profileId
+            && record.localNodeId === this.localNodeId
+            && record.expiresAtMs !== null
+            && record.expiresAtMs <= cutoffMs
+          )
+          .sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || a.id.localeCompare(b.id))
+          .slice(0, limit)
+          .map((record) => record.id)
+        const expiredIdSet = new Set(expiredIds)
+        this.memory = this.memory.filter((record) => !expiredIdSet.has(record.id))
+        this.deletedMemoryIds.push(...expiredIds)
+        return { deleted: expiredIds.length }
+      }
       case 'memory.listMemoryItems':
         this.assertScope(operation)
-        return this.memory.filter((record) => operation.namespace === undefined || record.namespace === operation.namespace)
+        return this.memory.filter((record) =>
+          record.profileId === this.profileId
+          && record.localNodeId === this.localNodeId
+          && (operation.namespace === undefined || record.namespace === operation.namespace)
+        )
       case 'localTools.upsertLocalToolState':
         this.assertScope(operation.record)
         upsert(this.tools, operation.record)
@@ -333,6 +438,23 @@ class FakeTauriLocalDataBridge {
 
   private assertScope(value: { profileId: string; localNodeId: string }): void {
     if (value.profileId !== this.profileId || value.localNodeId !== this.localNodeId) throw { code: 'identity_mismatch' }
+  }
+
+  seedForeignProfile(records: Partial<FakeTauriLocalDataSnapshot>): void {
+    this.conversations.push(...(records.conversations ?? []))
+    this.messages.push(...(records.messages ?? []))
+    this.memory.push(...(records.memory ?? []))
+  }
+
+  foreignRecords(): Pick<FakeTauriLocalDataSnapshot, 'conversations' | 'messages' | 'memory'> {
+    return {
+      conversations: this.conversations.filter((record) => record.profileId !== this.profileId || record.localNodeId !== this.localNodeId),
+      messages: this.messages.filter((message) => {
+        const conversation = this.conversations.find((record) => record.id === message.conversationId)
+        return conversation !== undefined && (conversation.profileId !== this.profileId || conversation.localNodeId !== this.localNodeId)
+      }),
+      memory: this.memory.filter((record) => record.profileId !== this.profileId || record.localNodeId !== this.localNodeId)
+    }
   }
 
   private assertTx(args: Record<string, unknown>): void {
@@ -382,6 +504,16 @@ function upsert<T extends { id?: string; grantId?: string; toolContractId?: stri
   const index = records.findIndex((record) => (record.id ?? record.grantId ?? record.toolContractId) === id)
   if (index === -1) records.push(next)
   else records[index] = next
+}
+
+function requireDeleteNowMs(nowMs: number): number {
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw { code: 'invalid_record', detail: { reason: 'delete_now_ms' } }
+  return nowMs
+}
+
+function requireDeleteLimit(limit: number): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw { code: 'invalid_record', detail: { reason: 'delete_limit' } }
+  return limit
 }
 
 function walk(directory: string): string[] {

@@ -9,6 +9,9 @@ import {
   parsePeerGrantMetadataRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
+  type DeleteConversationResult,
+  type DeleteExpiredMemoryItemsResult,
+  type DeleteRecordResult,
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalDataBackend,
@@ -29,9 +32,12 @@ export interface TauriSqliteLocalDataBackendOptions {
 type RepositoryOperation =
   | { readonly kind: 'conversations.upsertConversation'; readonly record: ConversationRecord }
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
+  | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
   | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
+  | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
+  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly nowMs: number; readonly limit: number }
   | { readonly kind: 'memory.listMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly namespace?: string }
   | { readonly kind: 'localTools.upsertLocalToolState'; readonly record: LocalToolStateRecord }
   | { readonly kind: 'localTools.listLocalToolStates'; readonly profileId: string; readonly localNodeId: string }
@@ -217,6 +223,9 @@ class TauriConversationRepository {
   async appendMessage(record: ConversationMessageRecord): Promise<void> {
     await this.session.repositoryOperation({ kind: 'conversations.appendMessage', record: parseConversationMessageRecord(record) })
   }
+  async deleteConversation(conversationId: string): Promise<DeleteConversationResult> {
+    return await this.session.repositoryOperation<DeleteConversationResult>({ kind: 'conversations.deleteConversation', conversationId })
+  }
   async listConversations(): Promise<ConversationRecord[]> {
     return (await this.session.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations', profileId: this.session.profileId, localNodeId: this.session.localNodeId })).map(parseConversationRecord)
   }
@@ -229,6 +238,12 @@ class TauriMemoryRepository {
   constructor(private readonly session: TauriSqliteLocalDataSession) {}
   async upsertMemoryItem(record: LightweightMemoryRecord): Promise<void> {
     await this.session.repositoryOperation({ kind: 'memory.upsertMemoryItem', record: parseLightweightMemoryRecord(record) })
+  }
+  async deleteMemoryItem(memoryItemId: string): Promise<DeleteRecordResult> {
+    return await this.session.repositoryOperation<DeleteRecordResult>({ kind: 'memory.deleteMemoryItem', memoryItemId })
+  }
+  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+    return await this.session.repositoryOperation<DeleteExpiredMemoryItemsResult>({ kind: 'memory.deleteExpiredMemoryItems', nowMs, limit })
   }
   async listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]> {
     return (await this.session.repositoryOperation<LightweightMemoryRecord[]>(namespace === undefined
