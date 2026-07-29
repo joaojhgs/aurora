@@ -516,12 +516,6 @@ pub(crate) async fn aurora_local_data_open(
     state: State<'_, LocalDataCommandState>,
     request: LocalDataOpenRequest,
 ) -> Result<Value, AuroraCommandError> {
-    let db_path = local_data_db_path(&app)?;
-    let conn = SqliteConnection::open(db_path)?;
-    apply_generated_migrations(&conn)?;
-    ensure_identity(&conn, &request.local_node_id)?;
-    let schema_version = schema_version(&conn)?;
-
     let mut state = state
         .inner
         .lock()
@@ -531,6 +525,11 @@ pub(crate) async fn aurora_local_data_open(
             return Err(local_data_error("identity_mismatch"));
         }
     }
+    let schema_version = open_local_data_at_path(
+        local_data_db_path_without_create(&app)?,
+        &request.profile_id,
+        &request.local_node_id,
+    )?;
     state.profile_id = Some(request.profile_id.clone());
     state.local_node_id = Some(request.local_node_id.clone());
     state.schema_version = Some(schema_version);
@@ -1177,6 +1176,77 @@ fn validate_existing_ledger(conn: &SqliteConnection) -> Result<(), AuroraCommand
     Ok(())
 }
 
+fn open_local_data_at_path(
+    db_path: PathBuf,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<u32, AuroraCommandError> {
+    validate_id(profile_id, "profileId")?;
+    validate_id(local_node_id, "localNodeId")?;
+    if db_path.exists()
+        && db_path
+            .metadata()
+            .map(|metadata| metadata.len())
+            .unwrap_or(0)
+            > 0
+    {
+        let conn = SqliteConnection::open(db_path.clone())?;
+        ensure_existing_identity_before_migration(&conn, local_node_id)?;
+    }
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| local_data_error(error.to_string()))?;
+    }
+    let conn = SqliteConnection::open(db_path)?;
+    apply_generated_migrations(&conn)?;
+    ensure_identity(&conn, local_node_id)?;
+    schema_version(&conn)
+}
+
+fn ensure_existing_identity_before_migration(
+    conn: &SqliteConnection,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    let object_count = sqlite_object_count(conn)?;
+    if object_count == 0 && schema_version(conn)? == 0 {
+        return Ok(());
+    }
+    if !table_exists(conn, "aurora_database_identity")? {
+        return Err(local_data_error("identity_missing"));
+    }
+    let rows = conn.query(
+        "SELECT singleton_id, local_node_id FROM aurora_database_identity WHERE singleton_id = 1",
+        &[],
+    )?;
+    if rows.len() != 1 {
+        return Err(local_data_error("identity_missing"));
+    }
+    if row_string(&rows[0], "local_node_id")? != local_node_id {
+        return Err(local_data_error("identity_mismatch"));
+    }
+    Ok(())
+}
+
+fn table_exists(conn: &SqliteConnection, table: &str) -> Result<bool, AuroraCommandError> {
+    Ok(!conn
+        .query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+            &[json!(table)],
+        )?
+        .is_empty())
+}
+
+fn sqlite_object_count(conn: &SqliteConnection) -> Result<i64, AuroraCommandError> {
+    let rows = conn.query(
+        "SELECT COUNT(*) AS object_count FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'",
+        &[],
+    )?;
+    row_i64(
+        rows.first()
+            .ok_or_else(|| local_data_error("unable to inspect local data database"))?,
+        "object_count",
+    )
+}
+
 fn ensure_identity(conn: &SqliteConnection, local_node_id: &str) -> Result<(), AuroraCommandError> {
     let rows = conn.query(
         "SELECT singleton_id, local_node_id FROM aurora_database_identity WHERE singleton_id = 1",
@@ -1206,11 +1276,18 @@ fn schema_version(conn: &SqliteConnection) -> Result<u32, AuroraCommandError> {
 }
 
 fn local_data_db_path(app: &AppHandle) -> Result<PathBuf, AuroraCommandError> {
+    let path = local_data_db_path_without_create(app)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| local_data_error(error.to_string()))?;
+    }
+    Ok(path)
+}
+
+fn local_data_db_path_without_create(app: &AppHandle) -> Result<PathBuf, AuroraCommandError> {
     let base = app
         .path()
         .app_config_dir()
         .map_err(|error| local_data_error(error.to_string()))?;
-    std::fs::create_dir_all(&base).map_err(|error| local_data_error(error.to_string()))?;
     Ok(base.join(generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME))
 }
 
@@ -1703,15 +1780,23 @@ fn validate_envelope_key_id(
 ) -> Result<(), AuroraCommandError> {
     validate_optional_text(Some(value), 256, context)?;
     let prefix = format!(
-        "aurora.local-data-envelope.v1.{profile_id}.{local_node_id}.local-structured-data.k"
+        "aurora.local-data-envelope.v1.{}.{}.local-structured-data.k",
+        sha256_hex(profile_id.as_bytes()),
+        sha256_hex(local_node_id.as_bytes())
     );
     let Some(version) = value.strip_prefix(&prefix) else {
         return Err(local_data_error(format!("{context} keyId scope mismatch")));
     };
-    if version.is_empty() || !version.chars().all(|ch| ch.is_ascii_digit()) {
+    if version.is_empty() || !version.chars().all(|ch| ch.is_ascii_digit()) || version == "0" {
         return Err(local_data_error(format!("{context} keyId version invalid")));
     }
     Ok(())
+}
+
+fn sha256_hex(input: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input);
+    format!("{:x}", hasher.finalize())
 }
 
 fn validate_json_object(value: &Value, context: &str) -> Result<(), AuroraCommandError> {
@@ -2284,14 +2369,188 @@ mod tests {
         assert!(state.active_transaction.is_none());
     }
 
+    #[test]
+    fn open_rejects_malformed_identity_without_creating_files() {
+        let (dir, path) = test_db_path("malformed-open");
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(!dir.exists());
+
+        let error = open_local_data_at_path(path.clone(), "profile with spaces", "node-1")
+            .expect_err("malformed profile must fail before path creation");
+        assert!(format!("{error:?}").contains("profileId invalid"));
+        assert!(!dir.exists());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn open_rejects_identity_missing_database_without_migration_or_byte_mutation() {
+        let (_dir, path) = test_db_path("identity-missing-open");
+        {
+            let conn = SqliteConnection::open(path.clone()).unwrap();
+            conn.exec("CREATE TABLE unrelated_existing_data (id TEXT PRIMARY KEY);")
+                .unwrap();
+            conn.execute(
+                "INSERT INTO unrelated_existing_data (id) VALUES (?)",
+                &[json!("record-1")],
+            )
+            .unwrap();
+        }
+        let before = std::fs::read(&path).unwrap();
+
+        let error = open_local_data_at_path(path.clone(), "profile-1", "node-1")
+            .expect_err("nonempty database without identity must fail before migration");
+        assert!(format!("{error:?}").contains("identity_missing"));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+
+        let conn = SqliteConnection::open(path).unwrap();
+        assert_eq!(schema_version(&conn).unwrap(), 0);
+        assert!(!table_exists(&conn, "aurora_schema_migrations").unwrap());
+    }
+
+    #[test]
+    fn open_rejects_wrong_identity_before_migration_without_advancing_database() {
+        let (_dir, path) = test_db_path("wrong-identity-open");
+        {
+            let conn = SqliteConnection::open(path.clone()).unwrap();
+            let first = &generated::local_data_migrations::LOCAL_DATA_MIGRATIONS[0];
+            conn.exec(first.sql).unwrap();
+            ensure_identity(&conn, "node-1").unwrap();
+            conn.exec(first.ledger_sql).unwrap();
+        }
+        let before_bytes = std::fs::read(&path).unwrap();
+        let before = db_version_and_ledger_count(&path);
+
+        let error = open_local_data_at_path(path.clone(), "profile-1", "node-2")
+            .expect_err("wrong local node must fail before later migrations");
+        assert!(format!("{error:?}").contains("identity_mismatch"));
+        assert_eq!(std::fs::read(&path).unwrap(), before_bytes);
+        assert_eq!(db_version_and_ledger_count(&path), before);
+    }
+
+    #[test]
+    fn open_rejects_wrong_identity_on_latest_database_without_byte_mutation() {
+        let (_dir, path) = test_db_path("wrong-latest-open");
+        open_local_data_at_path(path.clone(), "profile-1", "node-1").unwrap();
+        let before_bytes = std::fs::read(&path).unwrap();
+        let before = db_version_and_ledger_count(&path);
+
+        let error = open_local_data_at_path(path.clone(), "profile-1", "node-2")
+            .expect_err("wrong local node must not mutate latest database");
+        assert!(format!("{error:?}").contains("identity_mismatch"));
+        assert_eq!(std::fs::read(&path).unwrap(), before_bytes);
+        assert_eq!(db_version_and_ledger_count(&path), before);
+    }
+
+    #[test]
+    fn hashed_native_envelope_key_handles_are_the_only_accepted_scope() {
+        let key_id = canonical_test_key_id("profile-1", "node-1", 1);
+        validate_envelope_key_id(&key_id, "profile-1", "node-1", "memory.payload").unwrap();
+
+        for bad_key_id in [
+            "aurora.local-data-envelope.v1.profile-1.node-1.local-structured-data.k1".to_string(),
+            canonical_test_key_id("profile-2", "node-1", 1),
+            canonical_test_key_id("profile-1", "node-2", 1),
+            format!(
+                "aurora.local-data-envelope.v1.{}.{}.wrong-purpose.k1",
+                sha256_hex("profile-1".as_bytes()),
+                sha256_hex("node-1".as_bytes())
+            ),
+            format!(
+                "aurora.local-data-envelope.v1.{}.{}.local-structured-data.k0",
+                sha256_hex("profile-1".as_bytes()),
+                sha256_hex("node-1".as_bytes())
+            ),
+        ] {
+            assert!(
+                validate_envelope_key_id(&bad_key_id, "profile-1", "node-1", "memory.payload")
+                    .is_err(),
+                "{bad_key_id} should fail scope validation"
+            );
+        }
+    }
+
+    #[test]
+    fn native_hashed_envelopes_are_accepted_by_repository_and_import_boundaries() {
+        let conn = test_connection();
+        apply_generated_migrations(&conn).unwrap();
+        ensure_identity(&conn, "node-1").unwrap();
+
+        let memory = test_memory("memory-1");
+        assert_eq!(
+            memory.payload_envelope["keyId"],
+            json!(canonical_test_key_id("profile-1", "node-1", 1))
+        );
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record: memory },
+        )
+        .unwrap();
+        assert_eq!(
+            export_records(&conn, "profile-1", "node-1").unwrap()["memoryItems"][0]["id"],
+            json!("memory-1")
+        );
+
+        let document = valid_import_document_value();
+        let parsed = validate_import_document(document, "profile-1", "node-1", 3).unwrap();
+        let import_result = import_records(&conn, "profile-1", "node-1", &parsed).unwrap();
+        assert_eq!(import_result["imported"], json!(true));
+    }
+
+    #[test]
+    fn import_rejects_native_envelopes_for_wrong_profile_node_or_key_format() {
+        for key_id in [
+            canonical_test_key_id("profile-2", "node-1", 1),
+            canonical_test_key_id("profile-1", "node-2", 1),
+            "aurora.local-data-envelope.v1.profile-1.node-1.local-structured-data.k1".to_string(),
+        ] {
+            let mut document = valid_import_document_value();
+            document["records"]["memoryItems"][0]["payloadEnvelope"]["keyId"] = json!(key_id);
+            refresh_counts_and_hashes(&mut document);
+            assert!(validate_import_document(document, "profile-1", "node-1", 3).is_err());
+        }
+    }
+
     fn test_connection() -> SqliteConnection {
-        let path = std::env::temp_dir().join(format!(
-            "aurora-local-data-native-test-{}-{}.db",
+        let (_, path) = test_db_path("connection");
+        let _ = std::fs::remove_file(&path);
+        SqliteConnection::open(path).unwrap()
+    }
+
+    fn test_db_path(label: &str) -> (PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "aurora-local-data-native-test-{}-{}-{label}",
             std::process::id(),
             TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst)
         ));
-        let _ = std::fs::remove_file(&path);
-        SqliteConnection::open(path).unwrap()
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME);
+        (dir, path)
+    }
+
+    fn db_version_and_ledger_count(path: &PathBuf) -> (u32, i64) {
+        let conn = SqliteConnection::open(path.clone()).unwrap();
+        let rows = conn
+            .query(
+                "SELECT COUNT(*) AS ledger_count FROM aurora_schema_migrations",
+                &[],
+            )
+            .unwrap();
+        (
+            schema_version(&conn).unwrap(),
+            row_i64(&rows[0], "ledger_count").unwrap(),
+        )
+    }
+
+    fn canonical_test_key_id(profile_id: &str, local_node_id: &str, version: u32) -> String {
+        format!(
+            "aurora.local-data-envelope.v1.{}.{}.local-structured-data.k{}",
+            sha256_hex(profile_id.as_bytes()),
+            sha256_hex(local_node_id.as_bytes()),
+            version
+        )
     }
 
     fn valid_import_document_value() -> Value {
@@ -2424,7 +2683,7 @@ mod tests {
         json!({
             "version": 1,
             "algorithm": "AES-GCM-256",
-            "keyId": "aurora.local-data-envelope.v1.profile-1.node-1.local-structured-data.k1",
+            "keyId": canonical_test_key_id("profile-1", "node-1", 1),
             "nonceB64Url": "MTIzNDU2Nzg5MDEy",
             "ciphertextAndTagB64Url": "Y2lwaGVydGV4dC1hbmQtdGFn",
             "createdAtMs": 9

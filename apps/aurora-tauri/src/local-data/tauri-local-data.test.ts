@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -343,11 +344,19 @@ class FakeTauriLocalDataBridge {
 const envelopeFixture = {
   version: 1,
   algorithm: 'AES-GCM-256',
-  keyId: 'aurora.local-data-envelope.v1.profile.node.local-structured-data.k1',
+  keyId: localDataEnvelopeKeyId('profile-1', 'node-1', 1),
   nonceB64Url: 'MTIzNDU2Nzg5MDEy',
   ciphertextAndTagB64Url: 'Y2lwaGVydGV4dC1hbmQtdGFn',
   createdAtMs: 1000
 } as const
+
+function localDataEnvelopeKeyId(profileId: string, localNodeId: string, version: number): string {
+  return `aurora.local-data-envelope.v1.${sha256Hex(profileId)}.${sha256Hex(localNodeId)}.local-structured-data.k${version}`
+}
+
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
 
 function conversationFixture(overrides: Partial<ConversationRecord> = {}): ConversationRecord {
   return { id: 'conversation-1', profileId: 'profile-1', localNodeId: 'node-1', titleEnvelope: null, createdAtMs: 1, updatedAtMs: 2, archivedAtMs: null, ...overrides }
