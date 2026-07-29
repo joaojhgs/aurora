@@ -205,14 +205,14 @@ async function openDatabase(request: Extract<BrowserSqliteWorkerRequest, { comma
     openedDb = db
     const initialUserVersion = getUserVersion(db)
     const hadIdentityTable = tableExists(db, 'aurora_database_identity')
-    assertExistingSqliteProfileOwnership(db, request.profileId, request.localNodeId)
+    assertExistingSqliteLocalNodeOwnership(db, request.localNodeId)
     workerState.db = db
     workerState.profileId = request.profileId
     workerState.localNodeId = request.localNodeId
     exec(db, 'PRAGMA foreign_keys = ON;')
     applyMigrations(db, localDataMigrationManifest, request.migrationSql)
     ensureDatabaseIdentity(db, request.localNodeId, !hadIdentityTable && initialUserVersion === 0)
-    assertDatabaseProfileOwnership(db, request.profileId, request.localNodeId)
+    assertDatabaseLocalNodeOwnership(db, request.localNodeId)
     validateForeignKeys(db)
     workerState.schemaVersion = getUserVersion(db)
     workerState.migrationState = 'idle'
@@ -459,7 +459,7 @@ function importV1(workerState: WorkerState, document: LocalDataExportV1): unknow
   if (parsed.schemaVersion > CURRENT_SCHEMA_VERSION) {
     throw new LocalDataError('invalid_record', 'Local data export schema is newer than the open session', { reason: 'future_schema' })
   }
-  assertDatabaseProfileOwnership(workerState.db, workerState.profileId, workerState.localNodeId)
+  assertDatabaseLocalNodeOwnership(workerState.db, workerState.localNodeId)
   exec(workerState.db, 'BEGIN IMMEDIATE;')
   try {
     run(workerState.db, 'DELETE FROM aurora_local_audit WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
@@ -541,22 +541,22 @@ function assertRecordIdentity(workerState: WorkerState, profileId: string, local
   }
 }
 
-function assertDatabaseProfileOwnership(db: SqliteDatabase | null, profileId: string, localNodeId: string): void {
+function assertDatabaseLocalNodeOwnership(db: SqliteDatabase | null, localNodeId: string): void {
   const checks: Array<{ readonly source: string; readonly sql: string }> = [
-    { source: 'conversations', sql: 'SELECT id FROM aurora_conversations WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
-    { source: 'memory', sql: 'SELECT id FROM aurora_memory_items WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
-    { source: 'local_tools', sql: 'SELECT tool_contract_id FROM aurora_local_tool_state WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
-    { source: 'peer_grants', sql: 'SELECT grant_id FROM aurora_peer_grant_metadata WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' },
-    { source: 'local_audit', sql: 'SELECT id FROM aurora_local_audit WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;' }
+    { source: 'conversations', sql: 'SELECT id FROM aurora_conversations WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
+    { source: 'memory', sql: 'SELECT id FROM aurora_memory_items WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
+    { source: 'local_tools', sql: 'SELECT tool_contract_id FROM aurora_local_tool_state WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
+    { source: 'peer_grants', sql: 'SELECT grant_id FROM aurora_peer_grant_metadata WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
+    { source: 'local_audit', sql: 'SELECT id FROM aurora_local_audit WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' }
   ]
   for (const check of checks) {
-    if (selectObjects<Record<string, unknown>>(db, check.sql, [profileId, localNodeId]).length > 0) {
-      throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
+    if (selectObjects<Record<string, unknown>>(db, check.sql, [localNodeId]).length > 0) {
+      throw localNodeOwnerMismatch()
     }
   }
 }
 
-export function assertExistingSqliteProfileOwnership(db: SqliteDatabase, profileId: string, localNodeId: string): void {
+export function assertExistingSqliteLocalNodeOwnership(db: SqliteDatabase, localNodeId: string): void {
   const checks: Array<{ readonly tableName: string; readonly idColumn: string }> = [
     { tableName: 'aurora_conversations', idColumn: 'id' },
     { tableName: 'aurora_memory_items', idColumn: 'id' },
@@ -568,9 +568,8 @@ export function assertExistingSqliteProfileOwnership(db: SqliteDatabase, profile
     if (!tableExists(db, check.tableName) || !tableHasRows(db, check.tableName)) continue
     const hasProfileId = columnExists(db, check.tableName, 'profile_id')
     const hasLocalNodeId = columnExists(db, check.tableName, 'local_node_id')
-    if (hasProfileId && hasMismatchedOwnershipColumn(db, check.tableName, 'profile_id', profileId)) throw profileOwnerMismatch()
-    if (hasLocalNodeId && hasMismatchedOwnershipColumn(db, check.tableName, 'local_node_id', localNodeId)) throw profileOwnerMismatch()
     if (!hasProfileId || !hasLocalNodeId) throw ambiguousProfileOwnership()
+    if (hasMismatchedLocalNodeColumn(db, check.tableName, localNodeId)) throw localNodeOwnerMismatch()
   }
 }
 
@@ -582,8 +581,8 @@ function tableHasRows(db: SqliteDatabase, tableName: string): boolean {
   return selectObjects<Record<string, unknown>>(db, `SELECT 1 FROM ${quoteIdentifier(tableName)} LIMIT 1;`).length > 0
 }
 
-function hasMismatchedOwnershipColumn(db: SqliteDatabase, tableName: string, columnName: 'profile_id' | 'local_node_id', expectedValue: string): boolean {
-  const column = quoteIdentifier(columnName)
+function hasMismatchedLocalNodeColumn(db: SqliteDatabase, tableName: string, expectedValue: string): boolean {
+  const column = quoteIdentifier('local_node_id')
   return selectObjects<Record<string, unknown>>(
     db,
     `SELECT 1 FROM ${quoteIdentifier(tableName)} WHERE ${column} IS NULL OR ${column} <> ? LIMIT 1;`,
@@ -591,12 +590,12 @@ function hasMismatchedOwnershipColumn(db: SqliteDatabase, tableName: string, col
   ).length > 0
 }
 
-function profileOwnerMismatch(): LocalDataError {
-  return new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
+function localNodeOwnerMismatch(): LocalDataError {
+  return new LocalDataError('identity_mismatch', 'Local data database local node does not match the open session', { reason: 'local_node_owner_mismatch' })
 }
 
 function ambiguousProfileOwnership(): LocalDataError {
-  return new LocalDataError('identity_mismatch', 'Local data database profile ownership is incomplete', { reason: 'profile_owner_ambiguous' })
+  return new LocalDataError('identity_mismatch', 'Local data database local node ownership is incomplete', { reason: 'local_node_owner_ambiguous' })
 }
 
 function requireIdentity(value: string | null): string {

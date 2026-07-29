@@ -167,7 +167,7 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     })
   })
 
-  it('rejects future stored versions, profile mismatch on nonempty data, and partial upgrades without mutation', async () => {
+  it('rejects future stored versions, different-node data, and partial upgrades without mutation', async () => {
     const nonempty = {
       ...storedDocument('profile-1', 'node-1'),
       records: { ...emptyRecords(), memoryItems: [memoryFixture()] }
@@ -179,8 +179,12 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
       code: 'invalid_record',
       metadata: { reason: 'future_schema' }
     })
-    await expect(openSession(new MapBrowserLocalDataDocumentStore(nonempty), undefined, 'owner-2', 'profile-2')).rejects.toMatchObject({
-      code: 'identity_mismatch'
+    await expect(openSession(new MapBrowserLocalDataDocumentStore({
+      ...nonempty,
+      records: { ...emptyRecords(), memoryItems: [memoryFixture({ localNodeId: 'node-2' })] }
+    }), undefined, 'owner-2')).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'local_node_owner_mismatch' }
     })
     await expect(openSession(new MapBrowserLocalDataDocumentStore({
       ...nonempty,
@@ -190,6 +194,41 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
       code: 'migration_integrity',
       metadata: { reason: 'partial_upgrade_requires_reset' }
     })
+  })
+
+  it('shares one physical document across profiles for the same local node while preserving scoped records', async () => {
+    const leases = new MapBrowserStorageLeaseStore()
+    const store = new MapBrowserLocalDataDocumentStore()
+    const first = await openSession(store, leases, 'owner-1', 'profile-1', 'node-1')
+    await first.conversations.upsertConversation(conversationFixture({ id: 'conversation-profile-1' }))
+    await first.conversations.appendMessage(messageFixture({ id: 'message-profile-1', conversationId: 'conversation-profile-1' }))
+    await first.memory.upsertMemoryItem(memoryFixture({ id: 'memory-profile-1' }))
+    await first.close()
+
+    const second = await openSession(store, leases, 'owner-2', 'profile-2', 'node-1')
+    await expect(second.memory.listMemoryItems()).resolves.toEqual([])
+    await second.conversations.upsertConversation(conversationFixture({
+      id: 'conversation-profile-2',
+      profileId: 'profile-2'
+    }))
+    await second.conversations.appendMessage(messageFixture({
+      id: 'message-profile-2',
+      conversationId: 'conversation-profile-2'
+    }))
+    await second.memory.upsertMemoryItem(memoryFixture({
+      id: 'memory-profile-2',
+      profileId: 'profile-2'
+    }))
+    const exportedSecond = await second.exportV1()
+    expect(exportedSecond.recordCounts).toMatchObject({ conversations: 1, messages: 1, memoryItems: 1 })
+    await second.clear()
+    await expect(second.memory.listMemoryItems()).resolves.toEqual([])
+    await second.close()
+
+    const reopenedFirst = await openSession(store, leases, 'owner-3', 'profile-1', 'node-1')
+    await expect(reopenedFirst.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-profile-1' })])
+    await expect(reopenedFirst.conversations.listMessages('conversation-profile-2')).resolves.toEqual([])
+    await reopenedFirst.close()
   })
 
   it('contends same stable identity across different profiles and isolates distinct identities', async () => {

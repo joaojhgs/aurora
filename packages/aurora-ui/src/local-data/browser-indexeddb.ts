@@ -203,9 +203,6 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
     if (existing.localNodeId !== localNodeId) {
       throw new LocalDataError('identity_mismatch', 'Browser local data identity does not match the open session')
     }
-    if (hasAnyRecords(existing.records) && existing.profileId !== profileId) {
-      throw new LocalDataError('identity_mismatch', 'Browser local data profile does not match stored local data')
-    }
     if (existing.schemaVersion > localDataMigrationManifest.latestVersion) {
       throw new LocalDataError('invalid_record', 'Browser local data was created by a newer Aurora version', { reason: 'future_schema' })
     }
@@ -224,7 +221,7 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
       schemaVersion: localDataMigrationManifest.latestVersion,
       records: cloneLocalDataCollections(existing.records)
     }
-    validateImportedCollections(current.records, profileId, localNodeId)
+    validateStoredCollectionsForLocalNode(current.records, localNodeId)
     if (current.profileId !== existing.profileId || current.schemaVersion !== existing.schemaVersion) await store.save(current)
     return current
   }
@@ -370,7 +367,7 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
         profileId: this.profileId,
         localNodeId: this.localNodeId,
         exportedAtMs: this.nowMs(),
-        records: this.collections
+        records: scopedCollections(this.collections, this.profileId, this.localNodeId)
       })
     })
   }
@@ -388,7 +385,7 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
       }
       validateImportedCollections(parsed.records, this.profileId, this.localNodeId)
       const snapshot = cloneLocalDataCollections(this.collections)
-      this.collections = cloneLocalDataCollections(parsed.records)
+      this.collections = replaceScopedCollections(this.collections, parsed.records, this.profileId, this.localNodeId)
       try {
         await this.persist()
       } catch (error) {
@@ -407,9 +404,8 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
     await this.enqueueOperation(async () => {
       this.assertOpen()
       this.writerLock.assertWritable()
-      this.collections = emptyLocalDataCollections()
-      await this.documentStore.clear()
-      await this.documentStore.save(createStoredDocument(this.profileId, this.localNodeId))
+      this.collections = replaceScopedCollections(this.collections, emptyLocalDataCollections(), this.profileId, this.localNodeId)
+      await this.persist()
     })
   }
 
@@ -521,7 +517,11 @@ export class BrowserConversationRepository {
     await this.session.withRepositoryAccess(this.access, true, () => {
       const record = parseConversationMessageRecord(input)
       assertSafeLocalDataIds([record.id, record.conversationId], 'record.conversation_message')
-      if (!this.session.mutable.conversations.some((conversation) => conversation.id === record.conversationId)) {
+      if (!this.session.mutable.conversations.some((conversation) =>
+        conversation.id === record.conversationId
+        && conversation.profileId === this.session.profileId
+        && conversation.localNodeId === this.session.localNodeId
+      )) {
         throw new LocalDataError('invalid_record', 'Message conversation does not exist')
       }
       if (this.session.mutable.messages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence && message.id !== record.id)) {
@@ -532,12 +532,16 @@ export class BrowserConversationRepository {
   }
 
   async listConversations(): Promise<ConversationRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.conversations).sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId))
+      .sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
   }
 
   async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.messages.filter((message) => message.conversationId === conversationId))
-      .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id)))
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      if (!this.session.mutable.conversations.some((conversation) => conversation.id === conversationId && conversation.profileId === this.session.profileId && conversation.localNodeId === this.session.localNodeId)) return []
+      return clone(this.session.mutable.messages.filter((message) => message.conversationId === conversationId))
+        .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
+    })
   }
 }
 
@@ -557,7 +561,11 @@ export class BrowserLightweightMemoryRepository {
   }
 
   async listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.memoryItems.filter((record) => namespace === undefined || record.namespace === namespace))
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.memoryItems.filter((record) =>
+      record.profileId === this.session.profileId
+      && record.localNodeId === this.session.localNodeId
+      && (namespace === undefined || record.namespace === namespace)
+    ))
       .sort((a, b) => compareUtf8(a.namespace, b.namespace) || compareUtf8(a.id, b.id)))
   }
 }
@@ -578,7 +586,9 @@ export class BrowserLocalToolStateRepository {
   }
 
   async listLocalToolStates(): Promise<LocalToolStateRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.localToolStates).sort((a, b) => compareUtf8(a.toolContractId, b.toolContractId)))
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.localToolStates.filter((record) =>
+      record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId
+    )).sort((a, b) => compareUtf8(a.toolContractId, b.toolContractId)))
   }
 }
 
@@ -598,7 +608,9 @@ export class BrowserPeerGrantMetadataRepository {
   }
 
   async listPeerGrants(): Promise<PeerGrantMetadataRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.peerGrantMetadata).sort((a, b) => compareUtf8(a.claimantPeerId, b.claimantPeerId) || compareUtf8(a.tokenId, b.tokenId)))
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.peerGrantMetadata.filter((record) =>
+      record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId
+    )).sort((a, b) => compareUtf8(a.claimantPeerId, b.claimantPeerId) || compareUtf8(a.tokenId, b.tokenId)))
   }
 }
 
@@ -621,7 +633,9 @@ export class BrowserLocalAuditRepository {
   }
 
   async listAudit(): Promise<LocalAuditRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.localAudit).sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id)))
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.localAudit.filter((record) =>
+      record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId
+    )).sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id)))
   }
 }
 
@@ -729,6 +743,47 @@ function validateImportedCollections(records: LocalDataRecordCollections, profil
   }
 }
 
+function validateStoredCollectionsForLocalNode(records: LocalDataRecordCollections, localNodeId: string): void {
+  validateCollectionShape(records)
+  for (const record of records.conversations) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
+  for (const record of records.memoryItems) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
+  for (const record of records.localToolStates) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
+  for (const record of records.peerGrantMetadata) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
+  for (const record of records.localAudit) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
+}
+
+function validateCollectionShape(records: LocalDataRecordCollections): void {
+  const conversationIds = requireUnique(records.conversations.map((record) => record.id), 'duplicate_conversation_id')
+  requireUnique(records.messages.map((record) => record.id), 'duplicate_message_id')
+  requireUnique(records.memoryItems.map((record) => record.id), 'duplicate_memory_id')
+  requireUnique(records.localToolStates.map((record) => `${record.profileId}\u0000${record.localNodeId}\u0000${record.toolContractId}`), 'duplicate_tool_state')
+  requireUnique(records.peerGrantMetadata.map((record) => record.grantId), 'duplicate_grant_id')
+  requireUnique(records.localAudit.map((record) => record.id), 'duplicate_audit_id')
+  for (const record of records.conversations) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId], 'record.conversation')
+  for (const record of records.messages) assertSafeLocalDataIds([record.id, record.conversationId], 'record.conversation_message')
+  for (const record of records.memoryItems) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.namespace], 'record.lightweight_memory')
+  for (const record of records.localToolStates) assertSafeLocalDataIds([record.profileId, record.localNodeId, record.toolContractId], 'record.local_tool_state')
+  for (const record of records.peerGrantMetadata) assertSafeLocalDataIds([record.grantId, record.profileId, record.localNodeId, record.claimantPeerId, record.tokenId], 'record.peer_grant_metadata')
+  for (const record of records.localAudit) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.action, record.decision, record.resultStatus], 'record.local_audit')
+  const messageSequences = new Set<string>()
+  for (const record of records.messages) {
+    if (!conversationIds.has(record.conversationId)) {
+      throw new LocalDataError('invalid_record', 'Imported message conversation does not exist', { reason: 'message_conversation_missing' })
+    }
+    const sequenceKey = `${record.conversationId}\u0000${record.sequence}`
+    if (messageSequences.has(sequenceKey)) {
+      throw new LocalDataError('invalid_record', 'Imported message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
+    }
+    messageSequences.add(sequenceKey)
+  }
+}
+
+function requireStoredRecordLocalNode(recordLocalNodeId: string, localNodeId: string): void {
+  if (recordLocalNodeId !== localNodeId) {
+    throw new LocalDataError('identity_mismatch', 'Browser local data local node does not match stored local data', { reason: 'local_node_owner_mismatch' })
+  }
+}
+
 function requireRecordIdentity(recordProfileId: string, recordLocalNodeId: string, profileId: string, localNodeId: string): void {
   if (recordProfileId !== profileId || recordLocalNodeId !== localNodeId) {
     throw new LocalDataError('identity_mismatch', 'Imported local data record identity does not match the open session')
@@ -763,6 +818,58 @@ function hasAnyRecords(records: LocalDataRecordCollections): boolean {
     + records.localToolStates.length
     + records.peerGrantMetadata.length
     + records.localAudit.length > 0
+}
+
+function scopedCollections(records: LocalDataRecordCollections, profileId: string, localNodeId: string): LocalDataRecordCollections {
+  const conversations = scopedConversations(records, profileId, localNodeId)
+  const conversationIds = new Set(conversations.map((record) => record.id))
+  return {
+    conversations,
+    messages: records.messages.filter((record) => conversationIds.has(record.conversationId)),
+    memoryItems: records.memoryItems.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId),
+    localToolStates: records.localToolStates.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId),
+    peerGrantMetadata: records.peerGrantMetadata.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId),
+    localAudit: records.localAudit.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId)
+  }
+}
+
+function scopedConversations(records: LocalDataRecordCollections, profileId: string, localNodeId: string): ConversationRecord[] {
+  return records.conversations.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId)
+}
+
+function replaceScopedCollections(
+  current: LocalDataRecordCollections,
+  replacement: LocalDataRecordCollections,
+  profileId: string,
+  localNodeId: string
+): MutableLocalDataCollections {
+  const scopedConversationIds = new Set(scopedConversations(current, profileId, localNodeId).map((record) => record.id))
+  return cloneLocalDataCollections({
+    conversations: [
+      ...current.conversations.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
+      ...replacement.conversations
+    ],
+    messages: [
+      ...current.messages.filter((record) => !scopedConversationIds.has(record.conversationId)),
+      ...replacement.messages
+    ],
+    memoryItems: [
+      ...current.memoryItems.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
+      ...replacement.memoryItems
+    ],
+    localToolStates: [
+      ...current.localToolStates.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
+      ...replacement.localToolStates
+    ],
+    peerGrantMetadata: [
+      ...current.peerGrantMetadata.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
+      ...replacement.peerGrantMetadata
+    ],
+    localAudit: [
+      ...current.localAudit.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
+      ...replacement.localAudit
+    ]
+  })
 }
 
 function emptyLocalDataCollections(): MutableLocalDataCollections {

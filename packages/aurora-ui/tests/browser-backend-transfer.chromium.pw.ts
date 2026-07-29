@@ -170,21 +170,20 @@ test('real Chromium transfers local data between IndexedDB and Worker OPFS SQLit
       selectedBackend: 'indexeddb',
       committedAtMs: 5000
     })
-    const staleFailureReason = await transferBrowserLocalDataBackend({
+    const sameNodeTransfer = await transferBrowserLocalDataBackend({
       profileId,
       localNodeId: staleNodeId,
       sourceBackend: staleIndexedSource,
       targetBackend: new BrowserSqliteLocalDataBackend(sqliteState),
       reopenTargetBackend: () => new BrowserSqliteLocalDataBackend(sqliteState),
       pointerStore
-    }).then(
-      () => null,
-      (error: unknown) => error instanceof Error && 'metadata' in error
-        ? (error as { metadata?: { reason?: string } }).metadata?.reason ?? null
-        : null
-    )
+    })
     const staleSourceRetained = await staleIndexedSourceSession.memory.listMemoryItems()
     await staleIndexedSource.close()
+    const staleProfileSqlite = new BrowserSqliteLocalDataBackend(sqliteState)
+    const staleProfileSqliteSession = await staleProfileSqlite.open(profileId, staleNodeId)
+    const staleProfileSqliteExport = await staleProfileSqliteSession.exportV1()
+    await staleProfileSqlite.close()
     const staleSqliteReopened = new BrowserSqliteLocalDataBackend(sqliteState)
     const staleSqliteReopenedSession = await staleSqliteReopened.open(staleOtherProfileId, staleNodeId)
     const staleOtherProfileRetained = await staleSqliteReopenedSession.memory.listMemoryItems()
@@ -199,8 +198,9 @@ test('real Chromium transfers local data between IndexedDB and Worker OPFS SQLit
       bootstrappedIndexedSource: bootstrappedIndexedExport.sourceBackend,
       bootstrappedIndexedCounts: bootstrappedIndexedExport.recordCounts,
       secondPointer: await pointerStore.read(profileId, secondNodeId),
-      staleFailureReason,
+      sameNodeTransferBackend: sameNodeTransfer.committedBackend,
       stalePointer: await pointerStore.read(profileId, staleNodeId),
+      staleProfileSqliteCounts: staleProfileSqliteExport.recordCounts,
       staleSourceRetained: staleSourceRetained.map((record: { readonly id: string }) => record.id),
       staleOtherProfileRetained: staleOtherProfileRetained.map((record: { readonly id: string }) => record.id),
     }
@@ -237,8 +237,9 @@ test('real Chromium transfers local data between IndexedDB and Worker OPFS SQLit
     bootstrappedIndexedSource: 'indexeddb',
     bootstrappedIndexedCounts: { memoryItems: 1 },
     secondPointer: { selectedBackend: 'indexeddb', committedAtMs: 4000 },
-    staleFailureReason: 'profile_owner_mismatch',
-    stalePointer: { selectedBackend: 'indexeddb', committedAtMs: 5000 },
+    sameNodeTransferBackend: 'sqlite-wasm-opfs',
+    stalePointer: { selectedBackend: 'sqlite-wasm-opfs' },
+    staleProfileSqliteCounts: { memoryItems: 1 },
     staleSourceRetained: ['memory-stale-source'],
     staleOtherProfileRetained: ['memory-stale-other-profile']
   })

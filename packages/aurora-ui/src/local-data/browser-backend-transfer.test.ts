@@ -173,7 +173,42 @@ describe('browser backend transfer', () => {
     await expect(pointerStore.read('profile-1', 'node-1')).resolves.toMatchObject({ selectedBackend: 'indexeddb' })
   })
 
-  it('keeps source and pointer when target storage reports stale other-profile rows', async () => {
+  it('allows transferring one profile into target storage that already contains another profile for the same node', async () => {
+    const pointerStore = new MapPointerStore(pointer('indexeddb'))
+    const targetState = new DurableState()
+    const existingTarget = new DurableFakeBackend('sqlite-wasm-opfs', targetState)
+    const existingTargetSession = await existingTarget.open('profile-2', 'node-1')
+    await existingTargetSession.memory.upsertMemoryItem(memoryFixture({
+      id: 'memory-profile-2',
+      profileId: 'profile-2'
+    }))
+    await existingTarget.close()
+
+    const source = new DurableFakeBackend('indexeddb')
+    const sourceSession = await source.open('profile-1', 'node-1')
+    await sourceSession.memory.upsertMemoryItem(memoryFixture({ id: 'memory-profile-1' }))
+
+    await expect(transferBrowserLocalDataBackend({
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+      sourceBackend: source,
+      targetBackend: new DurableFakeBackend('sqlite-wasm-opfs', targetState),
+      reopenTargetBackend: () => new DurableFakeBackend('sqlite-wasm-opfs', targetState),
+      pointerStore
+    })).resolves.toMatchObject({
+      committedBackend: 'sqlite-wasm-opfs',
+      recordCounts: { memoryItems: 1 }
+    })
+    const reopenedProfileTwoBackend = new DurableFakeBackend('sqlite-wasm-opfs', targetState)
+    const reopenedProfileTwo = await reopenedProfileTwoBackend.open('profile-2', 'node-1')
+    await expect(reopenedProfileTwo.memory.listMemoryItems()).resolves.toEqual([memoryFixture({
+      id: 'memory-profile-2',
+      profileId: 'profile-2'
+    })])
+    await reopenedProfileTwoBackend.close()
+  })
+
+  it('keeps source and pointer when target storage reports other-node rows', async () => {
     const pointerStore = new MapPointerStore(pointer('indexeddb'))
     const source = new DurableFakeBackend('indexeddb')
     const sourceSession = await source.open('profile-1', 'node-1')
@@ -184,12 +219,12 @@ describe('browser backend transfer', () => {
       profileId: 'profile-1',
       localNodeId: 'node-1',
       sourceBackend: source,
-      targetBackend: new DurableFakeBackend('sqlite-wasm-opfs', undefined, { rejectForProfileOwnerMismatch: true }),
+      targetBackend: new DurableFakeBackend('sqlite-wasm-opfs', undefined, { rejectForLocalNodeOwnerMismatch: true }),
       reopenTargetBackend: () => new DurableFakeBackend('sqlite-wasm-opfs'),
       pointerStore
     })).rejects.toMatchObject({
       code: 'identity_mismatch',
-      metadata: { reason: 'profile_owner_mismatch' }
+      metadata: { reason: 'local_node_owner_mismatch' }
     })
     await expect(sourceSession.conversations.listConversations()).resolves.toEqual([conversationFixture({ id: 'conversation-collides' })])
     await expect(sourceSession.memory.listMemoryItems()).resolves.toEqual([memoryFixture()])
@@ -238,7 +273,7 @@ describe('browser backend transfer', () => {
 })
 
 class DurableState {
-  exportDocument: LocalDataExportV1 | null = null
+  exportDocuments = new Map<string, LocalDataExportV1>()
 }
 
 class DurableFakeBackend implements LocalDataBackend {
@@ -256,7 +291,7 @@ class DurableFakeBackend implements LocalDataBackend {
       readonly tamperExportRecords?: boolean
       readonly exportProfileId?: string
       readonly failAfterImport?: boolean
-      readonly rejectForProfileOwnerMismatch?: boolean
+      readonly rejectForLocalNodeOwnerMismatch?: boolean
     } = {}
   ) {
     this.sqlite = kind === 'sqlite-wasm-opfs'
@@ -265,15 +300,16 @@ class DurableFakeBackend implements LocalDataBackend {
 
   async open(profileId: string, localNodeId: string): Promise<LocalDataSession> {
     if (this.closed) throw new Error('backend closed')
-    if (this.faults.rejectForProfileOwnerMismatch === true) {
-      throw new LocalDataError('identity_mismatch', 'Local data database profile does not match the open session', { reason: 'profile_owner_mismatch' })
+    if (this.faults.rejectForLocalNodeOwnerMismatch === true) {
+      throw new LocalDataError('identity_mismatch', 'Local data database local node does not match the open session', { reason: 'local_node_owner_mismatch' })
     }
     if (this.session !== null) return this.session
     const memory = new MemoryLocalDataBackend({ nowMs: () => 1000 })
     const session = await memory.open(profileId, localNodeId)
-    if (this.state.exportDocument !== null) await session.importV1(this.state.exportDocument)
+    const storedDocument = this.state.exportDocuments.get(durableStateKey(profileId, localNodeId))
+    if (storedDocument !== undefined) await session.importV1(storedDocument)
     this.session = new DurableFakeSession(this.kind, session, async () => {
-      this.state.exportDocument = await exportAsKind(session, this.kind)
+      this.state.exportDocuments.set(durableStateKey(profileId, localNodeId), await exportAsKind(session, this.kind))
       await memory.close()
       this.session = null
     }, this.faults)
@@ -298,6 +334,10 @@ class DurableFakeBackend implements LocalDataBackend {
   }
 }
 
+function durableStateKey(profileId: string, localNodeId: string): string {
+  return `${profileId}\u0000${localNodeId}`
+}
+
 class DurableFakeSession implements LocalDataSession {
   readonly profileId: string
   readonly localNodeId: string
@@ -317,7 +357,7 @@ class DurableFakeSession implements LocalDataSession {
       readonly tamperExportRecords?: boolean
       readonly exportProfileId?: string
       readonly failAfterImport?: boolean
-      readonly rejectForProfileOwnerMismatch?: boolean
+      readonly rejectForLocalNodeOwnerMismatch?: boolean
     }
   ) {
     this.profileId = inner.profileId

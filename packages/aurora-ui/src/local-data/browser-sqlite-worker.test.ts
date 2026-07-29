@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { buildLocalDataExportV1, type EncryptedDataEnvelopeV1 } from '@aurora/client/local-data'
 
 import {
-  assertExistingSqliteProfileOwnership,
+  assertExistingSqliteLocalNodeOwnership,
   handleBrowserSqliteWorkerMessage,
   type BrowserSqliteWorkerResponse
 } from './browser-sqlite-worker.js'
@@ -51,10 +51,10 @@ describe('browser sqlite worker protocol guardrails', () => {
     }])
   })
 
-  it('rejects cross-profile existing rows before import deletes or overwrites colliding IDs', async () => {
+  it('rejects cross-node existing rows before import deletes or overwrites colliding IDs', async () => {
     const responses: BrowserSqliteWorkerResponse[] = []
     const db = new FakeSqliteDatabase({
-      'SELECT id FROM aurora_conversations WHERE profile_id IS NULL OR local_node_id IS NULL OR profile_id <> ? OR local_node_id <> ? LIMIT 1;': [{ id: 'conversation-1' }]
+      'SELECT id FROM aurora_conversations WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;': [{ id: 'conversation-1' }]
     })
     await handleBrowserSqliteWorkerMessage(
       {
@@ -104,8 +104,8 @@ describe('browser sqlite worker protocol guardrails', () => {
         ok: false,
         error: {
           code: 'identity_mismatch',
-          message: 'Local data database profile does not match the open session',
-          metadata: { reason: 'profile_owner_mismatch' }
+          message: 'Local data database local node does not match the open session',
+          metadata: { reason: 'local_node_owner_mismatch' }
         }
       }
     }])
@@ -113,22 +113,22 @@ describe('browser sqlite worker protocol guardrails', () => {
     expect(db.statements.some((statement) => /\bINSERT\b/iu.test(statement))).toBe(false)
   })
 
-  it('preflights existing profile ownership without changing schema, ledger, identity, user_version, or records', () => {
+  it('preflights existing local-node ownership without changing schema, ledger, identity, user_version, or records', () => {
     for (const testCase of [
       {
         name: 'different-profile-same-node',
         record: { id: 'conversation-1', profile_id: 'profile-2', local_node_id: 'node-1', title_envelope_json: '{}' },
-        reason: 'profile_owner_mismatch'
+        reason: null
       },
       {
         name: 'same-profile-different-node',
         record: { id: 'conversation-1', profile_id: 'profile-1', local_node_id: 'node-2', title_envelope_json: '{}' },
-        reason: 'profile_owner_mismatch'
+        reason: 'local_node_owner_mismatch'
       },
       {
         name: 'different-profile-different-node',
         record: { id: 'conversation-1', profile_id: 'profile-2', local_node_id: 'node-2', title_envelope_json: '{}' },
-        reason: 'profile_owner_mismatch'
+        reason: 'local_node_owner_mismatch'
       }
     ]) {
       const db = new SnapshotSqliteDatabase({
@@ -144,7 +144,14 @@ describe('browser sqlite worker protocol guardrails', () => {
           aurora_conversations: [testCase.record]
         }
       })
-      assertPreflightRejectsWithoutMutation(db, testCase.reason)
+      if (testCase.reason === null) {
+        const before = db.snapshot()
+        expect(() => assertExistingSqliteLocalNodeOwnership(db, 'node-1')).not.toThrow()
+        expect(db.snapshot()).toEqual(before)
+        expect(db.statements.some(isWriteStatement)).toBe(false)
+      } else {
+        assertPreflightRejectsWithoutMutation(db, testCase.reason)
+      }
     }
   })
 
@@ -176,11 +183,11 @@ describe('browser sqlite worker protocol guardrails', () => {
           [tableName]: [testCase.record]
         }
       })
-      assertPreflightRejectsWithoutMutation(db, 'profile_owner_ambiguous')
+      assertPreflightRejectsWithoutMutation(db, 'local_node_owner_ambiguous')
     }
   })
 
-  it('allows empty or ownership-establishable legacy schemas through read-only profile ownership preflight', () => {
+  it('allows empty or ownership-establishable legacy schemas through read-only local-node ownership preflight', () => {
     const empty = new SnapshotSqliteDatabase({
       userVersion: 0,
       schema: {},
@@ -188,7 +195,7 @@ describe('browser sqlite worker protocol guardrails', () => {
       identity: null,
       records: {}
     })
-    expect(() => assertExistingSqliteProfileOwnership(empty, 'profile-1', 'node-1')).not.toThrow()
+    expect(() => assertExistingSqliteLocalNodeOwnership(empty, 'node-1')).not.toThrow()
     const emptySnapshot: SnapshotSqliteState = {
       userVersion: 0,
       schema: {},
@@ -210,7 +217,7 @@ describe('browser sqlite worker protocol guardrails', () => {
       }
     })
     const beforeLegacy = legacy.snapshot()
-    expect(() => assertExistingSqliteProfileOwnership(legacy, 'profile-1', 'node-1')).not.toThrow()
+    expect(() => assertExistingSqliteLocalNodeOwnership(legacy, 'node-1')).not.toThrow()
     expect(legacy.snapshot()).toEqual(beforeLegacy)
     expect(legacy.statements.some(isWriteStatement)).toBe(false)
   })
@@ -316,7 +323,7 @@ class SnapshotSqliteDatabase {
 
 function assertPreflightRejectsWithoutMutation(db: SnapshotSqliteDatabase, reason: string): void {
   const before = db.snapshot()
-  expect(() => assertExistingSqliteProfileOwnership(db, 'profile-1', 'node-1')).toThrowError(
+  expect(() => assertExistingSqliteLocalNodeOwnership(db, 'node-1')).toThrowError(
     expect.objectContaining({
       code: 'identity_mismatch',
       metadata: { reason }

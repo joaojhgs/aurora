@@ -76,7 +76,7 @@ describe('createLocalDataBackend pointer selection', () => {
     expect(storage.getItem('factory.pointer:profile-1:node-1')).toBe(rawPointer)
   })
 
-  it('does not fallback or write a pointer when uncommitted SQLite open hits ownership rejection', async () => {
+  it('does not fallback or write a pointer when uncommitted SQLite open hits local-node ownership rejection', async () => {
     installBrowserStorageProbe()
     const pointerStore = new CountingPointerStore(null)
     const indexedDbBackend = new KindOverrideBackend('indexeddb')
@@ -85,11 +85,11 @@ describe('createLocalDataBackend pointer selection', () => {
       pointerStore,
       indexedDbBackend,
       lock: new GrantedLock(),
-      createWorker: () => new ErrorOpenWorker('identity_mismatch', 'profile_owner_mismatch'),
+      createWorker: () => new ErrorOpenWorker('identity_mismatch', 'local_node_owner_mismatch'),
       wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
     })).rejects.toMatchObject({
       code: 'identity_mismatch',
-      metadata: { reason: 'profile_owner_mismatch' }
+      metadata: { reason: 'local_node_owner_mismatch' }
     })
     expect(indexedDbBackend.openCount).toBe(0)
     expect(pointerStore.writes).toBe(0)
@@ -104,11 +104,11 @@ describe('createLocalDataBackend pointer selection', () => {
       pointerStore,
       indexedDbBackend,
       lock: new GrantedLock(),
-      createWorker: () => new ErrorOpenWorker('migration_integrity', 'profile_owner_ambiguous'),
+      createWorker: () => new ErrorOpenWorker('migration_integrity', 'local_node_owner_ambiguous'),
       wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
     })).rejects.toMatchObject({
       code: 'migration_integrity',
-      metadata: { reason: 'profile_owner_ambiguous' }
+      metadata: { reason: 'local_node_owner_ambiguous' }
     })
     expect(indexedDbBackend.openCount).toBe(0)
     expect(pointerStore.writes).toBe(0)

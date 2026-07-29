@@ -141,7 +141,9 @@ function isTerminalSqliteOpenError(error: unknown): boolean {
   if (error.code === 'identity_mismatch') return true
   if (error.code !== 'migration_integrity' && error.code !== 'invalid_record') return false
   const reason = error.metadata?.reason
-  return reason === 'profile_owner_mismatch'
+  return reason === 'local_node_owner_mismatch'
+    || reason === 'local_node_owner_ambiguous'
+    || reason === 'profile_owner_mismatch'
     || reason === 'profile_owner_ambiguous'
     || reason === 'identity_missing'
     || reason === 'identity_invalid'
