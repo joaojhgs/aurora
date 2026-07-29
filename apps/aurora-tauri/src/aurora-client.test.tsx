@@ -2269,8 +2269,7 @@ describe("Tauri CI/E2E route gates", () => {
         expect(request.payload).toEqual(
           expect.objectContaining({
             action_id: "aa-Config-Set",
-            reason:
-              "Select model source llama.cpp desktop from Aurora Models",
+            reason: "Select model source llama.cpp desktop",
             reauth_confirmed: true,
           }),
         );
@@ -2347,20 +2346,30 @@ describe("Tauri CI/E2E route gates", () => {
         await flushReactWork();
       });
       await waitUntil(() => {
-        expect(requestMethods(transport)).toEqual(
+        const methods = requestMethods(transport);
+        expect(methods).toEqual(
           expect.arrayContaining([
             "Gateway.AdminActionDraft",
             "Gateway.AdminActionConfirm",
+            "Config.Set",
           ]),
         );
-        expect(requestMethods(transport)).not.toContain("Config.Set");
+        expect(methods.indexOf("Gateway.AdminActionDraft")).toBeLessThan(
+          methods.indexOf("Gateway.AdminActionConfirm"),
+        );
+        expect(methods.indexOf("Gateway.AdminActionConfirm")).toBeLessThan(
+          methods.indexOf("Config.Set"),
+        );
+        expect(container.textContent).toContain("Model source selection applied.");
+        expect(container.textContent).not.toContain("Config.Set");
         expect(container.textContent).not.toContain("AdminAction");
+        expect(container.textContent).not.toContain("audit-Config-Set");
       });
       expect(
         requestMethods(transport).filter(
           (method) => method === ORCHESTRATOR_MODEL_METHODS.getCatalog,
         ).length,
-      ).toBeGreaterThanOrEqual(1);
+      ).toBeGreaterThanOrEqual(2);
     } finally {
       await act(async () => root.unmount());
       container.remove();
