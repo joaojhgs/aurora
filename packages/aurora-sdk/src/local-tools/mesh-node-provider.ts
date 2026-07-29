@@ -22,6 +22,7 @@ import {
 } from './tooling-provider.js'
 
 export interface MeshNodeLocalToolProviderOptions {
+  readonly nodeMode?: 'mesh-node' | 'remote-console' | undefined
   readonly localPeerId: string
   readonly nodeName: string
   readonly registry: LocalToolRegistry
@@ -60,7 +61,8 @@ export function createMeshNodeLocalToolProvider(
   options: MeshNodeLocalToolProviderOptions
 ): MeshNodeLocalToolProviderComposition {
   assertRegistryOwnedByPeer(options.registry, options.localPeerId)
-  const enabled = options.providerEnabled !== false
+  const enabled = options.nodeMode === 'mesh-node'
+    && options.providerEnabled !== false
     && options.authorityResolver !== undefined
     && options.exportDecision !== undefined
     && options.audit !== undefined

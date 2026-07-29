@@ -69,6 +69,7 @@ const descriptor: LocalToolDescriptorV1 = {
 describe('mesh-node local Tooling provider composition', () => {
   it('fails closed without explicit authority, audit, and export decision ports', async () => {
     const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: registryWithEcho(),
@@ -92,6 +93,35 @@ describe('mesh-node local Tooling provider composition', () => {
     })
   })
 
+  it('does not instantiate local provider methods for remote-console or unspecified modes', async () => {
+    for (const nodeMode of ['remote-console', undefined] as const) {
+      const grantRepository = new MemoryPeerGrantRepository()
+      await grantRepository.upsertGrant(grant())
+      const resolver = new PeerAuthorityResolver({
+        verifierStore: new MemoryInboundCredentialVerifierStore(),
+        grantRepository
+      })
+      const composition = createMeshNodeLocalToolProvider({
+        ...(nodeMode !== undefined ? { nodeMode } : {}),
+        localPeerId: 'provider',
+        nodeName: 'Provider',
+        registry: registryWithEcho(),
+        authorityResolver: resolver,
+        exportDecision: { isShared: () => true },
+        audit: () => undefined,
+        cursorSecret: 'cursor-secret',
+        clock: () => 1_000,
+        randomId: () => 'epoch-1'
+      })
+
+      expect(composition.enabled).toBe(false)
+      expect(composition.peerHostRegistry.list()).toEqual([])
+      await expect(composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)).resolves.toMatchObject({
+        shared_services: []
+      })
+    }
+  })
+
   it('advertises and executes only through authenticated grants plus explicit export sharing', async () => {
     const grantRepository = new MemoryPeerGrantRepository()
     await grantRepository.upsertGrant(grant())
@@ -101,6 +131,7 @@ describe('mesh-node local Tooling provider composition', () => {
     })
     const audits: unknown[] = []
     const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: registryWithEcho(),
@@ -156,6 +187,7 @@ describe('mesh-node local Tooling provider composition', () => {
 
   it('rejects registries created for a different provider identity', () => {
     expect(() => createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: registryWithEcho('other-provider')
