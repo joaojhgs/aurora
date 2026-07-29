@@ -179,7 +179,8 @@ describe('native capability local tool pack', () => {
       'file:///etc/passwd',
       'data:text/plain,secret',
       'javascript:alert(1)',
-      'random-app://open'
+      'random-app://open',
+      'not-a-url'
     ]) {
       const unsafeRequest = { tool_name: AURORA_NATIVE_TOOL_IDS.openDeepLink, arguments: { url } }
       expect(await provider.executeTool({
@@ -188,7 +189,7 @@ describe('native capability local tool pack', () => {
       }, context(['Tooling.ExecuteTool', 'Native.OpenDeepLink']))).toMatchObject({
         ok: false,
         status: 'failed',
-        error_code: 'handler_failed',
+        error_code: 'permission_denied',
         error: 'Tool execution failed'
       })
     }

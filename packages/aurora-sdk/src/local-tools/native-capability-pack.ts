@@ -305,12 +305,12 @@ function nativeStateErrorReason(state: LocalNativeCapabilityState): string {
 }
 
 function validateSafeDeepLink(value: JsonValue | undefined): void {
-  if (typeof value !== 'string') throw new LocalToolHandlerError('handler_failed')
+  if (typeof value !== 'string') throw new LocalToolHandlerError('permission_denied')
   let parsed: URL
   try {
     parsed = new URL(value)
   } catch {
-    throw new LocalToolHandlerError('handler_failed')
+    throw new LocalToolHandlerError('permission_denied')
   }
-  if (!SAFE_DEEP_LINK_PROTOCOLS.has(parsed.protocol)) throw new LocalToolHandlerError('handler_failed')
+  if (!SAFE_DEEP_LINK_PROTOCOLS.has(parsed.protocol)) throw new LocalToolHandlerError('permission_denied')
 }
