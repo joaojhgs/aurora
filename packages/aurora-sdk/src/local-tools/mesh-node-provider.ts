@@ -61,11 +61,13 @@ export function createMeshNodeLocalToolProvider(
   options: MeshNodeLocalToolProviderOptions
 ): MeshNodeLocalToolProviderComposition {
   assertRegistryOwnedByPeer(options.registry, options.localPeerId)
+  const registeredTools = options.registry.list()
   const enabled = options.nodeMode === 'mesh-node'
     && options.providerEnabled !== false
     && options.authorityResolver !== undefined
     && options.exportDecision !== undefined
     && options.audit !== undefined
+    && registeredTools.length > 0
   const serviceInstanceId = providerServiceInstanceId(options.localPeerId)
   const policy = new LocalToolExecutionPolicy({
     providerPeerId: options.localPeerId,
@@ -112,7 +114,7 @@ export function createMeshNodeLocalToolProvider(
     policy,
     providerPeerId: options.localPeerId,
     serviceInstanceId,
-    registeredToolIds: options.registry.list().map((tool) => tool.descriptor.toolContractId),
+    registeredToolIds: registeredTools.map((tool) => tool.descriptor.toolContractId),
     enabled
   }
 }

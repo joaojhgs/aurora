@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   LocalToolRegistry,
+  MESH_NODE_TOOLING_METHOD_IDS,
+  NATIVE_TOOL_DESCRIPTORS,
   createMeshNodeLocalToolProvider,
   type LocalToolDescriptorV1,
   type LocalToolExecutionContext
@@ -11,6 +13,9 @@ import {
   MemoryPeerGrantRepository,
   PeerAuthorityResolver,
   type AuthenticatedPeerContext,
+  type PeerAuthorityDecision,
+  type PeerGrantResolutionRequest,
+  type PeerHostCallContext,
   type ProviderLocalPeerGrantV1,
   type PeerRelationshipSelector,
   type ReconnectTransportAttestation
@@ -66,6 +71,22 @@ const descriptor: LocalToolDescriptorV1 = {
   handlerId: 'core.echo'
 }
 
+const sensitiveDescriptor: LocalToolDescriptorV1 = {
+  ...descriptor,
+  toolContractId: 'native.share_text',
+  localName: 'share_text',
+  displayName: 'Share text',
+  description: 'Share text',
+  requiredPermissions: ['Native.Share'],
+  resourceScopes: ['native.share'],
+  safetyClass: 'sensitive',
+  mutating: true,
+  dataEgress: true,
+  nativeRequirements: { capabilityIds: ['aurora.browser.share'], osPermissions: [] },
+  confirmationPolicy: 'sensitive',
+  handlerId: 'native.share_text'
+}
+
 describe('mesh-node local Tooling provider composition', () => {
   it('fails closed without explicit authority, audit, and export decision ports', async () => {
     const composition = createMeshNodeLocalToolProvider({
@@ -91,6 +112,36 @@ describe('mesh-node local Tooling provider composition', () => {
     await expect(composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)).resolves.toMatchObject({
       shared_services: []
     })
+  })
+
+  it('fails closed when export or audit ports are missing even if authority grants exist', async () => {
+    const grantRepository = new MemoryPeerGrantRepository()
+    await grantRepository.upsertGrant(grant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository
+    })
+    const base = {
+      nodeMode: 'mesh-node' as const,
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry: registryWithEcho(),
+      authorityResolver: resolver,
+      cursorSecret: 'cursor-secret',
+      clock: () => 1_000,
+      randomId: () => 'epoch-1'
+    }
+
+    for (const composition of [
+      createMeshNodeLocalToolProvider({ ...base, audit: () => undefined }),
+      createMeshNodeLocalToolProvider({ ...base, exportDecision: { isShared: () => true } })
+    ]) {
+      expect(composition.enabled).toBe(false)
+      expect(composition.peerHostRegistry.list()).toEqual([])
+      await expect(composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)).resolves.toMatchObject({
+        shared_services: []
+      })
+    }
   })
 
   it('does not instantiate local provider methods for remote-console or unspecified modes', async () => {
@@ -185,6 +236,114 @@ describe('mesh-node local Tooling provider composition', () => {
     expect(JSON.stringify({ result, audits })).not.toContain('cursor-secret')
   })
 
+  it('fails closed to structured denial when authority grant resolution throws', async () => {
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository: new ThrowingPeerGrantRepository()
+    })
+    const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry: registryWithEcho(),
+      authorityResolver: resolver,
+      exportDecision: { isShared: () => true },
+      audit: () => undefined,
+      cursorSecret: 'cursor-secret',
+      clock: () => 1_000,
+      randomId: () => 'epoch-1'
+    })
+    const execute = composition.peerHostRegistry.get('Tooling.ExecuteTool')
+    expect(execute).toBeDefined()
+    if (!execute) throw new Error('execute method missing')
+
+    await expect(composition.peerHostRegistry.dispatch(execute, {
+      tool_name: 'echo',
+      arguments: { text: 'hello' }
+    }, callContext())).resolves.toMatchObject({
+      ok: false,
+      status: 'denied',
+      error_code: 'method_not_granted'
+    })
+  })
+
+  it('requires local approval tokens for sensitive tools and rejects token replay', async () => {
+    const grantRepository = new MemoryPeerGrantRepository()
+    await grantRepository.upsertGrant(grant({
+      allowedToolContractIds: ['native.share_text'],
+      capabilityPackIds: ['aurora.browser.share'],
+      resourceScopes: ['native.share']
+    }))
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository
+    })
+    const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry: registryWithSensitiveTool(),
+      authorityResolver: resolver,
+      exportDecision: { isShared: () => true },
+      audit: () => undefined,
+      cursorSecret: 'cursor-secret',
+      clock: () => 1_000,
+      randomId: () => 'epoch-1'
+    })
+    const entry = composition.localToolRegistry.resolveForDispatch('share_text')
+    expect(entry).toBeDefined()
+    if (!entry) throw new Error('sensitive tool missing')
+    const request = { tool_name: 'share_text', arguments: { text: 'hello' } }
+    const context = executionContext({ permissions: ['Tooling.ExecuteTool', 'Native.Share'] })
+
+    const prepared = await composition.policy.validateForExecute(entry, request, context)
+    expect(prepared).toMatchObject({
+      ok: false,
+      policy_decision: { approval_required: true, reason: 'approval_token_required' }
+    })
+    const token = composition.policy.issueApprovalToken(prepared, request, context)
+    await expect(composition.policy.validateForExecute(entry, { ...request, approval_token: token }, context)).resolves.toMatchObject({
+      ok: true,
+      policy_decision: { allowed: true, reason: null }
+    })
+    await expect(composition.policy.validateForExecute(entry, { ...request, approval_token: token }, context)).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { reason: 'approval_token_replayed' }
+    })
+  })
+
+  it('keeps empty registries out of manifests and omits raw native escape hatches', async () => {
+    const grantRepository = new MemoryPeerGrantRepository()
+    await grantRepository.upsertGrant(grant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository
+    })
+    const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry: new LocalToolRegistry({ stablePeerId: 'provider' }),
+      authorityResolver: resolver,
+      exportDecision: { isShared: () => true },
+      audit: () => undefined,
+      cursorSecret: 'cursor-secret',
+      clock: () => 1_000,
+      randomId: () => 'epoch-1'
+    })
+
+    await expect(composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)).resolves.toMatchObject({
+      shared_services: []
+    })
+    expect(MESH_NODE_TOOLING_METHOD_IDS).toEqual([
+      'Tooling.GetTools',
+      'Tooling.GetExportCatalog',
+      'Tooling.PrepareExecution',
+      'Tooling.ExecuteTool'
+    ])
+    expect(JSON.stringify(NATIVE_TOOL_DESCRIPTORS)).not.toMatch(/shell|process|filesystem|filePath|path/u)
+  })
+
   it('rejects registries created for a different provider identity', () => {
     expect(() => createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
@@ -204,6 +363,20 @@ function registryWithEcho(stablePeerId = 'provider'): LocalToolRegistry {
   })
   registry.register({
     descriptor,
+    handler: ({ context }) => ({ ok: true, caller: context.callerPeerId })
+  })
+  return registry
+}
+
+function registryWithSensitiveTool(): LocalToolRegistry {
+  const registry = new LocalToolRegistry({
+    stablePeerId: 'provider',
+    providerLabel: 'Provider',
+    source: 'core',
+    sourceId: 'test'
+  })
+  registry.register({
+    descriptor: sensitiveDescriptor,
     handler: ({ context }) => ({ ok: true, caller: context.callerPeerId })
   })
   return registry
@@ -238,5 +411,31 @@ function executionContext(patch: Partial<LocalToolExecutionContext> = {}): Local
     methodId: 'Tooling.ExecuteTool',
     nowMs: 1_000,
     ...patch
+  }
+}
+
+function callContext(patch: Partial<PeerHostCallContext> = {}): PeerHostCallContext {
+  return {
+    id: 'call-1',
+    methodId: 'Tooling.ExecuteTool',
+    remotePeerId: 'peer-a',
+    identity: {
+      callerPeerId: 'peer-a',
+      principalId: 'principal-a',
+      effectivePermissions: ['Tooling.ExecuteTool', 'Echo.Use'],
+      authGrantRevision: 5,
+      manifestRevision: 1
+    },
+    authenticatedPeerContext,
+    signal: new AbortController().signal,
+    receivedAtMs: 1_000,
+    deadlineAtMs: 31_000,
+    ...patch
+  }
+}
+
+class ThrowingPeerGrantRepository extends MemoryPeerGrantRepository {
+  override async resolveGrant(_request: PeerGrantResolutionRequest): Promise<PeerAuthorityDecision> {
+    throw new Error('repository unavailable')
   }
 }
