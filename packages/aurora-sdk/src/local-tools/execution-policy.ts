@@ -4,6 +4,8 @@ import type {
   ToolingPrepareExecutionResponse
 } from '../types.js'
 import { hasPermission } from '../permissions.js'
+import { randomBytes } from '../webrtc/crypto.js'
+import { bytesToHex } from '../webrtc/encoding.js'
 import { canonicalJson, canonicalJsonSha256Hex } from './canonical-json.js'
 import { validateJsonAgainstSchema } from './json-schema.js'
 import type { LocalToolDispatchEntry, LocalToolExecutionContext } from './tool-registry.js'
@@ -94,7 +96,7 @@ export class LocalToolExecutionPolicy {
       providerServiceInstanceId: options.providerServiceInstanceId,
       tokenTtlSeconds: options.tokenTtlSeconds ?? 300,
       nowMs: options.nowMs ?? (() => Date.now()),
-      randomToken: options.randomToken ?? (() => `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`),
+      randomToken: options.randomToken ?? secureRandomToken,
       ...(options.ports ? { ports: options.ports } : {})
     }
   }
@@ -281,6 +283,14 @@ export function sanitizeHandlerData(value: JsonValue | undefined): JsonValue | n
   if (value === undefined) return null
   canonicalJson(value)
   return value
+}
+
+function secureRandomToken(): string {
+  try {
+    return bytesToHex(randomBytes(32))
+  } catch {
+    throw new LocalToolPolicyError('approval_random_unavailable')
+  }
 }
 
 export function safeToolError(): string {

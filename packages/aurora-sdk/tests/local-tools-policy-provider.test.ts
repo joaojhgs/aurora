@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createToolingPeerHostRegistry, type PeerHostCallContext } from '../src/peer-host/index.js'
 import {
@@ -40,6 +40,10 @@ const dangerousDescriptor: LocalToolDescriptorV1 = {
   confirmationPolicy: 'always',
   handlerId: 'core.delete'
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('local Tooling policy/provider', () => {
   it('executes safe tools through generated boundaries and trusted context grants only', async () => {
@@ -166,6 +170,60 @@ describe('local Tooling policy/provider', () => {
     })
     expect(await provider.executeTool({ ...request, approval_token: fresh }, callContext)).toMatchObject({ ok: true, status: 'success' })
     expect(await provider.executeTool({ ...request, approval_token: fresh }, callContext)).toMatchObject({ ok: false, status: 'denied', error_code: 'approval_token_replayed' })
+  })
+
+  it('uses WebCrypto random bytes for default approval tokens and nonces', async () => {
+    const fills: number[] = []
+    vi.stubGlobal('crypto', {
+      getRandomValues(value: Uint8Array) {
+        fills.push(value.byteLength)
+        value.fill(fills.length)
+        return value
+      }
+    })
+    const { policy, prepared, request, execution } = await dangerousPreparation(new LocalToolExecutionPolicy({
+      providerPeerId: 'provider',
+      providerServiceInstanceId: 'local:provider:Tooling',
+      ports: allowPorts()
+    }))
+
+    const first = policy.issueApprovalToken(prepared, request, execution)
+    const second = policy.issueApprovalToken(prepared, request, execution)
+
+    expect(fills).toEqual([32, 32, 32, 32])
+    expect(first).toMatch(/^local_tool_approval_[0-9a-f]{64}$/u)
+    expect(second).toMatch(/^local_tool_approval_[0-9a-f]{64}$/u)
+    expect(first).not.toBe(second)
+  })
+
+  it('fails closed before storing a default approval token when WebCrypto is unavailable', async () => {
+    vi.stubGlobal('crypto', undefined)
+    const { policy, prepared, request, execution, registry } = await dangerousPreparation(new LocalToolExecutionPolicy({
+      providerPeerId: 'provider',
+      providerServiceInstanceId: 'local:provider:Tooling',
+      ports: allowPorts()
+    }))
+
+    expect(() => policy.issueApprovalToken(prepared, request, execution)).toThrow(/approval_random_unavailable/)
+    await expect(policy.validateForExecute(registry.resolveForDispatch('delete')!, {
+      ...request,
+      approval_token: `local_tool_approval_${'0'.repeat(64)}`
+    }, execution)).resolves.toMatchObject({
+      ok: false,
+      policy_decision: { reason: 'approval_token_invalid' }
+    })
+  })
+
+  it('preserves injected deterministic approval token generation without WebCrypto', async () => {
+    vi.stubGlobal('crypto', undefined)
+    const { policy, prepared, request, execution } = await dangerousPreparation(new LocalToolExecutionPolicy({
+      providerPeerId: 'provider',
+      providerServiceInstanceId: 'local:provider:Tooling',
+      randomToken: () => 'fixed',
+      ports: allowPorts()
+    }))
+
+    expect(policy.issueApprovalToken(prepared, request, execution)).toBe('local_tool_approval_fixed')
   })
 
   it('rejects expired approval tokens without dispatching', async () => {
@@ -433,6 +491,26 @@ function providerFor(
     exportDecision: allowExport,
     ...overrides
   })
+}
+
+async function dangerousPreparation(policy: LocalToolExecutionPolicy) {
+  const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+  registry.register({ descriptor: dangerousDescriptor, handler: () => ({ ok: true }) })
+  const request = { tool_name: 'delete', arguments: { text: 'target' } }
+  const execution = {
+    callerPeerId: 'peer-a',
+    callerPrincipalId: 'principal-a',
+    permissions: ['Tooling.ExecuteTool', 'Echo.Use'],
+    methodId: 'Tooling.ExecuteTool',
+    nowMs: 1_000
+  }
+  return {
+    registry,
+    request,
+    execution,
+    policy,
+    prepared: await policy.prepare(registry.resolveForDispatch('delete')!, request, execution)
+  }
 }
 
 function context(
