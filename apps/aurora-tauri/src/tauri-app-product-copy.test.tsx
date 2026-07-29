@@ -1,10 +1,21 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   getAuroraSurfaceProfile,
+  getAuroraNavItem,
   loadingShellSnapshot,
+  navItemSnapshot,
+  type RouteAvailability,
 } from "@aurora/ui";
 import {
+  AuroraClient as Aurora,
+  MockAuroraTransport,
+} from "@aurora/client";
+import { findForbiddenProductionCopyTerms } from "../../../packages/aurora-ui/src/product-copy-forbidden-terms";
+import {
+  MissingTauriRoute,
+  TauriReadinessError,
+  assertReadySidecar,
   androidBaselineLabel,
   assistantRoleProbeLabel,
   connectionModeLabel,
@@ -16,14 +27,15 @@ import {
   savedAccessLabel,
   tauriRouteRegistry,
   transportKindLabel,
+  waitForGatewayReadiness,
 } from "./tauri-app";
-
-const forbiddenRenderedCopy =
-  /\b(?:assertion|consumer|contract|debug|evidence|fallback|fixture|hybrid|implementation|indexeddb|manifest|migration|opfs|protocol|provider|route counts?|runtime tier|schema|sidecar|sqlite|tested|thin|transport state|webview)\b/i;
 
 function expectProductCopy(...values: string[]) {
   for (const value of values) {
-    expect(value).not.toMatch(forbiddenRenderedCopy);
+    const matches = findForbiddenProductionCopyTerms(value).map(
+      (term) => term.id,
+    );
+    expect(matches, value).toEqual([]);
   }
 }
 
@@ -107,7 +119,7 @@ describe("Tauri application product copy", () => {
     expectProductCopy(...values);
   });
 
-  it("renders native device controls without echoing command or diagnostic metadata", () => {
+  it("renders hostile Tauri route states without echoing command or diagnostic metadata", () => {
     const hostileFeature = {
       available: false,
       permission: "manifest.schema.permission",
@@ -162,23 +174,245 @@ describe("Tauri application product copy", () => {
       loadState: "ready" as const,
       nativePlatform: "linux",
       nativeAvailable: true,
+      nativePermissions: [
+        {
+          name: "sidecar.debug.permission",
+          granted: false,
+          nativeState: "manifest.schema.denied",
+        },
+      ],
+      nativeCapabilities: [
+        {
+          name: "provider.runtime.capability",
+          enabled: false,
+          nativeState: "sqlite.migration.failed",
+        },
+      ],
     };
+    const client = new Aurora({ transport: new MockAuroraTransport() });
+    const route = routeFor("assistant");
 
-    const markup = renderToStaticMarkup(
+    const routeMarkups = [
+      tauriRouteRegistry.assistant({
+        route,
+        snapshot,
+        nativeContext,
+        client,
+        shutdown: async () => undefined,
+        assistantNativePermissions: snapshot.nativePermissions,
+        assistantNativeCapabilities: snapshot.nativeCapabilities,
+      } as never),
+      tauriRouteRegistry.settings({
+        route: routeFor("settings"),
+        snapshot,
+        nativeContext,
+        client,
+        shutdown: async () => undefined,
+        assistantNativePermissions: [],
+        assistantNativeCapabilities: [],
+      } as never),
+      tauriRouteRegistry.diagnostics({
+        route: routeFor("diagnostics"),
+        snapshot,
+        nativeContext,
+        client,
+        shutdown: async () => undefined,
+        assistantNativePermissions: [],
+        assistantNativeCapabilities: [],
+      } as never),
+      <MissingTauriRoute route={hostileRoute()} />,
       tauriRouteRegistry.native({
         snapshot,
         nativeContext,
+        route: routeFor("native"),
+        client,
+        shutdown: async () => undefined,
+        assistantNativePermissions: [],
+        assistantNativeCapabilities: [],
       } as never),
-    );
+    ].map((element) => renderToStaticMarkup(element));
 
-    expect(markup).toContain("Device controls");
-    expect(markup).toContain("2 permissions need review");
-    expect(markup).toContain("Aurora on this computer");
-    expect(markup).toContain("Needs attention");
-    expect(markup).not.toContain("manifest.schema.permission");
-    expect(markup).not.toContain("provider.runtime.capability");
-    expect(markup).not.toContain("local:Orchestrator");
-    expect(markup).not.toContain("secret.example");
-    expectProductCopy(markup);
+    const rendered = routeMarkups.map(renderedUserCopy).join(" ");
+
+    expect(rendered).toContain("Device controls");
+    expect(rendered).toContain("2 permissions need review");
+    expect(rendered).toContain("Aurora on this computer");
+    expect(rendered).toContain("Needs attention");
+    for (const leaked of [
+      "manifest.schema.permission",
+      "provider.runtime.capability",
+      "local:Orchestrator",
+      "secret.example",
+      "SQLite migration failed",
+      "WebView transport",
+      "sidecar debug",
+      "Runtime protocol migration",
+    ]) {
+      expect(rendered).not.toContain(leaked);
+    }
+    expectProductCopy(rendered);
+  });
+
+  it("preserves redacted startup diagnostics outside rendered error copy", async () => {
+    const sidecar = {
+      running: false,
+      mode: "sidecar",
+      gatewayUrl: "http://127.0.0.1:8000",
+      lastError:
+        "SQLite migration failed in sidecar debug mode for token=secret-token at https://secret.example/path",
+      details: {
+        room_password: "super-secret",
+        provider: "local:Orchestrator",
+      },
+    };
+
+    expect(() => assertReadySidecar(sidecar)).toThrow(TauriReadinessError);
+    try {
+      assertReadySidecar(sidecar);
+    } catch (error) {
+      expect(error).toBeInstanceOf(TauriReadinessError);
+      const readiness = error as TauriReadinessError;
+      expect(readiness.message).toBe(
+        "Aurora on this computer could not start. Restart Aurora and try again.",
+      );
+      expect(readiness.diagnosticCause.code).toBe(
+        "AURORA_TAURI_SIDECAR_NOT_READY",
+      );
+      expect(readiness.diagnosticCause.sidecar.lastError).toContain(
+        "SQLite migration failed in sidecar debug mode",
+      );
+      expect(readiness.diagnosticCause.sidecar.lastError).not.toContain(
+        "secret.example",
+      );
+      expect(readiness.diagnosticCause.sidecar.details).toContain(
+        "room_password",
+      );
+      expect(readiness.diagnosticCause.sidecar.details).not.toContain(
+        "super-secret",
+      );
+      expectProductCopy(readiness.message);
+    }
+  });
+
+  it("preserves the last Gateway readiness probe in non-rendered diagnostics", async () => {
+    vi.useFakeTimers();
+    try {
+      const lastProbeError = new Error(
+        "Gateway WebRTC transport probe failed at http://127.0.0.1:8000/api/health with bearer=secret-token",
+      );
+      const runtime = {
+        client: {
+          request: async () => {
+            throw lastProbeError;
+          },
+          registry: {
+            getRegistry: async () => ({}),
+            listServices: async () => ({ services: [] }),
+          },
+          memory: {
+            listSessions: async () => ({ ok: true, sessions: [] }),
+          },
+        },
+        sidecarStatus: async () => ({
+          running: true,
+          mode: "threads",
+          gatewayUrl: "http://127.0.0.1:8000",
+          lastError: null,
+          details: { healthPath: "/api/health" },
+        }),
+      };
+      const readiness = waitForGatewayReadiness(
+        runtime as never,
+        {
+          running: true,
+          mode: "threads",
+          gatewayUrl: "http://127.0.0.1:8000",
+          lastError: null,
+          details: { healthPath: "/api/health" },
+        },
+        () => undefined,
+      );
+      const captured = readiness.catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(90_000);
+      const error = await captured;
+      expect(error).toMatchObject({
+        code: "AURORA_TAURI_GATEWAY_NOT_READY",
+        message:
+          "Aurora on this computer did not finish starting. Restart Aurora and try again.",
+      });
+      expect(error).toBeInstanceOf(TauriReadinessError);
+      const diagnostic = (error as TauriReadinessError).diagnosticCause;
+      expect(diagnostic.gateway?.lastProbeError).toContain(
+        "Gateway WebRTC transport probe failed",
+      );
+      expect(diagnostic.gateway?.lastProbeError).not.toContain("secret-token");
+      expect(diagnostic.gateway?.lastProbeError).not.toContain(
+        "127.0.0.1:8000",
+      );
+      expectProductCopy((error as Error).message);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
+
+function routeFor(id: string): RouteAvailability {
+  const item = getAuroraNavItem(id);
+  if (!item) throw new Error(`Missing test route ${id}`);
+  return {
+    item: navItemSnapshot(item),
+    state: "available-local",
+    explanation: "Available on this device.",
+    providerLabel: "This device",
+    blockers: [],
+    repairActions: [],
+    candidateProviders: [],
+    evidenceSources: [],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: item.adminGated ?? false,
+  };
+}
+
+function hostileRoute(): RouteAvailability {
+  return {
+    ...routeFor("native"),
+    item: {
+      ...routeFor("native").item,
+      label: "Runtime protocol migration",
+    },
+    explanation: "sidecar manifest provider route failed",
+    providerLabel: "WebView transport",
+    evidenceSources: ["SQLite migration fixture"],
+  };
+}
+
+function renderedUserCopy(markup: string): string {
+  const attributes = Array.from(
+    markup.matchAll(
+      /\s(?:aria-label|title|placeholder|alt|disabledreason)=["']([^"']*)["']/giu,
+    ),
+    (match) => match[1] ?? "",
+  );
+  const text = markup
+    .replace(/<script[\s\S]*?<\/script>/giu, " ")
+    .replace(/<style[\s\S]*?<\/style>/giu, " ")
+    .replace(/<[^>]+>/gu, " ");
+  return decodeHtml([text, ...attributes].join(" "))
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&nbsp;/gu, " ")
+    .replace(/&amp;/gu, "&")
+    .replace(/&lt;/gu, "<")
+    .replace(/&gt;/gu, ">")
+    .replace(/&quot;/gu, '"')
+    .replace(/&#x27;|&apos;|&#39;/gu, "'")
+    .replace(/\s+/gu, " ");
+}

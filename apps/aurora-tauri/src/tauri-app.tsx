@@ -752,10 +752,39 @@ function sidecarStartupDetail(sidecar: TauriSidecarStatus): string {
     : "Aurora on this computer needs attention";
 }
 
-function assertReadySidecar(sidecar: TauriSidecarStatus): void {
+export interface TauriReadinessDiagnostic {
+  code: "AURORA_TAURI_SIDECAR_NOT_READY" | "AURORA_TAURI_GATEWAY_NOT_READY";
+  message: string;
+  sidecar: {
+    running: boolean;
+    mode: string | null;
+    lastError: string | null;
+    details: string | null;
+  };
+  gateway?: {
+    attempt: number;
+    elapsedMs: number;
+    lastProbeError: string | null;
+  };
+}
+
+export class TauriReadinessError extends Error {
+  readonly code: TauriReadinessDiagnostic["code"];
+  readonly diagnosticCause: TauriReadinessDiagnostic;
+
+  constructor(message: string, diagnosticCause: TauriReadinessDiagnostic) {
+    super(message);
+    this.name = "TauriReadinessError";
+    this.code = diagnosticCause.code;
+    this.diagnosticCause = diagnosticCause;
+  }
+}
+
+export function assertReadySidecar(sidecar: TauriSidecarStatus): void {
   if (sidecar.running && !sidecar.lastError) return;
-  throw new Error(
+  throw new TauriReadinessError(
     "Aurora on this computer could not start. Restart Aurora and try again.",
+    readinessDiagnostic("AURORA_TAURI_SIDECAR_NOT_READY", sidecar),
   );
 }
 
@@ -775,7 +804,7 @@ async function probeGatewayReadiness(client: AuroraClient): Promise<void> {
   if (!sessions.ok) throw sessions.error;
 }
 
-async function waitForGatewayReadiness(
+export async function waitForGatewayReadiness(
   runtime: AuroraTauriRuntime,
   initialSidecar: TauriSidecarStatus,
   reportProgress: (progressPct: number, detail: string) => void,
@@ -806,9 +835,70 @@ async function waitForGatewayReadiness(
     }
   }
 
-  throw new Error(
+  throw new TauriReadinessError(
     "Aurora on this computer did not finish starting. Restart Aurora and try again.",
+    readinessDiagnostic("AURORA_TAURI_GATEWAY_NOT_READY", latestSidecar, {
+      attempt,
+      elapsedMs: Date.now() - startedAt,
+      lastProbeError: diagnosticText(lastError),
+    }),
   );
+}
+
+function readinessDiagnostic(
+  code: TauriReadinessDiagnostic["code"],
+  sidecar: TauriSidecarStatus,
+  gateway?: TauriReadinessDiagnostic["gateway"],
+): TauriReadinessDiagnostic {
+  return {
+    code,
+    message:
+      code === "AURORA_TAURI_SIDECAR_NOT_READY"
+        ? "Local Aurora startup did not report a ready service."
+        : "Local Aurora startup completed, but the app could not confirm service readiness before timeout.",
+    sidecar: {
+      running: Boolean(sidecar.running),
+      mode: diagnosticText(sidecar.mode),
+      lastError: diagnosticText(sidecar.lastError),
+      details: diagnosticText(sidecar.details),
+    },
+    ...(gateway ? { gateway } : {}),
+  };
+}
+
+function diagnosticText(value: unknown): string | null {
+  if (value == null) return null;
+  const raw =
+    value instanceof Error
+      ? `${value.name}: ${value.message}`
+      : typeof value === "string"
+        ? value
+        : safeStringifyDiagnostic(value);
+  return redactDiagnosticText(raw);
+}
+
+function safeStringifyDiagnostic(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function redactDiagnosticText(value: string): string {
+  return value
+    .replace(
+      /"((?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|room_password)"\s*:\s*"[^"]*"/giu,
+      '"$1":"[redacted]"',
+    )
+    .replace(/https?:\/\/[^\s"')]+/giu, "[redacted-url]")
+    .replace(/wss?:\/\/[^\s"')]+/giu, "[redacted-url]")
+    .replace(
+      /\b((?:access_?|refresh_?|api_?)?token|secret|password|credential|bearer|api[_ -]?key|authorization|room_password)\b\s*[:=]\s*["']?[^"',\s}]+/giu,
+      "$1=[redacted]",
+    )
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gu, "[redacted-secret]")
+    .slice(0, 1_200);
 }
 
 const CORE_PROGRESS_PCT = AURORA_OWL_LOADER_STAGES.find(
@@ -1534,11 +1624,15 @@ function TauriDiagnosticsPage({
   );
 }
 
-function MissingTauriRoute({ route }: { route: RouteAvailability }) {
+export function MissingTauriRoute({
+  route: _route,
+}: {
+  route: RouteAvailability;
+}) {
   return (
     <div className="ata-page-stack">
       <StateSurface
-        title={`${route.item.label} is unavailable`}
+        title="Page unavailable"
         state="denied"
         description="Aurora could not open this page. Return to the previous page and try again."
         evidence={null}
