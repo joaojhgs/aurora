@@ -85,6 +85,7 @@ TOOLING_PROVIDER_PEER_ID = "aurora-sdk-local-provider-v1"
 TOOLING_PROVIDER_SERVICE_INSTANCE_ID = f"local:{quote(TOOLING_PROVIDER_PEER_ID, safe='')}:Tooling"
 SDK_PROVIDER_REQUIRED_PERMISSION_OVERRIDES = {
     "Tooling.GetExportCatalog": "Tooling.GetTools",
+    "Tooling.PrepareExecution": "Tooling.ExecuteTool",
 }
 
 SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (

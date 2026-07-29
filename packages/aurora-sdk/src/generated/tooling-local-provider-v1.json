@@ -628,7 +628,7 @@
       "digest": "c4532fa6e9ced621f75dea566e14eacb1f1bafa271b091d60a9974f20ad5a651"
     }
   },
-  "final_checksum": "03d3ef12ceeabe92a3d003a9e79286274914d36674202ae41fd92e4ffe1dec14",
+  "final_checksum": "0dd0ee56c28810a0a9d5686c6132b2845ec8b09ce8ab68438c34aa40d920e99c",
   "methods": [
     {
       "input_schema_hash": "b40b50bac773b8e49ad345b17fffb816097a6d2e15fd88bbae6fa1bb0e910def",
@@ -652,7 +652,7 @@
       "output_schema_hash": "9985c7c5b15f4e0aa59980459a983c7f3c70fbf8e4bbcd1a065aedbdacd9928e",
       "provider_peer_id": "aurora-sdk-local-provider-v1",
       "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-      "required_permission": "Tooling.PrepareExecution"
+      "required_permission": "Tooling.ExecuteTool"
     },
     {
       "input_schema_hash": "9547a17d13c96218f08f90c83258a985fc6d5aad9aef7aff3a643f784b001132",
@@ -663,7 +663,7 @@
       "required_permission": "Tooling.ExecuteTool"
     }
   ],
-  "projection_page_hash": "41c22c60d90813cc3d18d5a6061f4d523ef8c8194b642f2c56792d786479e1d3",
+  "projection_page_hash": "8e66ad3ef353ad9fda7172c44672c7539560385d8efd4a9ea4597bd38fc9f0a5",
   "provider_peer_id": "aurora-sdk-local-provider-v1",
   "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
   "version": 1

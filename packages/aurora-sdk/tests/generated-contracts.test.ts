@@ -407,6 +407,7 @@ describe('generated backend contracts', () => {
     expect(providerInventory.methods.map((method: ProviderMethod) => method.method_id)).toEqual(contractSchema.allowlist)
     const providerMethods = Object.fromEntries(providerInventory.methods.map((method: ProviderMethod) => [method.method_id, method]))
     expect(providerMethods['Tooling.GetExportCatalog'].required_permission).toBe('Tooling.GetTools')
+    expect(providerMethods['Tooling.PrepareExecution'].required_permission).toBe('Tooling.ExecuteTool')
     expect(providerInventory.canonical_digest_vectors.identity_digest.reordered_json_a).not.toEqual(
       providerInventory.canonical_digest_vectors.identity_digest.reordered_json_b
     )

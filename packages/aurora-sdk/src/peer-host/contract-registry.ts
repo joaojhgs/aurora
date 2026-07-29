@@ -114,7 +114,7 @@ export function createToolingPeerHostRegistry(handlers: {
       outputSchemaId: 'Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse',
       inputSchema: ToolingPrepareExecutionInputToolingPrepareExecutionRequestSchema,
       outputSchema: ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema,
-      requiredPermissions: [TOOLING_METHODS.prepareExecution],
+      requiredPermissions: [TOOLING_METHODS.executeTool],
       maxRequestBytes: DEFAULT_METHOD_BYTES,
       timeoutMs: DEFAULT_TIMEOUT_MS,
       handler: handlers.prepareExecution

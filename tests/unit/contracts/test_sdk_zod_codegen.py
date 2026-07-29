@@ -260,6 +260,10 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     )
     provider_methods = {item["method_id"]: item for item in provider["methods"]}
     assert provider_methods["Tooling.GetExportCatalog"]["required_permission"] == "Tooling.GetTools"
+    assert (
+        provider_methods["Tooling.PrepareExecution"]["required_permission"]
+        == "Tooling.ExecuteTool"
+    )
     assert schema["allowlist"] == [
         "Tooling.GetTools",
         "Tooling.GetExportCatalog",

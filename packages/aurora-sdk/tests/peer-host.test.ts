@@ -153,6 +153,7 @@ describe('WebRtcPeerHost', () => {
     })
 
     expect(registry.get('Tooling.GetExportCatalog')?.requiredPermissions).toEqual(['Tooling.GetTools'])
+    expect(registry.get('Tooling.PrepareExecution')?.requiredPermissions).toEqual(['Tooling.ExecuteTool'])
   })
 
   it('parses generated Tooling schemas before dispatching an authorized handler', async () => {
