@@ -17,6 +17,7 @@ import {
   PairingQueueSurface,
   RoutePolicyView,
   RouteSheet,
+  assistantPrivacyClassCopy,
   auroraEmbeddedNavItems,
   auroraNavSections,
   buildAssistantVoiceModel,
@@ -137,30 +138,42 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
   })
 
   it('keeps microphone route warnings product-safe while preserving the privacy class value', () => {
-    const route = {
-      ...enabledRoute('assistant'),
-      item: { ...enabledRoute('assistant').item, privacyClass: 'raw-audio' as PrivacyClass },
-      state: 'available-remote',
-      providerLabel: 'peer-WebRTC-runtime',
-      explanation: 'remote WebRTC transport runtime fallback',
-      candidateProviders: [{
-        id: 'remote:peer-WebRTC-runtime:Orchestrator',
-        label: 'remote WebRTC runtime',
-        state: 'available-remote',
-        reason: 'transport ready',
-        providerKind: 'remote',
-        selectable: true,
-        requiredAction: null,
-      }],
-    } satisfies RouteAvailability
+    const route = rawAudioAssistantRoute()
 
     const warning = assistantRemotePrivacyWarning(route)
 
     expect(route.item.privacyClass).toBe('raw-audio')
+    expect(assistantPrivacyClassCopy('raw-audio')).toBe('Microphone audio')
+    expect(assistantPrivacyClassCopy('unknown-internal')).toBe('Sensitive')
     expect(warning).toContain('Microphone audio')
     expect(warning).not.toContain('Raw audio')
     expect(warning).not.toMatch(/\braw\b/iu)
     expect(findForbiddenProductionCopyTerms(warning ?? '').map((term) => term.id)).toEqual([])
+  })
+
+  it('renders raw-audio assistant and voice privacy copy without leaking the enum in text or user-facing attributes', () => {
+    const route = rawAudioAssistantRoute()
+    const markup = renderToStaticMarkup(
+      <AssistantView
+        client={new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })}
+        route={route}
+        nativeAvailable
+        nativePlatform={hostile.routeReason}
+        nativePermissions={[{ name: hostile.routeReason, granted: false }]}
+        nativeCapabilities={[{ name: hostile.methodId, enabled: false }]}
+        recentVoiceEvents={hostileVoiceEvents()}
+        initialSession={assistantSession()}
+      />
+    )
+    const rendered = renderedUserCopy(markup)
+
+    expect(route.item.privacyClass).toBe('raw-audio')
+    expect(rendered).toContain('Microphone audio')
+    expect(rendered).not.toContain('raw-audio')
+    expect(rendered).not.toContain('Raw Audio')
+    expect(rendered).not.toContain('Raw audio')
+    expect(rendered).not.toMatch(/\braw\b/iu)
+    expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), rendered).toEqual([])
   })
 })
 
@@ -498,6 +511,26 @@ function enabledRoute(id: string): RouteAvailability {
     routeable: true,
     disabled: false,
     requiresAdminAction: false
+  }
+}
+
+function rawAudioAssistantRoute(): RouteAvailability {
+  const route = enabledRoute('assistant')
+  return {
+    ...route,
+    item: { ...route.item, privacyClass: 'raw-audio' as PrivacyClass },
+    state: 'available-remote',
+    providerLabel: 'peer-WebRTC-runtime',
+    explanation: 'remote WebRTC transport runtime fallback',
+    candidateProviders: [{
+      id: 'remote:peer-WebRTC-runtime:Orchestrator',
+      label: 'remote WebRTC runtime',
+      state: 'available-remote',
+      reason: 'transport ready',
+      providerKind: 'remote',
+      selectable: true,
+      requiredAction: null,
+    }],
   }
 }
 

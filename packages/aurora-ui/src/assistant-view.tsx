@@ -50,7 +50,8 @@ import {
 } from '#components/ui/message-scroller'
 import { ToolFallbackArgs, ToolFallbackContent, ToolFallbackResult, ToolFallbackRoot } from '#components/assistant-ui/tool-fallback'
 import { ModelSelector, type ModelOption } from '#components/assistant-ui/model-selector'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { Badge } from '#components/ui/badge'
+import { EvidenceBadge, StatusBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
 
@@ -2432,7 +2433,7 @@ export function AssistantView({
                 </ModelSelector.Root>
               </div>
               <div className="aui-composer-route-context">
-                <PrivacyBadge privacy={route.item.privacyClass} />
+                <AssistantPrivacyBadge privacy={route.item.privacyClass} />
                 {attachments.length > 0 ? <span className="aui-composer-attachment-count">{attachments.length} attached</span> : null}
                 <Button
                   type="button"
@@ -2554,7 +2555,7 @@ export function AssistantView({
           <dl>
 	            <div><dt>Device or service</dt><dd>{assistantRouteProviderCopy(route)}</dd></div>
             <div><dt>Availability</dt><dd>{route.state}</dd></div>
-            <div><dt>Privacy</dt><dd>{route.item.privacyClass}</dd></div>
+            <div><dt>Privacy</dt><dd>{assistantPrivacyClassCopy(route.item.privacyClass)}</dd></div>
             <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
             <div><dt>Cancellation</dt><dd>{controls.canCancel ? 'supported' : controls.cancelReason}</dd></div>
@@ -2796,7 +2797,7 @@ function VoiceModePanel({
           <h2 id="assistant-voice-title">Voice modes</h2>
         </div>
         <div className="aui-assistant-badges" aria-label="Voice status">
-          <PrivacyBadge privacy={model.privacyClass} />
+          <AssistantPrivacyBadge privacy={model.privacyClass} />
           <EvidenceBadge label={productConnectionCopy(model.transport)} />
           <EvidenceBadge label={model.consentGranted ? 'consent granted' : 'consent required'} />
           <EvidenceBadge label={voiceDestinationCopy(model.targetLabel)} />
@@ -2812,7 +2813,7 @@ function VoiceModePanel({
             </header>
             <p>{chip.detail}</p>
             <div className="aui-settings-inline">
-              <PrivacyBadge privacy={chip.privacyClass} />
+              <AssistantPrivacyBadge privacy={chip.privacyClass} />
               <EvidenceBadge label={voiceProviderCopy(chip.providerLabel)} />
             </div>
             <small>{voiceChipStatusCopy(chip)}</small>
@@ -2864,7 +2865,7 @@ function VoiceModePanel({
         <aside className="aui-voice-privacy" aria-label="Audio route privacy details">
           <h3>Audio privacy</h3><span className="aui-sr-only">Route sheet</span>
           <dl>
-            <div><dt>Privacy class</dt><dd>{model.privacyClass}</dd></div>
+            <div><dt>Privacy class</dt><dd>{assistantPrivacyClassCopy(model.privacyClass)}</dd></div>
             <div><dt>Destination</dt><dd>{voiceDestinationCopy(model.targetLabel)}</dd></div>
             <div><dt>Connection</dt><dd>{productConnectionCopy(model.transport)}</dd></div>
             <div><dt>Retention</dt><dd>{model.retentionPolicy}</dd></div>
@@ -3610,6 +3611,37 @@ function executionPeerLabel(label: string, peerId: string | null): string {
   return readable || peerId || 'Peer'
 }
 
+function AssistantPrivacyBadge({ privacy }: { privacy: string }) {
+  return <Badge variant={assistantPrivacyVariant(privacy)}>{assistantPrivacyClassCopy(privacy)}</Badge>
+}
+
+export function assistantPrivacyClassCopy(privacy: string | null | undefined): string {
+  switch (privacy) {
+    case 'public':
+      return 'Public'
+    case 'personal':
+      return 'Personal'
+    case 'sensitive':
+      return 'Sensitive'
+    case 'secret':
+      return 'Private'
+    case 'raw-audio':
+      return 'Microphone audio'
+    case 'credential':
+      return 'Credential'
+    case 'admin-critical':
+      return 'Protected'
+    default:
+      return 'Sensitive'
+  }
+}
+
+function assistantPrivacyVariant(privacy: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (privacy === 'admin-critical' || privacy === 'secret' || privacy === 'credential') return 'destructive'
+  if (privacy === 'sensitive' || privacy === 'raw-audio') return 'secondary'
+  return 'outline'
+}
+
 export function assistantRemotePrivacyWarning(route: RouteAvailability): string | null {
   const privacyClass = route.item.privacyClass
   if (privacyClass === 'public') return null
@@ -3624,9 +3656,7 @@ export function assistantRemotePrivacyWarning(route: RouteAvailability): string 
     route.selectorRequired ||
     /remote|mesh|peer|cloud|http|fallback/i.test(remoteOrMeshEvidence)
   if (!remoteOrMeshFallback) return null
-  const label = privacyClass === 'raw-audio'
-    ? 'Microphone audio'
-    : privacyClass.charAt(0).toUpperCase() + privacyClass.slice(1)
+  const label = assistantPrivacyClassCopy(privacyClass)
   return `${label} data needs privacy review before another device can help; nothing leaves until consent, privacy indicator, and policy allow it.`
 }
 
