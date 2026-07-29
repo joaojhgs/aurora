@@ -2,17 +2,22 @@ import type { AuthenticatedPeerContext, PeerAuthorityResolver } from '../peer-ho
 import type { LocalToolPolicyPorts } from './execution-policy.js'
 import type { LocalToolExecutionContext } from './tool-registry.js'
 
-export function createPeerAuthorityLocalToolPolicyPorts(resolver: PeerAuthorityResolver): LocalToolPolicyPorts {
+export interface PeerAuthorityLocalToolPolicyPortsOptions {
+  readonly resolver: PeerAuthorityResolver
+  readonly providerPeerId: string
+}
+
+export function createPeerAuthorityLocalToolPolicyPorts(options: PeerAuthorityLocalToolPolicyPortsOptions): LocalToolPolicyPorts {
   return {
-    hasMethodGrant: (methodId, context) => resolveDimensionGrant(resolver, context, { methodId }),
-    hasToolGrant: (toolContractId, context) => resolveDimensionGrant(resolver, context, { toolContractId }),
-    hasCapabilityGrant: (capabilityPackId, context) => resolveDimensionGrant(resolver, context, { capabilityPackId }),
-    hasResourceGrant: (resourceScope, context) => resolveDimensionGrant(resolver, context, { resourceScope })
+    hasMethodGrant: (methodId, context) => resolveDimensionGrant(options, context, { methodId }),
+    hasToolGrant: (toolContractId, context) => resolveDimensionGrant(options, context, { toolContractId }),
+    hasCapabilityGrant: (capabilityPackId, context) => resolveDimensionGrant(options, context, { capabilityPackId }),
+    hasResourceGrant: (resourceScope, context) => resolveDimensionGrant(options, context, { resourceScope })
   }
 }
 
 async function resolveDimensionGrant(
-  resolver: PeerAuthorityResolver,
+  options: PeerAuthorityLocalToolPolicyPortsOptions,
   context: LocalToolExecutionContext,
   dimension: {
     readonly methodId?: string
@@ -21,18 +26,23 @@ async function resolveDimensionGrant(
     readonly resourceScope?: string
   }
 ): Promise<boolean> {
-  const authenticated = authenticatedContextForCaller(context)
+  const authenticated = authenticatedContextForCaller(context, options.providerPeerId)
   if (authenticated === undefined) return false
-  const decision = await resolver.resolveGrant(authenticated, {
-    ...dimension,
-    nowMs: context.nowMs
-  })
-  return decision.allowed
+  try {
+    const decision = await options.resolver.resolveGrant(authenticated, {
+      ...dimension,
+      nowMs: context.nowMs
+    })
+    return decision.allowed
+  } catch {
+    return false
+  }
 }
 
-function authenticatedContextForCaller(context: LocalToolExecutionContext): AuthenticatedPeerContext | undefined {
+function authenticatedContextForCaller(context: LocalToolExecutionContext, providerPeerId: string): AuthenticatedPeerContext | undefined {
   const authenticated = context.authenticatedPeerContext
   if (authenticated === undefined) return undefined
   if (authenticated.selector.claimantPeerId !== context.callerPeerId) return undefined
+  if (authenticated.selector.verifierPeerId !== providerPeerId) return undefined
   return authenticated
 }

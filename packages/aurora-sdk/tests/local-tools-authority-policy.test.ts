@@ -18,6 +18,8 @@ import {
   type ProviderLocalPeerCredentialVerifierV1,
   type ProviderLocalPeerGrantV1,
   type PeerRelationshipSelector,
+  type PeerAuthorityDecision,
+  type PeerGrantResolutionRequest,
   type ReconnectTransportAttestation
 } from '../src/peer-host/index.js'
 
@@ -103,6 +105,15 @@ describe('local Tooling authority policy ports', () => {
     )).resolves.toMatchObject({ ok: false, status: 'denied', error_code: 'resource_not_granted' })
   })
 
+  it('denies an explicitly missing method grant before checking tool dimensions', async () => {
+    const { provider } = await providerWithGrant(grant({ allowedMethodIds: ['Tooling.GetTools'] }))
+
+    await expect(provider.prepareExecution(
+      { tool_name: 'echo', arguments: { text: 'hello' } },
+      context({ permissions: ['Tooling.ExecuteTool', 'Echo.Use'], authenticatedPeerContext })
+    )).resolves.toMatchObject({ ok: false, policy_decision: { reason: 'method_not_granted' } })
+  })
+
   it('fails closed when authenticated context is missing or belongs to a different caller', async () => {
     const { provider } = await providerWithGrant(grant())
 
@@ -119,6 +130,44 @@ describe('local Tooling authority policy ports', () => {
         authenticatedPeerContext
       })
     )).resolves.toMatchObject({ ok: false, policy_decision: { reason: 'method_not_granted' } })
+
+    await expect(provider.prepareExecution(
+      { tool_name: 'echo', arguments: { text: 'hello' } },
+      context({
+        permissions: ['Tooling.ExecuteTool', 'Echo.Use'],
+        authenticatedPeerContext: {
+          ...authenticatedPeerContext,
+          selector: { ...selector, verifierPeerId: 'other-provider' }
+        }
+      })
+    )).resolves.toMatchObject({ ok: false, policy_decision: { reason: 'method_not_granted' } })
+  })
+
+  it('fails closed to structured policy denial when the resolver or grant repository throws', async () => {
+    const throwingRepository = new ThrowingPeerGrantRepository()
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository: throwingRepository
+    })
+    const registry = registryWithHandler()
+    const policy = new LocalToolExecutionPolicy({
+      providerPeerId: 'provider',
+      providerServiceInstanceId: 'local:provider:Tooling',
+      ports: createPeerAuthorityLocalToolPolicyPorts({ resolver, providerPeerId: 'provider' })
+    })
+    const provider = createLocalToolingProviderHandlers({
+      registry,
+      policy,
+      providerPeerId: 'provider',
+      serviceInstanceId: 'local:provider:Tooling',
+      audit: () => undefined,
+      exportDecision: { isShared: () => true }
+    })
+
+    await expect(provider.executeTool(
+      { tool_name: 'echo', arguments: { text: 'hello' } },
+      context({ permissions: ['Tooling.ExecuteTool', 'Echo.Use'], authenticatedPeerContext })
+    )).resolves.toMatchObject({ ok: false, status: 'denied', error_code: 'method_not_granted' })
   })
 
   it('propagates authenticated context through provider policy checks and handlers', async () => {
@@ -152,7 +201,7 @@ describe('local Tooling authority policy ports', () => {
     const policy = new LocalToolExecutionPolicy({
       providerPeerId: 'provider',
       providerServiceInstanceId: 'local:provider:Tooling',
-      ports: createPeerAuthorityLocalToolPolicyPorts(resolver)
+      ports: createPeerAuthorityLocalToolPolicyPorts({ resolver, providerPeerId: 'provider' })
     })
     const provider = createLocalToolingProviderHandlers({
       registry,
@@ -188,7 +237,7 @@ async function providerWithGrant(
     verifierStore: new MemoryInboundCredentialVerifierStore(),
     grantRepository
   })
-  const basePorts = createPeerAuthorityLocalToolPolicyPorts(resolver)
+  const basePorts = createPeerAuthorityLocalToolPolicyPorts({ resolver, providerPeerId: 'provider' })
   const policy = new LocalToolExecutionPolicy({
     providerPeerId: 'provider',
     providerServiceInstanceId: 'local:provider:Tooling',
@@ -270,5 +319,11 @@ function context(input: {
     signal: new AbortController().signal,
     receivedAtMs: 1_000,
     deadlineAtMs: 31_000
+  }
+}
+
+class ThrowingPeerGrantRepository extends MemoryPeerGrantRepository {
+  override async resolveGrant(_request: PeerGrantResolutionRequest): Promise<PeerAuthorityDecision> {
+    throw new Error('repository unavailable')
   }
 }

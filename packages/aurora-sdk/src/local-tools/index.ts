@@ -42,6 +42,9 @@ export type {
 export {
   createPeerAuthorityLocalToolPolicyPorts
 } from './authority-policy.js'
+export type {
+  PeerAuthorityLocalToolPolicyPortsOptions
+} from './authority-policy.js'
 export {
   LocalToolHandlerError,
   createLocalToolingProviderHandlers
