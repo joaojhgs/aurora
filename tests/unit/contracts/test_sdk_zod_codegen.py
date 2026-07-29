@@ -261,8 +261,7 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     provider_methods = {item["method_id"]: item for item in provider["methods"]}
     assert provider_methods["Tooling.GetExportCatalog"]["required_permission"] == "Tooling.GetTools"
     assert (
-        provider_methods["Tooling.PrepareExecution"]["required_permission"]
-        == "Tooling.ExecuteTool"
+        provider_methods["Tooling.PrepareExecution"]["required_permission"] == "Tooling.ExecuteTool"
     )
     assert schema["allowlist"] == [
         "Tooling.GetTools",
@@ -458,10 +457,20 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
     assert get_tools_request["normalized"]["top_k"] == 2**53 - 1
 
     get_tools_response = by_model["ToolingGetToolsResponse"]["vectors"]["positive"]
-    assert get_tools_response["normalized"]["tools"][0]["legacy_global_tool_ids"] == [
+    normalized_tool = get_tools_response["normalized"]["tools"][0]
+    assert normalized_tool["legacy_global_tool_ids"] == [
         "legacy-a",
         "legacy-z",
     ]
+    assert normalized_tool["share_group_id"] == "core:memory"
+    assert normalized_tool["share_group_label"] == "Memory"
+    assert normalized_tool["exportable"] is True
+    assert normalized_tool["source_type"] == "local"
+    assert normalized_tool["mutating"] is True
+
+    get_tools_negative = by_model["ToolingGetToolsResponse"]["vectors"]["negative"]
+    assert get_tools_negative["accepted"] is False
+    assert get_tools_negative["issue_path"] == "$.tools.0.legacy_global_tool_ids"
 
     execute_negative = by_model["ToolingExecuteToolRequest"]["vectors"]["negative"]
     assert execute_negative["accepted"] is False

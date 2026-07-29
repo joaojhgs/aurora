@@ -779,7 +779,10 @@ def _tool_info_fixture() -> dict[str, Any]:
         "tool_id_scheme": "aurora-tool",
         "tool_id_version": 1,
         "tool_contract_id": tool_contract_id,
+        "share_group_id": "core:memory",
+        "share_group_label": "Memory",
         "legacy_global_tool_ids": ["legacy-z", "legacy-a", "legacy-z"],
+        "exportable": True,
         "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
         "provider_service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
         "namespace": "core.memory",
@@ -789,6 +792,7 @@ def _tool_info_fixture() -> dict[str, Any]:
         "args_schema": {"type": "object", "properties": {"text": {"type": "string"}}},
         "schema": {"type": "object", "properties": {"text": {"type": "string"}}},
         "argument_visibility": {},
+        "source_type": "local",
         "source": "core",
         "source_id": "core:memory",
         "trust_tier": "trusted",
@@ -797,7 +801,12 @@ def _tool_info_fixture() -> dict[str, Any]:
         "execution_location": "local",
         "safety_class": "standard",
         "risk_class": "standard",
-        "required_permissions": [],
+        "data_egress": False,
+        "mutating": True,
+        "external": False,
+        "admin": False,
+        "required_permissions": ["Tooling.ExecuteTool"],
+        "confirmation_required": False,
         "privacy_hints": [],
         "provenance": {
             "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
@@ -1227,12 +1236,15 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
                 TOOLING_PROVIDER_PEER_ID, "core.alpha.lookup"
             ),
             "tool_contract_id": "core.alpha.lookup",
+            "share_group_id": "core:alpha",
+            "share_group_label": "Alpha",
             "legacy_global_tool_ids": ["legacy-beta", "legacy-alpha"],
             "display_name": "Alpha lookup",
             "args_schema": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string"},
+                    "api_key": {"type": "string"},
                     "options": {
                         "type": "object",
                         "properties": {"limit": {"type": "integer", "minimum": 0, "maximum": 5}},
@@ -1245,6 +1257,22 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
                     "result": {"type": "string"},
                     "metadata": {"type": "object", "properties": {}},
                 },
+            },
+            "argument_visibility": {
+                "query": "display",
+                "api_key": "secret",
+            },
+            "source_id": "core:alpha",
+            "capability_class": "read",
+            "mutating": False,
+            "provenance": {
+                "provider_peer_id": TOOLING_PROVIDER_PEER_ID,
+                "provider_service_instance_id": TOOLING_PROVIDER_SERVICE_INSTANCE_ID,
+                "provider_kind": "local",
+                "source": "core",
+                "advertised_name": "lookup_alpha",
+                "stable_source_id": "core:alpha",
+                "provider_tool_id": "lookup_alpha",
             },
         }
     )
@@ -1259,10 +1287,27 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
         reason_code="removed_by_provider",
         last_schema_hash=compute_tool_schema_hash(alternate_tool),
     )
-    final_checksum = compute_projection_checksum([digest_tool], [], [])
+    digest_page_peer_id = "peer-\u2603"
+    digest_page_service_instance_id = "local:peer-%E2%98%83:Tooling"
+    digest_page_tool = digest_tool.model_copy(
+        update={
+            "global_tool_id": canonical_tool_global_id(
+                digest_page_peer_id, digest_tool.tool_contract_id
+            ),
+            "provider_peer_id": digest_page_peer_id,
+            "provider_service_instance_id": digest_page_service_instance_id,
+            "provenance": digest_tool.provenance.model_copy(
+                update={
+                    "provider_peer_id": digest_page_peer_id,
+                    "provider_service_instance_id": digest_page_service_instance_id,
+                }
+            ),
+        }
+    )
+    page_final_checksum = compute_projection_checksum([digest_page_tool], [], [])
     digest_page = ToolingGetExportCatalogResponse(
-        provider_peer_id="peer-\u2603",
-        service_instance_id="local:peer-%E2%98%83:Tooling",
+        provider_peer_id=digest_page_peer_id,
+        service_instance_id=digest_page_service_instance_id,
         authority_revision=ToolingProjectionAuthorityRevision(
             catalog_revision=2,
             export_policy_revision=3,
@@ -1272,18 +1317,19 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
             protocol_revision=13,
         ),
         projection_revision="projection-\u2603",
-        projection_digest=canonical_digest(
-            {"zeta": "\u2603", "alpha": ["schema", {"reordered": True}]}
-        ),
+        projection_digest=page_final_checksum,
         page_index=0,
         page_size=1,
         page_hash="0" * 64,
-        tools=[digest_tool],
+        tools=[digest_page_tool],
         blocked_tools=[],
         retirements=[],
         complete=True,
         total_count=1,
-        final_checksum=final_checksum,
+        final_checksum=page_final_checksum,
+    )
+    digest_page = digest_page.model_copy(
+        update={"page_hash": compute_projection_page_hash(digest_page)}
     )
     hostile_identity_cases = [
         ("peer/slash", "core.tool/slash"),
@@ -1367,10 +1413,10 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
             "digest": compute_projection_page_hash(digest_page),
         },
         "final_checksum": {
-            "canonical_tools": [digest_tool.model_dump(mode="json")],
+            "canonical_tools": [digest_page_tool.model_dump(mode="json")],
             "canonical_retirements": [],
             "canonical_blocked_tools": [],
-            "digest": final_checksum,
+            "digest": page_final_checksum,
         },
         "order_independent_final_checksum": {
             "canonical_tools": [

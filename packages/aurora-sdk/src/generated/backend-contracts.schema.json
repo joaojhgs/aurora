@@ -1541,6 +1541,7 @@
               "service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
               "tools": [
                 {
+                  "admin": false,
                   "aliases": [
                     "remember"
                   ],
@@ -1554,9 +1555,13 @@
                   },
                   "argument_visibility": {},
                   "capability_class": "write",
+                  "confirmation_required": false,
+                  "data_egress": false,
                   "description": "Store a memory",
                   "display_name": "Memory",
                   "execution_location": "local",
+                  "exportable": true,
+                  "external": false,
                   "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                   "legacy_global_tool_ids": [
                     "legacy-z",
@@ -1564,6 +1569,7 @@
                     "legacy-z"
                   ],
                   "local_name": "upsert_memory",
+                  "mutating": true,
                   "name": "memory.upsert",
                   "namespace": "core.memory",
                   "privacy_hints": [],
@@ -1578,7 +1584,9 @@
                   },
                   "provider_peer_id": "aurora-sdk-local-provider-v1",
                   "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-                  "required_permissions": [],
+                  "required_permissions": [
+                    "Tooling.ExecuteTool"
+                  ],
                   "resource_scope": [],
                   "risk_class": "standard",
                   "safety_class": "standard",
@@ -1590,8 +1598,11 @@
                     },
                     "type": "object"
                   },
+                  "share_group_id": "core:memory",
+                  "share_group_label": "Memory",
                   "source": "core",
                   "source_id": "core:memory",
+                  "source_type": "local",
                   "tool_contract_id": "core.memory.upsert",
                   "tool_id_scheme": "aurora-tool",
                   "tool_id_version": 1,
@@ -1629,6 +1640,7 @@
               "service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
               "tools": [
                 {
+                  "admin": false,
                   "aliases": [
                     "remember"
                   ],
@@ -1642,9 +1654,13 @@
                   },
                   "argument_visibility": {},
                   "capability_class": "write",
+                  "confirmation_required": false,
+                  "data_egress": false,
                   "description": "Store a memory",
                   "display_name": "Memory",
                   "execution_location": "local",
+                  "exportable": true,
+                  "external": false,
                   "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                   "legacy_global_tool_ids": [
                     "legacy-z",
@@ -1652,6 +1668,7 @@
                     "legacy-z"
                   ],
                   "local_name": "upsert_memory",
+                  "mutating": true,
                   "name": "memory.upsert",
                   "namespace": "core.memory",
                   "privacy_hints": [],
@@ -1666,7 +1683,9 @@
                   },
                   "provider_peer_id": "aurora-sdk-local-provider-v1",
                   "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-                  "required_permissions": [],
+                  "required_permissions": [
+                    "Tooling.ExecuteTool"
+                  ],
                   "resource_scope": [],
                   "risk_class": "standard",
                   "safety_class": "standard",
@@ -1678,8 +1697,11 @@
                     },
                     "type": "object"
                   },
+                  "share_group_id": "core:memory",
+                  "share_group_label": "Memory",
                   "source": "core",
                   "source_id": "core:memory",
+                  "source_type": "local",
                   "tool_contract_id": "core.memory.upsert",
                   "tool_id_scheme": "aurora-tool",
                   "tool_id_version": 1,
@@ -1718,6 +1740,7 @@
               "service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
               "tools": [
                 {
+                  "admin": false,
                   "aliases": [
                     "remember"
                   ],
@@ -1731,9 +1754,13 @@
                   },
                   "argument_visibility": {},
                   "capability_class": "write",
+                  "confirmation_required": false,
+                  "data_egress": false,
                   "description": "Store a memory",
                   "display_name": "Memory",
                   "execution_location": "local",
+                  "exportable": true,
+                  "external": false,
                   "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                   "legacy_global_tool_ids": [
                     "legacy-z",
@@ -1741,6 +1768,7 @@
                     "legacy-z"
                   ],
                   "local_name": "upsert_memory",
+                  "mutating": true,
                   "name": "memory.upsert",
                   "namespace": "core.memory",
                   "privacy_hints": [],
@@ -1755,7 +1783,9 @@
                   },
                   "provider_peer_id": "aurora-sdk-local-provider-v1",
                   "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-                  "required_permissions": [],
+                  "required_permissions": [
+                    "Tooling.ExecuteTool"
+                  ],
                   "resource_scope": [],
                   "risk_class": "standard",
                   "safety_class": "standard",
@@ -1767,8 +1797,11 @@
                     },
                     "type": "object"
                   },
+                  "share_group_id": "core:memory",
+                  "share_group_label": "Memory",
                   "source": "core",
                   "source_id": "core:memory",
+                  "source_type": "local",
                   "tool_contract_id": "core.memory.upsert",
                   "tool_id_scheme": "aurora-tool",
                   "tool_id_version": 1,
@@ -1807,6 +1840,7 @@
             "service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
             "tools": [
               {
+                "admin": false,
                 "aliases": [
                   "remember"
                 ],
@@ -1820,9 +1854,13 @@
                 },
                 "argument_visibility": {},
                 "capability_class": "write",
+                "confirmation_required": false,
+                "data_egress": false,
                 "description": "Store a memory",
                 "display_name": "Memory",
                 "execution_location": "local",
+                "exportable": true,
+                "external": false,
                 "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                 "legacy_global_tool_ids": [
                   "legacy-z",
@@ -1830,6 +1868,7 @@
                   "legacy-z"
                 ],
                 "local_name": "upsert_memory",
+                "mutating": true,
                 "name": "memory.upsert",
                 "namespace": "core.memory",
                 "privacy_hints": [],
@@ -1844,7 +1883,9 @@
                 },
                 "provider_peer_id": "aurora-sdk-local-provider-v1",
                 "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-                "required_permissions": [],
+                "required_permissions": [
+                  "Tooling.ExecuteTool"
+                ],
                 "resource_scope": [],
                 "risk_class": "standard",
                 "safety_class": "standard",
@@ -1856,8 +1897,11 @@
                   },
                   "type": "object"
                 },
+                "share_group_id": "core:memory",
+                "share_group_label": "Memory",
                 "source": "core",
                 "source_id": "core:memory",
+                "source_type": "local",
                 "tool_contract_id": "core.memory.upsert",
                 "tool_id_scheme": "aurora-tool",
                 "tool_id_version": 1,
@@ -1912,7 +1956,7 @@
                 "description": "Store a memory",
                 "display_name": "Memory",
                 "execution_location": "local",
-                "exportable": false,
+                "exportable": true,
                 "external": false,
                 "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                 "legacy_global_tool_ids": [
@@ -1920,7 +1964,7 @@
                   "legacy-z"
                 ],
                 "local_name": "upsert_memory",
-                "mutating": false,
+                "mutating": true,
                 "name": "memory.upsert",
                 "namespace": "core.memory",
                 "privacy_hints": [],
@@ -1939,7 +1983,9 @@
                 "provider_peer_id": "aurora-sdk-local-provider-v1",
                 "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
                 "rate_limit_hints": null,
-                "required_permissions": [],
+                "required_permissions": [
+                  "Tooling.ExecuteTool"
+                ],
                 "resource_scope": [],
                 "risk_class": "standard",
                 "safety_class": "standard",
@@ -1951,8 +1997,8 @@
                   },
                   "type": "object"
                 },
-                "share_group_id": "",
-                "share_group_label": "",
+                "share_group_id": "core:memory",
+                "share_group_label": "Memory",
                 "source": "core",
                 "source_id": "core:memory",
                 "source_type": "local",
@@ -1964,7 +2010,7 @@
             ],
             "total_count": 1
           },
-          "normalized_hash": "ecb6c9873363b70701ca64ff3083768220da401787deb7dd05d0f616d2263993"
+          "normalized_hash": "2ea591169f444fc8c0acfec597ebf6f86c0b42349cd269d7cf4b568fac031172"
         }
       }
     },
@@ -2658,6 +2704,7 @@
             "count": 1,
             "tools": [
               {
+                "admin": false,
                 "aliases": [
                   "remember"
                 ],
@@ -2671,14 +2718,19 @@
                 },
                 "argument_visibility": {},
                 "capability_class": "write",
+                "confirmation_required": false,
+                "data_egress": false,
                 "description": "Store a memory",
                 "display_name": "Memory",
                 "execution_location": "local",
+                "exportable": true,
+                "external": false,
                 "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                 "legacy_global_tool_ids": [
                   " not-trimmed "
                 ],
                 "local_name": "upsert_memory",
+                "mutating": true,
                 "name": "memory.upsert",
                 "namespace": "core.memory",
                 "privacy_hints": [],
@@ -2693,7 +2745,9 @@
                 },
                 "provider_peer_id": "aurora-sdk-local-provider-v1",
                 "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-                "required_permissions": [],
+                "required_permissions": [
+                  "Tooling.ExecuteTool"
+                ],
                 "resource_scope": [],
                 "risk_class": "standard",
                 "safety_class": "standard",
@@ -2705,8 +2759,11 @@
                   },
                   "type": "object"
                 },
+                "share_group_id": "core:memory",
+                "share_group_label": "Memory",
                 "source": "core",
                 "source_id": "core:memory",
+                "source_type": "local",
                 "tool_contract_id": "core.memory.upsert",
                 "tool_id_scheme": "aurora-tool",
                 "tool_id_version": 1,
@@ -2724,6 +2781,7 @@
               "count": 1,
               "tools": [
                 {
+                  "admin": false,
                   "aliases": [
                     "remember"
                   ],
@@ -2737,14 +2795,19 @@
                   },
                   "argument_visibility": {},
                   "capability_class": "write",
+                  "confirmation_required": false,
+                  "data_egress": false,
                   "description": "Store a memory",
                   "display_name": "Memory",
                   "execution_location": "local",
+                  "exportable": true,
+                  "external": false,
                   "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                   "legacy_global_tool_ids": [
                     " not-trimmed "
                   ],
                   "local_name": "upsert_memory",
+                  "mutating": true,
                   "name": "memory.upsert",
                   "namespace": "core.memory",
                   "privacy_hints": [],
@@ -2759,7 +2822,9 @@
                   },
                   "provider_peer_id": "aurora-sdk-local-provider-v1",
                   "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-                  "required_permissions": [],
+                  "required_permissions": [
+                    "Tooling.ExecuteTool"
+                  ],
                   "resource_scope": [],
                   "risk_class": "standard",
                   "safety_class": "standard",
@@ -2771,8 +2836,11 @@
                     },
                     "type": "object"
                   },
+                  "share_group_id": "core:memory",
+                  "share_group_label": "Memory",
                   "source": "core",
                   "source_id": "core:memory",
+                  "source_type": "local",
                   "tool_contract_id": "core.memory.upsert",
                   "tool_id_scheme": "aurora-tool",
                   "tool_id_version": 1,
@@ -2790,6 +2858,7 @@
             "count": 1,
             "tools": [
               {
+                "admin": false,
                 "aliases": [
                   "remember"
                 ],
@@ -2803,9 +2872,13 @@
                 },
                 "argument_visibility": {},
                 "capability_class": "write",
+                "confirmation_required": false,
+                "data_egress": false,
                 "description": "Store a memory",
                 "display_name": "Memory",
                 "execution_location": "local",
+                "exportable": true,
+                "external": false,
                 "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                 "legacy_global_tool_ids": [
                   "legacy-z",
@@ -2813,6 +2886,7 @@
                   "legacy-z"
                 ],
                 "local_name": "upsert_memory",
+                "mutating": true,
                 "name": "memory.upsert",
                 "namespace": "core.memory",
                 "privacy_hints": [],
@@ -2827,7 +2901,9 @@
                 },
                 "provider_peer_id": "aurora-sdk-local-provider-v1",
                 "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
-                "required_permissions": [],
+                "required_permissions": [
+                  "Tooling.ExecuteTool"
+                ],
                 "resource_scope": [],
                 "risk_class": "standard",
                 "safety_class": "standard",
@@ -2839,8 +2915,11 @@
                   },
                   "type": "object"
                 },
+                "share_group_id": "core:memory",
+                "share_group_label": "Memory",
                 "source": "core",
                 "source_id": "core:memory",
+                "source_type": "local",
                 "tool_contract_id": "core.memory.upsert",
                 "tool_id_scheme": "aurora-tool",
                 "tool_id_version": 1,
@@ -2872,7 +2951,7 @@
                 "description": "Store a memory",
                 "display_name": "Memory",
                 "execution_location": "local",
-                "exportable": false,
+                "exportable": true,
                 "external": false,
                 "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
                 "legacy_global_tool_ids": [
@@ -2880,7 +2959,7 @@
                   "legacy-z"
                 ],
                 "local_name": "upsert_memory",
-                "mutating": false,
+                "mutating": true,
                 "name": "memory.upsert",
                 "namespace": "core.memory",
                 "privacy_hints": [],
@@ -2899,7 +2978,9 @@
                 "provider_peer_id": "aurora-sdk-local-provider-v1",
                 "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
                 "rate_limit_hints": null,
-                "required_permissions": [],
+                "required_permissions": [
+                  "Tooling.ExecuteTool"
+                ],
                 "resource_scope": [],
                 "risk_class": "standard",
                 "safety_class": "standard",
@@ -2911,8 +2992,8 @@
                   },
                   "type": "object"
                 },
-                "share_group_id": "",
-                "share_group_label": "",
+                "share_group_id": "core:memory",
+                "share_group_label": "Memory",
                 "source": "core",
                 "source_id": "core:memory",
                 "source_type": "local",
@@ -2923,7 +3004,7 @@
               }
             ]
           },
-          "normalized_hash": "c4b8e82353334b225c51cf3feff46c43840507a7c91af3c6545b83326aa865ce"
+          "normalized_hash": "4f29b45b4a74870d0dbce3ea81ebb16d66701feb12fcb081dcaa2bc298bc06d3"
         }
       }
     },
