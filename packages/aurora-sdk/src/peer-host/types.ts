@@ -1,6 +1,7 @@
 import type { z } from 'zod/v4'
 
 import type { JsonObject } from '../types.js'
+import type { AuthenticatedPeerContext } from './authority.js'
 
 export type PeerHostMethodType = 'unary' | 'stream' | 'event'
 
@@ -17,6 +18,7 @@ export interface PeerHostCallContext {
   readonly methodId: string
   readonly remotePeerId: string
   readonly identity: PeerHostIdentity
+  readonly authenticatedPeerContext?: AuthenticatedPeerContext
   readonly signal: AbortSignal
   readonly receivedAtMs: number
   readonly deadlineAtMs: number
@@ -25,6 +27,7 @@ export interface PeerHostCallContext {
 export interface PeerHostSubscribeContext {
   readonly id: string
   readonly remotePeerId: string
+  readonly authenticatedPeerContext?: AuthenticatedPeerContext
   readonly topics: readonly string[]
   readonly correlationIds: readonly string[]
   readonly ttlSeconds: number
@@ -74,6 +77,7 @@ export interface PeerHostAuthorizeRequest {
   readonly methodId: string
   readonly requiredPermissions: readonly string[]
   readonly identity: PeerHostIdentity
+  readonly authenticatedPeerContext?: AuthenticatedPeerContext
   readonly nowMs: number
 }
 

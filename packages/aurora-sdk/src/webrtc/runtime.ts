@@ -56,6 +56,7 @@ import {
 } from './peer-session.js'
 import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import type { WebRtcPeerHost } from '../peer-host/index.js'
+import type { PeerAuthorityResolver } from '../peer-host/authority.js'
 import type {
   AuroraConnectionMode,
   PeerConnectionController,
@@ -105,6 +106,7 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   scryptWorkerFactory?: ScryptWorkerFactory | undefined
   localProtocolCapabilities?: readonly string[] | undefined
   peerHost?: WebRtcPeerHost | undefined
+  peerAuthorityResolver?: PeerAuthorityResolver | undefined
   appLayerE2eeAllowed?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
   pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
@@ -323,7 +325,8 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
         },
         onDiagnostic: (code, message) => this.recordDiagnostic(code, message),
         randomId: this.options.randomId,
-        pairingConnectPoll: this.options.pairingConnectPoll
+        pairingConnectPoll: this.options.pairingConnectPoll,
+        peerAuthorityResolver: this.options.peerAuthorityResolver
       })
       const sessionOptions: PeerSessionOptions = {
         localSignalingId,
@@ -555,6 +558,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     onDiagnostic(code: string, message: string): void
     randomId?: (() => string) | undefined
     pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
+    peerAuthorityResolver?: PeerAuthorityResolver | undefined
   }) {
     this.pairingConnectPoll = { ...DEFAULT_PAIRING_CONNECT_POLL, ...options.pairingConnectPoll }
   }
@@ -640,6 +644,9 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
         await this.startPairing(context)
       }
       return undefined
+    }
+    if (type === 'mesh_auth_proof_v1' && this.options.peerAuthorityResolver !== undefined) {
+      return await this.handleInboundReconnectProof(frame, context)
     }
     if (type === 'pairing_v2_commit') {
       const handshake = await this.ensureHandshake(context)
@@ -847,6 +854,56 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     expectedToken.fill(0)
     if (!matches) return { handled: true, denied: true, terminal: true }
     return { handled: true, authenticated: true }
+  }
+
+  private async handleInboundReconnectProof(frame: Record<string, unknown>, context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
+    const expectedClaimantPeerId = this.options.profile.expectedStablePeerId ?? context.remoteStableId
+    const verifierPeerId = this.options.localStablePeerId
+    if (!expectedClaimantPeerId || !context.offerSdp || !context.answerSdp) return { handled: true, denied: true, terminal: true }
+    const tokenId = stringField(frame, 'token_id')
+    const challenge = hex64Field(frame, 'challenge')
+    const proofHex = hex64Field(frame, 'proof')
+    const channelBinding = hex64Field(frame, 'channel_binding')
+    const claimantPeerId = stringField(frame, 'claimant_peer_id')
+    const proofVerifierPeerId = stringField(frame, 'verifier_peer_id')
+    const claimantSignalingPeerId = stringField(frame, 'claimant_signaling_peer_id')
+    const verifierSignalingPeerId = stringField(frame, 'verifier_signaling_peer_id')
+    const roomName = stringField(frame, 'room_name')
+    if (
+      tokenId === null ||
+      challenge === null ||
+      proofHex === null ||
+      channelBinding === null ||
+      claimantPeerId !== expectedClaimantPeerId ||
+      proofVerifierPeerId !== verifierPeerId ||
+      claimantSignalingPeerId !== context.remoteSignalingId ||
+      verifierSignalingPeerId !== context.localSignalingId ||
+      roomName !== this.options.profile.room
+    ) {
+      return { handled: true, denied: true, terminal: true }
+    }
+    const expectedChannelBinding = await reconnectChannelBinding(this.options.profile, context)
+    if (channelBinding !== expectedChannelBinding) return { handled: true, denied: true, terminal: true }
+    const result = await this.options.peerAuthorityResolver!.verifyReconnectProof({
+      proofHex,
+      challenge,
+      selector: {
+        tokenId,
+        claimantPeerId,
+        verifierPeerId,
+        roomName
+      },
+      transport: {
+        channelBinding,
+        claimantSignalingPeerId,
+        verifierSignalingPeerId
+      },
+      nowMs: Date.now()
+    })
+    if (!result.ok || result.context === undefined) return { handled: true, denied: true, terminal: true }
+    const authenticated = { handled: true, authenticated: true, authenticatedPeerContext: result.context }
+    this.resolveReconnectWait(authenticated)
+    return authenticated
   }
 
   private requireInboundPairingContext(params: Record<string, unknown>, requireVerificationCode: boolean): PairingSasResult {
@@ -1080,6 +1137,29 @@ async function createReconnectProof(credentialStore: InternalPeerCredentialStore
   if (!credentialStore) return undefined
   if (credentialStore.createReconnectProof) return await credentialStore.createReconnectProof(peerId, challenge)
   return await credentialStore.prove(peerId, challenge)
+}
+
+async function reconnectChannelBinding(profile: WebRtcPeerConnectionProfile, context: PeerSessionAuthContext): Promise<string> {
+  if (!context.offerSdp || !context.answerSdp) throw new PairingProtocolError('WebRTC SDP transcript is required for reconnect proof')
+  const localRole = context.localSignalingId < context.remoteSignalingId ? 'offerer' : 'answerer'
+  return await deriveChannelBinding({
+    appId: profile.appId,
+    room: profile.room,
+    offererSignalingId: localRole === 'offerer' ? context.localSignalingId : context.remoteSignalingId,
+    answererSignalingId: localRole === 'answerer' ? context.localSignalingId : context.remoteSignalingId,
+    offerSdp: context.offerSdp,
+    answerSdp: context.answerSdp
+  })
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  return typeof value === 'string' && value.length > 0 && value.length <= 512 ? value : null
+}
+
+function hex64Field(record: Record<string, unknown>, key: string): string | null {
+  const value = stringField(record, key)
+  return value !== null && /^[0-9a-f]{64}$/u.test(value) ? value : null
 }
 
 function diagnostic(code: string, message: string): RedactedPeerDiagnostic {

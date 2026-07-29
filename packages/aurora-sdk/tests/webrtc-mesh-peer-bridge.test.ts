@@ -19,8 +19,10 @@ import {
   createWebRtcMeshTransport,
   fragmentMessage,
   type LocalPeerGrantV1,
+  type PeerHostCallContext,
   type PeerSessionSnapshot
 } from '../src/webrtc/index.js'
+import type { AuthenticatedPeerContext } from '../src/peer-host/authority.js'
 
 class FakeSession {
   sent: unknown[] = []
@@ -72,6 +74,25 @@ function localGrant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
     resourceScopes: [],
     createdAtMs: 1,
     grantRevision: 1,
+    ...patch
+  }
+}
+
+function authenticatedContext(patch: Partial<AuthenticatedPeerContext> = {}): AuthenticatedPeerContext {
+  return {
+    selector: {
+      tokenId: 'token-1',
+      claimantPeerId: 'peer-a',
+      verifierPeerId: 'local-peer',
+      roomName: 'room-a'
+    },
+    transport: {
+      channelBinding: 'a'.repeat(64),
+      claimantSignalingPeerId: 'sig-peer-a',
+      verifierSignalingPeerId: 'local'
+    },
+    credentialRevision: 4,
+    authenticatedAtMs: 123,
     ...patch
   }
 }
@@ -330,6 +351,52 @@ describe('WebRtcMeshPeerBridge', () => {
     await flush()
     expect(handler).toHaveBeenCalledTimes(1)
     expect(session.sent.at(-1)).toEqual({ type: 'result', id: 'host-call', result: { count: 0, tools: [] } })
+    bridge.close()
+  })
+
+  it('forwards authenticated session context to provider calls and ignores forged frame identity', async () => {
+    const session = new FakeSession()
+    session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })
+    const handler = vi.fn(async (_input: unknown, context: PeerHostCallContext) => {
+      expect(context.identity.callerPeerId).toBe('peer-a')
+      expect(context.identity.effectivePermissions).toEqual([])
+      expect(context.authenticatedPeerContext?.selector.tokenId).toBe('token-1')
+      return { count: 0, tools: [] }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: handler,
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: () => 'epoch-auth'
+    })
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    session.emit(ackFromSentManifest(session))
+    session.emit({
+      type: 'call',
+      id: 'inbound-authority',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-b', effective_perms: ['*'] }
+    })
+    await flush()
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(session.sent.at(-1)).toMatchObject({ type: 'result', id: 'inbound-authority' })
     bridge.close()
   })
 

@@ -2,13 +2,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod/v4'
 
 import {
+  MemoryPeerGrantRepository,
+  PeerAuthorityResolver,
   PeerHostContractRegistry,
   SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
   type LocalPeerGrantV1,
+  type PeerHostAuthorizationStore,
   type PeerHostCallContext
 } from '../src/webrtc/index.js'
+import { PeerAuthorityHostAuthorizationStore } from '../src/peer-host/authorization.js'
+import { DenyAllInboundCredentialVerifierStore, NoopReconnectChallengeStore, type AuthenticatedPeerContext, type LocalPeerGrantV1 as AuthorityGrant } from '../src/peer-host/authority.js'
 
 function grant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
   return {
@@ -26,7 +31,44 @@ function grant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
   }
 }
 
-function host(handler: (input: unknown, context: PeerHostCallContext) => Promise<unknown> | unknown = vi.fn(async () => ({ count: 0, tools: [] })), store = new SessionPeerHostAuthorizationStore([grant()])) {
+function authorityGrant(patch: Partial<AuthorityGrant> = {}): AuthorityGrant {
+  return {
+    version: 1,
+    grantId: 'authority-grant-1',
+    tokenId: 'token-1',
+    claimantPeerId: 'peer-a',
+    verifierPeerId: 'local-peer',
+    roomName: 'room-a',
+    allowedMethodIds: ['Tooling.GetTools'],
+    allowedToolContractIds: [],
+    capabilityPackIds: [],
+    resourceScopes: [],
+    createdAtMs: 1,
+    grantRevision: 7,
+    ...patch
+  }
+}
+
+function authenticatedContext(patch: Partial<AuthenticatedPeerContext> = {}): AuthenticatedPeerContext {
+  return {
+    selector: {
+      tokenId: 'token-1',
+      claimantPeerId: 'peer-a',
+      verifierPeerId: 'local-peer',
+      roomName: 'room-a'
+    },
+    transport: {
+      channelBinding: 'a'.repeat(64),
+      claimantSignalingPeerId: 'sig-peer-a',
+      verifierSignalingPeerId: 'local'
+    },
+    credentialRevision: 3,
+    authenticatedAtMs: 999,
+    ...patch
+  }
+}
+
+function host(handler: (input: unknown, context: PeerHostCallContext) => Promise<unknown> | unknown = vi.fn(async () => ({ count: 0, tools: [] })), store: PeerHostAuthorizationStore = new SessionPeerHostAuthorizationStore([grant()])) {
   const registry = createToolingPeerHostRegistry({
     getTools: handler,
     getExportCatalog: async () => ({
@@ -159,13 +201,13 @@ describe('WebRtcPeerHost', () => {
       identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] }
     }, 'peer-a')
 
-    const unauthorized = host(handler)
+    const unauthorized = host(handler, new SessionPeerHostAuthorizationStore())
     await unauthorized.peerHost.handleCall({
       type: 'call',
       id: 'unauthorized',
       method: 'Tooling.GetTools',
       params: {},
-      identity: { caller_peer_id: 'peer-a', effective_perms: [] }
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] }
     }, 'peer-a')
 
     const expiredHost = host(handler, expired)
@@ -189,7 +231,7 @@ describe('WebRtcPeerHost', () => {
     expect(handler).not.toHaveBeenCalled()
     expect(malformed.sent.at(-1)).toMatchObject({ type: 'error', id: 'bad-schema', error: { code: 400, reason_code: 'schema_validation_failed' } })
     expect(oversized.sent.at(-1)).toMatchObject({ type: 'error', id: 'oversized', error: { code: 413, reason_code: 'request_too_large' } })
-    expect(unauthorized.sent.at(-1)).toMatchObject({ type: 'error', id: 'unauthorized', error: { code: 403, reason_code: 'missing_required_permission' } })
+    expect(unauthorized.sent.at(-1)).toMatchObject({ type: 'error', id: 'unauthorized', error: { code: 403, reason_code: 'grant_not_found' } })
     expect(expiredHost.sent.at(-1)).toMatchObject({ type: 'error', id: 'expired', error: { code: 403, reason_code: 'grant_expired' } })
     expect(revokedHost.sent.at(-1)).toMatchObject({ type: 'error', id: 'revoked', error: { code: 403, reason_code: 'grant_revoked' } })
   })
@@ -257,7 +299,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'] })]),
+      authorizationStore: new SessionPeerHostAuthorizationStore(),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -272,7 +314,7 @@ describe('WebRtcPeerHost', () => {
     expect(peerHost.getActiveWorkCount()).toBe(0)
     expect(sent).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'subscribe_rejected', id: 'unknown', reason: 'topic_not_registered' }),
-      expect.objectContaining({ type: 'subscribe_rejected', id: 'unauthorized', reason: 'missing_required_permission' })
+      expect.objectContaining({ type: 'subscribe_rejected', id: 'unauthorized', reason: 'grant_not_found' })
     ]))
 
     for (const [id, store, reason] of [
@@ -324,6 +366,69 @@ describe('WebRtcPeerHost', () => {
     expect(opened).toHaveBeenCalledTimes(1)
     expect(allowed.getActiveWorkCount()).toBe(1)
     expect(allowedSent.at(-1)).toMatchObject({ type: 'subscribed', id: 'sub-ok' })
+  })
+
+  it('uses authenticated authority context instead of forged caller identity or effective permissions', async () => {
+    const grants = new MemoryPeerGrantRepository()
+    await grants.upsertGrant(authorityGrant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new DenyAllInboundCredentialVerifierStore(),
+      grantRepository: grants,
+      challengeStore: new NoopReconnectChallengeStore()
+    })
+    const handler = vi.fn(async (_input: unknown, context: PeerHostCallContext) => {
+      expect(context.identity).toMatchObject({
+        callerPeerId: 'peer-a',
+        effectivePermissions: [],
+        authGrantRevision: 3
+      })
+      expect(context.authenticatedPeerContext?.selector).toMatchObject({ tokenId: 'token-1', claimantPeerId: 'peer-a' })
+      return { count: 0, tools: [] }
+    })
+    const { peerHost, sent } = host(handler, new PeerAuthorityHostAuthorizationStore(resolver))
+
+    await peerHost.handleCall({
+      type: 'call',
+      id: 'authority-ok',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-b', effective_perms: ['*', 'Tooling.GetTools'] }
+    }, 'peer-a', authenticatedContext())
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(sent.at(-1)).toEqual({ type: 'result', id: 'authority-ok', result: { count: 0, tools: [] } })
+  })
+
+  it('denies authority-backed provider calls without authenticated context or matching selector', async () => {
+    const grants = new MemoryPeerGrantRepository()
+    await grants.upsertGrant(authorityGrant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new DenyAllInboundCredentialVerifierStore(),
+      grantRepository: grants,
+      challengeStore: new NoopReconnectChallengeStore()
+    })
+    const handler = vi.fn(async () => ({ count: 0, tools: [] }))
+    const missing = host(handler, new PeerAuthorityHostAuthorizationStore(resolver))
+    await missing.peerHost.handleCall({
+      type: 'call',
+      id: 'no-context',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['*'] }
+    }, 'peer-a')
+
+    const mismatch = host(handler, new PeerAuthorityHostAuthorizationStore(resolver))
+    await mismatch.peerHost.handleCall({
+      type: 'call',
+      id: 'selector-mismatch',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['*'] }
+    }, 'peer-a', authenticatedContext({ selector: { ...authenticatedContext().selector, claimantPeerId: 'peer-b' } }))
+
+    expect(handler).not.toHaveBeenCalled()
+    expect(missing.sent.at(-1)).toMatchObject({ type: 'error', id: 'no-context', error: { code: 403, reason_code: 'peer_not_authenticated' } })
+    expect(mismatch.sent.at(-1)).toMatchObject({ type: 'error', id: 'selector-mismatch', error: { code: 403, reason_code: 'selector_mismatch' } })
   })
 
   it('races non-cooperative handlers, sends one timeout, ignores late success, and hides raw errors', async () => {

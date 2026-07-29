@@ -16,6 +16,7 @@ import {
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   parseProtocolHello
 } from '../src/webrtc/peer-protocol.js'
+import type { AuthenticatedPeerContext } from '../src/peer-host/authority.js'
 
 class FakeTimers {
   next = 1
@@ -177,6 +178,24 @@ const codec = {
   open: vi.fn(async (data: unknown) => JSON.parse(String(data)))
 }
 
+function authenticatedContext(): AuthenticatedPeerContext {
+  return {
+    selector: {
+      tokenId: 'token-1',
+      claimantPeerId: 'stable-a',
+      verifierPeerId: 'stable-z',
+      roomName: 'room-a'
+    },
+    transport: {
+      channelBinding: 'a'.repeat(64),
+      claimantSignalingPeerId: 'a',
+      verifierSignalingPeerId: 'z'
+    },
+    credentialRevision: 3,
+    authenticatedAtMs: 1000
+  }
+}
+
 describe('WebRtcPeerSession', () => {
   it('is SSR import safe and categorizes ICE candidates without exposing addresses', async () => {
     await expect(import('../src/webrtc/peer-session.js')).resolves.toBeTruthy()
@@ -184,6 +203,20 @@ describe('WebRtcPeerSession', () => {
     expect(categorizeIceCandidate('candidate:0 1 udp 1 203.0.113.2 123 typ srflx')).toBe('srflx')
     expect(categorizeIceCandidate('candidate:0 1 udp 1 203.0.113.4 123 typ prflx')).toBe('prflx')
     expect(categorizeIceCandidate('candidate:0 1 udp 1 203.0.113.3 123 typ relay')).toBe('relay')
+  })
+
+  it('exposes authenticated peer context only after auth success and clears it on reconnect', async () => {
+    const context = authenticatedContext()
+    const { session, pc } = await authorizedAnswerer({
+      auth: { tryReconnect: async () => ({ authenticated: true, authenticatedPeerContext: context }), handleFrame: async () => undefined },
+      localStableId: 'stable-z',
+      expectedRemoteStableId: 'stable-a'
+    })
+
+    expect(session.getSnapshot().authenticatedPeerContext).toEqual(context)
+    pc.fail()
+    await flush()
+    expect(session.getSnapshot().authenticatedPeerContext).toBeUndefined()
   })
 
   it('preserves selected prflx evidence even when a configured STUN server gathered srflx', async () => {

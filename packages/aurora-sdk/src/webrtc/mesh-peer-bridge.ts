@@ -20,6 +20,7 @@ import type { WebRtcPeerSession, PeerSessionSnapshot } from './peer-session.js'
 import { buildWebRtcManifestAck, parseWebRtcMeshManifest } from './manifest.js'
 import { DEFAULT_PARSER_LIMITS, parseWebRtcFrame, type AuroraProtocolFrame, type ManifestAckFrame, type ProviderLeaseFrame } from './protocol.js'
 import type { WebRtcPeerHost } from '../peer-host/index.js'
+import type { AuthenticatedPeerContext } from '../peer-host/authority.js'
 
 export interface WebRtcMeshPeerBridgeOptions {
   session: Pick<WebRtcPeerSession, 'sendFrame' | 'subscribeFrames' | 'subscribe' | 'getSnapshot'>
@@ -138,6 +139,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private remoteAvailability: 'unknown' | 'active' | 'unavailable' = 'unknown'
   private asyncDispatchFailureCount = 0
   private lastAsyncDispatchFailure: AsyncDispatchFailure | null = null
+  private authenticatedPeerContext: AuthenticatedPeerContext | undefined
   private unsubscribeFrames: (() => void) | undefined
   private unsubscribeSession: (() => void) | undefined
 
@@ -164,7 +166,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.manifestParser = options.manifestParser ?? ((frame, expectedPeerId) => parseWebRtcMeshManifest(assertRecord(frame, 'manifest frame'), expectedPeerId))
     this.clock = options.clock ?? (() => Date.now() / 1000)
     this.peerHost = options.peerHost
-    this.assertAuthenticatedPeerSnapshot(this.session.getSnapshot())
+    this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(this.session.getSnapshot())
     this.peerHost?.attach({ sendFrame: (frame) => this.sendPeerHostFrame(frame) })
     this.eventSubscriptions = new MeshEventSubscriptionRegistry({ maxTopicsPerPeer: 32, clock: this.clock })
     this.reassembler = new FragmentReassembler({ limits: new PeerProtocolLimits(), clock: this.clock })
@@ -489,6 +491,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.remoteProtocol = null
     this.manifest = null
+    this.authenticatedPeerContext = undefined
     this.remoteAvailability = 'unknown'
     this.clearRemoteLease()
     this.clearAllTimers()
@@ -499,7 +502,11 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       this.close(`session ${snapshot.state}`)
       return
     }
-    if (snapshot.state !== 'authorized' || !snapshot.authorized) this.resetEpoch(`session ${snapshot.state}`)
+    if (snapshot.state !== 'authorized' || !snapshot.authorized) {
+      this.resetEpoch(`session ${snapshot.state}`)
+      return
+    }
+    this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(snapshot)
   }
 
   private handleFrame(raw: unknown): void {
@@ -769,7 +776,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       await this.sendLogicalFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: { code: 503, message: 'Local provider is unavailable' } })
       return
     }
-    await this.peerHost.handleCall(frame, this.remotePeerId)
+    await this.peerHost.handleCall(frame, this.remotePeerId, this.authenticatedPeerContext)
   }
 
   private async handleInboundSubscribe(frame: import('./protocol.js').SubscribeFrame): Promise<void> {
@@ -781,7 +788,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       await this.sendLogicalFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'provider_unavailable', rejected_topics: frame.topics })
       return
     }
-    await this.peerHost.handleSubscribe(frame, this.remotePeerId)
+    await this.peerHost.handleSubscribe(frame, this.remotePeerId, this.authenticatedPeerContext)
   }
 
   private handleManifest(frame: unknown): void {
@@ -898,14 +905,17 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private assertOpen(): void {
     const snapshot = this.session.getSnapshot()
     if (this.closed || snapshot.state !== 'authorized' || !snapshot.authorized) throw new Error('WebRTC mesh peer bridge is not connected')
-    this.assertAuthenticatedPeerSnapshot(snapshot)
+    this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(snapshot)
   }
 
-  private assertAuthenticatedPeerSnapshot(snapshot: PeerSessionSnapshot): void {
+  private assertAuthenticatedPeerSnapshot(snapshot: PeerSessionSnapshot): AuthenticatedPeerContext | undefined {
     if (snapshot.state !== 'authorized' || !snapshot.authorized) throw new Error('WebRTC mesh peer bridge requires an authorized session')
     const actualStable = (snapshot as PeerSessionSnapshot & { remoteStableId?: string }).remoteStableId
     const stable = actualStable ?? snapshot.expectedRemoteStableId
     if (stable !== this.remotePeerId) throw new Error('WebRTC mesh peer stable identity mismatch')
+    const context = snapshot.authenticatedPeerContext
+    if (context !== undefined && context.selector.claimantPeerId !== this.remotePeerId) throw new Error('WebRTC mesh authenticated peer selector mismatch')
+    return context
   }
 
   private assertPeer(peerId: string): void {

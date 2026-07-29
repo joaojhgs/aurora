@@ -4,6 +4,7 @@ import type {
   PeerHostAuthorizationStore,
   PeerHostAuthorizeRequest
 } from './types.js'
+import type { PeerAuthorityResolver } from './authority.js'
 
 export class DenyAllPeerHostAuthorizationStore implements PeerHostAuthorizationStore {
   async authorize(): Promise<PeerHostAuthorizationDecision> {
@@ -37,6 +38,7 @@ export class SessionPeerHostAuthorizationStore implements PeerHostAuthorizationS
     let bestRevision = 0
     for (const grant of this.grants.values()) {
       if (grant.claimantPeerId !== request.remotePeerId) continue
+      if (request.authenticatedPeerContext !== undefined && grant.tokenId !== request.authenticatedPeerContext.selector.tokenId) continue
       if (grant.revokedAtMs !== undefined && grant.revokedAtMs <= request.nowMs) {
         return { allowed: false, reasonCode: 'grant_revoked', grantRevision: grant.grantRevision }
       }
@@ -45,14 +47,30 @@ export class SessionPeerHostAuthorizationStore implements PeerHostAuthorizationS
       }
       if (!grant.allowedMethodIds.includes(request.methodId)) continue
       bestRevision = Math.max(bestRevision, grant.grantRevision)
-      const observed = new Set(request.identity.effectivePermissions)
-      const hasPermissions = request.requiredPermissions.every((permission) => observed.has(permission))
-      if (!hasPermissions) return { allowed: false, reasonCode: 'missing_required_permission', grantRevision: grant.grantRevision }
       return { allowed: true, grantRevision: grant.grantRevision }
     }
     return bestRevision > 0
       ? { allowed: false, reasonCode: 'grant_not_found', grantRevision: bestRevision }
       : { allowed: false, reasonCode: 'grant_not_found' }
+  }
+}
+
+export class PeerAuthorityHostAuthorizationStore implements PeerHostAuthorizationStore {
+  constructor(private readonly resolver: PeerAuthorityResolver) {}
+
+  async authorize(request: PeerHostAuthorizeRequest): Promise<PeerHostAuthorizationDecision> {
+    const context = request.authenticatedPeerContext
+    if (context === undefined) return { allowed: false, reasonCode: 'peer_not_authenticated' }
+    if (context.selector.claimantPeerId !== request.remotePeerId) return { allowed: false, reasonCode: 'selector_mismatch' }
+    const decision = await this.resolver.resolveGrant(context, {
+      methodId: request.methodId,
+      nowMs: request.nowMs
+    })
+    return {
+      allowed: decision.allowed,
+      ...(decision.reasonCode !== undefined ? { reasonCode: decision.reasonCode } : {}),
+      ...(decision.grant?.grantRevision !== undefined ? { grantRevision: decision.grant.grantRevision } : {})
+    }
   }
 }
 

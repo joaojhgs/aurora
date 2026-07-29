@@ -4,6 +4,7 @@ import { AuroraValidationError } from '../validation/index.js'
 import { bytesToHex, canonicalJson } from '../webrtc/encoding.js'
 import type { CallFrame, SubscribeFrame } from '../webrtc/protocol.js'
 import { ProviderLeaseController } from './provider-lease.js'
+import type { AuthenticatedPeerContext } from './authority.js'
 import type {
   PeerHostCallContext,
   PeerHostEventDescriptor,
@@ -156,7 +157,7 @@ export class WebRtcPeerHost {
     }
   }
 
-  async handleCall(frame: CallFrame, remotePeerId: string): Promise<void> {
+  async handleCall(frame: CallFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
     const method = this.options.registry.get(frame.method)
     if (!method) {
@@ -173,22 +174,24 @@ export class WebRtcPeerHost {
       await sender.sendFrame(errorFrame(frame.id, 413, 'request too large', 'request_too_large'))
       return
     }
-    const identity = parseIdentity(frame.identity, remotePeerId)
+    const identity = identityFromAuthority(authenticatedPeerContext, frame.identity, remotePeerId)
     const nowMs = Math.floor(this.options.clock())
     const deadlineAtMs = nowMs + (method.timeoutMs ?? this.options.defaultTimeoutMs)
-    const decision = await this.options.authorizationStore.authorize({
+    const authorizeRequest = {
       remotePeerId,
       methodId: method.methodId,
       requiredPermissions: method.requiredPermissions,
       identity,
       nowMs
-    })
+    }
+    if (authenticatedPeerContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext })
+    const decision = await this.options.authorizationStore.authorize(authorizeRequest)
     if (!decision.allowed) {
       await sender.sendFrame(errorFrame(frame.id, 403, 'not authorized', decision.reasonCode ?? 'not_authorized'))
       return
     }
     if (method.methodType === 'stream') {
-      await this.handleStreamCall(method, frame, remotePeerId, identity, nowMs, deadlineAtMs)
+      await this.handleStreamCall(method, frame, remotePeerId, identity, nowMs, deadlineAtMs, authenticatedPeerContext)
       return
     }
     const abort = new AbortController()
@@ -203,7 +206,7 @@ export class WebRtcPeerHost {
     }, Math.max(1, deadlineAtMs - nowMs))
     this.active.set(frame.id, active)
     try {
-      const context = this.callContext(frame, method, remotePeerId, identity, abort.signal, nowMs, deadlineAtMs)
+      const context = this.callContext(frame, method, remotePeerId, identity, abort.signal, nowMs, deadlineAtMs, authenticatedPeerContext)
       const result = await this.options.registry.dispatch(method, frame.params ?? {}, context)
       if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'result', id: frame.id, result })
     } catch (error) {
@@ -213,7 +216,7 @@ export class WebRtcPeerHost {
     }
   }
 
-  async handleSubscribe(frame: SubscribeFrame, remotePeerId: string): Promise<void> {
+  async handleSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
     if (!this.acceptingInbound || !this.lease.isActive()) {
       await sender.sendFrame({
@@ -230,15 +233,17 @@ export class WebRtcPeerHost {
       return
     }
     const nowMs = Math.floor(this.options.clock())
-    const identity = { callerPeerId: remotePeerId, effectivePermissions: [] }
+    const identity = identityFromAuthority(authenticatedPeerContext, undefined, remotePeerId)
     for (const event of events as PeerHostEventDescriptor[]) {
-      const decision = await this.options.authorizationStore.authorize({
+      const authorizeRequest = {
         remotePeerId,
         methodId: event.topic,
         requiredPermissions: event.requiredPermissions,
         identity,
         nowMs
-      })
+      }
+      if (authenticatedPeerContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext })
+      const decision = await this.options.authorizationStore.authorize(authorizeRequest)
       if (!decision.allowed) {
         await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: decision.reasonCode ?? 'not_authorized', rejected_topics: frame.topics })
         return
@@ -263,7 +268,7 @@ export class WebRtcPeerHost {
           await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'ttl_too_large', rejected_topics: frame.topics })
           return
         }
-        const handle = await this.options.registry.openSubscription(event, {
+        const subscribeContext = {
           id: frame.id,
           remotePeerId,
           topics: frame.topics,
@@ -271,7 +276,9 @@ export class WebRtcPeerHost {
           ttlSeconds,
           signal: abort.signal,
           receivedAtMs: nowMs
-        })
+        }
+        if (authenticatedPeerContext !== undefined) Object.assign(subscribeContext, { authenticatedPeerContext })
+        const handle = await this.options.registry.openSubscription(event, subscribeContext)
         if (handle) handles.push(handle)
       }
     } catch {
@@ -318,7 +325,7 @@ export class WebRtcPeerHost {
     }
   }
 
-  private async handleStreamCall(method: PeerHostMethodDescriptor, frame: CallFrame, remotePeerId: string, identity: PeerHostIdentity, nowMs: number, deadlineAtMs: number): Promise<void> {
+  private async handleStreamCall(method: PeerHostMethodDescriptor, frame: CallFrame, remotePeerId: string, identity: PeerHostIdentity, nowMs: number, deadlineAtMs: number, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
     const abort = new AbortController()
     const active: ActiveWork = {
@@ -332,7 +339,7 @@ export class WebRtcPeerHost {
     }, Math.max(1, deadlineAtMs - nowMs))
     this.active.set(frame.id, active)
     try {
-      const context = this.callContext(frame, method, remotePeerId, identity, abort.signal, nowMs, deadlineAtMs)
+      const context = this.callContext(frame, method, remotePeerId, identity, abort.signal, nowMs, deadlineAtMs, authenticatedPeerContext)
       const stream = await this.options.registry.openStream(method, frame.params ?? {}, context)
       for await (const chunk of stream) {
         if (abort.signal.aborted || active.settled) break
@@ -348,8 +355,8 @@ export class WebRtcPeerHost {
     }
   }
 
-  private callContext(frame: CallFrame, method: PeerHostMethodDescriptor, remotePeerId: string, identity: PeerHostIdentity, signal: AbortSignal, receivedAtMs: number, deadlineAtMs: number): PeerHostCallContext {
-    return {
+  private callContext(frame: CallFrame, method: PeerHostMethodDescriptor, remotePeerId: string, identity: PeerHostIdentity, signal: AbortSignal, receivedAtMs: number, deadlineAtMs: number, authenticatedPeerContext?: AuthenticatedPeerContext): PeerHostCallContext {
+    const context = {
       id: frame.id,
       methodId: method.methodId,
       remotePeerId,
@@ -358,6 +365,8 @@ export class WebRtcPeerHost {
       receivedAtMs,
       deadlineAtMs
     }
+    if (authenticatedPeerContext !== undefined) Object.assign(context, { authenticatedPeerContext })
+    return context
   }
 
   private cancelAll(reason: string): void {
@@ -405,6 +414,17 @@ function parseIdentity(value: unknown, fallbackPeerId: string): PeerHostIdentity
     effectivePermissions: Array.isArray(value.effective_perms) ? value.effective_perms.filter((item): item is string => typeof item === 'string' && item.length <= 256) : [],
     authGrantRevision: typeof value.auth_grant_revision === 'number' ? value.auth_grant_revision : null,
     manifestRevision: typeof value.manifest_revision === 'string' || typeof value.manifest_revision === 'number' ? value.manifest_revision : null
+  }
+}
+
+function identityFromAuthority(context: AuthenticatedPeerContext | undefined, frameIdentity: unknown, fallbackPeerId: string): PeerHostIdentity {
+  if (context === undefined) return parseIdentity(frameIdentity, fallbackPeerId)
+  return {
+    callerPeerId: context.selector.claimantPeerId,
+    principalId: null,
+    effectivePermissions: [],
+    authGrantRevision: context.credentialRevision,
+    manifestRevision: null
   }
 }
 

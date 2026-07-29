@@ -7,6 +7,7 @@ import {
   parseProtocolHello
 } from './peer-protocol.js'
 import { DataChannelFlowController, type DataChannelFlowLimits } from './datachannel-flow.js'
+import type { AuthenticatedPeerContext } from '../peer-host/index.js'
 
 export const AURORA_RPC_DATA_CHANNEL_LABEL = 'aurora-rpc' as const
 
@@ -66,6 +67,7 @@ export interface PeerSessionSnapshot {
   remoteSignalingId?: string | undefined
   remoteStableId?: string | undefined
   expectedRemoteStableId?: string | undefined
+  authenticatedPeerContext?: AuthenticatedPeerContext | undefined
   icePath: IcePathCategory
   reconnectAttempts: number
   lastError?: string | undefined
@@ -109,7 +111,13 @@ export interface PeerSessionFrameCodec {
   open(data: string | ArrayBuffer | ArrayBufferView): unknown | Promise<unknown>
 }
 
-export type PeerSessionAuthFrameResult = boolean | { authenticated?: boolean; denied?: boolean; terminal?: boolean; handled?: boolean } | void
+export type PeerSessionAuthFrameResult = boolean | {
+  authenticated?: boolean
+  authenticatedPeerContext?: AuthenticatedPeerContext
+  denied?: boolean
+  terminal?: boolean
+  handled?: boolean
+} | void
 
 export interface PeerSessionAuthPort {
   tryReconnect?(context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> | PeerSessionAuthFrameResult
@@ -259,6 +267,15 @@ function redactError(error: unknown): string {
   return 'peer session error'
 }
 
+function cloneAuthenticatedPeerContext(context: AuthenticatedPeerContext): AuthenticatedPeerContext {
+  return {
+    selector: { ...context.selector },
+    transport: { ...context.transport },
+    credentialRevision: context.credentialRevision,
+    authenticatedAtMs: context.authenticatedAtMs
+  }
+}
+
 export function categorizeIceCandidate(candidate: string | null | undefined): IcePathCategory {
   if (!candidate) return 'unknown'
   if (/\btyp\s+relay\b/u.test(candidate)) return 'relay'
@@ -304,6 +321,7 @@ export class WebRtcPeerSession {
   private terminalNoReconnect = false
   private lastError: string | undefined
   private sentLocalProtocolHello = false
+  private authenticatedPeerContext: AuthenticatedPeerContext | undefined
 
   constructor(options: PeerSessionOptions) {
     this.options = options
@@ -327,6 +345,7 @@ export class WebRtcPeerSession {
     if (this.remoteSignalingId !== undefined) snapshot.remoteSignalingId = this.remoteSignalingId
     if (this.remoteStableId !== undefined) snapshot.remoteStableId = this.remoteStableId
     if (this.options.expectedRemoteStableId !== undefined) snapshot.expectedRemoteStableId = this.options.expectedRemoteStableId
+    if (this.authenticatedPeerContext !== undefined) snapshot.authenticatedPeerContext = cloneAuthenticatedPeerContext(this.authenticatedPeerContext)
     if (this.lastError !== undefined) snapshot.lastError = this.lastError
     return snapshot
   }
@@ -407,6 +426,7 @@ export class WebRtcPeerSession {
     this.terminalNoReconnect = true
     this.clearAllTimers()
     this.detachSignaling()
+    this.authenticatedPeerContext = undefined
     this.closeChannel()
     this.closePeerConnection()
     this.frameListeners.clear()
@@ -738,6 +758,7 @@ export class WebRtcPeerSession {
 
   private onTransientDisconnect(reason: string): void {
     if (this.closedExplicitly || this.terminalNoReconnect || this.isTerminal()) return
+    this.authenticatedPeerContext = undefined
     if (this.reconnectAttempts >= this.reconnectOptions.maxAttempts) {
       this.fail(reason, false)
       return
@@ -786,7 +807,7 @@ export class WebRtcPeerSession {
 
   private async applyReconnectResult(result: PeerSessionAuthFrameResult): Promise<void> {
     if (result === true || (typeof result === 'object' && result !== null && result.authenticated === true)) {
-      await this.completeAuthentication()
+      await this.completeAuthentication(undefined, typeof result === 'object' && result !== null ? result.authenticatedPeerContext : undefined)
       return
     }
     if (typeof result === 'object' && result !== null && (result.denied === true || result.terminal === true)) {
@@ -797,7 +818,7 @@ export class WebRtcPeerSession {
 
   private async applyAuthResult(result: PeerSessionAuthFrameResult, source: string, replayFrame?: unknown): Promise<void> {
     if (result === true || (typeof result === 'object' && result !== null && result.authenticated === true)) {
-      await this.completeAuthentication(replayFrame)
+      await this.completeAuthentication(replayFrame, typeof result === 'object' && result !== null ? result.authenticatedPeerContext : undefined)
       return
     }
     if (result === false || (typeof result === 'object' && result !== null && (result.denied === true || result.terminal === true))) {
@@ -806,7 +827,7 @@ export class WebRtcPeerSession {
     }
   }
 
-  private async completeAuthentication(replayFrame?: unknown): Promise<void> {
+  private async completeAuthentication(replayFrame?: unknown, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     if (this.state === 'authorized' || this.isTerminal()) return
     this.clearAllTimers()
     let localHello: unknown
@@ -820,6 +841,7 @@ export class WebRtcPeerSession {
         return
       }
     }
+    this.authenticatedPeerContext = authenticatedPeerContext === undefined ? undefined : cloneAuthenticatedPeerContext(authenticatedPeerContext)
     this.transition('authorized')
     if (replayFrame !== undefined) this.deliverFrame(replayFrame)
     if (localHello !== undefined) {
@@ -859,6 +881,7 @@ export class WebRtcPeerSession {
       return
     }
     this.clearAllTimers()
+    this.authenticatedPeerContext = undefined
     this.closeChannel()
     this.closePeerConnection()
     this.frameListeners.clear()
