@@ -2,9 +2,10 @@ import type {
   LocalPeerGrantV1,
   PeerHostAuthorizationDecision,
   PeerHostAuthorizationStore,
-  PeerHostAuthorizeRequest
+  PeerHostAuthorizeRequest,
+  PeerHostManifestAuthoritySnapshot
 } from './types.js'
-import type { PeerAuthorityResolver } from './authority.js'
+import type { AuthenticatedPeerContext, PeerAuthorityResolver } from './authority.js'
 
 export class DenyAllPeerHostAuthorizationStore implements PeerHostAuthorizationStore {
   async authorize(): Promise<PeerHostAuthorizationDecision> {
@@ -47,11 +48,31 @@ export class SessionPeerHostAuthorizationStore implements PeerHostAuthorizationS
       }
       if (!grant.allowedMethodIds.includes(request.methodId)) continue
       bestRevision = Math.max(bestRevision, grant.grantRevision)
-      return { allowed: true, grantRevision: grant.grantRevision }
+      return { allowed: true, grantRevision: grant.grantRevision, grantedMethodIds: sortedUnique(grant.allowedMethodIds) }
     }
     return bestRevision > 0
       ? { allowed: false, reasonCode: 'grant_not_found', grantRevision: bestRevision }
       : { allowed: false, reasonCode: 'grant_not_found' }
+  }
+
+  snapshotManifestAuthority(request: { readonly remotePeerId?: string; readonly authenticatedPeerContext?: PeerHostAuthorizeRequest['authenticatedPeerContext']; readonly nowMs: number }): PeerHostManifestAuthoritySnapshot {
+    const grants = [...this.grants.values()]
+      .filter((grant) => {
+        if (request.remotePeerId !== undefined && grant.claimantPeerId !== request.remotePeerId) return false
+        if (request.authenticatedPeerContext !== undefined && grant.tokenId !== request.authenticatedPeerContext.selector.tokenId) return false
+        if (grant.revokedAtMs !== undefined && grant.revokedAtMs <= request.nowMs) return false
+        if (grant.expiresAtMs !== undefined && grant.expiresAtMs <= request.nowMs) return false
+        return true
+      })
+      .sort((left, right) => right.grantRevision - left.grantRevision || right.createdAtMs - left.createdAtMs || left.grantId.localeCompare(right.grantId))
+    const grantedMethodIds = sortedUnique(grants.flatMap((grant) => grant.allowedMethodIds))
+    const recipientPeerId = request.remotePeerId ?? grants[0]?.claimantPeerId
+    return {
+      ...(recipientPeerId !== undefined ? { recipientPeerId } : {}),
+      grantedMethodIds,
+      authGrantRevision: grants.reduce((revision, grant) => Math.max(revision, grant.grantRevision), 0),
+      authGrantState: grantedMethodIds.length > 0 ? 'active' : 'unknown'
+    }
   }
 }
 
@@ -69,9 +90,39 @@ export class PeerAuthorityHostAuthorizationStore implements PeerHostAuthorizatio
     return {
       allowed: decision.allowed,
       ...(decision.reasonCode !== undefined ? { reasonCode: decision.reasonCode } : {}),
-      ...(decision.grant?.grantRevision !== undefined ? { grantRevision: decision.grant.grantRevision } : {})
+      ...(decision.grant?.grantRevision !== undefined ? { grantRevision: decision.grant.grantRevision } : {}),
+      ...(decision.grant?.allowedMethodIds !== undefined ? { grantedMethodIds: sortedUnique(decision.grant.allowedMethodIds) } : {})
     }
   }
+
+  async snapshotManifestAuthority(request: { readonly remotePeerId?: string; readonly authenticatedPeerContext?: AuthenticatedPeerContext; readonly nowMs: number }): Promise<PeerHostManifestAuthoritySnapshot> {
+    const context = request.authenticatedPeerContext
+    if (context === undefined) {
+      return { ...(request.remotePeerId !== undefined ? { recipientPeerId: request.remotePeerId } : {}), grantedMethodIds: [], authGrantRevision: 0, authGrantState: 'unknown' }
+    }
+    if (request.remotePeerId !== undefined && context.selector.claimantPeerId !== request.remotePeerId) {
+      return { recipientPeerId: request.remotePeerId, grantedMethodIds: [], authGrantRevision: 0, authGrantState: 'unknown' }
+    }
+    const grants = await this.resolver.listRecipientGrants(context, request.nowMs)
+    const active = grants
+      .filter((grant) => {
+        if (grant.revokedAtMs !== undefined && grant.revokedAtMs <= request.nowMs) return false
+        if (grant.expiresAtMs !== undefined && grant.expiresAtMs <= request.nowMs) return false
+        return true
+      })
+      .sort((left, right) => right.grantRevision - left.grantRevision || right.createdAtMs - left.createdAtMs || left.grantId.localeCompare(right.grantId))
+    const grantedMethodIds = sortedUnique(active.flatMap((grant) => grant.allowedMethodIds))
+    return {
+      recipientPeerId: context.selector.claimantPeerId,
+      grantedMethodIds,
+      authGrantRevision: active.reduce((revision, grant) => Math.max(revision, grant.grantRevision), 0),
+      authGrantState: grantedMethodIds.length > 0 ? 'active' : 'unknown'
+    }
+  }
+}
+
+function sortedUnique(values: readonly string[]): string[] {
+  return [...new Set(values)].sort()
 }
 
 function validateGrant(grant: LocalPeerGrantV1): void {

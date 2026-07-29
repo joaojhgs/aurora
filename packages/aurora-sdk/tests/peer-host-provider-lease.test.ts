@@ -8,7 +8,9 @@ describe('ProviderLeaseController', () => {
     const lease = new ProviderLeaseController({ peerId: 'peer-local', clock: () => now, randomId: () => 'epoch-1' })
     expect(lease.renewMs).toBe(20_000)
     expect(lease.ttlMs).toBe(60_000)
-    const first = lease.startEpoch()
+    expect(lease.startEpoch()).toBe('epoch-1')
+    expect(lease.snapshot()).toBeNull()
+    const first = lease.renew()
     expect(first).toMatchObject({ connection_epoch: 'epoch-1', issued_at_ms: 1000, expires_at_ms: 61_000, available: true })
     now += 20_000
     const second = lease.renew()

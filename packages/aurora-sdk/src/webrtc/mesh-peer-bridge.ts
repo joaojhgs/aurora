@@ -102,6 +102,11 @@ type AsyncDispatchFailure = {
   reason: 'bridge_closed' | 'send_failed' | 'handler_failed'
 }
 
+type RemoteLeaseCursor = {
+  epoch: string
+  revision: number
+}
+
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_STREAM_QUEUE_LIMIT = 128
 const DEFAULT_FRAGMENT_THRESHOLD = 16 * 1024
@@ -135,6 +140,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private sentFragmentCount = 0
   private receivedFragmentCount = 0
   private remoteLease: ProviderLeaseFrame | null = null
+  private remoteLeaseCursor: RemoteLeaseCursor | null = null
+  private remoteLeaseFloor: RemoteLeaseCursor | null = null
   private remoteLeaseTimer: unknown | null = null
   private remoteAvailability: 'unknown' | 'active' | 'unavailable' = 'unknown'
   private asyncDispatchFailureCount = 0
@@ -157,7 +164,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
           CAP_FRAGMENTATION_V1,
           CAP_BACKPRESSURE_V1,
           CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
-          ...(this.localPeerRole === 'consumer' ? [] : [CAP_PROVIDER_LEASE_V1]),
+          CAP_PROVIDER_LEASE_V1,
           ...(this.localPeerRole === 'consumer' ? [CAP_CONSUMER_ONLY_V1] : []),
         ],
       })
@@ -262,7 +269,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   async getManifest(peerId: string): Promise<MeshPeerManifest | null> {
     this.assertOpen()
     this.assertPeer(peerId)
-    if (this.manifest) return this.manifest
+    if (this.manifest && this.isRemoteProviderAvailable()) return this.manifest
     if (this.remoteAvailability === 'unavailable') return null
     if (!this.manifestParser) return null
     if (this.pendingManifests.size > 0) {
@@ -493,6 +500,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.manifest = null
     this.authenticatedPeerContext = undefined
     this.remoteAvailability = 'unknown'
+    this.remoteLeaseCursor = null
+    this.remoteLeaseFloor = null
     this.clearRemoteLease()
     this.clearAllTimers()
   }
@@ -608,7 +617,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.reassembler = new FragmentReassembler({ limits: this.remoteProtocol.limits, clock: this.clock })
     if (this.peerHost && this.remoteProtocol.capabilities.has(CAP_PROVIDER_LEASE_V1)) {
-      void this.sendLogicalFrame(this.peerHost.startEpoch()).catch(() => undefined)
+      void this.peerHost.startEpoch(this.remotePeerId, this.authenticatedPeerContext)
+        .then((frame) => this.sendLogicalFrame(frame))
+        .catch(() => undefined)
     }
   }
 
@@ -797,13 +808,19 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     if (!this.manifestParser) return
     try {
       this.manifest = this.manifestParser(frame, this.remotePeerId)
-      if (this.remoteAvailability === 'unknown') this.remoteAvailability = 'active'
       void this.sendLogicalFrame(buildManifestAck(this.manifest)).catch(() => undefined)
-      for (const pending of this.pendingManifests.values()) {
-        this.clearTimer(pending.timer)
-        pending.resolve(this.manifest)
+      if (!this.remoteRequiresProviderLease()) {
+        if (this.remoteAvailability === 'unknown') this.remoteAvailability = 'active'
+        for (const pending of this.pendingManifests.values()) {
+          this.clearTimer(pending.timer)
+          pending.resolve(this.manifest)
+        }
+        this.pendingManifests.clear()
+      } else {
+        this.remoteLeaseFloor = this.remoteLeaseCursor
+        this.clearRemoteLease()
+        this.remoteAvailability = 'unknown'
       }
-      this.pendingManifests.clear()
     } catch (error) {
       for (const pending of this.pendingManifests.values()) {
         this.clearTimer(pending.timer)
@@ -816,11 +833,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private async sendLocalManifest(): Promise<void> {
     if (!this.peerHost || this.localPeerRole === 'consumer') return
     if (!this.remoteProtocol?.capabilities.has(CAP_PROVIDER_LEASE_V1)) return
-    await this.sendLogicalFrame(this.peerHost.buildManifest())
+    await this.sendLogicalFrame(await this.peerHost.buildManifest(this.remotePeerId, this.authenticatedPeerContext))
   }
 
   private handleProviderLease(frame: ProviderLeaseFrame): void {
     if (frame.peer_id !== this.remotePeerId) return
+    if (!this.isFreshRemoteLeaseFrame(frame)) return
+    this.remoteLeaseCursor = leaseCursor(frame)
     if (frame.available === false || frame.type === 'provider_unavailable') {
       this.clearRemoteAvailability()
       return
@@ -828,6 +847,30 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.remoteLease = frame
     this.remoteAvailability = 'active'
     this.rearmRemoteLease(frame.expires_at_ms)
+    if (this.manifest) {
+      for (const pending of this.pendingManifests.values()) {
+        this.clearTimer(pending.timer)
+        pending.resolve(this.manifest)
+      }
+      this.pendingManifests.clear()
+    }
+  }
+
+  private isRemoteProviderAvailable(): boolean {
+    if (this.remoteRequiresProviderLease()) return this.remoteAvailability === 'active' && this.remoteLease !== null
+    return this.remoteAvailability !== 'unavailable'
+  }
+
+  private remoteRequiresProviderLease(): boolean {
+    return Boolean(this.remoteProtocol?.capabilities.has(CAP_PROVIDER_LEASE_V1))
+  }
+
+  private isFreshRemoteLeaseFrame(frame: ProviderLeaseFrame): boolean {
+    const cursor = leaseCursor(frame)
+    if (this.remoteLease !== null) return cursor.epoch === this.remoteLease.connection_epoch && cursor.revision > this.remoteLease.availability_revision
+    if (this.remoteLeaseFloor === null) return true
+    if (cursor.epoch === this.remoteLeaseFloor.epoch) return cursor.revision > this.remoteLeaseFloor.revision
+    return true
   }
 
   private async sendPeerHostFrame(frame: Record<string, unknown>): Promise<void> {
@@ -854,6 +897,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.clearRemoteLease()
     this.remoteAvailability = 'unavailable'
     this.manifest = null
+    this.remoteLeaseFloor = this.remoteLeaseCursor
     for (const pending of this.pendingManifests.values()) {
       this.clearTimer(pending.timer)
       pending.resolve(null)
@@ -1030,6 +1074,10 @@ function buildManifestAck(manifest: MeshPeerManifest): Record<string, unknown> {
 
 function isLeaseBearingFrame(frame: Record<string, unknown>): boolean {
   return frame.type === 'manifest' || frame.type === 'provider_lease' || frame.type === 'provider_unavailable'
+}
+
+function leaseCursor(frame: ProviderLeaseFrame): RemoteLeaseCursor {
+  return { epoch: frame.connection_epoch, revision: frame.availability_revision }
 }
 
 function parserLimitsFor(protocol: NegotiatedPeerProtocol | null): Partial<typeof DEFAULT_PARSER_LIMITS> {

@@ -1,16 +1,11 @@
 export interface LocalNodeLifecycleHost {
-  suspend(reason?: string): Record<string, unknown>
-  resume(): Record<string, unknown>
-  renewLease(): Record<string, unknown>
-}
-
-export interface LocalNodeLifecycleSender {
-  sendFrame(frame: Record<string, unknown>): Promise<void>
+  suspend(reason?: string): void | Promise<void>
+  resume(): void | Promise<void>
+  renew(): void | Promise<void>
 }
 
 export interface LocalNodeLifecycleOptions {
   readonly host: LocalNodeLifecycleHost
-  readonly sender?: LocalNodeLifecycleSender
   readonly document?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>
   readonly window?: Pick<Window, 'addEventListener' | 'removeEventListener'>
   readonly renewMs?: number
@@ -22,7 +17,6 @@ const DEFAULT_RENEW_MS = 20_000
 
 export class LocalNodeLifecycleController {
   private readonly host: LocalNodeLifecycleHost
-  private readonly sender: LocalNodeLifecycleSender | undefined
   private readonly document: LocalNodeLifecycleOptions['document']
   private readonly windowTarget: LocalNodeLifecycleOptions['window']
   private readonly renewMs: number
@@ -33,7 +27,6 @@ export class LocalNodeLifecycleController {
 
   constructor(options: LocalNodeLifecycleOptions) {
     this.host = options.host
-    this.sender = options.sender
     this.document = options.document ?? (typeof document === 'undefined' ? undefined : document)
     this.windowTarget = options.window ?? (typeof window === 'undefined' ? undefined : window)
     this.renewMs = options.renewMs ?? DEFAULT_RENEW_MS
@@ -51,7 +44,7 @@ export class LocalNodeLifecycleController {
     this.windowTarget?.addEventListener('blur', this.handleBlur)
     if (this.document?.visibilityState === 'hidden') this.stopRenewal()
     else {
-      void this.publish(this.host.resume())
+      void this.resumeAndAnnounceLease().catch(() => undefined)
       this.startRenewal()
     }
   }
@@ -72,22 +65,22 @@ export class LocalNodeLifecycleController {
       this.stopRenewal()
       return
     }
-    void this.publish(this.host.resume())
+    void this.resumeAndAnnounceLease().catch(() => undefined)
     this.startRenewal()
   }
 
   private readonly handlePageHide = (): void => {
     this.stopRenewal()
-    void this.publish(this.host.suspend('page_hidden'))
+    void Promise.resolve(this.host.suspend('page_hidden')).catch(() => undefined)
   }
 
   private readonly handleFreeze = (): void => {
     this.stopRenewal()
-    void this.publish(this.host.suspend('page_frozen'))
+    void Promise.resolve(this.host.suspend('page_frozen')).catch(() => undefined)
   }
 
   private readonly handlePageShow = (): void => {
-    void this.publish(this.host.resume())
+    void this.resumeAndAnnounceLease().catch(() => undefined)
     this.startRenewal()
   }
 
@@ -98,7 +91,7 @@ export class LocalNodeLifecycleController {
   private startRenewal(): void {
     if (this.interval !== null) return
     this.interval = this.setIntervalFn(() => {
-      void this.publish(this.host.renewLease())
+      void Promise.resolve(this.host.renew()).catch(() => undefined)
     }, this.renewMs)
   }
 
@@ -108,7 +101,7 @@ export class LocalNodeLifecycleController {
     this.interval = null
   }
 
-  private async publish(frame: Record<string, unknown>): Promise<void> {
-    await this.sender?.sendFrame(frame).catch(() => undefined)
+  private async resumeAndAnnounceLease(): Promise<void> {
+    await this.host.resume()
   }
 }

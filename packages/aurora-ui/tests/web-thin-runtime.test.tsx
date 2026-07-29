@@ -492,7 +492,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     )
   })
 
-  it('drives local provider leases from page lifecycle while blur does not withdraw', () => {
+  it('drives semantic local provider lifecycle while blur does not withdraw', async () => {
     vi.useFakeTimers()
     try {
       const documentListeners = new Map<string, Set<() => void>>()
@@ -519,20 +519,25 @@ describe('browser WebRTC thin-shell runtime', () => {
         },
       } as unknown as Pick<Window, 'addEventListener' | 'removeEventListener'>
       const calls: string[] = []
-      const sent: unknown[] = []
+      const flushLifecycle = async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      }
       const host = {
-        resume: () => { calls.push('resume'); return { type: 'manifest' } },
-        renewLease: () => { calls.push('renew'); return { type: 'provider_lease' } },
-        suspend: (reason?: string) => { calls.push(`suspend:${reason}`); return { type: 'provider_unavailable', reason_code: reason } },
+        resume: async () => { calls.push('resume') },
+        renew: () => { calls.push('renew') },
+        suspend: (reason?: string) => { calls.push(`suspend:${reason}`) },
       }
       const controller = new LocalNodeLifecycleController({
         host,
-        sender: { sendFrame: async (frame) => { sent.push(frame) } },
         document: visibilityDocument,
         window: windowTarget,
       })
 
       controller.start()
+      await flushLifecycle()
       expect(calls).toEqual(['resume'])
       for (const listener of windowListeners.get('blur') ?? []) listener()
       expect(calls).toEqual(['resume'])
@@ -545,16 +550,51 @@ describe('browser WebRTC thin-shell runtime', () => {
       expect(calls.filter((call) => call === 'renew')).toHaveLength(1)
 
       for (const listener of windowListeners.get('pageshow') ?? []) listener()
+      await flushLifecycle()
       expect(calls.at(-1)).toBe('resume')
       for (const listener of documentListeners.get('freeze') ?? []) listener()
       expect(calls.at(-1)).toBe('suspend:page_frozen')
-      expect(sent).toEqual(expect.arrayContaining([
-        { type: 'manifest' },
-        { type: 'provider_lease' },
-        { type: 'provider_unavailable', reason_code: 'page_hidden' },
-        { type: 'provider_unavailable', reason_code: 'page_frozen' },
-      ]))
       controller.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('wires mesh-node browser runtime lifecycle through the SDK provider port', async () => {
+    vi.useFakeTimers()
+    try {
+      const calls: string[] = []
+      const peerHost = {
+        resumeLocalProvider: async () => { calls.push('resume') },
+        renewLocalProvider: async () => { calls.push('renew') },
+        suspendLocalProvider: async (reason?: string) => { calls.push(`suspend:${reason}`) },
+      }
+      const runtime = createBrowserWebThinRuntime({
+        createClient,
+        createDemoClient,
+        mode: 'webrtc-only',
+        inviteText: inviteText(),
+        nodeRole: 'mesh-node',
+        peerHost: peerHost as never,
+        windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      })
+
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(calls).toEqual(['resume'])
+      vi.advanceTimersByTime(20_000)
+      expect(calls).toEqual(['resume', 'renew'])
+
+      window.dispatchEvent(new Event('pagehide'))
+      expect(calls.at(-1)).toBe('suspend:page_hidden')
+      vi.advanceTimersByTime(20_000)
+      expect(calls.filter((call) => call === 'renew')).toHaveLength(1)
+
+      window.dispatchEvent(new Event('pageshow'))
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(calls.at(-1)).toBe('resume')
+      await runtime.close()
     } finally {
       vi.useRealTimers()
     }

@@ -337,8 +337,12 @@ export class PeerAuthorityResolver {
     return decision
   }
 
+  async listRecipientGrants(context: AuthenticatedPeerContext, nowMs: number): Promise<readonly LocalPeerGrantV1[]> {
+    return await this.grantRepository.listRecipientGrants(context.selector, nowMs)
+  }
+
   async getRecipientManifest(context: AuthenticatedPeerContext, nowMs: number): Promise<unknown> {
-    const grants = await this.grantRepository.listRecipientGrants(context.selector, nowMs)
+    const grants = await this.listRecipientGrants(context, nowMs)
     if (grants.length === 0 || this.manifestProvider === undefined) {
       return { shared_services: [], grants: [] }
     }

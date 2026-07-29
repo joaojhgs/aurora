@@ -4,6 +4,7 @@ import type { JsonObject } from '../types.js'
 import type { AuthenticatedPeerContext } from './authority.js'
 
 export type PeerHostMethodType = 'unary' | 'stream' | 'event'
+export type PeerHostProjectionMethodType = 'use' | 'manage'
 
 export interface PeerHostIdentity {
   readonly callerPeerId: string
@@ -52,6 +53,7 @@ export interface PeerHostErrorBody {
 export interface PeerHostMethodDescriptor<TInput = unknown, TOutput = unknown> {
   readonly methodId: string
   readonly methodType: PeerHostMethodType
+  readonly projectionMethodType?: PeerHostProjectionMethodType
   readonly inputSchemaId: string
   readonly outputSchemaId: string
   readonly inputSchema: z.ZodType<TInput>
@@ -85,10 +87,23 @@ export interface PeerHostAuthorizationDecision {
   readonly allowed: boolean
   readonly reasonCode?: string
   readonly grantRevision?: number
+  readonly grantedMethodIds?: readonly string[]
+}
+
+export interface PeerHostManifestAuthoritySnapshot {
+  readonly recipientPeerId?: string
+  readonly grantedMethodIds: readonly string[]
+  readonly authGrantRevision: number
+  readonly authGrantState: 'unknown' | 'pending' | 'active' | 'revoked'
 }
 
 export interface PeerHostAuthorizationStore {
   authorize(request: PeerHostAuthorizeRequest): Promise<PeerHostAuthorizationDecision>
+  snapshotManifestAuthority?(request: {
+    readonly remotePeerId?: string
+    readonly authenticatedPeerContext?: AuthenticatedPeerContext
+    readonly nowMs: number
+  }): PeerHostManifestAuthoritySnapshot | Promise<PeerHostManifestAuthoritySnapshot>
 }
 
 export interface LocalPeerGrantV1 {
@@ -123,14 +138,17 @@ export interface PeerHostManifest {
   readonly type: 'manifest'
   readonly peer_id: string
   readonly node_name: string
+  readonly aurora_version: string
   readonly shared_services: readonly JsonObject[]
-  readonly connection_epoch: string
-  readonly availability_revision: number
+  readonly granted_permissions: null
   readonly active_protocol: 'projection-v1'
   readonly active_version: 'v1'
   readonly active_tier: 'projection'
+  readonly supported_protocols: readonly ['legacy-unfiltered-v0', 'projection-v1']
+  readonly projection_supported: true
   readonly projection_active: true
   readonly recipient_projection_evidence: JsonObject
+  readonly timestamp: string
 }
 
 export interface ProviderLeaseRecord {

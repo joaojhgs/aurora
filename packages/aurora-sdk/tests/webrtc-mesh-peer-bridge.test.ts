@@ -100,12 +100,33 @@ function authenticatedContext(patch: Partial<AuthenticatedPeerContext> = {}): Au
 function ackFromSentManifest(session: FakeSession): Record<string, unknown> {
   const manifest = session.sent.find((frame) => (frame as any).type === 'manifest') as Record<string, unknown> | undefined
   if (!manifest) throw new Error('manifest not sent')
+  return ackFromManifest(manifest)
+}
+
+function ackFromLatestSentManifest(session: FakeSession): Record<string, unknown> {
+  const manifest = session.sent.filter((frame) => (frame as any).type === 'manifest').at(-1) as Record<string, unknown> | undefined
+  if (!manifest) throw new Error('manifest not sent')
+  return ackFromManifest(manifest)
+}
+
+function ackFromManifest(manifest: Record<string, unknown>): Record<string, unknown> {
+  const evidence = manifest.recipient_projection_evidence as Record<string, unknown>
   return {
     type: 'manifest_ack',
-    connection_epoch: manifest.connection_epoch,
-    manifest_revision: manifest.manifest_revision,
-    manifest_digest: manifest.manifest_digest,
-    compatible_services: manifest.required_services
+    compatible_services: Array.isArray(manifest.shared_services) && manifest.shared_services.length > 0 ? ['Tooling'] : [],
+    incompatible_services: [],
+    unused_services: [],
+    active_protocol: 'projection-v1',
+    active_version: 'v1',
+    active_tier: 'projection',
+    protocol_revision: 'v1',
+    registry_revision: evidence.registry_revision,
+    export_policy_revision: evidence.policy_revision,
+    auth_grant_revision: evidence.auth_grant_revision,
+    projection_digest: evidence.projection_digest,
+    services: [
+      { service_id: 'Tooling', service_label: '', status: 'compatible', reason_codes: [], reason: '' }
+    ]
   }
 }
 
@@ -359,7 +380,7 @@ describe('WebRtcMeshPeerBridge', () => {
     session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })
     const handler = vi.fn(async (_input: unknown, context: PeerHostCallContext) => {
       expect(context.identity.callerPeerId).toBe('peer-a')
-      expect(context.identity.effectivePermissions).toEqual([])
+      expect(context.identity.effectivePermissions).toEqual(['Tooling.GetTools'])
       expect(context.authenticatedPeerContext?.selector.tokenId).toBe('token-1')
       return { count: 0, tools: [] }
     })
@@ -475,13 +496,19 @@ describe('WebRtcMeshPeerBridge', () => {
     })
     session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
     await flush()
+    await flush()
+    expect(session.sent.filter((frame) => ['manifest', 'provider_lease'].includes(String((frame as any).type))).map((frame) => (frame as any).type)).toEqual(['manifest'])
     const ack = ackFromSentManifest(session)
-    session.emit({ ...ack, manifest_digest: '1'.repeat(64) })
+    session.emit({ ...ack, projection_digest: '1'.repeat(64) })
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(0)
     session.emit({ type: 'call', id: 'forged-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
     await flush()
     expect(handler).not.toHaveBeenCalled()
-    expect(session.sent.at(-1)).toMatchObject({ type: 'error', id: 'forged-call', error: { code: 425 } })
+    expect(session.sent.find((frame) => (frame as any).type === 'error' && (frame as any).id === 'forged-call')).toMatchObject({ type: 'error', id: 'forged-call', error: { code: 425 } })
     session.emit(ack)
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(1)
     session.emit({ type: 'call', id: 'valid-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } })
     await flush(); await flush()
     expect(handler).toHaveBeenCalledTimes(1)
@@ -510,10 +537,100 @@ describe('WebRtcMeshPeerBridge', () => {
     })
     oldSession.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1] }))
     oldSession.emit({ type: 'manifest_request' })
-    oldHost.resume()
+    void oldHost.resume()
     oldHost.renewLease()
     await flush()
     expect(oldSession.sent.some((frame) => ['manifest', 'provider_lease', 'provider_unavailable'].includes((frame as any).type))).toBe(false)
+  })
+
+  it('routes provider lifecycle frames through the bridge after ACK gating', async () => {
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: async () => ({ count: 0, tools: [] }),
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: (() => { let now = 1000; return () => now += 20_000 })(),
+      randomId: (() => { let i = 0; return () => `epoch-${++i}` })()
+    })
+    const session = new FakeSession()
+    new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    expect(session.sent.map((frame) => (frame as any).type)).toEqual(['manifest'])
+
+    session.emit(ackFromLatestSentManifest(session))
+    await flush()
+    expect(session.sent.map((frame) => (frame as any).type)).toEqual(['manifest', 'provider_lease'])
+
+    await peerHost.renewLocalProvider()
+    expect(session.sent.map((frame) => (frame as any).type)).toEqual(['manifest', 'provider_lease', 'provider_lease'])
+
+    await peerHost.suspendLocalProvider('page_hidden')
+    expect(session.sent.at(-1)).toMatchObject({ type: 'provider_unavailable', reason_code: 'page_hidden' })
+
+    await peerHost.resumeLocalProvider()
+    expect(session.sent.at(-1)).toMatchObject({ type: 'manifest' })
+    expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(2)
+
+    session.emit(ackFromLatestSentManifest(session))
+    await flush()
+    expect(session.sent.filter((frame) => (frame as any).type === 'provider_lease')).toHaveLength(3)
+  })
+
+  it('requires a fresh lease after each negotiated provider manifest generation', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'manifest-generation' })
+    session.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
+
+    const manifestA = { type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] }
+    const manifestB = { ...manifestA, node_name: 'Peer B' }
+    const leaseA = { type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-a', availability_revision: 1, issued_at_ms: 1000, expires_at_ms: 61_000, available: true }
+    const leaseB = { ...leaseA, availability_revision: 2, issued_at_ms: 21_000, expires_at_ms: 81_000 }
+    const staleTombstoneA = { ...leaseA, type: 'provider_unavailable', available: false, reason_code: 'stale' }
+    const tombstoneB = { ...leaseB, type: 'provider_unavailable', availability_revision: 3, available: false, reason_code: 'current' }
+
+    const first = bridge.getManifest('peer-a')
+    await flush()
+    session.emit(manifestA)
+    await flush()
+    session.emit(leaseA)
+    await expect(first).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer A' })
+    await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({ nodeName: 'Peer A' })
+
+    session.emit(manifestB)
+    await flush()
+    const second = bridge.getManifest('peer-a')
+    let settled = false
+    second.finally(() => { settled = true }).catch(() => undefined)
+    await flush()
+    expect(settled).toBe(false)
+
+    session.emit(leaseA)
+    session.emit(staleTombstoneA)
+    await flush()
+    expect(settled).toBe(false)
+
+    session.emit(leaseB)
+    await expect(second).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer B' })
+    await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({ nodeName: 'Peer B' })
+
+    session.emit(staleTombstoneA)
+    await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({ nodeName: 'Peer B' })
+
+    session.emit(tombstoneB)
+    await expect(bridge.getManifest('peer-a')).resolves.toBeNull()
   })
 
   it('expires consumer provider leases by TTL, re-arms renewal, and tombstones manifest routes', async () => {
@@ -522,12 +639,17 @@ describe('WebRtcMeshPeerBridge', () => {
       vi.setSystemTime(1000)
       const session = new FakeSession()
       const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'manifest-lease' })
-      session.emit(hello())
+      session.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
       const manifestPromise = bridge.getManifest('peer-a')
       await flush()
       session.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
-      await expect(manifestPromise).resolves.toMatchObject({ peerId: 'peer-a' })
+      await flush()
+      let settled = false
+      manifestPromise.finally(() => { settled = true }).catch(() => undefined)
+      await flush()
+      expect(settled).toBe(false)
       session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 1, issued_at_ms: 1000, expires_at_ms: 61_000, available: true })
+      await expect(manifestPromise).resolves.toMatchObject({ peerId: 'peer-a' })
       vi.advanceTimersByTime(20_000)
       session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 2, issued_at_ms: 21_000, expires_at_ms: 81_000, available: true })
       vi.advanceTimersByTime(59_999)
@@ -537,12 +659,12 @@ describe('WebRtcMeshPeerBridge', () => {
 
       const tombstoneSession = new FakeSession()
       const tombstoneBridge = new WebRtcMeshPeerBridge({ session: tombstoneSession, remotePeerId: 'peer-a', randomId: () => 'manifest-tombstone' })
-      tombstoneSession.emit(hello())
+      tombstoneSession.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
       const manifestAgain = tombstoneBridge.getManifest('peer-a')
       await flush()
       tombstoneSession.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
-      await expect(manifestAgain).resolves.toMatchObject({ peerId: 'peer-a' })
       tombstoneSession.emit({ type: 'provider_unavailable', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 3, issued_at_ms: 81_000, expires_at_ms: 81_000, available: false })
+      await expect(manifestAgain).resolves.toBeNull()
       await expect(tombstoneBridge.getManifest('peer-a')).resolves.toBeNull()
     } finally {
       vi.useRealTimers()
@@ -568,15 +690,15 @@ describe('WebRtcMeshPeerBridge', () => {
       })
       const session = new FakeSession()
       const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'real-lease' })
-      session.emit(hello())
+      session.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
       const manifestPromise = bridge.getManifest('peer-a')
       await flush()
       session.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
-      await expect(manifestPromise).resolves.toMatchObject({ peerId: 'peer-a' })
 
       const renewal = host.renewLease()
       expect(renewal).toMatchObject({ type: 'provider_lease', available: true })
       session.emit(renewal)
+      await expect(manifestPromise).resolves.toMatchObject({ peerId: 'peer-a' })
       vi.advanceTimersByTime(59_999)
       await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({ peerId: 'peer-a' })
       vi.advanceTimersByTime(1)
@@ -584,14 +706,14 @@ describe('WebRtcMeshPeerBridge', () => {
 
       const tombstoneSession = new FakeSession()
       const tombstoneBridge = new WebRtcMeshPeerBridge({ session: tombstoneSession, remotePeerId: 'peer-a', randomId: () => 'real-tombstone' })
-      tombstoneSession.emit(hello())
+      tombstoneSession.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_PROVIDER_LEASE_V1] }))
       const tombstoneManifest = tombstoneBridge.getManifest('peer-a')
       await flush()
       tombstoneSession.emit({ type: 'manifest', peer_id: 'peer-a', node_name: 'Peer A', shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }] })
-      await expect(tombstoneManifest).resolves.toMatchObject({ peerId: 'peer-a' })
       const tombstone = host.suspend('manual_pause')
       expect(tombstone).toMatchObject({ type: 'provider_unavailable', available: false, reason_code: 'manual_pause' })
       tombstoneSession.emit(tombstone)
+      await expect(tombstoneManifest).resolves.toBeNull()
       await expect(tombstoneBridge.getManifest('peer-a')).resolves.toBeNull()
     } finally {
       vi.useRealTimers()
@@ -639,6 +761,7 @@ describe('WebRtcMeshPeerBridge', () => {
     manifestSession.sendFailure = sendFailure
     manifestSession.emit({ type: 'manifest_request' })
     await flush()
+    await flush()
     expect(manifestBridge.getDiagnostics()).toMatchObject({
       asyncDispatchFailureCount: 1,
       lastAsyncDispatchFailure: { operation: 'manifest_response', reason: 'send_failed' }
@@ -676,7 +799,16 @@ describe('WebRtcMeshPeerBridge', () => {
     expect(errorFrame).toMatchObject({ error: { code: 500, message: 'handler failed', reason_code: 'handler_failed', error_ref: 'redacted-ref' } })
     expect(JSON.stringify(errorFrame)).not.toContain('raw handler secret')
 
-    const subscriptionRegistry = new PeerHostContractRegistry().registerEvent({
+    const subscriptionRegistry = new PeerHostContractRegistry().register({
+      methodId: 'Tooling.ProjectionInvalidated',
+      methodType: 'unary',
+      inputSchemaId: 'Tooling.ProjectionInvalidated.input',
+      outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      requiredPermissions: [],
+      handler: async () => ({ ok: true })
+    }).registerEvent({
       topic: 'Tooling.ProjectionInvalidated',
       outputSchemaId: 'Tooling.ProjectionInvalidated.output',
       outputSchema: z.object({ ok: z.boolean() }),

@@ -33,9 +33,10 @@ export class ProviderLeaseController {
     this.epoch = this.randomId()
   }
 
-  startEpoch(): ProviderLeaseRecord {
+  startEpoch(): string {
     this.epoch = this.randomId()
-    return this.renew()
+    this.current = null
+    return this.epoch
   }
 
   renew(): ProviderLeaseRecord {

@@ -118,6 +118,11 @@ export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
 
 type BrowserSnapshotListener = (snapshot: BrowserWebRtcSnapshot) => void
 type SelectedCandidatePairEvidence = Awaited<ReturnType<PeerConnectionController['getSelectedCandidatePairEvidence']>>
+type LocalProviderLifecyclePort = {
+  resumeLocalProvider(): void | Promise<void>
+  renewLocalProvider(): void | Promise<void>
+  suspendLocalProvider(reason?: string): void | Promise<void>
+}
 
 const DEFAULT_MODE: AuroraThinConnectionMode = 'http-only'
 const CONNECTION_UNAVAILABLE_COPY = 'Could not connect to this Aurora device. Try again from Connection settings.'
@@ -276,9 +281,14 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     config: securityContext,
     visibilityDocument: config.visibilityDocument,
   })
-  const lifecycle = nodeRole === 'mesh-node' && config.peerHost
+  const localProviderLifecycle = config.peerHost as (WebRtcPeerHost & LocalProviderLifecyclePort) | undefined
+  const lifecycle = nodeRole === 'mesh-node' && localProviderLifecycle
     ? new LocalNodeLifecycleController({
-        host: config.peerHost,
+        host: {
+          resume: () => localProviderLifecycle.resumeLocalProvider(),
+          renew: () => localProviderLifecycle.renewLocalProvider(),
+          suspend: (reason?: string) => localProviderLifecycle.suspendLocalProvider(reason),
+        },
         ...(config.visibilityDocument ? { document: config.visibilityDocument } : {}),
       })
     : null

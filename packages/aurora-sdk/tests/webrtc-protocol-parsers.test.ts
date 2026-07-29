@@ -178,15 +178,49 @@ describe('WebRTC actual-G002 protocol parsers', () => {
   it('parses provider lease and manifest ACK evidence with bounded fields', () => {
     const ack = {
       type: 'manifest_ack',
-      connection_epoch: 'epoch-1',
-      manifest_revision: '3',
-      manifest_digest: 'a'.repeat(64),
       compatible_services: ['Tooling'],
-      incompatible_services: []
+      incompatible_services: [],
+      unused_services: [],
+      active_protocol: 'projection-v1',
+      active_version: 'v1',
+      active_tier: 'projection',
+      protocol_revision: 'v1',
+      registry_revision: 'registry-1',
+      export_policy_revision: 'policy-1',
+      auth_grant_revision: 3,
+      projection_digest: 'a'.repeat(64),
+      services: [
+        { service_id: 'Tooling', service_label: '', status: 'compatible', reason_codes: [], reason: '' }
+      ]
     }
     expect(parseWebRtcFrame(ack)).toEqual(ack)
-    expect(() => parseWebRtcFrame({ type: 'manifest_ack', compatible_services: ['Tooling'] })).toThrow(/connection_epoch|id/i)
-    expect(() => parseWebRtcFrame({ ...ack, manifest_digest: 'not-a-digest' })).toThrow(/manifest_digest/)
+    expect(parseWebRtcFrame({ type: 'manifest_ack', compatible_services: ['Tooling'] })).toMatchObject({
+      type: 'manifest_ack',
+      compatible_services: ['Tooling'],
+      incompatible_services: [],
+      unused_services: [],
+      active_protocol: null,
+      projection_digest: null
+    })
+    const missingServicesAck = { ...ack }
+    delete (missingServicesAck as Partial<typeof ack>).services
+    expect(() => parseWebRtcFrame(missingServicesAck)).toThrow(/requires services/)
+    expect(() => parseWebRtcFrame({
+      ...ack,
+      incompatible_services: ['Tooling']
+    })).toThrow(/both compatible_services and incompatible_services/)
+    expect(() => parseWebRtcFrame({
+      ...ack,
+      services: [
+        { service_id: 'Tooling', service_label: '', status: 'compatible', reason_codes: [], reason: '' },
+        { service_id: 'Tooling', service_label: '', status: 'compatible', reason_codes: [], reason: '' }
+      ]
+    })).toThrow(/duplicate service_id/)
+    expect(() => parseWebRtcFrame({ ...ack, projection_digest: 'not-a-digest' })).toThrow(/projection_digest/)
+    expect(() => parseWebRtcFrame({
+      ...ack,
+      services: [{ service_id: 'Tooling', service_label: '', status: 'incompatible', reason_codes: ['method_not_advertised'], reason: '' }]
+    })).toThrow(/contradict/)
 
     const lease = {
       type: 'provider_lease',

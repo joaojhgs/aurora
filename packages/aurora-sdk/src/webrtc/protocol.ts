@@ -77,11 +77,18 @@ export interface ProviderLeaseFrame {
 }
 export interface ManifestAckFrame {
   type: 'manifest_ack'
-  connection_epoch: string
-  manifest_revision: string
-  manifest_digest: string
   compatible_services: string[]
-  incompatible_services?: string[]
+  incompatible_services: string[]
+  unused_services: string[]
+  active_protocol?: 'projection-v1' | null
+  active_version?: 'v1' | null
+  active_tier?: 'projection' | null
+  protocol_revision: string | null
+  registry_revision: string | null
+  export_policy_revision: string | null
+  auth_grant_revision: number | null
+  projection_digest: string | null
+  services?: unknown[]
 }
 
 export type AuroraRpcFrame = CallFrame | ResultFrame | ErrorFrame | ChunkFrame | EofFrame | CancelFrame | EventFrame
@@ -376,14 +383,80 @@ function parseProviderLease(object: Record<string, unknown>, type: 'provider_lea
 }
 
 function parseManifestAck(object: Record<string, unknown>, limits: ParserLimits): ManifestAckFrame {
-  return {
+  const activeProtocol = object.active_protocol === undefined || object.active_protocol === null ? null : requireString(object.active_protocol, 'active_protocol', ID_MAX)
+  if (activeProtocol !== null && activeProtocol !== 'projection-v1') throw new WebRtcProtocolParseError('manifest_ack active_protocol is unsupported')
+  const activeVersion = object.active_version === undefined || object.active_version === null ? null : requireString(object.active_version, 'active_version', ID_MAX)
+  if (activeVersion !== null && activeVersion !== 'v1') throw new WebRtcProtocolParseError('manifest_ack active_version is unsupported')
+  const activeTier = object.active_tier === undefined || object.active_tier === null ? null : requireString(object.active_tier, 'active_tier', ID_MAX)
+  if (activeTier !== null && activeTier !== 'projection') throw new WebRtcProtocolParseError('manifest_ack active_tier is unsupported')
+  const compatible = requireStringArray(object.compatible_services, 'compatible_services', limits.maxTopics, limits.maxTopicLength)
+  const incompatible = object.incompatible_services === undefined ? [] : requireStringArray(object.incompatible_services, 'incompatible_services', limits.maxTopics, limits.maxTopicLength)
+  const unused = object.unused_services === undefined ? [] : requireStringArray(object.unused_services, 'unused_services', limits.maxTopics, limits.maxTopicLength)
+  validateManifestAckPartitions({ compatible, incompatible, unused })
+  const ack: ManifestAckFrame = {
     type: 'manifest_ack',
-    connection_epoch: requireId(object.connection_epoch) as string,
-    manifest_revision: requireString(object.manifest_revision, 'manifest_revision', ID_MAX),
-    manifest_digest: requireHex64(object.manifest_digest, 'manifest_digest'),
-    compatible_services: requireStringArray(object.compatible_services, 'compatible_services', limits.maxTopics, limits.maxTopicLength),
-    ...(object.incompatible_services !== undefined ? { incompatible_services: requireStringArray(object.incompatible_services, 'incompatible_services', limits.maxTopics, limits.maxTopicLength) } : {})
+    compatible_services: compatible,
+    incompatible_services: incompatible,
+    unused_services: unused,
+    active_protocol: activeProtocol,
+    active_version: activeVersion,
+    active_tier: activeTier,
+    protocol_revision: object.protocol_revision === undefined || object.protocol_revision === null ? null : requireString(object.protocol_revision, 'protocol_revision', ID_MAX),
+    registry_revision: object.registry_revision === undefined || object.registry_revision === null ? null : requireString(object.registry_revision, 'registry_revision', ID_MAX),
+    export_policy_revision: object.export_policy_revision === undefined || object.export_policy_revision === null ? null : requireString(object.export_policy_revision, 'export_policy_revision', ID_MAX),
+    auth_grant_revision: object.auth_grant_revision === undefined || object.auth_grant_revision === null ? null : requireInteger(object.auth_grant_revision, 'auth_grant_revision', 0, Number.MAX_SAFE_INTEGER),
+    projection_digest: object.projection_digest === undefined || object.projection_digest === null ? null : requireHex64(object.projection_digest, 'projection_digest')
   }
+  if (activeProtocol === 'projection-v1' && object.services === undefined) throw new WebRtcProtocolParseError('manifest_ack projection-v1 requires services')
+  if (object.services !== undefined) {
+    if (!Array.isArray(object.services) || object.services.length === 0 || object.services.length > limits.maxArrayLength) throw new WebRtcProtocolParseError('services must be a bounded non-empty array')
+    validateManifestAckServices(object.services, { compatible, incompatible, unused }, limits)
+    ack.services = object.services
+  }
+  return ack
+}
+
+function validateManifestAckPartitions(partitions: { compatible: string[]; incompatible: string[]; unused: string[] }): void {
+  for (const [label, values] of Object.entries(partitions)) {
+    if (!isSortedUnique(values)) throw new WebRtcProtocolParseError(`manifest_ack ${label}_services must be sorted and unique`)
+  }
+  const seen = new Map<string, string>()
+  for (const [label, values] of Object.entries(partitions)) {
+    for (const value of values) {
+      const previous = seen.get(value)
+      if (previous !== undefined) throw new WebRtcProtocolParseError(`manifest_ack service appears in both ${previous}_services and ${label}_services`)
+      seen.set(value, label)
+    }
+  }
+}
+
+function validateManifestAckServices(services: unknown[], partitions: { compatible: string[]; incompatible: string[]; unused: string[] }, limits: ParserLimits): void {
+  const seen = new Set<string>()
+  const previous: { serviceId: string | null } = { serviceId: null }
+  const actual = {
+    compatible: [] as string[],
+    incompatible: [] as string[],
+    unused: [] as string[]
+  }
+  for (const item of services) {
+    const service = requirePlainRecord(item, 'manifest_ack.services[]')
+    const serviceId = requireString(service.service_id, 'service_id', limits.maxTopicLength)
+    if (seen.has(serviceId)) throw new WebRtcProtocolParseError('manifest_ack services contain duplicate service_id')
+    if (previous.serviceId !== null && previous.serviceId.localeCompare(serviceId) > 0) throw new WebRtcProtocolParseError('manifest_ack services must be sorted by service_id')
+    previous.serviceId = serviceId
+    seen.add(serviceId)
+    const status = requireString(service.status, 'status', 32)
+    if (status !== 'compatible' && status !== 'incompatible' && status !== 'unused') throw new WebRtcProtocolParseError('manifest_ack service status is invalid')
+    actual[status].push(serviceId)
+    if (service.service_label !== '') throw new WebRtcProtocolParseError('manifest_ack service_label must be empty')
+    if (service.reason !== '') throw new WebRtcProtocolParseError('manifest_ack reason must be empty')
+    const reasonCodes = requireStringArray(service.reason_codes, 'reason_codes', limits.maxArrayLength, 128)
+    if (!isSortedUnique(reasonCodes)) throw new WebRtcProtocolParseError('manifest_ack reason_codes must be sorted and unique')
+    if (status === 'compatible' && reasonCodes.length > 0) throw new WebRtcProtocolParseError('manifest_ack compatible services must not include reason_codes')
+  }
+  if (!sameOrderedStrings(actual.compatible, partitions.compatible)) throw new WebRtcProtocolParseError('manifest_ack services contradict compatible_services')
+  if (!sameOrderedStrings(actual.incompatible, partitions.incompatible)) throw new WebRtcProtocolParseError('manifest_ack services contradict incompatible_services')
+  if (!sameOrderedStrings(actual.unused, partitions.unused)) throw new WebRtcProtocolParseError('manifest_ack services contradict unused_services')
 }
 
 function parseFragmentMetadata(object: Record<string, unknown>): FragmentFrame {
@@ -455,6 +528,17 @@ function validateJsonTree(value: unknown, limits: ParserLimits, depth = 0): void
 function requireString(value: unknown, field: string, maxLength: number): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) throw new WebRtcProtocolParseError(`${field} must be a bounded string`)
   return value
+}
+
+function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function isSortedUnique(values: readonly string[]): boolean {
+  return values.every((value, index) => {
+    const previous = values[index - 1]
+    return index === 0 || (previous !== undefined && previous < value)
+  })
 }
 
 function requireId(value: unknown): string {
