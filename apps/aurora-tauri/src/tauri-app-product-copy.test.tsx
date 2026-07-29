@@ -7,11 +7,8 @@ import {
   navItemSnapshot,
   type RouteAvailability,
 } from "@aurora/ui";
-import {
-  AuroraClient as Aurora,
-  MockAuroraTransport,
-} from "@aurora/client";
 import { findForbiddenProductionCopyTerms } from "../../../packages/aurora-ui/src/product-copy-forbidden-terms";
+import { createAuroraTauriRuntime } from "./aurora-client";
 import {
   MissingTauriRoute,
   TauriReadinessError,
@@ -189,7 +186,7 @@ describe("Tauri application product copy", () => {
         },
       ],
     };
-    const client = new Aurora({ transport: new MockAuroraTransport() });
+    const client = createAuroraTauriRuntime().client;
     const route = routeFor("assistant");
 
     const routeMarkups = [

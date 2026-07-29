@@ -54,9 +54,6 @@ const PLACEHOLDER_MARKERS = [
 ] as const;
 
 const DIAGNOSTICS_PAGE_MARKERS = [
-  "Native boundary",
-  "Denied native defaults",
-  "Shut down shell",
   "Troubleshooting",
   "Live checks",
   "Privacy check",
@@ -80,7 +77,7 @@ const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<
   string,
   readonly string[]
 > = {
-  native: ["Native platform settings", "Native permissions and capabilities"],
+  native: ["Device controls", "Device permissions"],
   tools: [
     "Tools & Plugins",
     "Review tool sources",
@@ -1169,8 +1166,8 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).toContain("Assistant");
     expect(markup).toContain("Prompt");
     expect(markup).toContain("Text chat");
-    expect(markup).not.toContain("Native boundary");
-    expect(markup).not.toContain("Denied native defaults");
+    expect(markup).not.toContain("Troubleshooting");
+    expect(markup).not.toContain("Service checks");
   });
 
   it("routes the diagnostics dashboard away from the assistant landing page", () => {
@@ -1179,14 +1176,15 @@ describe("Aurora Tauri runtime wrapper", () => {
 
     const markup = renderReadyTauriApp();
 
-    expect(markup).toContain("Native boundary");
-    expect(markup).toContain("Runtime mode");
-    expect(markup).toContain("Audio bridge");
+    expect(markup).toContain("Troubleshooting");
+    expect(markup).toContain("Live checks");
+    expect(markup).toContain("Privacy check");
+    expect(markup).toContain("Service checks");
     expect(markup).not.toContain("iOS microphone capture");
     expect(markup).not.toContain("Android baseline");
     expect(markup).not.toContain("Assistant role probe");
-    expect(markup).toContain("Denied native defaults");
-    expect(markup).toContain("Diagnostics overview");
+    expect(markup).toContain("Device permissions");
+    expect(markup).toContain("Support export");
   });
 
   it("renders desktop-thin WebRTC connection controls and diagnostics without sidecar controls", () => {
@@ -1229,12 +1227,9 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).toContain(
       "Connection details come from the saved Aurora invite and can be changed later",
     );
-    expect(markup).toContain("Thin connection mode");
-    expect(markup).toContain("webrtc-only");
-    expect(markup).toContain("Thin peer status");
-    expect(markup).toContain("pairing");
-    expect(markup).toContain("memory-only");
-    expect(markup).toContain("Desktop thin webrtc-only shell");
+    expect(markup).toContain("Connected Aurora device");
+    expect(markup).toContain("Device connection");
+    expect(markup).toContain("Direct device connection");
     expect(markup).not.toContain("aurora_sidecar_start");
   });
 
@@ -1514,7 +1509,7 @@ describe("Tauri CI/E2E route gates", () => {
 
     expectNoPlaceholderOrDebugUi(settingsMarkup, "settings");
     expect(settingsText).toContain(
-      "General permissions, schema-backed configuration",
+      "Permissions, connection choices, privacy, and data controls are grouped on one Settings page.",
     );
     expect(settingsText).toContain("Privacy defaults");
     expect(settingsText).toContain("Voice behavior");
@@ -1522,8 +1517,7 @@ describe("Tauri CI/E2E route gates", () => {
     expect(settingsText).toContain("Connection choices");
     expect(settingsText).toContain("Configuration");
     expect(settingsText).toContain("Data policy and retention");
-    expect(settingsText).toContain("Native platform settings");
-    expect(settingsText).toContain("Native controls");
+    expect(settingsText).toContain("Device controls");
     expect(settingsText).not.toContain("Route and fallback policy");
     expect(settingsText).not.toContain("Native permission id");
   });
@@ -2652,12 +2646,12 @@ describe("Tauri CI/E2E route gates", () => {
         ],
       ],
       ["/admin/pairing", ["Pairing queue"]],
-      ["/diagnostics", ["Native boundary", "Live checks"]],
+      ["/diagnostics", ["Troubleshooting", "Live checks"]],
       [
         "/memory/policy",
         ["Data policy and retention", "Audit trail for policy changes"],
       ],
-      ["/settings/native", ["Settings", "Native controls"]],
+      ["/settings/native", ["Settings", "Device controls"]],
     ] as const;
 
     for (const [path, landmarks] of deepLinks) {
@@ -2691,8 +2685,8 @@ describe("Tauri CI/E2E route gates", () => {
       expectMarkupToContainText(markup, route.label, route.id);
       expect(markup, route.id).not.toContain("route registry error");
       if (route.id !== "settings") {
-        expect(markup, route.id).not.toContain("Native boundary");
-        expect(markup, route.id).not.toContain("Denied native defaults");
+        expect(markup, route.id).not.toContain("Troubleshooting");
+        expect(markup, route.id).not.toContain("Service checks");
         expect(markup, route.id).not.toContain("aui-badge-privacy-blocked");
       }
     }
@@ -3010,13 +3004,11 @@ describe("Tauri CI/E2E route gates", () => {
     const { container, root } = await mountOutcomeApp(runtime);
     try {
       await waitUntil(() => {
-        expect(container.textContent).toContain("Native boundary");
-        expect(container.textContent).toContain("Desktop local shell");
+        expect(container.textContent).toContain("Troubleshooting");
+        expect(container.textContent).toContain("Aurora is running on this computer");
       });
-      expect(container.textContent).toContain(
-        "threads; gateway=http://127.0.0.1:8000; running=true",
-      );
-      expect(container.textContent).toContain("Sidecar supervisorrunning");
+      expect(container.textContent).toContain("Connected to Aurora");
+      expect(container.textContent).toContain("Aurora ready");
       expect(container.textContent).not.toContain(
         "native sidecar status unavailable in this runtime",
       );
@@ -3096,28 +3088,15 @@ describe("Tauri CI/E2E route gates", () => {
     try {
       await waitUntil(() => {
         expect(desktop.container.textContent).toContain("Settings");
-        expect(desktop.container.textContent).toContain("Desktop controls");
-        expect(desktop.container.textContent).toContain("Native permissions");
+        expect(desktop.container.textContent).toContain("Device controls");
+        expect(desktop.container.textContent).toContain("Device permissions");
         expect(desktop.container.textContent).toContain("Tray");
         expect(desktop.container.textContent).toContain("Notifications");
         expect(desktop.container.textContent).toContain("Dialogs");
-        expect(desktop.container.textContent).toContain("Audio bridge");
-        expect(desktop.container.textContent).toContain("Sidecar");
-        expect(desktop.container.textContent).toContain(
-          "aurora_native_permission_status",
-        );
-        expect(desktop.container.textContent).toContain("aurora_tray_status");
-        expect(desktop.container.textContent).toContain(
-          "aurora_notification_status",
-        );
-        expect(desktop.container.textContent).toContain("aurora_dialog_status");
-        expect(desktop.container.textContent).toContain(
-          "aurora_audio_bridge_status",
-        );
+        expect(desktop.container.textContent).toContain("Audio access");
+        expect(desktop.container.textContent).toContain("Aurora on this computer");
       });
-      expect(desktop.container.textContent).toContain(
-        "tauri-capability-manifest",
-      );
+      expect(desktop.container.textContent).toContain("Available");
     } finally {
       await act(async () => desktop.root.unmount());
       desktop.container.remove();
@@ -3138,9 +3117,9 @@ describe("Tauri CI/E2E route gates", () => {
     try {
       await waitUntil(() => {
         expect(browser.container.textContent).toContain("Settings");
-        expect(browser.container.textContent).toContain("Native controls");
+        expect(browser.container.textContent).toContain("Device controls");
         expect(browser.container.textContent).toContain(
-          "Local desktop sidecar controls are hidden on this surface",
+          "Computer-only controls are not available here.",
         );
       });
       expect(browser.container.textContent).not.toContain("Tauri tray status");
