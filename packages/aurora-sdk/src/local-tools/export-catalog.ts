@@ -75,7 +75,7 @@ export function buildLocalToolExportCatalogPage(
   }
   const candidates = options.tools.map((tool) => normalizeProjectionToolAuthority(tool, options.providerPeerId, options.serviceInstanceId))
   const visible = buildVisibleProjection(candidates, options.context, options.exportDecision)
-  const blockedTools: ToolingProjectionBlockedTool[] = []
+  const blockedTools = buildBlockedProjection(candidates, options.context, options.exportDecision)
   const retirements = [...(options.retirements ?? [])].sort((left, right) => left.global_tool_id.localeCompare(right.global_tool_id))
   const digest = computeProjectionChecksum(visible, retirements, blockedTools)
   const projectionRevision = canonicalJsonSha256Hex(options.context.authorityRevision)
@@ -176,6 +176,38 @@ export function buildVisibleProjection(
       && ['Tooling.GetTools', 'Tooling.ExecuteTool', ...tool.required_permissions].every((permission) => hasPermission(permission, context.recipientPermissions, 'use'))
       && exportDecision.isShared(tool, context))
     .sort((left, right) => left.global_tool_id.localeCompare(right.global_tool_id))
+}
+
+function buildBlockedProjection(
+  tools: readonly ToolingProjectionToolInfo[],
+  context: LocalToolProjectionContext,
+  exportDecision?: LocalToolExportDecisionPort
+): ToolingProjectionBlockedTool[] {
+  if (!context.providerEnabled || !context.serviceExported || !context.discoveryExported || !context.executionExported || !context.recipientPeerId) return []
+  if (!exportDecision) return []
+  if (!hasPermission('Tooling.GetTools', context.recipientPermissions, 'use')) return []
+  if (!hasPermission('Tooling.ExecuteTool', context.recipientPermissions, 'use')) return []
+  return tools
+    .flatMap((tool): ToolingProjectionBlockedTool[] => {
+      if (
+        tool.source_type !== 'local'
+        || tool.execution_location !== 'local'
+        || !tool.exportable
+        || tool.provider_peer_id === context.recipientPeerId
+        || !tool.global_tool_id
+        || !tool.share_group_id
+        || !exportDecision.isShared(tool, context)
+      ) return []
+      const missingPermissions = [...new Set(tool.required_permissions.filter((permission) => !hasPermission(permission, context.recipientPermissions, 'use')))]
+        .sort((left, right) => left.localeCompare(right))
+      if (missingPermissions.length === 0) return []
+      return [{
+        tool,
+        reason_code: 'recipient_missing_tool_permissions',
+        missing_permissions: missingPermissions
+      }]
+    })
+    .sort((left, right) => left.tool.global_tool_id.localeCompare(right.tool.global_tool_id))
 }
 
 export function computeProjectionChecksum(
