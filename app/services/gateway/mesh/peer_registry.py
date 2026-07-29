@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -29,7 +30,7 @@ from app.services.gateway.mesh.provider_eligibility import (
 from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL
 from app.shared.contracts.models.mesh import MeshAddressSelector
 
-from .models import PeerManifest, PeerServiceInfo, PeerState, ProviderCandidate
+from .models import PeerManifest, PeerServiceInfo, PeerState, ProviderCandidate, ProviderLeaseState
 
 if TYPE_CHECKING:
     from app.services.gateway.config import MeshConfig, MeshServicePolicy
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
 # Callback type: async fn(peer_id, node_name, status) -> None
 PeerLifecycleCallback = Callable[[str, str, str], Coroutine[Any, Any, None]]
 _LEGACY_CAPACITY_MODULE = "__legacy__"
+_MAX_RETIRED_PROVIDER_LEASE_EPOCHS_PER_PEER = 16
 
 
 def _protocol_revision_number(value: str | None) -> int | None:
@@ -76,6 +78,8 @@ class PeerRegistry:
         self._config = mesh_config
         self._policy_provider = policy_provider
         self._peers: dict[str, PeerState] = {}
+        self._provider_leases: dict[str, ProviderLeaseState] = {}
+        self._retired_provider_lease_epochs: dict[str, OrderedDict[str, None]] = {}
         self._capacity_leases: dict[tuple[str, str], set[str]] = {}
         self._legacy_leases: dict[str, list[CapacityLease]] = {}
         self._lock = asyncio.Lock()
@@ -172,8 +176,9 @@ class PeerRegistry:
             state.node_name = manifest.node_name or state.node_name
             node_name = state.node_name
             state.last_manifest = time.monotonic()
-            status_changed = state.status != "negotiated"
-            state.status = "negotiated"
+            next_status = self._bindable_status_for_peer_locked(peer_id, state)
+            status_changed = state.status != next_status
+            state.status = next_status
             svc_names = [s.module for s in manifest.shared_services]
             if status_changed:
                 log_info(f"PeerRegistry: Peer {peer_id} manifest updated — services: {svc_names}")
@@ -185,7 +190,7 @@ class PeerRegistry:
         # Fire status change callback outside the lock
         if status_changed and self.on_peer_status_changed:
             try:
-                await self.on_peer_status_changed(peer_id, node_name, "negotiated")
+                await self.on_peer_status_changed(peer_id, node_name, next_status)
             except Exception as exc:
                 log_warning(f"PeerRegistry: on_peer_status_changed callback failed: {exc}")
 
@@ -242,6 +247,8 @@ class PeerRegistry:
         async with self._lock:
             removed = self._peers.pop(peer_id, None)
             if removed:
+                self._provider_leases.pop(peer_id, None)
+                self._retired_provider_lease_epochs.pop(peer_id, None)
                 node_name = removed.node_name
                 log_info(f"PeerRegistry: Peer {peer_id} removed")
 
@@ -267,9 +274,12 @@ class PeerRegistry:
             if state:
                 state.latency_ms = latency_ms
                 state.last_ping = time.monotonic()
-                # If peer was stale, restore to negotiated (if it has a manifest)
+                # If peer was stale, restore to negotiated (if it has a bindable manifest)
                 if state.status == "stale" and state.manifest:
-                    state.status = "negotiated"
+                    next_status = self._bindable_status_for_peer_locked(peer_id, state)
+                    if next_status != "negotiated":
+                        return
+                    state.status = next_status
                     log_info(
                         f"PeerRegistry: Peer {peer_id} recovered from stale (latency={latency_ms:.1f}ms)"
                     )
@@ -324,7 +334,7 @@ class PeerRegistry:
         lease_id = lease_id or uuid.uuid4().hex
         async with self._lock:
             state = self._peers.get(peer_id)
-            if not state or state.status == "stale":
+            if not state or state.status in {"stale", "provider_unavailable"}:
                 return None
             key = (peer_id, module)
             leases = self._capacity_leases.setdefault(key, set())
@@ -380,6 +390,125 @@ class PeerRegistry:
             if state:
                 state.active_calls = max(0, count)
                 state.active_calls_by_module = {}
+
+    async def require_provider_lease(self, peer_id: str) -> None:
+        """Mark a stable peer as lease-aware; a manifest alone is not bindable."""
+
+        status_changed: tuple[str, str, str] | None = None
+        async with self._lock:
+            state = self._peers.get(peer_id)
+            if not state:
+                return
+            if peer_id not in self._provider_leases:
+                self._provider_leases[peer_id] = ProviderLeaseState(
+                    peer_id=peer_id,
+                    connection_epoch="",
+                    availability_revision=0,
+                    issued_at_ms=0,
+                    expires_at_ms=0,
+                    available=False,
+                    reason_code="lease_missing",
+                    lease_required=True,
+                )
+            next_status = self._bindable_status_for_peer_locked(peer_id, state)
+            if state.status != next_status:
+                state.status = next_status
+                status_changed = (peer_id, state.node_name, next_status)
+
+        if status_changed and self.on_peer_status_changed:
+            try:
+                await self.on_peer_status_changed(*status_changed)
+            except Exception as exc:
+                log_warning(f"PeerRegistry: on_peer_status_changed callback failed: {exc}")
+
+    async def apply_provider_lease(
+        self,
+        lease: ProviderLeaseState,
+        *,
+        now_ms: int,
+    ) -> bool:
+        """Apply one provider lease/tombstone with per-peer epoch/revision CAS."""
+
+        status_changed: tuple[str, str, str] | None = None
+        async with self._lock:
+            state = self._peers.get(lease.peer_id)
+            if not state:
+                return False
+            current = self._provider_leases.get(lease.peer_id)
+            retired = self._retired_provider_lease_epochs.get(lease.peer_id)
+            if retired and lease.connection_epoch in retired:
+                return False
+            if current and current.connection_epoch == lease.connection_epoch:
+                if lease.availability_revision <= current.availability_revision:
+                    return False
+            elif current and current.connection_epoch:
+                self._retire_provider_lease_epoch_locked(lease.peer_id, current.connection_epoch)
+            self._provider_leases[lease.peer_id] = lease
+            next_status = self._bindable_status_for_peer_locked(
+                lease.peer_id,
+                state,
+                now_ms=now_ms,
+            )
+            if state.status != next_status:
+                state.status = next_status
+                status_changed = (lease.peer_id, state.node_name, next_status)
+
+        if status_changed and self.on_peer_status_changed:
+            try:
+                await self.on_peer_status_changed(*status_changed)
+            except Exception as exc:
+                log_warning(f"PeerRegistry: on_peer_status_changed callback failed: {exc}")
+        return True
+
+    async def expire_provider_lease(
+        self,
+        peer_id: str,
+        *,
+        connection_epoch: str,
+        availability_revision: int,
+        now_ms: int,
+    ) -> bool:
+        """Expire the exact current lease without retiring newer state."""
+
+        status_changed: tuple[str, str, str] | None = None
+        async with self._lock:
+            state = self._peers.get(peer_id)
+            current = self._provider_leases.get(peer_id)
+            if (
+                not state
+                or not current
+                or current.connection_epoch != connection_epoch
+                or current.availability_revision != availability_revision
+                or not current.available
+                or current.expires_at_ms > now_ms
+            ):
+                return False
+            self._provider_leases[peer_id] = current.model_copy(
+                update={"available": False, "reason_code": "lease_expired"}
+            )
+            next_status = self._bindable_status_for_peer_locked(peer_id, state, now_ms=now_ms)
+            if state.status != next_status:
+                state.status = next_status
+                status_changed = (peer_id, state.node_name, next_status)
+
+        if status_changed and self.on_peer_status_changed:
+            try:
+                await self.on_peer_status_changed(*status_changed)
+            except Exception as exc:
+                log_warning(f"PeerRegistry: on_peer_status_changed callback failed: {exc}")
+        return True
+
+    def get_provider_lease(self, peer_id: str) -> ProviderLeaseState | None:
+        """Return runtime provider lease state for tests/diagnostics."""
+
+        return self._provider_leases.get(peer_id)
+
+    async def clear_provider_lease_session(self, peer_id: str) -> None:
+        """Clear lease and bounded epoch history for a disconnected stable peer."""
+
+        async with self._lock:
+            self._provider_leases.pop(peer_id, None)
+            self._retired_provider_lease_epochs.pop(peer_id, None)
 
     # ── Queries ──────────────────────────────────────────────────────────
 
@@ -600,6 +729,7 @@ class PeerRegistry:
 
         return self._evaluate_module_provider_candidate(
             peer=peer,
+            module=module,
             service=service,
             routing_config=routing_config,
             policy_snapshot=policy_snapshot,
@@ -646,6 +776,7 @@ class PeerRegistry:
         self,
         *,
         peer: PeerState,
+        module: str,
         service: PeerServiceInfo | None,
         routing_config: MeshServicePolicy | None,
         policy_snapshot: MeshPolicySnapshot,
@@ -653,6 +784,20 @@ class PeerRegistry:
         captured_at: float,
     ) -> ProviderCandidate:
         if service is None:
+            if peer.status == "provider_unavailable" and peer.manifest:
+                manifest_service = self._find_peer_service_unlocked(
+                    peer,
+                    module,
+                    include_unavailable=True,
+                )
+                if manifest_service is not None:
+                    return _candidate(
+                        peer,
+                        manifest_service,
+                        False,
+                        "provider_unavailable",
+                        "provider lease is unavailable",
+                    )
             return _candidate(
                 peer,
                 None,
@@ -677,7 +822,9 @@ class PeerRegistry:
                 peer,
                 service,
                 False,
-                "manifest_projection_stale",
+                "provider_unavailable"
+                if peer.status == "provider_unavailable"
+                else "manifest_projection_stale",
                 f"peer status is {peer.status}, not negotiated",
             )
         if (
@@ -751,8 +898,14 @@ class PeerRegistry:
         self,
         state: PeerState,
         module: str,
+        *,
+        include_unavailable: bool = False,
     ) -> PeerServiceInfo | None:
-        if not state.manifest or not _manifest_has_verified_projection_authority(state.manifest):
+        if (
+            (state.status == "provider_unavailable" and not include_unavailable)
+            or not state.manifest
+            or not _manifest_has_verified_projection_authority(state.manifest)
+        ):
             return None
         for svc in state.manifest.shared_services:
             if svc.module == module:
@@ -785,6 +938,33 @@ class PeerRegistry:
         state = self._peers.get(peer_id)
         if state:
             self._sync_active_calls_locked(state)
+
+    def _bindable_status_for_peer_locked(
+        self,
+        peer_id: str,
+        state: PeerState,
+        *,
+        now_ms: int | None = None,
+    ) -> str:
+        lease = self._provider_leases.get(peer_id)
+        if lease and lease.lease_required:
+            if not lease.available:
+                return "provider_unavailable"
+            if now_ms is not None and lease.expires_at_ms <= now_ms:
+                return "provider_unavailable"
+            if state.manifest:
+                return "negotiated"
+            return "authenticated"
+        if state.manifest:
+            return "negotiated"
+        return "authenticated"
+
+    def _retire_provider_lease_epoch_locked(self, peer_id: str, connection_epoch: str) -> None:
+        retired = self._retired_provider_lease_epochs.setdefault(peer_id, OrderedDict())
+        retired[connection_epoch] = None
+        retired.move_to_end(connection_epoch)
+        while len(retired) > _MAX_RETIRED_PROVIDER_LEASE_EPOCHS_PER_PEER:
+            retired.popitem(last=False)
 
     # ── Peer selection ───────────────────────────────────────────────────
 

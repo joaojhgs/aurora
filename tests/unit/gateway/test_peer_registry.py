@@ -13,6 +13,7 @@ from app.services.gateway.mesh.models import (
     PeerManifest,
     PeerServiceInfo,
     PeerState,
+    ProviderLeaseState,
 )
 from app.services.gateway.mesh.negotiation import (
     finalize_recipient_projection_evidence,
@@ -133,6 +134,27 @@ def _stale_timeout_and_ping() -> tuple[float, float]:
     return observed_at / 4, observed_at / 2
 
 
+def _lease(
+    peer_id: str = "peer-1",
+    *,
+    epoch: str = "epoch-1",
+    revision: int = 1,
+    issued_at_ms: int = 1000,
+    expires_at_ms: int = 61000,
+    available: bool = True,
+    reason_code: str = "",
+) -> ProviderLeaseState:
+    return ProviderLeaseState(
+        peer_id=peer_id,
+        connection_epoch=epoch,
+        availability_revision=revision,
+        issued_at_ms=issued_at_ms,
+        expires_at_ms=expires_at_ms,
+        available=available,
+        reason_code=reason_code,
+    )
+
+
 class TestPeerRegistration:
     """Tests for register/remove operations."""
 
@@ -248,6 +270,133 @@ class TestLatencyAndCalls:
         registry.on_peer_status_changed.assert_awaited_once_with(
             "peer-1", "node-peer-1", "negotiated"
         )
+
+    @pytest.mark.asyncio
+    async def test_provider_lease_required_blocks_manifest_until_active_lease(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.require_provider_lease("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+
+        assert registry.get_peer("peer-1").status == "provider_unavailable"
+        assert registry.get_best_provider("TTS") is None
+
+        assert await registry.apply_provider_lease(_lease(), now_ms=1000) is True
+
+        assert registry.get_peer("peer-1").status == "negotiated"
+        assert registry.get_best_provider("TTS").peer_id == "peer-1"
+
+    @pytest.mark.asyncio
+    async def test_provider_lease_revision_is_monotonic_within_epoch(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        await registry.require_provider_lease("peer-1")
+
+        assert await registry.apply_provider_lease(_lease(revision=2), now_ms=1000) is True
+        assert await registry.apply_provider_lease(_lease(revision=2), now_ms=2000) is False
+        assert await registry.apply_provider_lease(_lease(revision=1), now_ms=2000) is False
+
+        stored = registry.get_provider_lease("peer-1")
+        assert stored.availability_revision == 2
+        assert stored.available is True
+
+    @pytest.mark.asyncio
+    async def test_provider_lease_new_epoch_supersedes_and_old_epoch_noops(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        await registry.require_provider_lease("peer-1")
+
+        assert await registry.apply_provider_lease(_lease(epoch="epoch-a", revision=1), now_ms=1000)
+        assert await registry.apply_provider_lease(_lease(epoch="epoch-b", revision=1), now_ms=2000)
+        assert not await registry.apply_provider_lease(
+            _lease(epoch="epoch-a", revision=99, expires_at_ms=90000),
+            now_ms=3000,
+        )
+        assert not await registry.apply_provider_lease(
+            _lease(
+                epoch="epoch-a",
+                revision=100,
+                issued_at_ms=3000,
+                expires_at_ms=3000,
+                available=False,
+                reason_code="old_tombstone",
+            ),
+            now_ms=3000,
+        )
+
+        stored = registry.get_provider_lease("peer-1")
+        assert stored.connection_epoch == "epoch-b"
+        assert stored.available is True
+        assert registry.get_peer("peer-1").status == "negotiated"
+
+    @pytest.mark.asyncio
+    async def test_provider_lease_retired_epochs_are_bounded_and_cleared(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        await registry.require_provider_lease("peer-1")
+
+        for index in range(20):
+            assert await registry.apply_provider_lease(
+                _lease(epoch=f"epoch-{index}", revision=1),
+                now_ms=1000 + index,
+            )
+
+        retired = registry._retired_provider_lease_epochs["peer-1"]  # noqa: SLF001
+        assert len(retired) == 16
+        assert "epoch-0" not in retired
+        assert "epoch-3" in retired
+
+        await registry.remove_peer("peer-1")
+
+        assert "peer-1" not in registry._provider_leases  # noqa: SLF001
+        assert "peer-1" not in registry._retired_provider_lease_epochs  # noqa: SLF001
+
+    @pytest.mark.asyncio
+    async def test_provider_lease_current_tombstone_and_expiry_make_non_bindable(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        await registry.require_provider_lease("peer-1")
+        assert await registry.apply_provider_lease(_lease(revision=1), now_ms=1000)
+
+        assert await registry.apply_provider_lease(
+            _lease(
+                revision=2,
+                issued_at_ms=2000,
+                expires_at_ms=2000,
+                available=False,
+                reason_code="page_hidden",
+            ),
+            now_ms=2000,
+        )
+        assert registry.get_peer("peer-1").status == "provider_unavailable"
+        assert registry.get_best_provider("TTS") is None
+
+        assert await registry.apply_provider_lease(
+            _lease(epoch="epoch-2", revision=1, issued_at_ms=3000, expires_at_ms=63000),
+            now_ms=3000,
+        )
+        assert registry.get_peer("peer-1").status == "negotiated"
+        assert await registry.expire_provider_lease(
+            "peer-1",
+            connection_epoch="epoch-2",
+            availability_revision=1,
+            now_ms=63000,
+        )
+        assert registry.get_peer("peer-1").status == "provider_unavailable"
+
+    @pytest.mark.asyncio
+    async def test_provider_unavailable_is_not_resurrected_by_pong_latency(self, registry):
+        await registry.register_peer("peer-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        await registry.require_provider_lease("peer-1")
+        await registry.apply_provider_lease(
+            _lease(available=False, expires_at_ms=1000, reason_code="paused"),
+            now_ms=1000,
+        )
+
+        await registry.update_latency("peer-1", 4.0)
+
+        assert registry.get_peer("peer-1").status == "provider_unavailable"
+        assert registry.get_best_provider("TTS") is None
 
     @pytest.mark.asyncio
     async def test_increment_active_calls(self, registry):

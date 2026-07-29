@@ -3,7 +3,13 @@
 import pytest
 
 from app.services.gateway.config import MeshConfig
-from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState, RouteDecision
+from app.services.gateway.mesh.models import (
+    PeerManifest,
+    PeerServiceInfo,
+    PeerState,
+    ProviderLeaseState,
+    RouteDecision,
+)
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
@@ -164,6 +170,33 @@ class TestRoutingTableResolve:
         assert route.target == "remote"
         assert route.peer_id == "peer-1"
         assert route.module == "TTS"
+
+    @pytest.mark.asyncio
+    async def test_provider_unavailable_peer_is_excluded_from_automatic_route(
+        self,
+        routing_table,
+        peer_registry,
+    ):
+        peer = _make_negotiated_peer("peer-1", ["TTS"], latency_ms=20.0)
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        await peer_registry.require_provider_lease("peer-1")
+        await peer_registry.apply_provider_lease(
+            ProviderLeaseState(
+                peer_id="peer-1",
+                connection_epoch="epoch-1",
+                availability_revision=1,
+                issued_at_ms=1000,
+                expires_at_ms=1000,
+                available=False,
+                reason_code="paused",
+            ),
+            now_ms=1000,
+        )
+
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
+
+        assert route.target == "local"
 
     @pytest.mark.asyncio
     async def test_required_provider_feature_ids_block_automatic_route(

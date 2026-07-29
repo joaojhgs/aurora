@@ -5,14 +5,19 @@ except for pairing/auth methods.
 """
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import ANONYMOUS, Identity
+from app.services.gateway.webrtc.event_subscriptions import MeshEventSubscriptionRegistry
+from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from app.shared.contracts.models.tts import TTSMethods
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 
 
 @pytest.fixture
@@ -37,14 +42,50 @@ def _make_anonymous_acl():
 
 def _make_authenticated_acl():
     """Return an ACL provider with normal permissions."""
+    return _make_acl_with_perms("user", "read")
+
+
+def _make_acl_with_perms(*perms: str):
+    """Return an ACL provider with explicit permissions."""
     identity = Identity(
         principal_id="peer-user",
         principal_name="peer-user",
         is_admin=False,
-        effective_perms=frozenset(["user", "read"]),
+        effective_perms=frozenset(perms),
         source="webrtc_peer",
     )
     return MagicMock(return_value=identity)
+
+
+def _make_mesh_config(enabled: bool = True, sharing: dict | None = None):
+    cfg = MagicMock()
+    cfg.enabled = enabled
+    cfg.services = sharing or {}
+    return cfg
+
+
+def _active_projection(*, services: list | None = None):
+    return SimpleNamespace(
+        cache_key=SimpleNamespace(recipient_peer_id="peer-a", provider_peer_id="provider-a"),
+        readiness="ready",
+        routable=True,
+        services=services or [],
+    )
+
+
+def _projected_service(module: str, *topics: str):
+    return SimpleNamespace(
+        service_id=module,
+        capacity={"max_concurrent": 0},
+        methods=[
+            SimpleNamespace(
+                topic=topic,
+                required_permissions=(topic,),
+                method_type="use",
+            )
+            for topic in topics
+        ],
+    )
 
 
 @pytest.mark.asyncio
@@ -307,3 +348,134 @@ async def test_authenticated_peer_rpc_works(mock_bus, mock_registry, mock_send_f
     mock_send_fn.assert_called_once()
     response = json.loads(mock_send_fn.call_args[0][0])
     assert response["type"] == "result"
+
+
+@pytest.mark.asyncio
+async def test_mesh_gate_blocks_provider_rpc_until_manifest_ack_readiness(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    mesh_config = _make_mesh_config(
+        enabled=True,
+        sharing={"TTS": mesh_policy(share=True)},
+    )
+    method_info = MethodInfo(
+        name="Request",
+        bus_topic="TTS.Request",
+        exposure="external",
+        required_perms=["TTS.Request"],
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[method_info],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request")]
+        ),
+        provider_readiness_provider=lambda _service_id: False,
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "not-ready", "method": "TTS.Request"})
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 425
+    assert response["error"]["message"] == "Provider is not ready"
+    mock_bus.request.assert_not_called()
+
+    mock_send_fn.reset_mock()
+    ready_handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("TTS.Request"),
+        mesh_config=mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: _active_projection(
+            services=[_projected_service("TTS", "TTS.Request")]
+        ),
+        provider_readiness_provider=lambda _service_id: True,
+    )
+    mock_bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+    await ready_handler.on_message(
+        json.dumps({"type": "call", "id": "ready", "method": "TTS.Request"})
+    )
+
+    mock_bus.request.assert_awaited_once()
+    assert json.loads(mock_send_fn.call_args.args[0])["type"] == "result"
+
+
+@pytest.mark.asyncio
+async def test_scoped_subscribe_blocks_unacknowledged_provider_service_events(
+    mock_bus,
+    mock_registry,
+):
+    readiness: dict[str, bool] = {"TTS": False}
+    sent: list[dict] = []
+    subscriptions = MeshEventSubscriptionRegistry()
+    method_info = MethodInfo(
+        name="Started",
+        bus_topic=TTSMethods.STARTED,
+        exposure="external",
+        required_perms=["TTS.Started"],
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS",
+        version="1.0",
+        methods=[method_info],
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        lambda text: sent.append(json.loads(text)),
+        _make_acl_with_perms("TTS.Started"),
+        mesh_config=_make_mesh_config(enabled=True, sharing={"TTS": mesh_policy(share=True)}),
+        stable_peer_id_provider=lambda: "peer-a",
+        authenticated_peer_validator=lambda: True,
+        event_subscription_registry=subscriptions,
+        peer_supports_capability=lambda cap: cap == CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+        provider_readiness_provider=lambda service_id: readiness.get(service_id, False),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "subscribe",
+                "id": "sub-not-ready",
+                "params": {"subscription_id": "sub-1", "topics": [TTSMethods.STARTED]},
+            }
+        )
+    )
+
+    assert sent[-1]["type"] == "subscribe_rejected"
+    assert sent[-1]["accepted"] is False
+    assert sent[-1]["rejected_topics"] == [
+        {"topic": TTSMethods.STARTED, "reason": "unauthorized_topic"}
+    ]
+    assert subscriptions.is_interested("peer-a", TTSMethods.STARTED) is False
+
+    readiness["TTS"] = True
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "subscribe",
+                "id": "sub-ready",
+                "params": {"subscription_id": "sub-2", "topics": [TTSMethods.STARTED]},
+            }
+        )
+    )
+
+    assert sent[-1]["type"] == "subscribed"
+    assert sent[-1]["accepted_topics"] == [TTSMethods.STARTED]
+    assert subscriptions.is_interested("peer-a", TTSMethods.STARTED) is True

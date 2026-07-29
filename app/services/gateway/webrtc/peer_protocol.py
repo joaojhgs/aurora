@@ -23,6 +23,7 @@ CAP_FRAGMENTATION_V1 = "fragmentation_v1"
 CAP_BACKPRESSURE_V1 = "backpressure_v1"
 CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1 = "scoped_event_subscriptions_v1"
 CAP_CONSUMER_ONLY_V1 = "consumer_only_v1"
+CAP_PROVIDER_LEASE_V1 = "provider_lease_v1"
 
 KNOWN_PEER_CAPABILITIES = frozenset(
     {
@@ -30,12 +31,14 @@ KNOWN_PEER_CAPABILITIES = frozenset(
         CAP_BACKPRESSURE_V1,
         CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
         CAP_CONSUMER_ONLY_V1,
+        CAP_PROVIDER_LEASE_V1,
     }
 )
 DEFAULT_PEER_CAPABILITIES = (
     CAP_FRAGMENTATION_V1,
     CAP_BACKPRESSURE_V1,
     CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+    CAP_PROVIDER_LEASE_V1,
 )
 
 PEER_PROTOCOL_VERSION = 1
@@ -56,6 +59,8 @@ _MAX_CONTENT_TYPE_LENGTH = 128
 _MAX_CAPABILITIES = 32
 _MAX_CAPABILITY_LENGTH = 96
 _BASE64URL_RE = re.compile(r"^[A-Za-z0-9_-]*$")
+_MAX_REASON_CODE_LENGTH = 128
+_MAX_SAFE_INTEGER = (2**53) - 1
 
 
 class PeerProtocolError(ValueError):
@@ -64,6 +69,28 @@ class PeerProtocolError(ValueError):
 
 class FragmentProtocolError(PeerProtocolError):
     """Raised when a fragmentation frame is invalid or exceeds limits."""
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderLeaseFrame:
+    """Strict provider availability lease frame shared with TypeScript peers."""
+
+    type: Literal["provider_lease", "provider_unavailable"]
+    peer_id: str
+    connection_epoch: str
+    availability_revision: int
+    issued_at_ms: int
+    expires_at_ms: int
+    available: bool | None = None
+    reason_code: str | None = None
+
+    @property
+    def is_available(self) -> bool:
+        """Return whether this frame advertises a bindable provider."""
+
+        if self.type == "provider_unavailable":
+            return False
+        return self.available is not False
 
 
 @dataclass(frozen=True)
@@ -153,6 +180,30 @@ def _require_identifier(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value or len(value) > _MAX_ID_LENGTH:
         raise PeerProtocolError(f"{field_name} must be a non-empty bounded string")
     return value
+
+
+def _require_bounded_string(value: Any, field_name: str, max_length: int) -> str:
+    if not isinstance(value, str) or not value or len(value) > max_length:
+        raise PeerProtocolError(f"{field_name} must be a non-empty bounded string")
+    return value
+
+
+def _require_integer(value: Any, field_name: str, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool):
+        raise PeerProtocolError(f"{field_name} must be an integer in {minimum}..{maximum}")
+    if isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            raise PeerProtocolError(f"{field_name} must be an integer in {minimum}..{maximum}")
+        value = int(value)
+    if not isinstance(value, int) or value < minimum or value > maximum:
+        raise PeerProtocolError(f"{field_name} must be an integer in {minimum}..{maximum}")
+    return value
+
+
+def _require_optional_bool(value: Any, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    raise PeerProtocolError(f"{field_name} must be boolean")
 
 
 def _parse_role(value: Any) -> PeerRole:
@@ -276,6 +327,47 @@ def negotiate_protocol(
             max_fragments=min(local.limits.max_fragments, remote.limits.max_fragments),
         ),
     )
+
+
+def parse_provider_lease_frame(frame: Mapping[str, Any]) -> ProviderLeaseFrame:
+    """Parse a provider lease/unavailable frame using the TypeScript wire bounds."""
+
+    if not isinstance(frame, Mapping):
+        raise PeerProtocolError("provider lease frame must be an object")
+    frame_type = frame.get("type")
+    if frame_type not in {"provider_lease", "provider_unavailable"}:
+        raise PeerProtocolError("unsupported provider lease frame")
+    parsed = ProviderLeaseFrame(
+        type=frame_type,  # type: ignore[arg-type]
+        peer_id=_require_identifier(frame.get("peer_id"), "peer_id"),
+        connection_epoch=_require_identifier(frame.get("connection_epoch"), "connection_epoch"),
+        availability_revision=_require_integer(
+            frame.get("availability_revision"),
+            "availability_revision",
+            0,
+            _MAX_SAFE_INTEGER,
+        ),
+        issued_at_ms=_require_integer(
+            frame.get("issued_at_ms"), "issued_at_ms", 0, _MAX_SAFE_INTEGER
+        ),
+        expires_at_ms=_require_integer(
+            frame.get("expires_at_ms"),
+            "expires_at_ms",
+            0,
+            _MAX_SAFE_INTEGER,
+        ),
+        available=_require_optional_bool(frame["available"], "available")
+        if "available" in frame
+        else None,
+        reason_code=_require_bounded_string(
+            frame["reason_code"], "reason_code", _MAX_REASON_CODE_LENGTH
+        )
+        if "reason_code" in frame
+        else None,
+    )
+    if parsed.expires_at_ms < parsed.issued_at_ms:
+        raise PeerProtocolError("provider lease expires before issue time")
+    return parsed
 
 
 def _b64url_encode(data: bytes) -> str:

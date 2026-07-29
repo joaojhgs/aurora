@@ -8,9 +8,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.services.gateway.acl.identity import Identity
+from app.services.gateway.mesh.negotiation import LEGACY_MANIFEST_PROTOCOL, SUPPORTED_PROTOCOLS
 from app.services.gateway.webrtc.peer_protocol import (
     CAP_BACKPRESSURE_V1,
     CAP_FRAGMENTATION_V1,
+    CAP_PROVIDER_LEASE_V1,
     DEFAULT_PEER_CAPABILITIES,
     FRAGMENT_FRAME_TYPE,
     FragmentReassembler,
@@ -19,7 +22,7 @@ from app.services.gateway.webrtc.peer_protocol import (
     fragment_message,
     negotiate_protocol,
 )
-from app.services.gateway.webrtc.rtc_client import RTCClient
+from app.services.gateway.webrtc.rtc_client import RTCClient, _ManifestAckExpectation
 
 
 class FakeDataChannel:
@@ -58,6 +61,52 @@ class FakeDataChannel:
             callback()
 
 
+class FakePeerRegistry:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self.registered: list[tuple[str, str]] = []
+        self.required: list[str] = []
+        self.updated: list[tuple[str, object]] = []
+        self.applied: list[object] = []
+        self.expired: list[tuple[str, str, int, int]] = []
+        self.removed: list[str] = []
+        self.apply_result = True
+
+    async def register_peer(self, peer_id: str, node_name: str = "") -> None:
+        self.calls.append(("register_peer", peer_id))
+        self.registered.append((peer_id, node_name))
+
+    async def require_provider_lease(self, peer_id: str) -> None:
+        self.calls.append(("require_provider_lease", peer_id))
+        self.required.append(peer_id)
+
+    async def update_manifest(self, peer_id: str, manifest) -> None:
+        self.calls.append(("update_manifest", peer_id))
+        self.updated.append((peer_id, manifest))
+
+    def get_peer(self, _peer_id: str):
+        return SimpleNamespace(latency_ms=float("inf"))
+
+    async def apply_provider_lease(self, lease, *, now_ms: int) -> bool:
+        self.applied.append((lease, now_ms))
+        return self.apply_result
+
+    async def expire_provider_lease(
+        self,
+        peer_id: str,
+        *,
+        connection_epoch: str,
+        availability_revision: int,
+        now_ms: int,
+    ) -> bool:
+        self.expired.append((peer_id, connection_epoch, availability_revision, now_ms))
+        return True
+
+    async def remove_peer(self, peer_id: str) -> None:
+        self.calls.append(("remove_peer", peer_id))
+        self.removed.append(peer_id)
+
+
 def _settings():
     return SimpleNamespace(
         webrtc=SimpleNamespace(
@@ -83,6 +132,68 @@ def _small_limits() -> PeerProtocolLimits:
         max_peer_aggregate_bytes=4096,
         incomplete_ttl_seconds=1.0,
         max_fragments=32,
+    )
+
+
+def _provider_lease_frame(
+    *,
+    peer_id: str = "stable-peer",
+    epoch: str = "epoch-1",
+    revision: int = 1,
+    issued_at_ms: int = 1000,
+    expires_at_ms: int = 61000,
+    frame_type: str = "provider_lease",
+    available: bool = True,
+) -> dict[str, object]:
+    return {
+        "type": frame_type,
+        "peer_id": peer_id,
+        "connection_epoch": epoch,
+        "availability_revision": revision,
+        "issued_at_ms": issued_at_ms,
+        "expires_at_ms": expires_at_ms,
+        "available": available,
+    }
+
+
+def _negotiate_provider_lease(client: RTCClient) -> None:
+    limits = _small_limits()
+    hello = build_protocol_hello(
+        role="hybrid",
+        capabilities=(CAP_PROVIDER_LEASE_V1, CAP_FRAGMENTATION_V1),
+        limits=limits,
+    )
+    protocol = negotiate_protocol(hello, hello)
+    client._remember_stable_peer_id("session-peer", "stable-peer", "Remote")  # noqa: SLF001
+    client._peer_protocols["session-peer"] = protocol  # noqa: SLF001
+    client._peer_protocols["stable-peer"] = protocol  # noqa: SLF001
+
+
+def _legacy_manifest_dict(peer_id: str = "stable-peer") -> dict[str, object]:
+    return {
+        "type": "manifest",
+        "peer_id": peer_id,
+        "node_name": "Remote",
+        "aurora_version": "1.0.0",
+        "shared_services": [],
+        "active_protocol": LEGACY_MANIFEST_PROTOCOL,
+        "active_version": "v0",
+        "active_tier": "legacy",
+        "supported_protocols": list(SUPPORTED_PROTOCOLS),
+        "projection_supported": True,
+        "projection_active": False,
+        "recipient_projection_evidence": None,
+        "timestamp": "2026-07-29T00:00:00+00:00",
+    }
+
+
+def _authenticated_identity() -> Identity:
+    return Identity(
+        principal_id="peer-user",
+        principal_name="peer-user",
+        is_admin=False,
+        effective_perms=frozenset({"user"}),
+        source="webrtc_peer",
     )
 
 
@@ -112,6 +223,382 @@ def test_authenticated_protocol_hello_negotiates_for_session_and_stable_peer() -
     assert client.peer_protocol_role("stable-peer") == "consumer"
     assert client.peer_supports_capability("stable-peer", CAP_FRAGMENTATION_V1) is True
     assert client.peer_supports_capability("stable-peer", CAP_BACKPRESSURE_V1) is False
+
+
+@pytest.mark.asyncio
+async def test_provider_lease_protocol_hello_marks_peer_lease_required() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    client._remember_stable_peer_id("session-peer", "stable-peer", "Remote")  # noqa: SLF001
+
+    client._handle_protocol_hello(  # noqa: SLF001
+        "session-peer",
+        build_protocol_hello(
+            role="hybrid",
+            capabilities=(CAP_PROVIDER_LEASE_V1,),
+            limits=_small_limits(),
+        ),
+    )
+    await asyncio.sleep(0)
+
+    assert registry.required == ["stable-peer"]
+
+
+@pytest.mark.asyncio
+async def test_provider_lease_manifest_requires_lease_before_manifest_update() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    client._remember_stable_peer_id("session-peer", "stable-peer", "Remote")  # noqa: SLF001
+    client._handle_protocol_hello(  # noqa: SLF001
+        "session-peer",
+        build_protocol_hello(
+            role="hybrid",
+            capabilities=(CAP_PROVIDER_LEASE_V1,),
+            limits=_small_limits(),
+        ),
+    )
+    await asyncio.sleep(0)
+
+    await client._on_peer_manifest("session-peer", _legacy_manifest_dict())  # noqa: SLF001
+
+    assert registry.calls == [
+        ("require_provider_lease", "stable-peer"),
+        ("register_peer", "stable-peer"),
+        ("require_provider_lease", "stable-peer"),
+        ("update_manifest", "stable-peer"),
+    ]
+
+
+@pytest.mark.unit
+def test_legacy_authenticated_peer_remains_ready_without_provider_lease_capability() -> None:
+    client = _client()
+    client._remember_stable_peer_id("session-peer", "stable-peer", "Remote")  # noqa: SLF001
+    identity = _authenticated_identity()
+    client._peer_acl["session-peer"] = identity  # noqa: SLF001
+    client._peer_acl["stable-peer"] = identity  # noqa: SLF001
+    client._is_peer_session_active = lambda peer_id: peer_id == "session-peer"  # type: ignore[method-assign]  # noqa: SLF001
+
+    assert client.peer_supports_capability("session-peer", CAP_PROVIDER_LEASE_V1) is False
+    assert client._is_local_provider_ready_for_session("session-peer") is True  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_provider_lease_rejects_unnegotiated_malformed_wrong_peer_and_stale_session() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    handler = AsyncMock()
+
+    client._dispatch_authenticated_datachannel_message(  # noqa: SLF001
+        peer="session-peer",
+        handler=handler,
+        text="{}",
+        obj=_provider_lease_frame(),
+    )
+    await asyncio.sleep(0)
+    assert client._diagnostic_errors[0].code == "provider_lease_unnegotiated"  # noqa: SLF001
+
+    _negotiate_provider_lease(client)
+    client._dispatch_authenticated_datachannel_message(  # noqa: SLF001
+        peer="session-peer",
+        handler=handler,
+        text="{}",
+        obj={**_provider_lease_frame(), "expires_at_ms": 999},
+    )
+    await asyncio.sleep(0)
+    assert client._diagnostic_errors[0].code == "provider_lease_malformed"  # noqa: SLF001
+
+    client._dispatch_authenticated_datachannel_message(  # noqa: SLF001
+        peer="session-peer",
+        handler=handler,
+        text="{}",
+        obj=_provider_lease_frame(peer_id="other-peer"),
+    )
+    await asyncio.sleep(0)
+    assert client._diagnostic_errors[0].code == "provider_lease_wrong_peer"  # noqa: SLF001
+
+    client._stable_peer_sessions["stable-peer"] = "replacement-session"  # noqa: SLF001
+    client._dispatch_authenticated_datachannel_message(  # noqa: SLF001
+        peer="session-peer",
+        handler=handler,
+        text="{}",
+        obj=_provider_lease_frame(),
+    )
+    await asyncio.sleep(0)
+    assert client._diagnostic_errors[0].code == "provider_lease_stale_session"  # noqa: SLF001
+    assert registry.applied == []
+    handler.on_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_provider_lease_schedules_exact_expiry_and_tombstone_cancels() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    _negotiate_provider_lease(client)
+    now_ms = 1000
+    sleep_release = asyncio.Event()
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+        await sleep_release.wait()
+
+    client._provider_lease_clock_ms = lambda: now_ms  # noqa: SLF001
+    client._provider_lease_sleep = fake_sleep  # noqa: SLF001
+
+    await client._handle_provider_lease_frame("session-peer", _provider_lease_frame())  # noqa: SLF001
+    await asyncio.sleep(0)
+
+    assert sleeps == [60.0]
+    assert "stable-peer" in client._provider_lease_tasks  # noqa: SLF001
+
+    now_ms = 61000
+    task = client._provider_lease_tasks["stable-peer"][3]  # noqa: SLF001
+    sleep_release.set()
+    await task
+
+    assert registry.expired == [("stable-peer", "epoch-1", 1, 61000)]
+
+    await client._handle_provider_lease_frame(  # noqa: SLF001
+        "session-peer",
+        _provider_lease_frame(
+            revision=2,
+            issued_at_ms=62000,
+            expires_at_ms=62000,
+            frame_type="provider_unavailable",
+            available=False,
+        ),
+    )
+
+    assert "stable-peer" not in client._provider_lease_tasks  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_stale_expiry_finalizer_does_not_remove_new_epoch_timer() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    _negotiate_provider_lease(client)
+    new_task = asyncio.create_task(asyncio.sleep(60))
+    client._provider_lease_tasks["stable-peer"] = (  # noqa: SLF001
+        "session-peer",
+        "epoch-new",
+        1,
+        new_task,
+    )
+    client._provider_lease_clock_ms = lambda: 61000  # noqa: SLF001
+    client._provider_lease_sleep = AsyncMock(return_value=None)  # noqa: SLF001
+
+    await client._expire_provider_lease_after(  # noqa: SLF001
+        "stable-peer",
+        "session-peer",
+        "epoch-old",
+        1,
+        61000,
+    )
+
+    assert client._provider_lease_tasks["stable-peer"][1] == "epoch-new"  # noqa: SLF001
+    assert registry.expired == [("stable-peer", "epoch-old", 1, 61000)]
+    new_task.cancel()
+    await asyncio.gather(new_task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_provider_lease_renewal_replaces_timer_and_session_replacement_cleans_old() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    _negotiate_provider_lease(client)
+    sleep_started = asyncio.Event()
+
+    async def fake_sleep(_delay: float) -> None:
+        sleep_started.set()
+        await asyncio.Event().wait()
+
+    client._provider_lease_sleep = fake_sleep  # noqa: SLF001
+
+    await client._handle_provider_lease_frame("session-peer", _provider_lease_frame())  # noqa: SLF001
+    await sleep_started.wait()
+    first_task = client._provider_lease_tasks["stable-peer"][3]  # noqa: SLF001
+    await client._handle_provider_lease_frame(  # noqa: SLF001
+        "session-peer",
+        _provider_lease_frame(revision=2, issued_at_ms=2000, expires_at_ms=62000),
+    )
+    await asyncio.sleep(0)
+
+    assert first_task.cancelled()
+    assert client._provider_lease_tasks["stable-peer"][2] == 2  # noqa: SLF001
+
+    client._remember_stable_peer_id("replacement-session", "stable-peer", "Remote")  # noqa: SLF001
+
+    assert "stable-peer" not in client._provider_lease_tasks  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_no_pc_signaling_departure_cancels_provider_timer_and_removes_peer() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    client._remember_stable_peer_id("session-peer", "stable-peer", "Remote")  # noqa: SLF001
+    task = asyncio.create_task(asyncio.sleep(60))
+    client._provider_lease_tasks["stable-peer"] = (  # noqa: SLF001
+        "session-peer",
+        "epoch-1",
+        1,
+        task,
+    )
+
+    await client._handle_signaling_departure("session-peer", reason="left")  # noqa: SLF001
+    await asyncio.gather(task, return_exceptions=True)
+
+    assert "stable-peer" not in client._provider_lease_tasks  # noqa: SLF001
+    assert task.cancelled()
+    assert registry.removed == ["stable-peer"]
+
+
+@pytest.mark.asyncio
+async def test_structured_manifest_ack_opens_local_provider_lease_and_renews() -> None:
+    client = _client()
+    _negotiate_provider_lease(client)
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-peer"] = protocol  # noqa: SLF001
+    client._peer_protocols["stable-peer"] = protocol  # noqa: SLF001
+    channel = FakeDataChannel()
+    client._peer_data_channels["session-peer"] = channel  # noqa: SLF001
+    client._mesh_peer_id = "local-provider"  # noqa: SLF001
+    client._has_authenticated_stable_peer = lambda _peer_id: True  # type: ignore[method-assign]  # noqa: SLF001
+    client._peer_registry = MagicMock()  # noqa: SLF001
+    client._peer_registry.update_manifest_ack = AsyncMock()  # noqa: SLF001
+    sleep_release = asyncio.Event()
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+        await sleep_release.wait()
+
+    client._provider_lease_clock_ms = lambda: 1000  # noqa: SLF001
+    client._provider_lease_sleep = fake_sleep  # noqa: SLF001
+    client._manifest_ack_expectations["stable-peer"] = _ManifestAckExpectation(  # noqa: SLF001
+        session_peer_id="session-peer",
+        connection_epoch="local-epoch-1",
+        projection_digest="projection-digest",
+        active_protocol="projection-v1",
+        active_version="v1",
+        active_tier="projection",
+        protocol_revision="v1",
+        registry_revision="registry-1",
+        export_policy_revision="policy-1",
+        auth_grant_revision=7,
+        advertised_services=("TTS",),
+        compatible_services=(),
+    )
+
+    await client._on_manifest_ack(  # noqa: SLF001
+        "session-peer",
+        {
+            "type": "manifest_ack",
+            "compatible_services": ["TTS"],
+            "incompatible_services": [],
+            "unused_services": [],
+            "active_protocol": "projection-v1",
+            "active_version": "v1",
+            "active_tier": "projection",
+            "protocol_revision": "v1",
+            "registry_revision": "registry-1",
+            "export_policy_revision": "policy-1",
+            "auth_grant_revision": 7,
+            "projection_digest": "projection-digest",
+            "services": [
+                {"service_id": "TTS", "status": "compatible", "reason_codes": []},
+            ],
+        },
+    )
+    await asyncio.sleep(0)
+
+    assert client._is_local_provider_ready_for_session("session-peer") is True  # noqa: SLF001
+    first_lease = json.loads(channel.sent[0])
+    assert first_lease["type"] == "provider_lease"
+    assert first_lease["peer_id"] == "local-provider"
+    assert first_lease["connection_epoch"] == "local-epoch-1"
+    assert first_lease["availability_revision"] == 1
+    assert first_lease["expires_at_ms"] - first_lease["issued_at_ms"] == 60_000
+    assert sleeps == [20.0]
+
+    sleep_release.set()
+    await asyncio.sleep(0)
+    renewal_task = client._local_provider_lease_tasks["stable-peer"][3]  # noqa: SLF001
+    renewal_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await renewal_task
+
+
+@pytest.mark.asyncio
+async def test_stale_bare_or_incompatible_manifest_ack_does_not_open_local_provider() -> None:
+    client = _client()
+    _negotiate_provider_lease(client)
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-peer"] = protocol  # noqa: SLF001
+    client._peer_protocols["stable-peer"] = protocol  # noqa: SLF001
+    channel = FakeDataChannel()
+    client._peer_data_channels["session-peer"] = channel  # noqa: SLF001
+    client._mesh_peer_id = "local-provider"  # noqa: SLF001
+    client._has_authenticated_stable_peer = lambda _peer_id: True  # type: ignore[method-assign]  # noqa: SLF001
+    client._peer_registry = MagicMock()  # noqa: SLF001
+    client._peer_registry.update_manifest_ack = AsyncMock()  # noqa: SLF001
+    client._manifest_ack_expectations["stable-peer"] = _ManifestAckExpectation(  # noqa: SLF001
+        session_peer_id="session-peer",
+        connection_epoch="local-epoch-1",
+        projection_digest="projection-digest",
+        active_protocol="projection-v1",
+        active_version="v1",
+        active_tier="projection",
+        protocol_revision="v1",
+        registry_revision="registry-1",
+        export_policy_revision="policy-1",
+        auth_grant_revision=7,
+        advertised_services=("TTS",),
+        compatible_services=(),
+    )
+
+    await client._on_manifest_ack(  # noqa: SLF001
+        "session-peer",
+        {"type": "manifest_ack", "compatible_services": ["TTS"], "protocol_revision": "v1"},
+    )
+    assert channel.sent == []
+    assert client._is_local_provider_ready_for_session("session-peer") is False  # noqa: SLF001
+
+    await client._on_manifest_ack(  # noqa: SLF001
+        "session-peer",
+        {
+            "type": "manifest_ack",
+            "compatible_services": [],
+            "incompatible_services": ["TTS"],
+            "unused_services": [],
+            "active_protocol": "projection-v1",
+            "active_version": "v1",
+            "active_tier": "projection",
+            "protocol_revision": "v1",
+            "registry_revision": "registry-1",
+            "export_policy_revision": "policy-1",
+            "auth_grant_revision": 7,
+            "projection_digest": "projection-digest",
+            "services": [
+                {
+                    "service_id": "TTS",
+                    "status": "incompatible",
+                    "reason_codes": ["method_not_advertised"],
+                },
+            ],
+        },
+    )
+
+    assert channel.sent == []
+    assert client._is_local_provider_ready_for_session("session-peer") is False  # noqa: SLF001
 
 
 @pytest.mark.unit

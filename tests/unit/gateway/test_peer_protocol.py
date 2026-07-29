@@ -6,6 +6,7 @@ from app.services.gateway.webrtc.peer_protocol import (
     CAP_BACKPRESSURE_V1,
     CAP_CONSUMER_ONLY_V1,
     CAP_FRAGMENTATION_V1,
+    CAP_PROVIDER_LEASE_V1,
     CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
     FragmentProtocolError,
     FragmentReassembler,
@@ -15,6 +16,7 @@ from app.services.gateway.webrtc.peer_protocol import (
     fragment_message,
     negotiate_protocol,
     parse_protocol_hello,
+    parse_provider_lease_frame,
 )
 
 
@@ -38,13 +40,19 @@ def test_protocol_hello_fallback_and_common_capability_negotiation() -> None:
             CAP_FRAGMENTATION_V1,
             CAP_BACKPRESSURE_V1,
             CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+            CAP_PROVIDER_LEASE_V1,
             "future_browser_cap_v9",
         ),
         limits=_small_limits(fragment_payload_bytes=8, max_logical_bytes=64),
     )
     remote = build_protocol_hello(
         role="consumer",
-        capabilities=(CAP_FRAGMENTATION_V1, CAP_CONSUMER_ONLY_V1, "unknown_remote_cap"),
+        capabilities=(
+            CAP_FRAGMENTATION_V1,
+            CAP_PROVIDER_LEASE_V1,
+            CAP_CONSUMER_ONLY_V1,
+            "unknown_remote_cap",
+        ),
         limits=_small_limits(
             fragment_payload_bytes=4, max_logical_bytes=32, max_peer_aggregate_bytes=96
         ),
@@ -53,11 +61,14 @@ def test_protocol_hello_fallback_and_common_capability_negotiation() -> None:
     parsed = parse_protocol_hello(remote)
     assert parsed.role == "consumer"
     assert parsed.raw_capabilities[-1] == "unknown_remote_cap"
-    assert parsed.capabilities == frozenset({CAP_FRAGMENTATION_V1, CAP_CONSUMER_ONLY_V1})
+    assert parsed.capabilities == frozenset(
+        {CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1, CAP_CONSUMER_ONLY_V1}
+    )
 
     negotiated = negotiate_protocol(local, remote)
     assert negotiated.role == "consumer"
     assert negotiated.supports(CAP_FRAGMENTATION_V1)
+    assert negotiated.supports(CAP_PROVIDER_LEASE_V1)
     assert not negotiated.supports(CAP_BACKPRESSURE_V1)
     assert negotiated.limits.fragment_payload_bytes == 4
     assert negotiated.limits.max_logical_bytes == 32
@@ -84,6 +95,69 @@ def test_protocol_hello_strict_bounds() -> None:
                 "limits": {"fragment_payload_bytes": True},
             }
         )
+
+
+@pytest.mark.unit
+def test_provider_lease_parser_accepts_lease_and_tombstone_bounds() -> None:
+    lease = parse_provider_lease_frame(
+        {
+            "type": "provider_lease",
+            "peer_id": "peer-a",
+            "connection_epoch": "epoch-1",
+            "availability_revision": 1.0,
+            "issued_at_ms": 1e3,
+            "expires_at_ms": 61000.0,
+            "available": True,
+        }
+    )
+    assert lease.type == "provider_lease"
+    assert lease.availability_revision == 1
+    assert lease.issued_at_ms == 1000
+    assert lease.is_available is True
+
+    tombstone = parse_provider_lease_frame(
+        {
+            "type": "provider_unavailable",
+            "peer_id": "peer-a",
+            "connection_epoch": "epoch-1",
+            "availability_revision": 2,
+            "issued_at_ms": 61000,
+            "expires_at_ms": 61000,
+            "available": False,
+            "reason_code": "page_hidden",
+        }
+    )
+    assert tombstone.is_available is False
+    assert tombstone.reason_code == "page_hidden"
+
+
+@pytest.mark.unit
+def test_provider_lease_parser_rejects_malformed_and_expiry_regression() -> None:
+    valid = {
+        "type": "provider_lease",
+        "peer_id": "peer-a",
+        "connection_epoch": "epoch-1",
+        "availability_revision": 1,
+        "issued_at_ms": 1000,
+        "expires_at_ms": 61000,
+    }
+    for key in ("peer_id", "connection_epoch", "availability_revision", "issued_at_ms"):
+        bad = dict(valid)
+        bad.pop(key)
+        with pytest.raises(PeerProtocolError):
+            parse_provider_lease_frame(bad)
+    with pytest.raises(PeerProtocolError, match="expires"):
+        parse_provider_lease_frame({**valid, "expires_at_ms": 999})
+    with pytest.raises(PeerProtocolError):
+        parse_provider_lease_frame({**valid, "availability_revision": True})
+    with pytest.raises(PeerProtocolError):
+        parse_provider_lease_frame({**valid, "availability_revision": 1.5})
+    with pytest.raises(PeerProtocolError):
+        parse_provider_lease_frame({**valid, "availability_revision": -1})
+    with pytest.raises(PeerProtocolError):
+        parse_provider_lease_frame({**valid, "availability_revision": 9007199254740992})
+    with pytest.raises(PeerProtocolError):
+        parse_provider_lease_frame({**valid, "reason_code": "x" * 129})
 
 
 @pytest.mark.unit

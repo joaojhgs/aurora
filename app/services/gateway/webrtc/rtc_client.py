@@ -8,10 +8,14 @@ import json
 import math
 import re
 import secrets
+import time
 import uuid
 from collections import OrderedDict, deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import (
+    dataclass,
+    replace as dataclass_replace,
+)
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -65,6 +69,7 @@ from .pairing_sas import (
 from .peer_protocol import (
     CAP_BACKPRESSURE_V1,
     CAP_FRAGMENTATION_V1,
+    CAP_PROVIDER_LEASE_V1,
     DEFAULT_PEER_CAPABILITIES,
     FRAGMENT_FRAME_TYPE,
     PROTOCOL_HELLO_TYPE,
@@ -77,6 +82,7 @@ from .peer_protocol import (
     fragment_message,
     negotiate_protocol,
     parse_protocol_hello,
+    parse_provider_lease_frame,
 )
 from .rpc import RPCHandler
 from .signaling.mqtt_client import MQTTSignaling
@@ -120,6 +126,22 @@ class _ActiveProjectionRecord:
 class _QueuedPeerSend:
     text: str
     future: asyncio.Future[bool]
+
+
+@dataclass(frozen=True, slots=True)
+class _ManifestAckExpectation:
+    session_peer_id: str
+    connection_epoch: str
+    projection_digest: str
+    active_protocol: str
+    active_version: str
+    active_tier: str
+    protocol_revision: str
+    registry_revision: str
+    export_policy_revision: str
+    auth_grant_revision: int
+    advertised_services: tuple[str, ...]
+    compatible_services: tuple[str, ...]
 
 
 _DIAGNOSTIC_REDACTED = "[REDACTED]"
@@ -412,7 +434,10 @@ class RTCClient:
         self._provider_export_generation = 0
         self._provider_export_peer_generations: dict[str, int] = {}
         self._provider_export_active: dict[str, _ActiveProjectionRecord] = {}
-        self._manifest_ack_expectations: dict[str, tuple[str, str]] = {}
+        self._manifest_ack_expectations: dict[str, _ManifestAckExpectation] = {}
+        self._local_provider_ready: dict[str, _ManifestAckExpectation] = {}
+        self._local_provider_lease_revisions: dict[str, int] = {}
+        self._local_provider_lease_tasks: dict[str, tuple[str, str, int, asyncio.Task[None]]] = {}
         self._provider_export_tasks: set[asyncio.Task[None]] = set()
         self._rpc_send_tasks: set[asyncio.Task[bool]] = set()
         self._tooling_projection_refresh_tasks: dict[str, asyncio.Task[None]] = {}
@@ -439,6 +464,9 @@ class RTCClient:
         self._flow_controllers: dict[str, DataChannelFlowController] = {}
         self._peer_send_locks: dict[str, asyncio.Lock] = {}
         self._event_subscriptions = MeshEventSubscriptionRegistry()
+        self._provider_lease_tasks: dict[str, tuple[str, str, int, asyncio.Task[None]]] = {}
+        self._provider_lease_clock_ms: Callable[[], int] = lambda: int(time.time() * 1000)
+        self._provider_lease_sleep: Callable[[float], Any] = asyncio.sleep
 
     _PUBLIC_BROKERS = {"broker.emqx.io", "test.mosquitto.org"}
 
@@ -583,6 +611,8 @@ class RTCClient:
         for key in {session_peer_id, stable_peer_id}:
             self._peer_protocol_hellos[key] = remote_hello
             self._peer_protocols[key] = negotiated
+        if negotiated.supports(CAP_PROVIDER_LEASE_V1) and self._peer_registry:
+            asyncio.create_task(self._peer_registry.require_provider_lease(stable_peer_id))
 
     def _handle_fragment_frame(self, peer_id: str, frame: dict[str, Any]) -> str | None:
         """Accept one authenticated fragment and return completed logical JSON if ready."""
@@ -615,6 +645,307 @@ class RTCClient:
             self._record_diagnostic_error("fragment_rejected", str(exc), session_peer_id)
             return None
 
+    def _cancel_provider_lease_task(
+        self,
+        stable_peer_id: str,
+        *,
+        session_peer_id: str | None = None,
+    ) -> None:
+        current = self._provider_lease_tasks.get(stable_peer_id)
+        if current is None:
+            return
+        current_session, _, _, task = current
+        if session_peer_id is not None and current_session != session_peer_id:
+            return
+        self._provider_lease_tasks.pop(stable_peer_id, None)
+        if task is not asyncio.current_task() and not task.done():
+            task.cancel()
+
+    async def _expire_provider_lease_after(
+        self,
+        stable_peer_id: str,
+        session_peer_id: str,
+        connection_epoch: str,
+        availability_revision: int,
+        expires_at_ms: int,
+    ) -> None:
+        try:
+            delay_s = max(0.0, (expires_at_ms - self._provider_lease_clock_ms()) / 1000.0)
+            await self._provider_lease_sleep(delay_s)
+            if self._stable_peer_sessions.get(stable_peer_id, stable_peer_id) != session_peer_id:
+                return
+            if not self._peer_registry:
+                return
+            await self._peer_registry.expire_provider_lease(
+                stable_peer_id,
+                connection_epoch=connection_epoch,
+                availability_revision=availability_revision,
+                now_ms=self._provider_lease_clock_ms(),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._record_diagnostic_error(
+                "provider_lease_expiry_failed",
+                str(exc),
+                session_peer_id,
+            )
+        finally:
+            current = self._provider_lease_tasks.get(stable_peer_id)
+            task = asyncio.current_task()
+            if (
+                current
+                and current[0] == session_peer_id
+                and current[1] == connection_epoch
+                and current[2] == availability_revision
+                and current[3] is task
+            ):
+                self._provider_lease_tasks.pop(stable_peer_id, None)
+
+    def _schedule_provider_lease_expiry(
+        self,
+        stable_peer_id: str,
+        session_peer_id: str,
+        connection_epoch: str,
+        availability_revision: int,
+        expires_at_ms: int,
+    ) -> None:
+        self._cancel_provider_lease_task(stable_peer_id)
+        task = asyncio.create_task(
+            self._expire_provider_lease_after(
+                stable_peer_id,
+                session_peer_id,
+                connection_epoch,
+                availability_revision,
+                expires_at_ms,
+            ),
+            name=f"provider-lease-expiry:{stable_peer_id[:8]}",
+        )
+        self._provider_lease_tasks[stable_peer_id] = (
+            session_peer_id,
+            connection_epoch,
+            availability_revision,
+            task,
+        )
+
+    def _reset_local_provider_readiness(
+        self,
+        stable_peer_id: str,
+        *,
+        session_peer_id: str | None = None,
+    ) -> None:
+        current = self._local_provider_lease_tasks.get(stable_peer_id)
+        if current is not None:
+            current_session, _, _, task = current
+            if session_peer_id is None or current_session == session_peer_id:
+                self._local_provider_lease_tasks.pop(stable_peer_id, None)
+                if task is not asyncio.current_task() and not task.done():
+                    task.cancel()
+        ready = self._local_provider_ready.get(stable_peer_id)
+        if ready is not None and (
+            session_peer_id is None or ready.session_peer_id == session_peer_id
+        ):
+            self._local_provider_ready.pop(stable_peer_id, None)
+
+    def _is_local_provider_ready_for_session(
+        self,
+        session_peer_id: str,
+        service_id: str | None = None,
+    ) -> bool:
+        stable_peer_id = self._peer_stable_ids.get(session_peer_id)
+        if not stable_peer_id:
+            return False
+        # Legacy authenticated peers did not negotiate provider leases. When the
+        # RTC-owned readiness callback is installed for all handlers, preserve
+        # their existing manifest/ACL gate instead of requiring an impossible ACK.
+        if not self.peer_supports_capability(session_peer_id, CAP_PROVIDER_LEASE_V1):
+            return self._stable_peer_sessions.get(
+                stable_peer_id
+            ) == session_peer_id and self._has_authenticated_stable_peer(stable_peer_id)
+        ready = self._local_provider_ready.get(stable_peer_id)
+        return bool(
+            ready
+            and ready.session_peer_id == session_peer_id
+            and self._stable_peer_sessions.get(stable_peer_id) == session_peer_id
+            and self._has_authenticated_stable_peer(stable_peer_id)
+            and (service_id is None or service_id in ready.compatible_services)
+        )
+
+    async def _send_local_provider_unavailable(
+        self,
+        stable_peer_id: str,
+        *,
+        reason_code: str,
+        session_peer_id: str | None = None,
+        expectation: _ManifestAckExpectation | None = None,
+    ) -> bool:
+        if not self._mesh_peer_id:
+            return False
+        session = session_peer_id or self._stable_peer_sessions.get(stable_peer_id)
+        if not session or not self._is_peer_session_active(session):
+            return False
+        current = expectation or self._local_provider_ready.get(stable_peer_id)
+        connection_epoch = current.connection_epoch if current else uuid.uuid4().hex
+        revision = self._local_provider_lease_revisions.get(stable_peer_id, 0) + 1
+        self._local_provider_lease_revisions[stable_peer_id] = revision
+        now_ms = self._provider_lease_clock_ms()
+        frame = {
+            "type": "provider_unavailable",
+            "peer_id": self._mesh_peer_id,
+            "connection_epoch": connection_epoch,
+            "availability_revision": revision,
+            "issued_at_ms": now_ms,
+            "expires_at_ms": now_ms,
+            "available": False,
+            "reason_code": reason_code,
+        }
+        return await self.send_to_peer_async(session, json.dumps(frame))
+
+    async def _send_local_provider_lease_frame(
+        self,
+        stable_peer_id: str,
+        expectation: _ManifestAckExpectation,
+    ) -> bool:
+        if (
+            not self._mesh_peer_id
+            or self._local_provider_ready.get(stable_peer_id) != expectation
+            or self._stable_peer_sessions.get(stable_peer_id) != expectation.session_peer_id
+        ):
+            return False
+        revision = self._local_provider_lease_revisions.get(stable_peer_id, 0) + 1
+        self._local_provider_lease_revisions[stable_peer_id] = revision
+        now_ms = self._provider_lease_clock_ms()
+        frame = {
+            "type": "provider_lease",
+            "peer_id": self._mesh_peer_id,
+            "connection_epoch": expectation.connection_epoch,
+            "availability_revision": revision,
+            "issued_at_ms": now_ms,
+            "expires_at_ms": now_ms + 60_000,
+            "available": True,
+        }
+        return await self.send_to_peer_async(expectation.session_peer_id, json.dumps(frame))
+
+    async def _renew_local_provider_lease(
+        self,
+        stable_peer_id: str,
+        expectation: _ManifestAckExpectation,
+    ) -> None:
+        try:
+            while True:
+                await self._provider_lease_sleep(20.0)
+                await self._send_local_provider_lease_frame(stable_peer_id, expectation)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._record_diagnostic_error(
+                "provider_lease_renewal_failed",
+                str(exc),
+                expectation.session_peer_id,
+            )
+        finally:
+            current = self._local_provider_lease_tasks.get(stable_peer_id)
+            task = asyncio.current_task()
+            if (
+                current
+                and current[0] == expectation.session_peer_id
+                and current[1] == expectation.connection_epoch
+                and current[3] is task
+            ):
+                self._local_provider_lease_tasks.pop(stable_peer_id, None)
+
+    async def _open_local_provider_readiness(
+        self,
+        stable_peer_id: str,
+        expectation: _ManifestAckExpectation,
+    ) -> bool:
+        self._reset_local_provider_readiness(
+            stable_peer_id,
+            session_peer_id=expectation.session_peer_id,
+        )
+        self._local_provider_ready[stable_peer_id] = expectation
+        self._local_provider_lease_revisions[stable_peer_id] = 0
+        if not await self._send_local_provider_lease_frame(stable_peer_id, expectation):
+            self._reset_local_provider_readiness(
+                stable_peer_id,
+                session_peer_id=expectation.session_peer_id,
+            )
+            return False
+        revision = self._local_provider_lease_revisions[stable_peer_id]
+        task = asyncio.create_task(
+            self._renew_local_provider_lease(stable_peer_id, expectation),
+            name=f"provider-lease-renew:{stable_peer_id[:8]}",
+        )
+        self._local_provider_lease_tasks[stable_peer_id] = (
+            expectation.session_peer_id,
+            expectation.connection_epoch,
+            revision,
+            task,
+        )
+        return True
+
+    async def _handle_provider_lease_frame(
+        self, session_peer_id: str, frame: dict[str, Any]
+    ) -> None:
+        if not self.peer_supports_capability(session_peer_id, CAP_PROVIDER_LEASE_V1):
+            self._record_diagnostic_error(
+                "provider_lease_unnegotiated",
+                "Peer sent provider lease without negotiated capability",
+                session_peer_id,
+            )
+            return
+        try:
+            lease_frame = parse_provider_lease_frame(frame)
+        except PeerProtocolError as exc:
+            self._record_diagnostic_error("provider_lease_malformed", str(exc), session_peer_id)
+            return
+        stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
+        if lease_frame.peer_id != stable_peer_id:
+            self._record_diagnostic_error(
+                "provider_lease_wrong_peer",
+                "Provider lease peer_id did not match authenticated peer",
+                session_peer_id,
+            )
+            return
+        if self._stable_peer_sessions.get(stable_peer_id, stable_peer_id) != session_peer_id:
+            self._record_diagnostic_error(
+                "provider_lease_stale_session",
+                "Provider lease arrived on a stale peer session",
+                session_peer_id,
+            )
+            return
+        if not self._peer_registry:
+            return
+
+        from app.services.gateway.mesh.models import ProviderLeaseState
+
+        lease = ProviderLeaseState(
+            peer_id=stable_peer_id,
+            connection_epoch=lease_frame.connection_epoch,
+            availability_revision=lease_frame.availability_revision,
+            issued_at_ms=lease_frame.issued_at_ms,
+            expires_at_ms=lease_frame.expires_at_ms,
+            available=lease_frame.is_available,
+            reason_code=lease_frame.reason_code or "",
+            lease_required=True,
+        )
+        applied = await self._peer_registry.apply_provider_lease(
+            lease,
+            now_ms=self._provider_lease_clock_ms(),
+        )
+        if not applied:
+            return
+        if lease.available:
+            self._schedule_provider_lease_expiry(
+                stable_peer_id,
+                session_peer_id,
+                lease.connection_epoch,
+                lease.availability_revision,
+                lease.expires_at_ms,
+            )
+        else:
+            self._cancel_provider_lease_task(stable_peer_id, session_peer_id=session_peer_id)
+
     def _dispatch_authenticated_datachannel_message(
         self,
         *,
@@ -628,6 +959,8 @@ class RTCClient:
         msg_type = obj.get("type")
         if msg_type == "manifest":
             asyncio.create_task(self._on_peer_manifest(peer, obj))
+        elif msg_type in {"provider_lease", "provider_unavailable"}:
+            asyncio.create_task(self._handle_provider_lease_frame(peer, obj))
         elif msg_type == "manifest_request":
             stable_peer_id = self._stable_peer_id_for_session(peer)
             asyncio.create_task(self._send_manifest(stable_peer_id))
@@ -806,6 +1139,10 @@ class RTCClient:
     ) -> str:
         """Record a stable mesh peer_id for an active signaling session."""
         stable = stable_peer_id or session_peer_id
+        previous_session = self._stable_peer_sessions.get(stable)
+        if previous_session and previous_session != session_peer_id:
+            self._cancel_provider_lease_task(stable, session_peer_id=previous_session)
+            self._reset_local_provider_readiness(stable, session_peer_id=previous_session)
         if stable != session_peer_id:
             self._peer_stable_ids[session_peer_id] = stable
             self._stable_peer_sessions[stable] = session_peer_id
@@ -1118,6 +1455,18 @@ class RTCClient:
             log_debug("RTCClient signaling connected; room join deferred until mesh bootstrap")
 
     async def close(self) -> None:
+        if not self._closing:
+            tombstone_tasks = [
+                self._send_local_provider_unavailable(
+                    stable_peer_id,
+                    reason_code="peer_closing",
+                    session_peer_id=expectation.session_peer_id,
+                    expectation=expectation,
+                )
+                for stable_peer_id, expectation in list(self._local_provider_ready.items())
+            ]
+            if tombstone_tasks:
+                await asyncio.gather(*tombstone_tasks, return_exceptions=True)
         # Set this before broadcasting or closing any peer connection. aiortc
         # dispatches state-change callbacks asynchronously, so those callbacks
         # may run while (or just after) the close loop below is in progress.
@@ -1181,6 +1530,29 @@ class RTCClient:
         retry_tasks = self._cancel_manifest_reannounce_retries()
         if retry_tasks:
             await asyncio.gather(*retry_tasks, return_exceptions=True)
+        provider_lease_tasks = [entry[3] for entry in self._provider_lease_tasks.values()]
+        for task in provider_lease_tasks:
+            task.cancel()
+        if provider_lease_tasks:
+            await asyncio.gather(*provider_lease_tasks, return_exceptions=True)
+        self._provider_lease_tasks.clear()
+        local_provider_lease_tasks = [
+            entry[3] for entry in self._local_provider_lease_tasks.values()
+        ]
+        for task in local_provider_lease_tasks:
+            task.cancel()
+        if local_provider_lease_tasks:
+            await asyncio.gather(*local_provider_lease_tasks, return_exceptions=True)
+        self._local_provider_lease_tasks.clear()
+        self._local_provider_ready.clear()
+        self._local_provider_lease_revisions.clear()
+        if self._peer_registry:
+            lease_peers = set(self._stable_peer_sessions) | {
+                self._stable_peer_id_for_session(peer_id) for peer_id in self._pcs
+            }
+            for stable_peer_id in lease_peers:
+                with contextlib.suppress(Exception):
+                    await self._peer_registry.clear_provider_lease_session(stable_peer_id)
 
         for pc in list(self._pcs.values()):
             await pc.close()
@@ -1383,6 +1755,11 @@ class RTCClient:
         self._offer_in_progress.discard(session_peer_id)
         self._negotiation_retry_pcs.discard(pc)
         self._reconnect_suppressed_pcs.add(pc)
+        await self._send_local_provider_unavailable(
+            stable_peer_id,
+            reason_code="peer_disconnected",
+            session_peer_id=session_peer_id,
+        )
         pairing_task = self._pairing_tasks.pop(session_peer_id, None)
         if pairing_task:
             pairing_task.cancel()
@@ -1399,6 +1776,7 @@ class RTCClient:
         self._peer_send_fns.pop(session_peer_id, None)
         self._peer_data_channels.pop(session_peer_id, None)
         self._cleanup_peer_protocol_state(session_peer_id, stable_peer_id)
+        self._cancel_provider_lease_task(stable_peer_id, session_peer_id=session_peer_id)
         self._peer_names.pop(session_peer_id, None)
         self._peer_names.pop(stable_peer_id, None)
         self._peer_claimed_stable_ids.pop(session_peer_id, None)
@@ -1406,6 +1784,8 @@ class RTCClient:
         self._peer_stable_ids.pop(session_peer_id, None)
         self._stable_peer_sessions.pop(stable_peer_id, None)
         self._invalidate_provider_export_peer(stable_peer_id)
+        if self._peer_registry:
+            await self._peer_registry.remove_peer(stable_peer_id)
         log_info(f"Force disconnected peer {peer_id}")
 
         # Audit: peer force-disconnected
@@ -1715,6 +2095,8 @@ class RTCClient:
         self._provider_export_generation += 1
         self._provider_export_active.clear()
         self._manifest_ack_expectations.clear()
+        for stable_peer_id in list(self._local_provider_ready):
+            self._reset_local_provider_readiness(stable_peer_id)
         return self._provider_export_cache.invalidate_all()
 
     def _invalidate_provider_export_peer(self, stable_peer_id: str) -> int:
@@ -1722,6 +2104,7 @@ class RTCClient:
         self._provider_export_peer_generations[stable_peer_id] = generation
         self._provider_export_active.pop(stable_peer_id, None)
         self._manifest_ack_expectations.pop(stable_peer_id, None)
+        self._reset_local_provider_readiness(stable_peer_id)
         return self._provider_export_cache.invalidate_peer(stable_peer_id)
 
     def _cancel_manifest_reannounce_retries(
@@ -2906,6 +3289,7 @@ class RTCClient:
         )
         msg = manifest_to_dict(manifest)
         projection_size = sum(len(service.methods) for service in manifest.shared_services)
+        advertised_services = tuple(sorted(service.module for service in manifest.shared_services))
         await self._audit(
             "mesh.manifest_projection.generated",
             details={
@@ -2915,8 +3299,26 @@ class RTCClient:
                 "secrets_redacted": True,
             },
         )
-        sent = self.send_to_peer(peer_id, json.dumps(msg))
+        self._reset_local_provider_readiness(stable_peer_id, session_peer_id=session_peer_id)
         evidence = manifest.recipient_projection_evidence
+        expected_ack: _ManifestAckExpectation | None = None
+        if evidence is not None:
+            expected_ack = _ManifestAckExpectation(
+                session_peer_id=session_peer_id,
+                connection_epoch=uuid.uuid4().hex,
+                projection_digest=evidence.projection_digest,
+                active_protocol=str(manifest.active_protocol or ""),
+                active_version=str(manifest.active_version or ""),
+                active_tier=str(manifest.active_tier or ""),
+                protocol_revision=str(manifest.active_version or ""),
+                registry_revision=evidence.registry_revision,
+                export_policy_revision=evidence.policy_revision,
+                auth_grant_revision=evidence.auth_grant_revision,
+                advertised_services=advertised_services,
+                compatible_services=(),
+            )
+            self._manifest_ack_expectations[stable_peer_id] = expected_ack
+        sent = await self.send_to_peer_async(session_peer_id, json.dumps(msg))
         if self._rollout_metrics is not None:
             self._rollout_metrics.record(
                 "manifest_sent" if sent else "manifest_failed",
@@ -2940,12 +3342,13 @@ class RTCClient:
                 "secrets_redacted": True,
             },
         )
-        if sent:
-            if evidence is not None:
-                self._manifest_ack_expectations[stable_peer_id] = (
-                    evidence.projection_digest,
-                    evidence.policy_revision,
-                )
+        if not sent:
+            if (
+                expected_ack is not None
+                and self._manifest_ack_expectations.get(stable_peer_id) == expected_ack
+            ):
+                self._manifest_ack_expectations.pop(stable_peer_id, None)
+        else:
             log_debug(f"RTCClient: Sent manifest to peer {peer_id}")
             self._tooling_outbound_manifest_revisions[stable_peer_id] = (
                 self._tooling_outbound_manifest_revisions.get(stable_peer_id, 0) + 1
@@ -3040,6 +3443,8 @@ class RTCClient:
                 existing_latency, (int, float)
             ) or not math.isfinite(existing_latency)
             await self._peer_registry.register_peer(stable_peer_id, manifest.node_name)
+            if self.peer_supports_capability(peer_id, CAP_PROVIDER_LEASE_V1):
+                await self._peer_registry.require_provider_lease(stable_peer_id)
             await self._peer_registry.update_manifest(stable_peer_id, registry_manifest)
 
         # Send ACK
@@ -3082,13 +3487,23 @@ class RTCClient:
         ack = parse_manifest_ack(data)
         if not ack:
             return
+        expected = self._manifest_ack_expectations.get(stable_peer_id)
+        readiness_expectation = None
         if ack.services:
-            expected = getattr(self, "_manifest_ack_expectations", {}).get(stable_peer_id)
-            if expected != (ack.projection_digest, ack.export_policy_revision):
+            current_structured_ack = self._manifest_ack_matches_current_expectation(
+                stable_peer_id, ack, expected
+            )
+            if not current_structured_ack and expected is not None:
                 log_warning(
                     f"RTCClient: Ignored stale structured manifest ACK from {stable_peer_id}"
                 )
                 return
+            if current_structured_ack:
+                readiness_expectation = self._readiness_expectation_from_ack(
+                    stable_peer_id,
+                    ack,
+                    expected,
+                )
 
         log_info(
             f"RTCClient: Manifest ACK from {stable_peer_id} — "
@@ -3100,6 +3515,58 @@ class RTCClient:
         # Store compatibility report in peer registry
         if self._peer_registry:
             await self._peer_registry.update_manifest_ack(stable_peer_id, ack)
+        if readiness_expectation is not None:
+            opened = await self._open_local_provider_readiness(
+                stable_peer_id, readiness_expectation
+            )
+            if opened:
+                self._manifest_ack_expectations.pop(stable_peer_id, None)
+
+    def _readiness_expectation_from_ack(
+        self,
+        stable_peer_id: str,
+        ack: Any,
+        expected: _ManifestAckExpectation | None,
+    ) -> _ManifestAckExpectation | None:
+        if not self._manifest_ack_matches_current_expectation(stable_peer_id, ack, expected):
+            return None
+        compatible_services = tuple(sorted(ack.compatible_services))
+        if not compatible_services:
+            return None
+        return dataclass_replace(expected, compatible_services=compatible_services)
+
+    def _manifest_ack_matches_current_expectation(
+        self,
+        stable_peer_id: str,
+        ack: Any,
+        expected: _ManifestAckExpectation | None,
+    ) -> bool:
+        if expected is None:
+            return False
+        if self._stable_peer_sessions.get(stable_peer_id) != expected.session_peer_id:
+            return False
+        if not self.peer_supports_capability(expected.session_peer_id, CAP_PROVIDER_LEASE_V1):
+            return False
+        compatible_services = tuple(sorted(ack.compatible_services))
+        service_statuses = {service.service_id: service.status for service in ack.services}
+        if set(service_statuses) != set(expected.advertised_services):
+            return False
+        if compatible_services != tuple(
+            service_id
+            for service_id, status in sorted(service_statuses.items())
+            if status == "compatible"
+        ):
+            return False
+        return (
+            ack.active_protocol == expected.active_protocol
+            and ack.active_version == expected.active_version
+            and ack.active_tier == expected.active_tier
+            and ack.protocol_revision == expected.protocol_revision
+            and ack.registry_revision == expected.registry_revision
+            and ack.export_policy_revision == expected.export_policy_revision
+            and ack.auth_grant_revision == expected.auth_grant_revision
+            and ack.projection_digest == expected.projection_digest
+        )
 
     def _send_pong(self, peer_id: str, ping_data: dict) -> None:
         """Send a pong response to a peer's ping.
@@ -3324,6 +3791,7 @@ class RTCClient:
         self._stable_peer_sessions.pop(stable_peer_id, None)
         self._peer_names.pop(peer, None)
         self._peer_names.pop(stable_peer_id, None)
+        self._cancel_provider_lease_task(stable_peer_id)
         self._invalidate_provider_export_peer(stable_peer_id)
         if self._peer_registry:
             await self._peer_registry.remove_peer(stable_peer_id)
@@ -4290,6 +4758,9 @@ class RTCClient:
             ),
             local_peer_role_provider=lambda: "hybrid",
             event_topic_authorizer=self._event_topic_authorizer,
+            provider_readiness_provider=lambda service_id, peer=peer: (
+                self._is_local_provider_ready_for_session(peer, service_id)
+            ),
         )
         self._rpc_handlers[peer] = handler
 
@@ -4848,6 +5319,7 @@ class RTCClient:
                 self._peer_send_fns.pop(peer, None)
                 self._peer_data_channels.pop(peer, None)
                 self._cleanup_peer_protocol_state(peer, stable_peer_id)
+                self._cancel_provider_lease_task(stable_peer_id, session_peer_id=peer)
                 self._peer_names.pop(peer, None)
                 self._peer_names.pop(stable_peer_id, None)
                 self._peer_claimed_stable_ids.pop(peer, None)

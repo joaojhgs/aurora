@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,7 +16,7 @@ from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.utils.crypto import aead_open
 from app.services.gateway.webrtc.rpc import RPCHandler
-from app.services.gateway.webrtc.rtc_client import RTCClient
+from app.services.gateway.webrtc.rtc_client import RTCClient, _ManifestAckExpectation
 
 
 @pytest.fixture
@@ -227,15 +228,39 @@ async def test_outbound_ice_filter_applies_to_sdp_and_trickle_candidates(mock_de
 @pytest.mark.asyncio
 async def test_disconnect_peer_success(client):
     pc = AsyncMock()
+    pc.connectionState = "connected"
     identity = _make_identity("user-1")
     token = _make_token("user-1", ["TTS.*"])
     timeout_task = MagicMock()
     timeout_task.cancel = MagicMock()
+    channel = MagicMock()
+    channel.readyState = "open"
+    channel.sent = []
+    channel.send.side_effect = channel.sent.append
 
     client._pcs = {"peer-a": pc}
     client._peer_acl = {"peer-a": identity}
     client._peer_tokens = {"peer-a": token}
     client._peer_timeout_tasks = {"peer-a": timeout_task}
+    client._mesh_peer_id = "local-provider"
+    client._remember_stable_peer_id("peer-a", "stable-peer-a", "remote")
+    client._peer_data_channels["peer-a"] = channel
+    client._local_provider_ready["stable-peer-a"] = _ManifestAckExpectation(
+        session_peer_id="peer-a",
+        connection_epoch="local-epoch-1",
+        projection_digest="projection-digest",
+        active_protocol="projection-v1",
+        active_version="v1",
+        active_tier="projection",
+        protocol_revision="v1",
+        registry_revision="registry-1",
+        export_policy_revision="policy-1",
+        auth_grant_revision=1,
+        advertised_services=("TTS",),
+        compatible_services=("TTS",),
+    )
+    client._peer_registry = MagicMock()
+    client._peer_registry.remove_peer = AsyncMock()
 
     result = await client.disconnect_peer("peer-a", by_principal_id="admin")
     assert result is True
@@ -243,6 +268,11 @@ async def test_disconnect_peer_success(client):
     assert "peer-a" not in client._peer_acl
     assert "peer-a" not in client._peer_tokens
     assert "peer-a" not in client._peer_timeout_tasks
+    client._peer_registry.remove_peer.assert_awaited_once_with("stable-peer-a")
+    tombstone = json.loads(channel.sent[0])
+    assert tombstone["type"] == "provider_unavailable"
+    assert tombstone["peer_id"] == "local-provider"
+    assert tombstone["connection_epoch"] == "local-epoch-1"
     pc.close.assert_called_once()
     timeout_task.cancel.assert_called_once()
 

@@ -199,7 +199,7 @@ class PeerState(BaseModel):
     last_manifest: float = 0.0
     active_calls: int = 0
     active_calls_by_module: dict[str, int] = Field(default_factory=dict)
-    status: str = "connected"  # "connected" | "authenticated" | "negotiated" | "stale"
+    status: str = "connected"  # "connected" | "authenticated" | "negotiated" | "stale" | "provider_unavailable"
     # Compatibility report from manifest ACK (what the remote peer thinks of OUR services)
     remote_compatible: list[str] = Field(default_factory=list)
     remote_incompatible: list[str] = Field(default_factory=list)
@@ -207,6 +207,21 @@ class PeerState(BaseModel):
     remote_manifest_ack: ManifestAck | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class ProviderLeaseState(BaseModel):
+    """Runtime-only provider availability lease tracked outside manifests."""
+
+    peer_id: str
+    connection_epoch: str
+    availability_revision: int = Field(ge=0)
+    issued_at_ms: int = Field(ge=0)
+    expires_at_ms: int = Field(ge=0)
+    available: bool = True
+    reason_code: str = ""
+    lease_required: bool = True
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class ProviderCandidate(BaseModel):

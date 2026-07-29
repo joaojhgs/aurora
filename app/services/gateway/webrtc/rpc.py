@@ -152,6 +152,7 @@ class RPCHandler:
         peer_supports_capability: Callable[[str], bool] | None = None,
         local_peer_role_provider: Callable[[], str] | None = None,
         event_topic_authorizer: Callable[[str, str, Identity], bool | Any] | None = None,
+        provider_readiness_provider: Callable[[str], bool] | None = None,
     ):
         self._bus = bus
         self._registry = registry
@@ -173,6 +174,7 @@ class RPCHandler:
         self._peer_supports_capability = peer_supports_capability
         self._local_peer_role_provider = local_peer_role_provider
         self._event_topic_authorizer = event_topic_authorizer
+        self._provider_readiness_provider = provider_readiness_provider
         # Track active remote calls per module for capacity limiting
         self._active_remote_calls: dict[str, int] = {}
         self._active_stream_tasks: dict[str, asyncio.Task[Any]] = {}
@@ -356,6 +358,15 @@ class RPCHandler:
             return "hybrid"
         return role if role in {"provider", "consumer", "hybrid"} else "hybrid"
 
+    def _local_provider_ready(self, service_id: str) -> bool:
+        if self._provider_readiness_provider is None:
+            return True
+        try:
+            return bool(self._provider_readiness_provider(service_id))
+        except Exception as error:
+            log_warning(f"RPCHandler: Failed to resolve provider readiness: {error}")
+            return False
+
     async def _authorized_event_topics(
         self, requested_topics: tuple[str, ...], identity: Identity
     ) -> set[str]:
@@ -375,7 +386,7 @@ class RPCHandler:
                 )
                 if hasattr(verdict, "__await__"):
                     verdict = await verdict
-                if verdict:
+                if verdict and self._local_provider_ready(topic.split(".")[0]):
                     allowed.add(topic)
                 continue
 
@@ -404,6 +415,8 @@ class RPCHandler:
                 sharing = getattr(mesh_config, "services", {}).get(svc_name)
                 if not sharing or not getattr(getattr(sharing, "export", None), "share", False):
                     continue
+                if not self._local_provider_ready(svc_name):
+                    continue
                 allowed.add(topic)
                 continue
 
@@ -430,6 +443,8 @@ class RPCHandler:
                 continue
             sharing = getattr(mesh_config, "services", {}).get(svc_name)
             if not sharing or not getattr(getattr(sharing, "export", None), "share", False):
+                continue
+            if not self._local_provider_ready(svc_name):
                 continue
             allowed.add(topic)
         return allowed
@@ -896,6 +911,18 @@ class RPCHandler:
                         "method_not_shared",
                         403,
                         "Method is not shared",
+                        params=params,
+                        principal_id=identity.principal_id,
+                    )
+                    return
+                if not self._local_provider_ready(svc_name):
+                    await self._deny_rpc(
+                        req_id,
+                        method_name,
+                        correlation_id,
+                        "provider_not_ready",
+                        425,
+                        "Provider is not ready",
                         params=params,
                         principal_id=identity.principal_id,
                     )

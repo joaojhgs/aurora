@@ -15,7 +15,14 @@ from app.shared.contracts.models.gateway import MethodInfo
 
 from .version_compat import is_compatible
 
-ProviderEligibilityReason = MeshCompatibilityReasonCode | Literal["eligible", "excluded_peer"]
+ProviderEligibilityReason = (
+    MeshCompatibilityReasonCode
+    | Literal[
+        "eligible",
+        "excluded_peer",
+        "provider_unavailable",
+    ]
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +139,13 @@ def evaluate_outbound_provider(
         )
 
     if provider.status != "negotiated":
+        if provider.status == "provider_unavailable":
+            return _decision(
+                **base,
+                eligible=False,
+                reason_code="provider_unavailable",
+                reason="provider lease is unavailable",
+            )
         return _decision(
             **base,
             eligible=False,

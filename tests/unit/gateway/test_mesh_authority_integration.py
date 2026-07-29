@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -11,12 +12,23 @@ from app.messaging.bus import Envelope, QueryResult
 from app.services.db.models import Token
 from app.services.gateway.acl.identity import ANONYMOUS, OPEN_PEER, SYSTEM, Identity
 from app.services.gateway.config import MeshConfig
+from app.services.gateway.mesh.negotiation import (
+    generate_manifest_ack,
+    manifest_ack_to_dict,
+    parse_manifest_with_evidence,
+)
 from app.services.gateway.mesh.provider_export import ACTIVE_MANIFEST_PROTOCOL, ProjectionResult
 from app.services.gateway.service import (
     GatewayService,
     _mesh_connection_status,
     _MeshStartOutcome,
 )
+from app.services.gateway.webrtc.peer_protocol import (
+    CAP_PROVIDER_LEASE_V1,
+    build_protocol_hello,
+    negotiate_protocol,
+)
+from app.services.gateway.webrtc.rpc import RPCHandler
 from app.services.gateway.webrtc.rtc_client import (
     PeerAuthorityApplyResult,
     PeerAuthorityApplyStatus,
@@ -27,6 +39,7 @@ from app.shared.contracts.mesh_surface import (
     feature_contracts_for_topic,
 )
 from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
 from app.shared.contracts.models.mesh import (
     MeshEvents,
     MeshPeerAuthorityChangedEvent,
@@ -35,6 +48,15 @@ from app.shared.contracts.models.mesh import (
 )
 
 from .mesh_policy_helpers import mesh_policy
+
+
+class FakeDataChannel:
+    def __init__(self) -> None:
+        self.readyState = "open"
+        self.sent: list[str | bytes] = []
+
+    def send(self, payload: str | bytes) -> None:
+        self.sent.append(payload)
 
 
 def _settings() -> MagicMock:
@@ -77,7 +99,7 @@ def _client() -> RTCClient:
     pc.connectionState = "connected"
     pc.close = AsyncMock()
     client._pcs["session-a"] = pc
-    client._peer_data_channels["session-a"] = SimpleNamespace(readyState="open")
+    client._peer_data_channels["session-a"] = FakeDataChannel()
     identity = _identity({"Gateway.GetServices"})
     client._peer_acl["peer-a"] = identity
     client._peer_acl["session-a"] = identity
@@ -91,6 +113,35 @@ def _client() -> RTCClient:
     client._peer_tokens["peer-a"] = token
     client._peer_tokens["session-a"] = token
     return client
+
+
+def _mesh_module(
+    module: str,
+    topic: str,
+    *,
+    feature_id: str,
+    permission: str,
+    method_name: str,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        version="1.2.0",
+        capabilities=["streaming"],
+        callable_features=list(feature_contracts_for_module(module)),
+        methods=[
+            SimpleNamespace(
+                name=method_name,
+                summary=f"{module} method",
+                bus_topic=topic,
+                exposure="external",
+                required_perms=[permission],
+                callable_feature_ids=[feature_id],
+                callable_features=list(feature_contracts_for_topic(topic)),
+                input_model=type(f"{module}Request", (), {"__name__": f"{module}Request"}),
+                output_model=type(f"{module}Response", (), {"__name__": f"{module}Response"}),
+                method_type="use",
+            )
+        ],
+    )
 
 
 def _event(
@@ -931,6 +982,31 @@ async def test_startup_success_snapshot_precedes_configure_credentials_presence(
     assert connection_update.peer_id == "browser-peer"
     assert connection_update.connection_status == "connected"
 
+    from app.services.gateway.mesh.tooling_projection_transport import (
+        TOOLING_PROJECTION_SYNC_REQUESTED_TOPIC,
+    )
+    from app.shared.contracts.models.tooling import ToolingProjectionSyncRequested
+
+    bus.request.reset_mock()
+    bus.publish.reset_mock()
+    await service._mesh_peer_registry.on_peer_status_changed(
+        "browser-peer",
+        "Browser Thin",
+        "provider_unavailable",
+    )
+
+    unavailable_update = bus.request.await_args.args[1]
+    assert bus.request.await_args.args[0] == AuthMethods.MESH_UPDATE_PEER_CONNECTION
+    assert unavailable_update.peer_id == "browser-peer"
+    assert unavailable_update.connection_status == "disconnected"
+    topic, refresh = bus.publish.await_args.args[:2]
+    assert topic == TOOLING_PROJECTION_SYNC_REQUESTED_TOPIC
+    assert isinstance(refresh, ToolingProjectionSyncRequested)
+    assert refresh.provider_peer_id == "browser-peer"
+    assert refresh.reason_code == "provider_status_provider_unavailable"
+    assert refresh.force_full_snapshot is True
+    assert bus.publish.await_args.kwargs["mesh"] is False
+
     bus.request.reset_mock()
     await service._mesh_peer_registry.remove_peer("browser-peer")
     disconnect_update = bus.request.await_args.args[1]
@@ -1074,8 +1150,7 @@ async def test_send_manifest_wire_path_uses_ready_projection_filtered_to_recipie
             reason="approved",
         )
     )
-    sent: list[dict[str, object]] = []
-    client._peer_send_fns["session-a"] = lambda text: sent.append(json.loads(text))
+    channel = client._peer_data_channels["session-a"]
     client._registry = None
     monkeypatch.setattr(
         "app.shared.contracts.registry.list_modules",
@@ -1129,8 +1204,8 @@ async def test_send_manifest_wire_path_uses_ready_projection_filtered_to_recipie
 
     assert await client._send_manifest("peer-a", mesh_config=mesh_config)
 
-    assert sent
-    payload = sent[0]
+    assert channel.sent
+    payload = json.loads(channel.sent[0])
     assert payload["type"] == "manifest"
     assert payload.get("active_protocol") == "projection-v1"
     assert payload.get("projection_active") is True
@@ -1152,6 +1227,237 @@ async def test_send_manifest_wire_path_uses_ready_projection_filtered_to_recipie
         readiness="ready",
     )
     assert projection.routable is False
+
+
+@pytest.mark.asyncio
+async def test_partial_manifest_ack_opens_only_compatible_provider_rpc(monkeypatch) -> None:
+    client = _client()
+    identity = _identity({"TTS.Synthesize", "Scheduler.ListJobs"})
+    client._peer_acl["session-a"] = identity
+    client._peer_acl["peer-a"] = identity
+    client._registry = None
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-a"] = protocol
+    client._peer_protocols["peer-a"] = protocol
+    assert client.apply_peer_authority_changed(
+        MeshPeerAuthorityChangedEvent(
+            peer_id="peer-a",
+            auth_grant_revision=1,
+            disposition="present",
+            state="active",
+            effective_permissions=("*",),
+            reason="approved",
+        )
+    )
+    monkeypatch.setattr(
+        "app.shared.contracts.registry.list_modules",
+        lambda: {
+            "TTS": _mesh_module(
+                "TTS",
+                "TTS.Synthesize",
+                feature_id="speech_synthesis",
+                permission="TTS.Synthesize",
+                method_name="Synthesize",
+            ),
+            "Scheduler": _mesh_module(
+                "Scheduler",
+                "Scheduler.ListJobs",
+                feature_id="job_discovery",
+                permission="Scheduler.ListJobs",
+                method_name="ListJobs",
+            ),
+        },
+    )
+    monkeypatch.setattr("app.shared.contracts.registry._get_package_version", lambda: "1.0.0")
+    client._schedule_provider_export_shadow = MagicMock()
+    client.retry_tooling_projection_invalidation = MagicMock(return_value=True)
+    provider_mesh_config = MeshConfig(
+        enabled=True,
+        services={
+            "TTS": mesh_policy(share=True),
+            "Scheduler": mesh_policy(share=True),
+        },
+    )
+    consumer_mesh_config = MeshConfig(
+        enabled=True,
+        services={"TTS": mesh_policy(prefer="network")},
+    )
+    frames: list[dict[str, object]] = []
+    sleeps: list[float] = []
+    sleep_release = asyncio.Event()
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+        await sleep_release.wait()
+
+    client._provider_lease_clock_ms = lambda: 1000
+    client._provider_lease_sleep = fake_sleep
+
+    async def send_and_ack(_peer_id: str, text: str) -> bool:
+        payload = json.loads(text)
+        frames.append(payload)
+        if payload.get("type") == "manifest":
+            manifest = parse_manifest_with_evidence(payload).manifest
+            assert manifest is not None
+            ack = generate_manifest_ack(manifest, consumer_mesh_config)
+            assert ack.compatible_services == ["TTS"]
+            assert ack.unused_services == ["Scheduler"]
+            await client._on_manifest_ack("session-a", manifest_ack_to_dict(ack))
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_and_ack)  # type: ignore[method-assign]
+
+    assert await client._send_manifest("peer-a", mesh_config=provider_mesh_config)
+
+    assert client._is_local_provider_ready_for_session("session-a", "TTS") is True
+    assert client._is_local_provider_ready_for_session("session-a", "Scheduler") is False
+    assert any(frame.get("type") == "provider_lease" for frame in frames)
+    for _ in range(5):
+        if sleeps:
+            break
+        await asyncio.sleep(0)
+    assert sleeps == [20.0]
+
+    registry = MagicMock()
+
+    async def get_service(module: str) -> ServiceAnnouncement:
+        return ServiceAnnouncement(
+            module=module,
+            version="1.0",
+            methods=[
+                MethodInfo(
+                    name="Synthesize" if module == "TTS" else "ListJobs",
+                    bus_topic="TTS.Synthesize" if module == "TTS" else "Scheduler.ListJobs",
+                    exposure="external",
+                    required_perms=[
+                        f"{module}.Synthesize" if module == "TTS" else "Scheduler.ListJobs"
+                    ],
+                )
+            ],
+        )
+
+    registry.get_service = AsyncMock(side_effect=get_service)
+    bus = AsyncMock()
+    bus.request.return_value = QueryResult(ok=True, data={"status": "ok"})
+    sent_rpc: list[dict[str, object]] = []
+    handler = RPCHandler(
+        bus,
+        registry,
+        lambda text: sent_rpc.append(json.loads(text)),
+        lambda: identity,
+        mesh_config=provider_mesh_config,
+        stable_peer_id_provider=lambda: "peer-a",
+        active_projection_provider=lambda: client._current_provider_export_projection(
+            "peer-a", mesh_config=provider_mesh_config
+        ),
+        provider_readiness_provider=lambda service_id: client._is_local_provider_ready_for_session(
+            "session-a", service_id
+        ),
+    )
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "tts-ok", "method": "TTS.Synthesize"})
+    )
+    assert sent_rpc[-1]["type"] == "result", sent_rpc[-1]
+    bus.request.assert_awaited_once()
+
+    await handler.on_message(
+        json.dumps({"type": "call", "id": "scheduler-blocked", "method": "Scheduler.ListJobs"})
+    )
+    assert sent_rpc[-1]["type"] == "error"
+    assert sent_rpc[-1]["error"]["code"] == 425
+    bus.request.assert_awaited_once()
+
+    sleep_release.set()
+    renewal_task = client._local_provider_lease_tasks["peer-a"][3]
+    renewal_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await renewal_task
+
+
+@pytest.mark.asyncio
+async def test_manifest_ack_without_compatible_services_does_not_open_provider_lease(
+    monkeypatch,
+) -> None:
+    client = _client()
+    identity = _identity({"TTS.Synthesize", "Scheduler.ListJobs"})
+    client._peer_acl["session-a"] = identity
+    client._peer_acl["peer-a"] = identity
+    client._registry = None
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-a"] = protocol
+    client._peer_protocols["peer-a"] = protocol
+    assert client.apply_peer_authority_changed(
+        MeshPeerAuthorityChangedEvent(
+            peer_id="peer-a",
+            auth_grant_revision=1,
+            disposition="present",
+            state="active",
+            effective_permissions=("*",),
+            reason="approved",
+        )
+    )
+    monkeypatch.setattr(
+        "app.shared.contracts.registry.list_modules",
+        lambda: {
+            "TTS": _mesh_module(
+                "TTS",
+                "TTS.Synthesize",
+                feature_id="speech_synthesis",
+                permission="TTS.Synthesize",
+                method_name="Synthesize",
+            ),
+            "Scheduler": _mesh_module(
+                "Scheduler",
+                "Scheduler.ListJobs",
+                feature_id="job_discovery",
+                permission="Scheduler.ListJobs",
+                method_name="ListJobs",
+            ),
+        },
+    )
+    monkeypatch.setattr("app.shared.contracts.registry._get_package_version", lambda: "1.0.0")
+    provider_mesh_config = MeshConfig(
+        enabled=True,
+        services={
+            "TTS": mesh_policy(share=True),
+            "Scheduler": mesh_policy(share=True),
+        },
+    )
+    consumer_mesh_config = MeshConfig(
+        enabled=True,
+        services={
+            "TTS": mesh_policy(prefer="network", allowed_provider_peer_ids=["other-peer"]),
+            "Scheduler": mesh_policy(prefer="network", allowed_provider_peer_ids=["other-peer"]),
+        },
+    )
+    frames: list[dict[str, object]] = []
+    client._peer_registry = MagicMock()
+    client._peer_registry.update_manifest_ack = AsyncMock()
+
+    async def send_and_ack(_peer_id: str, text: str) -> bool:
+        payload = json.loads(text)
+        frames.append(payload)
+        if payload.get("type") == "manifest":
+            manifest = parse_manifest_with_evidence(payload).manifest
+            assert manifest is not None
+            ack = generate_manifest_ack(manifest, consumer_mesh_config)
+            assert ack.compatible_services == []
+            assert sorted(ack.incompatible_services) == ["Scheduler", "TTS"]
+            await client._on_manifest_ack("session-a", manifest_ack_to_dict(ack))
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_and_ack)  # type: ignore[method-assign]
+
+    assert await client._send_manifest("peer-a", mesh_config=provider_mesh_config)
+
+    client._peer_registry.update_manifest_ack.assert_awaited_once()
+    assert client._peer_registry.update_manifest_ack.await_args.args[0] == "peer-a"
+    assert client._is_local_provider_ready_for_session("session-a", "TTS") is False
+    assert client._is_local_provider_ready_for_session("session-a", "Scheduler") is False
+    assert not any(frame.get("type") == "provider_lease" for frame in frames)
 
 
 def test_g007_projection_protocol_is_active() -> None:
