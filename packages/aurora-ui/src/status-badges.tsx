@@ -8,8 +8,8 @@ export function StatusBadge({ state }: { state: AvailabilityState }) {
   return <Badge variant={statusVariant(state)}>{statusLabel(state)}</Badge>
 }
 
-export function PrivacyBadge({ privacy }: { privacy: PrivacyClass }) {
-  return <Badge variant={privacyVariant(privacy)}>{titleCaseToken(privacy)}</Badge>
+export function PrivacyBadge({ privacy }: { privacy: PrivacyClass | string }) {
+  return <Badge variant={privacyVariant(privacy)}>{privacyLabel(privacy)}</Badge>
 }
 
 export function EvidenceBadge({ label }: { label: string }) {
@@ -174,10 +174,31 @@ function statusVariant(state: AvailabilityState): 'default' | 'secondary' | 'des
   }
 }
 
-function privacyVariant(privacy: PrivacyClass): 'default' | 'secondary' | 'destructive' | 'outline' {
+function privacyVariant(privacy: PrivacyClass | string): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (privacy === 'admin-critical' || privacy === 'secret' || privacy === 'credential') return 'destructive'
   if (privacy === 'sensitive' || privacy === 'raw-audio') return 'secondary'
   return 'outline'
+}
+
+function privacyLabel(privacy: PrivacyClass | string): string {
+  switch (privacy) {
+    case 'public':
+      return 'Public'
+    case 'personal':
+      return 'Personal'
+    case 'sensitive':
+      return 'Sensitive'
+    case 'secret':
+      return 'Secret'
+    case 'credential':
+      return 'Credential'
+    case 'raw-audio':
+      return 'Microphone audio'
+    case 'admin-critical':
+      return 'Administrator action'
+    default:
+      return 'Sensitive'
+  }
 }
 
 function titleCaseToken(value: string): string {

@@ -3430,10 +3430,10 @@ describe('Aurora production shell', () => {
     })
 
     expect(deniedModel.canConfirm).toBe(false)
-    expect(deniedModel.primaryReason).toContain('explicit peer')
+    expect(deniedModel.primaryReason).toContain('Choose the device or resource')
     expect(adminModel.canConfirm).toBe(false)
-    expect(adminModel.primaryReason).toContain('AdminAction')
-    expect(errorModel.primaryReason).toContain('timed out')
+    expect(adminModel.primaryReason).toContain('Administrator confirmation')
+    expect(errorModel.primaryReason).toContain('Connection lost')
   })
 
   it('distinguishes RouteSheet selector, consent, privacy indicator, native permission, and AdminAction states', () => {
@@ -3488,8 +3488,8 @@ describe('Aurora production shell', () => {
       expect.objectContaining({ id: 'selector', label: 'Privacy selector', state: 'blocked' }),
       expect.objectContaining({ id: 'consent', label: 'Consent', state: 'blocked' }),
       expect.objectContaining({ id: 'privacy-indicator', label: 'Privacy indicator', state: 'blocked' }),
-      expect.objectContaining({ id: 'native-permission', label: 'Native permission', state: 'blocked' }),
-      expect.objectContaining({ id: 'admin-action', label: 'AdminAction', state: 'blocked' })
+      expect.objectContaining({ id: 'native-permission', label: 'Device permission', state: 'blocked' }),
+      expect.objectContaining({ id: 'admin-action', label: 'Admin approval', state: 'blocked' })
     ]))
 
     const localPreferenceSignals = routeSheetPolicySignals({
@@ -3498,14 +3498,14 @@ describe('Aurora production shell', () => {
     }, 'not-required')
     expect(localPreferenceSignals.find((signal) => signal.id === 'selector')).toEqual(expect.objectContaining({
       state: 'preference',
-      detail: expect.stringContaining('does not hard-block')
+      detail: expect.stringContaining('remains available')
     }))
   })
 
   it('maps RouteSheet SDK error codes to user-facing messages', () => {
     const errorMessage = routeSheetErrorMessage(new AuroraError({ code: 'privacy_blocked', message: 'blocked' }))
 
-    expect(errorMessage).toContain('privacy policy')
+    expect(errorMessage).toContain('required privacy choice')
   })
 
   it('renders memory namespaces, conversation history, provenance, and AdminAction-gated controls', async () => {

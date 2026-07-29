@@ -102,7 +102,7 @@ describe('models view product copy', () => {
       root.render(
         <ModelsView
           client={client(getSchemaMetadata)}
-          initialCatalog={modelRuntimeCatalogFixture}
+          initialCatalog={selectableModelCatalog()}
           initialGraph={buildCapabilityGraph({
             catalog: capabilityGraphCatalogFixture,
             registry: gatewayRegistryFixture,
@@ -129,6 +129,20 @@ describe('models view product copy', () => {
     expect(document.body.textContent).toContain('Update this setting only if you know the expected value.')
     expect(copySurface(document.body)).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
     expect(findForbiddenProductionCopyTerms(copySurface(document.body)).map((term) => term.id)).toEqual([])
+
+    const setActive = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === 'Set as active' && !button.disabled)
+    expect(setActive).toBeTruthy()
+
+    await act(async () => {
+      setActive!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const selectionDialogCopy = copySurface(document.body)
+    expect(selectionDialogCopy).toContain('Select model source')
+    expect(selectionDialogCopy).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
+    expect(selectionDialogCopy).not.toMatch(/local:Orchestrator|cloud:openai|Config\.Set|AdminAction/iu)
+    expect(findForbiddenProductionCopyTerms(selectionDialogCopy).map((term) => term.id)).toEqual([])
 
     await act(async () => {
       root.unmount()
@@ -189,6 +203,25 @@ function client(getSchemaMetadata: ReturnType<typeof vi.fn>) {
       applyChange: vi.fn(),
     },
   } as never
+}
+
+function selectableModelCatalog() {
+  const catalog = cloneFixture(modelRuntimeCatalogFixture)
+  catalog.providers = [
+    catalog.providers[0]!,
+    {
+      ...catalog.providers[0]!,
+      provider_id: 'local:Orchestrator:huggingface-pipeline',
+      display_name: 'Selected model source',
+      backend_kind: 'transformers_pipeline',
+      selected: false,
+      enabled: true,
+      health: 'healthy',
+      health_reason: 'Ready for selection.',
+    },
+    catalog.providers[2]!,
+  ]
+  return catalog
 }
 
 function copySurface(root: ParentNode): string {

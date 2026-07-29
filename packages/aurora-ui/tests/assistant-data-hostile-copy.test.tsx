@@ -175,6 +175,28 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
     expect(rendered).not.toMatch(/\braw\b/iu)
     expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), rendered).toEqual([])
   })
+
+  it('renders assistant audio RouteSheet policy copy without leaking the privacy enum', () => {
+    const evaluation = hostileEvaluation('raw-audio')
+    const markup = renderToStaticMarkup(
+      <RouteSheet
+        client={new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })}
+        initialEvaluation={evaluation}
+        payload={{ audio_privacy_class: evaluation.privacyClass, sample_format: 'pcm16' }}
+        dataClasses={[evaluation.privacyClass]}
+        privacyClass={evaluation.privacyClass}
+      />
+    )
+    const rendered = renderedUserCopy(markup)
+
+    expect(evaluation.privacyClass).toBe('raw-audio')
+    expect(rendered).toContain('Microphone audio')
+    expect(rendered).not.toContain('raw-audio')
+    expect(rendered).not.toContain('Raw Audio')
+    expect(rendered).not.toContain('Raw audio')
+    expect(rendered).not.toMatch(/\braw\b/iu)
+    expect(findForbiddenProductionCopyTerms(rendered).map((term) => term.id), rendered).toEqual([])
+  })
 })
 
 const hostileCopyPattern = /\b(?:SDK|WebView|daemon|Orchestrator|native-manifest|WebRTC|transport|fallback|runtime|Gateway\.ExplainRoute|Tooling\.DeleteSecret|api_key|secret-token|sk-secret)\b|provider:\/\/|peer-webrtc-runtime/i
@@ -433,7 +455,7 @@ function pairingModel() {
   })
 }
 
-function hostileEvaluation(): RoutePolicyEvaluation {
+function hostileEvaluation(privacyClass: PrivacyClass = 'sensitive'): RoutePolicyEvaluation {
   const route = cloneFixture(routeExplainFixture)
   route.selected_target = hostile.providerId
   route.selected_provider_id = hostile.providerId
@@ -488,7 +510,7 @@ function hostileEvaluation(): RoutePolicyEvaluation {
     topic: hostile.methodId,
     method: 'DeleteSecret',
     payload: { prompt: hostile.json },
-    privacyClass: 'sensitive' as PrivacyClass,
+    privacyClass,
     transportKind: hostile.routeReason
   })
 }

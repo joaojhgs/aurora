@@ -432,7 +432,7 @@ export function ModelsView({
           methodId="Config.Set"
           actionLabel="Select model source"
           severity="standard"
-          affected={[pendingProvider.id]}
+          affected={[pendingProvider.name || 'Selected model source']}
           requireReason
           reasonValue={reason}
           onReasonChange={setReason}
