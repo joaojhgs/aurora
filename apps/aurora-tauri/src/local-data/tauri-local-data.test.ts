@@ -8,6 +8,7 @@ import {
   type ConversationRecord,
   type LightweightMemoryRecord,
   type LocalAuditRecord,
+  type LocalDataRepositories,
   type LocalToolStateRecord,
   type PeerGrantMetadataRecord
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
@@ -88,6 +89,23 @@ describe('Tauri local data adapter', () => {
     })).rejects.toThrow(/rollback/u)
     await expect(session.memory.listMemoryItems()).resolves.toEqual([])
     await expect(session.memory.upsertMemoryItem(memoryFixture({ profileId: 'profile-2' }))).rejects.toMatchObject({ code: 'identity_mismatch' })
+  })
+
+  it('serializes operations, rejects nested transactions, and expires leaked transaction repositories', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
+    const leaked: { repositories?: LocalDataRepositories } = {}
+    await expect(session.transaction(async (repositories) => {
+      leaked.repositories = repositories
+      await expect(session.transaction(async () => undefined)).rejects.toMatchObject({ code: 'invalid_record' })
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'tx-memory' }))
+    })).resolves.toBeUndefined()
+    if (leaked.repositories === undefined) throw new Error('transaction repositories were not captured')
+    await expect(leaked.repositories.memory.upsertMemoryItem(memoryFixture({ id: 'late-memory' }))).rejects.toMatchObject({ code: 'invalid_record' })
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'tx-memory' })])
+    expect(bridge.calls.filter((call) => call.command === 'aurora_local_data_transaction_begin')).toHaveLength(1)
+    const txOperation = bridge.calls.find((call) => call.command === 'aurora_local_data_repository_operation' && JSON.stringify(call.args).includes('tx-00000000000000000000000000000001'))
+    expect(txOperation).toBeDefined()
   })
 
   it('keeps SQL and native crypto private to the local-data adapter', () => {
@@ -199,6 +217,8 @@ class FakeTauriLocalDataBridge {
   private grants: PeerGrantMetadataRecord[] = []
   private audit: LocalAuditRecord[] = []
   private snapshot: FakeTauriLocalDataSnapshot | null = null
+  private activeTxId: string | null = null
+  private txCounter = 0
 
   readonly invoke = async (command: string, args: Record<string, unknown>): Promise<unknown> => {
     this.calls.push({ command, args })
@@ -216,6 +236,9 @@ class FakeTauriLocalDataBridge {
       return this.status('idle')
     }
     if (command === 'aurora_local_data_transaction_begin') {
+      if (this.activeTxId !== null) throw { code: 'invalid_record', detail: { reason: 'nested_transaction' } }
+      this.txCounter += 1
+      this.activeTxId = `tx-${String(this.txCounter).padStart(32, '0')}`
       this.snapshot = structuredClone({
         conversations: this.conversations,
         messages: this.messages,
@@ -224,19 +247,26 @@ class FakeTauriLocalDataBridge {
         grants: this.grants,
         audit: this.audit
       })
-      return { begun: true }
+      return { txId: this.activeTxId, begun: true }
     }
     if (command === 'aurora_local_data_transaction_commit') {
+      this.assertTx(args)
+      this.activeTxId = null
       this.snapshot = null
       return { committed: true }
     }
     if (command === 'aurora_local_data_transaction_rollback') {
+      this.assertTx(args)
       if (this.snapshot !== null) Object.assign(this, this.snapshot)
+      this.activeTxId = null
       this.snapshot = null
       return { rolledBack: true }
     }
     if (command === 'aurora_local_data_repository_operation') {
-      return this.repositoryOperation(((args.request ?? {}) as { operation?: RepositoryOperation }).operation)
+      const request = (args.request ?? {}) as { txId?: string; operation?: RepositoryOperation }
+      if (request.txId !== undefined) this.assertTx(args)
+      else if (this.activeTxId !== null) throw { code: 'invalid_record', detail: { reason: 'transaction_active' } }
+      return this.repositoryOperation(request.operation)
     }
     return this.status('applied')
   }
@@ -302,6 +332,11 @@ class FakeTauriLocalDataBridge {
 
   private assertScope(value: { profileId: string; localNodeId: string }): void {
     if (value.profileId !== this.profileId || value.localNodeId !== this.localNodeId) throw { code: 'identity_mismatch' }
+  }
+
+  private assertTx(args: Record<string, unknown>): void {
+    const request = (args.request ?? {}) as { txId?: string }
+    if (request.txId === undefined || request.txId !== this.activeTxId) throw { code: 'invalid_record', detail: { reason: 'forged_transaction' } }
   }
 }
 

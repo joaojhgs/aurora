@@ -1,8 +1,9 @@
 use crate::{generated, AuroraCommandError};
-use serde::Deserialize;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_int, c_void};
 use std::path::PathBuf;
@@ -10,6 +11,18 @@ use std::ptr;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
+
+const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+const MAX_JSON_DEPTH: usize = 32;
+const MAX_JSON_STRING_BYTES: usize = 64 * 1024;
+const MAX_JSON_ARRAY_ITEMS: usize = 1024;
+const MAX_JSON_OBJECT_KEYS: usize = 256;
+const MAX_CONVERSATIONS: usize = 10_000;
+const MAX_MESSAGES: usize = 100_000;
+const MAX_MEMORY_ITEMS: usize = 50_000;
+const MAX_LOCAL_TOOL_STATES: usize = 10_000;
+const MAX_PEER_GRANT_METADATA: usize = 50_000;
+const MAX_LOCAL_AUDIT: usize = 100_000;
 
 const SQLITE_OK: c_int = 0;
 const SQLITE_ROW: c_int = 100;
@@ -88,7 +101,12 @@ struct LocalDataState {
     profile_id: Option<String>,
     local_node_id: Option<String>,
     schema_version: Option<u32>,
-    transactions: HashMap<String, SqliteConnection>,
+    active_transaction: Option<ActiveTransaction>,
+}
+
+struct ActiveTransaction {
+    tx_id: String,
+    conn: SqliteConnection,
 }
 
 #[derive(Deserialize)]
@@ -106,6 +124,10 @@ pub(crate) struct LocalDataTransactionRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct LocalDataTransactionBeginRequest {}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct LocalDataRepositoryRequest {
     tx_id: Option<String>,
     operation: LocalDataRepositoryOperation,
@@ -115,6 +137,54 @@ pub(crate) struct LocalDataRepositoryRequest {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LocalDataImportRequest {
     document: Value,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalDataExportDocument {
+    version: u32,
+    source_backend: String,
+    schema_version: u32,
+    profile_id: String,
+    local_node_id: String,
+    exported_at_ms: i64,
+    encryption_envelope_versions: Vec<u32>,
+    record_counts: LocalDataRecordCounts,
+    collection_hashes: LocalDataCollectionHashes,
+    records: LocalDataRecordCollections,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalDataRecordCounts {
+    conversations: usize,
+    messages: usize,
+    memory_items: usize,
+    local_tool_states: usize,
+    peer_grant_metadata: usize,
+    local_audit: usize,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalDataCollectionHashes {
+    conversations: String,
+    messages: String,
+    memory_items: String,
+    local_tool_states: String,
+    peer_grant_metadata: String,
+    local_audit: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalDataRecordCollections {
+    conversations: Vec<ConversationRecord>,
+    messages: Vec<ConversationMessageRecord>,
+    memory_items: Vec<LightweightMemoryRecord>,
+    local_tool_states: Vec<LocalToolStateRecord>,
+    peer_grant_metadata: Vec<PeerGrantMetadataRecord>,
+    local_audit: Vec<LocalAuditRecord>,
 }
 
 #[derive(Deserialize)]
@@ -166,8 +236,9 @@ enum LocalDataRepositoryOperation {
     },
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct ConversationRecord {
     id: String,
     profile_id: String,
@@ -178,8 +249,9 @@ struct ConversationRecord {
     archived_at_ms: Option<i64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct ConversationMessageRecord {
     id: String,
     conversation_id: String,
@@ -191,8 +263,9 @@ struct ConversationMessageRecord {
     created_at_ms: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct LightweightMemoryRecord {
     id: String,
     profile_id: String,
@@ -206,8 +279,9 @@ struct LightweightMemoryRecord {
     expires_at_ms: Option<i64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct LocalToolStateRecord {
     profile_id: String,
     local_node_id: String,
@@ -220,8 +294,9 @@ struct LocalToolStateRecord {
     updated_at_ms: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct PeerGrantMetadataRecord {
     grant_id: String,
     profile_id: String,
@@ -235,8 +310,9 @@ struct PeerGrantMetadataRecord {
     revoked_at_ms: Option<i64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 struct LocalAuditRecord {
     id: String,
     profile_id: String,
@@ -494,7 +570,9 @@ pub(crate) async fn aurora_local_data_close(
         .inner
         .lock()
         .map_err(|_| local_data_error("local data state lock failed"))?;
-    state.transactions.clear();
+    if let Some(active) = state.active_transaction.take() {
+        let _ = active.conn.exec("ROLLBACK;");
+    }
     state.profile_id = None;
     state.local_node_id = None;
     state.schema_version = None;
@@ -505,20 +583,25 @@ pub(crate) async fn aurora_local_data_close(
 pub(crate) async fn aurora_local_data_transaction_begin(
     app: AppHandle,
     state: State<'_, LocalDataCommandState>,
-    request: LocalDataTransactionRequest,
+    request: LocalDataTransactionBeginRequest,
 ) -> Result<Value, AuroraCommandError> {
     let mut state = state
         .inner
         .lock()
         .map_err(|_| local_data_error("local data state lock failed"))?;
     ensure_open_state(&state)?;
-    if state.transactions.contains_key(&request.tx_id) {
-        return Err(local_data_error("transaction already exists"));
+    let _ = request;
+    if state.active_transaction.is_some() {
+        return Err(transaction_scope_error("nested_transaction"));
     }
     let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
     conn.exec("BEGIN IMMEDIATE;")?;
-    state.transactions.insert(request.tx_id.clone(), conn);
-    Ok(json!({ "txId": request.tx_id, "begun": true }))
+    let tx_id = new_transaction_id()?;
+    state.active_transaction = Some(ActiveTransaction {
+        tx_id: tx_id.clone(),
+        conn,
+    });
+    Ok(json!({ "txId": tx_id, "begun": true }))
 }
 
 #[tauri::command]
@@ -530,11 +613,8 @@ pub(crate) async fn aurora_local_data_transaction_commit(
         .inner
         .lock()
         .map_err(|_| local_data_error("local data state lock failed"))?;
-    let conn = state
-        .transactions
-        .remove(&request.tx_id)
-        .ok_or_else(|| local_data_error("transaction not found"))?;
-    conn.exec("COMMIT;")?;
+    let active = take_active_transaction(&mut state, &request.tx_id)?;
+    active.conn.exec("COMMIT;")?;
     Ok(json!({ "txId": request.tx_id, "committed": true }))
 }
 
@@ -547,9 +627,8 @@ pub(crate) async fn aurora_local_data_transaction_rollback(
         .inner
         .lock()
         .map_err(|_| local_data_error("local data state lock failed"))?;
-    if let Some(conn) = state.transactions.remove(&request.tx_id) {
-        let _ = conn.exec("ROLLBACK;");
-    }
+    let active = take_active_transaction(&mut state, &request.tx_id)?;
+    let _ = active.conn.exec("ROLLBACK;");
     Ok(json!({ "txId": request.tx_id, "rolledBack": true }))
 }
 
@@ -565,13 +644,23 @@ pub(crate) async fn aurora_local_data_repository_operation(
         .map_err(|_| local_data_error("local data state lock failed"))?;
     let (profile_id, local_node_id) = ensure_open_state(&state_guard)?;
     if let Some(tx_id) = request.tx_id {
-        let conn = state_guard
-            .transactions
-            .get(&tx_id)
-            .ok_or_else(|| local_data_error("transaction not found"))?;
-        return run_repository_operation(conn, &profile_id, &local_node_id, request.operation);
+        let active = state_guard
+            .active_transaction
+            .as_ref()
+            .ok_or_else(|| transaction_scope_error("transaction_not_found"))?;
+        if active.tx_id != tx_id {
+            return Err(transaction_scope_error("forged_transaction"));
+        }
+        return run_repository_operation(
+            &active.conn,
+            &profile_id,
+            &local_node_id,
+            request.operation,
+        );
     }
-    drop(state_guard);
+    if state_guard.active_transaction.is_some() {
+        return Err(transaction_scope_error("transaction_active"));
+    }
     let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
     run_repository_operation(&conn, &profile_id, &local_node_id, request.operation)
 }
@@ -618,29 +707,20 @@ pub(crate) async fn aurora_local_data_import_v1(
         .lock()
         .map_err(|_| local_data_error("local data state lock failed"))?;
     let (profile_id, local_node_id) = ensure_open_state(&state)?;
-    drop(state);
-
-    let document_profile = request
-        .document
-        .get("profileId")
-        .and_then(Value::as_str)
-        .ok_or_else(|| local_data_error("import profileId missing"))?;
-    let document_node = request
-        .document
-        .get("localNodeId")
-        .and_then(Value::as_str)
-        .ok_or_else(|| local_data_error("import localNodeId missing"))?;
-    if document_profile != profile_id || document_node != local_node_id {
-        return Err(local_data_error("identity_mismatch"));
+    let schema_version = state.schema_version.unwrap_or(0);
+    if state.active_transaction.is_some() {
+        return Err(transaction_scope_error("transaction_active"));
     }
-    let records = request
-        .document
-        .get("records")
-        .cloned()
-        .ok_or_else(|| local_data_error("import records missing"))?;
+    drop(state);
+    let document = validate_import_document(
+        request.document,
+        &profile_id,
+        &local_node_id,
+        schema_version,
+    )?;
     let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
     conn.exec("BEGIN IMMEDIATE;")?;
-    let result = import_records(&conn, &profile_id, &local_node_id, records);
+    let result = import_records(&conn, &profile_id, &local_node_id, &document);
     match result {
         Ok(response) => {
             conn.exec("COMMIT;")?;
@@ -661,6 +741,7 @@ fn run_repository_operation(
 ) -> Result<Value, AuroraCommandError> {
     match operation {
         LocalDataRepositoryOperation::ConversationsUpsertConversation { record } => {
+            validate_conversation_record(&record)?;
             ensure_scope(
                 profile_id,
                 local_node_id,
@@ -684,6 +765,7 @@ fn run_repository_operation(
             Ok(Value::Null)
         }
         LocalDataRepositoryOperation::ConversationsAppendMessage { record } => {
+            validate_message_record(&record, profile_id, local_node_id)?;
             let rows = conn.query(
                 "SELECT id FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1",
                 &[json!(record.conversation_id), json!(profile_id), json!(local_node_id)],
@@ -747,6 +829,7 @@ fn run_repository_operation(
             )?.into_iter().map(message_from_row).collect::<Result<Vec<_>, _>>()?))
         }
         LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record } => {
+            validate_memory_record(&record)?;
             ensure_scope(
                 profile_id,
                 local_node_id,
@@ -794,6 +877,7 @@ fn run_repository_operation(
             ))
         }
         LocalDataRepositoryOperation::LocalToolsUpsertLocalToolState { record } => {
+            validate_tool_record(&record)?;
             ensure_scope(
                 profile_id,
                 local_node_id,
@@ -826,6 +910,7 @@ fn run_repository_operation(
             )?.into_iter().map(tool_from_row).collect::<Result<Vec<_>, _>>()?))
         }
         LocalDataRepositoryOperation::PeerGrantsUpsertPeerGrant { record } => {
+            validate_grant_record(&record)?;
             ensure_scope(
                 profile_id,
                 local_node_id,
@@ -858,6 +943,7 @@ fn run_repository_operation(
             )?.into_iter().map(grant_from_row).collect::<Result<Vec<_>, _>>()?))
         }
         LocalDataRepositoryOperation::LocalAuditAppendAudit { record } => {
+            validate_audit_record(&record)?;
             ensure_scope(
                 profile_id,
                 local_node_id,
@@ -895,7 +981,7 @@ fn import_records(
     conn: &SqliteConnection,
     profile_id: &str,
     local_node_id: &str,
-    records: Value,
+    document: &LocalDataExportDocument,
 ) -> Result<Value, AuroraCommandError> {
     conn.execute(
         "DELETE FROM aurora_local_audit WHERE profile_id = ? AND local_node_id = ?",
@@ -918,64 +1004,64 @@ fn import_records(
         &[json!(profile_id), json!(local_node_id)],
     )?;
 
-    for record in records_array(&records, "conversations")? {
-        let record: ConversationRecord = serde_json::from_value(record.clone())
-            .map_err(|error| local_data_error(error.to_string()))?;
+    for record in &document.records.conversations {
         run_repository_operation(
             conn,
             profile_id,
             local_node_id,
-            LocalDataRepositoryOperation::ConversationsUpsertConversation { record },
+            LocalDataRepositoryOperation::ConversationsUpsertConversation {
+                record: record.clone(),
+            },
         )?;
     }
-    for record in records_array(&records, "messages")? {
-        let record: ConversationMessageRecord = serde_json::from_value(record.clone())
-            .map_err(|error| local_data_error(error.to_string()))?;
+    for record in &document.records.messages {
         run_repository_operation(
             conn,
             profile_id,
             local_node_id,
-            LocalDataRepositoryOperation::ConversationsAppendMessage { record },
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: record.clone(),
+            },
         )?;
     }
-    for record in records_array(&records, "memoryItems")? {
-        let record: LightweightMemoryRecord = serde_json::from_value(record.clone())
-            .map_err(|error| local_data_error(error.to_string()))?;
+    for record in &document.records.memory_items {
         run_repository_operation(
             conn,
             profile_id,
             local_node_id,
-            LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record },
+            LocalDataRepositoryOperation::MemoryUpsertMemoryItem {
+                record: record.clone(),
+            },
         )?;
     }
-    for record in records_array(&records, "localToolStates")? {
-        let record: LocalToolStateRecord = serde_json::from_value(record.clone())
-            .map_err(|error| local_data_error(error.to_string()))?;
+    for record in &document.records.local_tool_states {
         run_repository_operation(
             conn,
             profile_id,
             local_node_id,
-            LocalDataRepositoryOperation::LocalToolsUpsertLocalToolState { record },
+            LocalDataRepositoryOperation::LocalToolsUpsertLocalToolState {
+                record: record.clone(),
+            },
         )?;
     }
-    for record in records_array(&records, "peerGrantMetadata")? {
-        let record: PeerGrantMetadataRecord = serde_json::from_value(record.clone())
-            .map_err(|error| local_data_error(error.to_string()))?;
+    for record in &document.records.peer_grant_metadata {
         run_repository_operation(
             conn,
             profile_id,
             local_node_id,
-            LocalDataRepositoryOperation::PeerGrantsUpsertPeerGrant { record },
+            LocalDataRepositoryOperation::PeerGrantsUpsertPeerGrant {
+                record: record.clone(),
+            },
         )?;
     }
-    for record in records_array(&records, "localAudit")? {
-        let record: LocalAuditRecord = serde_json::from_value(record.clone())
-            .map_err(|error| local_data_error(error.to_string()))?;
+    for record in &document.records.local_audit {
         run_repository_operation(
             conn,
             profile_id,
             local_node_id,
-            LocalDataRepositoryOperation::LocalAuditAppendAudit { record },
+            LocalDataRepositoryOperation::LocalAuditAppendAudit {
+                record: record.clone(),
+            },
         )?;
     }
 
@@ -1157,6 +1243,38 @@ fn ensure_open_state(state: &LocalDataState) -> Result<(String, String), AuroraC
     Ok((profile_id, local_node_id))
 }
 
+fn take_active_transaction(
+    state: &mut LocalDataState,
+    tx_id: &str,
+) -> Result<ActiveTransaction, AuroraCommandError> {
+    let active = state
+        .active_transaction
+        .take()
+        .ok_or_else(|| transaction_scope_error("transaction_not_found"))?;
+    if active.tx_id != tx_id {
+        state.active_transaction = Some(active);
+        return Err(transaction_scope_error("forged_transaction"));
+    }
+    Ok(active)
+}
+
+fn new_transaction_id() -> Result<String, AuroraCommandError> {
+    let mut bytes = [0_u8; 16];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|error| local_data_error(format!("transaction entropy failed: {error}")))?;
+    Ok(format!(
+        "tx-{}",
+        bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    ))
+}
+
+fn transaction_scope_error(reason: &str) -> AuroraCommandError {
+    local_data_error(format!("transaction.scope:{reason}"))
+}
+
 fn ensure_scope(
     expected_profile: &str,
     expected_node: &str,
@@ -1167,6 +1285,609 @@ fn ensure_scope(
         return Err(local_data_error("identity_mismatch"));
     }
     Ok(())
+}
+
+fn validate_import_document(
+    value: Value,
+    profile_id: &str,
+    local_node_id: &str,
+    current_schema_version: u32,
+) -> Result<LocalDataExportDocument, AuroraCommandError> {
+    validate_json_safety(&value, 0)?;
+    let document: LocalDataExportDocument =
+        serde_json::from_value(value).map_err(|error| local_data_error(error.to_string()))?;
+    if document.version != 1 {
+        return Err(local_data_error("invalid import version"));
+    }
+    if !matches!(
+        document.source_backend.as_str(),
+        "sqlite-wasm-opfs" | "sqlite-tauri" | "indexeddb" | "memory"
+    ) {
+        return Err(local_data_error("invalid import sourceBackend"));
+    }
+    validate_safe_int(document.exported_at_ms, "exportedAtMs")?;
+    validate_id(&document.profile_id, "profileId")?;
+    validate_id(&document.local_node_id, "localNodeId")?;
+    ensure_scope(
+        profile_id,
+        local_node_id,
+        &document.profile_id,
+        &document.local_node_id,
+    )?;
+    if document.schema_version > current_schema_version {
+        return Err(local_data_error("future_schema"));
+    }
+    if document.encryption_envelope_versions.as_slice() != [1] {
+        return Err(local_data_error("invalid envelope versions"));
+    }
+    validate_collection_sizes(&document.records)?;
+    validate_record_counts(&document)?;
+    validate_records(&document.records, profile_id, local_node_id)?;
+    validate_collection_hashes(&document)?;
+    Ok(document)
+}
+
+fn validate_records(
+    records: &LocalDataRecordCollections,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    let conversation_ids = require_unique(
+        records
+            .conversations
+            .iter()
+            .map(|record| record.id.as_str()),
+        "duplicate_conversation_id",
+    )?;
+    let _message_ids = require_unique(
+        records.messages.iter().map(|record| record.id.as_str()),
+        "duplicate_message_id",
+    )?;
+    let _memory_ids = require_unique(
+        records.memory_items.iter().map(|record| record.id.as_str()),
+        "duplicate_memory_id",
+    )?;
+    let _grant_ids = require_unique(
+        records
+            .peer_grant_metadata
+            .iter()
+            .map(|record| record.grant_id.as_str()),
+        "duplicate_grant_id",
+    )?;
+    let _audit_ids = require_unique(
+        records.local_audit.iter().map(|record| record.id.as_str()),
+        "duplicate_audit_id",
+    )?;
+    let _tool_keys = require_unique(
+        records.local_tool_states.iter().map(|record| {
+            format!(
+                "{}\0{}\0{}",
+                record.profile_id, record.local_node_id, record.tool_contract_id
+            )
+        }),
+        "duplicate_tool_state",
+    )?;
+
+    for record in &records.conversations {
+        validate_conversation_record(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+    }
+    for record in &records.memory_items {
+        validate_memory_record(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+    }
+    for record in &records.local_tool_states {
+        validate_tool_record(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+    }
+    for record in &records.peer_grant_metadata {
+        validate_grant_record(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+    }
+    for record in &records.local_audit {
+        validate_audit_record(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+    }
+
+    let mut message_sequences = HashSet::new();
+    for record in &records.messages {
+        validate_message_record(record, profile_id, local_node_id)?;
+        if !conversation_ids.contains(&record.conversation_id) {
+            return Err(local_data_error("message_conversation_missing"));
+        }
+        if !message_sequences.insert(format!("{}\0{}", record.conversation_id, record.sequence)) {
+            return Err(local_data_error("duplicate_message_sequence"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_conversation_record(record: &ConversationRecord) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "conversation.id")?;
+    validate_id(&record.profile_id, "conversation.profileId")?;
+    validate_id(&record.local_node_id, "conversation.localNodeId")?;
+    validate_safe_int(record.created_at_ms, "conversation.createdAtMs")?;
+    validate_safe_int(record.updated_at_ms, "conversation.updatedAtMs")?;
+    if record.updated_at_ms < record.created_at_ms {
+        return Err(local_data_error(
+            "conversation updatedAtMs before createdAtMs",
+        ));
+    }
+    validate_optional_safe_int(record.archived_at_ms, "conversation.archivedAtMs")?;
+    validate_optional_envelope(
+        record.title_envelope.as_ref(),
+        &record.profile_id,
+        &record.local_node_id,
+        "conversation.titleEnvelope",
+    )
+}
+
+fn validate_message_record(
+    record: &ConversationMessageRecord,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "message.id")?;
+    validate_id(&record.conversation_id, "message.conversationId")?;
+    validate_safe_int(record.sequence, "message.sequence")?;
+    validate_safe_int(record.created_at_ms, "message.createdAtMs")?;
+    if !matches!(
+        record.role.as_str(),
+        "system" | "user" | "assistant" | "tool"
+    ) {
+        return Err(local_data_error("invalid message role"));
+    }
+    if !matches!(
+        record.status.as_str(),
+        "pending" | "complete" | "failed" | "cancelled"
+    ) {
+        return Err(local_data_error("invalid message status"));
+    }
+    validate_optional_envelope(
+        record.content_envelope.as_ref(),
+        profile_id,
+        local_node_id,
+        "message.contentEnvelope",
+    )?;
+    validate_optional_envelope(
+        record.tool_envelope.as_ref(),
+        profile_id,
+        local_node_id,
+        "message.toolEnvelope",
+    )
+}
+
+fn validate_memory_record(record: &LightweightMemoryRecord) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "memory.id")?;
+    validate_id(&record.profile_id, "memory.profileId")?;
+    validate_id(&record.local_node_id, "memory.localNodeId")?;
+    validate_id(&record.namespace, "memory.namespace")?;
+    validate_safe_int(record.created_at_ms, "memory.createdAtMs")?;
+    validate_safe_int(record.updated_at_ms, "memory.updatedAtMs")?;
+    if record.updated_at_ms < record.created_at_ms {
+        return Err(local_data_error("memory updatedAtMs before createdAtMs"));
+    }
+    validate_optional_safe_int(record.expires_at_ms, "memory.expiresAtMs")?;
+    validate_optional_text(record.source_type.as_deref(), 256, "memory.sourceType")?;
+    validate_optional_text(record.source_id.as_deref(), 256, "memory.sourceId")?;
+    validate_envelope(
+        &record.payload_envelope,
+        &record.profile_id,
+        &record.local_node_id,
+        "memory.payloadEnvelope",
+    )
+}
+
+fn validate_tool_record(record: &LocalToolStateRecord) -> Result<(), AuroraCommandError> {
+    validate_id(&record.profile_id, "tool.profileId")?;
+    validate_id(&record.local_node_id, "tool.localNodeId")?;
+    validate_id(&record.tool_contract_id, "tool.toolContractId")?;
+    validate_hash(&record.descriptor_hash, "tool.descriptorHash")?;
+    validate_safe_int(record.revision, "tool.revision")?;
+    validate_safe_int(record.updated_at_ms, "tool.updatedAtMs")?;
+    validate_json_object(&record.descriptor_json, "tool.descriptorJson")?;
+    validate_optional_envelope(
+        record.settings_envelope.as_ref(),
+        &record.profile_id,
+        &record.local_node_id,
+        "tool.settingsEnvelope",
+    )
+}
+
+fn validate_grant_record(record: &PeerGrantMetadataRecord) -> Result<(), AuroraCommandError> {
+    validate_id(&record.grant_id, "grant.grantId")?;
+    validate_id(&record.profile_id, "grant.profileId")?;
+    validate_id(&record.local_node_id, "grant.localNodeId")?;
+    validate_id(&record.claimant_peer_id, "grant.claimantPeerId")?;
+    validate_id(&record.token_id, "grant.tokenId")?;
+    validate_safe_int(record.revision, "grant.revision")?;
+    validate_safe_int(record.created_at_ms, "grant.createdAtMs")?;
+    validate_optional_safe_int(record.expires_at_ms, "grant.expiresAtMs")?;
+    validate_optional_safe_int(record.revoked_at_ms, "grant.revokedAtMs")?;
+    validate_envelope(
+        &record.scope_envelope,
+        &record.profile_id,
+        &record.local_node_id,
+        "grant.scopeEnvelope",
+    )
+}
+
+fn validate_audit_record(record: &LocalAuditRecord) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "audit.id")?;
+    validate_id(&record.profile_id, "audit.profileId")?;
+    validate_id(&record.local_node_id, "audit.localNodeId")?;
+    validate_id(&record.action, "audit.action")?;
+    validate_id(&record.decision, "audit.decision")?;
+    validate_id(&record.result_status, "audit.resultStatus")?;
+    validate_safe_int(record.created_at_ms, "audit.createdAtMs")?;
+    validate_optional_text(record.peer_id.as_deref(), 256, "audit.peerId")?;
+    validate_optional_text(
+        record.connection_epoch.as_deref(),
+        256,
+        "audit.connectionEpoch",
+    )?;
+    validate_optional_text(record.method_id.as_deref(), 256, "audit.methodId")?;
+    validate_optional_text(
+        record.tool_contract_id.as_deref(),
+        256,
+        "audit.toolContractId",
+    )?;
+    validate_optional_text(record.correlation_id.as_deref(), 256, "audit.correlationId")?;
+    validate_json_object(&record.redacted_detail_json, "audit.redactedDetailJson")
+}
+
+fn validate_record_counts(document: &LocalDataExportDocument) -> Result<(), AuroraCommandError> {
+    let counts = &document.record_counts;
+    if counts.conversations != document.records.conversations.len()
+        || counts.messages != document.records.messages.len()
+        || counts.memory_items != document.records.memory_items.len()
+        || counts.local_tool_states != document.records.local_tool_states.len()
+        || counts.peer_grant_metadata != document.records.peer_grant_metadata.len()
+        || counts.local_audit != document.records.local_audit.len()
+    {
+        return Err(local_data_error("record_count_mismatch"));
+    }
+    Ok(())
+}
+
+fn validate_collection_hashes(
+    document: &LocalDataExportDocument,
+) -> Result<(), AuroraCommandError> {
+    validate_hash(
+        &document.collection_hashes.conversations,
+        "hash.conversations",
+    )?;
+    validate_hash(&document.collection_hashes.messages, "hash.messages")?;
+    validate_hash(&document.collection_hashes.memory_items, "hash.memoryItems")?;
+    validate_hash(
+        &document.collection_hashes.local_tool_states,
+        "hash.localToolStates",
+    )?;
+    validate_hash(
+        &document.collection_hashes.peer_grant_metadata,
+        "hash.peerGrantMetadata",
+    )?;
+    validate_hash(&document.collection_hashes.local_audit, "hash.localAudit")?;
+    let records = serde_json::to_value(&document.records)
+        .map_err(|error| local_data_error(error.to_string()))?;
+    let hashes = collection_hashes(&records)?;
+    if hashes
+        != json!({
+            "conversations": document.collection_hashes.conversations,
+            "messages": document.collection_hashes.messages,
+            "memoryItems": document.collection_hashes.memory_items,
+            "localToolStates": document.collection_hashes.local_tool_states,
+            "peerGrantMetadata": document.collection_hashes.peer_grant_metadata,
+            "localAudit": document.collection_hashes.local_audit,
+        })
+    {
+        return Err(local_data_error("collection_hash_mismatch"));
+    }
+    Ok(())
+}
+
+fn validate_collection_sizes(
+    records: &LocalDataRecordCollections,
+) -> Result<(), AuroraCommandError> {
+    if records.conversations.len() > MAX_CONVERSATIONS
+        || records.messages.len() > MAX_MESSAGES
+        || records.memory_items.len() > MAX_MEMORY_ITEMS
+        || records.local_tool_states.len() > MAX_LOCAL_TOOL_STATES
+        || records.peer_grant_metadata.len() > MAX_PEER_GRANT_METADATA
+        || records.local_audit.len() > MAX_LOCAL_AUDIT
+    {
+        return Err(local_data_error("collection_size_limit"));
+    }
+    Ok(())
+}
+
+fn validate_optional_envelope(
+    value: Option<&Value>,
+    profile_id: &str,
+    local_node_id: &str,
+    context: &str,
+) -> Result<(), AuroraCommandError> {
+    if let Some(value) = value {
+        validate_envelope(value, profile_id, local_node_id, context)?;
+    }
+    Ok(())
+}
+
+fn validate_envelope(
+    value: &Value,
+    profile_id: &str,
+    local_node_id: &str,
+    context: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_json_safety(value, 0)?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| local_data_error(format!("{context} must be an envelope object")))?;
+    let expected = [
+        "version",
+        "algorithm",
+        "keyId",
+        "nonceB64Url",
+        "ciphertextAndTagB64Url",
+        "createdAtMs",
+    ];
+    if object.len() != expected.len() || expected.iter().any(|key| !object.contains_key(*key)) {
+        return Err(local_data_error(format!(
+            "{context} has invalid envelope shape"
+        )));
+    }
+    if object.get("version").and_then(Value::as_i64) != Some(1) {
+        return Err(local_data_error(format!("{context} has invalid version")));
+    }
+    if object.get("algorithm").and_then(Value::as_str) != Some("AES-GCM-256") {
+        return Err(local_data_error(format!("{context} has invalid algorithm")));
+    }
+    let key_id = object
+        .get("keyId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| local_data_error(format!("{context} keyId missing")))?;
+    validate_envelope_key_id(key_id, profile_id, local_node_id, context)?;
+    let nonce = object
+        .get("nonceB64Url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| local_data_error(format!("{context} nonce missing")))?;
+    if decode_canonical_base64url(nonce)?.len() != 12 {
+        return Err(local_data_error(format!("{context} nonce length invalid")));
+    }
+    let ciphertext = object
+        .get("ciphertextAndTagB64Url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| local_data_error(format!("{context} ciphertext missing")))?;
+    if decode_canonical_base64url(ciphertext)?.len() < 16 {
+        return Err(local_data_error(format!("{context} tag length invalid")));
+    }
+    validate_safe_int(
+        object
+            .get("createdAtMs")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| local_data_error(format!("{context} createdAtMs missing")))?,
+        context,
+    )
+}
+
+fn validate_envelope_key_id(
+    value: &str,
+    profile_id: &str,
+    local_node_id: &str,
+    context: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_optional_text(Some(value), 256, context)?;
+    let prefix = format!(
+        "aurora.local-data-envelope.v1.{profile_id}.{local_node_id}.local-structured-data.k"
+    );
+    let Some(version) = value.strip_prefix(&prefix) else {
+        return Err(local_data_error(format!("{context} keyId scope mismatch")));
+    };
+    if version.is_empty() || !version.chars().all(|ch| ch.is_ascii_digit()) {
+        return Err(local_data_error(format!("{context} keyId version invalid")));
+    }
+    Ok(())
+}
+
+fn validate_json_object(value: &Value, context: &str) -> Result<(), AuroraCommandError> {
+    if !value.is_object() {
+        return Err(local_data_error(format!("{context} must be an object")));
+    }
+    validate_json_value(value, 0)
+}
+
+fn validate_json_safety(value: &Value, depth: usize) -> Result<(), AuroraCommandError> {
+    if depth > MAX_JSON_DEPTH {
+        return Err(local_data_error("json max depth"));
+    }
+    match value {
+        Value::Null | Value::Bool(_) => Ok(()),
+        Value::Number(number) => validate_json_number(number, "json"),
+        Value::String(value) => {
+            if value.len() > 2 * 1024 * 1024 {
+                return Err(local_data_error("json string too large"));
+            }
+            Ok(())
+        }
+        Value::Array(values) => {
+            if values.len() > MAX_MESSAGES {
+                return Err(local_data_error("json array too large"));
+            }
+            for value in values {
+                validate_json_safety(value, depth + 1)?;
+            }
+            Ok(())
+        }
+        Value::Object(object) => {
+            if object.len() > 2048 {
+                return Err(local_data_error("json object too large"));
+            }
+            for (key, value) in object {
+                if key.is_empty() || key.len() > 256 {
+                    return Err(local_data_error("json key invalid"));
+                }
+                validate_json_safety(value, depth + 1)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_json_value(value: &Value, depth: usize) -> Result<(), AuroraCommandError> {
+    if depth > MAX_JSON_DEPTH {
+        return Err(local_data_error("json value max depth"));
+    }
+    match value {
+        Value::Null | Value::Bool(_) => Ok(()),
+        Value::Number(number) => validate_json_number(number, "json value"),
+        Value::String(value) => {
+            if value.len() > MAX_JSON_STRING_BYTES {
+                return Err(local_data_error("json value string too large"));
+            }
+            Ok(())
+        }
+        Value::Array(values) => {
+            if values.len() > MAX_JSON_ARRAY_ITEMS {
+                return Err(local_data_error("json value array too large"));
+            }
+            for value in values {
+                validate_json_value(value, depth + 1)?;
+            }
+            Ok(())
+        }
+        Value::Object(object) => {
+            if object.len() > MAX_JSON_OBJECT_KEYS {
+                return Err(local_data_error("json value object too large"));
+            }
+            for (key, value) in object {
+                if key.is_empty() || key.len() > 256 {
+                    return Err(local_data_error("json value key invalid"));
+                }
+                validate_json_value(value, depth + 1)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_id(value: &str, context: &str) -> Result<(), AuroraCommandError> {
+    if value.is_empty()
+        || value.len() > 256
+        || !value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | ':' | '@' | '/' | '-'))
+    {
+        return Err(local_data_error(format!("{context} invalid")));
+    }
+    Ok(())
+}
+
+fn validate_hash(value: &str, context: &str) -> Result<(), AuroraCommandError> {
+    if value.len() != 64
+        || !value
+            .chars()
+            .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase())
+    {
+        return Err(local_data_error(format!("{context} invalid")));
+    }
+    Ok(())
+}
+
+fn validate_safe_int(value: i64, context: &str) -> Result<(), AuroraCommandError> {
+    if !(0..=MAX_SAFE_INTEGER).contains(&value) {
+        return Err(local_data_error(format!("{context} invalid integer")));
+    }
+    Ok(())
+}
+
+fn validate_json_number(value: &Number, context: &str) -> Result<(), AuroraCommandError> {
+    if let Some(value) = value.as_i64() {
+        return validate_safe_int(value, context);
+    }
+    if let Some(value) = value.as_u64() {
+        if value <= MAX_SAFE_INTEGER as u64 {
+            return Ok(());
+        }
+    }
+    Err(local_data_error(format!("{context} unsafe number")))
+}
+
+fn validate_optional_safe_int(value: Option<i64>, context: &str) -> Result<(), AuroraCommandError> {
+    if let Some(value) = value {
+        validate_safe_int(value, context)?;
+    }
+    Ok(())
+}
+
+fn validate_optional_text(
+    value: Option<&str>,
+    max_len: usize,
+    context: &str,
+) -> Result<(), AuroraCommandError> {
+    if let Some(value) = value {
+        if value.len() > max_len {
+            return Err(local_data_error(format!("{context} too long")));
+        }
+    }
+    Ok(())
+}
+
+fn decode_canonical_base64url(value: &str) -> Result<Vec<u8>, AuroraCommandError> {
+    if value.is_empty()
+        || value.contains('=')
+        || !value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return Err(local_data_error("invalid base64url"));
+    }
+    let decoded = URL_SAFE_NO_PAD
+        .decode(value)
+        .map_err(|_| local_data_error("invalid base64url"))?;
+    if URL_SAFE_NO_PAD.encode(&decoded) != value {
+        return Err(local_data_error("noncanonical base64url"));
+    }
+    Ok(decoded)
+}
+
+fn require_unique<I, S>(values: I, reason: &str) -> Result<HashSet<String>, AuroraCommandError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut seen = HashSet::new();
+    for value in values {
+        let value = value.as_ref().to_string();
+        if !seen.insert(value) {
+            return Err(local_data_error(reason));
+        }
+    }
+    Ok(seen)
 }
 
 fn conversation_from_row(row: Value) -> Result<Value, AuroraCommandError> {
@@ -1358,13 +2079,6 @@ fn canonicalize(value: &Value) -> Value {
     }
 }
 
-fn records_array<'a>(records: &'a Value, key: &str) -> Result<&'a Vec<Value>, AuroraCommandError> {
-    records
-        .get(key)
-        .and_then(Value::as_array)
-        .ok_or_else(|| local_data_error(format!("import {key} records missing")))
-}
-
 fn records_array_len(records: &Value, key: &str) -> usize {
     records
         .get(key)
@@ -1449,4 +2163,271 @@ fn now_ms() -> u64 {
 
 fn local_data_error(message: impl Into<String>) -> AuroraCommandError {
     AuroraCommandError::LocalData(message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn import_validation_rejects_hostile_documents_before_db_changes() {
+        let conn = test_connection();
+        apply_generated_migrations(&conn).unwrap();
+        ensure_identity(&conn, "node-1").unwrap();
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsUpsertConversation {
+                record: test_conversation("existing-conversation"),
+            },
+        )
+        .unwrap();
+        let before = export_records(&conn, "profile-1", "node-1").unwrap();
+
+        let mut cases = Vec::new();
+        let mut tampered_counts = valid_import_document_value();
+        tampered_counts["recordCounts"]["conversations"] = json!(99);
+        cases.push(tampered_counts);
+
+        let mut tampered_hash = valid_import_document_value();
+        tampered_hash["collectionHashes"]["conversations"] = json!("0".repeat(64));
+        cases.push(tampered_hash);
+
+        let mut future_schema = valid_import_document_value();
+        future_schema["schemaVersion"] =
+            json!(generated::local_data_migrations::LOCAL_DATA_LATEST_VERSION + 1);
+        cases.push(future_schema);
+
+        let mut duplicate = valid_import_document_value();
+        let first = duplicate["records"]["conversations"][0].clone();
+        duplicate["records"]["conversations"]
+            .as_array_mut()
+            .unwrap()
+            .push(first);
+        refresh_counts_and_hashes(&mut duplicate);
+        cases.push(duplicate);
+
+        let mut bad_fk = valid_import_document_value();
+        bad_fk["records"]["messages"][0]["conversationId"] = json!("missing-conversation");
+        refresh_counts_and_hashes(&mut bad_fk);
+        cases.push(bad_fk);
+
+        let mut bad_identity = valid_import_document_value();
+        bad_identity["records"]["memoryItems"][0]["profileId"] = json!("profile-2");
+        refresh_counts_and_hashes(&mut bad_identity);
+        cases.push(bad_identity);
+
+        let mut bad_envelope = valid_import_document_value();
+        bad_envelope["records"]["memoryItems"][0]["payloadEnvelope"]["nonceB64Url"] =
+            json!("not_canonical");
+        refresh_counts_and_hashes(&mut bad_envelope);
+        cases.push(bad_envelope);
+
+        for case in cases {
+            assert!(validate_import_document(case, "profile-1", "node-1", 3).is_err());
+            assert_eq!(
+                export_records(&conn, "profile-1", "node-1").unwrap(),
+                before
+            );
+        }
+    }
+
+    #[test]
+    fn direct_repository_writes_validate_records_before_persisting() {
+        let conn = test_connection();
+        apply_generated_migrations(&conn).unwrap();
+        ensure_identity(&conn, "node-1").unwrap();
+        let before = export_records(&conn, "profile-1", "node-1").unwrap();
+        let mut bad_memory = test_memory("memory-1");
+        bad_memory.payload_envelope["ciphertextAndTagB64Url"] = json!("short");
+        assert!(run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record: bad_memory },
+        )
+        .is_err());
+        assert_eq!(
+            export_records(&conn, "profile-1", "node-1").unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn transaction_ids_are_server_owned_and_forgery_checked() {
+        let first = new_transaction_id().unwrap();
+        let second = new_transaction_id().unwrap();
+        assert_ne!(first, second);
+        assert!(first.starts_with("tx-"));
+        assert_eq!(first.len(), 35);
+
+        let conn = test_connection();
+        let mut state = LocalDataState {
+            profile_id: Some("profile-1".to_string()),
+            local_node_id: Some("node-1".to_string()),
+            schema_version: Some(3),
+            active_transaction: Some(ActiveTransaction {
+                tx_id: first.clone(),
+                conn,
+            }),
+        };
+        assert!(
+            take_active_transaction(&mut state, "tx-00000000000000000000000000000000").is_err()
+        );
+        assert!(state.active_transaction.is_some());
+        assert!(take_active_transaction(&mut state, &first).is_ok());
+        assert!(state.active_transaction.is_none());
+    }
+
+    fn test_connection() -> SqliteConnection {
+        let path = std::env::temp_dir().join(format!(
+            "aurora-local-data-native-test-{}-{}.db",
+            std::process::id(),
+            TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_file(&path);
+        SqliteConnection::open(path).unwrap()
+    }
+
+    fn valid_import_document_value() -> Value {
+        let records = json!({
+            "conversations": [test_conversation_value("conversation-1")],
+            "messages": [test_message_value("message-1", "conversation-1")],
+            "memoryItems": [test_memory_value("memory-1")],
+            "localToolStates": [test_tool_value()],
+            "peerGrantMetadata": [test_grant_value("grant-1")],
+            "localAudit": [test_audit_value("audit-1")]
+        });
+        let mut document = json!({
+            "version": 1,
+            "sourceBackend": "memory",
+            "schemaVersion": 3,
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "exportedAtMs": 10,
+            "encryptionEnvelopeVersions": [1],
+            "recordCounts": record_counts(&records),
+            "collectionHashes": collection_hashes(&records).unwrap(),
+            "records": records
+        });
+        refresh_counts_and_hashes(&mut document);
+        document
+    }
+
+    fn refresh_counts_and_hashes(document: &mut Value) {
+        let records = document["records"].clone();
+        document["recordCounts"] = record_counts(&records);
+        document["collectionHashes"] = collection_hashes(&records).unwrap();
+    }
+
+    fn test_conversation(id: &str) -> ConversationRecord {
+        serde_json::from_value(test_conversation_value(id)).unwrap()
+    }
+
+    fn test_memory(id: &str) -> LightweightMemoryRecord {
+        serde_json::from_value(test_memory_value(id)).unwrap()
+    }
+
+    fn test_conversation_value(id: &str) -> Value {
+        json!({
+            "id": id,
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "titleEnvelope": null,
+            "createdAtMs": 1,
+            "updatedAtMs": 2,
+            "archivedAtMs": null
+        })
+    }
+
+    fn test_message_value(id: &str, conversation_id: &str) -> Value {
+        json!({
+            "id": id,
+            "conversationId": conversation_id,
+            "sequence": 0,
+            "role": "user",
+            "contentEnvelope": null,
+            "toolEnvelope": null,
+            "status": "complete",
+            "createdAtMs": 3
+        })
+    }
+
+    fn test_memory_value(id: &str) -> Value {
+        json!({
+            "id": id,
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "namespace": "notes",
+            "payloadEnvelope": envelope_value(),
+            "sourceType": null,
+            "sourceId": null,
+            "createdAtMs": 4,
+            "updatedAtMs": 5,
+            "expiresAtMs": null
+        })
+    }
+
+    fn test_tool_value() -> Value {
+        json!({
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "toolContractId": "Tooling.Search",
+            "descriptorJson": { "id": "Tooling.Search" },
+            "descriptorHash": "a".repeat(64),
+            "enabled": true,
+            "settingsEnvelope": null,
+            "revision": 1,
+            "updatedAtMs": 6
+        })
+    }
+
+    fn test_grant_value(id: &str) -> Value {
+        json!({
+            "grantId": id,
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "claimantPeerId": "peer-1",
+            "tokenId": "token-1",
+            "scopeEnvelope": envelope_value(),
+            "revision": 1,
+            "createdAtMs": 7,
+            "expiresAtMs": null,
+            "revokedAtMs": null
+        })
+    }
+
+    fn test_audit_value(id: &str) -> Value {
+        json!({
+            "id": id,
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "peerId": null,
+            "action": "read",
+            "decision": "allow",
+            "resultStatus": "success",
+            "connectionEpoch": null,
+            "methodId": null,
+            "toolContractId": null,
+            "correlationId": null,
+            "redactedDetailJson": {},
+            "createdAtMs": 8
+        })
+    }
+
+    fn envelope_value() -> Value {
+        json!({
+            "version": 1,
+            "algorithm": "AES-GCM-256",
+            "keyId": "aurora.local-data-envelope.v1.profile-1.node-1.local-structured-data.k1",
+            "nonceB64Url": "MTIzNDU2Nzg5MDEy",
+            "ciphertextAndTagB64Url": "Y2lwaGVydGV4dC1hbmQtdGFn",
+            "createdAtMs": 9
+        })
+    }
 }

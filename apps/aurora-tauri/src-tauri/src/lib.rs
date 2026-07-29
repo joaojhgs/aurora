@@ -5546,6 +5546,9 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_deep_link::init());
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    // The SQL plugin remains registered for Tauri's managed database preload path.
+    // WebView SQL capabilities are not granted; generated schema catalogs may list
+    // plugin vocabulary, but src-tauri/capabilities is the permission grant source.
     let builder = builder.plugin(tauri_plugin_sql::Builder::default().build());
     builder
         .plugin(aurora_mobile_native_plugin())

@@ -313,6 +313,33 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['tauri:smoke:linux']).toContain('test:ci-regression-gates')
   })
 
+  it('treats generated SQL schema vocabulary as catalog metadata, not granted capability', () => {
+    const capabilities = JSON.parse(repoText('apps/aurora-tauri/src-tauri/gen/schemas/capabilities.json')) as Record<
+      string,
+      { permissions: string[] }
+    >
+    const desktopSchema = repoText('apps/aurora-tauri/src-tauri/gen/schemas/desktop-schema.json')
+    const aclManifests = repoText('apps/aurora-tauri/src-tauri/gen/schemas/acl-manifests.json')
+    const rustMain = repoText('apps/aurora-tauri/src-tauri/src/lib.rs')
+
+    expect(desktopSchema).toContain('"const": "sql:allow-select"')
+    expect(aclManifests).toContain('"sql"')
+    for (const [name, capability] of Object.entries(capabilities)) {
+      expect(
+        capability.permissions.filter((permission) => permission.startsWith('sql:')),
+        `${name} must not grant generic SQL WebView commands`,
+      ).toEqual([])
+      if (capability.permissions.includes('aurora-local-data-storage')) {
+        expect(
+          capability.permissions,
+          `${name} should grant only Aurora local-data commands for local data`,
+        ).toContain('aurora-local-data-envelope-crypto')
+      }
+    }
+    expect(rustMain).toContain('generated schema catalogs may list')
+    expect(rustMain).toContain('src-tauri/capabilities is the permission grant source')
+  })
+
 
   it('keeps python3-dev out of the desktop-thin matrix prerequisites', () => {
     const workflow = repoText('.github/workflows/tauri-desktop.yml')
