@@ -83,7 +83,7 @@ const documentIdSchema = { type: 'string', minLength: 1, maxLength: 256 } as con
 const platformSchema = { type: 'string', minLength: 1, maxLength: 64 } as const
 const capabilityIdSchema = { type: 'string', minLength: 1, maxLength: 160 } as const
 const deepLinkUrlSchema = { type: 'string', minLength: 1, maxLength: 2_048 } as const
-const SAFE_DEEP_LINK_PROTOCOLS = new Set(['aurora:', 'aurora-local:'])
+const SAFE_DEEP_LINK_PROTOCOLS = new Set(['https:', 'mailto:', 'tel:', 'aurora:', 'aurora-local:'])
 
 const okOutput = (key: string): JsonObject => ({
   type: 'object',

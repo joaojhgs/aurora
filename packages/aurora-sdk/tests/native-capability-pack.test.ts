@@ -135,7 +135,7 @@ describe('native capability local tool pack', () => {
     })
   })
 
-  it('accepts only safe Aurora deep links before calling the native handler', async () => {
+  it('accepts only SDK-safe deep-link protocols before calling the native handler', async () => {
     const calls: string[] = []
     const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
     registerNativeCapabilityTools({
@@ -157,27 +157,48 @@ describe('native capability local tool pack', () => {
     })
     const provider = providerFor(registry, policy)
 
-    const safeRequest = { tool_name: AURORA_NATIVE_TOOL_IDS.openDeepLink, arguments: { url: 'aurora://pair/invite?id=abc' } }
-    expect(await provider.executeTool({
-      ...safeRequest,
-      approval_token: await approvalForRequest(policy, registry, safeRequest, ['Tooling.ExecuteTool', 'Native.OpenDeepLink'])
-    }, context(['Tooling.ExecuteTool', 'Native.OpenDeepLink']))).toMatchObject({
-      ok: true,
-      status: 'success',
-      data: { opened: true }
-    })
+    for (const url of [
+      'https://aurora.example/invite?id=abc',
+      'mailto:support@example.test',
+      'tel:+15551234567',
+      'aurora://pair/invite?id=abc',
+      'aurora-local://pair/invite?id=abc'
+    ]) {
+      const safeRequest = { tool_name: AURORA_NATIVE_TOOL_IDS.openDeepLink, arguments: { url } }
+      expect(await provider.executeTool({
+        ...safeRequest,
+        approval_token: await approvalForRequest(policy, registry, safeRequest, ['Tooling.ExecuteTool', 'Native.OpenDeepLink'])
+      }, context(['Tooling.ExecuteTool', 'Native.OpenDeepLink']))).toMatchObject({
+        ok: true,
+        status: 'success',
+        data: { opened: true }
+      })
+    }
 
-    const unsafeRequest = { tool_name: AURORA_NATIVE_TOOL_IDS.openDeepLink, arguments: { url: 'file:///etc/passwd' } }
-    expect(await provider.executeTool({
-      ...unsafeRequest,
-      approval_token: await approvalForRequest(policy, registry, unsafeRequest, ['Tooling.ExecuteTool', 'Native.OpenDeepLink'])
-    }, context(['Tooling.ExecuteTool', 'Native.OpenDeepLink']))).toMatchObject({
-      ok: false,
-      status: 'failed',
-      error_code: 'handler_failed',
-      error: 'Tool execution failed'
-    })
-    expect(calls).toEqual(['aurora://pair/invite?id=abc'])
+    for (const url of [
+      'file:///etc/passwd',
+      'data:text/plain,secret',
+      'javascript:alert(1)',
+      'random-app://open'
+    ]) {
+      const unsafeRequest = { tool_name: AURORA_NATIVE_TOOL_IDS.openDeepLink, arguments: { url } }
+      expect(await provider.executeTool({
+        ...unsafeRequest,
+        approval_token: await approvalForRequest(policy, registry, unsafeRequest, ['Tooling.ExecuteTool', 'Native.OpenDeepLink'])
+      }, context(['Tooling.ExecuteTool', 'Native.OpenDeepLink']))).toMatchObject({
+        ok: false,
+        status: 'failed',
+        error_code: 'handler_failed',
+        error: 'Tool execution failed'
+      })
+    }
+    expect(calls).toEqual([
+      'https://aurora.example/invite?id=abc',
+      'mailto:support@example.test',
+      'tel:+15551234567',
+      'aurora://pair/invite?id=abc',
+      'aurora-local://pair/invite?id=abc'
+    ])
   })
 
   it('does not define raw shell/process tools or unrestricted path arguments', () => {
