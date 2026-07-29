@@ -57,16 +57,20 @@ const DENY_ALL_PORTS: LocalToolPolicyPorts = Object.freeze({
   hasResourceGrant: () => false
 })
 
+const MIN_CURSOR_SECRET_BYTES = 16
+
 export function createMeshNodeLocalToolProvider(
   options: MeshNodeLocalToolProviderOptions
 ): MeshNodeLocalToolProviderComposition {
   assertRegistryOwnedByPeer(options.registry, options.localPeerId)
   const registeredTools = options.registry.list()
+  const localToolRequiredPermissions = sortedUnique(registeredTools.flatMap((tool) => tool.descriptor.requiredPermissions))
   const enabled = options.nodeMode === 'mesh-node'
     && options.providerEnabled !== false
     && options.authorityResolver !== undefined
     && options.exportDecision !== undefined
     && options.audit !== undefined
+    && isUsableCursorSecret(options.cursorSecret)
     && registeredTools.length > 0
   const serviceInstanceId = providerServiceInstanceId(options.localPeerId)
   const policy = new LocalToolExecutionPolicy({
@@ -92,7 +96,7 @@ export function createMeshNodeLocalToolProvider(
     ...(options.nowSeconds ? { nowSeconds: options.nowSeconds } : {})
   })
   const peerHostRegistry = enabled
-    ? createToolingPeerHostRegistry(handlers)
+    ? createToolingPeerHostRegistry({ ...handlers, localToolRequiredPermissions })
     : new PeerHostContractRegistry()
   const peerHost = new WebRtcPeerHost({
     localPeerId: options.localPeerId,
@@ -117,6 +121,15 @@ export function createMeshNodeLocalToolProvider(
     registeredToolIds: registeredTools.map((tool) => tool.descriptor.toolContractId),
     enabled
   }
+}
+
+function isUsableCursorSecret(secret: Uint8Array | string | undefined): boolean {
+  if (typeof secret === 'string') return secret.length >= MIN_CURSOR_SECRET_BYTES
+  return secret instanceof Uint8Array && secret.byteLength >= MIN_CURSOR_SECRET_BYTES
+}
+
+function sortedUnique(values: readonly string[]): string[] {
+  return [...new Set(values)].sort()
 }
 
 function assertRegistryOwnedByPeer(registry: LocalToolRegistry, localPeerId: string): void {

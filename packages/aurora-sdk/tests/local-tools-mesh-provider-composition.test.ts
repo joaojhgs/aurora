@@ -127,7 +127,7 @@ describe('mesh-node local Tooling provider composition', () => {
       nodeName: 'Provider',
       registry: registryWithEcho(),
       authorityResolver: resolver,
-      cursorSecret: 'cursor-secret',
+      cursorSecret: 'cursor-secret-1234',
       clock: () => 1_000,
       randomId: () => 'epoch-1'
     }
@@ -160,7 +160,7 @@ describe('mesh-node local Tooling provider composition', () => {
         authorityResolver: resolver,
         exportDecision: { isShared: () => true },
         audit: () => undefined,
-        cursorSecret: 'cursor-secret',
+        cursorSecret: 'cursor-secret-1234',
         clock: () => 1_000,
         randomId: () => 'epoch-1'
       })
@@ -189,7 +189,7 @@ describe('mesh-node local Tooling provider composition', () => {
       authorityResolver: resolver,
       exportDecision: { isShared: () => true },
       audit: (record) => { audits.push(record) },
-      cursorSecret: 'cursor-secret',
+      cursorSecret: 'cursor-secret-1234',
       clock: () => 1_000,
       randomId: () => 'epoch-1'
     })
@@ -233,7 +233,53 @@ describe('mesh-node local Tooling provider composition', () => {
       status: 'success',
       data: { ok: true, caller: 'peer-a' }
     })
-    expect(JSON.stringify({ result, audits })).not.toContain('cursor-secret')
+    expect(JSON.stringify({ result, audits })).not.toContain('cursor-secret-1234')
+  })
+
+  it('executes granted local tools through the real peer-host call path', async () => {
+    const grantRepository = new MemoryPeerGrantRepository()
+    await grantRepository.upsertGrant(grant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository
+    })
+    const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry: registryWithEcho(),
+      authorityResolver: resolver,
+      exportDecision: { isShared: () => true },
+      audit: () => undefined,
+      cursorSecret: 'cursor-secret-1234',
+      clock: () => 1_000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: unknown[] = []
+    composition.peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const manifest = await composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)
+    expect(composition.peerHost.markManifestAcknowledged(ackFromManifest(manifest))).toBe(true)
+
+    await composition.peerHost.handleCall({
+      type: 'call',
+      id: 'execute-1',
+      method: 'Tooling.ExecuteTool',
+      params: {
+        tool_name: 'echo',
+        arguments: { text: 'hello' }
+      },
+      identity: { caller_peer_id: 'forged-peer', effective_perms: [] }
+    }, 'peer-a', authenticatedPeerContext)
+
+    expect(sent.at(-1)).toMatchObject({
+      type: 'result',
+      id: 'execute-1',
+      result: {
+        ok: true,
+        status: 'success',
+        data: { ok: true, caller: 'peer-a' }
+      }
+    })
   })
 
   it('fails closed to structured denial when authority grant resolution throws', async () => {
@@ -249,7 +295,7 @@ describe('mesh-node local Tooling provider composition', () => {
       authorityResolver: resolver,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
-      cursorSecret: 'cursor-secret',
+      cursorSecret: 'cursor-secret-1234',
       clock: () => 1_000,
       randomId: () => 'epoch-1'
     })
@@ -286,7 +332,7 @@ describe('mesh-node local Tooling provider composition', () => {
       authorityResolver: resolver,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
-      cursorSecret: 'cursor-secret',
+      cursorSecret: 'cursor-secret-1234',
       clock: () => 1_000,
       randomId: () => 'epoch-1'
     })
@@ -327,7 +373,7 @@ describe('mesh-node local Tooling provider composition', () => {
       authorityResolver: resolver,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
-      cursorSecret: 'cursor-secret',
+      cursorSecret: 'cursor-secret-1234',
       clock: () => 1_000,
       randomId: () => 'epoch-1'
     })
@@ -342,6 +388,33 @@ describe('mesh-node local Tooling provider composition', () => {
       'Tooling.ExecuteTool'
     ])
     expect(JSON.stringify(NATIVE_TOOL_DESCRIPTORS)).not.toMatch(/shell|process|filesystem|filePath|path/u)
+  })
+
+  it('does not enable production provider methods without a pagination cursor secret', async () => {
+    const grantRepository = new MemoryPeerGrantRepository()
+    await grantRepository.upsertGrant(grant())
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new MemoryInboundCredentialVerifierStore(),
+      grantRepository
+    })
+
+    for (const cursorSecret of [undefined, 'short'] as const) {
+      const composition = createMeshNodeLocalToolProvider({
+        nodeMode: 'mesh-node',
+        localPeerId: 'provider',
+        nodeName: 'Provider',
+        registry: registryWithEcho(),
+        authorityResolver: resolver,
+        exportDecision: { isShared: () => true },
+        audit: () => undefined,
+        ...(cursorSecret !== undefined ? { cursorSecret } : {}),
+        clock: () => 1_000,
+        randomId: () => 'epoch-1'
+      })
+
+      expect(composition.enabled).toBe(false)
+      expect(composition.peerHostRegistry.list()).toEqual([])
+    }
   })
 
   it('rejects registries created for a different provider identity', () => {
@@ -430,6 +503,29 @@ function callContext(patch: Partial<PeerHostCallContext> = {}): PeerHostCallCont
     signal: new AbortController().signal,
     receivedAtMs: 1_000,
     deadlineAtMs: 31_000,
+    ...patch
+  }
+}
+
+function ackFromManifest(manifest: Record<string, unknown>, patch: Record<string, unknown> = {}): Record<string, unknown> {
+  const evidence = manifest.recipient_projection_evidence as Record<string, unknown>
+  const hasSharedServices = Array.isArray(manifest.shared_services) && manifest.shared_services.length > 0
+  return {
+    type: 'manifest_ack',
+    compatible_services: hasSharedServices ? ['Tooling'] : [],
+    incompatible_services: [],
+    unused_services: [],
+    active_protocol: 'projection-v1',
+    active_version: 'v1',
+    active_tier: 'projection',
+    protocol_revision: 'v1',
+    registry_revision: evidence.registry_revision,
+    export_policy_revision: evidence.policy_revision,
+    auth_grant_revision: evidence.auth_grant_revision,
+    projection_digest: evidence.projection_digest,
+    services: hasSharedServices
+      ? [{ service_id: 'Tooling', service_label: '', status: 'compatible', reason_codes: [], reason: '' }]
+      : [],
     ...patch
   }
 }
