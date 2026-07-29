@@ -27,6 +27,7 @@ export interface ReconnectTransportAttestation {
 export interface AuthenticatedPeerContext {
   readonly selector: PeerRelationshipSelector
   readonly transport: ReconnectTransportAttestation
+  readonly connectionEpoch?: string
   readonly credentialRevision: number
   readonly authenticatedAtMs: number
 }
@@ -69,6 +70,7 @@ export type PeerAuthorityDecisionReason =
   | 'credential_expired'
   | 'credential_revoked'
   | 'grant_not_found'
+  | 'grant_store_unreadable'
   | 'grant_expired'
   | 'grant_revoked'
   | 'method_not_granted'
@@ -111,6 +113,7 @@ export interface LocalPeerAuditRecord {
   readonly capabilityPackId?: string
   readonly resourceScope?: string
   readonly correlationId?: string
+  readonly connectionEpoch?: string
   readonly createdAtMs: number
   readonly redacted: true
   readonly redactedFields: readonly string[]
@@ -333,7 +336,7 @@ export class PeerAuthorityResolver {
       selector: context.selector,
       nowMs: request.nowMs
     })
-    await this.auditSink.record(auditRecord('grant.check', context.selector, decision.allowed ? 'accepted' : 'rejected', request.nowMs, decision.reasonCode, request.methodId))
+    await this.auditSink.record(auditRecord('grant.check', context.selector, decision.allowed ? 'accepted' : 'rejected', request.nowMs, decision.reasonCode, request.methodId, context.connectionEpoch))
     return decision
   }
 
@@ -699,7 +702,8 @@ function auditRecord(
   decision: LocalPeerAuditRecord['decision'],
   createdAtMs: number,
   reasonCode?: string,
-  methodId?: string
+  methodId?: string,
+  connectionEpoch?: string
 ): LocalPeerAuditRecord {
   const record: LocalPeerAuditRecord = {
     action,
@@ -711,6 +715,7 @@ function auditRecord(
   }
   if (reasonCode !== undefined) Object.assign(record, { reasonCode })
   if (methodId !== undefined) Object.assign(record, { methodId })
+  if (connectionEpoch !== undefined) Object.assign(record, { connectionEpoch })
   return record
 }
 

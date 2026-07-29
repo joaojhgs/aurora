@@ -186,9 +186,10 @@ export class WebRtcPeerHost {
 
   async buildManifest(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
     if (remotePeerId !== undefined) this.lastRecipientPeerId = remotePeerId
-    if (authenticatedPeerContext !== undefined) this.lastAuthenticatedPeerContext = authenticatedPeerContext
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
+    if (epochContext !== undefined) this.lastAuthenticatedPeerContext = epochContext
     const nowMs = Math.floor(this.options.clock())
-    const authority = await this.manifestAuthoritySnapshot(remotePeerId, authenticatedPeerContext, nowMs)
+    const authority = await this.manifestAuthoritySnapshot(remotePeerId, epochContext, nowMs)
     const grantedMethodIds = new Set(authority.grantedMethodIds)
     const registryMethods = this.options.registry.list()
     const registryDigest = digest({ services: [manifestService(registryMethods.map((method) => manifestMethod(method)).sort((left, right) => String(left.bus_topic).localeCompare(String(right.bus_topic))))] })
@@ -260,6 +261,7 @@ export class WebRtcPeerHost {
 
   async handleCall(frame: CallFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
     const method = this.options.registry.get(frame.method)
     if (!method) {
       await sender.sendFrame(errorFrame(frame.id, 404, 'method not found', 'method_not_found'))
@@ -275,7 +277,7 @@ export class WebRtcPeerHost {
       await sender.sendFrame(errorFrame(frame.id, 413, 'request too large', 'request_too_large'))
       return
     }
-    const identity = identityFromAuthority(authenticatedPeerContext, frame.identity, remotePeerId)
+    const identity = identityFromAuthority(epochContext, frame.identity, remotePeerId)
     const nowMs = Math.floor(this.options.clock())
     const deadlineAtMs = nowMs + (method.timeoutMs ?? this.options.defaultTimeoutMs)
     const authorizeRequest = {
@@ -285,15 +287,15 @@ export class WebRtcPeerHost {
       identity,
       nowMs
     }
-    if (authenticatedPeerContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext })
+    if (epochContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext: epochContext })
     const decision = await this.options.authorizationStore.authorize(authorizeRequest)
     if (!decision.allowed) {
       await sender.sendFrame(errorFrame(frame.id, 403, 'not authorized', decision.reasonCode ?? 'not_authorized'))
       return
     }
-    const authorizedIdentity = identityFromAuthority(authenticatedPeerContext, frame.identity, remotePeerId, decision, this.effectivePermissionsForGrant(decision))
+    const authorizedIdentity = identityFromAuthority(epochContext, frame.identity, remotePeerId, decision, this.effectivePermissionsForGrant(decision))
     if (method.methodType === 'stream') {
-      await this.handleStreamCall(method, frame, remotePeerId, authorizedIdentity, nowMs, deadlineAtMs, authenticatedPeerContext)
+      await this.handleStreamCall(method, frame, remotePeerId, authorizedIdentity, nowMs, deadlineAtMs, epochContext)
       return
     }
     const abort = new AbortController()
@@ -308,7 +310,7 @@ export class WebRtcPeerHost {
     }, Math.max(1, deadlineAtMs - nowMs))
     this.active.set(frame.id, active)
     try {
-      const context = this.callContext(frame, method, remotePeerId, authorizedIdentity, abort.signal, nowMs, deadlineAtMs, authenticatedPeerContext)
+      const context = this.callContext(frame, method, remotePeerId, authorizedIdentity, abort.signal, nowMs, deadlineAtMs, epochContext)
       const result = await this.options.registry.dispatch(method, frame.params ?? {}, context)
       if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'result', id: frame.id, result })
     } catch (error) {
@@ -320,6 +322,7 @@ export class WebRtcPeerHost {
 
   async handleSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
     if (!this.acceptingInbound || !this.lease.isActive()) {
       await sender.sendFrame({
         type: 'subscribe_rejected',
@@ -335,7 +338,7 @@ export class WebRtcPeerHost {
       return
     }
     const nowMs = Math.floor(this.options.clock())
-    const identity = identityFromAuthority(authenticatedPeerContext, undefined, remotePeerId)
+    const identity = identityFromAuthority(epochContext, undefined, remotePeerId)
     for (const event of events as PeerHostEventDescriptor[]) {
       const authorizeRequest = {
         remotePeerId,
@@ -344,7 +347,7 @@ export class WebRtcPeerHost {
         identity,
         nowMs
       }
-      if (authenticatedPeerContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext })
+      if (epochContext !== undefined) Object.assign(authorizeRequest, { authenticatedPeerContext: epochContext })
       const decision = await this.options.authorizationStore.authorize(authorizeRequest)
       if (!decision.allowed) {
         await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: decision.reasonCode ?? 'not_authorized', rejected_topics: frame.topics })
@@ -379,7 +382,7 @@ export class WebRtcPeerHost {
           signal: abort.signal,
           receivedAtMs: nowMs
         }
-        if (authenticatedPeerContext !== undefined) Object.assign(subscribeContext, { authenticatedPeerContext })
+        if (epochContext !== undefined) Object.assign(subscribeContext, { authenticatedPeerContext: epochContext })
         const handle = await this.options.registry.openSubscription(event, subscribeContext)
         if (handle) handles.push(handle)
       }
@@ -440,6 +443,12 @@ export class WebRtcPeerHost {
       authGrantRevision: 0,
       authGrantState: 'unknown'
     })
+  }
+
+  private authenticatedContextForCurrentEpoch(context: AuthenticatedPeerContext | undefined): AuthenticatedPeerContext | undefined {
+    if (context === undefined) return undefined
+    if (context.connectionEpoch === this.connectionEpoch) return context
+    return { ...context, selector: { ...context.selector }, transport: { ...context.transport }, connectionEpoch: this.connectionEpoch }
   }
 
   private effectivePermissionsForGrant(decision: PeerHostAuthorizationDecision): string[] {

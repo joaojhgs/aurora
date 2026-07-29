@@ -591,6 +591,7 @@ describe('WebRtcPeerHost', () => {
         authGrantRevision: 7
       })
       expect(context.authenticatedPeerContext?.selector).toMatchObject({ tokenId: 'token-1', claimantPeerId: 'peer-a' })
+      expect(context.authenticatedPeerContext?.connectionEpoch).toBe('epoch-1')
       return { count: 0, tools: [] }
     })
     const { peerHost, sent } = await host(handler, new PeerAuthorityHostAuthorizationStore(resolver), authenticatedContext())

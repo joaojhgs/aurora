@@ -29,6 +29,7 @@ const LOCAL_DATA_KEY_PURPOSE = 'local-structured-data'
 
 const safeIdSchema = z.string().min(1).max(MAX_ID_LENGTH).regex(/^[A-Za-z0-9_.:@/-]+$/u)
 const roomNameSchema = z.string().min(1).max(MAX_ROOM_LENGTH)
+const connectionEpochSchema = z.string().min(1).max(MAX_ID_LENGTH)
 const epochMsSchema = z.number().int().safe().nonnegative().refine((value) => !Object.is(value, -0))
 const selectorSchema = z.object({
   tokenId: safeIdSchema,
@@ -109,6 +110,8 @@ export class SecureInboundCredentialVerifierStore implements InboundCredentialVe
 
   async upsertVerifier(verifier: LocalPeerCredentialVerifierV1): Promise<void> {
     const parsed = parseVerifier(verifier)
+    const existing = await this.readVerifier(selectorFrom(parsed))
+    if (existing !== undefined && parsed.credentialRevision <= existing.credentialRevision) return
     await this.storage.setOpaqueSecret(this.keyFor(selectorFrom(parsed)), JSON.stringify(parsed))
   }
 
@@ -170,6 +173,8 @@ export class EncryptedPeerGrantRepository implements PeerGrantRepository {
 
   async upsertGrant(grant: LocalPeerGrantV1): Promise<void> {
     const parsed = parseGrant(grant)
+    const existing = await this.readGrantMetadata(parsed.grantId)
+    if (existing !== undefined && parsed.grantRevision <= existing.revision) return
     const envelope = await this.crypto.encrypt(
       LOCAL_DATA_KEY_PURPOSE,
       encodeJson(parsed),
@@ -192,7 +197,9 @@ export class EncryptedPeerGrantRepository implements PeerGrantRepository {
   async resolveGrant(request: PeerGrantResolutionRequest): Promise<PeerAuthorityDecision> {
     parseSelector(request.selector)
     assertEpochMs(request.nowMs, 'nowMs')
-    const candidates = (await this.readMatchingGrants(request.selector)).sort(compareGrants)
+    const result = await this.readMatchingGrants(request.selector)
+    if (result.unreadable) return { allowed: false, reasonCode: 'grant_store_unreadable' }
+    const candidates = result.grants.sort(compareGrants)
     let blockedReason: PeerAuthorityDecisionReason = 'grant_not_found'
     for (const grant of candidates) {
       if (grant.revokedAtMs !== undefined && grant.revokedAtMs <= request.nowMs) {
@@ -213,7 +220,9 @@ export class EncryptedPeerGrantRepository implements PeerGrantRepository {
   async listRecipientGrants(selector: PeerRelationshipSelector, nowMs: number): Promise<readonly LocalPeerGrantV1[]> {
     parseSelector(selector)
     assertEpochMs(nowMs, 'nowMs')
-    return (await this.readMatchingGrants(selector))
+    const result = await this.readMatchingGrants(selector)
+    if (result.unreadable) return []
+    return result.grants
       .filter((grant) => (grant.revokedAtMs === undefined || grant.revokedAtMs > nowMs) && (grant.expiresAtMs === undefined || grant.expiresAtMs > nowMs))
       .sort(compareGrants)
       .map(cloneGrant)
@@ -223,7 +232,9 @@ export class EncryptedPeerGrantRepository implements PeerGrantRepository {
     parseSelector(selector)
     assertEpochMs(revokedAtMs, 'revokedAtMs')
     const revoked: LocalPeerGrantV1[] = []
-    for (const grant of await this.readMatchingGrants(selector)) {
+    const result = await this.readMatchingGrants(selector)
+    if (result.unreadable) return []
+    for (const grant of result.grants) {
       const next = parseGrant({
         ...grant,
         revokedAtMs,
@@ -235,9 +246,10 @@ export class EncryptedPeerGrantRepository implements PeerGrantRepository {
     return revoked.sort(compareGrants)
   }
 
-  private async readMatchingGrants(selector: PeerRelationshipSelector): Promise<LocalPeerGrantV1[]> {
+  private async readMatchingGrants(selector: PeerRelationshipSelector): Promise<{ grants: LocalPeerGrantV1[]; unreadable: boolean }> {
     const records = await this.metadataRepository.listPeerGrants()
     const grants: LocalPeerGrantV1[] = []
+    let unreadable = false
     for (const record of records) {
       if (record.profileId !== this.profileId || record.localNodeId !== this.localNodeId) continue
       if (record.claimantPeerId !== selector.claimantPeerId || record.tokenId !== selector.tokenId) continue
@@ -249,10 +261,17 @@ export class EncryptedPeerGrantRepository implements PeerGrantRepository {
         if (!selectorEquals(grant, selector)) continue
         grants.push(grant)
       } catch {
-        continue
+        unreadable = true
       }
     }
-    return grants
+    return { grants, unreadable }
+  }
+
+  private async readGrantMetadata(grantId: string) {
+    for (const record of await this.metadataRepository.listPeerGrants()) {
+      if (record.profileId === this.profileId && record.localNodeId === this.localNodeId && record.grantId === grantId) return record
+    }
+    return undefined
   }
 
   private aadForGrant(grantId: string): Uint8Array {
@@ -289,7 +308,7 @@ export class LocalDataPeerAuditSink implements PeerAuditSink {
       action: parseStorageIdentity(record.action, 'action'),
       decision: parseStorageIdentity(record.decision, 'decision'),
       resultStatus: record.decision === 'accepted' || record.decision === 'issued' ? 'complete' : record.decision,
-      connectionEpoch: null,
+      connectionEpoch: optionalConnectionEpoch(record.connectionEpoch),
       methodId: optionalBounded(record.methodId),
       toolContractId: optionalBounded(record.toolContractId),
       correlationId: optionalBounded(record.correlationId),
@@ -417,6 +436,11 @@ function encodeKeyPart(value: string): string {
 function optionalBounded(value: string | undefined): string | null {
   if (value === undefined) return null
   return value.slice(0, MAX_ID_LENGTH)
+}
+
+function optionalConnectionEpoch(value: string | undefined): string | null {
+  if (value === undefined) return null
+  return parseLocalDataBoundary(connectionEpochSchema, value, 'peer_authority.connectionepoch')
 }
 
 function redactedAuditDetails(record: LocalPeerAuditRecord): Record<string, LocalDataJsonValue> {

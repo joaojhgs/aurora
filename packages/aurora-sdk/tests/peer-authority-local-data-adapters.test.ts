@@ -7,10 +7,13 @@ import {
   MemoryLocalDataBackend
 } from '../src/local-data/index.js'
 import {
+  DenyAllInboundCredentialVerifierStore,
   EncryptedPeerGrantRepository,
   LocalDataPeerAuditSink,
+  PeerAuthorityResolver,
   SecureInboundCredentialVerifierStore,
   inboundVerifierSecretKey,
+  type AuthenticatedPeerContext,
   type InboundVerifierSecretStoragePort,
   type LocalPeerAuditRecord,
   type ProviderLocalPeerCredentialVerifierV1,
@@ -32,6 +35,18 @@ const otherSelector: PeerRelationshipSelector = {
 
 const profileId = 'profile-1'
 const localNodeId = 'node-1'
+
+const authenticatedContext: AuthenticatedPeerContext = {
+  selector,
+  transport: {
+    channelBinding: 'a'.repeat(64),
+    claimantSignalingPeerId: 'sig-claimant',
+    verifierSignalingPeerId: 'sig-verifier'
+  },
+  credentialRevision: 3,
+  authenticatedAtMs: 199,
+  connectionEpoch: 'epoch-auth'
+}
 
 function verifier(patch: Partial<ProviderLocalPeerCredentialVerifierV1> = {}): ProviderLocalPeerCredentialVerifierV1 {
   return {
@@ -95,6 +110,25 @@ describe('local-data peer authority adapters', () => {
     await expect(store.getVerifier(selector, 1)).resolves.toBeUndefined()
   })
 
+  it('does not let stale or equal-revision verifier upserts resurrect revoked authority', async () => {
+    const storage = new RecordingSecretStorage()
+    const store = new SecureInboundCredentialVerifierStore({ storage })
+
+    await store.upsertVerifier(verifier({ credentialRevision: 2, revokedAtMs: 150 }))
+    await store.upsertVerifier(verifier({ credentialRevision: 1, tokenHashHex: 'b'.repeat(64) }))
+    await store.upsertVerifier(verifier({ credentialRevision: 2, tokenHashHex: 'c'.repeat(64) }))
+
+    await expect(store.getVerifier(selector, 151)).resolves.toBeUndefined()
+    expect(storage.values().join('\n')).toContain('"revokedAtMs":150')
+    expect(storage.values().join('\n')).not.toContain('"tokenHashHex":"c')
+
+    await store.upsertVerifier(verifier({ credentialRevision: 3, tokenHashHex: 'd'.repeat(64) }))
+    await expect(store.getVerifier(selector, 151)).resolves.toMatchObject({
+      credentialRevision: 3,
+      tokenHashHex: 'd'.repeat(64)
+    })
+  })
+
   it('stores full peer grants only inside encrypted envelopes and resolves by decrypted selector', async () => {
     const { session, repository, crypto } = await grantRepositoryFixture()
 
@@ -150,6 +184,26 @@ describe('local-data peer authority adapters', () => {
     await expect(repository.listRecipientGrants(selector, 261)).resolves.toEqual([])
   })
 
+  it('does not let stale or equal-revision grant upserts resurrect revoked authority', async () => {
+    const { repository } = await grantRepositoryFixture()
+
+    await repository.upsertGrant(grant({ grantRevision: 1 }))
+    await repository.revokeGrants(selector, 260)
+    await repository.upsertGrant(grant({ grantRevision: 1, allowedMethodIds: ['Tooling.GetTools'] }))
+    await repository.upsertGrant(grant({ grantRevision: 2, allowedMethodIds: ['Tooling.GetTools'] }))
+
+    await expect(repository.resolveGrant({ selector, methodId: 'Tooling.GetTools', nowMs: 261 })).resolves.toEqual({
+      allowed: false,
+      reasonCode: 'grant_revoked'
+    })
+
+    await repository.upsertGrant(grant({ grantRevision: 3, allowedMethodIds: ['Tooling.GetTools'] }))
+    await expect(repository.resolveGrant({ selector, methodId: 'Tooling.GetTools', nowMs: 261 })).resolves.toMatchObject({
+      allowed: true,
+      grant: { grantId: 'grant-1', grantRevision: 3 }
+    })
+  })
+
   it('fails closed when grant envelope AAD or ciphertext is wrong', async () => {
     const { session, repository, crypto } = await grantRepositoryFixture()
     await repository.upsertGrant(grant())
@@ -175,8 +229,53 @@ describe('local-data peer authority adapters', () => {
     })
     await expect(repository.resolveGrant({ selector, methodId: 'Tooling.GetTools', nowMs: 201 })).resolves.toEqual({
       allowed: false,
-      reasonCode: 'grant_not_found'
+      reasonCode: 'grant_store_unreadable'
     })
+  })
+
+  it('reports matched corrupt grant envelopes as unreadable with redacted durable audit details', async () => {
+    const { session, repository } = await grantRepositoryFixture()
+    await repository.upsertGrant(grant())
+    const [record] = await session.peerGrants.listPeerGrants()
+    await session.peerGrants.upsertPeerGrant({
+      ...record!,
+      scopeEnvelope: {
+        ...record!.scopeEnvelope,
+        ciphertextAndTagB64Url: 'tamperedtamperedtampered'
+      }
+    })
+    const auditSink = new LocalDataPeerAuditSink({
+      auditRepository: session.localAudit,
+      profileId,
+      localNodeId,
+      randomId: () => 'audit-unreadable'
+    })
+    const resolver = new PeerAuthorityResolver({
+      verifierStore: new DenyAllInboundCredentialVerifierStore(),
+      grantRepository: repository,
+      auditSink
+    })
+
+    await expect(resolver.resolveGrant(authenticatedContext, { methodId: 'Tooling.GetTools', nowMs: 201 })).resolves.toEqual({
+      allowed: false,
+      reasonCode: 'grant_store_unreadable'
+    })
+
+    await expect(session.localAudit.listAudit()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'audit-unreadable',
+        action: 'grant.check',
+        decision: 'rejected',
+        connectionEpoch: 'epoch-auth',
+        methodId: 'Tooling.GetTools',
+        redactedDetailJson: expect.objectContaining({
+          redacted: true,
+          secretsRedacted: true,
+          reasonCode: 'grant_store_unreadable'
+        })
+      })
+    ])
+    expect(JSON.stringify(await session.localAudit.listAudit())).not.toMatch(/peer-verifier|room-a|tokenHashHex|proofHex|bearer|tampered|[a-f0-9]{64}/u)
   })
 
   it('writes bounded redacted local audit records without verifier or bearer fields', async () => {
@@ -214,6 +313,7 @@ describe('local-data peer authority adapters', () => {
         action: 'credential.verify',
         decision: 'rejected',
         resultStatus: 'rejected',
+        connectionEpoch: null,
         methodId: 'Tooling.GetTools',
         toolContractId: 'aurora.local.native.share_text.v1',
         correlationId: 'corr-1',
