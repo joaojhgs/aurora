@@ -21,7 +21,7 @@ import { AssistantView } from '../src/assistant-view'
 import { SettingsPermissionsView } from '../src/settings-permissions-view'
 import { buildShellSnapshot, type AuroraShellSnapshot } from '../src/shell-data'
 
-type SurfaceId = 'assistant' | 'admin' | 'mobile-settings'
+type SurfaceId = 'assistant' | 'admin' | 'native-settings'
 type ViewportId = 'desktop' | 'tablet' | 'mobile'
 
 interface Viewport {
@@ -47,7 +47,7 @@ interface AccessibilityReportSurface {
 }
 
 const reportsDir = join(process.cwd(), 'reports', 'accessibility')
-const surfaceIds: SurfaceId[] = ['assistant', 'admin', 'mobile-settings']
+const surfaceIds: SurfaceId[] = ['assistant', 'admin', 'native-settings']
 const accessibilityResults: AccessibilityReportSurface[] = []
 let qaRenders: SurfaceRender[] = []
 
@@ -62,19 +62,19 @@ const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   // evidence-driven: thin shells no longer claim Desktop Local/admin status or
   // render a synthetic uptime value.
   assistant: {
-    desktop: '4a44e1a306f0',
-    tablet: 'a6d5101f66c2',
-    mobile: 'aa4f0ee6ad59'
+    desktop: '0eb3ae7445be',
+    tablet: '5a00ea9f08e4',
+    mobile: 'c66bd1b0c5d7'
   },
   admin: {
-    desktop: '947ae1a185af',
-    tablet: 'a36b8c71df45',
-    mobile: 'c8bfc8120962'
+    desktop: '1312f4f626ec',
+    tablet: 'df9b67a512c5',
+    mobile: 'e531fb1c08aa'
   },
-  'mobile-settings': {
-    desktop: '2d7903ca811a',
-    tablet: '510d5a1a77a8',
-    mobile: '4a8f463abd01'
+  'native-settings': {
+    desktop: '6d37e40dc56d',
+    tablet: '1e7fcfdb06a5',
+    mobile: 'e1698566be65'
   }
 }
 
@@ -130,12 +130,11 @@ describe('Accessibility, responsive, and visual regression suite', () => {
         hasPrimaryNav: surface.html.includes('aria-label="Primary navigation"'),
         hasMobileNav: surface.html.includes('aria-label="Mobile navigation"'),
         hasMain: /<main[^>]*id="content"/.test(surface.html),
-        hasStatusLanguage: /available-local|available-remote|privacy-blocked|degraded|denied|stale|unsupported/.test(text),
-        hasBackendStatus: /SDK|Aurora|Gateway|secrets protected|capability/.test(text)
+        hasStatusLanguage: /Ready|Review|Not ready|Needs consent|Needs confirmation|Degraded|Stale|Not needed|Protected|Unavailable|Unsupported/i.test(text),
+        hasBackendStatus: /Aurora|Gateway|Connected|Protected|Device|Routes|Features|Platform/i.test(text)
       }
-      // route-sheet.tsx's (frozen, unchanged) Route & Privacy technical-details drawer
-      // legitimately surfaces raw route.state labels like "available-local" in its
-      // diagnostic readout on every surface, including assistant.
+      // Keep this gate anchored in rendered product language rather than raw
+      // route or native diagnostic tokens.
       expect(shellChecks, `${surface.id}/${surface.viewport.id}`).toEqual({
         hasPrimaryNav: true,
         hasMobileNav: true,
@@ -189,15 +188,15 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     })
     const stateCoverage = coverageText(renders)
     expect(stateCoverage).toContain('Draft a short launch announcement')
-    expect(stateCoverage).toContain('privacy-blocked')
-    expect(stateCoverage).toContain('degraded')
-    expect(stateCoverage).toContain('unsupported')
-    expect(stateCoverage).toContain('AdminAction')
-    expect(stateCoverage).toContain('Native unsupported')
-    expect(stateCoverage).toContain('secrets protected')
+    expect(stateCoverage).toContain('Needs attention')
+    expect(stateCoverage).toContain('Degraded')
+    expect(stateCoverage).toContain('This device is offline')
+    expect(stateCoverage).toContain('Protected changes')
+    expect(stateCoverage).toContain('Device features')
+    expect(stateCoverage).toContain('Sensitive details stay hidden')
     expect(stateCoverage).toContain('aurora-prod-01')
-    expect(stateCoverage).toContain('AD admin Full access')
-    expect(stateCoverage).toContain('Local mode')
+    expect(stateCoverage).toContain('AD admin Administrator')
+    expect(stateCoverage).toContain('Local service')
     expect(stateCoverage).toContain('Healthy')
     expect(stateCoverage).toContain('v0.9.2')
     expect(stateCoverage).toContain('· connected')
@@ -209,7 +208,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
       command: 'pnpm --filter @aurora/ui test:accessibility',
       baselineType: 'normalized static markup fingerprint',
       fingerprints,
-      stateCoverage: ['loading', 'privacy-blocked', 'denied', 'degraded', 'unsupported', 'native not-ready']
+      stateCoverage: ['ready', 'needs-attention', 'needs-consent', 'degraded', 'offline', 'native settings']
     })
 
     for (const surface of renders) {
@@ -220,19 +219,19 @@ describe('Accessibility, responsive, and visual regression suite', () => {
 
   it('documents security and privacy negative cases in the gate output', async () => {
     const snapshot = await buildQaSnapshot()
-    const text = textContent(renderShell(snapshot, 'mobile-settings', viewports[2]!))
+    const text = textContent(renderShell(snapshot, 'native-settings', viewports[2]!))
 
-    expect(text.toLowerCase()).toContain('secrets protected')
-    expect(text).toContain('explicit selector failures remain hard failures')
-    expect(text).toContain('Platform surface')
+    expect(text).toContain('Sensitive details stay hidden')
+    expect(text).toContain('Review access, consent, or device selection')
+    expect(text).toContain('Platform')
     expect(text).not.toMatch(/api[_ -]?key|password|token value|credential hash/i)
 
     writeJsonReport('security-privacy-negative-cases.json', {
       command: 'pnpm --filter @aurora/ui test:accessibility',
       negativeCases: [
-        'no secret-like token values rendered in settings/mobile surface',
-        'fallback is not presented as success for explicit selector failures',
-        'native capabilities stay unsupported without SDK native manifest status',
+        'no secret-like token values rendered in settings/native surface',
+        'device selection failures are presented as user action, not success',
+        'native settings render product-safe device feature status',
         'admin-critical settings remain AdminAction-gated'
       ],
       owner: 'aurora-frontend-engineer',
@@ -246,7 +245,7 @@ async function renderQaSurfaces(): Promise<SurfaceRender[]> {
   return viewports.flatMap((viewport) => [
     { id: 'assistant' as const, viewport, html: renderShell(snapshot, 'assistant', viewport) },
     { id: 'admin' as const, viewport, html: renderShell(snapshot, 'admin', viewport) },
-    { id: 'mobile-settings' as const, viewport, html: renderShell(snapshot, 'mobile-settings', viewport) }
+    { id: 'native-settings' as const, viewport, html: renderShell(snapshot, 'native-settings', viewport) }
   ])
 }
 
@@ -258,7 +257,7 @@ async function buildQaSnapshot(): Promise<AuroraShellSnapshot> {
 
 function renderShell(snapshot: AuroraShellSnapshot, surface: SurfaceId, viewport: Viewport): string {
   const client = new Aurora({ transport: new MockAuroraTransport() })
-  const path = surface === 'assistant' ? '/assistant' : surface === 'admin' ? '/admin' : '/settings'
+  const path = surface === 'assistant' ? '/assistant' : surface === 'admin' ? '/admin' : '/settings/native'
   const content =
     surface === 'assistant' ? (
       <AssistantView client={client} route={route(snapshot, 'assistant')} storageKey={`accessibility-${viewport.id}`} />
@@ -273,7 +272,7 @@ function renderShell(snapshot: AuroraShellSnapshot, surface: SurfaceId, viewport
         transportKind="mock"
       />
     ) : (
-      <SettingsPermissionsView snapshot={snapshot} />
+      <SettingsPermissionsView snapshot={snapshot} surface="native" currentPath="/settings/native" />
     )
 
   return renderToStaticMarkup(

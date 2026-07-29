@@ -4452,6 +4452,7 @@ function isAllowedAdapterFile(repoRoot: string, file: string): boolean {
   return [
     'apps/aurora-web/app/aurora-client.ts',
     'apps/aurora-tauri/src/aurora-client.ts',
+    'apps/aurora-tauri/src/local-data/tauri-local-data-invoke.ts',
     'apps/aurora-tauri/src/eventstream-smoke.tsx'
   ].includes(rel)
 }
