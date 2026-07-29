@@ -93,6 +93,8 @@ export interface BrowserThinRuntimeConfig {
   createDemoClient?: () => AuroraClient
 }
 
+export type BrowserThinNodeRole = NonNullable<BrowserThinRuntimeConfig['nodeRole']>
+
 export interface BrowserWebThinRuntime {
   client: AuroraClient
   peer: BrowserWebRtcPeerController
@@ -239,7 +241,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ...(config.random ? { random: config.random } : {}),
       ...(config.scryptDeriver ? { scryptDeriver: config.scryptDeriver } : {}),
       ...(config.scryptWorkerFactory ? { scryptWorkerFactory: config.scryptWorkerFactory } : {}),
-      localProtocolCapabilities: localProtocolCapabilities(rolloutFlags),
+      localProtocolCapabilities: localProtocolCapabilities(rolloutFlags, nodeRole),
       appLayerE2eeAllowed: rolloutFlags.webrtc_app_layer_e2ee,
       ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
       ...(config.windowLocation ? { windowLocation: config.windowLocation } : {}),
@@ -711,12 +713,16 @@ export function normalizeAuroraWebRtcRolloutFlags(
   }
 }
 
-function localProtocolCapabilities(flags: AuroraWebRtcRolloutFlags): string[] {
-  return [
+export function localProtocolCapabilities(
+  flags: AuroraWebRtcRolloutFlags,
+  nodeRole: BrowserThinNodeRole = 'remote-console',
+): string[] {
+  const capabilities: string[] = [
     ...(flags.webrtc_fragmentation ? [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1] : []),
     ...(flags.webrtc_scoped_subscriptions ? [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1] : []),
-    CAP_CONSUMER_ONLY_V1,
   ]
+  if (nodeRole === 'remote-console') capabilities.push(CAP_CONSUMER_ONLY_V1)
+  return [...new Set(capabilities)]
 }
 
 export interface ParsedWebRtcInvite {

@@ -25,6 +25,8 @@ import {
   explainBrowserThinRuntime,
   getAuroraSurfaceProfile,
   hostedMixedContentWarning,
+  localProtocolCapabilities,
+  normalizeAuroraWebRtcRolloutFlags,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
   type ThinConnectionProfile,
@@ -249,6 +251,17 @@ describe('browser WebRTC thin-shell runtime', () => {
   })
 
   it('keeps WebRTC remote-console runtime consumer-only with no local provider capabilities', async () => {
+    const capabilities = localProtocolCapabilities(
+      normalizeAuroraWebRtcRolloutFlags(undefined),
+      'remote-console',
+    )
+    expect(capabilities).toEqual([
+      'fragmentation_v1',
+      'backpressure_v1',
+      'scoped_event_subscriptions_v1',
+      CAP_CONSUMER_ONLY_V1,
+    ])
+
     const runtime = createBrowserWebThinRuntime({
       createClient,
       createDemoClient,
@@ -264,6 +277,43 @@ describe('browser WebRTC thin-shell runtime', () => {
       CAP_CONSUMER_ONLY_V1,
     )
     await runtime.close()
+  })
+
+  it('omits consumer-only from mesh-node protocol capabilities while preserving provider-capable rollout order', () => {
+    const capabilities = localProtocolCapabilities(
+      normalizeAuroraWebRtcRolloutFlags(undefined),
+      'mesh-node',
+    )
+
+    expect(capabilities).toEqual([
+      'fragmentation_v1',
+      'backpressure_v1',
+      'scoped_event_subscriptions_v1',
+    ])
+    expect(capabilities).not.toContain(CAP_CONSUMER_ONLY_V1)
+    expect(new Set(capabilities).size).toBe(capabilities.length)
+  })
+
+  it('keeps rollout-gated mesh-node capabilities deduplicated and ordered', () => {
+    expect(localProtocolCapabilities(
+      normalizeAuroraWebRtcRolloutFlags({
+        webrtc_fragmentation: false,
+        webrtc_scoped_subscriptions: true,
+      }),
+      'mesh-node',
+    )).toEqual(['scoped_event_subscriptions_v1'])
+
+    expect(localProtocolCapabilities(
+      normalizeAuroraWebRtcRolloutFlags({
+        webrtc_fragmentation: true,
+        webrtc_scoped_subscriptions: false,
+      }),
+      'remote-console',
+    )).toEqual([
+      'fragmentation_v1',
+      'backpressure_v1',
+      CAP_CONSUMER_ONLY_V1,
+    ])
   })
 
   it('rolls WebRTC-preferred back to HTTP without consuming or rewriting peer credentials', async () => {
