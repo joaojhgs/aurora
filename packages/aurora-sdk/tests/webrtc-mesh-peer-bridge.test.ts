@@ -400,6 +400,56 @@ describe('WebRtcMeshPeerBridge', () => {
     bridge.close()
   })
 
+  it('closes provider epoch and clears stale authority when authenticated snapshot assertion fails', async () => {
+    const session = new FakeSession()
+    session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })
+    const handler = vi.fn(async (_input: unknown, context: PeerHostCallContext) => {
+      await new Promise<void>((resolve) => context.signal.addEventListener('abort', () => resolve(), { once: true }))
+      return { count: 0, tools: [] }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry: createToolingPeerHostRegistry({
+        getTools: handler,
+        getExportCatalog: async () => { throw new Error('not implemented') },
+        prepareExecution: async () => { throw new Error('not implemented') },
+        executeTool: async () => { throw new Error('not implemented') }
+      }),
+      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      clock: () => 1000,
+      randomId: () => 'epoch-stale'
+    })
+    new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    session.emit(ackFromSentManifest(session))
+    session.emit({ type: 'call', id: 'before-stale', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-b', effective_perms: ['*'] } })
+    await flush()
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+
+    session.setSnapshot({ authenticatedPeerContext: authenticatedContext({ selector: { ...authenticatedContext().selector, claimantPeerId: 'peer-b' } }) })
+    await flush()
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+
+    session.emit({ type: 'call', id: 'after-stale-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['*'] } })
+    session.emit({ type: 'subscribe', id: 'after-stale-sub', topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 10 })
+    await flush()
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(session.sent.some((frame) => (frame as any).id === 'after-stale-call')).toBe(false)
+    expect(session.sent.some((frame) => (frame as any).id === 'after-stale-sub')).toBe(false)
+    expect(session.frameListeners.size).toBe(0)
+    expect(session.snapshotListeners.size).toBe(0)
+  })
+
   it('rejects forged or stale manifest ACKs and does not send lease-bearing manifests to older peers', async () => {
     const handler = vi.fn(async () => ({ count: 0, tools: [] }))
     const peerHost = new WebRtcPeerHost({

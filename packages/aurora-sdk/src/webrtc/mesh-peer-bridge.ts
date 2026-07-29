@@ -174,8 +174,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.unsubscribeSession = this.session.subscribe((snapshot) => {
       try {
         this.handleSessionSnapshot(snapshot)
-      } catch {
-        // Session transition cleanup must fail pending bridge work closed, not crash host page event loops.
+      } catch (error) {
+        this.close(`session authority rejected: ${redactReason(error)}`)
       }
     })
   }
@@ -776,6 +776,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       await this.sendLogicalFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: { code: 503, message: 'Local provider is unavailable' } })
       return
     }
+    this.assertOpen()
     await this.peerHost.handleCall(frame, this.remotePeerId, this.authenticatedPeerContext)
   }
 
@@ -788,6 +789,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       await this.sendLogicalFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'provider_unavailable', rejected_topics: frame.topics })
       return
     }
+    this.assertOpen()
     await this.peerHost.handleSubscribe(frame, this.remotePeerId, this.authenticatedPeerContext)
   }
 
@@ -905,7 +907,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private assertOpen(): void {
     const snapshot = this.session.getSnapshot()
     if (this.closed || snapshot.state !== 'authorized' || !snapshot.authorized) throw new Error('WebRTC mesh peer bridge is not connected')
-    this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(snapshot)
+    this.authenticatedPeerContext = undefined
+    try {
+      this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(snapshot)
+    } catch (error) {
+      this.close(`session authority rejected: ${redactReason(error)}`)
+      throw error
+    }
   }
 
   private assertAuthenticatedPeerSnapshot(snapshot: PeerSessionSnapshot): AuthenticatedPeerContext | undefined {
@@ -946,6 +954,12 @@ function normalizeRemoteError(error: unknown): Error {
   if (isRecord(error)) return new Error(typeof error.message === 'string' ? error.message : 'Remote WebRTC mesh error')
   if (typeof error === 'string') return new Error(error)
   return new Error('Remote WebRTC mesh error')
+}
+
+function redactReason(error: unknown): string {
+  if (error instanceof Error) return error.message.slice(0, 160)
+  if (typeof error === 'string') return error.slice(0, 160)
+  return 'session authority assertion failed'
 }
 
 function classifyAsyncDispatchFailure(error: unknown): AsyncDispatchFailure['reason'] {
