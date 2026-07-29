@@ -12,7 +12,7 @@ export default async function Page() {
         <AuroraRoutePage
           routeId="assistant"
           title="Assistant"
-          description="Assistant route evidence is unavailable from the SDK shell snapshot."
+          description="The assistant is unavailable until Aurora confirms this device can start a conversation."
         />
       ) : null}
     </>

@@ -43,7 +43,7 @@ const WEB_ROUTE_PRODUCTION_MOUNTS: Record<string, readonly string[]> = {
   scheduler: ['SchedulerClientPage'],
   audit: ['AdminAuditClientPage'],
   models: ['ModelsClientPage'],
-  diagnostics: ['Diagnostics Probes', 'DiagnosticsExportIsland'],
+  diagnostics: ['Health Checks', 'DiagnosticsExportIsland'],
   onboarding: ['OnboardingClientPage'],
   settings: ['SettingsPermissionsView'],
   data: ['DataPolicyClientPage'],
@@ -130,6 +130,6 @@ describe('Aurora web route registry', () => {
 
     const fallbackSource = readFileSync(join(appDir, 'page-content.tsx'), 'utf8')
     expect(fallbackSource).not.toMatch(/will use|will render|follow-up task|downstream UI task wires/i)
-    expect(fallbackSource).toContain('unsupported actions stay disabled')
+    expect(fallbackSource).toContain('Actions remain unavailable')
   })
 })

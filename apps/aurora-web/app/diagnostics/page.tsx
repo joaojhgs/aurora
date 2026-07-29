@@ -8,6 +8,7 @@ import type {
 } from '@aurora/client'
 import { MeshDiagnosticsView, meshDiagnosticsSnapshotFromResults } from '@aurora/ui'
 import { createAuroraWebClient } from '../aurora-client'
+import { countText, productErrorText, productStatusText, yesNo } from '../product-copy'
 import { getShellSnapshot } from '../shell-state'
 import { DiagnosticsExportIsland } from './diagnostics-export-island'
 
@@ -19,16 +20,16 @@ interface DiagnosticResult<T> {
 interface ProbeRow {
   name: string
   state: AvailabilityState
-  evidence: string
+  summary: string
   details: string
 }
 
 const redactionPreview = [
-  { label: 'Tokens and credentials', source: 'Gateway support bundle redaction.omitted_payloads' },
-  { label: 'Peer secrets and approval tokens', source: 'Gateway support bundle redacted_fields' },
-  { label: 'Redis URLs, host paths, and model paths', source: 'diagnostic redacted config shape' },
-  { label: 'Tool args and RAG content', source: 'event and audit payload summaries only' },
-  { label: 'Audio/session metadata', source: 'omitted raw-audio payloads' }
+  { label: 'Tokens and credentials', source: 'Removed from the bundle before sharing.' },
+  { label: 'Device secrets and approval codes', source: 'Hidden before the bundle is prepared.' },
+  { label: 'Addresses, file locations, and model locations', source: 'Shown only as safe summaries.' },
+  { label: 'Tool inputs and memory content', source: 'Summarized without sensitive detail.' },
+  { label: 'Audio and session details', source: 'Kept out of the shared bundle.' }
 ]
 
 export default async function Page() {
@@ -60,15 +61,15 @@ export default async function Page() {
           <p className="adx-kicker">ADM-009</p>
           <h1 id="diagnostics-title">Diagnostics</h1>
           <p>
-            Gateway, service, native, sidecar, mesh, route, redaction, and audit surfaces are shown only
-            from SDK-backed backend evidence. Export uses the AdminAction controller.
+            Aurora checks service health, trusted devices, privacy protection, and support export readiness.
+            Sensitive details stay hidden before anything is shared.
           </p>
         </div>
         <dl className="adx-metrics">
           <Metric label="services" value={services.data?.services.length ?? 0} />
-          <Metric label="mesh peers" value={webrtc.data?.connected_peer_count ?? 0} />
+          <Metric label="trusted devices" value={webrtc.data?.connected_peer_count ?? 0} />
           <Metric label="blocked actions" value={blockedActions(catalog.data)} />
-          <Metric label="degraded probes" value={unavailable.length} />
+          <Metric label="needs attention" value={unavailable.length} />
         </dl>
       </section>
 
@@ -76,15 +77,15 @@ export default async function Page() {
         <section className="aw-panel" aria-labelledby="diagnostics-probes-title">
           <div className="adx-section-heading">
             <div>
-              <h2 id="diagnostics-probes-title">Diagnostics Probes</h2>
-              <p>Each row is backed by Gateway, capability catalog, route, or WebRTC diagnostics.</p>
+              <h2 id="diagnostics-probes-title">Health Checks</h2>
+              <p>Each row shows what Aurora can read now and what may need attention.</p>
             </div>
           </div>
-          <div className="adx-table" role="table" aria-label="Diagnostics probes">
+          <div className="adx-table" role="table" aria-label="Health checks">
             <div className="adx-table-head" role="row">
-              <span role="columnheader">Probe</span>
+              <span role="columnheader">Check</span>
               <span role="columnheader">State</span>
-              <span role="columnheader">Evidence</span>
+              <span role="columnheader">Summary</span>
             </div>
             {probes.map((probe) => (
               <div className="adx-table-row" role="row" key={probe.name}>
@@ -93,7 +94,7 @@ export default async function Page() {
                   <small>{probe.details}</small>
                 </span>
                 <span role="cell"><StateBadge state={probe.state} /></span>
-                <span role="cell">{probe.evidence}</span>
+                <span role="cell">{probe.summary}</span>
               </div>
             ))}
           </div>
@@ -104,7 +105,7 @@ export default async function Page() {
           <div className="adx-section-heading">
             <div>
               <h2 id="diagnostics-redaction-title">Redaction Preview</h2>
-              <p>Preview lists data classes the backend omits or summarizes before support export.</p>
+              <p>Preview lists sensitive details Aurora removes or summarizes before support sharing.</p>
             </div>
             <span className="adx-badge">secrets redacted</span>
           </div>
@@ -118,16 +119,16 @@ export default async function Page() {
           </ul>
           <dl className="aw-facts adx-redaction-facts">
             <div>
-              <dt>Capability catalog</dt>
-              <dd>{catalog.data?.secrets_redacted ? 'backend redaction asserted' : redactionGap(catalog.error)}</dd>
+              <dt>Feature list</dt>
+              <dd>{catalog.data?.secrets_redacted ? 'Sensitive details removed' : redactionGap(catalog.error)}</dd>
             </div>
             <div>
-              <dt>WebRTC diagnostics</dt>
-              <dd>{webrtc.data?.secrets_redacted ? 'peer/session secrets redacted' : redactionGap(webrtc.error)}</dd>
+              <dt>Trusted devices</dt>
+              <dd>{webrtc.data?.secrets_redacted ? 'Sensitive details removed' : redactionGap(webrtc.error)}</dd>
             </div>
             <div>
-              <dt>Deployment topology</dt>
-              <dd>{topology.data?.secrets_redacted ? 'Redis URL redacted' : redactionGap(topology.error)}</dd>
+              <dt>Service layout</dt>
+              <dd>{topology.data?.secrets_redacted ? 'Sensitive details removed' : redactionGap(topology.error)}</dd>
             </div>
           </dl>
         </section>
@@ -138,25 +139,25 @@ export default async function Page() {
           <div className="adx-section-heading">
             <div>
               <h2 id="diagnostics-availability-title">Availability Summary</h2>
-              <p>Unsupported or degraded features keep repair evidence instead of disappearing.</p>
+              <p>Unavailable features stay visible with clear next steps.</p>
             </div>
           </div>
           <dl className="aw-facts">
             <div>
               <dt>Bus</dt>
-              <dd>{topology.data ? `${topology.data.bus_backend} (${topology.data.bullmq_queue_health.status})` : unavailableText(topology.error)}</dd>
+              <dd>{topology.data ? productStatusText(topology.data.bullmq_queue_health.status) : unavailableText(topology.error)}</dd>
             </div>
             <div>
-              <dt>Mode</dt>
-              <dd>{topology.data ? `${topology.data.architecture_mode} / ${topology.data.runtime_mode}` : 'unknown'}</dd>
+              <dt>Service Layout</dt>
+              <dd>{topology.data ? 'Readable' : 'Unknown'}</dd>
             </div>
             <div>
-              <dt>Capability providers</dt>
-              <dd>{catalog.data ? `${catalog.data.providers.length} providers, ${catalog.data.actions.length} actions` : unavailableText(catalog.error)}</dd>
+              <dt>Available Features</dt>
+              <dd>{catalog.data ? `${countText(catalog.data.providers.length, 'source')}, ${countText(catalog.data.actions.length, 'action')}` : unavailableText(catalog.error)}</dd>
             </div>
             <div>
-              <dt>Config parity</dt>
-              <dd>{topology.data?.mode_capability_degradations.length ? topology.data.mode_capability_degradations.join(', ') : 'no mode degradations reported'}</dd>
+              <dt>Needs Attention</dt>
+              <dd>{topology.data?.mode_capability_degradations.length ? countText(topology.data.mode_capability_degradations.length, 'item') : 'No issues reported'}</dd>
             </div>
           </dl>
         </section>
@@ -167,7 +168,7 @@ export default async function Page() {
       <DiagnosticsExportIsland
         correlationId={correlationId}
         disabled={exportDisabled}
-        disabledReason="Required support bundle inputs are unavailable; repair Gateway services, topology, and capability catalog first."
+        disabledReason="Support export is unavailable until Aurora can read service health and feature availability."
       />
     </div>
   )
@@ -177,7 +178,7 @@ async function capture<T>(operation: () => Promise<T>): Promise<DiagnosticResult
   try {
     return { data: await operation(), error: null }
   } catch (error) {
-    return { data: null, error: error instanceof Error ? error.message : 'SDK request failed' }
+    return { data: null, error: productErrorText(error) }
   }
 }
 
@@ -185,9 +186,9 @@ async function captureResult<T>(operation: () => Promise<{ ok: true; data: T } |
   try {
     const result = await operation()
     if (result.ok) return { data: result.data, error: null }
-    return { data: null, error: result.error.message }
+    return { data: null, error: productErrorText(result.error) }
   } catch (error) {
-    return { data: null, error: error instanceof Error ? error.message : 'SDK request failed' }
+    return { data: null, error: productErrorText(error) }
   }
 }
 
@@ -200,36 +201,42 @@ function buildProbes(input: {
 }): ProbeRow[] {
   return [
     {
-      name: 'Gateway service registry',
+      name: 'Service List',
       state: input.services.data?.services.length ? 'available-local' : stateFromError(input.services.error),
-      evidence: input.services.data ? `${input.services.data.services.length} services in ${input.services.data.mode}` : unavailableText(input.services.error),
-      details: 'native/sidecar/gateway service inventory'
+      summary: input.services.data ? countText(input.services.data.services.length, 'service') : unavailableText(input.services.error),
+      details: 'Aurora service health'
     },
     {
-      name: 'Deployment and bus health',
+      name: 'Service Health',
       state: input.topology.data?.bullmq_queue_health.status === 'healthy' ? 'available-local' : stateFromError(input.topology.error, 'degraded'),
-      evidence: input.topology.data ? `${input.topology.data.bus_backend}; redis=${input.topology.data.redis_reachable ?? 'n/a'}` : unavailableText(input.topology.error),
-      details: 'process/thread topology and config parity'
+      summary: input.topology.data ? productStatusText(input.topology.data.bullmq_queue_health.status) : unavailableText(input.topology.error),
+      details: 'App services and shared work queue'
     },
     {
-      name: 'Capability catalog snapshot',
+      name: 'Available Features',
       state: input.catalog.data?.actions.length ? 'available-local' : stateFromError(input.catalog.error),
-      evidence: input.catalog.data ? `${input.catalog.data.providers.length} providers; redacted=${input.catalog.data.secrets_redacted}` : unavailableText(input.catalog.error),
-      details: 'provider/action/resource catalog'
+      summary: input.catalog.data ? `${countText(input.catalog.data.actions.length, 'action')}; sensitive details removed: ${yesNo(input.catalog.data.secrets_redacted)}` : unavailableText(input.catalog.error),
+      details: 'Feature and action readiness'
     },
     {
-      name: 'Mesh route explain',
+      name: 'Device Routing',
       state: input.route.data?.blockers.length ? 'privacy-blocked' : stateFromError(input.route.error, 'available-remote'),
-      evidence: input.route.data ? `${input.route.data.selected_target}; blockers=${input.route.data.blockers.map((blocker) => blocker.code).join(',') || 'none'}` : unavailableText(input.route.error),
-      details: 'route, provider, fallback, policy blockers'
+      summary: input.route.data ? input.route.data.blockers.length ? `${countText(input.route.data.blockers.length, 'item')} needs attention` : 'Ready' : unavailableText(input.route.error),
+      details: 'Device selection and safety checks'
     },
     {
-      name: 'WebRTC ICE/DataChannel',
+      name: 'Device Connection',
       state: input.webrtc.data?.started ? 'available-remote' : stateFromError(input.webrtc.error, 'unsupported'),
-      evidence: input.webrtc.data ? `${input.webrtc.data.connected_peer_count} connected; e2ee=${input.webrtc.data.app_layer_e2ee_enabled}` : unavailableText(input.webrtc.error),
-      details: 'peer/session and DataChannel diagnostics'
+      summary: input.webrtc.data
+        ? trustedDeviceSummary(input.webrtc.data.connected_peer_count, input.webrtc.data.app_layer_e2ee_enabled)
+        : unavailableText(input.webrtc.error),
+      details: 'Trusted device connection health'
     }
   ]
+}
+
+function trustedDeviceSummary(connectedCount: number, privateConnection: boolean): string {
+  return `${countText(connectedCount, 'trusted device')}; private connection: ${yesNo(privateConnection)}`
 }
 
 function blockedActions(catalog: CapabilityCatalogResponse | null): number {
@@ -245,15 +252,15 @@ function stateFromError(error: string | null, fallback: AvailabilityState = 'uns
 }
 
 function unavailableText(error: string | null): string {
-  return error ? `unavailable: ${error}` : 'unavailable'
+  return error ? productErrorText(error) : 'Unavailable'
 }
 
 function redactionGap(error: string | null): string {
-  return error ? `redaction evidence unavailable: ${error}` : 'redaction evidence unavailable'
+  return error ? productErrorText(error, 'Sensitive-detail status is unavailable. Try again.') : 'Sensitive-detail status unavailable'
 }
 
 function StateBadge({ state }: { state: AvailabilityState }) {
-  return <span className={`adx-badge adx-state-${state}`}>{state}</span>
+  return <span className={`adx-badge adx-state-${state}`}>{productStatusText(state)}</span>
 }
 
 function Metric({ label, value }: { label: string; value: number }) {

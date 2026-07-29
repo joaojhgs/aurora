@@ -11,7 +11,7 @@ const DiagnosticsExportControl = dynamic(
         <div className="adx-section-heading">
           <div>
             <h2 id="diagnostics-export-title">Support Bundle Export</h2>
-            <p>AdminAction draft, confirmation, and audit receipt controls are loading for redacted diagnostics export.</p>
+            <p>Confirmation controls are loading so Aurora can prepare a support bundle safely.</p>
           </div>
           <span className="adx-badge adx-badge-critical">admin-critical</span>
         </div>

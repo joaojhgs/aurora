@@ -13,7 +13,7 @@ export default async function Page() {
         <AuroraRoutePage
           routeId="scheduler"
           title="Scheduler"
-          description="Scheduler jobs and automation controls stay disabled until Scheduler registry, capability, and AdminAction contracts are available."
+          description="Scheduled jobs and automation controls appear when Aurora confirms they are available for this device."
         />
       ) : null}
     </>

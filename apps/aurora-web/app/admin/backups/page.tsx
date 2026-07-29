@@ -21,7 +21,7 @@ export default async function Page() {
     <AuroraRoutePage
       routeId="backups"
       title="Backups"
-      description="Backup and restore controls require backend capability evidence from AuroraClient."
+      description="Backup and restore controls appear when Aurora confirms this device can manage saved copies."
     />
   )
 }

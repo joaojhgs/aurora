@@ -17,7 +17,7 @@ export default async function Page() {
         <AuroraRoutePage
           routeId="tools"
           title="Tools"
-          description="Tool catalog and approval cards must use Tooling catalog, prepare, request, confirm, and execute SDK calls before any execution is enabled."
+          description="Tool approvals appear when Aurora confirms available tools and required approvals."
         />
       ) : null}
     </>

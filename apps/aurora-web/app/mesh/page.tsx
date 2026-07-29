@@ -10,7 +10,7 @@ export default async function Page() {
     <AuroraRoutePage
       routeId="mesh"
       title="Mesh"
-      description="Peer lifecycle, route explain, provider candidates, stale state, and fallback decisions must remain explicit before remote actions are selectable."
+      description="Trusted device actions appear when Aurora confirms the device is reachable and allowed."
     />
   )
 }
