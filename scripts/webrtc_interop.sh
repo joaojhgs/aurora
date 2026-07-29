@@ -22,6 +22,7 @@ import secrets
 print('g009.' + secrets.token_urlsafe(24))
 PY
 )}"
+export WEBRTC_INTEROP_AC18_LOCAL_TOOL_PROVIDER="${WEBRTC_INTEROP_AC18_LOCAL_TOOL_PROVIDER:-0}"
 
 BROKER="${WEBRTC_INTEROP_BROKER:-ws://127.0.0.1:9001/mqtt}"
 ROOM="${WEBRTC_INTEROP_ROOM:-g009-live-interop-$LANE-$$}"

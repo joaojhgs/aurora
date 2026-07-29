@@ -31,6 +31,10 @@ if str(ROOT) not in sys.path:
 from app.messaging.bus import QueryResult  # noqa: E402
 from app.services.gateway.config import (  # noqa: E402
     APISettings,
+    MeshConfig,
+    MeshServiceExportPolicy,
+    MeshServicePolicy,
+    MeshServiceRoutingPolicy,
     MQTTSettings,
     PermissionSettings,
     Settings,
@@ -38,9 +42,14 @@ from app.services.gateway.config import (  # noqa: E402
 )
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo  # noqa: E402
 from app.services.gateway.mesh.negotiation import manifest_to_dict  # noqa: E402
+from app.services.gateway.mesh.peer_bridge import PeerBridge  # noqa: E402
+from app.services.gateway.mesh.peer_registry import PeerRegistry  # noqa: E402
 from app.services.gateway.mesh.provider_export import (  # noqa: E402
     LEGACY_MANIFEST_PROTOCOL,
     SUPPORTED_PROTOCOLS,
+    NormalizedMethodSnapshot,
+    NormalizedServiceSnapshot,
+    RegistrySnapshot,
 )
 from app.services.gateway.webrtc.rtc_client import RTCClient  # noqa: E402
 from app.shared.auth.identity import build_identity  # noqa: E402
@@ -56,7 +65,9 @@ from app.shared.contracts.models.gateway import (  # noqa: E402
     ModuleRegistryInfo,
     ServiceAnnouncement,
 )
+from app.shared.contracts.models.mesh import MeshPeerAuthoritySnapshot  # noqa: E402
 from app.shared.contracts.models.orchestrator import OrchestratorMethods  # noqa: E402
+from app.shared.contracts.models.tooling import ToolingMethods  # noqa: E402
 from app.shared.contracts.models.tts import TTSMethods  # noqa: E402
 from app.shared.models.db import Token  # noqa: E402
 
@@ -70,6 +81,22 @@ MUTATION_STARTED_TOPIC = "G009Interop.MutationStarted"
 LARGE_ECHO_TOPIC = "G009Interop.LargeEcho"
 ERROR_TOPIC = "G009Interop.IntentionalError"
 STREAM_STATUS_TOPIC = "G009Interop.StreamStatus"
+AC18_TOOL_CONTRACT_ID = "interop.browser.echo"
+AC18_TOOL_LOCAL_NAME = "interop.browser.echo"
+AC18_LOCAL_TOOL_PROVIDER_ENV = "WEBRTC_INTEROP_AC18_LOCAL_TOOL_PROVIDER"
+BROWSER_MESH_PEER_ID = "browser-g009"
+PYTHON_MESH_PEER_ID = "python-gateway-g009"
+AC18_FORGED_FRAME_PEER_ID = "forged-ac18-frame-peer"
+AC18_PROVIDER_SERVICE_INSTANCE_ID = f"local:{BROWSER_MESH_PEER_ID}:Tooling"
+AC18_GLOBAL_TOOL_ID = f"aurora-tool:v1:{BROWSER_MESH_PEER_ID}:Tooling:{AC18_TOOL_CONTRACT_ID}"
+INTEROP_SERVICE_PERMISSION = "Gateway.G009Interop"
+AC18_SHARED_HARNESS_PERMISSIONS = (
+    "Config.use",
+    INTEROP_SERVICE_PERMISSION,
+    "Gateway.use",
+    "Orchestrator.use",
+    "TTS.use",
+)
 PYTHON_SIGNALING_IDS = {
     "direct": "100-python-g009",
     "stun": "000-python-g009",
@@ -82,8 +109,74 @@ BROWSER_SIGNALING_IDS = {
 }
 
 
+def env_flag(name: str) -> bool:
+    """Return whether a string environment flag is explicitly enabled."""
+
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def ac18_digest(value: dict[str, Any]) -> str:
+    """Build the cross-runtime digest for the AC18 browser-local tool response."""
+
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def build_ac18_mesh_config(*, timeout_seconds: float) -> MeshConfig:
+    """Build the live interop mesh policy used when the browser is a local tool provider."""
+
+    shared_harness_services = {
+        module: MeshServicePolicy(export=MeshServiceExportPolicy(share=True))
+        for module in ("Config", "G009Interop", "Gateway", "Orchestrator", "TTS")
+    }
+    return MeshConfig(
+        enabled=True,
+        node_name="G009 Python Gateway",
+        services={
+            **shared_harness_services,
+            "Tooling": MeshServicePolicy(
+                export=MeshServiceExportPolicy(share=False),
+                routing=MeshServiceRoutingPolicy(
+                    allowed_provider_peer_ids=(BROWSER_MESH_PEER_ID,),
+                    prefer="network",
+                    fallback="error",
+                ),
+            ),
+        },
+        stale_peer_timeout_s=0,
+        remote_timeout_s=timeout_seconds,
+    )
+
+
+def build_ac18_browser_authority_snapshot(peer_id: str) -> MeshPeerAuthoritySnapshot:
+    """Build the exact recipient authority needed by the live browser interop harness."""
+
+    return MeshPeerAuthoritySnapshot(
+        peer_id=peer_id,
+        auth_grant_revision=1,
+        disposition="present",
+        state="active",
+        effective_permissions=AC18_SHARED_HARNESS_PERMISSIONS,
+    )
+
+
+def install_ac18_authority_refresh(rtc: Any) -> None:
+    """Install a supported authority-refresh callback for the browser harness peer."""
+
+    async def _refresh(peer_id: str) -> bool:
+        if peer_id != BROWSER_MESH_PEER_ID:
+            return False
+        result = rtc.apply_trusted_peer_authority_snapshot(
+            build_ac18_browser_authority_snapshot(peer_id)
+        )
+        return bool(getattr(result, "applied", False))
+
+    rtc.set_authority_refresh_callback(_refresh)
 
 
 class InteropRegistry:
@@ -99,26 +192,30 @@ class InteropRegistry:
                 MethodInfo(
                     name="PairingStart",
                     bus_topic=AuthMethods.PAIRING_START,
-                    exposure="internal",
+                    exposure="both",
                     method_type="use",
+                    public_infrastructure=True,
                 ),
                 MethodInfo(
                     name="PairingConnect",
                     bus_topic=AuthMethods.PAIRING_CONNECT,
-                    exposure="internal",
+                    exposure="both",
                     method_type="use",
+                    public_infrastructure=True,
                 ),
                 MethodInfo(
                     name="PairingExchange",
                     bus_topic=AuthMethods.PAIRING_EXCHANGE,
-                    exposure="internal",
+                    exposure="both",
                     method_type="use",
+                    public_infrastructure=True,
                 ),
                 MethodInfo(
                     name="Login",
                     bus_topic=AuthMethods.LOGIN,
-                    exposure="internal",
+                    exposure="both",
                     method_type="use",
+                    public_infrastructure=True,
                 ),
             ],
         )
@@ -190,49 +287,49 @@ class InteropRegistry:
                     bus_topic=MUTATE_TOPIC,
                     exposure="both",
                     method_type="use",
-                    required_perms=["G009Interop.use"],
+                    required_perms=[INTEROP_SERVICE_PERMISSION],
                 ),
                 MethodInfo(
                     name="MutationCount",
                     bus_topic=MUTATION_COUNT_TOPIC,
                     exposure="both",
-                    method_type="query",
-                    required_perms=["G009Interop.use"],
+                    method_type="use",
+                    required_perms=[INTEROP_SERVICE_PERMISSION],
                 ),
                 MethodInfo(
                     name="MutationStarted",
                     bus_topic=MUTATION_STARTED_TOPIC,
                     exposure="both",
                     method_type="use",
-                    required_perms=["G009Interop.use"],
+                    required_perms=[INTEROP_SERVICE_PERMISSION],
                 ),
                 MethodInfo(
                     name="RevokeCredential",
                     bus_topic=REVOKE_TOPIC,
                     exposure="both",
                     method_type="use",
-                    required_perms=["G009Interop.use"],
+                    required_perms=[INTEROP_SERVICE_PERMISSION],
                 ),
                 MethodInfo(
                     name="LargeEcho",
                     bus_topic=LARGE_ECHO_TOPIC,
                     exposure="both",
-                    method_type="query",
-                    required_perms=["G009Interop.use"],
+                    method_type="use",
+                    required_perms=[INTEROP_SERVICE_PERMISSION],
                 ),
                 MethodInfo(
                     name="IntentionalError",
                     bus_topic=ERROR_TOPIC,
                     exposure="both",
-                    method_type="query",
-                    required_perms=["G009Interop.use"],
+                    method_type="use",
+                    required_perms=[INTEROP_SERVICE_PERMISSION],
                 ),
                 MethodInfo(
                     name="StreamStatus",
                     bus_topic=STREAM_STATUS_TOPIC,
                     exposure="both",
-                    method_type="query",
-                    required_perms=["G009Interop.use"],
+                    method_type="use",
+                    required_perms=[INTEROP_SERVICE_PERMISSION],
                 ),
             ],
         )
@@ -245,6 +342,55 @@ class InteropRegistry:
 
     async def get_service(self, module: str) -> ServiceAnnouncement | None:
         return self._services.get(module)
+
+    def snapshot_registry(self) -> RegistrySnapshot:
+        """Return the immutable normalized registry used by provider projection."""
+
+        services: list[NormalizedServiceSnapshot] = []
+        for announcement in sorted(self._services.values(), key=lambda item: item.module):
+            topics = {
+                str(method.bus_topic or f"{announcement.module}.{method.name}")
+                for method in announcement.methods
+            }
+            feature_members = {
+                str(feature.feature_id): tuple(
+                    sorted(
+                        str(method_id)
+                        for method_id in feature.method_ids
+                        if str(method_id) in topics
+                    )
+                )
+                for feature in announcement.callable_features
+                if any(str(method_id) in topics for method_id in feature.method_ids)
+            }
+            services.append(
+                NormalizedServiceSnapshot(
+                    service_id=announcement.module,
+                    version=announcement.version,
+                    tags=tuple(announcement.capabilities),
+                    methods=tuple(
+                        NormalizedMethodSnapshot(
+                            topic=str(method.bus_topic or f"{announcement.module}.{method.name}"),
+                            exposure=method.exposure,
+                            method_type=method.method_type,
+                            required_permissions=tuple(method.required_perms),
+                            summary=method.summary,
+                            input_model=method.input_model,
+                            output_model=method.output_model,
+                            input_schema=method.input_schema,
+                            output_schema=method.output_schema,
+                            feature_ids=tuple(method.callable_feature_ids),
+                            public_infrastructure=method.public_infrastructure,
+                        )
+                        for method in announcement.methods
+                    ),
+                    feature_members=feature_members,
+                )
+            )
+        return RegistrySnapshot(
+            revision=f"interop:{self.registry_response().digest}",
+            services=tuple(services),
+        )
 
     def registry_response(self) -> GetRegistryResponse:
         modules = [
@@ -595,6 +741,7 @@ def build_ready_payload(
     turn_servers: list[str],
     timeout_seconds: float,
     gateway_http_reachable: bool,
+    ac18_local_tool_provider: bool,
     ready_at: str,
 ) -> dict[str, Any]:
     """Build the browser handoff without serializing room-password or bearer secrets."""
@@ -627,6 +774,11 @@ def build_ready_payload(
         "errorTopic": ERROR_TOPIC,
         "streamTopic": OrchestratorMethods.STREAM_INFER_CHAT,
         "streamStatusTopic": STREAM_STATUS_TOPIC,
+        "ac18LocalToolProvider": ac18_local_tool_provider,
+        "ac18ToolContractId": AC18_TOOL_CONTRACT_ID,
+        "ac18ToolLocalName": AC18_TOOL_LOCAL_NAME,
+        "ac18ProbeId": f"ac18-browser-tool-{lane}",
+        "ac18ForgedFramePeerId": AC18_FORGED_FRAME_PEER_ID,
         "timeoutMs": int(timeout_seconds * 1000),
         "gatewayHttpApiEnabled": False,
         "gatewayHttpReachable": gateway_http_reachable,
@@ -648,6 +800,8 @@ def build_gateway_report(
     wildcard_interested: bool,
     revoked_reconnect_failures: int,
     manifest_sent: bool,
+    ac18_local_tool_provider: bool,
+    ac18_reverse_tool: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Build the redacted Python-peer report consumed by the aggregate scanner."""
     return {
@@ -672,12 +826,342 @@ def build_gateway_report(
         "revoked": bus.revoked,
         "reconnectEvidence": {"revokedReconnectFailuresObserved": revoked_reconnect_failures},
         "manifestSent": manifest_sent,
+        "ac18LocalToolProviderEnabled": ac18_local_tool_provider,
+        "ac18ReverseToolEvidence": ac18_reverse_tool
+        or {
+            "enabled": ac18_local_tool_provider,
+            "status": "not-run" if ac18_local_tool_provider else "disabled",
+        },
         "largeRpcRecords": bus.large_rpc_records,
         "streamRecords": bus.stream_records,
         "requests": bus.requests,
         "publishes": bus.publish_records,
         "diagnostics": diagnostics,
         "secretsRedacted": True,
+    }
+
+
+async def run_ac18_reverse_browser_tool_probe(
+    *,
+    lane: str,
+    peer_registry: PeerRegistry,
+    peer_bridge: PeerBridge,
+    timeout: float,
+) -> dict[str, Any]:
+    """Discover, prepare, and invoke the browser-local provider through the public bridge."""
+
+    peer_id = BROWSER_MESH_PEER_ID
+    probe_id = f"ac18-browser-tool-{lane}"
+    negative_probe_id = f"{probe_id}-negative"
+    deadline = time.monotonic() + timeout
+    last_status = "missing"
+    last_lease: dict[str, Any] | None = None
+    public_call_methods: list[str] = []
+
+    def lease_evidence() -> dict[str, Any] | None:
+        lease = peer_registry.get_provider_lease(peer_id)
+        if lease is None:
+            return last_lease
+        return {
+            "peerId": lease.peer_id,
+            "connectionEpoch": lease.connection_epoch,
+            "availabilityRevision": lease.availability_revision,
+            "available": lease.available,
+            "leaseRequired": lease.lease_required,
+        }
+
+    def base_evidence(status: str) -> dict[str, Any]:
+        return {
+            "enabled": True,
+            "status": status,
+            "peerStatus": last_status,
+            "toolingServiceAdvertised": (
+                peer_registry.get_peer_service(peer_id, "Tooling") is not None
+            ),
+            "manifestAckAndLeaseReady": (
+                last_status == "negotiated"
+                and peer_registry.get_peer_service(peer_id, "Tooling") is not None
+                and bool((lease_evidence() or {}).get("available"))
+            ),
+            "providerLease": lease_evidence(),
+            "peerBridgeCallPath": "PeerBridge.call",
+            "publicCallMethods": list(public_call_methods),
+            "publicCallCount": len(public_call_methods),
+            "privateRpcCallUsed": False,
+            "manualAckUsed": False,
+            "directServiceCallUsed": False,
+            "httpFallbackUsed": False,
+            "frameIdentityClaim": {
+                "callerPeerId": AC18_FORGED_FRAME_PEER_ID,
+                "principalId": f"mesh:{AC18_FORGED_FRAME_PEER_ID}",
+                "effectivePermissions": [],
+                "authGrantRevision": 999,
+                "manifestRevision": 999,
+            },
+        }
+
+    async def public_call(
+        method: str,
+        payload: dict[str, Any],
+        correlation_id: str,
+    ) -> QueryResult:
+        public_call_methods.append(method)
+        return await peer_bridge.call(
+            peer_id,
+            method,
+            payload,
+            timeout=min(15.0, timeout),
+            correlation_id=correlation_id,
+            principal_id=f"mesh:{AC18_FORGED_FRAME_PEER_ID}",
+            effective_perms=[],
+            identity_source="webrtc_interop_ac18_forged_frame",
+            method_type="use",
+            caller_peer_id=AC18_FORGED_FRAME_PEER_ID,
+            auth_grant_revision=999,
+            manifest_revision=999,
+        )
+
+    while time.monotonic() < deadline:
+        peer = peer_registry.get_peer(peer_id)
+        last_status = getattr(peer, "status", "missing") if peer is not None else "missing"
+        lease = peer_registry.get_provider_lease(peer_id)
+        if lease is not None:
+            last_lease = {
+                "peerId": lease.peer_id,
+                "connectionEpoch": lease.connection_epoch,
+                "availabilityRevision": lease.availability_revision,
+                "available": lease.available,
+                "leaseRequired": lease.lease_required,
+            }
+        if (
+            last_status == "negotiated"
+            and peer_registry.get_peer_service(peer_id, "Tooling") is not None
+            and lease is not None
+            and lease.available is True
+        ):
+            break
+        await asyncio.sleep(0.1)
+    else:
+        return base_evidence("provider-not-ready")
+
+    discovery_payload = {"query": AC18_TOOL_LOCAL_NAME, "top_k": 10}
+    discovery = await public_call(
+        ToolingMethods.GET_TOOLS,
+        discovery_payload,
+        f"{probe_id}-discovery",
+    )
+    discovery_response = discovery.data if isinstance(discovery.data, dict) else {}
+    discovered_tools = discovery_response.get("tools")
+    discovered_tool = (
+        next(
+            (
+                candidate
+                for candidate in discovered_tools
+                if isinstance(candidate, dict)
+                and candidate.get("tool_contract_id") == AC18_TOOL_CONTRACT_ID
+                and candidate.get("local_name") == AC18_TOOL_LOCAL_NAME
+                and candidate.get("name") == AC18_TOOL_LOCAL_NAME
+                and candidate.get("global_tool_id") == AC18_GLOBAL_TOOL_ID
+                and candidate.get("provider_peer_id") == BROWSER_MESH_PEER_ID
+                and candidate.get("provider_service_instance_id")
+                == AC18_PROVIDER_SERVICE_INSTANCE_ID
+            ),
+            None,
+        )
+        if isinstance(discovered_tools, list)
+        else None
+    )
+    discovery_ok = (
+        discovery.ok
+        and discovered_tool is not None
+        and discovery_response.get("count") == len(discovered_tools)
+    )
+    discovery_evidence = {
+        "method": ToolingMethods.GET_TOOLS,
+        "peerBridgeCallPath": "PeerBridge.call",
+        "request": discovery_payload,
+        "queryResultOk": discovery.ok,
+        "queryResultError": discovery.error,
+        "toolFound": discovery_ok,
+        "discoveredTool": discovered_tool,
+    }
+    if not discovery_ok or discovered_tool is None:
+        return {
+            **base_evidence("failed"),
+            "discoveryProbe": discovery_evidence,
+        }
+
+    arguments = {
+        "probe_id": probe_id,
+        "message": f"python-originated-{lane}",
+    }
+    discovered_global_tool_id = str(discovered_tool["global_tool_id"])
+    prepare_payload = {
+        "tool_name": discovered_global_tool_id,
+        "arguments": arguments,
+        "correlation_id": probe_id,
+        "caller_peer_id": AC18_FORGED_FRAME_PEER_ID,
+        "caller_permissions": [],
+    }
+    prepare = await public_call(
+        ToolingMethods.PREPARE_EXECUTION,
+        prepare_payload,
+        f"{probe_id}-prepare",
+    )
+    prepare_response = prepare.data if isinstance(prepare.data, dict) else {}
+    policy_decision = (
+        prepare_response.get("policy_decision")
+        if isinstance(prepare_response.get("policy_decision"), dict)
+        else {}
+    )
+    args_schema_hash = prepare_response.get("args_schema_hash")
+    prepare_ok = (
+        prepare.ok
+        and prepare_response.get("ok") is True
+        and policy_decision.get("allowed") is True
+        and isinstance(args_schema_hash, str)
+        and re.fullmatch(r"[0-9a-f]{64}", args_schema_hash) is not None
+        and prepare_response.get("global_tool_id") == discovered_global_tool_id
+        and prepare_response.get("local_tool_name") == AC18_TOOL_LOCAL_NAME
+        and prepare_response.get("provider_peer_id") == BROWSER_MESH_PEER_ID
+        and prepare_response.get("provider_service_instance_id")
+        == AC18_PROVIDER_SERVICE_INSTANCE_ID
+    )
+    prepare_evidence = {
+        "method": ToolingMethods.PREPARE_EXECUTION,
+        "peerBridgeCallPath": "PeerBridge.call",
+        "request": prepare_payload,
+        "queryResultOk": prepare.ok,
+        "queryResultError": prepare.error,
+        "policyAllowed": policy_decision.get("allowed") is True,
+        "argsSchemaHash": args_schema_hash,
+        "globalToolId": prepare_response.get("global_tool_id"),
+        "providerServiceInstanceId": prepare_response.get("provider_service_instance_id"),
+        "schemaHashBoundToExecution": False,
+        "toolResponse": prepare_response,
+    }
+    if not prepare_ok or not isinstance(args_schema_hash, str):
+        return {
+            **base_evidence("failed"),
+            "discoveryProbe": discovery_evidence,
+            "prepareProbe": prepare_evidence,
+        }
+
+    positive_payload = {
+        **prepare_payload,
+        "expected_args_schema_hash": args_schema_hash,
+    }
+    result = await public_call(
+        ToolingMethods.EXECUTE_TOOL,
+        positive_payload,
+        probe_id,
+    )
+    negative_payload = {
+        "tool_name": f"{AC18_TOOL_LOCAL_NAME}.missing",
+        "arguments": {
+            "probe_id": negative_probe_id,
+            "message": "must-not-run",
+        },
+        "expected_args_schema_hash": args_schema_hash,
+        "correlation_id": negative_probe_id,
+        "caller_peer_id": AC18_FORGED_FRAME_PEER_ID,
+        "caller_permissions": [],
+    }
+    negative = await public_call(
+        ToolingMethods.EXECUTE_TOOL,
+        negative_payload,
+        negative_probe_id,
+    )
+    response = result.data if isinstance(result.data, dict) else {}
+    response_data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    negative_response = negative.data if isinstance(negative.data, dict) else {}
+    peer = peer_registry.get_peer(peer_id)
+    digest_input = {
+        "caller_peer_id": response_data.get("caller_peer_id"),
+        "handled_by": response_data.get("handled_by"),
+        "message": response_data.get("message"),
+        "probe_id": response_data.get("probe_id"),
+    }
+    positive_ok = (
+        result.ok
+        and response.get("ok") is True
+        and response.get("status") == "success"
+        and response_data.get("probe_id") == probe_id
+        and response_data.get("handled_by") == peer_id
+        and response_data.get("caller_peer_id") == PYTHON_MESH_PEER_ID
+        and response.get("global_tool_id") == discovered_global_tool_id
+    )
+    negative_ok = (
+        negative.ok
+        and negative_response.get("ok") is False
+        and negative_response.get("status") == "not_found"
+        and negative_response.get("error_code") == "tool_not_found"
+    )
+    schema_hash_bound = positive_payload.get("expected_args_schema_hash") == args_schema_hash
+    public_sequence_ok = public_call_methods == [
+        ToolingMethods.GET_TOOLS,
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.EXECUTE_TOOL,
+        ToolingMethods.EXECUTE_TOOL,
+    ]
+    identity_override_ok = (
+        response_data.get("caller_peer_id") == PYTHON_MESH_PEER_ID
+        and response_data.get("caller_peer_id") != AC18_FORGED_FRAME_PEER_ID
+    )
+    passed = (
+        discovery_ok
+        and prepare_ok
+        and schema_hash_bound
+        and positive_ok
+        and negative_ok
+        and public_sequence_ok
+        and identity_override_ok
+    )
+    prepare_evidence["schemaHashBoundToExecution"] = schema_hash_bound
+    return {
+        **base_evidence("passed" if passed else "failed"),
+        "peerStatus": getattr(peer, "status", last_status),
+        "discoveryProbe": discovery_evidence,
+        "prepareProbe": prepare_evidence,
+        "method": ToolingMethods.EXECUTE_TOOL,
+        "toolName": discovered_global_tool_id,
+        "localToolName": AC18_TOOL_LOCAL_NAME,
+        "globalToolId": discovered_global_tool_id,
+        "providerServiceInstanceId": AC18_PROVIDER_SERVICE_INSTANCE_ID,
+        "probeId": probe_id,
+        "queryResultOk": result.ok,
+        "queryResultError": result.error,
+        "toolResponse": response,
+        "toolResponseDataDigest": ac18_digest(digest_input) if positive_ok else None,
+        "executeProbe": {
+            "method": ToolingMethods.EXECUTE_TOOL,
+            "peerBridgeCallPath": "PeerBridge.call",
+            "request": positive_payload,
+            "expectedArgsSchemaHash": args_schema_hash,
+            "queryResultOk": result.ok,
+            "queryResultError": result.error,
+            "toolResponse": response,
+            "globalToolIdMatchedDiscovery": (
+                response.get("global_tool_id") == discovered_global_tool_id
+            ),
+        },
+        "identityOverride": {
+            "forgedFrameCallerPeerId": AC18_FORGED_FRAME_PEER_ID,
+            "forgedFrameEffectivePermissions": [],
+            "observedCallerPeerId": response_data.get("caller_peer_id"),
+            "authenticatedCallerPeerId": PYTHON_MESH_PEER_ID,
+            "frameCallerPeerIdOverridden": identity_override_ok,
+        },
+        "negativeProbe": {
+            "method": ToolingMethods.EXECUTE_TOOL,
+            "peerBridgeCallPath": "PeerBridge.call",
+            "probeId": negative_probe_id,
+            "request": negative_payload,
+            "queryResultOk": negative.ok,
+            "queryResultError": negative.error,
+            "toolResponse": negative_response,
+            "failClosedWithoutHandler": negative_ok,
+        },
     }
 
 
@@ -703,6 +1187,7 @@ async def main() -> int:
     done_path = Path(args.done)
     report_path = Path(args.report)
     token_value = os.environ.get("WEBRTC_INTEROP_TOKEN", "interop-browser-token-value-not-written")
+    ac18_local_tool_provider = env_flag(AC18_LOCAL_TOOL_PROVIDER_ENV)
     registry = InteropRegistry()
     bus = InteropBus(registry, token_value)
     auth = InteropAuth(token_value, bus)
@@ -745,7 +1230,16 @@ async def main() -> int:
         outbound_ice_candidate_allowed=non_host_ice_candidate if args.lane == "stun" else None,
     )
     rtc._peer_id = PYTHON_SIGNALING_IDS[args.lane]  # noqa: SLF001
-    rtc.set_mesh_identity("python-gateway-g009", "G009 Python Gateway")
+    rtc.set_mesh_identity(PYTHON_MESH_PEER_ID, "G009 Python Gateway")
+    peer_registry: PeerRegistry | None = None
+    peer_bridge: PeerBridge | None = None
+    if ac18_local_tool_provider:
+        mesh_config = build_ac18_mesh_config(timeout_seconds=args.timeout)
+        peer_registry = PeerRegistry(mesh_config)
+        peer_bridge = PeerBridge(rtc, peer_registry)
+        install_ac18_authority_refresh(rtc)
+        rtc.configure_mesh(mesh_config, peer_registry, peer_bridge)
+        await peer_registry.start()
 
     async def _send_mutation_started(started: dict[str, Any]) -> None:
         mutation_id = str(started.get("mutation_id") or "")
@@ -791,112 +1285,134 @@ async def main() -> int:
 
     bus.on_mutation_started = _send_mutation_started
     started_at = time.monotonic()
-    await rtc.start(join_room=True)
-
-    write_json(
-        ready_path,
-        build_ready_payload(
-            lane=args.lane,
-            app_id=args.app_id,
-            room=args.room,
-            broker_url=args.broker,
-            stun_servers=args.stun,
-            turn_servers=args.turn,
-            timeout_seconds=args.timeout,
-            gateway_http_reachable=can_connect("127.0.0.1", 8000),
-            ready_at=now(),
-        ),
-    )
-
+    ac18_reverse_tool: dict[str, Any] | None = None
     event_sent = False
     tts_event_sent = False
     wrong_corr_interest = False
     wildcard_interest = False
     revoked_reconnect_failures = 0
     manifest_sent = False
-    deadline = time.monotonic() + args.timeout
-    while time.monotonic() < deadline and not done_path.exists():
-        for error in rtc.get_diagnostics().recent_errors:
-            if error.code == "reconnect_auth_failed":
-                revoked_reconnect_failures += 1
-        for peer in rtc.get_connected_peers():
-            stable = str(peer.get("stable_peer_id") or "")
-            if stable == "browser-g009" and peer.get("connection_state") == "connected":
-                if not manifest_sent:
-                    manifest_sent = await rtc.send_to_peer_async(
-                        stable,
-                        json.dumps(
-                            registry.legacy_manifest("python-gateway-g009", "G009 Python Gateway")
-                        ),
-                    )
-                if not event_sent and rtc.event_subscriptions.is_interested(
-                    stable, SAFE_EVENT_TOPIC, f"g009-corr-{args.lane}"
-                ):
-                    await rtc.send_to_peer_async(
-                        stable,
-                        json.dumps(
-                            {
-                                "type": "event",
-                                "topic": SAFE_EVENT_TOPIC,
-                                "params": {
-                                    "kind": "config.updated",
-                                    "key": "interop.probe",
-                                    "value": "redacted",
-                                    "correlation_id": f"g009-corr-{args.lane}",
-                                },
-                                "correlation_id": f"g009-corr-{args.lane}",
-                            }
-                        ),
-                    )
-                    event_sent = True
-                wrong_corr_interest = rtc.event_subscriptions.is_interested(
-                    stable, TTS_EVENT_TOPIC, f"g009-wrong-{args.lane}", sensitive=True
-                )
-                wildcard_interest = rtc.event_subscriptions.is_interested(
-                    stable, "TTS.*", f"g009-tts-{args.lane}", sensitive=True
-                )
-                if not tts_event_sent and rtc.event_subscriptions.is_interested(
-                    stable, TTS_EVENT_TOPIC, f"g009-tts-{args.lane}", sensitive=True
-                ):
-                    await rtc.send_to_peer_async(
-                        stable,
-                        json.dumps(
-                            {
-                                "type": "event",
-                                "topic": TTS_EVENT_TOPIC,
-                                "params": {
-                                    "kind": "tts.chunk",
-                                    "chunk_id": "redacted",
-                                    "byte_count": 128,
-                                    "media_redacted": True,
-                                    "correlation_id": f"g009-tts-{args.lane}",
-                                },
-                                "correlation_id": f"g009-tts-{args.lane}",
-                            }
-                        ),
-                    )
-                    tts_event_sent = True
-        await asyncio.sleep(0.1)
+    try:
+        await rtc.start(join_room=True)
 
-    diagnostics = rtc.get_diagnostics().model_dump(mode="json")
-    write_json(
-        report_path,
-        build_gateway_report(
-            lane=args.lane,
-            started_at=now(),
-            duration_ms=round((time.monotonic() - started_at) * 1000),
-            gateway_http_reachable=can_connect("127.0.0.1", 8000),
-            diagnostics=diagnostics,
-            bus=bus,
-            event_sent=event_sent,
-            tts_event_sent=tts_event_sent,
-            wrong_correlation_interested=wrong_corr_interest,
-            wildcard_interested=wildcard_interest,
-            revoked_reconnect_failures=revoked_reconnect_failures,
-            manifest_sent=manifest_sent,
-        ),
-    )
-    await rtc.close()
+        write_json(
+            ready_path,
+            build_ready_payload(
+                lane=args.lane,
+                app_id=args.app_id,
+                room=args.room,
+                broker_url=args.broker,
+                stun_servers=args.stun,
+                turn_servers=args.turn,
+                timeout_seconds=args.timeout,
+                gateway_http_reachable=can_connect("127.0.0.1", 8000),
+                ac18_local_tool_provider=ac18_local_tool_provider,
+                ready_at=now(),
+            ),
+        )
+
+        deadline = time.monotonic() + args.timeout
+        while time.monotonic() < deadline and not done_path.exists():
+            for error in rtc.get_diagnostics().recent_errors:
+                if error.code == "reconnect_auth_failed":
+                    revoked_reconnect_failures += 1
+            for peer in rtc.get_connected_peers():
+                stable = str(peer.get("stable_peer_id") or "")
+                if stable == BROWSER_MESH_PEER_ID and peer.get("connection_state") == "connected":
+                    if not manifest_sent:
+                        manifest_sent = await rtc.send_to_peer_async(
+                            stable,
+                            json.dumps(
+                                registry.legacy_manifest(PYTHON_MESH_PEER_ID, "G009 Python Gateway")
+                            ),
+                        )
+                    if not event_sent and rtc.event_subscriptions.is_interested(
+                        stable, SAFE_EVENT_TOPIC, f"g009-corr-{args.lane}"
+                    ):
+                        await rtc.send_to_peer_async(
+                            stable,
+                            json.dumps(
+                                {
+                                    "type": "event",
+                                    "topic": SAFE_EVENT_TOPIC,
+                                    "params": {
+                                        "kind": "config.updated",
+                                        "key": "interop.probe",
+                                        "value": "redacted",
+                                        "correlation_id": f"g009-corr-{args.lane}",
+                                    },
+                                    "correlation_id": f"g009-corr-{args.lane}",
+                                }
+                            ),
+                        )
+                        event_sent = True
+                    wrong_corr_interest = rtc.event_subscriptions.is_interested(
+                        stable, TTS_EVENT_TOPIC, f"g009-wrong-{args.lane}", sensitive=True
+                    )
+                    wildcard_interest = rtc.event_subscriptions.is_interested(
+                        stable, "TTS.*", f"g009-tts-{args.lane}", sensitive=True
+                    )
+                    if not tts_event_sent and rtc.event_subscriptions.is_interested(
+                        stable, TTS_EVENT_TOPIC, f"g009-tts-{args.lane}", sensitive=True
+                    ):
+                        await rtc.send_to_peer_async(
+                            stable,
+                            json.dumps(
+                                {
+                                    "type": "event",
+                                    "topic": TTS_EVENT_TOPIC,
+                                    "params": {
+                                        "kind": "tts.chunk",
+                                        "chunk_id": "redacted",
+                                        "byte_count": 128,
+                                        "media_redacted": True,
+                                        "correlation_id": f"g009-tts-{args.lane}",
+                                    },
+                                    "correlation_id": f"g009-tts-{args.lane}",
+                                }
+                            ),
+                        )
+                        tts_event_sent = True
+            if (
+                ac18_local_tool_provider
+                and ac18_reverse_tool is None
+                and peer_registry is not None
+                and peer_bridge is not None
+            ):
+                ac18_reverse_tool = await run_ac18_reverse_browser_tool_probe(
+                    lane=args.lane,
+                    peer_registry=peer_registry,
+                    peer_bridge=peer_bridge,
+                    timeout=max(1.0, deadline - time.monotonic()),
+                )
+            await asyncio.sleep(0.1)
+
+        diagnostics = rtc.get_diagnostics().model_dump(mode="json")
+        write_json(
+            report_path,
+            build_gateway_report(
+                lane=args.lane,
+                started_at=now(),
+                duration_ms=round((time.monotonic() - started_at) * 1000),
+                gateway_http_reachable=can_connect("127.0.0.1", 8000),
+                diagnostics=diagnostics,
+                bus=bus,
+                event_sent=event_sent,
+                tts_event_sent=tts_event_sent,
+                wrong_correlation_interested=wrong_corr_interest,
+                wildcard_interested=wildcard_interest,
+                revoked_reconnect_failures=revoked_reconnect_failures,
+                manifest_sent=manifest_sent,
+                ac18_local_tool_provider=ac18_local_tool_provider,
+                ac18_reverse_tool=ac18_reverse_tool,
+            ),
+        )
+    finally:
+        if peer_bridge is not None:
+            await peer_bridge.cancel_all()
+        await rtc.close()
+        if peer_registry is not None:
+            await peer_registry.stop()
     return 0 if done_path.exists() else 2
 
 

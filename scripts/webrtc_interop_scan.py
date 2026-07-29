@@ -103,6 +103,242 @@ def candidate_pair_matches_lane(lane: str, selected_pair: dict[str, Any]) -> tup
     return False, "unsupported-lane"
 
 
+def ac18_local_tool_provider_passed(
+    python_report: dict[str, Any],
+    browser_result: dict[str, Any],
+) -> tuple[bool, dict[str, Any]]:
+    """Validate live Python->browser local Tooling evidence when AC18 is enabled."""
+
+    enabled = python_report.get("ac18LocalToolProviderEnabled") is True
+    python_evidence = python_report.get("ac18ReverseToolEvidence") or {}
+    browser_evidence = browser_result.get("ac18LocalToolProviderEvidence") or {}
+    if not enabled:
+        return True, {
+            "enabled": False,
+            "applicable": False,
+            "status": "not_applicable",
+            "requiredEvidencePassed": False,
+            "python": python_evidence,
+            "browser": browser_evidence,
+        }
+
+    expected_methods = [
+        "Tooling.GetTools",
+        "Tooling.PrepareExecution",
+        "Tooling.ExecuteTool",
+        "Tooling.ExecuteTool",
+    ]
+    expected_tool_contract_id = "interop.browser.echo"
+    expected_local_name = "interop.browser.echo"
+    expected_global_tool_id = "aurora-tool:v1:browser-g009:Tooling:interop.browser.echo"
+    expected_service_instance_id = "local:browser-g009:Tooling"
+    expected_provider_peer_id = "browser-g009"
+    expected_caller_peer_id = "python-gateway-g009"
+    forged_frame_peer_id = "forged-ac18-frame-peer"
+
+    def is_hex64(value: Any) -> bool:
+        return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+    python_response = python_evidence.get("toolResponse") or {}
+    python_negative = python_evidence.get("negativeProbe") or {}
+    discovery = python_evidence.get("discoveryProbe") or {}
+    prepare = python_evidence.get("prepareProbe") or {}
+    execute = python_evidence.get("executeProbe") or {}
+    discovered_tool = discovery.get("discoveredTool") or {}
+    browser_digest = browser_evidence.get("toolResponseDataDigest")
+    python_digest = python_evidence.get("toolResponseDataDigest")
+    provider_lease = python_evidence.get("providerLease") or {}
+    public_sequence_ok = python_evidence.get(
+        "publicCallMethods"
+    ) == expected_methods and python_evidence.get("publicCallCount") == len(expected_methods)
+    readiness_ok = (
+        python_evidence.get("peerStatus") == "negotiated"
+        and python_evidence.get("toolingServiceAdvertised") is True
+        and python_evidence.get("manifestAckAndLeaseReady") is True
+        and provider_lease.get("available") is True
+        and provider_lease.get("leaseRequired") is True
+        and isinstance(provider_lease.get("connectionEpoch"), str)
+        and bool(provider_lease["connectionEpoch"])
+        and isinstance(provider_lease.get("availabilityRevision"), int)
+    )
+    discovery_ok = (
+        discovery.get("method") == "Tooling.GetTools"
+        and discovery.get("peerBridgeCallPath") == "PeerBridge.call"
+        and discovery.get("request") == {"query": expected_local_name, "top_k": 10}
+        and discovery.get("queryResultOk") is True
+        and discovery.get("toolFound") is True
+        and discovered_tool.get("tool_contract_id") == expected_tool_contract_id
+        and discovered_tool.get("local_name") == expected_local_name
+        and discovered_tool.get("name") == expected_local_name
+        and discovered_tool.get("global_tool_id") == expected_global_tool_id
+        and discovered_tool.get("provider_peer_id") == expected_provider_peer_id
+        and discovered_tool.get("provider_service_instance_id") == expected_service_instance_id
+    )
+    args_schema_hash = prepare.get("argsSchemaHash")
+    prepare_ok = (
+        prepare.get("method") == "Tooling.PrepareExecution"
+        and prepare.get("peerBridgeCallPath") == "PeerBridge.call"
+        and prepare.get("queryResultOk") is True
+        and prepare.get("policyAllowed") is True
+        and is_hex64(args_schema_hash)
+        and prepare.get("schemaHashBoundToExecution") is True
+        and prepare.get("globalToolId") == expected_global_tool_id
+        and prepare.get("providerServiceInstanceId") == expected_service_instance_id
+        and (prepare.get("request") or {}).get("tool_name") == expected_global_tool_id
+        and "expected_args_schema_hash" not in (prepare.get("request") or {})
+    )
+    execute_ok = (
+        execute.get("method") == "Tooling.ExecuteTool"
+        and execute.get("peerBridgeCallPath") == "PeerBridge.call"
+        and execute.get("queryResultOk") is True
+        and execute.get("expectedArgsSchemaHash") == args_schema_hash
+        and (execute.get("request") or {}).get("expected_args_schema_hash") == args_schema_hash
+        and (execute.get("request") or {}).get("tool_name") == expected_global_tool_id
+        and execute.get("globalToolIdMatchedDiscovery") is True
+    )
+    positive_ok = (
+        python_evidence.get("status") == "passed"
+        and python_evidence.get("peerBridgeCallPath") == "PeerBridge.call"
+        and python_evidence.get("privateRpcCallUsed") is False
+        and python_evidence.get("manualAckUsed") is False
+        and python_evidence.get("directServiceCallUsed") is False
+        and python_evidence.get("httpFallbackUsed") is False
+        and python_evidence.get("queryResultOk") is True
+        and python_response.get("ok") is True
+        and python_response.get("status") == "success"
+        and python_response.get("global_tool_id") == expected_global_tool_id
+        and (python_response.get("data") or {}).get("caller_peer_id") == expected_caller_peer_id
+        and (python_response.get("data") or {}).get("handled_by") == expected_provider_peer_id
+    )
+    browser_global_tool_id = browser_evidence.get("globalToolId")
+    browser_lease = browser_evidence.get("providerLeaseAtInvocation") or {}
+    invocation_records = browser_evidence.get("invocationRecords") or []
+    positive_invocation = next(
+        (
+            record
+            for record in invocation_records
+            if isinstance(record, dict)
+            and record.get("probe_id") == browser_evidence.get("probeId")
+        ),
+        {},
+    )
+    registered_tool_ok = (
+        browser_evidence.get("toolContractId") == expected_tool_contract_id
+        and browser_evidence.get("localName") == expected_local_name
+        and browser_global_tool_id == expected_global_tool_id
+        and browser_evidence.get("providerServiceInstanceId") == expected_service_instance_id
+        and is_hex64(browser_evidence.get("schemaHash"))
+    )
+    invocation_lease_ok = (
+        browser_lease.get("available") is True
+        and isinstance(browser_lease.get("connection_epoch"), str)
+        and bool(browser_lease["connection_epoch"])
+        and isinstance(browser_lease.get("availability_revision"), int)
+        and positive_invocation.get("provider_lease") == browser_lease
+    )
+    browser_ok = (
+        browser_evidence.get("enabled") is True
+        and registered_tool_ok
+        and browser_evidence.get("positiveInvocationCount") == 1
+        and browser_evidence.get("negativeInvocationCount") == 0
+        and browser_evidence.get("failClosedWithoutNegativeInvocation") is True
+        and positive_invocation.get("caller_peer_id") == expected_caller_peer_id
+        and positive_invocation.get("method_id") == "Tooling.ExecuteTool"
+        and isinstance(positive_invocation.get("permission_count"), int)
+        and positive_invocation["permission_count"] > 0
+        and invocation_lease_ok
+        and is_hex64(browser_digest)
+    )
+    negative_ok = (
+        python_negative.get("method") == "Tooling.ExecuteTool"
+        and python_negative.get("peerBridgeCallPath") == "PeerBridge.call"
+        and python_negative.get("queryResultOk") is True
+        and python_negative.get("failClosedWithoutHandler") is True
+        and (python_negative.get("toolResponse") or {}).get("ok") is False
+        and (python_negative.get("toolResponse") or {}).get("status") == "not_found"
+        and (python_negative.get("toolResponse") or {}).get("error_code") == "tool_not_found"
+    )
+    python_identity = python_evidence.get("identityOverride") or {}
+    browser_identity = browser_evidence.get("identityOverride") or {}
+    identity_override_ok = (
+        (python_evidence.get("frameIdentityClaim") or {}).get("callerPeerId")
+        == forged_frame_peer_id
+        and (python_evidence.get("frameIdentityClaim") or {}).get("effectivePermissions") == []
+        and python_identity.get("forgedFrameCallerPeerId") == forged_frame_peer_id
+        and python_identity.get("forgedFrameEffectivePermissions") == []
+        and python_identity.get("observedCallerPeerId") == expected_caller_peer_id
+        and python_identity.get("frameCallerPeerIdOverridden") is True
+        and browser_identity.get("forgedFrameCallerPeerId") == forged_frame_peer_id
+        and browser_identity.get("forgedFrameEffectivePermissions") == []
+        and browser_identity.get("observedCallerPeerId") == expected_caller_peer_id
+        and browser_identity.get("frameCallerPeerIdOverridden") is True
+        and browser_identity.get("framePermissionsOverridden") is True
+    )
+    audit_records = browser_evidence.get("auditRecords") or []
+
+    def has_audit(action: str, result: str, method: str, correlation_id: str) -> bool:
+        return any(
+            isinstance(record, dict)
+            and record.get("action") == action
+            and record.get("result") == result
+            and record.get("method_id") == method
+            and record.get("correlation_id") == correlation_id
+            and record.get("caller_peer_id") == expected_caller_peer_id
+            and record.get("provider_peer_id") == expected_provider_peer_id
+            and record.get("provider_service_instance_id") == expected_service_instance_id
+            and record.get("connection_epoch") == browser_lease.get("connection_epoch")
+            and record.get("redacted") is True
+            and record.get("secrets_redacted") is True
+            for record in audit_records
+        )
+
+    probe_id = browser_evidence.get("probeId")
+    audit_ok = (
+        isinstance(probe_id, str)
+        and has_audit("prepare", "allowed", "Tooling.PrepareExecution", probe_id)
+        and has_audit("execute", "success", "Tooling.ExecuteTool", probe_id)
+        and has_audit(
+            "execute",
+            "not_found",
+            "Tooling.ExecuteTool",
+            f"{probe_id}-negative",
+        )
+    )
+    digest_ok = is_hex64(python_digest) and python_digest == browser_digest
+    passed = (
+        public_sequence_ok
+        and readiness_ok
+        and discovery_ok
+        and prepare_ok
+        and execute_ok
+        and positive_ok
+        and browser_ok
+        and negative_ok
+        and identity_override_ok
+        and audit_ok
+        and digest_ok
+    )
+    return passed, {
+        "enabled": True,
+        "requiredEvidencePassed": passed,
+        "publicSequencePassed": public_sequence_ok,
+        "readinessPassed": readiness_ok,
+        "discoveryPassed": discovery_ok,
+        "preparePassed": prepare_ok,
+        "executePassed": execute_ok,
+        "positiveCallPassed": positive_ok,
+        "registeredToolPassed": registered_tool_ok,
+        "browserInvocationPassed": browser_ok,
+        "invocationLeasePassed": invocation_lease_ok,
+        "negativeFailClosedPassed": negative_ok,
+        "identityOverridePassed": identity_override_ok,
+        "auditPassed": audit_ok,
+        "digestMatched": digest_ok,
+        "python": python_evidence,
+        "browser": browser_evidence,
+    }
+
+
 def build_interop_report(
     *,
     lane: str,
@@ -125,6 +361,7 @@ def build_interop_report(
     scoped = br.get("scopedEventEvidence") or {}
     tts_event = br.get("ttsEvent")
     browser_fetch_calls = br.get("httpFetchCalls")
+    ac18_ok, ac18_evidence = ac18_local_tool_provider_passed(python_report, br)
     manifest = br.get("manifestEvidence") or {}
     error_evidence = br.get("errorEvidence") or {}
     large_rpc = br.get("largeRpcEvidence") or {}
@@ -206,6 +443,7 @@ def build_interop_report(
         and scoped.get("wildcardDelivered") is False
         and (python_report.get("scopedEventEvidence") or {}).get("wildcardInterested") is False
         and bool(tts_event)
+        and ac18_ok
     )
     final = {
         "schema": "aurora.webrtc_interop.report.v1",
@@ -267,6 +505,7 @@ def build_interop_report(
             "pythonCancelledStream": cancelled_stream,
             "rpcStreamPassed": stream_ok,
         },
+        "ac18LocalToolProviderEvidence": ac18_evidence,
         "timings": {
             "pythonDurationMs": python_report.get("durationMs"),
             "browserDurationMs": browser_report.get("durationMs"),
@@ -300,6 +539,7 @@ def build_interop_report(
             "wildcardInterestedByPython": (python_report.get("scopedEventEvidence") or {}).get(
                 "wildcardInterested"
             ),
+            "ac18LocalToolProvider": ac18_evidence["requiredEvidencePassed"],
         },
         "reconnectEvidence": reconnect,
         "revocationEvidence": revocation,

@@ -8,25 +8,43 @@ import json
 
 import pytest
 
+from app.messaging.bus import QueryResult
+from app.services.gateway.mesh.models import PeerState, ProviderLeaseState
 from app.services.gateway.mesh.provider_export import (
     LEGACY_MANIFEST_PROTOCOL,
     SUPPORTED_PROTOCOLS,
+    GrantEvidence,
+    PolicySnapshot,
+    ProtocolEvidence,
+    RecipientEvidence,
+    ServiceExportPolicy,
+    project_provider_export,
 )
 from app.shared.contracts.models.auth import (
     AuthMethods,
     build_mesh_reconnect_proof_message,
 )
 from app.shared.contracts.models.gateway import GatewayMethods
+from app.shared.contracts.models.tooling import ToolingMethods
 from scripts.webrtc_interop_gateway import (
+    AC18_FORGED_FRAME_PEER_ID,
+    AC18_GLOBAL_TOOL_ID,
+    AC18_PROVIDER_SERVICE_INSTANCE_ID,
+    AC18_SHARED_HARNESS_PERMISSIONS,
+    BROWSER_MESH_PEER_ID,
     MUTATE_TOPIC,
     MUTATION_COUNT_TOPIC,
+    PYTHON_MESH_PEER_ID,
     REVOKE_TOPIC,
     InteropAuth,
     InteropBus,
     InteropRegistry,
+    build_ac18_mesh_config,
     build_gateway_report,
     build_ready_payload,
+    install_ac18_authority_refresh,
     non_host_ice_candidate,
+    run_ac18_reverse_browser_tool_probe,
 )
 
 TOKEN = "g009.test-token-that-must-never-be-reported"
@@ -47,6 +65,65 @@ def test_registry_response_is_sorted_and_digest_is_stable() -> None:
     assert modules == ["Auth", "Config", "G009Interop", "Gateway", "Orchestrator", "TTS"]
     assert first.digest == second.digest
     assert len(first.digest) == 64
+
+
+def test_registry_snapshot_is_projection_ready_and_matches_harness_policy() -> None:
+    registry = InteropRegistry()
+    snapshot = registry.snapshot_registry()
+    mesh_config = build_ac18_mesh_config(timeout_seconds=12.5)
+    policy = PolicySnapshot(
+        revision="interop-policy",
+        services=tuple(
+            ServiceExportPolicy(
+                service_id=module,
+                share=service_policy.export.share,
+                unshared_feature_ids=service_policy.export.unshared_feature_ids,
+                unshared_method_ids=service_policy.export.unshared_method_ids,
+                max_concurrent=service_policy.export.max_concurrent,
+            )
+            for module, service_policy in mesh_config.services.items()
+        ),
+    )
+    recipient = RecipientEvidence(
+        peer_id=BROWSER_MESH_PEER_ID,
+        revision=1,
+        grants=tuple(GrantEvidence(permission) for permission in AC18_SHARED_HARNESS_PERMISSIONS),
+        state="active",
+    )
+
+    projection = project_provider_export(
+        provider_peer_id=PYTHON_MESH_PEER_ID,
+        registry=snapshot,
+        policy=policy,
+        recipient=recipient,
+        protocol=ProtocolEvidence(),
+    )
+
+    assert snapshot.revision.startswith("interop:")
+    assert [service.service_id for service in snapshot.services] == [
+        "Auth",
+        "Config",
+        "G009Interop",
+        "Gateway",
+        "Orchestrator",
+        "TTS",
+    ]
+    auth = next(service for service in snapshot.services if service.service_id == "Auth")
+    assert all(method.public_infrastructure for method in auth.methods)
+    assert all(
+        method.method_type in {"use", "manage"}
+        for service in snapshot.services
+        for method in service.methods
+    )
+    assert projection.readiness == "ready"
+    assert projection.routable is True
+    assert [service.service_id for service in projection.services] == [
+        "Config",
+        "G009Interop",
+        "Gateway",
+        "Orchestrator",
+        "TTS",
+    ]
 
 
 def test_harness_manifest_declares_the_canonical_legacy_protocol() -> None:
@@ -206,6 +283,7 @@ def test_ready_payload_is_lane_specific_and_never_serializes_session_secrets() -
         turn_servers=["turn:127.0.0.1:3478"],
         timeout_seconds=12.5,
         gateway_http_reachable=False,
+        ac18_local_tool_provider=True,
         ready_at="2026-07-26T00:00:00+00:00",
     )
     serialized = json.dumps(payload, sort_keys=True)
@@ -214,6 +292,9 @@ def test_ready_payload_is_lane_specific_and_never_serializes_session_secrets() -
     assert payload["suppressHostCandidates"] is False
     assert payload["timeoutMs"] == 12500
     assert payload["gatewayHttpApiEnabled"] is False
+    assert payload["ac18LocalToolProvider"] is True
+    assert payload["ac18ToolContractId"] == "interop.browser.echo"
+    assert payload["ac18ForgedFramePeerId"] == AC18_FORGED_FRAME_PEER_ID
     assert "roomSecret" not in payload
     assert "token" not in serialized.lower()
     assert TOKEN not in serialized
@@ -253,6 +334,8 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
         wildcard_interested=False,
         revoked_reconnect_failures=1,
         manifest_sent=True,
+        ac18_local_tool_provider=False,
+        ac18_reverse_tool=None,
     )
     serialized = json.dumps(report, sort_keys=True)
 
@@ -264,5 +347,208 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
         "wrongCorrelationInterested": False,
         "wildcardInterested": False,
     }
+    assert report["ac18LocalToolProviderEnabled"] is False
+    assert report["ac18ReverseToolEvidence"] == {"enabled": False, "status": "disabled"}
     assert report["secretsRedacted"] is True
     assert TOKEN not in serialized
+
+
+def test_ac18_mesh_config_shares_harness_services_and_routes_tooling_to_browser() -> None:
+    mesh_config = build_ac18_mesh_config(timeout_seconds=12.5)
+
+    assert mesh_config.enabled is True
+    assert mesh_config.node_name == "G009 Python Gateway"
+    assert mesh_config.stale_peer_timeout_s == 0
+    assert mesh_config.remote_timeout_s == 12.5
+    assert set(mesh_config.services) == {
+        "Config",
+        "G009Interop",
+        "Gateway",
+        "Orchestrator",
+        "Tooling",
+        "TTS",
+    }
+    for module in ("Config", "G009Interop", "Gateway", "Orchestrator", "TTS"):
+        policy = mesh_config.services[module]
+        assert policy.export.share is True
+        assert policy.export.unshared_method_ids == ()
+        assert policy.routing.prefer == "local"
+
+    tooling_policy = mesh_config.services["Tooling"]
+    assert tooling_policy.export.share is False
+    assert tooling_policy.routing.prefer == "network"
+    assert tooling_policy.routing.fallback == "error"
+    assert tooling_policy.routing.allowed_provider_peer_ids == (BROWSER_MESH_PEER_ID,)
+
+
+@pytest.mark.asyncio
+async def test_ac18_authority_refresh_seeds_exact_grants_through_public_rtc_api() -> None:
+    class _ApplyResult:
+        applied = True
+
+    class _PublicRtcOnly:
+        def __init__(self) -> None:
+            self.callback = None
+            self.applied_events: list[object] = []
+
+        def set_authority_refresh_callback(self, callback):
+            self.callback = callback
+
+        def apply_trusted_peer_authority_snapshot(self, snapshot):
+            self.applied_events.append(snapshot)
+            return _ApplyResult()
+
+    rtc = _PublicRtcOnly()
+
+    install_ac18_authority_refresh(rtc)
+
+    assert rtc.callback is not None
+    assert await rtc.callback(BROWSER_MESH_PEER_ID) is True
+    assert await rtc.callback(BROWSER_MESH_PEER_ID) is True
+    assert await rtc.callback("unrelated-peer") is False
+    authority_snapshot = rtc.applied_events[0]
+    assert len(rtc.applied_events) == 2
+    assert authority_snapshot.peer_id == BROWSER_MESH_PEER_ID
+    assert authority_snapshot.auth_grant_revision == 1
+    assert authority_snapshot.disposition == "present"
+    assert authority_snapshot.state == "active"
+    assert authority_snapshot.effective_permissions == AC18_SHARED_HARNESS_PERMISSIONS
+
+
+class _Ac18ReadyRegistry:
+    def __init__(self) -> None:
+        self.peer = PeerState(peer_id=BROWSER_MESH_PEER_ID, status="negotiated")
+        self.lease = ProviderLeaseState(
+            peer_id=BROWSER_MESH_PEER_ID,
+            connection_epoch="epoch-1",
+            availability_revision=1,
+            issued_at_ms=1,
+            expires_at_ms=60_000,
+            available=True,
+            lease_required=True,
+        )
+
+    def get_peer(self, peer_id: str) -> PeerState | None:
+        return self.peer if peer_id == BROWSER_MESH_PEER_ID else None
+
+    def get_provider_lease(self, peer_id: str) -> ProviderLeaseState | None:
+        return self.lease if peer_id == BROWSER_MESH_PEER_ID else None
+
+    def get_peer_service(self, peer_id: str, module: str) -> object | None:
+        return object() if peer_id == BROWSER_MESH_PEER_ID and module == "Tooling" else None
+
+
+class _RecordingPeerBridge:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, dict[str, object]]] = []
+        self.call_options: list[dict[str, object]] = []
+        self.schema_hash = "a" * 64
+
+    async def call(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: dict[str, object],
+        **options: object,
+    ) -> QueryResult:
+        self.calls.append((peer_id, topic, payload))
+        self.call_options.append(options)
+        if topic == ToolingMethods.GET_TOOLS:
+            return QueryResult(
+                ok=True,
+                data={
+                    "tools": [
+                        {
+                            "tool_contract_id": "interop.browser.echo",
+                            "local_name": "interop.browser.echo",
+                            "name": "interop.browser.echo",
+                            "global_tool_id": AC18_GLOBAL_TOOL_ID,
+                            "provider_peer_id": BROWSER_MESH_PEER_ID,
+                            "provider_service_instance_id": (AC18_PROVIDER_SERVICE_INSTANCE_ID),
+                        }
+                    ],
+                    "count": 1,
+                },
+            )
+        if topic == ToolingMethods.PREPARE_EXECUTION:
+            return QueryResult(
+                ok=True,
+                data={
+                    "ok": True,
+                    "policy_decision": {"allowed": True},
+                    "args_schema_hash": self.schema_hash,
+                    "global_tool_id": AC18_GLOBAL_TOOL_ID,
+                    "local_tool_name": "interop.browser.echo",
+                    "provider_peer_id": BROWSER_MESH_PEER_ID,
+                    "provider_service_instance_id": (AC18_PROVIDER_SERVICE_INSTANCE_ID),
+                },
+            )
+        if payload.get("tool_name") == "interop.browser.echo.missing":
+            return QueryResult(
+                ok=True,
+                data={
+                    "ok": False,
+                    "status": "not_found",
+                    "error_code": "tool_not_found",
+                    "global_tool_id": payload["tool_name"],
+                },
+            )
+        return QueryResult(
+            ok=True,
+            data={
+                "ok": True,
+                "status": "success",
+                "global_tool_id": AC18_GLOBAL_TOOL_ID,
+                "data": {
+                    "probe_id": "ac18-browser-tool-direct",
+                    "message": "python-originated-direct:browser-local",
+                    "handled_by": BROWSER_MESH_PEER_ID,
+                    "caller_peer_id": PYTHON_MESH_PEER_ID,
+                },
+            },
+        )
+
+
+@pytest.mark.asyncio
+async def test_ac18_browser_tool_probe_discovers_prepares_executes_and_fails_closed() -> None:
+    bridge = _RecordingPeerBridge()
+
+    evidence = await run_ac18_reverse_browser_tool_probe(
+        lane="direct",
+        peer_registry=_Ac18ReadyRegistry(),  # type: ignore[arg-type]
+        peer_bridge=bridge,  # type: ignore[arg-type]
+        timeout=1,
+    )
+
+    assert evidence["status"] == "passed"
+    assert [topic for _, topic, _ in bridge.calls] == [
+        ToolingMethods.GET_TOOLS,
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.EXECUTE_TOOL,
+        ToolingMethods.EXECUTE_TOOL,
+    ]
+    discovery_payload = bridge.calls[0][2]
+    prepare_payload = bridge.calls[1][2]
+    execute_payload = bridge.calls[2][2]
+    assert discovery_payload == {"query": "interop.browser.echo", "top_k": 10}
+    assert prepare_payload["tool_name"] == AC18_GLOBAL_TOOL_ID
+    assert "expected_args_schema_hash" not in prepare_payload
+    assert execute_payload["tool_name"] == AC18_GLOBAL_TOOL_ID
+    assert execute_payload["expected_args_schema_hash"] == bridge.schema_hash
+    assert all(
+        options["caller_peer_id"] == AC18_FORGED_FRAME_PEER_ID and options["effective_perms"] == []
+        for options in bridge.call_options
+    )
+    assert evidence["publicCallCount"] == 4
+    assert evidence["publicCallMethods"] == [
+        ToolingMethods.GET_TOOLS,
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.EXECUTE_TOOL,
+        ToolingMethods.EXECUTE_TOOL,
+    ]
+    assert evidence["discoveryProbe"]["toolFound"] is True
+    assert evidence["prepareProbe"]["schemaHashBoundToExecution"] is True
+    assert evidence["executeProbe"]["expectedArgsSchemaHash"] == bridge.schema_hash
+    assert evidence["identityOverride"]["frameCallerPeerIdOverridden"] is True
+    assert evidence["identityOverride"]["observedCallerPeerId"] == PYTHON_MESH_PEER_ID
+    assert evidence["negativeProbe"]["failClosedWithoutHandler"] is True

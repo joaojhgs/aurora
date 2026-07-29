@@ -17,6 +17,7 @@ type BrowserConfig = {
   brokerUrl: string
   expectedStablePeerId: string
   expectedNegotiationRole: 'offerer' | 'answerer'
+  ac18LocalToolProvider?: boolean
   timeoutMs: number
   [key: string]: unknown
 }
@@ -65,6 +66,7 @@ const ready = readyPath
       lane: 'unconfigured',
       brokerUrl: '',
       expectedStablePeerId: '',
+      expectedNegotiationRole: 'offerer',
       timeoutMs: 45_000,
     } satisfies BrowserConfig)
 
@@ -132,7 +134,7 @@ test.beforeAll(async () => {
   )
 
   const html =
-    '<!doctype html><html><head><meta charset="utf-8"><title>Aurora WebRTC Interop</title></head><body><script type="module" src="/browser-bundle.js"></script></body></html>'
+    '<!doctype html><html><head><meta charset="utf-8"><title>Aurora WebRTC Interop</title><script type="importmap">{"imports":{"mqtt":"/mqtt-bundle.mjs"}}</script></head><body><script type="module" src="/browser-bundle.js"></script></body></html>'
   server = http.createServer(async (request, response) => {
     if (request.url === '/mqtt-bundle.mjs') {
       response.writeHead(200, {
@@ -243,6 +245,8 @@ test('browser thin shell interoperates with the Python WebRTC peer without HTTP 
           lane,
           expectedStablePeerId: ready.expectedStablePeerId,
           expectedNegotiationRole: ready.expectedNegotiationRole,
+          expectedAc18LocalToolProvider:
+            ready.ac18LocalToolProvider === true,
         })
       },
     )

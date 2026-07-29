@@ -25,6 +25,31 @@ export type InteropBrowserResult = {
     serviceCount: number
     methodCount: number
   }
+  ac18LocalToolProviderEvidence?: {
+    enabled: boolean
+    toolContractId: string | null
+    localName: string | null
+    globalToolId: string | null
+    providerServiceInstanceId: string | null
+    schemaHash: string | null
+    probeId: string | null
+    invocationRecords: unknown[]
+    positiveInvocationCount: number
+    negativeInvocationCount: number
+    failClosedWithoutNegativeInvocation: boolean
+    providerLeaseAtInvocation: Record<string, unknown> | null
+    identityOverride: {
+      forgedFrameCallerPeerId?: string
+      forgedFrameEffectivePermissions?: unknown[]
+      observedCallerPeerId?: string | null
+      authenticatedCallerPeerId?: string
+      observedPermissionCount?: number
+      frameCallerPeerIdOverridden?: boolean
+      framePermissionsOverridden?: boolean
+    } | null
+    toolResponseDataDigest: string | null
+    auditRecords: unknown[]
+  }
   errorEvidence: {
     rejected: boolean
     code: string | null
@@ -81,6 +106,7 @@ export type InteropResultExpectations = {
   expectedStablePeerId: string
   expectedNegotiationRole: 'offerer' | 'answerer'
   expectedErrorMessage?: string
+  expectedAc18LocalToolProvider?: boolean
 }
 
 export type InteropNetworkRequest = {
@@ -343,6 +369,115 @@ export function collectInteropAssertionFailures(
     result.httpFetchCalls.length === 0,
     `runtime recorded ${result.httpFetchCalls.length} HTTP fetch calls`,
   )
+  if (expectations.expectedAc18LocalToolProvider) {
+    const ac18 = result.ac18LocalToolProviderEvidence
+    check(ac18?.enabled === true, 'AC18 browser local tool provider was not enabled')
+    check(
+      ac18?.positiveInvocationCount === 1,
+      `AC18 browser local tool invocation count was ${String(ac18?.positiveInvocationCount)}`,
+    )
+    check(
+      ac18?.negativeInvocationCount === 0,
+      'AC18 negative tool probe invoked a browser handler',
+    )
+    check(
+      ac18?.failClosedWithoutNegativeInvocation === true,
+      'AC18 negative tool probe did not fail closed',
+    )
+    check(
+      typeof ac18?.globalToolId === 'string' &&
+        ac18.globalToolId.startsWith('aurora-tool:v1:browser-g009:Tooling:'),
+      'AC18 browser tool global identity was missing',
+    )
+    check(
+      ac18?.providerServiceInstanceId === 'local:browser-g009:Tooling',
+      'AC18 browser provider service identity was not canonical',
+    )
+    check(
+      typeof ac18?.schemaHash === 'string' &&
+        /^[0-9a-f]{64}$/u.test(ac18.schemaHash),
+      'AC18 browser tool schema hash was missing',
+    )
+    const invocationRecords = Array.isArray(ac18?.invocationRecords)
+      ? ac18.invocationRecords as Array<Record<string, unknown>>
+      : []
+    const positiveInvocation = invocationRecords.find(
+      (record) => record.probe_id === ac18?.probeId,
+    )
+    check(
+      positiveInvocation?.caller_peer_id === 'python-gateway-g009' &&
+        positiveInvocation?.method_id === 'Tooling.ExecuteTool' &&
+        Number(positiveInvocation?.permission_count ?? 0) > 0,
+      'AC18 browser handler did not receive authenticated caller authority',
+    )
+    const invocationLease = ac18?.providerLeaseAtInvocation
+    check(
+      invocationLease?.available === true &&
+        typeof invocationLease.connection_epoch === 'string' &&
+        invocationLease.connection_epoch.length > 0 &&
+        Number.isSafeInteger(invocationLease.availability_revision),
+      'AC18 browser handler did not capture an active provider lease',
+    )
+    check(
+      ac18?.identityOverride?.forgedFrameCallerPeerId === 'forged-ac18-frame-peer' &&
+        Array.isArray(ac18.identityOverride.forgedFrameEffectivePermissions) &&
+        ac18.identityOverride.forgedFrameEffectivePermissions.length === 0 &&
+        ac18.identityOverride.observedCallerPeerId === 'python-gateway-g009' &&
+        ac18.identityOverride.frameCallerPeerIdOverridden === true &&
+        ac18.identityOverride.framePermissionsOverridden === true,
+      'AC18 authenticated session identity did not override forged frame identity',
+    )
+    check(
+      typeof ac18?.toolResponseDataDigest === 'string' &&
+        ac18.toolResponseDataDigest.length === 64,
+      'AC18 browser tool response digest was missing',
+    )
+    check(
+      Array.isArray(ac18?.auditRecords) && ac18.auditRecords.length >= 3,
+      'AC18 browser tool audit records were missing',
+    )
+    const auditRecords = Array.isArray(ac18?.auditRecords)
+      ? ac18.auditRecords as Array<Record<string, unknown>>
+      : []
+    check(
+      auditRecords.some((record) =>
+        record.action === 'prepare' &&
+        record.result === 'allowed' &&
+        record.method_id === 'Tooling.PrepareExecution' &&
+        record.correlation_id === ac18?.probeId
+      ),
+      'AC18 browser prepare audit record was missing',
+    )
+    check(
+      auditRecords.some((record) =>
+        record.action === 'execute' &&
+        record.result === 'success' &&
+        record.method_id === 'Tooling.ExecuteTool' &&
+        record.correlation_id === ac18?.probeId
+      ),
+      'AC18 browser execute audit record was missing',
+    )
+    check(
+      auditRecords.some((record) =>
+        record.action === 'execute' &&
+        record.result === 'not_found' &&
+        record.method_id === 'Tooling.ExecuteTool' &&
+        record.correlation_id === `${String(ac18?.probeId)}-negative`
+      ),
+      'AC18 browser negative execute audit record was missing',
+    )
+    check(
+      auditRecords.every((record) =>
+        record.caller_peer_id === 'python-gateway-g009' &&
+        record.provider_peer_id === 'browser-g009' &&
+        record.provider_service_instance_id === 'local:browser-g009:Tooling' &&
+        record.connection_epoch === invocationLease?.connection_epoch &&
+        record.redacted === true &&
+        record.secrets_redacted === true
+      ),
+      'AC18 browser audit records were incomplete or not redacted',
+    )
+  }
   return failures
 }
 

@@ -1,5 +1,23 @@
 import '../../../apps/aurora-tauri/src/legacy-webview-polyfills.js'
-import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, MqttWebSocketSignalingClient, type WebRtcPeerConnectionProfile } from '../../../packages/aurora-sdk/src/webrtc/index.js'
+import {
+  createBrowserWebRtcAuroraRuntime,
+  MemoryPeerCredentialStore,
+  MqttWebSocketSignalingClient,
+  SessionPeerHostAuthorizationStore,
+  WebRtcPeerHost,
+  createToolingPeerHostRegistry,
+  type WebRtcPeerConnectionProfile
+} from '../../../packages/aurora-sdk/src/webrtc/index.js'
+import {
+  canonicalJson,
+  LocalToolExecutionPolicy,
+  LocalToolRegistry,
+  createLocalToolingProviderHandlers,
+  providerServiceInstanceId,
+  type LocalToolAuditRecord,
+  type LocalToolDescriptorV1,
+  type RegisteredLocalTool
+} from '../../../packages/aurora-sdk/src/local-tools/index.js'
 import {
   candidatePairMatchesLane,
   type InteropCandidatePairEvidence
@@ -36,6 +54,11 @@ export type InteropBrowserConfig = {
   errorTopic: string
   streamTopic: string
   streamStatusTopic: string
+  ac18LocalToolProvider: boolean
+  ac18ToolContractId?: string
+  ac18ToolLocalName?: string
+  ac18ProbeId?: string
+  ac18ForgedFramePeerId?: string
   runtimeLocation?: {
     protocol: string
     hostname: string
@@ -298,6 +321,243 @@ function signalingIdFactory(signalingId: string): () => string {
   }
 }
 
+type Ac18BrowserLocalToolProbe = {
+  auditRecords: LocalToolAuditRecord[]
+  invocationRecords: Array<Record<string, unknown>>
+  peerHost: WebRtcPeerHost
+  toolContractId: string
+  localName: string
+  probeId: string
+  forgedFramePeerId: string
+  registeredTool: RegisteredLocalTool
+  serviceInstanceId: string
+}
+
+const AC18_BROWSER_TOOL_CONTRACT_ID = 'interop.browser.echo'
+const AC18_BROWSER_TOOL_LOCAL_NAME = 'interop.browser.echo'
+
+function createAc18BrowserLocalToolProvider(
+  config: InteropBrowserConfig
+): Ac18BrowserLocalToolProbe {
+  const toolContractId = config.ac18ToolContractId ?? AC18_BROWSER_TOOL_CONTRACT_ID
+  const localName = config.ac18ToolLocalName ?? AC18_BROWSER_TOOL_LOCAL_NAME
+  const probeId = config.ac18ProbeId ?? `ac18-browser-tool-${config.lane}`
+  const forgedFramePeerId = config.ac18ForgedFramePeerId ?? 'forged-ac18-frame-peer'
+  const auditRecords: LocalToolAuditRecord[] = []
+  const invocationRecords: Array<Record<string, unknown>> = []
+  let peerHost: WebRtcPeerHost | null = null
+  const descriptor: LocalToolDescriptorV1 = {
+    version: 1,
+    toolContractId,
+    localName,
+    displayName: 'Interop browser echo',
+    description: 'Returns a deterministic browser-local interop response',
+    argsSchema: {
+      type: 'object',
+      properties: {
+        probe_id: { type: 'string' },
+        message: { type: 'string' }
+      },
+      required: ['probe_id', 'message'],
+      additionalProperties: false
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        probe_id: { type: 'string' },
+        message: { type: 'string' },
+        handled_by: { type: 'string' },
+        caller_peer_id: { type: 'string' }
+      },
+      required: ['probe_id', 'message', 'handled_by', 'caller_peer_id'],
+      additionalProperties: false
+    },
+    argumentVisibility: {
+      probe_id: 'public',
+      message: 'public'
+    },
+    requiredPermissions: ['Tooling.ExecuteTool'],
+    resourceScopes: ['interop.browser.echo'],
+    safetyClass: 'standard',
+    privacyClass: 'public',
+    mutating: false,
+    dataEgress: false,
+    nativeRequirements: { capabilityIds: ['interop.browser.echo'], osPermissions: [] },
+    confirmationPolicy: 'never',
+    handlerId: 'interop.browser.echo'
+  }
+  const registry = new LocalToolRegistry({
+    stablePeerId: config.localStablePeerId,
+    providerLabel: 'G009 browser',
+    source: 'core',
+    sourceId: 'webrtc-interop'
+  })
+  const registeredTool = registry.register({
+    descriptor,
+    handler: ({ arguments: args, context }) => {
+      const providerLease = peerHost?.currentLease() ?? null
+      const record = {
+        probe_id: String(args.probe_id ?? ''),
+        message: String(args.message ?? ''),
+        returned_message: `${String(args.message ?? '')}:browser-local`,
+        handled_by: config.localStablePeerId,
+        caller_peer_id: context.callerPeerId,
+        method_id: context.methodId,
+        permissions: [...context.permissions],
+        permission_count: context.permissions.length,
+        provider_lease: providerLease
+      }
+      invocationRecords.push(record)
+      return {
+        probe_id: record.probe_id,
+        message: record.returned_message,
+        handled_by: record.handled_by,
+        caller_peer_id: context.callerPeerId
+      }
+    }
+  })
+  const serviceInstanceId = providerServiceInstanceId(config.localStablePeerId)
+  const policy = new LocalToolExecutionPolicy({
+    providerPeerId: config.localStablePeerId,
+    providerServiceInstanceId: serviceInstanceId,
+    ports: {
+      hasMethodGrant: (methodId) =>
+        [
+          'Tooling.GetTools',
+          'Tooling.GetExportCatalog',
+          'Tooling.PrepareExecution',
+          'Tooling.ExecuteTool'
+        ].includes(methodId),
+      hasToolGrant: (candidate) => candidate === toolContractId,
+      hasCapabilityGrant: (candidate) => candidate === 'interop.browser.echo',
+      hasResourceGrant: (candidate) => candidate === 'interop.browser.echo'
+    }
+  })
+  const provider = createLocalToolingProviderHandlers({
+    registry,
+    policy,
+    providerPeerId: config.localStablePeerId,
+    serviceInstanceId,
+    audit: (record) => {
+      auditRecords.push(record)
+    },
+    exportDecision: { isShared: () => true },
+    cursorSecret: `ac18-cursor-${config.lane}`,
+    connectionEpoch: () => {
+      const lease = peerHost?.currentLease()
+      return typeof lease?.connection_epoch === 'string' ? lease.connection_epoch : null
+    },
+    authorityRevision: {
+      catalog_revision: 1,
+      export_policy_revision: 1,
+      auth_grant_revision: 1,
+      manifest_revision: 1,
+      switch_revision: 0,
+      protocol_revision: 1
+    }
+  })
+  const configuredPeerHost = new WebRtcPeerHost({
+    localPeerId: config.localStablePeerId,
+    nodeName: 'G009 browser',
+    registry: createToolingPeerHostRegistry(provider),
+    authorizationStore: new SessionPeerHostAuthorizationStore([
+      {
+        version: 1,
+        grantId: 'ac18-python-gateway-grant',
+        tokenId: 'interop-token-row',
+        claimantPeerId: config.expectedStablePeerId,
+        allowedMethodIds: [
+          'Tooling.GetTools',
+          'Tooling.GetExportCatalog',
+          'Tooling.PrepareExecution',
+          'Tooling.ExecuteTool'
+        ],
+        allowedToolContractIds: [toolContractId],
+        capabilityPackIds: ['interop.browser.echo'],
+        resourceScopes: ['interop.browser.echo'],
+        createdAtMs: 1,
+        grantRevision: 1
+      }
+    ]),
+    randomId: () => `ac18-epoch-${config.lane}`,
+    defaultTimeoutMs: config.timeoutMs
+  })
+  peerHost = configuredPeerHost
+  return {
+    auditRecords,
+    invocationRecords,
+    peerHost: configuredPeerHost,
+    toolContractId,
+    localName,
+    probeId,
+    forgedFramePeerId,
+    registeredTool,
+    serviceInstanceId
+  }
+}
+
+async function buildAc18Evidence(
+  ac18: Ac18BrowserLocalToolProbe
+): Promise<Record<string, unknown>> {
+  const positiveInvocations = ac18.invocationRecords.filter(
+    (record) => record.probe_id === ac18.probeId
+  )
+  const negativeInvocations = ac18.invocationRecords.filter(
+    (record) => String(record.probe_id ?? '').endsWith('-negative')
+  )
+  const first = positiveInvocations[0]
+  const digestInput = {
+    caller_peer_id: first?.caller_peer_id ?? null,
+    handled_by: first?.handled_by ?? null,
+    message: first?.returned_message ?? null,
+    probe_id: first?.probe_id ?? null
+  }
+  return {
+    enabled: true,
+    toolContractId: ac18.toolContractId,
+    localName: ac18.localName,
+    globalToolId: ac18.registeredTool.toolInfo.global_tool_id,
+    providerServiceInstanceId: ac18.serviceInstanceId,
+    schemaHash: ac18.registeredTool.schemaHash,
+    probeId: ac18.probeId,
+    invocationRecords: ac18.invocationRecords,
+    positiveInvocationCount: positiveInvocations.length,
+    negativeInvocationCount: negativeInvocations.length,
+    failClosedWithoutNegativeInvocation: negativeInvocations.length === 0,
+    providerLeaseAtInvocation: first?.provider_lease ?? null,
+    identityOverride: {
+      forgedFrameCallerPeerId: ac18.forgedFramePeerId,
+      forgedFrameEffectivePermissions: [],
+      observedCallerPeerId: first?.caller_peer_id ?? null,
+      authenticatedCallerPeerId: 'python-gateway-g009',
+      observedPermissionCount: first?.permission_count ?? 0,
+      frameCallerPeerIdOverridden:
+        first?.caller_peer_id === 'python-gateway-g009' &&
+        first?.caller_peer_id !== ac18.forgedFramePeerId,
+      framePermissionsOverridden: Number(first?.permission_count ?? 0) > 0
+    },
+    toolResponseDataDigest:
+      positiveInvocations.length === 1
+        ? await sha256Hex(canonicalJson(digestInput))
+        : null,
+    auditRecords: ac18.auditRecords.map((record) => ({
+      action: record.action,
+      result: record.result,
+      reason_code: record.reason_code ?? null,
+      provider_peer_id: record.provider_peer_id,
+      provider_service_instance_id: record.provider_service_instance_id,
+      caller_peer_id: record.caller_peer_id,
+      method_id: record.method_id,
+      global_tool_id: record.global_tool_id ?? null,
+      local_tool_name: record.local_tool_name ?? null,
+      correlation_id: record.correlation_id ?? null,
+      connection_epoch: record.connection_epoch ?? null,
+      redacted: record.redacted,
+      secrets_redacted: record.secrets_redacted
+    }))
+  }
+}
+
 async function sha256Hex(value: string): Promise<string> {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
@@ -361,6 +621,9 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
   }) as typeof fetch
 
   const snapshots: Snapshot[] = []
+  const ac18 = config.ac18LocalToolProvider
+    ? createAc18BrowserLocalToolProvider(config)
+    : null
   let autoConfirmPairing = true
   const profile: WebRtcPeerConnectionProfile = {
     mode: 'webrtc-only',
@@ -381,6 +644,8 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
     profile,
     localStablePeerId: config.localStablePeerId,
     localNodeName: 'G009 browser',
+    nodeRole: ac18 ? 'mesh-node' : 'remote-console',
+    ...(ac18 ? { peerHost: ac18.peerHost } : {}),
     defaultTimeoutMs: config.timeoutMs,
     credentialStore: new MemoryPeerCredentialStore(),
     createPeerConnection: makePeerConnectionFactory(
@@ -590,6 +855,25 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
         serviceCount: manifest.services?.length ?? 0,
         methodCount: manifest.services?.reduce((count, service) => count + (service.methods?.length ?? 0), 0) ?? 0
       },
+      ac18LocalToolProviderEvidence: ac18
+        ? await buildAc18Evidence(ac18)
+        : {
+            enabled: false,
+            toolContractId: null,
+            localName: null,
+            globalToolId: null,
+            providerServiceInstanceId: null,
+            schemaHash: null,
+            probeId: null,
+            invocationRecords: [],
+            positiveInvocationCount: 0,
+            negativeInvocationCount: 0,
+            failClosedWithoutNegativeInvocation: true,
+            providerLeaseAtInvocation: null,
+            identityOverride: null,
+            toolResponseDataDigest: null,
+            auditRecords: []
+          },
       errorEvidence: {
         rejected: intentionalError.ok === false,
         code: intentionalError.ok ? null : intentionalError.error.code,
