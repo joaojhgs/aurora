@@ -166,9 +166,10 @@ describe('Aurora production shell', () => {
       expect.objectContaining({ id: 'selector', label: 'Privacy selector', state: 'blocked' }),
       expect.objectContaining({ id: 'consent', label: 'Consent', state: 'blocked' }),
       expect.objectContaining({ id: 'privacy-indicator', label: 'Privacy indicator', state: 'blocked' }),
-      expect.objectContaining({ id: 'native-permission', label: 'Native permission', state: 'blocked' }),
-      expect.objectContaining({ id: 'admin-action', label: 'AdminAction', state: 'blocked' })
+      expect.objectContaining({ id: 'native-permission', label: 'Device permission', state: 'blocked' }),
+      expect.objectContaining({ id: 'admin-action', label: 'Admin approval', state: 'blocked' })
     ]))
+    expect(policySignals.map((signal) => signal.detail).join(' ')).not.toMatch(/\b(AdminAction|Native permission|fallback|provider)\b/i)
   })
 
   it('builds route availability from Aurora capability catalog', async () => {
@@ -866,14 +867,14 @@ describe('Aurora production shell', () => {
       expect.objectContaining({
         state: 'degraded',
         label: 'iOS Local Light Inference',
-        detail: expect.stringContaining('backend model catalog and device/model proof')
+        detail: 'Local iOS models need a supported device and an available model before selection.'
       })
     )
     expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosMicrophoneCapture')).toEqual(
       expect.objectContaining({
         state: 'privacy-blocked',
         label: 'iOS microphone capture',
-        detail: expect.stringContaining('raw-audio consent')
+        detail: expect.stringContaining('microphone access')
       })
     )
     expect(model.nativePermissions.find((permission) => permission.id === 'ios.backgroundVoice')).toEqual(
@@ -885,14 +886,14 @@ describe('Aurora production shell', () => {
     expect(model.nativePermissions.find((permission) => permission.id === 'ios.appOwnedInvocation')).toEqual(
       expect.objectContaining({
         state: 'privacy-blocked',
-        detail: expect.stringContaining('system assistant ownership is unavailable')
+        detail: 'iOS can start Aurora actions from Siri, Shortcuts, widgets, the share sheet, and links.'
       })
     )
     expect(model.nativeLimitations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'noSiriReplacement',
-          detail: 'Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.'
+          detail: 'iOS does not allow Aurora to become the default assistant.'
         })
       ])
     )
@@ -936,12 +937,12 @@ describe('Aurora production shell', () => {
 
     expect(explicitSelector).toEqual(expect.objectContaining({
       state: 'degraded',
-      providerLabel: '1 selector-gated routes',
+      providerLabel: '1 choices need review',
       enabled: true
     }))
     expect(hardFallback).toEqual(expect.objectContaining({
       state: 'available-local',
-      providerLabel: '0 hard-blocked routes'
+      providerLabel: 'No blocked choices'
     }))
     expect(deniedRoutes).toEqual(expect.objectContaining({
       state: 'available-local',
@@ -1004,7 +1005,8 @@ describe('Aurora production shell', () => {
     })
     const warning = assistantRemotePrivacyWarning(privateRemoteRoute)
 
-    expect(warning).toContain('Sensitive data requires route/privacy review before remote or mesh fallback')
+    expect(warning).toContain('Sensitive data needs privacy review before another device can help')
+    expect(warning).not.toMatch(/\b(remote|mesh|fallback|route\/privacy)\b/i)
     expect(assistantRemotePrivacyWarning(enabledRoute(route(snapshot, 'assistant'), {
       item: { ...route(snapshot, 'assistant').item, privacyClass: 'public' }
     }))).toBeNull()
@@ -1013,19 +1015,14 @@ describe('Aurora production shell', () => {
     const renderStringifyLines = assistantSource
       .split('\n')
       .filter((line) => line.includes('JSON.stringify') && !line.includes('localStorage.setItem'))
-    expect(renderStringifyLines).toEqual([
-      expect.stringContaining('JSON.stringify(tool.payloadPreview'),
-      expect.stringContaining('JSON.stringify(tool.errorDetails'),
-      expect.stringContaining('JSON.stringify(tool.payloadPreview'),
-      expect.stringContaining('JSON.stringify(tool.resultPreview'),
-      expect.stringContaining('JSON.stringify(value)')
-    ])
+    expect(renderStringifyLines).toEqual([expect.stringContaining('JSON.stringify(value)')])
+    expect(renderStringifyLines.join('\n')).not.toMatch(/tool\.(payloadPreview|errorDetails|resultPreview)/)
   })
 
   it('maps assistant SDK error codes to user-facing messages', () => {
     expect(assistantErrorMessage(new AuroraError({ code: 'timeout', message: 'timed out' }))).toContain('timed out')
-    expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: '401 Unauthorized' }))).toContain('denied by authentication')
-    expect(assistantErrorMessage(new AuroraError({ code: 'transport_loss', message: 'Gateway offline' }))).toContain('stream disconnected')
+    expect(assistantErrorMessage(new AuroraError({ code: 'auth', message: '401 Unauthorized' }))).toContain('Review access')
+    expect(assistantErrorMessage(new AuroraError({ code: 'transport_loss', message: 'Gateway offline' }))).toContain('interrupted before Aurora finished')
   })
 
   it('locks assistant backend integration boundaries for send, stream fallback, cancellation, voice, and context', async () => {
@@ -1065,7 +1062,7 @@ describe('Aurora production shell', () => {
     expect(controls).toEqual(expect.objectContaining({
       canSend: false,
       canCancel: true,
-      cancelReason: expect.stringContaining('Orchestrator.Interrupt')
+      cancelReason: 'Stop is available for this response.'
     }))
 
     const pendingMessage = {
@@ -1132,7 +1129,7 @@ describe('Aurora production shell', () => {
       voiceEvents: voiceStatusEvents()
     })
     expect(voiceModel.controls.map((control) => control.label)).toEqual(expect.arrayContaining([
-      'Start transcription',
+      'Start speech capture',
       'Wake foreground',
       'Synthesize speech',
       'Stop playback'
@@ -1294,7 +1291,7 @@ describe('Aurora production shell', () => {
     })
 
     expect(mobileModel.chips.find((chip) => chip.id === 'native-capture')?.state).toBe('privacy-blocked')
-    expect(mobileModel.chips.find((chip) => chip.id === 'wake')?.detail).toContain('foreground-only')
+    expect(mobileModel.chips.find((chip) => chip.id === 'wake')?.detail).toContain('only while Aurora is open')
   })
 
   it('renders iOS permission copy as Siri Shortcuts App Intents integration without replacement claims', async () => {
@@ -1941,7 +1938,7 @@ describe('Aurora production shell', () => {
       error: new AuroraError({ code: 'unavailable_service', message: 'Auth down' })
     }).state).toBe('degraded')
     expect(buildPairingQueueModel({ route: disabled }).disabledReason).toContain('Capability unavailable')
-    expect(pairingErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('unsupported')
+    expect(pairingErrorMessage(new AuroraError({ code: 'unsupported_feature', message: 'missing' }))).toContain('cannot use that pairing feature yet')
     expect(parsePermissionList('Gateway.use, Auth.use\nDB.use')).toEqual(['Gateway.use', 'Auth.use', 'DB.use'])
   })
 
@@ -3491,6 +3488,7 @@ describe('Aurora production shell', () => {
       expect.objectContaining({ id: 'native-permission', label: 'Device permission', state: 'blocked' }),
       expect.objectContaining({ id: 'admin-action', label: 'Admin approval', state: 'blocked' })
     ]))
+    expect(signals.map((signal) => `${signal.label} ${signal.detail}`).join(' ')).not.toMatch(/\b(AdminAction|Native permission|fallback|provider)\b/i)
 
     const localPreferenceSignals = routeSheetPolicySignals({
       ...allowedRouteEvaluation(),
@@ -3498,7 +3496,7 @@ describe('Aurora production shell', () => {
     }, 'not-required')
     expect(localPreferenceSignals.find((signal) => signal.id === 'selector')).toEqual(expect.objectContaining({
       state: 'preference',
-      detail: expect.stringContaining('remains available')
+      detail: 'A local destination preference is set; this route remains available.'
     }))
   })
 

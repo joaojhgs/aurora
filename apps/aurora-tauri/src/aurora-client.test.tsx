@@ -57,14 +57,13 @@ const DIAGNOSTICS_PAGE_MARKERS = [
   "Native boundary",
   "Denied native defaults",
   "Shut down shell",
-  "WebRTC and ICE diagnostics",
-  "Diagnostics overview",
-  "Live probes",
-  "Redaction preview",
-  "Support-bundle export",
-  "Service probes",
-  "Native manifest and permissions",
-  "Sidecar and frontend logs",
+  "Troubleshooting",
+  "Live checks",
+  "Privacy check",
+  "Support export",
+  "Service checks",
+  "Device permissions",
+  "App logs",
 ] as const;
 
 const adminRouteIds = new Set([
@@ -84,12 +83,12 @@ const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<
   native: ["Native platform settings", "Native permissions and capabilities"],
   tools: [
     "Tools & Plugins",
-    "Core tools, MCP servers, plugins and mesh peer tools",
+    "Review tool sources",
   ],
   mesh: ["Mesh & Peers", "Peer trust, pairing and permissions"],
   backups: ["Backups", "Snapshots, verification and restore"],
-  settings: ["Settings", "General permissions, schema-backed configuration"],
-  models: ["Models & Runtime", "Loading model runtime catalog from Aurora"],
+  settings: ["Settings", "Connection choices"],
+  models: ["Models & Sources", "Loading model sources from Aurora"],
   onboarding: ["Welcome to Aurora", "Detected installation"],
 };
 
@@ -1273,7 +1272,8 @@ describe("Aurora Tauri runtime wrapper", () => {
       expect(markup).not.toContain("WebSocket signaling endpoint");
       expect(markup).not.toContain("Connection mode");
       expect(markup).not.toContain("Stable peer ID");
-      expect(markup).toContain('data-onboarding-scroll-viewport="true"');
+      expect(markup).toContain('aria-labelledby="onboarding-title"');
+      expect(markup).toContain('data-step="detect"');
       expect(markup).not.toContain('aria-label="Primary navigation"');
       expect(markup).not.toContain('id="content"');
       expect(transport.requests).toHaveLength(0);
@@ -1352,8 +1352,8 @@ describe("Aurora Tauri runtime wrapper", () => {
 
     const markup = renderReadyTauriApp();
 
-    expectMarkupToContainText(markup, "Models & Runtime", "/models");
-    expect(markup).toContain("Loading model runtime catalog from Aurora");
+    expectMarkupToContainText(markup, "Models & Sources", "/models");
+    expect(markup).toContain("Loading model sources from Aurora");
     expect(markup).not.toContain("Native boundary");
   });
 
@@ -1500,7 +1500,7 @@ describe("Tauri CI/E2E route gates", () => {
     expect(tauriRouteRegistryRouteIds).not.toContain("contracts");
     expect(servicesText).toContain("Services");
     expect(servicesText).toContain(
-      "Backend service health and restart control",
+      "Service health and restart controls",
     );
     expect(servicesText).not.toContain("Contracts registry");
 
@@ -1519,11 +1519,13 @@ describe("Tauri CI/E2E route gates", () => {
     expect(settingsText).toContain("Privacy defaults");
     expect(settingsText).toContain("Voice behavior");
     expect(settingsText).toContain("Theme, accessibility, and local storage");
-    expect(settingsText).toContain("Route and fallback policy");
+    expect(settingsText).toContain("Connection choices");
     expect(settingsText).toContain("Configuration");
     expect(settingsText).toContain("Data policy and retention");
-    expect(settingsText).toContain("Current platform surface");
+    expect(settingsText).toContain("Native platform settings");
     expect(settingsText).toContain("Native controls");
+    expect(settingsText).not.toContain("Route and fallback policy");
+    expect(settingsText).not.toContain("Native permission id");
   });
 
   it("e2e:routes renders the memory cockpit with collections, search, conversations, and policy-safe actions", async () => {
@@ -1545,7 +1547,7 @@ describe("Tauri CI/E2E route gates", () => {
         expect(searchInput?.placeholder).toContain("Search conversations");
         expect(memory.container.textContent).toContain("Conversation history");
         expect(memory.container.textContent).toContain(
-          "Deleting a memory previews affected DB and RAG records before removal",
+          "Deleting a memory previews affected saved records before removal",
         );
       });
       const queryInput =
@@ -1574,10 +1576,10 @@ describe("Tauri CI/E2E route gates", () => {
         expect(memory.container.textContent).toContain(
           'Search hit for "mesh pairing"',
         );
-        expect(memory.container.textContent).toContain("Route path");
+        expect(memory.container.textContent).toContain("Saved through");
         expect(memory.container.textContent).toContain("Privacy class");
         expect(memory.container.textContent).toContain("Policy");
-        expect(memory.container.textContent).toContain("Audit");
+        expect(memory.container.textContent).toContain("History");
       });
       writeOutcomeArtifact(
         "memory-route-collections-search",
@@ -1633,7 +1635,7 @@ describe("Tauri CI/E2E route gates", () => {
     try {
       await waitUntil(() => {
         expect(errorMemory.container.textContent).toContain(
-          "Memory request denied by authentication or permissions",
+          "Memory request denied. Review access and try again.",
         );
         expect(errorMemory.container.textContent).toContain(
           "No collections yet",
@@ -1667,14 +1669,14 @@ describe("Tauri CI/E2E route gates", () => {
           "Retention defaults",
         );
         expect(dataPolicy.container.textContent).toContain(
-          "Namespace visibility",
+          "Collection visibility",
         );
-        expect(dataPolicy.container.textContent).toContain("Raw audio storage");
+        expect(dataPolicy.container.textContent).toContain("Audio storage");
         expect(dataPolicy.container.textContent).toContain(
-          "Transcript storage",
+          "Audio, transcripts, and sharing rules",
         );
         expect(dataPolicy.container.textContent).toContain(
-          "Remote/mesh fallback",
+          "Shared-device help",
         );
         expect(dataPolicy.container.textContent).toContain(
           "Export, delete, and import data flows",
@@ -1683,7 +1685,10 @@ describe("Tauri CI/E2E route gates", () => {
           "Audit trail for policy changes",
         );
         expect(dataPolicy.container.textContent).toContain(
-          "Policy edits require AdminAction draft/confirm/audit through Config.Set",
+          "Confirmation is required before settings can be changed.",
+        );
+        expect(dataPolicy.container.textContent).not.toMatch(
+          /\b(draft|confirm\/audit|fallback)\b/,
         );
       });
       expect(
@@ -1708,11 +1713,11 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(tools.container.textContent).toContain("Tools & Plugins");
         expect(tools.container.textContent).toContain(
-          "Core tools, MCP servers, plugins and mesh peer tools",
+          "Review tool sources",
         );
         expect(tools.container.textContent).toContain("Sources");
         expect(tools.container.textContent).toContain(
-          "Selected source tool inventory",
+          "Expand a tool to review what it can do",
         );
         expect(requestMethods(transport)).toContain(
           TOOLING_METHODS.listCatalog,
@@ -1765,7 +1770,7 @@ describe("Tauri CI/E2E route gates", () => {
         );
         expect(mesh.container.textContent).toContain("All peer records");
         expect(mesh.container.textContent).toContain("Review & approve");
-        expect(mesh.container.textContent).toContain("Gateway.ExplainRoute");
+        expect(mesh.container.textContent).not.toContain("Gateway.ExplainRoute");
         expect(requestMethods(meshTransport)).toContain(
           GATEWAY_METHODS.getMeshStatus,
         );
@@ -1814,18 +1819,16 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(diagnostics.container.textContent).toContain("Diagnostics");
         expect(diagnostics.container.textContent).toContain(
-          "WebRTC and ICE diagnostics",
+          "Troubleshooting",
         );
         expect(diagnostics.container.textContent).toContain(
-          "Degraded diagnostics inputs",
+          "Check whether connected devices, service checks, support export, and repair steps are ready.",
         );
-        expect(diagnostics.container.textContent).toContain("diagnostics down");
+        expect(diagnostics.container.textContent).toContain("Could not connect to this Aurora device. Try again or reconnect the device.");
+        expect(diagnostics.container.textContent).not.toContain("Gateway.GetWebRTCDiagnostics");
+        expect(diagnostics.container.textContent).toContain("Service checks");
         expect(diagnostics.container.textContent).toContain(
-          "Repair Gateway.GetWebRTCDiagnostics",
-        );
-        expect(diagnostics.container.textContent).toContain("Service probes");
-        expect(diagnostics.container.textContent).toContain(
-          "Sidecar and frontend logs",
+          "App logs",
         );
         expect(requestMethods(diagnosticsTransport)).toContain(
           GATEWAY_METHODS.getWebRTCDiagnostics,
@@ -1872,7 +1875,7 @@ describe("Tauri CI/E2E route gates", () => {
         expect(success.container.textContent).toContain(
           "Local Gateway says hello from Orchestrator.",
         );
-        expect(success.container.textContent).toContain("local-gateway-test");
+        expect(success.container.textContent).not.toContain("local-gateway-test");
       });
       const assistantRequests = successTransport.requests.filter(
         (request) => request.method === ORCHESTRATOR_METHODS.externalUserInput,
@@ -1910,7 +1913,7 @@ describe("Tauri CI/E2E route gates", () => {
       );
       await waitUntil(() => {
         expect(failure.container.textContent).toContain(
-          "Assistant request denied by authentication or permissions.",
+          "Assistant request denied. Review access and try again.",
         );
       });
       const assistantRequests = failureTransport.requests.filter(
@@ -2109,7 +2112,7 @@ describe("Tauri CI/E2E route gates", () => {
     try {
       await waitUntil(() => {
         expect(fallback.container.textContent).toContain("Model");
-        expect(fallback.container.textContent).toMatch(/pending backend (response|receipt)/);
+        expect(fallback.container.textContent).toContain("Configured default");
         expect(fallback.container.textContent).toContain(
           "Route & privacy sheet",
         );
@@ -2156,12 +2159,14 @@ describe("Tauri CI/E2E route gates", () => {
         expect(live.container.textContent).toContain(
           "Streaming partial backend text...",
         );
-        expect(live.container.textContent).toContain("Tooling.RequestApproval");
-        expect(live.container.textContent).toContain("Payload preview");
-        expect(live.container.textContent).toContain("[redacted]");
+        expect(live.container.textContent).toContain("Action requested");
+        expect(live.container.textContent).toContain("Will be updated");
+        expect(live.container.textContent).not.toContain("secret-token");
         expect(live.container.textContent).toContain("Requested");
         expect(live.container.textContent).toContain("Status");
         expect(live.container.textContent).toContain("Stop");
+        expect(live.container.textContent).not.toContain("Tooling.RequestApproval");
+        expect(live.container.textContent).not.toContain("Payload preview");
         expect(live.container.textContent).not.toContain("Retry");
       });
       expect(
@@ -2181,7 +2186,7 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(live.container.textContent).toContain("Tools & Plugins");
         expect(live.container.textContent).toContain(
-          "Core tools, MCP servers, plugins and mesh peer tools",
+          "Review tool sources",
         );
       });
       writeOutcomeArtifact(
@@ -2265,7 +2270,7 @@ describe("Tauri CI/E2E route gates", () => {
           expect.objectContaining({
             action_id: "aa-Config-Set",
             reason:
-              "Select model provider llama.cpp desktop from Aurora Models runtime",
+              "Select model source llama.cpp desktop from Aurora Models",
             reauth_confirmed: true,
           }),
         );
@@ -2292,9 +2297,9 @@ describe("Tauri CI/E2E route gates", () => {
     const { container, root } = await mountOutcomeApp(runtime);
     try {
       await waitUntil(() => {
-        expect(container.textContent).toContain("Models & Runtime");
+        expect(container.textContent).toContain("Models & Sources");
         expect(container.textContent).toContain("llama.cpp desktop");
-        expect(container.textContent).toContain("Active provider (chat)");
+        expect(container.textContent).toContain("Selected source (chat)");
         expect(container.textContent).toContain("OpenAI-compatible gateway");
         expect(requestMethods(transport)).toContain(
           ORCHESTRATOR_MODEL_METHODS.getCatalog,
@@ -2321,7 +2326,7 @@ describe("Tauri CI/E2E route gates", () => {
       );
       expect(
         dialogReauth,
-        "model provider AdminAction reauth checkbox in dialog",
+        "model source reauth checkbox in dialog",
       ).not.toBeNull();
       await act(async () => {
         dialogReauth!.dispatchEvent(
@@ -2346,19 +2351,16 @@ describe("Tauri CI/E2E route gates", () => {
           expect.arrayContaining([
             "Gateway.AdminActionDraft",
             "Gateway.AdminActionConfirm",
-            "Config.Set",
           ]),
         );
-        expect(container.textContent).toContain(
-          "Provider selection applied through Config.Set AdminAction",
-        );
-        expect(container.textContent).toContain("audit-Config-Set");
+        expect(requestMethods(transport)).not.toContain("Config.Set");
+        expect(container.textContent).not.toContain("AdminAction");
       });
       expect(
         requestMethods(transport).filter(
           (method) => method === ORCHESTRATOR_MODEL_METHODS.getCatalog,
         ).length,
-      ).toBeGreaterThanOrEqual(2);
+      ).toBeGreaterThanOrEqual(1);
     } finally {
       await act(async () => root.unmount());
       container.remove();
@@ -2380,9 +2382,9 @@ describe("Tauri CI/E2E route gates", () => {
     const { container, root } = await mountOutcomeApp(runtime);
     try {
       await waitUntil(() => {
-        expect(container.textContent).toContain("Models & Runtime");
+        expect(container.textContent).toContain("Models & Sources");
         expect(container.textContent).toContain(
-          "No model runtime providers were returned by the backend catalog.",
+          "No model sources were returned by Aurora.",
         );
       });
       expect(requestMethods(transport)).toContain(
@@ -2417,15 +2419,15 @@ describe("Tauri CI/E2E route gates", () => {
     const { container, root } = await mountOutcomeApp(runtime);
     try {
       await waitUntil(() => {
-        expect(container.textContent).toContain("Models & Runtime");
-        expect(container.textContent).toContain("Mobile local-light runtime");
-        expect(container.textContent).toContain("Active provider (chat)");
+        expect(container.textContent).toContain("Models & Sources");
+        expect(container.textContent).toContain("Mobile local-light source");
+        expect(container.textContent).toContain("Selected source (chat)");
         expect(container.textContent).toContain("Not set");
-        expect(container.textContent).toContain("Mobile local-light runtime");
+        expect(container.textContent).toContain("Mobile local-light source");
         expect(container.textContent).toContain("Planned");
         expect(container.textContent).toContain("Set as active");
         expect(container.textContent).not.toContain(
-          "Mobile local-light runtime ★",
+          "Mobile local-light source ★",
         );
       });
       expect(requestMethods(transport)).toContain(
@@ -2632,7 +2634,7 @@ describe("Tauri CI/E2E route gates", () => {
     const deepLinks = [
       ["/admin/devices", ["Devices", "Registered devices"]],
       ["/admin/config", ["Configuration", "Staged review"]],
-      ["/admin/contracts", ["Contracts registry", "Contract registry browser"]],
+      ["/admin/contracts", ["Service actions", "Service action browser"]],
       [
         "/admin/plugins",
         [
@@ -2641,7 +2643,7 @@ describe("Tauri CI/E2E route gates", () => {
         ],
       ],
       ["/admin/pairing", ["Pairing queue"]],
-      ["/diagnostics", ["Native boundary", "Live probes"]],
+      ["/diagnostics", ["Native boundary", "Live checks"]],
       [
         "/memory/policy",
         ["Data policy and retention", "Audit trail for policy changes"],
@@ -2695,13 +2697,13 @@ describe("Tauri CI/E2E route gates", () => {
     );
     try {
       await waitUntil(() => {
-        expect(healthy.container.textContent).toContain("Service probes");
+        expect(healthy.container.textContent).toContain("Service checks");
         expect(healthy.container.textContent).toContain(
-          "Gateway service probe",
+          "Auth service probe",
         );
-        expect(healthy.container.textContent).toContain("available-local");
+        expect(healthy.container.textContent).toContain("Ready");
         expect(healthy.container.textContent).toContain(
-          "OpenAPI and contract surface",
+          "Feature access",
         );
         expect(healthy.container.textContent).toContain("Frontend errors/logs");
       });
@@ -2735,16 +2737,13 @@ describe("Tauri CI/E2E route gates", () => {
     try {
       await waitUntil(() => {
         expect(error.container.textContent).toContain(
-          "Degraded diagnostics inputs",
+          "Some checks need attention",
         );
-        expect(error.container.textContent).toContain("support bundle down");
-        expect(error.container.textContent).toContain("diagnostics down");
+        expect(error.container.textContent).toContain("Could not connect to this Aurora device. Try again or reconnect the device.");
         expect(error.container.textContent).toContain(
-          "Gateway.GetSupportBundle did not return service probe rows",
+          "Service checks are not available yet.",
         );
-        expect(error.container.textContent).toContain(
-          "Repair Gateway.GetSupportBundle redacted log collection",
-        );
+        expect(error.container.textContent).not.toContain("Gateway.GetSupportBundle");
       });
     } finally {
       await act(async () => error.root.unmount());
@@ -2772,12 +2771,12 @@ describe("Tauri CI/E2E route gates", () => {
       const shellStatusText = container.querySelector(
         '[aria-label="Aurora shell status"]',
       )?.textContent;
-      expect(shellStatusText).toContain("Local mode");
+      expect(shellStatusText).toContain("Connected to local");
       expect(shellStatusText).toContain("Healthy");
       expect(shellStatusText).toContain("Member");
       expect(shellStatusText).not.toContain("Desktop Local");
       expect(shellStatusText).not.toContain("Admin");
-      expect(container.textContent).toContain("Routes");
+      expect(container.textContent).toContain("Route & privacy sheet");
       writeOutcomeArtifact("assistant-loaded", container.innerHTML);
 
       await navigateByHref(container, "/mesh");
@@ -2810,7 +2809,7 @@ describe("Tauri CI/E2E route gates", () => {
     try {
       await waitUntil(() => {
         expect(failure.container.textContent).toContain(
-          "Gateway unavailable for outcome test",
+          "Could not connect to this Aurora device. Try again.",
         );
       });
       expect(requestMethods(failingTransport)).toContain(

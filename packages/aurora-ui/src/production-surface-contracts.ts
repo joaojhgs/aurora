@@ -105,11 +105,11 @@ const CONFIG_SCHEMA_METADATA_METHOD = ['Config', 'GetSchemaMetadata'].join('.')
 export const productionSurfaceContracts: ProductionSurfaceContract[] = [
   {
     id: 'assistant-route-sheet',
-    label: 'Assistant and RouteSheet',
+    label: 'Assistant and route choices',
     navItemIds: ['assistant', 'assistant-cancel', 'voice-transcription', 'voice-wake-process', 'voice-wake-control', 'voice-tts-synthesize', 'voice-tts-stop'],
     routeOracles: [routeOracle('assistant', ['Assistant', 'Prompt'], ['Assistant conversation list', 'Send'])],
     mockReferenceFiles: ['components/aurora/assistant/assistant-view.tsx', 'components/aurora/assistant/route-sheet.tsx', 'components/aurora/assistant/tool-call-card.tsx'],
-    mockUxAnchors: ['Conversation rail', 'Route and privacy', 'Voice modes', 'Tool call approval card'],
+    mockUxAnchors: ['Conversation rail', 'Route and privacy', 'Voice modes', 'Action needs approval'],
     componentFiles: ['assistant-view.tsx', 'route-sheet.tsx', 'tool-approval-panel.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [
@@ -121,7 +121,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     mutatingMethodType: 'use',
     adminActionRequired: true,
     fixturePolicy: 'test-only',
-    degradedState: 'Not ready, denied, privacy-blocked, or unconfirmed AdminAction states disable send/confirm controls.',
+    degradedState: 'Not ready, denied, privacy-blocked, or unconfirmed administrator approval states disable send/confirm controls.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx', 'packages/aurora-sdk/tests/conformance.test.ts']
   },
   {
@@ -458,9 +458,9 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'settings-permissions-privacy',
     label: 'Settings, permissions, and privacy',
     navItemIds: ['settings'],
-    routeOracles: [routeOracle('settings', ['Settings and permissions'], ['Route and fallback policy'])],
+    routeOracles: [routeOracle('settings', ['Settings and permissions'], ['Connection choices'])],
     mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
-    mockUxAnchors: ['Privacy defaults, voice behavior, and assistant preferences.', 'Privacy defaults', 'Voice behavior', 'Native permission id'],
+    mockUxAnchors: ['Privacy defaults, voice behavior, and assistant preferences.', 'Privacy defaults', 'Voice behavior', 'Device access'],
     componentFiles: ['settings-permissions-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [
@@ -481,7 +481,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['native'],
     routeOracles: [routeOracle('native', ['Native platform settings'], ['Native permissions and capabilities'])],
     mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
-    mockUxAnchors: ['Privacy defaults, voice behavior, and assistant preferences.', 'NativeIntegrationRow', 'Siri/Shortcuts/App Intents integration', 'nativePolicyNotes'],
+    mockUxAnchors: ['Privacy defaults, voice behavior, and assistant preferences.', 'Device access', 'System assistant role', 'iOS can start Aurora actions'],
     componentFiles: ['settings-permissions-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'native-permission'],
     truthSources: [
