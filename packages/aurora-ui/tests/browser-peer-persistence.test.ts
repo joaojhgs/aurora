@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  MeshPeerCredentialRecord,
-  MeshReconnectChallengeMessage,
-  WebRtcPeerConnectionProfile,
+import {
+  inboundVerifierSecretKey,
+  type MeshPeerCredentialRecord,
+  type MeshReconnectChallengeMessage,
+  type PeerRelationshipSelector,
+  type WebRtcPeerConnectionProfile,
 } from '@aurora/client/webrtc'
 import {
   BrowserPersistentPeerCredentialStore,
@@ -18,6 +20,7 @@ class MapVaultStorage implements BrowserVaultStorage {
   failReads = false
   failWrites = false
   failDeletes = false
+  readonly failDeleteKeys = new Set<string>()
 
   async get(key: string): Promise<unknown> {
     if (this.failReads) throw new Error('storage read denied')
@@ -30,7 +33,7 @@ class MapVaultStorage implements BrowserVaultStorage {
   }
 
   async delete(key: string): Promise<void> {
-    if (this.failDeletes) throw new Error('storage delete denied')
+    if (this.failDeletes || this.failDeleteKeys.has(key)) throw new Error('storage delete denied')
     this.values.delete(key)
   }
 
@@ -87,12 +90,14 @@ const challenge: MeshReconnectChallengeMessage = {
   room_name: 'family-room',
 }
 
-const verifierSecretKey = inboundVerifierSecretKey({
+const verifierSelector: PeerRelationshipSelector = {
   tokenId: 'token-row-1',
   claimantPeerId: 'browser-peer',
   verifierPeerId: 'host-peer',
   roomName: 'family-room',
-})
+}
+
+const verifierSecretKey = inboundVerifierSecretKey(verifierSelector)
 
 const verifierSecret = JSON.stringify({
   version: 1,
@@ -104,25 +109,6 @@ const verifierSecret = JSON.stringify({
   createdAtMs: 100,
   credentialRevision: 1,
 })
-
-function inboundVerifierSecretKey(selector: {
-  verifierPeerId: string
-  claimantPeerId: string
-  roomName: string
-  tokenId: string
-}): string {
-  return [
-    'aurora.peer-host.inbound-verifier.v1',
-    encodeInboundVerifierKeyPart(selector.verifierPeerId),
-    encodeInboundVerifierKeyPart(selector.claimantPeerId),
-    encodeInboundVerifierKeyPart(selector.roomName),
-    encodeInboundVerifierKeyPart(selector.tokenId),
-  ].join(':')
-}
-
-function encodeInboundVerifierKeyPart(value: string): string {
-  return encodeURIComponent(value).replace(/\./gu, '%2E')
-}
 
 const thinProfileDocument: ThinProfileDocument = {
   version: 1,
@@ -248,6 +234,25 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     await reloaded.close()
   })
 
+  it('accepts SDK-valid inbound verifier keys with room names up to 512 characters', async () => {
+    const storage = new MapVaultStorage()
+    const longRoomSelector: PeerRelationshipSelector = {
+      ...verifierSelector,
+      roomName: 'r'.repeat(512),
+    }
+    const longRoomKey = inboundVerifierSecretKey(longRoomSelector)
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+
+    await expect(store.setOpaqueSecret(longRoomKey, verifierSecret)).resolves.toBeUndefined()
+    await expect(store.getOpaqueSecret(longRoomKey)).resolves.toBe(verifierSecret)
+    await store.close()
+  })
+
   it('rejects inbound verifier secret keys outside the exact default namespace', async () => {
     const store = new BrowserPersistentPeerCredentialStore({
       storage: new MapVaultStorage(),
@@ -278,6 +283,20 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     await expect(unavailable.setOpaqueSecret(verifierSecretKey, verifierSecret)).rejects.toThrow('Persistent inbound verifier storage is unavailable')
     await expect(unavailable.deleteOpaqueSecret(verifierSecretKey)).rejects.toThrow('Persistent inbound verifier storage is unavailable')
     await unavailable.close()
+
+    const queuedFailure = new MapVaultStorage()
+    const queuedStore = new BrowserPersistentPeerCredentialStore({
+      storage: queuedFailure,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+    queuedFailure.failWrites = true
+    queuedStore.setRoomSecret(profile.roomSecretRef, 'queued-room-secret')
+    await expect(queuedStore.setOpaqueSecret(verifierSecretKey, verifierSecret))
+      .rejects.toThrow('Persistent inbound verifier storage is unavailable')
+    expect(await queuedFailure.keys()).not.toContain(verifierSecretKey)
+    await queuedStore.close()
 
     const failingWrites = new MapVaultStorage()
     failingWrites.failWrites = true
@@ -336,6 +355,28 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     expect(await storage.keys()).not.toContain(verifierSecretKey)
     expect((await storage.keys()).some((key) => key.startsWith('credential:') || key.startsWith('room:'))).toBe(false)
     await expect(store.getOpaqueSecret(verifierSecretKey)).resolves.toBeUndefined()
+    await store.close()
+  })
+
+  it('reports clear failures for uncleared inbound verifier material', async () => {
+    const storage = new MapVaultStorage()
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+
+    await store.setOpaqueSecret(verifierSecretKey, verifierSecret)
+    await store.save('host-peer', credential)
+    store.setRoomSecret(profile.roomSecretRef, 'room-secret')
+    storage.failDeleteKeys.add(verifierSecretKey)
+
+    await expect(store.clear()).rejects.toThrow('storage delete denied')
+
+    const keys = await storage.keys()
+    expect(keys).toContain(verifierSecretKey)
+    expect(keys.some((key) => key.startsWith('credential:') || key.startsWith('room:'))).toBe(false)
     await store.close()
   })
 

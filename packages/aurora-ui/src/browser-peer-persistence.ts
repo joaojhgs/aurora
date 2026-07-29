@@ -318,20 +318,38 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.roomSecrets.clear()
     await this.memory.clear()
     await this.pendingWrites
+    let inboundVerifierClearError: unknown
     if (this.storageUsable && this.storage !== null) {
+      let keys: string[] = []
       try {
-        const keys = await this.storage.keys()
+        keys = await this.storage.keys()
+      } catch (error) {
+        this.fallbackToMemory(error)
+        inboundVerifierClearError = error
+      }
+      try {
         await Promise.all(keys
-          .filter((key) => key.startsWith(CREDENTIAL_PREFIX) || key.startsWith(ROOM_PREFIX) || key.startsWith(INBOUND_VERIFIER_KEY_PREFIX))
+          .filter((key) => key.startsWith(CREDENTIAL_PREFIX) || key.startsWith(ROOM_PREFIX))
           .map(async (key) => await this.storage!.delete(key)))
       } catch (error) {
         this.fallbackToMemory(error)
+      }
+      try {
+        await Promise.all(keys
+          .filter((key) => key.startsWith(INBOUND_VERIFIER_KEY_PREFIX))
+          .map(async (key) => await this.storage!.delete(key)))
+      } catch (error) {
+        this.fallbackToMemory(error)
+        inboundVerifierClearError = error
       }
     }
     this.removeMetadata(PROFILE_KEY)
     this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(STABLE_PEER_KEY)
+    if (inboundVerifierClearError !== undefined) {
+      throw inboundVerifierClearError
+    }
   }
 
   async close(): Promise<void> {
@@ -426,10 +444,32 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   }
 
   private async writeEncryptedRequired(key: string, value: unknown): Promise<void> {
-    this.assertDurableInboundVerifierStorage()
     try {
+      this.assertDurableInboundVerifierStorage()
       await this.pendingWrites
-      await this.writeEncrypted(key, value)
+      this.assertDurableInboundVerifierStorage()
+      const storage = this.storage!
+      const cryptoImpl = this.cryptoImpl!
+      const cryptoKey = await this.vaultKey()
+      const nonce = new Uint8Array(12)
+      cryptoImpl.getRandomValues(nonce)
+      const plaintext = new TextEncoder().encode(JSON.stringify(value))
+      try {
+        const ciphertext = await cryptoImpl.subtle.encrypt(
+          { name: 'AES-GCM', iv: nonce, additionalData: this.aad(key) },
+          cryptoKey,
+          plaintext,
+        )
+        const record: EncryptedVaultRecord = {
+          version: VAULT_VERSION,
+          nonce: toBase64Url(nonce),
+          ciphertext: toBase64Url(new Uint8Array(ciphertext)),
+          updatedAtMs: this.now(),
+        }
+        await storage.set(key, record)
+      } finally {
+        plaintext.fill(0)
+      }
     } catch (error) {
       this.fallbackToMemory(error)
       throw error
@@ -692,18 +732,21 @@ function assertStorageKey(name: string, value: string, maxLength = 1024): void {
 }
 
 function normalizeInboundVerifierSecretKey(key: string): string {
-  if (!key.startsWith(INBOUND_VERIFIER_KEY_PREFIX) || key.length > 2048) throw new Error('Invalid inbound verifier secret key')
+  if (!key.startsWith(INBOUND_VERIFIER_KEY_PREFIX) || key.length > 8192) throw new Error('Invalid inbound verifier secret key')
   const parts = key.split(':')
   if (parts.length !== 5 || parts[0] !== INBOUND_VERIFIER_PREFIX) throw new Error('Invalid inbound verifier secret key')
-  for (const part of parts.slice(1)) {
-    if (part.length === 0 || part.length > 768) throw new Error('Invalid inbound verifier secret key')
+  const encodedLimits = [768, 768, 4096, 768]
+  const decodedLimits = [256, 256, 512, 256]
+  for (const [index, part] of parts.slice(1).entries()) {
+    if (part.length === 0 || part.length > encodedLimits[index]!) throw new Error('Invalid inbound verifier secret key')
     let decoded: string
     try {
       decoded = decodeURIComponent(part)
     } catch {
       throw new Error('Invalid inbound verifier secret key')
     }
-    if (!/^[A-Za-z0-9_.:@/-]{1,256}$/u.test(decoded)) throw new Error('Invalid inbound verifier secret key')
+    if (decoded.length === 0 || decoded.length > decodedLimits[index]!) throw new Error('Invalid inbound verifier secret key')
+    if (index !== 2 && !/^[A-Za-z0-9_.:@/-]+$/u.test(decoded)) throw new Error('Invalid inbound verifier secret key')
     if (encodeInboundVerifierKeyPart(decoded) !== part) throw new Error('Invalid inbound verifier secret key')
   }
   return key
