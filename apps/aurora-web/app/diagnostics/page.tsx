@@ -8,13 +8,22 @@ import type {
 } from '@aurora/client'
 import { MeshDiagnosticsView, meshDiagnosticsSnapshotFromResults } from '@aurora/ui'
 import { createAuroraWebClient } from '../aurora-client'
-import { countText, productErrorText, productStatusText, yesNo } from '../product-copy'
+import {
+  countText,
+  productAvailabilityText,
+  productErrorState,
+  productErrorText,
+  productQueueStatusState,
+  productQueueStatusText,
+  yesNo
+} from '../product-copy'
 import { getShellSnapshot } from '../shell-state'
 import { DiagnosticsExportIsland } from './diagnostics-export-island'
 
 interface DiagnosticResult<T> {
   data: T | null
   error: string | null
+  errorState: AvailabilityState
 }
 
 interface ProbeRow {
@@ -145,7 +154,7 @@ export default async function Page() {
           <dl className="aw-facts">
             <div>
               <dt>Bus</dt>
-              <dd>{topology.data ? productStatusText(topology.data.bullmq_queue_health.status) : unavailableText(topology.error)}</dd>
+              <dd>{topology.data ? productQueueStatusText(topology.data.bullmq_queue_health.status) : unavailableText(topology.error)}</dd>
             </div>
             <div>
               <dt>Service Layout</dt>
@@ -176,19 +185,19 @@ export default async function Page() {
 
 async function capture<T>(operation: () => Promise<T>): Promise<DiagnosticResult<T>> {
   try {
-    return { data: await operation(), error: null }
+    return { data: await operation(), error: null, errorState: 'available-local' }
   } catch (error) {
-    return { data: null, error: productErrorText(error) }
+    return { data: null, error: productErrorText(error), errorState: productErrorState(error) }
   }
 }
 
 async function captureResult<T>(operation: () => Promise<{ ok: true; data: T } | { ok: false; error: Error }>): Promise<DiagnosticResult<T>> {
   try {
     const result = await operation()
-    if (result.ok) return { data: result.data, error: null }
-    return { data: null, error: productErrorText(result.error) }
+    if (result.ok) return { data: result.data, error: null, errorState: 'available-local' }
+    return { data: null, error: productErrorText(result.error), errorState: productErrorState(result.error) }
   } catch (error) {
-    return { data: null, error: productErrorText(error) }
+    return { data: null, error: productErrorText(error), errorState: productErrorState(error) }
   }
 }
 
@@ -202,31 +211,31 @@ function buildProbes(input: {
   return [
     {
       name: 'Service List',
-      state: input.services.data?.services.length ? 'available-local' : stateFromError(input.services.error),
+      state: input.services.data?.services.length ? 'available-local' : stateFromResult(input.services),
       summary: input.services.data ? countText(input.services.data.services.length, 'service') : unavailableText(input.services.error),
       details: 'Aurora service health'
     },
     {
       name: 'Service Health',
-      state: input.topology.data?.bullmq_queue_health.status === 'healthy' ? 'available-local' : stateFromError(input.topology.error, 'degraded'),
-      summary: input.topology.data ? productStatusText(input.topology.data.bullmq_queue_health.status) : unavailableText(input.topology.error),
+      state: input.topology.data ? productQueueStatusState(input.topology.data.bullmq_queue_health.status) : stateFromResult(input.topology, 'degraded'),
+      summary: input.topology.data ? productQueueStatusText(input.topology.data.bullmq_queue_health.status) : unavailableText(input.topology.error),
       details: 'App services and shared work queue'
     },
     {
       name: 'Available Features',
-      state: input.catalog.data?.actions.length ? 'available-local' : stateFromError(input.catalog.error),
+      state: input.catalog.data?.actions.length ? 'available-local' : stateFromResult(input.catalog),
       summary: input.catalog.data ? `${countText(input.catalog.data.actions.length, 'action')}; sensitive details removed: ${yesNo(input.catalog.data.secrets_redacted)}` : unavailableText(input.catalog.error),
       details: 'Feature and action readiness'
     },
     {
       name: 'Device Routing',
-      state: input.route.data?.blockers.length ? 'privacy-blocked' : stateFromError(input.route.error, 'available-remote'),
+      state: input.route.data?.blockers.length ? 'privacy-blocked' : stateFromResult(input.route, 'available-remote'),
       summary: input.route.data ? input.route.data.blockers.length ? `${countText(input.route.data.blockers.length, 'item')} needs attention` : 'Ready' : unavailableText(input.route.error),
       details: 'Device selection and safety checks'
     },
     {
       name: 'Device Connection',
-      state: input.webrtc.data?.started ? 'available-remote' : stateFromError(input.webrtc.error, 'unsupported'),
+      state: input.webrtc.data?.started ? 'available-remote' : stateFromResult(input.webrtc, 'unsupported'),
       summary: input.webrtc.data
         ? trustedDeviceSummary(input.webrtc.data.connected_peer_count, input.webrtc.data.app_layer_e2ee_enabled)
         : unavailableText(input.webrtc.error),
@@ -243,12 +252,8 @@ function blockedActions(catalog: CapabilityCatalogResponse | null): number {
   return catalog?.actions.filter((action) => action.bindability !== 'available').length ?? 0
 }
 
-function stateFromError(error: string | null, fallback: AvailabilityState = 'unsupported'): AvailabilityState {
-  if (!error) return fallback
-  const lower = error.toLowerCase()
-  if (lower.includes('permission') || lower.includes('forbidden')) return 'denied'
-  if (lower.includes('timeout') || lower.includes('unavailable')) return 'degraded'
-  return 'unsupported'
+function stateFromResult<T>(result: DiagnosticResult<T>, fallback: AvailabilityState = 'unsupported'): AvailabilityState {
+  return result.error ? result.errorState : fallback
 }
 
 function unavailableText(error: string | null): string {
@@ -260,7 +265,7 @@ function redactionGap(error: string | null): string {
 }
 
 function StateBadge({ state }: { state: AvailabilityState }) {
-  return <span className={`adx-badge adx-state-${state}`}>{productStatusText(state)}</span>
+  return <span className={`adx-badge adx-state-${state}`}>{productAvailabilityText(state)}</span>
 }
 
 function Metric({ label, value }: { label: string; value: number }) {

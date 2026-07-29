@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { GatewaySupportBundleResponse } from '@aurora/client'
 import { createAuroraBrowserClient } from '../aurora-client'
-import { countText, productActionErrorText, yesNo } from '../product-copy'
+import { countText, productActionErrorText, productBundleItemAvailable, yesNo } from '../product-copy'
 
 interface DiagnosticsExportControlProps {
   correlationId: string | null
@@ -122,6 +122,6 @@ export function DiagnosticsExportControl({
 }
 
 function summarizeItems(items: Array<{ name: string; status: string }>): string {
-  const available = items.filter((item) => item.status.toLowerCase().includes('available') || item.status.toLowerCase().includes('ok')).length
+  const available = items.filter((item) => productBundleItemAvailable(item.status)).length
   return `${countText(items.length, 'item')} checked; available: ${yesNo(available > 0)}`
 }

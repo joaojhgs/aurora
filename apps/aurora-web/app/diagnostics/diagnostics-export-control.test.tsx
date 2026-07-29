@@ -38,9 +38,10 @@ describe('DiagnosticsExportControl', () => {
     await confirmAndExport(container)
 
     const rendered = visibleOutput(container)
+    const attributes = userFacingAttributes(container)
     expect(rendered).toContain('Aurora could not complete that action. Try again.')
     expect(rendered).not.toContain(hostile)
-    expect(rendered).not.toMatch(/Gateway\.|\/home\/|room-password|WebRTC|sidecar|evidence|SDK|fallback|raw|token/i)
+    expect(`${rendered} ${attributes}`).not.toMatch(/Gateway\.|\/home\/|room-password|WebRTC|sidecar|evidence|SDK|fallback|raw|token/i)
 
     root.unmount()
   })
@@ -53,8 +54,14 @@ describe('DiagnosticsExportControl', () => {
         audit_receipt: 'AdminAction receipt Gateway.GetSupportBundle',
         audit_error: null,
         secrets_redacted: true,
-        native_capabilities: [{ name: 'SDK provider /home/alice', status: 'available' }],
-        sidecar_logs: [{ name: 'sidecar.log', status: 'raw WebRTC DataChannel failure' }],
+        native_capabilities: [
+          { name: 'SDK provider /home/alice', status: 'UN.AVAILABLE' },
+          { name: 'available-looking raw token', status: 'OK' }
+        ],
+        sidecar_logs: [
+          { name: 'sidecar.log', status: 'un-available' },
+          { name: 'raw WebRTC DataChannel failure', status: 'connected and available' }
+        ],
         recent_events: [{ event: 'diagnostics.support_bundle.exported' }],
         recent_audit_events: [{ method: 'Gateway.GetSupportBundle' }]
       }
@@ -70,11 +77,12 @@ describe('DiagnosticsExportControl', () => {
     await confirmAndExport(container)
 
     const rendered = visibleOutput(container)
+    const attributes = userFacingAttributes(container)
     expect(rendered).toContain('Support Record Recorded')
     expect(rendered).toContain('1 related item')
-    expect(rendered).toContain('Device Features 1 item checked; available: Yes')
-    expect(rendered).toContain('Service Notes 1 item checked; available: No')
-    expect(rendered).not.toMatch(/Gateway\.|\/home\/|room-password|WebRTC|DataChannel|sidecar|SDK provider|raw/i)
+    expect(rendered).toContain('Device Features 2 items checked; available: Yes')
+    expect(rendered).toContain('Service Notes 2 items checked; available: No')
+    expect(`${rendered} ${attributes}`).not.toMatch(/Gateway\.|\/home\/|room-password|WebRTC|DataChannel|sidecar|SDK provider|raw|token/i)
 
     root.unmount()
   })
@@ -107,4 +115,10 @@ function visibleOutput(container: HTMLElement): string {
     .replace(/&#x27;|&apos;/g, "'")
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function userFacingAttributes(container: HTMLElement): string {
+  return Array.from(container.querySelectorAll('[aria-label], [aria-description], [title], [placeholder], [alt]'))
+    .flatMap((element) => ['aria-label', 'aria-description', 'title', 'placeholder', 'alt'].map((name) => element.getAttribute(name) ?? ''))
+    .join(' ')
 }
