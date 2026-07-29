@@ -2,8 +2,11 @@ package dev.aurora.tauri.nativeplugin
 
 import android.Manifest
 import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.KeyguardManager
 import android.app.role.RoleManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -29,6 +32,8 @@ import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -51,6 +56,8 @@ import javax.crypto.spec.SecretKeySpec
 private const val ASSISTANT_ROLE_REQUEST_CODE = 4202
 private const val ANDROID_PERMISSION_REQUEST_CODE = 4204
 private const val ADMIN_UNLOCK_REQUEST_CODE = 4206
+private const val AURORA_ACTION_NOTIFICATION_CHANNEL_ID = "aurora_local_actions"
+private const val AURORA_ACTION_NOTIFICATION_ID = 4208
 private const val SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
@@ -155,8 +162,11 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val assistantRoleDenied = assistantRole.getBoolean("denied")
         val assistantRoleOemUnavailable = assistantRole.getBoolean("oemUnavailable")
         val localLightInference = localLightInferenceStatusObject()
+        val shareTextReady = canResolveIntent(Intent(Intent.ACTION_SEND).setType("text/plain"))
+        val deepLinkReady = true
 
         val permissions = JSObject()
+        permissions.put("aurora.nativeCapabilityManifest", true)
         permissions.put("aurora.android.assistantRoleStatus", true)
         permissions.put("aurora.android.assistantRoleRequest", assistantRoleRequestable)
         permissions.put("aurora.android.microphone", microphoneGranted)
@@ -179,6 +189,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.filePick", false)
         permissions.put("aurora.android.shareIntent", true)
         permissions.put("aurora.android.deepLink", true)
+        permissions.put("aurora.android.shareText", shareTextReady)
+        permissions.put("aurora.android.openDeepLink", deepLinkReady)
+        permissions.put("aurora.android.showNotification", notificationsGranted)
         permissions.put("aurora.android.appWidget", true)
         permissions.put("aurora.android.appShortcut", true)
         permissions.put("aurora.android.quickTile", true)
@@ -186,6 +199,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.localLightInference", localLightInference.getBoolean("permissionGranted"))
 
         val capabilities = JSObject()
+        capabilities.put("native.permissionsManifest", true)
+        capabilities.put("native.deviceStatus", true)
         capabilities.put("android.assistantRole.status", true)
         capabilities.put("android.assistantRole.available", assistantRoleAvailable)
         capabilities.put("android.assistantRole.packageQualified", assistantRolePackageQualified)
@@ -214,6 +229,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.filePick", false)
         capabilities.put("android.shareIntent", true)
         capabilities.put("android.deepLink", true)
+        capabilities.put("android.shareText", shareTextReady)
+        capabilities.put("android.openDeepLink", deepLinkReady)
+        capabilities.put("android.showNotification", notificationsGranted)
         capabilities.put("android.appWidget", true)
         capabilities.put("android.appShortcut", true)
         capabilities.put("android.quickTile", true)
@@ -224,6 +242,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.localLightInference.fallback", localLightInference.getBoolean("fallbackAvailable"))
 
         val permissionStates = JSObject()
+        permissionStates.put("aurora.nativeCapabilityManifest", "available")
         permissionStates.put("aurora.android.assistantRoleStatus", "available")
         permissionStates.put("aurora.android.assistantRoleRequest", assistantRoleState(assistantRole))
         permissionStates.put("aurora.android.microphone", permissionState(microphoneGranted))
@@ -246,6 +265,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.filePick", "degraded")
         permissionStates.put("aurora.android.shareIntent", "available")
         permissionStates.put("aurora.android.deepLink", "available")
+        permissionStates.put("aurora.android.shareText", if (shareTextReady) "available" else "unsupported_platform")
+        permissionStates.put("aurora.android.openDeepLink", "available")
+        permissionStates.put("aurora.android.showNotification", permissionState(notificationsGranted))
         permissionStates.put("aurora.android.appWidget", "fallback")
         permissionStates.put("aurora.android.appShortcut", "fallback")
         permissionStates.put("aurora.android.quickTile", "fallback")
@@ -253,6 +275,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.localLightInference", localLightInference.getString("state"))
 
         val capabilityStates = JSObject()
+        capabilityStates.put("native.permissionsManifest", "available")
+        capabilityStates.put("native.deviceStatus", "available")
         capabilityStates.put("android.assistantRole.status", "available")
         capabilityStates.put("android.assistantRole.available", if (assistantRoleAvailable) "available" else "unsupported_platform")
         capabilityStates.put("android.assistantRole.packageQualified", if (assistantRolePackageQualified) "available" else "degraded")
@@ -281,6 +305,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.filePick", "degraded")
         capabilityStates.put("android.shareIntent", "available")
         capabilityStates.put("android.deepLink", "available")
+        capabilityStates.put("android.shareText", if (shareTextReady) "available" else "unsupported_platform")
+        capabilityStates.put("android.openDeepLink", "available")
+        capabilityStates.put("android.showNotification", permissionState(notificationsGranted))
         capabilityStates.put("android.appWidget", "fallback")
         capabilityStates.put("android.appShortcut", "fallback")
         capabilityStates.put("android.quickTile", "fallback")
@@ -458,6 +485,91 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("evidenceSource", "android-intent-redacted")
         ret.put("secretsRedacted", true)
         invoke.resolve(ret)
+    }
+
+    @Command
+    fun shareText(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidShareTextArgs::class.java)
+        try {
+            val text = boundedRequiredString("text", args.text, 8192)
+            val title = boundedOptionalString("title", args.title, 160)
+            val sendIntent = Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, text)
+            if (title != null) sendIntent.putExtra(Intent.EXTRA_TITLE, title)
+            if (!canResolveIntent(sendIntent)) {
+                invoke.reject("capability_unavailable")
+                return
+            }
+            val chooser = Intent.createChooser(sendIntent, title ?: "Share with")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(chooser)
+            val ret = JSObject()
+            ret.put("shared", true)
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+        } catch (error: IllegalArgumentException) {
+            invoke.reject(error.message ?: "invalid_arguments")
+        } catch (_: ActivityNotFoundException) {
+            invoke.reject("capability_unavailable")
+        } catch (_: SecurityException) {
+            invoke.reject("permission_denied")
+        }
+    }
+
+    @Command
+    fun openDeepLink(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidOpenDeepLinkArgs::class.java)
+        try {
+            val uri = validateOutboundDeepLink(args.url)
+            val intent = Intent(Intent.ACTION_VIEW, uri)
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (!canResolveIntent(intent)) {
+                invoke.reject("capability_unavailable")
+                return
+            }
+            activity.startActivity(intent)
+            val ret = JSObject()
+            ret.put("opened", true)
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+        } catch (error: IllegalArgumentException) {
+            invoke.reject(error.message ?: "permission_denied")
+        } catch (_: ActivityNotFoundException) {
+            invoke.reject("capability_unavailable")
+        } catch (_: SecurityException) {
+            invoke.reject("permission_denied")
+        }
+    }
+
+    @Command
+    fun showNotification(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidShowNotificationArgs::class.java)
+        try {
+            if (!hasPostNotificationsPermission()) {
+                invoke.reject("permission_denied")
+                return
+            }
+            val title = boundedRequiredString("title", args.title, 160)
+            val body = boundedOptionalString("body", args.body, 1024)
+            ensureActionNotificationChannel()
+            val builder = NotificationCompat.Builder(activity, AURORA_ACTION_NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            if (body != null) builder.setContentText(body)
+            NotificationManagerCompat.from(activity).notify(AURORA_ACTION_NOTIFICATION_ID, builder.build())
+            val ret = JSObject()
+            ret.put("shown", true)
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+        } catch (error: IllegalArgumentException) {
+            invoke.reject(error.message ?: "invalid_arguments")
+        } catch (_: SecurityException) {
+            invoke.reject("permission_denied")
+        }
     }
 
     @Command
@@ -1116,7 +1228,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun runtimePermissionsFor(permission: String): List<String> =
         when (permission) {
             "aurora.android.microphone", "android.microphoneCapture" -> listOf(Manifest.permission.RECORD_AUDIO)
-            "aurora.android.notifications", "android.notifications" ->
+            "aurora.android.notifications", "android.notifications", "aurora.android.showNotification", "android.showNotification" ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) listOf(Manifest.permission.POST_NOTIFICATIONS) else emptyList()
             "aurora.android.voiceForegroundService", "android.voiceForegroundService" ->
                 listOfNotNull(
@@ -1125,6 +1237,49 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 )
             else -> emptyList()
         }
+
+    private fun canResolveIntent(intent: Intent): Boolean =
+        intent.resolveActivity(activity.packageManager) != null
+
+    private fun boundedRequiredString(field: String, value: String, maxLen: Int): String {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) throw IllegalArgumentException("${field}_required")
+        if (trimmed.length > maxLen) throw IllegalArgumentException("${field}_too_long")
+        return trimmed
+    }
+
+    private fun boundedOptionalString(field: String, value: String, maxLen: Int): String? {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return null
+        if (trimmed.length > maxLen) throw IllegalArgumentException("${field}_too_long")
+        return trimmed
+    }
+
+    private fun validateOutboundDeepLink(value: String): Uri {
+        val raw = boundedRequiredString("url", value, 2048)
+        val uri = Uri.parse(raw)
+        val scheme = uri.scheme?.lowercase() ?: throw IllegalArgumentException("permission_denied")
+        if (scheme !in setOf("https", "mailto", "tel", "aurora", "aurora-local")) {
+            throw IllegalArgumentException("permission_denied")
+        }
+        if (scheme == "https" && uri.host.isNullOrBlank()) throw IllegalArgumentException("permission_denied")
+        if ((scheme == "mailto" || scheme == "tel") && uri.schemeSpecificPart.isNullOrBlank()) {
+            throw IllegalArgumentException("permission_denied")
+        }
+        return uri
+    }
+
+    private fun ensureActionNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(
+            AURORA_ACTION_NOTIFICATION_CHANNEL_ID,
+            "Aurora actions",
+            NotificationManager.IMPORTANCE_DEFAULT,
+        )
+        channel.description = "Shows Aurora device action results."
+        val manager = activity.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
 
     private fun hasBiometricCapability(): Boolean {
         val keyguard = activity.getSystemService(KeyguardManager::class.java)
@@ -1904,6 +2059,23 @@ class AssistantRoleResultArgs {
 @InvokeArg
 class AndroidPermissionRequestArgs {
     var permission: String = ""
+}
+
+@InvokeArg
+class AndroidShareTextArgs {
+    var text: String = ""
+    var title: String = ""
+}
+
+@InvokeArg
+class AndroidOpenDeepLinkArgs {
+    var url: String = ""
+}
+
+@InvokeArg
+class AndroidShowNotificationArgs {
+    var title: String = ""
+    var body: String = ""
 }
 
 @InvokeArg
