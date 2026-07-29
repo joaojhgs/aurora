@@ -41,20 +41,17 @@ export interface RegisterNativeCapabilityToolsOptions {
   readonly registry: LocalToolRegistry
   readonly capabilities: LocalNativeCapabilitySnapshot
   readonly handlers: LocalNativeCapabilityHandlers
+  /** @deprecated Degraded capabilities are intentionally not bindable local tools. */
   readonly includeDegraded?: boolean | undefined
 }
 
-const ADVERTISED_STATES = new Set<LocalNativeCapabilityState>(['available', 'needs_native_permission', 'degraded'])
-
 export function registerNativeCapabilityTools(options: RegisterNativeCapabilityToolsOptions): AuroraNativeToolId[] {
-  const includeDegraded = options.includeDegraded ?? true
   const registered: AuroraNativeToolId[] = []
   for (const descriptor of NATIVE_TOOL_DESCRIPTORS) {
     const capability = options.capabilities[descriptor.toolContractId as AuroraNativeToolId]
     const handler = options.handlers[descriptor.toolContractId as AuroraNativeToolId]
     if (!capability || !handler) continue
-    if (!ADVERTISED_STATES.has(capability.state)) continue
-    if (!includeDegraded && capability.state === 'degraded') continue
+    if (capability.state !== 'available') continue
     const nativeRequirements = {
       capabilityIds: [capability.capabilityId],
       osPermissions: [...(capability.requiredOsPermissions ?? descriptor.nativeRequirements.osPermissions)]
@@ -65,9 +62,8 @@ export function registerNativeCapabilityTools(options: RegisterNativeCapabilityT
         nativeRequirements
       },
       handler: async (input) => {
-        if (capability.state === 'needs_native_permission') {
-          throw new LocalToolHandlerError('permission_denied')
-        }
+        if (capability.state !== 'available') throw new LocalToolHandlerError(nativeStateErrorReason(capability.state))
+        if (descriptor.toolContractId === AURORA_NATIVE_TOOL_IDS.openDeepLink) validateSafeDeepLink(input.arguments.url)
         return handler(input.arguments, input)
       }
     })
@@ -84,6 +80,10 @@ const stringSchema = { type: 'string', minLength: 1, maxLength: 16_384 } as cons
 const textSchema = { type: 'string', minLength: 1, maxLength: 100_000 } as const
 const booleanSchema = { type: 'boolean' } as const
 const documentIdSchema = { type: 'string', minLength: 1, maxLength: 256 } as const
+const platformSchema = { type: 'string', minLength: 1, maxLength: 64 } as const
+const capabilityIdSchema = { type: 'string', minLength: 1, maxLength: 160 } as const
+const deepLinkUrlSchema = { type: 'string', minLength: 1, maxLength: 2_048 } as const
+const SAFE_DEEP_LINK_PROTOCOLS = new Set(['aurora:', 'aurora-local:'])
 
 const okOutput = (key: string): JsonObject => ({
   type: 'object',
@@ -111,7 +111,7 @@ export const NATIVE_TOOL_DESCRIPTORS: readonly LocalToolDescriptorV1[] = Object.
     localName: 'native.open_deep_link',
     displayName: 'Open link',
     description: 'Open an Aurora-approved link with the platform handler.',
-    argsSchema: objectSchema({ url: stringSchema }, ['url']),
+    argsSchema: objectSchema({ url: deepLinkUrlSchema }, ['url']),
     outputSchema: okOutput('opened'),
     requiredPermissions: ['Native.OpenDeepLink'],
     safetyClass: 'sensitive',
@@ -222,6 +222,8 @@ export const NATIVE_TOOL_DESCRIPTORS: readonly LocalToolDescriptorV1[] = Object.
     description: 'Return bounded local device availability information.',
     argsSchema: objectSchema({}, []),
     outputSchema: objectSchema({
+      platform: platformSchema,
+      availableCapabilities: { type: 'array', items: capabilityIdSchema, maxItems: 128 },
       online: booleanSchema,
       batteryLevel: { type: 'number', minimum: 0, maximum: 1 },
       charging: booleanSchema
@@ -294,4 +296,21 @@ function objectSchema(properties: Record<string, JsonObject>, required: readonly
     required: [...required],
     additionalProperties: false
   }
+}
+
+function nativeStateErrorReason(state: LocalNativeCapabilityState): string {
+  if (state === 'needs_native_permission') return 'permission_unavailable'
+  if (state === 'unsupported_platform') return 'unsupported_platform'
+  return 'capability_unavailable'
+}
+
+function validateSafeDeepLink(value: JsonValue | undefined): void {
+  if (typeof value !== 'string') throw new LocalToolHandlerError('handler_failed')
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new LocalToolHandlerError('handler_failed')
+  }
+  if (!SAFE_DEEP_LINK_PROTOCOLS.has(parsed.protocol)) throw new LocalToolHandlerError('handler_failed')
 }
