@@ -5,10 +5,18 @@ export {
 export {
   DenyAllInboundCredentialVerifierStore,
   DenyAllPeerGrantRepository,
+  MemoryInboundCredentialVerifierStore,
+  MemoryPeerAuditSink,
+  MemoryPeerGrantRepository,
+  MemoryPeerRevocationBroadcaster,
+  MemoryPeerRevocationController,
+  MemoryReconnectChallengeStore,
   NoopPeerAuditSink,
   NoopPeerRevocationBroadcaster,
   NoopReconnectChallengeStore,
-  PeerAuthorityResolver
+  PeerAuthorityResolver,
+  PeerPairingIssuer,
+  createReconnectProofForBearer
 } from './authority.js'
 export type {
   AuthenticatedPeerContext,

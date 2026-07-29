@@ -18,7 +18,8 @@ import {
   encodeJsonPayload,
   hexToBytes,
   openJson,
-  sealJson
+  sealJson,
+  verifyReconnectProofHex
 } from '../src/webrtc/crypto.js'
 
 type Fixture = {
@@ -111,6 +112,9 @@ describe('Aurora WebRTC crypto', () => {
     }
     expect(bytesToHex(buildMeshReconnectProofMessage(input))).toBe(reconnect.message_hex)
     expect(await computeReconnectProofHex('synthetic-reconnect-token', input)).toBe(reconnect.hmac_sha256_hex)
+    await expect(verifyReconnectProofHex(reconnect.inputs.raw_token_sha256_hex, reconnect.hmac_sha256_hex, input)).resolves.toBe(true)
+    await expect(verifyReconnectProofHex(reconnect.inputs.raw_token_sha256_hex, '0'.repeat(64), input)).resolves.toBe(false)
+    await expect(verifyReconnectProofHex(reconnect.inputs.raw_token_sha256_hex, 'not-hex', input)).resolves.toBe(false)
   })
 
   it('matches Python ensure_ascii reconnect canonicalization for Unicode identities', async () => {

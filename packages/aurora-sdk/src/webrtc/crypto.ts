@@ -241,6 +241,29 @@ export async function computeReconnectProofHex(rawBearerToken: string, input: Re
   }
 }
 
+export async function verifyReconnectProofHex(tokenHashHex: string, proofHex: string, input: ReconnectProofInput): Promise<boolean> {
+  let key: Uint8Array
+  let proof: Uint8Array
+  try {
+    key = hexToBytes(tokenHashHex)
+    proof = hexToBytes(proofHex)
+  } catch {
+    return false
+  }
+  try {
+    if (key.byteLength !== 32 || proof.byteLength !== 32) return false
+    const expected = await hmacSha256(key, buildMeshReconnectProofMessage(input))
+    try {
+      return constantTimeEqual(expected, proof)
+    } finally {
+      zeroBytes(expected)
+    }
+  } finally {
+    zeroBytes(key)
+    zeroBytes(proof)
+  }
+}
+
 export function encodeEncryptedBase64Url(payload: Uint8Array): string {
   return base64UrlEncode(payload)
 }
