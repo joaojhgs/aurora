@@ -42,7 +42,6 @@ import {
   errorShellSnapshot,
   loadingShellSnapshot,
   navItemSnapshot,
-  redactDiagnosticText,
   retainThinShellSnapshot,
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
@@ -149,15 +148,18 @@ export const tauriRouteRegistry = {
       nativeCapabilities={assistantNativeCapabilities}
       runtimeHealth={{
         selectedModel: null,
-        routeLabel: `${route.providerLabel} / ${route.state}`,
+        routeLabel: routeAvailabilityLabel(route),
         sidecarHealth: nativeContext.sidecar?.running
-          ? "running"
+          ? "Ready"
           : nativeContext.localMode
-            ? "pending sidecar readiness"
-            : "not used in thin/mock mode",
+            ? "Starting Aurora on this computer"
+            : "Not needed for this connection",
         gatewayHealth: nativeContext.sidecar?.gatewayUrl
-          ? `Gateway ${nativeContext.sidecar.gatewayUrl}`
-          : `${snapshot.transportKind} transport`,
+          ? "Connected on this computer"
+          : transportKindLabel(
+              snapshot.transportKind,
+              nativeContext.runtimeMode,
+            ),
       }}
     />
   ),
@@ -614,11 +616,6 @@ export function AuroraTauriApp({
   }, [navigate]);
 
   const localMode = runtime.mode === "desktop-local";
-  const sidecarEvidence = sidecar
-    ? redactDiagnosticText(
-        `${sidecar.mode ?? "unknown"}; gateway=${sidecar.gatewayUrl ?? "not configured"}; running=${String(sidecar.running)}`,
-      )
-    : "native sidecar status unavailable in this runtime";
   const surfaceProfile = getAuroraSurfaceProfile({
     runtimeMode: runtime.mode,
     transportKind: snapshot.transportKind,
@@ -630,7 +627,6 @@ export function AuroraTauriApp({
     runtimeMode: runtime.mode,
     localMode,
     sidecar,
-    sidecarEvidence,
     nativePermissions,
     nativeFeatures,
     iosInvocationStatus,
@@ -641,7 +637,6 @@ export function AuroraTauriApp({
     surfaceProfile,
     thinConnectionMode: runtime.thinConnectionMode,
     thinPeer: runtime.thinPeer,
-    thinDiagnostics: runtime.thinDiagnostics,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
@@ -752,15 +747,15 @@ async function runRuntimeReadinessProbes(
 }
 
 function sidecarStartupDetail(sidecar: TauriSidecarStatus): string {
-  const parts = [`sidecar ${sidecar.mode ?? "process"}`];
-  if (sidecar.pid) parts.push(`pid ${sidecar.pid}`);
-  return parts.join(" · ");
+  return sidecar.running
+    ? "Aurora is starting on this computer"
+    : "Aurora on this computer needs attention";
 }
 
 function assertReadySidecar(sidecar: TauriSidecarStatus): void {
   if (sidecar.running && !sidecar.lastError) return;
   throw new Error(
-    `Tauri local sidecar is not ready: ${sidecar.lastError ?? "sidecar status command reported not running"}`,
+    "Aurora on this computer could not start. Restart Aurora and try again.",
   );
 }
 
@@ -812,7 +807,7 @@ async function waitForGatewayReadiness(
   }
 
   throw new Error(
-    `Tauri local Gateway did not become ready within ${DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS}ms. Last probe error: ${readinessErrorMessage(lastError)}`,
+    "Aurora on this computer did not finish starting. Restart Aurora and try again.",
   );
 }
 
@@ -842,19 +837,13 @@ function meshProgressPct(elapsedMs: number): number {
 }
 
 function meshAttemptDetail(
-  attempt: number,
+  _attempt: number,
   elapsedMs: number,
-  sidecar: TauriSidecarStatus,
-  lastError: unknown,
+  _sidecar: TauriSidecarStatus,
+  _lastError: unknown,
 ): string {
   const elapsedS = Math.round(elapsedMs / 1000);
-  const parts = [
-    `attempt ${attempt}`,
-    `${elapsedS}s elapsed`,
-    `gateway ${sidecar.gatewayUrl ?? "pending"}`,
-  ];
-  if (lastError) parts.push(readinessErrorMessage(lastError));
-  return parts.join(" · ");
+  return `Connecting Aurora on this computer · ${elapsedS}s`;
 }
 
 function modelsProgressPct(completed: number, total: number): number {
@@ -890,14 +879,11 @@ async function pollRegistryServices(
 }
 
 function registryPollDetail(services: ServiceInfo[]): string {
-  if (services.length === 0) return "waiting for services to register…";
+  if (services.length === 0) return "Preparing Aurora features…";
   const healthy = services.filter(
     (service) => service.status === "healthy",
   ).length;
-  const names = services.map((service) => service.module).sort();
-  const preview = names.slice(0, 4).join(", ");
-  const overflow = names.length > 4 ? ` +${names.length - 4} more` : "";
-  return `${healthy} / ${services.length} services healthy · ${preview}${overflow}`;
+  return `Preparing Aurora features · ${healthy} of ${services.length} ready`;
 }
 
 async function buildRuntimeShellSnapshot(
@@ -918,12 +904,6 @@ async function buildRuntimeShellSnapshot(
   return snapshot;
 }
 
-function readinessErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return "unknown Gateway readiness error";
-}
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -932,15 +912,11 @@ interface NativeContext {
   runtimeMode: string;
   localMode: boolean;
   sidecar: TauriSidecarStatus | null;
-  sidecarEvidence: string;
   surfaceProfile: ReturnType<typeof getAuroraSurfaceProfile>;
   thinConnectionMode: ReturnType<
     typeof createAuroraTauriRuntime
   >["thinConnectionMode"];
   thinPeer?: ReturnType<typeof createAuroraTauriRuntime>["thinPeer"];
-  thinDiagnostics: ReturnType<
-    typeof createAuroraTauriRuntime
-  >["thinDiagnostics"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
   saveThinProfile: (
@@ -1027,18 +1003,16 @@ function TauriNativeSettingsPage({
           className="ata-panel"
           aria-labelledby="tauri-native-command-title"
         >
-          <h2 id="tauri-native-command-title">Desktop controls</h2>
+          <h2 id="tauri-native-command-title">Device controls</h2>
           <p>
-            Local desktop controls are shown only when Aurora is running inside
-            the Tauri desktop shell with the local sidecar enabled.
+            Features provided by this computer are listed here with their
+            current access state.
           </p>
           <dl className="ata-facts">
             {rows.map((row) => (
-              <div key={row.command}>
+              <div key={row.id}>
                 <dt>{row.label}</dt>
-                <dd>
-                  <code>{row.command}</code> · {row.status} · {row.source}
-                </dd>
+                <dd>{row.status}</dd>
               </div>
             ))}
           </dl>
@@ -1048,11 +1022,11 @@ function TauriNativeSettingsPage({
           className="ata-panel"
           aria-labelledby="tauri-native-thin-title"
         >
-          <h2 id="tauri-native-thin-title">Native controls</h2>
+          <h2 id="tauri-native-thin-title">Device controls</h2>
           <p>
-            {nativeContext.surfaceProfile.label} uses remote or platform-managed
-            capabilities. Local desktop sidecar controls are hidden on this
-            surface.
+            {surfaceTitle(nativeContext)} uses features supplied by the
+            connected device or this device. Computer-only controls are not
+            available here.
           </p>
         </section>
       )}
@@ -1193,18 +1167,24 @@ function TauriSettingsPage({
         id="tauri-settings-title"
         eyebrow="Settings"
         title="Settings"
-        description="General permissions, schema-backed configuration, and advanced data-policy controls are grouped on one Settings page."
+        description="Permissions, connection choices, privacy, and data controls are grouped on one Settings page."
         badges={
           <>
-            <EvidenceBadge label={snapshot.evidenceSource} />
+            <EvidenceBadge
+              label={
+                snapshot.loadState === "ready"
+                  ? "Settings available"
+                  : "Settings need attention"
+              }
+            />
             <EvidenceBadge
               label={
                 snapshot.secretsRedacted
                   ? "secrets protected"
-                  : "redaction pending"
+                  : "sensitive details need attention"
               }
             />
-            <EvidenceBadge label={nativeContext.surfaceProfile.label} />
+            <EvidenceBadge label={surfaceTitle(nativeContext)} />
           </>
         }
       />
@@ -1353,11 +1333,7 @@ function TauriDiagnosticsPage({
         />
       ) : null}
       <StateSurface
-        title={
-          nativeContext.localMode
-            ? "Desktop local shell"
-            : thinShellTitle(nativeContext)
-        }
+        title={surfaceTitle(nativeContext)}
         state={
           snapshot.loadState === "error"
             ? "denied"
@@ -1367,25 +1343,23 @@ function TauriDiagnosticsPage({
                 ? "pending"
                 : "available-remote"
         }
-        description="Aurora desktop uses the official Tauri shell while keeping service state behind the Gateway boundary."
-        evidence={
-          shouldShowForSurface(nativeContext.surfaceProfile, "sidecar")
-            ? nativeContext.sidecarEvidence
-            : null
-        }
+        description="Connection, device features, and repair status are shown below."
+        evidence={null}
         actionLabel={
-          redactDiagnosticText(nativeContext.sidecar?.lastError) || null
+          nativeContext.sidecar?.lastError
+            ? "Aurora on this computer needs attention. Restart Aurora and try again."
+            : null
         }
       />
       <section className="ata-panel">
-        <h2>Native boundary</h2>
+        <h2>Device status</h2>
         <dl className="ata-facts">
           <div>
-            <dt>Runtime mode</dt>
+            <dt>Aurora setup</dt>
             <dd>{runtimeModeLabel(nativeContext.runtimeMode)}</dd>
           </div>
           <div>
-            <dt>Transport</dt>
+            <dt>Connection</dt>
             <dd>
               {transportKindLabel(
                 snapshot.transportKind,
@@ -1396,48 +1370,55 @@ function TauriDiagnosticsPage({
           {shouldShowForSurface(nativeContext.surfaceProfile, "webrtcThin") ? (
             <>
               <div>
-                <dt>Thin connection mode</dt>
-                <dd>{nativeContext.thinConnectionMode}</dd>
-              </div>
-              <div>
-                <dt>Thin peer status</dt>
+                <dt>Connection preference</dt>
                 <dd>
-                  {nativeContext.thinPeer?.snapshot().status ??
-                    "not configured"}
+                  {connectionModeLabel(nativeContext.thinConnectionMode)}
                 </dd>
               </div>
               <div>
-                <dt>Thin secrets</dt>
+                <dt>Connected device</dt>
                 <dd>
-                  {nativeContext.thinPeer?.snapshot().secretsPersisted === false
-                    ? "memory-only"
-                    : "none persisted by this shell"}
+                  {peerConnectionStatusLabel(
+                    nativeContext.thinPeer?.snapshot().status,
+                  )}
                 </dd>
               </div>
               <div>
-                <dt>Thin diagnostics</dt>
-                <dd>{nativeContext.thinDiagnostics().join(" · ")}</dd>
+                <dt>Saved access</dt>
+                <dd>
+                  {savedAccessLabel(
+                    nativeContext.thinPeer?.snapshot().secretsPersisted,
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Connection status</dt>
+                <dd>
+                  {peerConnectionDetailLabel(
+                    nativeContext.thinPeer?.snapshot().status,
+                  )}
+                </dd>
               </div>
             </>
           ) : null}
           {shouldShowForSurface(nativeContext.surfaceProfile, "sidecar") ? (
             <div>
-              <dt>Sidecar supervisor</dt>
+              <dt>Aurora on this computer</dt>
               <dd>
                 {nativeContext.sidecar?.running
-                  ? "running"
+                  ? "Ready"
                   : nativeContext.localMode
-                    ? "stopped or unavailable"
-                    : "not used in thin mode"}
+                    ? "Needs attention"
+                    : "Not needed for this connection"}
               </dd>
             </div>
           ) : null}
           <div>
-            <dt>Native manifest</dt>
+            <dt>Device support</dt>
             <dd>
               {snapshot.nativeAvailable
-                ? snapshot.nativePlatform
-                : "unavailable"}
+                ? platformLabel(snapshot.nativePlatform)
+                : "Not available"}
             </dd>
           </div>
           <div>
@@ -1471,7 +1452,7 @@ function TauriDiagnosticsPage({
             <dd>{nativeFeatureLabel(nativeContext.nativeFeatures.dialogs)}</dd>
           </div>
           <div>
-            <dt>Audio bridge</dt>
+            <dt>Audio access</dt>
             <dd>{nativeFeatureLabel(nativeContext.nativeFeatures.audio)}</dd>
           </div>
           {shouldShowForSurface(nativeContext.surfaceProfile, "ios") ? (
@@ -1492,13 +1473,13 @@ function TauriDiagnosticsPage({
           ) : null}
           {shouldShowForSurface(nativeContext.surfaceProfile, "ios") ? (
             <div>
-              <dt>iOS invocation</dt>
+              <dt>Siri and Shortcuts</dt>
               <dd>{iosInvocationLabel(nativeContext.iosInvocationStatus)}</dd>
             </div>
           ) : null}
           {shouldShowForSurface(nativeContext.surfaceProfile, "ios") ? (
             <div>
-              <dt>iOS local-light inference</dt>
+              <dt>On-device models</dt>
               <dd>
                 {localLightInferenceLabel(nativeContext.iosLocalLightStatus)}
               </dd>
@@ -1506,33 +1487,32 @@ function TauriDiagnosticsPage({
           ) : null}
           {shouldShowForSurface(nativeContext.surfaceProfile, "android") ? (
             <div>
-              <dt>Android baseline</dt>
+              <dt>Android support</dt>
               <dd>{androidBaselineLabel(nativeContext.androidBaseline)}</dd>
             </div>
           ) : null}
           {shouldShowForSurface(nativeContext.surfaceProfile, "android") ? (
             <div>
-              <dt>Assistant role</dt>
+              <dt>Assistant access</dt>
               <dd>{assistantRoleProbeLabel(nativeContext.androidBaseline)}</dd>
             </div>
           ) : null}
           {shouldShowForSurface(nativeContext.surfaceProfile, "android") ? (
             <div>
-              <dt>Android foreground</dt>
+              <dt>App visibility</dt>
               <dd>{androidForegroundLabel(nativeContext.androidForeground)}</dd>
             </div>
           ) : null}
           {shouldShowForSurface(nativeContext.surfaceProfile, "android") ? (
             <div>
-              <dt>Android media policy</dt>
+              <dt>Microphone use</dt>
               <dd>{androidMediaPolicyLabel(nativeContext.androidMediaPolicy)}</dd>
             </div>
           ) : null}
           <div>
-            <dt>Denied native defaults</dt>
+            <dt>Permissions to review</dt>
             <dd>
-              {nativeContext.nativePermissions?.deniedByDefault.join(", ") ??
-                "not available"}
+              {permissionsToReviewLabel(nativeContext.nativePermissions)}
             </dd>
           </div>
         </dl>
@@ -1541,7 +1521,7 @@ function TauriDiagnosticsPage({
           type="button"
           onClick={() => void shutdown()}
         >
-          Shut down shell
+          Close Aurora
         </button>
       </section>
       <RouteMatrix routes={snapshot.routes} />
@@ -1558,28 +1538,15 @@ function MissingTauriRoute({ route }: { route: RouteAvailability }) {
   return (
     <div className="ata-page-stack">
       <StateSurface
-        title={`${route.item.label} route registry error`}
+        title={`${route.item.label} is unavailable`}
         state="denied"
-        description="The Tauri shell could not find a production route component for this nav item."
+        description="Aurora could not open this page. Return to the previous page and try again."
         evidence={null}
-        actionLabel="Route registry repair required"
+        actionLabel="Your settings and data are unchanged."
       />
       <section className="ata-panel">
-        <h2>{route.item.label} route is unregistered</h2>
-        <dl className="ata-facts">
-          <div>
-            <dt>Privacy class</dt>
-            <dd>{route.item.privacyClass}</dd>
-          </div>
-          <div>
-            <dt>Routeable</dt>
-            <dd>{route.routeable ? "yes" : "no"}</dd>
-          </div>
-          <div>
-            <dt>Route id</dt>
-            <dd>{route.item.id}</dd>
-          </div>
-        </dl>
+        <h2>What you can do</h2>
+        <p>Restart Aurora, then open this page again.</p>
       </section>
     </div>
   );
@@ -1647,92 +1614,79 @@ function normalizePath(path: string): string {
 
 function nativeCommandRows(
   nativeContext: NativeContext,
-): Array<{ label: string; command: string; status: string; source: string }> {
+): Array<{ id: string; label: string; status: string }> {
   return [
     {
-      label: "Native permissions",
-      command: "aurora_native_permission_status",
-      status: nativeContext.nativePermissions
-        ? `${nativeContext.nativePermissions.platform}; denied=${nativeContext.nativePermissions.deniedByDefault.length}`
-        : "not available",
-      source:
-        nativeContext.nativePermissions?.evidenceSource ??
-        commandUnavailableSource(nativeContext),
+      id: "device-permissions",
+      label: "Device permissions",
+      status: permissionsToReviewLabel(nativeContext.nativePermissions),
     },
     nativeFeatureRow(
+      "tray",
       "Tray",
-      "aurora_tray_status",
       nativeContext.nativeFeatures.tray,
-      nativeContext,
     ),
     nativeFeatureRow(
+      "notifications",
       "Notifications",
-      "aurora_notification_status",
       nativeContext.nativeFeatures.notifications,
-      nativeContext,
     ),
     nativeFeatureRow(
+      "dialogs",
       "Dialogs",
-      "aurora_dialog_status",
       nativeContext.nativeFeatures.dialogs,
-      nativeContext,
     ),
     nativeFeatureRow(
-      "Audio bridge",
-      "aurora_audio_bridge_status",
+      "audio",
+      "Audio access",
       nativeContext.nativeFeatures.audio,
-      nativeContext,
     ),
     {
-      label: "Sidecar",
-      command: "aurora_sidecar_status",
-      status: nativeContext.sidecar
-        ? `running=${String(nativeContext.sidecar.running)}; mode=${nativeContext.sidecar.mode ?? "unknown"}`
-        : "not available",
-      source: nativeContext.sidecar
-        ? "aurora-sidecar-status"
-        : commandUnavailableSource(nativeContext),
+      id: "local-aurora",
+      label: "Aurora on this computer",
+      status: nativeContext.sidecar?.running ? "Ready" : "Needs attention",
     },
   ];
 }
 
-
-function androidForegroundLabel(status: AndroidForegroundRuntimeStatus | null): string {
-  if (!status) return "native command unavailable; WebView visibility fallback pending";
-  const state = status.foreground && status.visible && status.focused ? "focused foreground" : "not focused foreground";
-  return `${state}; ${status.source}${status.reason ? `; ${status.reason}` : ""}`;
+function androidForegroundLabel(
+  status: AndroidForegroundRuntimeStatus | null,
+): string {
+  if (!status) return "Open Aurora to use this feature";
+  return status.foreground && status.visible && status.focused
+    ? "Ready while Aurora is open"
+    : "Open Aurora to use this feature";
 }
 
-function androidMediaPolicyLabel(status: AndroidMediaPolicyStatus | null): string {
-  if (!status) return "focused foreground WebView mic only; no durable background wakeword";
-  return `foreground mic=${String(status.microphoneAllowedInForeground)}; background wakeword=false; ${status.source}${status.reason ? `; ${status.reason}` : ""}`;
+function androidMediaPolicyLabel(
+  status: AndroidMediaPolicyStatus | null,
+): string {
+  if (!status) {
+    return "Microphone use is available only while Aurora is open; background listening is unavailable";
+  }
+  return status.microphoneAllowedInForeground
+    ? "Microphone available while Aurora is open; background listening is unavailable"
+    : "Microphone access is unavailable; review device permissions";
 }
 
 function nativeFeatureRow(
+  id: string,
   label: string,
-  command: string,
   feature: TauriNativeFeatureStatus | null | undefined,
-  nativeContext: NativeContext,
-): { label: string; command: string; status: string; source: string } {
+): { id: string; label: string; status: string } {
   return {
+    id,
     label,
-    command,
     status: nativeFeatureLabel(feature),
-    source: feature?.source ?? commandUnavailableSource(nativeContext),
   };
 }
 
-function commandUnavailableSource(nativeContext: NativeContext): string {
-  return nativeContext.localMode
-    ? "Tauri command unavailable"
-    : "not used on this surface";
-}
-
-function thinShellTitle(nativeContext: NativeContext): string {
-  const prefix = nativeContext.surfaceProfile.isAndroid ? "Android thin" : "Desktop thin";
-  if (nativeContext.thinConnectionMode === "http-only")
-    return `${prefix} shell`;
-  return `${prefix} ${nativeContext.thinConnectionMode} shell`;
+function surfaceTitle(nativeContext: NativeContext): string {
+  if (nativeContext.localMode) return "This computer";
+  if (nativeContext.surfaceProfile.isAndroid) return "This Android device";
+  if (nativeContext.surfaceProfile.isIos) return "This iPhone or iPad";
+  if (nativeContext.surfaceProfile.isMobile) return "This mobile device";
+  return "Connected Aurora device";
 }
 
 function initialThinInviteFromUrl(): string | null {
@@ -1752,70 +1706,205 @@ function initialThinInviteFromUrl(): string | null {
   );
   return invite;
 }
-
-
-function runtimeModeLabel(mode: string): string {
+export function runtimeModeLabel(mode: string): string {
   if (mode === "mock") return "Local mode";
-  if (mode === "desktop-local")
-    return "desktop-local (Tauri sidecar supervised local stack)";
-  if (mode === "desktop-thin")
-    return "desktop-thin (remote Gateway, no local sidecar)";
-  return mode;
+  if (mode === "desktop-local") return "Local on this computer";
+  if (mode === "desktop-thin") return "Connected to another Aurora device";
+  if (mode === "mobile-native") return "Aurora on this mobile device";
+  if (mode === "web" || mode === "web-thin") {
+    return "Connected in this browser";
+  }
+  return "Aurora setup unavailable";
 }
 
-function transportKindLabel(
+export function transportKindLabel(
   transportKind: string,
   runtimeMode: string,
 ): string {
   if (runtimeMode === "mock") return "Local mode";
   if (transportKind === "pending" && runtimeMode === "desktop-local")
-    return "tauri (pending local Gateway readiness)";
+    return "Starting on this computer";
   if (transportKind === "pending" && runtimeMode === "desktop-thin")
-    return "http (pending remote Gateway readiness)";
-  return transportKind;
+    return "Connecting to your Aurora device";
+  if (transportKind === "tauri" || transportKind === "tauri-local") {
+    return "On this computer";
+  }
+  if (
+    transportKind === "mesh" ||
+    transportKind === "webrtc" ||
+    transportKind === "webrtc-only" ||
+    transportKind === "webrtc-preferred"
+  ) {
+    return "Direct device connection";
+  }
+  if (
+    transportKind === "http" ||
+    transportKind === "https" ||
+    transportKind === "gateway"
+  ) {
+    return "Connected through your Aurora home device";
+  }
+  if (transportKind === "mock") return "Local mode";
+  return "Connection unavailable";
 }
 
-function nativeFeatureLabel(
+export function nativeFeatureLabel(
   feature: TauriNativeFeatureStatus | null | undefined,
 ): string {
-  if (!feature) return "not available";
-  if (feature.available) return `${feature.capability} available`;
-  return `${feature.capability} denied by default`;
+  if (!feature) return "Not available";
+  if (feature.available) return "Available";
+  return "Permission needed";
 }
 
-function iosInvocationLabel(
+export function iosInvocationLabel(
   status: TauriIosInvocationStatus | null | undefined,
 ): string {
-  if (!status)
-    return "Siri/Shortcuts/App Intents integration; no system assistant role claim.";
-  const state = status.available ? status.surface : "not available";
-  return `${state}; no system assistant role claim.`;
+  return status?.available
+    ? "Available; Aurora does not replace the system assistant"
+    : "Not available; Aurora does not replace the system assistant";
 }
 
-function localLightInferenceLabel(
+export function localLightInferenceLabel(
   status: AndroidLocalLightInferenceStatus | null | undefined,
 ): string {
-  if (!status) return "local-light inference provider pending native support.";
-  return `${status.platform} ${status.providerId} ${status.state}; backend model catalog required=${String(status.backendModelCatalogRequired)}`;
+  if (!status) return "Not available";
+  if (status.available || status.state === "available") return "Available";
+  if (status.state === "needs_native_permission") return "Permission needed";
+  if (status.state === "degraded") return "Needs attention";
+  if (status.state === "fallback") {
+    return "Available through a connected Aurora device";
+  }
+  if (status.state === "unsupported_platform") return "Not available";
+  return "Status unavailable";
 }
 
-function androidBaselineLabel(
+export function androidBaselineLabel(
   status: TauriAndroidBaselineStatus | null,
 ): string {
-  if (!status) return "not available";
-  return `${status.feature} ${status.state}; platform=${status.platform}`;
+  if (!status) return "Not available";
+  if (status.available || status.state === "available") return "Available";
+  if (status.state === "needs_native_permission") return "Permission needed";
+  if (status.state === "degraded") return "Needs attention";
+  if (status.state === "fallback") {
+    return "Available through a connected Aurora device";
+  }
+  if (status.state === "unsupported_platform") return "Not available";
+  return "Status unavailable";
 }
 
-function assistantRoleProbeLabel(
+export function assistantRoleProbeLabel(
   status: TauriAndroidBaselineStatus | null,
 ): string {
-  if (!status) return "not available";
-  return status.assistantRole.probeImplemented
-    ? "native probe implemented"
-    : `probe deferred; role availability unknown; ${status.assistantRole.reason}`;
+  if (!status) return "Not available";
+  if (status.assistantRole.roleHeld) return "Selected";
+  if (
+    status.assistantRole.roleAvailable ||
+    status.assistantRole.requestable ||
+    status.assistantRole.packageQualified
+  ) {
+    return "Available";
+  }
+  if (status.assistantRole.denied) return "Permission needed";
+  return "Not available";
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
+export function connectionModeLabel(mode: string): string {
+  if (mode === "http-only") return "Home device";
+  if (mode === "webrtc-only") return "Direct device";
+  if (mode === "webrtc-preferred") return "Best available";
+  return "Not configured";
+}
+
+export function peerConnectionStatusLabel(
+  status: string | null | undefined,
+): string {
+  if (
+    status === "authorized" ||
+    status === "connected" ||
+    status === "fallback-http"
+  ) {
+    return "Connected";
+  }
+  if (status === "pairing" || status === "verification") {
+    return "Waiting for approval";
+  }
+  if (status === "connecting" || status === "reconnecting") {
+    return "Connecting";
+  }
+  if (
+    status === "error" ||
+    status === "closed" ||
+    status === "disconnected" ||
+    status === "offline"
+  ) {
+    return "Needs attention";
+  }
+  if (status === "idle" || status === "not-configured" || status == null) {
+    return "Not configured";
+  }
+  return "Checking";
+}
+
+function peerConnectionDetailLabel(status: string | null | undefined): string {
+  const productStatus = peerConnectionStatusLabel(status);
+  if (productStatus === "Connected") return "Ready";
+  if (productStatus === "Waiting for approval") {
+    return "Approve this device to continue";
+  }
+  if (productStatus === "Connecting") return "Connecting";
+  if (productStatus === "Needs attention") {
+    return "Reconnect this device and try again";
+  }
+  if (productStatus === "Not configured") {
+    return "Connect a device to continue";
+  }
+  return "Checking connection";
+}
+
+export function savedAccessLabel(
+  secretsPersisted: boolean | null | undefined,
+): string {
+  if (secretsPersisted === true) return "Protected on this device";
+  if (secretsPersisted === false) return "Available for this session only";
+  return "No saved access";
+}
+
+function platformLabel(platform: string | null | undefined): string {
+  const normalized = platform?.trim().toLowerCase();
+  if (normalized === "darwin" || normalized === "macos") return "macOS";
+  if (normalized === "windows" || normalized === "win32") return "Windows";
+  if (normalized === "linux") return "Linux";
+  if (normalized === "android") return "Android";
+  if (
+    normalized === "ios" ||
+    normalized === "iphone" ||
+    normalized === "ipad"
+  ) {
+    return "iPhone or iPad";
+  }
+  return "Device";
+}
+
+function permissionsToReviewLabel(
+  status: TauriNativePermissionStatus | null,
+): string {
+  if (!status) return "Status unavailable";
+  const count = status.deniedByDefault.length;
+  if (count === 0) return "None";
+  return `${count} ${count === 1 ? "permission needs" : "permissions need"} review`;
+}
+
+function routeAvailabilityLabel(route: RouteAvailability): string {
+  if (route.state === "available-local") return "Available on this device";
+  if (route.state === "available-remote") {
+    return "Available from a connected Aurora device";
+  }
+  if (route.state === "denied" || route.state === "privacy-blocked") {
+    return "Permission needed";
+  }
+  if (route.state === "pending") return "Checking";
+  if (route.state === "degraded" || route.state === "stale") {
+    return "Needs attention";
+  }
+  return "Unavailable";
 }
