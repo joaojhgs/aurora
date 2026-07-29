@@ -48,11 +48,11 @@ describe('production UI copy checker', () => {
     writeFileSync(file, `
       export function PunctuationVariants() {
         return (
-          <section aria-label="SDK WebView Room_Password">
+          <section aria-label="SDK WebView Room_Password room  password">
             <p>services/gateway/api/port uses fall-back fall_back raw daemon</p>
             <button title="services-orchestrator-llm-provider">Open</button>
-            <input aria-label="services.orchestrator.llm.provider" />
-            <span>room/password remote_console mesh/node runtime_tier HTTP WSS WebRTC Orchestrator</span>
+            <input aria-label="services.orchestrator.llm.provider key  path" />
+            <span>room/password remote_console remote  console mesh/node mesh  node runtime_tier runtime  tier HTTP WSS WebRTC Orchestrator</span>
           </section>
         )
       }
@@ -77,6 +77,26 @@ describe('production UI copy checker', () => {
     ]) {
       expect(result.stderr).toContain(term)
     }
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('does not turn ordinary whitespace into compound internal terms', () => {
+    const dir = fixtureDir()
+    const file = join(dir, 'safe-spaced-words.tsx')
+    writeFileSync(file, `
+      export function SafeSpacedWords() {
+        return (
+          <section>
+            <p>Room   setup is ready before password entry.</p>
+            <p>Remote   support console is available.</p>
+            <p>Mesh   layout node is selected.</p>
+            <p>Key   lime path is not a setting.</p>
+          </section>
+        )
+      }
+    `)
+
+    expect(runChecker(file).ok).toBe(true)
     rmSync(dir, { recursive: true, force: true })
   })
 

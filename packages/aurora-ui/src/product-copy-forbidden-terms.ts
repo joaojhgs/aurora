@@ -48,7 +48,8 @@ export const PRODUCTION_COPY_FORBIDDEN_TERMS = [
 ] as const satisfies readonly ProductionCopyForbiddenTerm[]
 
 export function findForbiddenProductionCopyTerms(value: string): ProductionCopyForbiddenTerm[] {
-  return PRODUCTION_COPY_FORBIDDEN_TERMS.filter((term) => term.pattern.test(value))
+  const normalized = value.replace(/\s+/gu, ' ').trim()
+  return PRODUCTION_COPY_FORBIDDEN_TERMS.filter((term) => term.pattern.test(normalized))
 }
 
 function term(id: string, pattern: RegExp, examples: readonly string[] = [id]): ProductionCopyForbiddenTerm {

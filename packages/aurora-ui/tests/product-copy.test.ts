@@ -47,12 +47,14 @@ describe('production product copy', () => {
       ['Use the room_password value', 'room-password'],
       ['Use the room-password value', 'room-password'],
       ['Use the room/password value', 'room-password'],
+      ['Use the room  password value', 'room-password'],
       ['Fall-back status', 'fallback'],
       ['Fall_back status', 'fallback'],
       ['Services/Gateway/API/Port setting', 'key-path'],
       ['services-orchestrator-llm-provider setting', 'key-path'],
       ['services_orchestrator_llm_provider setting', 'key-path'],
       ['services.orchestrator.llm.provider setting', 'key-path'],
+      ['Use the key  path value', 'key-path'],
       ['SDK details', 'sdk'],
       ['WebView bridge', 'webview'],
       ['Daemon status', 'daemon'],
@@ -62,8 +64,11 @@ describe('production product copy', () => {
       ['WSS signaling', 'webrtc-wss'],
       ['WebRTC status', 'webrtc-wss'],
       ['remote_console access', 'remote-console'],
+      ['remote  console access', 'remote-console'],
       ['mesh/node status', 'mesh-node'],
+      ['mesh  node status', 'mesh-node'],
       ['runtime_tier label', 'runtime-tier'],
+      ['runtime  tier label', 'runtime-tier'],
     ]
 
     for (const [copy, id] of cases) {
@@ -74,7 +79,16 @@ describe('production product copy', () => {
   })
 
   it('does not block ordinary words that only contain internal fragments', () => {
-    for (const copy of ['The room is ready', 'Fallbacks are handled elsewhere', 'This is a rawhide color name', 'The gateway is available']) {
+    for (const copy of [
+      'The room is ready',
+      'Room   setup is ready before password entry',
+      'Remote   support console is available',
+      'Mesh   layout node is selected',
+      'Key   lime path is not a setting',
+      'Fallbacks are handled elsewhere',
+      'This is a rawhide color name',
+      'The gateway is available',
+    ]) {
       expect(findForbiddenProductionCopyTerms(copy), copy).toEqual([])
     }
   })
