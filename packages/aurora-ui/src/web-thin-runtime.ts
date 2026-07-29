@@ -66,6 +66,7 @@ export interface BrowserThinRuntimeConfig {
   runtimeMode?: string | null | undefined
   nodeRole?: 'remote-console' | 'mesh-node' | null | undefined
   peerHost?: WebRtcPeerHost | undefined
+  peerAuthorityResolver?: BrowserWebRtcRuntimeOptions['peerAuthorityResolver'] | undefined
   nativePlatform?: string | null | undefined
   userAgent?: string | null | undefined
   nodeName?: string | null | undefined
@@ -225,6 +226,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ...(http ? { http } : {}),
       ...(activeProfile ? { profile: activeProfile } : {}),
       ...(config.peerHost ? { peerHost: config.peerHost } : {}),
+      ...(config.peerAuthorityResolver ? { peerAuthorityResolver: config.peerAuthorityResolver } : {}),
       credentialStore,
       ...(config.initialCredentials ? { initialCredentials: config.initialCredentials } : {}),
       ...(localStablePeerId ? { localStablePeerId } : {}),

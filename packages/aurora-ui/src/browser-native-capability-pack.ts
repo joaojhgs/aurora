@@ -29,6 +29,7 @@ export interface BrowserNativeCapabilityPack {
 export interface BrowserNativeCapabilityPackOptions {
   readonly stablePeerId: string
   readonly providerLabel?: string | null
+  readonly registry?: LocalToolRegistry | undefined
   readonly navigator?: BrowserNavigatorPort | null
   readonly window?: BrowserWindowPort | null
   readonly notification?: BrowserNotificationPort | null
@@ -136,7 +137,7 @@ interface ApprovedDeepLinkRule {
 }
 
 export function createBrowserNativeCapabilityPack(options: BrowserNativeCapabilityPackOptions): BrowserNativeCapabilityPack {
-  const registry = new LocalToolRegistry({
+  const registry = options.registry ?? new LocalToolRegistry({
     stablePeerId: options.stablePeerId,
     providerLabel: options.providerLabel ?? 'Browser device',
     source: 'core',

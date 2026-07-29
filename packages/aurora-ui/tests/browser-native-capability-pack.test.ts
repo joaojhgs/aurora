@@ -3,6 +3,7 @@ import type { JsonObject } from '@aurora/client'
 import {
   AURORA_NATIVE_TOOL_IDS,
   LocalToolExecutionPolicy,
+  LocalToolRegistry,
   NATIVE_TOOL_DESCRIPTORS,
   createLocalToolingProviderHandlers,
   type LocalToolExecutionContext,
@@ -34,6 +35,27 @@ describe('browser native capability pack', () => {
     expect(catalogIds).toEqual(snapshotIds)
     expect(Object.keys(pack.manifest.capabilities).sort()).toEqual(snapshotIds)
     expect(catalogIds).not.toContain(AURORA_NATIVE_TOOL_IDS.startForegroundVoiceCapture)
+  })
+
+  it('registers browser-native tools into a caller-owned registry', () => {
+    const registry = new LocalToolRegistry({
+      stablePeerId: 'peer-browser',
+      providerLabel: 'Injected browser',
+      source: 'core',
+      sourceId: 'test-browser-native-pack',
+    })
+
+    const pack = createBrowserNativeCapabilityPack(fullOptions({ registry }))
+    const catalog = registry.publicTools()
+    const catalogIds = catalog.map((tool) => tool.tool_contract_id).sort()
+
+    expect(pack.registry).toBe(registry)
+    expect(catalogIds).toEqual(pack.registeredToolIds.slice().sort())
+    expect(catalogIds).toContain(AURORA_NATIVE_TOOL_IDS.getDeviceStatus)
+    expect(catalogIds).toContain(AURORA_NATIVE_TOOL_IDS.shareText)
+    expect(registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.getDeviceStatus)).toBeDefined()
+    expect(registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.shareText)).toBeDefined()
+    expect(catalog.every((tool) => tool.provider_peer_id === 'peer-browser')).toBe(true)
   })
 
   it('omits capabilities when the required browser API is missing or not already permitted', () => {
