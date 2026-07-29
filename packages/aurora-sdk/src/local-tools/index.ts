@@ -25,6 +25,26 @@ export type {
   LocalToolProjectionContext
 } from './export-catalog.js'
 export {
+  LocalToolExecutionPolicy,
+  LocalToolPolicyError,
+  argumentsFingerprint,
+  displayArgumentsPreview,
+  resourceSelectorFingerprint,
+  safeToolError,
+  sanitizeHandlerData
+} from './execution-policy.js'
+export type {
+  LocalToolExecuteRequest,
+  LocalToolExecutionPolicyOptions,
+  LocalToolPolicyPorts
+} from './execution-policy.js'
+export {
+  createLocalToolingProviderHandlers
+} from './tooling-provider.js'
+export type {
+  LocalToolingProviderOptions
+} from './tooling-provider.js'
+export {
   canonicalJson,
   canonicalJsonBytes,
   canonicalJsonSha256Hex,
