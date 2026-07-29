@@ -77,7 +77,12 @@ export class SessionPeerHostAuthorizationStore implements PeerHostAuthorizationS
 }
 
 export class PeerAuthorityHostAuthorizationStore implements PeerHostAuthorizationStore {
-  constructor(private readonly resolver: PeerAuthorityResolver) {}
+  constructor(
+    private readonly resolver: PeerAuthorityResolver,
+    private readonly options: {
+      readonly grantedPermissionsForGrant?: (grant: LocalPeerGrantV1) => readonly string[]
+    } = {}
+  ) {}
 
   async authorize(request: PeerHostAuthorizeRequest): Promise<PeerHostAuthorizationDecision> {
     const context = request.authenticatedPeerContext
@@ -91,7 +96,10 @@ export class PeerAuthorityHostAuthorizationStore implements PeerHostAuthorizatio
       allowed: decision.allowed,
       ...(decision.reasonCode !== undefined ? { reasonCode: decision.reasonCode } : {}),
       ...(decision.grant?.grantRevision !== undefined ? { grantRevision: decision.grant.grantRevision } : {}),
-      ...(decision.grant?.allowedMethodIds !== undefined ? { grantedMethodIds: sortedUnique(decision.grant.allowedMethodIds) } : {})
+      ...(decision.grant?.allowedMethodIds !== undefined ? { grantedMethodIds: sortedUnique(decision.grant.allowedMethodIds) } : {}),
+      ...(decision.grant !== undefined && this.options.grantedPermissionsForGrant !== undefined
+        ? { grantedPermissions: sortedUnique(this.options.grantedPermissionsForGrant(decision.grant)) }
+        : {})
     }
   }
 

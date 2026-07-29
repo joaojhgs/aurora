@@ -444,7 +444,10 @@ export class WebRtcPeerHost {
 
   private effectivePermissionsForGrant(decision: PeerHostAuthorizationDecision): string[] {
     const grantedMethodIds = new Set(decision.grantedMethodIds ?? [])
-    return effectivePermissionsForMethods(this.options.registry.list().filter((method) => grantedMethodIds.has(method.methodId)))
+    return sortedUnique([
+      ...effectivePermissionsForMethods(this.options.registry.list().filter((method) => grantedMethodIds.has(method.methodId))),
+      ...(decision.grantedPermissions ?? [])
+    ])
   }
 
   private async handleStreamCall(method: PeerHostMethodDescriptor, frame: CallFrame, remotePeerId: string, identity: PeerHostIdentity, nowMs: number, deadlineAtMs: number, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {

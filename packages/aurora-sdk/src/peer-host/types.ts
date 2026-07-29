@@ -88,6 +88,7 @@ export interface PeerHostAuthorizationDecision {
   readonly reasonCode?: string
   readonly grantRevision?: number
   readonly grantedMethodIds?: readonly string[]
+  readonly grantedPermissions?: readonly string[]
 }
 
 export interface PeerHostManifestAuthoritySnapshot {
