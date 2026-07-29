@@ -247,7 +247,7 @@ describe('mesh-node local Tooling provider composition', () => {
       nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
-      registry: registryWithEcho(),
+      registry: registryWithEchoAndSensitiveTool(),
       authorityResolver: resolver,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
@@ -262,6 +262,27 @@ describe('mesh-node local Tooling provider composition', () => {
 
     await composition.peerHost.handleCall({
       type: 'call',
+      id: 'tools-1',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'forged-peer', effective_perms: ['*'] }
+    }, 'peer-a', authenticatedPeerContext)
+    const toolsResult = sent.find((frame) =>
+      typeof frame === 'object'
+      && frame !== null
+      && (frame as Record<string, unknown>).id === 'tools-1'
+    )
+    expect(toolsResult).toMatchObject({
+      type: 'result',
+      result: {
+        count: 1,
+        tools: [expect.objectContaining({ local_name: 'echo' })]
+      }
+    })
+    expect(JSON.stringify(toolsResult)).not.toContain('share_text')
+
+    await composition.peerHost.handleCall({
+      type: 'call',
       id: 'execute-1',
       method: 'Tooling.ExecuteTool',
       params: {
@@ -271,7 +292,12 @@ describe('mesh-node local Tooling provider composition', () => {
       identity: { caller_peer_id: 'forged-peer', effective_perms: [] }
     }, 'peer-a', authenticatedPeerContext)
 
-    expect(sent.at(-1)).toMatchObject({
+    const executeResult = sent.find((frame) =>
+      typeof frame === 'object'
+      && frame !== null
+      && (frame as Record<string, unknown>).id === 'execute-1'
+    )
+    expect(executeResult).toMatchObject({
       type: 'result',
       id: 'execute-1',
       result: {
@@ -448,6 +474,15 @@ function registryWithSensitiveTool(): LocalToolRegistry {
     source: 'core',
     sourceId: 'test'
   })
+  registry.register({
+    descriptor: sensitiveDescriptor,
+    handler: ({ context }) => ({ ok: true, caller: context.callerPeerId })
+  })
+  return registry
+}
+
+function registryWithEchoAndSensitiveTool(): LocalToolRegistry {
+  const registry = registryWithEcho()
   registry.register({
     descriptor: sensitiveDescriptor,
     handler: ({ context }) => ({ ok: true, caller: context.callerPeerId })

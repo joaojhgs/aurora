@@ -5,6 +5,7 @@ import {
   PeerHostContractRegistry,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
+  type LocalPeerGrantV1,
   type PeerHostOptions
 } from '../peer-host/index.js'
 import type { PeerAuthorityResolver } from '../peer-host/authority.js'
@@ -64,7 +65,6 @@ export function createMeshNodeLocalToolProvider(
 ): MeshNodeLocalToolProviderComposition {
   assertRegistryOwnedByPeer(options.registry, options.localPeerId)
   const registeredTools = options.registry.list()
-  const localToolRequiredPermissions = sortedUnique(registeredTools.flatMap((tool) => tool.descriptor.requiredPermissions))
   const enabled = options.nodeMode === 'mesh-node'
     && options.providerEnabled !== false
     && options.authorityResolver !== undefined
@@ -96,14 +96,16 @@ export function createMeshNodeLocalToolProvider(
     ...(options.nowSeconds ? { nowSeconds: options.nowSeconds } : {})
   })
   const peerHostRegistry = enabled
-    ? createToolingPeerHostRegistry({ ...handlers, localToolRequiredPermissions })
+    ? createToolingPeerHostRegistry(handlers)
     : new PeerHostContractRegistry()
   const peerHost = new WebRtcPeerHost({
     localPeerId: options.localPeerId,
     nodeName: options.nodeName,
     registry: peerHostRegistry,
     authorizationStore: enabled && options.authorityResolver
-      ? new PeerAuthorityHostAuthorizationStore(options.authorityResolver)
+      ? new PeerAuthorityHostAuthorizationStore(options.authorityResolver, {
+          grantedPermissionsForGrant: (grant) => permissionsForGrantedTools(options.registry, grant)
+        })
       : new DenyAllPeerHostAuthorizationStore(),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.randomId ? { randomId: options.randomId } : {}),
@@ -128,8 +130,12 @@ function isUsableCursorSecret(secret: Uint8Array | string | undefined): boolean 
   return secret instanceof Uint8Array && secret.byteLength >= MIN_CURSOR_SECRET_BYTES
 }
 
-function sortedUnique(values: readonly string[]): string[] {
-  return [...new Set(values)].sort()
+function permissionsForGrantedTools(registry: LocalToolRegistry, grant: LocalPeerGrantV1): string[] {
+  const grantedToolIds = new Set(grant.allowedToolContractIds)
+  return [...new Set(registry.list()
+    .filter((tool) => grantedToolIds.has(tool.descriptor.toolContractId))
+    .flatMap((tool) => tool.descriptor.requiredPermissions))]
+    .sort()
 }
 
 function assertRegistryOwnedByPeer(registry: LocalToolRegistry, localPeerId: string): void {
