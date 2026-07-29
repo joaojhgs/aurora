@@ -3,6 +3,7 @@ import Foundation
 import LocalAuthentication
 import Security
 import Tauri
+import UIKit
 import UserNotifications
 import WebKit
 
@@ -23,8 +24,34 @@ struct AuroraAdminUnlockArgs: Decodable {
   let allowDeviceCredential: Bool?
 }
 
+struct AuroraShareTextArgs: Decodable {
+  let text: String
+  let title: String?
+}
+
+struct AuroraOpenDeepLinkArgs: Decodable {
+  let url: String
+}
+
+struct AuroraShowNotificationArgs: Decodable {
+  let title: String
+  let body: String?
+}
+
 @objc(AuroraNativePlugin)
 public final class AuroraNativePlugin: Plugin {
+  private static let maxSharedTextLength = 8192
+  private static let maxTitleLength = 120
+  private static let maxNotificationBodyLength = 512
+  private static let maxUrlLength = 2048
+  private static let allowedOutgoingLinkSchemes: Set<String> = [
+    "https",
+    "mailto",
+    "tel",
+    "aurora",
+    "aurora-local"
+  ]
+
   private let mobileIntegrations: [[String: Any]] = [
     [
       "platform": "ios",
@@ -183,6 +210,54 @@ public final class AuroraNativePlugin: Plugin {
       "evidenceSource": "ios-native-local-light-adapter",
       "userCopy": "Native adapter reports iOS Core ML/MLC/ExecuTorch-style local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.",
       "verifier": "tauri ios build plus simulator/device nativeCapabilityManifest payload smoke"
+    ],
+    [
+      "platform": "ios",
+      "id": "iosShareText",
+      "label": "iOS share text",
+      "support": "supported-path",
+      "capability": "ios.shareText",
+      "permission": "aurora.ios.shareText",
+      "invocation": "tauri-command",
+      "backendMethod": "Native.ShareText",
+      "privacyClass": "sensitive",
+      "requiresConfirmation": true,
+      "siriReplacement": false,
+      "evidenceSource": "ios-native-outgoing-actions",
+      "userCopy": "Shares bounded text through the system share sheet after Aurora approval.",
+      "verifier": "tauri ios build plus simulator/device shareText smoke"
+    ],
+    [
+      "platform": "ios",
+      "id": "iosOpenDeepLink",
+      "label": "iOS open link",
+      "support": "supported-path",
+      "capability": "ios.openDeepLink",
+      "permission": "aurora.ios.openDeepLink",
+      "invocation": "tauri-command",
+      "backendMethod": "Native.OpenDeepLink",
+      "privacyClass": "sensitive",
+      "requiresConfirmation": true,
+      "siriReplacement": false,
+      "evidenceSource": "ios-native-outgoing-actions",
+      "userCopy": "Opens only approved link types after Aurora approval.",
+      "verifier": "tauri ios build plus simulator/device openDeepLink smoke"
+    ],
+    [
+      "platform": "ios",
+      "id": "iosShowNotification",
+      "label": "iOS notification",
+      "support": "supported-path",
+      "capability": "ios.showNotification",
+      "permission": "aurora.ios.showNotification",
+      "invocation": "tauri-command",
+      "backendMethod": "Native.ShowNotification",
+      "privacyClass": "sensitive",
+      "requiresConfirmation": true,
+      "siriReplacement": false,
+      "evidenceSource": "ios-native-outgoing-actions",
+      "userCopy": "Posts a local notification only when notifications were already allowed.",
+      "verifier": "tauri ios build plus simulator/device showNotification smoke"
     ]
   ]
 
@@ -198,6 +273,12 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.fileAssociations": true,
         "aurora.ios.entrypointPayload": true,
         "aurora.iosLocalLightInference": false,
+        "aurora.ios.shareText": true,
+        "aurora.ios.openDeepLink": true,
+        "aurora.ios.showNotification": true,
+        "aurora.nativeCapabilityManifest": true,
+        "native.permissionsManifest": true,
+        "native.deviceStatus": true,
         "aurora.iosKeychain": true,
         "aurora.iosThinPeerProof": true,
         "aurora.iosThinProfile": true,
@@ -221,6 +302,11 @@ public final class AuroraNativePlugin: Plugin {
         "ios.localLightInference.provider": true,
         "ios.localLightInference.modelRuntime": false,
         "ios.localLightInference.fallback": true,
+        "ios.shareText": true,
+        "ios.openDeepLink": true,
+        "ios.showNotification": true,
+        "native.permissionsManifest": true,
+        "native.deviceStatus": true,
         "ios.keychain.secureCredentialStorage": true,
         "ios.thinPeerProof": true,
         "ios.thinProfile": true,
@@ -242,6 +328,12 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.ios.fileAssociations": "available",
         "aurora.ios.entrypointPayload": "available",
         "aurora.iosLocalLightInference": "degraded",
+        "aurora.ios.shareText": "available",
+        "aurora.ios.openDeepLink": "available",
+        "aurora.ios.showNotification": "needs_native_permission",
+        "aurora.nativeCapabilityManifest": "available",
+        "native.permissionsManifest": "available",
+        "native.deviceStatus": "available",
         "aurora.iosKeychain": "available",
         "aurora.iosThinPeerProof": "available",
         "aurora.iosThinProfile": "available",
@@ -261,6 +353,11 @@ public final class AuroraNativePlugin: Plugin {
         "ios.localLightInference.provider": "degraded",
         "ios.localLightInference.modelRuntime": "needs_native_permission",
         "ios.localLightInference.fallback": "fallback",
+        "ios.shareText": "available",
+        "ios.openDeepLink": "available",
+        "ios.showNotification": "needs_native_permission",
+        "native.permissionsManifest": "available",
+        "native.deviceStatus": "available",
         "ios.keychain.secureCredentialStorage": "available",
         "ios.thinPeerProof": "available",
         "ios.thinProfile": "available",
@@ -380,6 +477,119 @@ public final class AuroraNativePlugin: Plugin {
           "secretsRedacted": true
         ]
       ])
+    }
+  }
+
+  @objc public func shareText(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraShareTextArgs.self)
+      let text = try AuroraNativePlugin.boundedRequiredString(
+        args.text,
+        maxLength: AuroraNativePlugin.maxSharedTextLength,
+        field: "text"
+      )
+      let title = try AuroraNativePlugin.boundedOptionalString(
+        args.title,
+        maxLength: AuroraNativePlugin.maxTitleLength,
+        field: "title"
+      )
+      DispatchQueue.main.async {
+        guard let presenter = AuroraNativePlugin.topViewController() else {
+          invoke.reject("capability_unavailable")
+          return
+        }
+        var activityItems: [Any] = [text]
+        if let title {
+          activityItems.insert(title, at: 0)
+        }
+        let activityController = UIActivityViewController(
+          activityItems: activityItems,
+          applicationActivities: nil
+        )
+        activityController.completionWithItemsHandler = { _, completed, _, error in
+          if error != nil {
+            invoke.reject("capability_unavailable")
+            return
+          }
+          guard completed else {
+            invoke.reject("user_cancelled")
+            return
+          }
+          invoke.resolve(["shared": true])
+        }
+        if let popover = activityController.popoverPresentationController {
+          popover.sourceView = presenter.view
+          popover.sourceRect = CGRect(
+            x: presenter.view.bounds.midX,
+            y: presenter.view.bounds.midY,
+            width: 1,
+            height: 1
+          )
+          popover.permittedArrowDirections = []
+        }
+        presenter.present(activityController, animated: true)
+      }
+    } catch {
+      invoke.reject("invalid_arguments")
+    }
+  }
+
+  @objc public func openDeepLink(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraOpenDeepLinkArgs.self)
+      let url = try AuroraNativePlugin.safeOutgoingUrl(args.url)
+      DispatchQueue.main.async {
+        UIApplication.shared.open(url, options: [:]) { opened in
+          if opened {
+            invoke.resolve(["opened": true])
+          } else {
+            invoke.reject("capability_unavailable")
+          }
+        }
+      }
+    } catch {
+      invoke.reject("permission_denied")
+    }
+  }
+
+  @objc public func showNotification(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraShowNotificationArgs.self)
+      let title = try AuroraNativePlugin.boundedRequiredString(
+        args.title,
+        maxLength: AuroraNativePlugin.maxTitleLength,
+        field: "title"
+      )
+      let body = try AuroraNativePlugin.boundedOptionalString(
+        args.body,
+        maxLength: AuroraNativePlugin.maxNotificationBodyLength,
+        field: "body"
+      )
+      UNUserNotificationCenter.current().getNotificationSettings { settings in
+        guard AuroraNativePlugin.notificationsAlreadyAuthorized(settings.authorizationStatus) else {
+          invoke.reject("permission_unavailable")
+          return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        if let body {
+          content.body = body
+        }
+        let request = UNNotificationRequest(
+          identifier: "aurora.local-notification.\(UUID().uuidString)",
+          content: content,
+          trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+          if error != nil {
+            invoke.reject("capability_unavailable")
+            return
+          }
+          invoke.resolve(["shown": true])
+        }
+      }
+    } catch {
+      invoke.reject("invalid_arguments")
     }
   }
 
@@ -744,6 +954,82 @@ public final class AuroraNativePlugin: Plugin {
       return NSNull()
     }
     return value
+  }
+
+  private static func boundedRequiredString(
+    _ value: String,
+    maxLength: Int,
+    field: String
+  ) throws -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty && trimmed.count <= maxLength else {
+      throw NSError(domain: "AuroraNativePlugin", code: 1, userInfo: ["field": field])
+    }
+    return trimmed
+  }
+
+  private static func boundedOptionalString(
+    _ value: String?,
+    maxLength: Int,
+    field: String
+  ) throws -> String? {
+    guard let value else {
+      return nil
+    }
+    return try boundedRequiredString(value, maxLength: maxLength, field: field)
+  }
+
+  private static func safeOutgoingUrl(_ value: String) throws -> URL {
+    let text = try boundedRequiredString(value, maxLength: maxUrlLength, field: "url")
+    guard let components = URLComponents(string: text),
+      let scheme = components.scheme?.lowercased(),
+      allowedOutgoingLinkSchemes.contains(scheme),
+      let url = components.url
+    else {
+      throw NSError(domain: "AuroraNativePlugin", code: 2, userInfo: ["field": "url"])
+    }
+    if scheme == "https", components.host?.isEmpty != false {
+      throw NSError(domain: "AuroraNativePlugin", code: 3, userInfo: ["field": "url"])
+    }
+    return url
+  }
+
+  private static func notificationsAlreadyAuthorized(_ status: UNAuthorizationStatus) -> Bool {
+    switch status {
+    case .authorized, .provisional, .ephemeral:
+      return true
+    default:
+      return false
+    }
+  }
+
+  private static func topViewController() -> UIViewController? {
+    let root: UIViewController?
+    if #available(iOS 15.0, *) {
+      root = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+        .first { $0.isKeyWindow }?
+        .rootViewController
+    } else {
+      root = UIApplication.shared.windows
+        .first { $0.isKeyWindow }?
+        .rootViewController
+    }
+    return visibleViewController(from: root)
+  }
+
+  private static func visibleViewController(from controller: UIViewController?) -> UIViewController? {
+    if let navigation = controller as? UINavigationController {
+      return visibleViewController(from: navigation.visibleViewController)
+    }
+    if let tab = controller as? UITabBarController {
+      return visibleViewController(from: tab.selectedViewController)
+    }
+    if let presented = controller?.presentedViewController {
+      return visibleViewController(from: presented)
+    }
+    return controller
   }
 
   private static func recordPermissionLabel(_ permission: AVAudioSession.RecordPermission) -> String {

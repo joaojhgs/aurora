@@ -15,6 +15,7 @@ Current commands:
 - `invocationStatus` reports the allowed invocation surface and explicitly sets `siriReplacement` to `false`.
 - `voiceStatus` reports foreground-only microphone capture state from `AVAudioSession` and keeps raw-audio consent/backend evidence required.
 - `notificationStatus` reports `UNUserNotificationCenter` authorization without claiming background assistant wake.
+- `shareText`, `openDeepLink`, and `showNotification` are exact outgoing native action commands. They accept bounded payloads only, allow only `https`, `mailto`, `tel`, `aurora`, and `aurora-local` links, use UIKit/UserNotifications platform APIs, and require notification authorization to already exist instead of prompting during a remote call.
 - `backgroundStatus` reports always-on background voice and system assistant ownership as unsupported, with app-owned fallback surfaces listed.
 - `localLightInferenceStatus` reports the iOS Core ML/MLC/ExecuTorch-style local-light inference provider as a degraded, capability-gated provider until backend model catalog evidence and device/model proof are present.
 - `iosEntrypointPayload` returns redacted IOS-004 entrypoint descriptors and the last payload envelope shape.
@@ -42,6 +43,7 @@ Required native verification remains macOS/Xcode-only:
 
 - `tauri ios build` or `ios:build:thin:simulator`/Xcode build of the generated iOS project with this package linked.
 - Simulator/device command smoke for thin profile load/save, Keychain set/status/delete, canonical reconnect proof parity, credential expiry, and no-secret response logging.
+- Simulator/device command smoke for `shareText`, `openDeepLink`, and `showNotification`, through the shared Rust/Tauri wrapper once that integration lane exposes the exact commands.
 - Foreground WKWebView HTTP/WebRTC direct, STUN, and TURN smoke against the Python peer with its HTTP API disabled.
 - Simulator or device invocation of at least one App Intent or Shortcut.
 - Simulator or device invocation of at least one share extension, deep-link, widget, or file-open entrypoint.
