@@ -384,6 +384,7 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
         throw new LocalDataError('invalid_record', 'Local data export schema is newer than the open session', { reason: 'future_schema' })
       }
       validateImportedCollections(parsed.records, this.profileId, this.localNodeId)
+      assertNoScopedKeyCollisions(this.collections, parsed.records, this.profileId, this.localNodeId)
       const snapshot = cloneLocalDataCollections(this.collections)
       this.collections = replaceScopedCollections(this.collections, parsed.records, this.profileId, this.localNodeId)
       try {
@@ -509,6 +510,11 @@ export class BrowserConversationRepository {
       const record = parseConversationRecord(input)
       assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId], 'record.conversation')
       this.session.assertIdentity(record.profileId, record.localNodeId)
+      assertNoScopedKeyCollision(
+        this.session.mutable.conversations.find((item) => item.id === record.id),
+        this.session.profileId,
+        this.session.localNodeId
+      )
       upsert(this.session.mutable.conversations, record, (item) => item.id === record.id)
     })
   }
@@ -527,6 +533,7 @@ export class BrowserConversationRepository {
       if (this.session.mutable.messages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence && message.id !== record.id)) {
         throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation')
       }
+      assertNoMessageIdCollision(this.session.mutable, record, this.session.profileId, this.session.localNodeId)
       upsert(this.session.mutable.messages, record, (item) => item.id === record.id)
     })
   }
@@ -556,6 +563,11 @@ export class BrowserLightweightMemoryRepository {
       const record = parseLightweightMemoryRecord(input)
       assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.namespace], 'record.lightweight_memory')
       this.session.assertIdentity(record.profileId, record.localNodeId)
+      assertNoScopedKeyCollision(
+        this.session.mutable.memoryItems.find((item) => item.id === record.id),
+        this.session.profileId,
+        this.session.localNodeId
+      )
       upsert(this.session.mutable.memoryItems, record, (item) => item.id === record.id)
     })
   }
@@ -603,6 +615,11 @@ export class BrowserPeerGrantMetadataRepository {
       const record = parsePeerGrantMetadataRecord(input)
       assertSafeLocalDataIds([record.grantId, record.profileId, record.localNodeId, record.claimantPeerId, record.tokenId], 'record.peer_grant_metadata')
       this.session.assertIdentity(record.profileId, record.localNodeId)
+      assertNoScopedKeyCollision(
+        this.session.mutable.peerGrantMetadata.find((item) => item.grantId === record.grantId),
+        this.session.profileId,
+        this.session.localNodeId
+      )
       upsert(this.session.mutable.peerGrantMetadata, record, (item) => item.grantId === record.grantId)
     })
   }
@@ -625,6 +642,11 @@ export class BrowserLocalAuditRepository {
       const record = parseLocalAuditRecord(input)
       assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.action, record.decision, record.resultStatus], 'record.local_audit')
       this.session.assertIdentity(record.profileId, record.localNodeId)
+      assertNoScopedKeyCollision(
+        this.session.mutable.localAudit.find((item) => item.id === record.id),
+        this.session.profileId,
+        this.session.localNodeId
+      )
       if (this.session.mutable.localAudit.some((item) => item.id === record.id)) {
         throw new LocalDataError('invalid_record', 'Audit record IDs must be unique')
       }
@@ -782,6 +804,59 @@ function requireStoredRecordLocalNode(recordLocalNodeId: string, localNodeId: st
   if (recordLocalNodeId !== localNodeId) {
     throw new LocalDataError('identity_mismatch', 'Browser local data local node does not match stored local data', { reason: 'local_node_owner_mismatch' })
   }
+}
+
+function assertNoScopedKeyCollisions(
+  current: LocalDataRecordCollections,
+  incoming: LocalDataRecordCollections,
+  profileId: string,
+  localNodeId: string
+): void {
+  for (const record of incoming.conversations) {
+    assertNoScopedKeyCollision(current.conversations.find((item) => item.id === record.id), profileId, localNodeId)
+  }
+  for (const record of incoming.messages) {
+    assertNoMessageIdCollision(current, record, profileId, localNodeId)
+  }
+  for (const record of incoming.memoryItems) {
+    assertNoScopedKeyCollision(current.memoryItems.find((item) => item.id === record.id), profileId, localNodeId)
+  }
+  for (const record of incoming.peerGrantMetadata) {
+    assertNoScopedKeyCollision(current.peerGrantMetadata.find((item) => item.grantId === record.grantId), profileId, localNodeId)
+  }
+  for (const record of incoming.localAudit) {
+    assertNoScopedKeyCollision(current.localAudit.find((item) => item.id === record.id), profileId, localNodeId)
+  }
+}
+
+function assertNoScopedKeyCollision(
+  existing: { readonly profileId: string; readonly localNodeId: string } | undefined,
+  profileId: string,
+  localNodeId: string
+): void {
+  if (existing !== undefined && (existing.profileId !== profileId || existing.localNodeId !== localNodeId)) {
+    throw scopedKeyCollision()
+  }
+}
+
+function assertNoMessageIdCollision(
+  records: LocalDataRecordCollections,
+  record: ConversationMessageRecord,
+  profileId: string,
+  localNodeId: string
+): void {
+  const existing = records.messages.find((item) => item.id === record.id)
+  if (existing === undefined) return
+  if (existing.conversationId === record.conversationId) return
+  const existingConversation = records.conversations.find((item) => item.id === existing.conversationId)
+  if (existingConversation === undefined || existingConversation.profileId !== profileId || existingConversation.localNodeId !== localNodeId) {
+    throw scopedKeyCollision()
+  }
+  throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+}
+
+function scopedKeyCollision(): LocalDataError {
+  return new LocalDataError('identity_mismatch', 'Local data record ID is already owned by another profile on this device', { reason: 'profile_scope_collision' })
 }
 
 function requireRecordIdentity(recordProfileId: string, recordLocalNodeId: string, profileId: string, localNodeId: string): void {

@@ -1,11 +1,20 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { buildLocalDataExportV1, type EncryptedDataEnvelopeV1 } from '@aurora/client/local-data'
+import {
+  buildLocalDataExportV1,
+  type ConversationMessageRecord,
+  type ConversationRecord,
+  type EncryptedDataEnvelopeV1,
+  type LightweightMemoryRecord,
+  type LocalAuditRecord,
+  type PeerGrantMetadataRecord
+} from '@aurora/client/local-data'
 
 import {
   assertExistingSqliteLocalNodeOwnership,
   handleBrowserSqliteWorkerMessage,
+  type BrowserSqliteRepositoryOperation,
   type BrowserSqliteWorkerResponse
 } from './browser-sqlite-worker.js'
 
@@ -111,6 +120,92 @@ describe('browser sqlite worker protocol guardrails', () => {
     }])
     expect(db.statements.some((statement) => /\bDELETE\b/iu.test(statement))).toBe(false)
     expect(db.statements.some((statement) => /\bINSERT\b/iu.test(statement))).toBe(false)
+  })
+
+  it('rejects same-node different-profile global ID collisions before sqlite writes', async () => {
+    for (const testCase of sqliteCollisionCases()) {
+      const db = new SnapshotSqliteDatabase(testCase.state)
+      const before = db.snapshot()
+      const responses: BrowserSqliteWorkerResponse[] = []
+      await handleBrowserSqliteWorkerMessage(
+        {
+          id: testCase.name,
+          command: 'repo',
+          operation: testCase.operation
+        },
+        (response) => responses.push(response),
+        openWorkerState(db, 'profile-2', 'node-1') as never
+      )
+
+      expect(responses).toEqual([{
+        id: testCase.name,
+        result: {
+          ok: false,
+          error: {
+            code: 'identity_mismatch',
+            message: 'Local data record ID is already owned by another profile on this device',
+            metadata: { reason: 'profile_scope_collision' }
+          }
+        }
+      }])
+      expect(db.snapshot()).toEqual(before)
+      expect(db.statements.some(isWriteStatement)).toBe(false)
+    }
+  })
+
+  it('rejects same-node different-profile import collisions before sqlite delete or insert', async () => {
+    const db = new SnapshotSqliteDatabase({
+      userVersion: 3,
+      schema: {
+        aurora_conversations: ['id', 'profile_id', 'local_node_id'],
+        aurora_memory_items: ['id', 'profile_id', 'local_node_id']
+      },
+      ledger: [],
+      identity: { singleton_id: 1, local_node_id: 'node-1', created_at_ms: 1000 },
+      records: {
+        aurora_conversations: [{ id: 'conversation-1', profile_id: 'profile-1', local_node_id: 'node-1' }],
+        aurora_memory_items: [{ id: 'memory-1', profile_id: 'profile-1', local_node_id: 'node-1' }]
+      }
+    })
+    const before = db.snapshot()
+    const responses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage(
+      {
+        id: 'import-profile-collision',
+        command: 'importV1',
+        document: buildLocalDataExportV1({
+          sourceBackend: 'indexeddb',
+          schemaVersion: 3,
+          profileId: 'profile-2',
+          localNodeId: 'node-1',
+          exportedAtMs: 1000,
+          records: {
+            conversations: [],
+            messages: [],
+            memoryItems: [memoryFixture({ profileId: 'profile-2' })],
+            localToolStates: [],
+            peerGrantMetadata: [],
+            localAudit: []
+          }
+        })
+      },
+      (response) => responses.push(response),
+      openWorkerState(db, 'profile-2', 'node-1') as never
+    )
+
+    expect(responses).toEqual([{
+      id: 'import-profile-collision',
+      result: {
+        ok: false,
+        error: {
+          code: 'identity_mismatch',
+          message: 'Local data record ID is already owned by another profile on this device',
+          metadata: { reason: 'profile_scope_collision' }
+        }
+      }
+    }])
+    expect(db.snapshot()).toEqual(before)
+    expect(db.statements.some(isWriteStatement)).toBe(false)
   })
 
   it('preflights existing local-node ownership without changing schema, ledger, identity, user_version, or records', () => {
@@ -307,6 +402,36 @@ class SnapshotSqliteDatabase {
         .slice(0, 1)
         .map(() => ({ 1: 1 }))
     }
+    const scopedKeyMatch = /^SELECT profile_id, local_node_id FROM "([^"]+)" WHERE "([^"]+)" = \? LIMIT 1;$/u.exec(sql)
+    if (scopedKeyMatch !== null) {
+      const tableName = scopedKeyMatch[1] ?? ''
+      const idColumn = scopedKeyMatch[2] ?? ''
+      const bind = Array.isArray(input.bind) ? input.bind : []
+      return (this.state.records[tableName] ?? [])
+        .filter((record) => record[idColumn] === bind[0])
+        .slice(0, 1)
+        .map((record) => ({
+          profile_id: record.profile_id,
+          local_node_id: record.local_node_id
+        }))
+    }
+    if (sql === 'SELECT messages.conversation_id, conversations.profile_id, conversations.local_node_id FROM aurora_messages messages LEFT JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.id = ? LIMIT 1;') {
+      const bind = Array.isArray(input.bind) ? input.bind : []
+      const message = (this.state.records.aurora_messages ?? []).find((record) => record.id === bind[0])
+      if (message === undefined) return []
+      const conversation = (this.state.records.aurora_conversations ?? []).find((record) => record.id === message.conversation_id)
+      return [{
+        conversation_id: message.conversation_id,
+        profile_id: conversation?.profile_id ?? null,
+        local_node_id: conversation?.local_node_id ?? null
+      }]
+    }
+    if (sql === 'SELECT id FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?;') {
+      const bind = Array.isArray(input.bind) ? input.bind : []
+      return (this.state.records.aurora_conversations ?? [])
+        .filter((record) => record.id === bind[0] && record.profile_id === bind[1] && record.local_node_id === bind[2])
+        .map((record) => ({ id: record.id }))
+    }
     if (sql === 'SELECT singleton_id, local_node_id FROM aurora_database_identity ORDER BY singleton_id ASC;') {
       return this.state.identity === null ? [] : [structuredClone(this.state.identity)]
     }
@@ -345,6 +470,166 @@ const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
   ciphertextAndTagB64Url: 'AAAAAAAAAAAAAAAAAAAAAA',
   createdAtMs: 1000
 })
+
+function openWorkerState(db: SnapshotSqliteDatabase, profileId: string, localNodeId: string) {
+  return {
+    db,
+    profileId,
+    localNodeId,
+    schemaVersion: 3,
+    migrationState: 'idle',
+    closed: false,
+    activeTransactionId: null,
+    operationQueue: Promise.resolve(),
+    cancelled: new Set<string>()
+  }
+}
+
+function sqliteCollisionCases(): Array<{
+  name: string
+  state: SnapshotSqliteState
+  operation: BrowserSqliteRepositoryOperation
+}> {
+  return [
+    {
+      name: 'conversation-id-collision',
+      state: stateWithRows({
+        aurora_conversations: [{ id: 'conversation-1', profile_id: 'profile-1', local_node_id: 'node-1' }]
+      }),
+      operation: { kind: 'conversations.upsertConversation', record: conversationFixture({ profileId: 'profile-2' }) }
+    },
+    {
+      name: 'message-id-collision',
+      state: stateWithRows({
+        aurora_conversations: [
+          { id: 'conversation-1', profile_id: 'profile-1', local_node_id: 'node-1' },
+          { id: 'conversation-2', profile_id: 'profile-2', local_node_id: 'node-1' }
+        ],
+        aurora_messages: [{ id: 'message-1', conversation_id: 'conversation-1', sequence: 0 }]
+      }),
+      operation: {
+        kind: 'conversations.appendMessage',
+        record: messageFixture({ conversationId: 'conversation-2' })
+      }
+    },
+    {
+      name: 'memory-id-collision',
+      state: stateWithRows({
+        aurora_memory_items: [{ id: 'memory-1', profile_id: 'profile-1', local_node_id: 'node-1' }]
+      }),
+      operation: { kind: 'memory.upsertMemoryItem', record: memoryFixture({ profileId: 'profile-2' }) }
+    },
+    {
+      name: 'grant-id-collision',
+      state: stateWithRows({
+        aurora_peer_grant_metadata: [{ grant_id: 'grant-1', profile_id: 'profile-1', local_node_id: 'node-1' }]
+      }),
+      operation: { kind: 'peerGrants.upsertPeerGrant', record: peerGrantFixture({ profileId: 'profile-2' }) }
+    },
+    {
+      name: 'audit-id-collision',
+      state: stateWithRows({
+        aurora_local_audit: [{ id: 'audit-1', profile_id: 'profile-1', local_node_id: 'node-1' }]
+      }),
+      operation: { kind: 'localAudit.appendAudit', record: auditFixture({ profileId: 'profile-2' }) }
+    }
+  ]
+}
+
+function stateWithRows(records: SnapshotSqliteState['records']): SnapshotSqliteState {
+  return {
+    userVersion: 3,
+    schema: {
+      aurora_conversations: ['id', 'profile_id', 'local_node_id'],
+      aurora_messages: ['id', 'conversation_id', 'sequence'],
+      aurora_memory_items: ['id', 'profile_id', 'local_node_id'],
+      aurora_local_tool_state: ['profile_id', 'local_node_id', 'tool_contract_id'],
+      aurora_peer_grant_metadata: ['grant_id', 'profile_id', 'local_node_id'],
+      aurora_local_audit: ['id', 'profile_id', 'local_node_id']
+    },
+    ledger: [],
+    identity: { singleton_id: 1, local_node_id: 'node-1', created_at_ms: 1000 },
+    records
+  }
+}
+
+function conversationFixture(overrides: Partial<ConversationRecord> = {}): ConversationRecord {
+  return {
+    id: 'conversation-1',
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    titleEnvelope: envelopeFixture,
+    createdAtMs: 1000,
+    updatedAtMs: 1100,
+    archivedAtMs: null,
+    ...overrides
+  }
+}
+
+function messageFixture(overrides: Partial<ConversationMessageRecord> = {}): ConversationMessageRecord {
+  return {
+    id: 'message-1',
+    conversationId: 'conversation-1',
+    sequence: 0,
+    role: 'user',
+    contentEnvelope: envelopeFixture,
+    toolEnvelope: null,
+    status: 'complete',
+    createdAtMs: 1200,
+    ...overrides
+  }
+}
+
+function memoryFixture(overrides: Partial<LightweightMemoryRecord> = {}): LightweightMemoryRecord {
+  return {
+    id: 'memory-1',
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    namespace: 'notes',
+    payloadEnvelope: envelopeFixture,
+    sourceType: 'conversation',
+    sourceId: 'conversation-1',
+    createdAtMs: 1300,
+    updatedAtMs: 1400,
+    expiresAtMs: null,
+    ...overrides
+  }
+}
+
+function peerGrantFixture(overrides: Partial<PeerGrantMetadataRecord> = {}): PeerGrantMetadataRecord {
+  return {
+    grantId: 'grant-1',
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    claimantPeerId: 'peer-1',
+    tokenId: 'token-1',
+    scopeEnvelope: envelopeFixture,
+    revision: 0,
+    createdAtMs: 1600,
+    expiresAtMs: null,
+    revokedAtMs: null,
+    ...overrides
+  }
+}
+
+function auditFixture(overrides: Partial<LocalAuditRecord> = {}): LocalAuditRecord {
+  return {
+    id: 'audit-1',
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    peerId: 'peer-1',
+    action: 'grant.check',
+    decision: 'allow',
+    resultStatus: 'complete',
+    connectionEpoch: 'epoch-1',
+    methodId: null,
+    toolContractId: 'aurora.local.native.share_text.v1',
+    correlationId: 'corr-1',
+    redactedDetailJson: { secretsRedacted: true },
+    createdAtMs: 1700,
+    ...overrides
+  }
+}
 
 function walk(directory: string): string[] {
   const files: string[] = []

@@ -363,6 +363,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     case 'conversations.upsertConversation': {
       const record = parseConversationRecord(operation.record)
       assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+      assertNoSqliteScopedKeyCollision(db, 'aurora_conversations', 'id', record.id, workerState)
       run(db, 'INSERT INTO aurora_conversations (id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET profile_id = excluded.profile_id, local_node_id = excluded.local_node_id, title_envelope_json = excluded.title_envelope_json, created_at_ms = excluded.created_at_ms, updated_at_ms = excluded.updated_at_ms, archived_at_ms = excluded.archived_at_ms;', [
         record.id, record.profileId, record.localNodeId, jsonOrNull(record.titleEnvelope), record.createdAtMs, record.updatedAtMs, record.archivedAtMs
       ])
@@ -371,6 +372,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     case 'conversations.appendMessage': {
       const record = parseConversationMessageRecord(operation.record)
       requireConversationInScope(db, workerState, record.conversationId)
+      assertNoSqliteMessageIdCollision(db, record, workerState)
       run(db, 'INSERT INTO aurora_messages (id, conversation_id, sequence, role, content_envelope_json, tool_envelope_json, status, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id, sequence = excluded.sequence, role = excluded.role, content_envelope_json = excluded.content_envelope_json, tool_envelope_json = excluded.tool_envelope_json, status = excluded.status, created_at_ms = excluded.created_at_ms;', [
         record.id, record.conversationId, record.sequence, record.role, jsonOrNull(record.contentEnvelope), jsonOrNull(record.toolEnvelope), record.status, record.createdAtMs
       ])
@@ -383,6 +385,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     case 'memory.upsertMemoryItem': {
       const record = parseLightweightMemoryRecord(operation.record)
       assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+      assertNoSqliteScopedKeyCollision(db, 'aurora_memory_items', 'id', record.id, workerState)
       run(db, 'INSERT INTO aurora_memory_items (id, profile_id, local_node_id, namespace, payload_envelope_json, source_type, source_id, created_at_ms, updated_at_ms, expires_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET profile_id = excluded.profile_id, local_node_id = excluded.local_node_id, namespace = excluded.namespace, payload_envelope_json = excluded.payload_envelope_json, source_type = excluded.source_type, source_id = excluded.source_id, created_at_ms = excluded.created_at_ms, updated_at_ms = excluded.updated_at_ms, expires_at_ms = excluded.expires_at_ms;', [
         record.id, record.profileId, record.localNodeId, record.namespace, JSON.stringify(record.payloadEnvelope), record.sourceType, record.sourceId, record.createdAtMs, record.updatedAtMs, record.expiresAtMs
       ])
@@ -407,6 +410,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     case 'peerGrants.upsertPeerGrant': {
       const record = parsePeerGrantMetadataRecord(operation.record)
       assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+      assertNoSqliteScopedKeyCollision(db, 'aurora_peer_grant_metadata', 'grant_id', record.grantId, workerState)
       run(db, 'INSERT INTO aurora_peer_grant_metadata (grant_id, profile_id, local_node_id, claimant_peer_id, token_id, scope_envelope_json, revision, created_at_ms, expires_at_ms, revoked_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(grant_id) DO UPDATE SET profile_id = excluded.profile_id, local_node_id = excluded.local_node_id, claimant_peer_id = excluded.claimant_peer_id, token_id = excluded.token_id, scope_envelope_json = excluded.scope_envelope_json, revision = excluded.revision, created_at_ms = excluded.created_at_ms, expires_at_ms = excluded.expires_at_ms, revoked_at_ms = excluded.revoked_at_ms;', [
         record.grantId, record.profileId, record.localNodeId, record.claimantPeerId, record.tokenId, JSON.stringify(record.scopeEnvelope), record.revision, record.createdAtMs, record.expiresAtMs, record.revokedAtMs
       ])
@@ -417,6 +421,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     case 'localAudit.appendAudit': {
       const record = parseLocalAuditRecord(operation.record)
       assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+      assertNoSqliteScopedKeyCollision(db, 'aurora_local_audit', 'id', record.id, workerState)
       run(db, 'INSERT INTO aurora_local_audit (id, profile_id, local_node_id, peer_id, action, decision, result_status, connection_epoch, method_id, tool_contract_id, correlation_id, redacted_detail_json, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', [
         record.id, record.profileId, record.localNodeId, record.peerId, record.action, record.decision, record.resultStatus, record.connectionEpoch, record.methodId, record.toolContractId, record.correlationId, JSON.stringify(record.redactedDetailJson), record.createdAtMs
       ])
@@ -460,6 +465,7 @@ function importV1(workerState: WorkerState, document: LocalDataExportV1): unknow
     throw new LocalDataError('invalid_record', 'Local data export schema is newer than the open session', { reason: 'future_schema' })
   }
   assertDatabaseLocalNodeOwnership(workerState.db, workerState.localNodeId)
+  assertNoSqliteImportScopedKeyCollisions(workerState.db, parsed.records, workerState)
   exec(workerState.db, 'BEGIN IMMEDIATE;')
   try {
     run(workerState.db, 'DELETE FROM aurora_local_audit WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
@@ -541,6 +547,71 @@ function assertRecordIdentity(workerState: WorkerState, profileId: string, local
   }
 }
 
+function assertNoSqliteImportScopedKeyCollisions(
+  db: SqliteDatabase,
+  records: LocalDataRecordCollections,
+  workerState: WorkerState & { profileId: string; localNodeId: string }
+): void {
+  for (const record of records.conversations) {
+    assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+    assertNoSqliteScopedKeyCollision(db, 'aurora_conversations', 'id', record.id, workerState)
+  }
+  for (const record of records.messages) {
+    assertNoSqliteMessageIdCollision(db, record, workerState)
+  }
+  for (const record of records.memoryItems) {
+    assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+    assertNoSqliteScopedKeyCollision(db, 'aurora_memory_items', 'id', record.id, workerState)
+  }
+  for (const record of records.localToolStates) {
+    assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+  }
+  for (const record of records.peerGrantMetadata) {
+    assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+    assertNoSqliteScopedKeyCollision(db, 'aurora_peer_grant_metadata', 'grant_id', record.grantId, workerState)
+  }
+  for (const record of records.localAudit) {
+    assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+    assertNoSqliteScopedKeyCollision(db, 'aurora_local_audit', 'id', record.id, workerState)
+  }
+}
+
+function assertNoSqliteScopedKeyCollision(
+  db: SqliteDatabase,
+  tableName: string,
+  idColumn: string,
+  id: string,
+  workerState: WorkerState & { profileId: string; localNodeId: string }
+): void {
+  const rows = selectObjects<{ profile_id: string; local_node_id: string }>(
+    db,
+    `SELECT profile_id, local_node_id FROM ${quoteIdentifier(tableName)} WHERE ${quoteIdentifier(idColumn)} = ? LIMIT 1;`,
+    [id]
+  )
+  const existing = rows[0]
+  if (existing !== undefined && (existing.profile_id !== workerState.profileId || existing.local_node_id !== workerState.localNodeId)) {
+    throw scopedKeyCollision()
+  }
+}
+
+function assertNoSqliteMessageIdCollision(
+  db: SqliteDatabase,
+  record: ConversationMessageRecord,
+  workerState: WorkerState & { profileId: string; localNodeId: string }
+): void {
+  const rows = selectObjects<{ conversation_id: string; profile_id: string | null; local_node_id: string | null }>(
+    db,
+    'SELECT messages.conversation_id, conversations.profile_id, conversations.local_node_id FROM aurora_messages messages LEFT JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.id = ? LIMIT 1;',
+    [record.id]
+  )
+  const existing = rows[0]
+  if (existing === undefined || existing.conversation_id === record.conversationId) return
+  if (existing.profile_id !== workerState.profileId || existing.local_node_id !== workerState.localNodeId) {
+    throw scopedKeyCollision()
+  }
+  throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+}
+
 function assertDatabaseLocalNodeOwnership(db: SqliteDatabase | null, localNodeId: string): void {
   const checks: Array<{ readonly source: string; readonly sql: string }> = [
     { source: 'conversations', sql: 'SELECT id FROM aurora_conversations WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
@@ -592,6 +663,10 @@ function hasMismatchedLocalNodeColumn(db: SqliteDatabase, tableName: string, exp
 
 function localNodeOwnerMismatch(): LocalDataError {
   return new LocalDataError('identity_mismatch', 'Local data database local node does not match the open session', { reason: 'local_node_owner_mismatch' })
+}
+
+function scopedKeyCollision(): LocalDataError {
+  return new LocalDataError('identity_mismatch', 'Local data record ID is already owned by another profile on this device', { reason: 'profile_scope_collision' })
 }
 
 function ambiguousProfileOwnership(): LocalDataError {

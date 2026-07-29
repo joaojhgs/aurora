@@ -231,6 +231,78 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     await reopenedFirst.close()
   })
 
+  it('rejects same-node different-profile global ID collisions without changing the first profile records', async () => {
+    const leases = new MapBrowserStorageLeaseStore()
+    const store = new MapBrowserLocalDataDocumentStore()
+    const first = await openSession(store, leases, 'owner-1', 'profile-1', 'node-1')
+    await first.conversations.upsertConversation(conversationFixture())
+    await first.conversations.appendMessage(messageFixture())
+    await first.memory.upsertMemoryItem(memoryFixture())
+    await first.localTools.upsertLocalToolState(localToolStateFixture())
+    await first.peerGrants.upsertPeerGrant(peerGrantFixture())
+    await first.localAudit.appendAudit(auditFixture())
+    const firstExportBefore = await first.exportV1()
+    await first.close()
+
+    const second = await openSession(store, leases, 'owner-2', 'profile-2', 'node-1')
+    await expect(second.conversations.upsertConversation(conversationFixture({ profileId: 'profile-2' }))).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_scope_collision' }
+    })
+    await second.conversations.upsertConversation(conversationFixture({ id: 'conversation-profile-2', profileId: 'profile-2' }))
+    await expect(second.conversations.appendMessage(messageFixture({
+      conversationId: 'conversation-profile-2'
+    }))).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_scope_collision' }
+    })
+    await expect(second.memory.upsertMemoryItem(memoryFixture({ profileId: 'profile-2' }))).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_scope_collision' }
+    })
+    await second.localTools.upsertLocalToolState(localToolStateFixture({ profileId: 'profile-2', enabled: true }))
+    await expect(second.peerGrants.upsertPeerGrant(peerGrantFixture({ profileId: 'profile-2' }))).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_scope_collision' }
+    })
+    await expect(second.localAudit.appendAudit(auditFixture({ profileId: 'profile-2' }))).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_scope_collision' }
+    })
+    await expect(second.importV1(buildLocalDataExportV1({
+      sourceBackend: 'memory',
+      schemaVersion: localDataMigrationManifest.latestVersion,
+      profileId: 'profile-2',
+      localNodeId: 'node-1',
+      exportedAtMs: 2000,
+      records: {
+        ...emptyRecords(),
+        memoryItems: [memoryFixture({ profileId: 'profile-2' })]
+      }
+    }))).rejects.toMatchObject({
+      code: 'identity_mismatch',
+      metadata: { reason: 'profile_scope_collision' }
+    })
+    const secondExport = await second.exportV1()
+    expect(secondExport.recordCounts).toMatchObject({
+      conversations: 1,
+      messages: 0,
+      memoryItems: 0,
+      localToolStates: 1,
+      peerGrantMetadata: 0,
+      localAudit: 0
+    })
+    await second.close()
+
+    const reopenedFirst = await openSession(store, leases, 'owner-3', 'profile-1', 'node-1')
+    expect(await reopenedFirst.exportV1()).toMatchObject({
+      records: firstExportBefore.records,
+      collectionHashes: firstExportBefore.collectionHashes,
+      recordCounts: firstExportBefore.recordCounts
+    })
+    await reopenedFirst.close()
+  })
+
   it('contends same stable identity across different profiles and isolates distinct identities', async () => {
     const leases = new MapBrowserStorageLeaseStore()
     const store = new MapBrowserLocalDataDocumentStore()
