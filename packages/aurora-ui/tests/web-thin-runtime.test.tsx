@@ -187,6 +187,67 @@ describe('browser WebRTC thin-shell runtime', () => {
     await preferred.close()
   })
 
+  it('creates runtime clients through the supplied factory across transport modes', async () => {
+    const transports: AuroraTransport[] = []
+    const createClientFromRuntimeTransport = vi.fn((transport: AuroraTransport) => {
+      transports.push(transport)
+      return new AuroraClient({ transport })
+    })
+    const createDemoClientOnly = vi.fn(createDemoClient)
+
+    const httpOnly = createBrowserWebThinRuntime({
+      createClient: createClientFromRuntimeTransport,
+      createDemoClient: createDemoClientOnly,
+      mode: 'http-only',
+      gatewayUrl: 'https://aurora.example',
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+    const webrtcOnly = createBrowserWebThinRuntime({
+      createClient: createClientFromRuntimeTransport,
+      createDemoClient: createDemoClientOnly,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+    const rolloutHttpFallback = createBrowserWebThinRuntime({
+      createClient: createClientFromRuntimeTransport,
+      createDemoClient: createDemoClientOnly,
+      mode: 'webrtc-preferred',
+      gatewayUrl: 'https://aurora.example',
+      inviteText: inviteText(),
+      rolloutFlags: { webrtc_thin_client: false },
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    })
+    const demo = createBrowserWebThinRuntime({
+      createClient: createClientFromRuntimeTransport,
+      createDemoClient: createDemoClientOnly,
+      mode: 'http-only',
+      demoMode: true,
+    })
+
+    expect(createClientFromRuntimeTransport).toHaveBeenCalledTimes(3)
+    expect(transports.map((transport) => transport.kind)).toEqual([
+      'http',
+      'mesh',
+      'http',
+    ])
+    expect(httpOnly.client.transport).toBe(transports[0])
+    expect(webrtcOnly.client.transport).toBe(transports[1])
+    expect(rolloutHttpFallback.client.transport).toBe(transports[2])
+    expect(rolloutHttpFallback.peer.snapshot()).toMatchObject({
+      status: 'disabled',
+      hasHttpFallback: true,
+    })
+    expect(createDemoClientOnly).toHaveBeenCalledTimes(1)
+    expect(demo.client.transport.kind).toBe('mock')
+
+    await httpOnly.close()
+    await webrtcOnly.close()
+    await rolloutHttpFallback.close()
+    await demo.close()
+  })
+
   it('keeps WebRTC remote-console runtime consumer-only with no local provider capabilities', async () => {
     const runtime = createBrowserWebThinRuntime({
       createClient,

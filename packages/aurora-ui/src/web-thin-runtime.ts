@@ -173,6 +173,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ? createBrowserWebRtcAuroraRuntime<AuroraClient>({
           mode: 'http-only',
           http: rollbackHttp,
+          ...clientFactoryOption(config),
           ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
         })
       : null
@@ -185,7 +186,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     })
     return {
       client: rollbackRuntime
-        ? clientFromRuntimeTransport(config, new ProductSafeTransport(rollbackRuntime.transport))
+        ? rollbackRuntime.client
         : clientFromFactory(config, new FailingTransport(disabled, mode)),
       peer,
       surface,
@@ -236,6 +237,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       appLayerE2eeAllowed: rolloutFlags.webrtc_app_layer_e2ee,
       ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
       ...(config.windowLocation ? { windowLocation: config.windowLocation } : {}),
+      ...clientFactoryOption(config),
     })
   } catch (error) {
     if (mode === 'http-only' && config.demoMode) {
@@ -280,7 +282,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     : null
   lifecycle?.start()
   return {
-    client: clientFromRuntimeTransport(config, new ProductSafeTransport(sdkRuntime.client.transport)),
+    client: sdkRuntime.client,
     peer,
     surface,
     mode,
@@ -658,8 +660,13 @@ function clientFromFactory(config: BrowserThinRuntimeConfig, transport: AuroraTr
   throw new AuroraError({ code: 'validation', message: CLIENT_SETUP_INCOMPLETE_COPY })
 }
 
-function clientFromRuntimeTransport(config: BrowserThinRuntimeConfig, transport: AuroraTransport): AuroraClient {
-  return config.createClient ? config.createClient(transport) : new AuroraClient({ transport })
+function clientFactoryOption(
+  config: BrowserThinRuntimeConfig,
+): Pick<BrowserWebRtcRuntimeOptions<AuroraClient>, 'createClient'> | Record<string, never> {
+  if (!config.createClient) return {}
+  return {
+    createClient: (transport: AuroraTransport) => config.createClient!(new ProductSafeTransport(transport)),
+  }
 }
 
 function httpOptionsFromConfig(config: BrowserThinRuntimeConfig): HttpTransportOptions | null {
