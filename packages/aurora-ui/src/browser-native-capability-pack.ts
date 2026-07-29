@@ -122,6 +122,13 @@ const ERROR_CODES = new Set<BrowserNativeCapabilityErrorCode>([
 const DOCUMENT_ID_RE = /^doc_[A-Za-z0-9_-]{16,96}$/u
 const DEFAULT_APPROVED_PROTOCOLS = new Set(['https:', 'mailto:', 'tel:', 'aurora:', 'aurora-local:'])
 
+interface ApprovedDeepLinkRule {
+  readonly protocol: string
+  readonly origin: string | null
+  readonly route: string
+  readonly subtree: boolean
+}
+
 export function createBrowserNativeCapabilityPack(options: BrowserNativeCapabilityPackOptions): BrowserNativeCapabilityPack {
   const registry = new LocalToolRegistry({
     stablePeerId: options.stablePeerId,
@@ -360,7 +367,7 @@ function canShareText(nav: BrowserNavigatorPort): boolean {
 }
 
 function hasApprovedDeepLinkScope(options: BrowserNativeCapabilityPackOptions): boolean {
-  return (options.approvedDeepLinks?.length ?? 0) > 0 || (options.allowCurrentOriginDeepLinks !== false && currentHttpsOrigin(options) !== null)
+  return approvedDeepLinkRules(options).length > 0 || (options.allowCurrentOriginDeepLinks !== false && currentHttpsOrigin(options) !== null)
 }
 
 function isApprovedDeepLink(value: string, options: BrowserNativeCapabilityPackOptions): boolean {
@@ -371,9 +378,59 @@ function isApprovedDeepLink(value: string, options: BrowserNativeCapabilityPackO
     return false
   }
   if (!DEFAULT_APPROVED_PROTOCOLS.has(url.protocol)) return false
-  if (options.approvedDeepLinks?.some((prefix) => url.href.startsWith(prefix))) return true
+  if (approvedDeepLinkRules(options).some((rule) => deepLinkMatchesRule(url, rule))) return true
   const currentOrigin = currentHttpsOrigin(options)
   return options.allowCurrentOriginDeepLinks !== false && url.protocol === 'https:' && currentOrigin !== null && url.origin === currentOrigin
+}
+
+function approvedDeepLinkRules(options: BrowserNativeCapabilityPackOptions): ApprovedDeepLinkRule[] {
+  return (options.approvedDeepLinks ?? [])
+    .map((value) => approvedDeepLinkRule(value))
+    .filter((rule): rule is ApprovedDeepLinkRule => Boolean(rule))
+}
+
+function approvedDeepLinkRule(value: string): ApprovedDeepLinkRule | null {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return null
+  }
+  if (!DEFAULT_APPROVED_PROTOCOLS.has(url.protocol)) return null
+  if (url.username || url.password) return null
+  if (url.protocol === 'https:') {
+    return {
+      protocol: url.protocol,
+      origin: url.origin,
+      route: normalizePath(url.pathname),
+      subtree: url.pathname.endsWith('/') && url.pathname !== '/',
+    }
+  }
+  return {
+    protocol: url.protocol,
+    origin: null,
+    route: customSchemeRoute(url),
+    subtree: false,
+  }
+}
+
+function deepLinkMatchesRule(url: URL, rule: ApprovedDeepLinkRule): boolean {
+  if (url.protocol !== rule.protocol) return false
+  if (rule.protocol === 'https:') {
+    if (url.origin !== rule.origin) return false
+    const path = normalizePath(url.pathname)
+    return rule.subtree ? path.startsWith(rule.route) : path === rule.route
+  }
+  return customSchemeRoute(url) === rule.route
+}
+
+function normalizePath(value: string): string {
+  return value || '/'
+}
+
+function customSchemeRoute(url: URL): string {
+  if (url.protocol === 'mailto:' || url.protocol === 'tel:') return url.pathname
+  return `${url.hostname}${normalizePath(url.pathname)}`
 }
 
 function currentHttpsOrigin(options: BrowserNativeCapabilityPackOptions): string | null {

@@ -122,6 +122,69 @@ describe('browser native capability pack', () => {
     expect(open).toHaveBeenCalledWith('https://app.example/approved/help', '_blank', 'noopener,noreferrer')
   })
 
+  it('does not approve lookalike hosts with parsed deep-link rules', async () => {
+    const open = vi.fn()
+    const pack = createBrowserNativeCapabilityPack(fullOptions({
+      window: { open },
+      approvedDeepLinks: ['https://trusted.example'],
+      allowCurrentOriginDeepLinks: false,
+    }))
+    const entry = pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.openDeepLink)
+
+    await expect(entry?.handler(callInput({ url: 'https://trusted.example.evil' }))).rejects.toMatchObject({ reasonCode: 'permission_denied' })
+    await expect(entry?.handler(callInput({ url: 'https://trusted.example/?from=aurora' }))).resolves.toEqual({ opened: true })
+    expect(open).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires exact paths unless the approved route is a deliberate subtree', async () => {
+    const exactOpen = vi.fn()
+    const exact = createBrowserNativeCapabilityPack(fullOptions({
+      window: { open: exactOpen },
+      approvedDeepLinks: ['https://trusted.example/app'],
+      allowCurrentOriginDeepLinks: false,
+    }))
+    const exactEntry = exact.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.openDeepLink)
+
+    await expect(exactEntry?.handler(callInput({ url: 'https://trusted.example/application' }))).rejects.toMatchObject({ reasonCode: 'permission_denied' })
+    await expect(exactEntry?.handler(callInput({ url: 'https://trusted.example/app?next=1#section' }))).resolves.toEqual({ opened: true })
+
+    const subtreeOpen = vi.fn()
+    const subtree = createBrowserNativeCapabilityPack(fullOptions({
+      window: { open: subtreeOpen },
+      approvedDeepLinks: ['https://trusted.example/app/'],
+      allowCurrentOriginDeepLinks: false,
+    }))
+    const subtreeEntry = subtree.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.openDeepLink)
+
+    await expect(subtreeEntry?.handler(callInput({ url: 'https://trusted.example/app/child?next=1' }))).resolves.toEqual({ opened: true })
+    await expect(subtreeEntry?.handler(callInput({ url: 'https://trusted.example/application' }))).rejects.toMatchObject({ reasonCode: 'permission_denied' })
+  })
+
+  it('does not advertise deep links when configured rules are invalid or unsafe', () => {
+    const pack = createBrowserNativeCapabilityPack(fullOptions({
+      window: { open: vi.fn() },
+      approvedDeepLinks: ['not a url', 'javascript:alert(1)', 'https://user:pass@trusted.example/app'],
+      allowCurrentOriginDeepLinks: false,
+    }))
+
+    expect(pack.registeredToolIds).not.toContain(AURORA_NATIVE_TOOL_IDS.openDeepLink)
+  })
+
+  it('allows bounded custom and contact routes with query variability only after the route', async () => {
+    const open = vi.fn()
+    const pack = createBrowserNativeCapabilityPack(fullOptions({
+      window: { open },
+      approvedDeepLinks: ['aurora://open/task', 'mailto:support@example.com'],
+      allowCurrentOriginDeepLinks: false,
+    }))
+    const entry = pack.registry.resolveForDispatch(AURORA_NATIVE_TOOL_IDS.openDeepLink)
+
+    await expect(entry?.handler(callInput({ url: 'aurora://open/task?ticket=1' }))).resolves.toEqual({ opened: true })
+    await expect(entry?.handler(callInput({ url: 'aurora://open/task-extra?ticket=1' }))).rejects.toMatchObject({ reasonCode: 'permission_denied' })
+    await expect(entry?.handler(callInput({ url: 'mailto:support@example.com?subject=Aurora' }))).resolves.toEqual({ opened: true })
+    await expect(entry?.handler(callInput({ url: 'mailto:support@example.com.evil?subject=Aurora' }))).rejects.toMatchObject({ reasonCode: 'permission_denied' })
+  })
+
   it('treats popup-blocked approved links as failed execution', async () => {
     const pack = createBrowserNativeCapabilityPack(fullOptions({
       window: { location: { origin: 'https://app.example', href: 'https://app.example/' }, open: () => null },
