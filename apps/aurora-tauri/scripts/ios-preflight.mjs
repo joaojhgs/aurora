@@ -81,6 +81,14 @@ function validateThinWebRtcContract() {
   const rustBridge = readFileSync(join(appDir, 'src-tauri', 'src', 'lib.rs'), 'utf8')
   const runtime = readFileSync(join(appDir, 'src', 'aurora-client.ts'), 'utf8')
   const packageJson = readJson(join(appDir, 'package.json'))
+  const prepareClientBundle = readFileSync(
+    join(appDir, 'scripts', 'prepare-ios-client-bundle.mjs'),
+    'utf8'
+  )
+  const buildClientBundle = readFileSync(
+    join(appDir, 'scripts', 'build-ios-client-bundle.mjs'),
+    'utf8'
+  )
   const prepareThinBundle = readFileSync(
     join(appDir, 'scripts', 'prepare-ios-thin-bundle.mjs'),
     'utf8'
@@ -132,8 +140,10 @@ function validateThinWebRtcContract() {
   assert(overlay.app.security.capabilities.includes('aurora-ios-thin'), 'iOS thin overlay must select aurora-ios-thin')
   assert(Array.isArray(overlay.bundle.externalBin) && overlay.bundle.externalBin.length === 0, 'iOS thin overlay must not bundle external binaries')
   assert(Object.keys(overlay.bundle.resources).length === 0, 'iOS thin overlay must not bundle sidecar resources')
-  assert(packageJson.scripts['ios:prepare:thin'] === 'node ./scripts/prepare-ios-thin-bundle.mjs', 'iOS thin prepare command must generate a runtime-configurable overlay')
-  assert(packageJson.scripts['ios:build:thin:simulator'] === 'node ./scripts/build-ios-thin-bundle.mjs', 'iOS thin simulator build must use the generated overlay wrapper')
+  assert(packageJson.scripts['ios:prepare:client'] === 'node ./scripts/prepare-ios-client-bundle.mjs', 'iOS client prepare command must generate a runtime-configurable overlay')
+  assert(packageJson.scripts['ios:prepare:thin'] === 'pnpm ios:prepare:client', 'iOS thin prepare command must delegate exactly to ios:prepare:client')
+  assert(packageJson.scripts['ios:build:client:simulator'] === 'node ./scripts/build-ios-client-bundle.mjs', 'iOS client simulator build must use the generated overlay wrapper')
+  assert(packageJson.scripts['ios:build:thin:simulator'] === 'pnpm ios:build:client:simulator', 'iOS thin simulator build must delegate exactly to ios:build:client:simulator')
   for (const invariant of [
     "capabilities: ['aurora-ios-thin', 'aurora-mobile-mesh']",
     'externalBin: []',
@@ -142,18 +152,22 @@ function validateThinWebRtcContract() {
     "connectionMode: 'runtime-configurable'",
     'runtimeConfiguredEndpoints: true'
   ]) {
-    assert(prepareThinBundle.includes(invariant), `iOS thin overlay generator is missing ${invariant}`)
+    assert(prepareClientBundle.includes(invariant), `iOS client overlay generator is missing ${invariant}`)
   }
   for (const invariant of [
-    'AURORA_TAURI_IOS_THIN_CONFIG_PATH',
+    'AURORA_TAURI_IOS_CLIENT_CONFIG_PATH',
     "'--config',",
     "'aarch64-sim'",
     "join(srcTauriRoot, 'gen', 'apple', 'build')",
     'rmSync(appleBuildRoot, { recursive: true, force: true })',
     'pythonSidecarStaged: false'
   ]) {
-    assert(buildThinBundle.includes(invariant), `iOS thin build wrapper is missing ${invariant}`)
+    assert(buildClientBundle.includes(invariant), `iOS client build wrapper is missing ${invariant}`)
   }
+  assert(prepareThinBundle.includes('AURORA_TAURI_IOS_THIN_CONFIG_PATH'), 'iOS thin prepare wrapper must keep legacy config env compatibility')
+  assert(prepareThinBundle.includes("await import('./prepare-ios-client-bundle.mjs')"), 'iOS thin prepare wrapper must import the client generator')
+  assert(buildThinBundle.includes('AURORA_TAURI_IOS_THIN_CONFIG_PATH'), 'iOS thin build wrapper must keep legacy config env compatibility')
+  assert(buildThinBundle.includes("await import('./build-ios-client-bundle.mjs')"), 'iOS thin build wrapper must import the client build wrapper')
 }
 
 function validateHost() {

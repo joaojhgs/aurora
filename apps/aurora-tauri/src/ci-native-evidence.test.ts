@@ -15,15 +15,15 @@ function workflowJobNames(workflowText: string): string[] {
   return [...workflowText.matchAll(/^\s{2}([A-Za-z0-9_-]+):\n\s{4}name:\s*(.+)$/gm)].map((match) => match[2]!.trim())
 }
 
-function generatedDesktopThinConfigText() {
-  const tmpRoot = mkdtempSync(join(tmpdir(), 'aurora-ci-native-thin-config-'))
-  const configPath = join(tmpRoot, 'tauri.thin.conf.json')
-  execFileSync(process.execPath, [resolve(repoRoot, 'apps/aurora-tauri/scripts/prepare-thin-bundle.mjs')], {
+function generatedDesktopClientConfigText() {
+  const tmpRoot = mkdtempSync(join(tmpdir(), 'aurora-ci-native-client-config-'))
+  const configPath = join(tmpRoot, 'tauri.client.conf.json')
+  execFileSync(process.execPath, [resolve(repoRoot, 'apps/aurora-tauri/scripts/prepare-client-bundle.mjs')], {
     cwd: resolve(repoRoot, 'apps/aurora-tauri'),
     env: {
       ...process.env,
-      AURORA_TAURI_THIN_CONFIG_PATH: configPath,
-      AURORA_TAURI_THIN_REPORT_PATH: join(tmpRoot, 'desktop-thin-bundle-prepare.json')
+      AURORA_TAURI_CLIENT_CONFIG_PATH: configPath,
+      AURORA_TAURI_CLIENT_REPORT_PATH: join(tmpRoot, 'desktop-client-bundle-prepare.json')
     }
   })
   return readFileSync(configPath, 'utf8')
@@ -40,7 +40,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['test:ci-regression-gates']).toContain('test:e2e:admin')
     expect(packageJson.scripts['test:ci-regression-gates']).toContain('test:e2e:runtime')
     expect(packageJson.scripts['test:ci-regression-gates']).toContain('test:ci-native-evidence')
-    expect(packageJson.scripts['test:ci-regression-gates']).toContain('test:desktop-thin-bundle')
+    expect(packageJson.scripts['test:ci-regression-gates']).toContain('test:desktop-client-bundle')
   })
 
   it('requires desktop-native Tauri evidence outside the web/frontend route crawl', () => {
@@ -131,7 +131,7 @@ describe('Tauri CI native evidence contract', () => {
     const androidWorkflow = repoText('.github/workflows/tauri-android.yml')
     const iosBaselineWorkflow = repoText('.github/workflows/tauri-ios.yml')
     const iosPolicyWorkflow = repoText('.github/workflows/tauri-ios-release.yml')
-    const androidThinBuildWrapper = repoText('apps/aurora-tauri/scripts/build-android-thin-bundle.mjs')
+    const androidClientBuildWrapper = repoText('apps/aurora-tauri/scripts/build-android-client-bundle.mjs')
     const androidInteropRunner = repoText('apps/aurora-tauri/scripts/run-android-webrtc-interop.mjs')
     const iosInteropTest = repoText('apps/aurora-tauri/tests/ios/ios-python-webrtc.e2e.test.ts')
 
@@ -141,18 +141,27 @@ describe('Tauri CI native evidence contract', () => {
     for (const [name, command] of Object.entries(packageJson.scripts).filter(([name, command]) => name.startsWith('android:build:') && command.includes('tauri android build'))) {
       expect(command, `${name} must sync canonical native plugin before build`).toContain('android:sync-native-plugin')
     }
-    expect(packageJson.scripts['android:build:thin:apk']).toBe('node ./scripts/build-android-thin-bundle.mjs --kind apk')
-    expect(packageJson.scripts['android:build:thin:apk:arm64']).toBe(
-      'node ./scripts/build-android-thin-bundle.mjs --kind apk --target aarch64',
+    expect(packageJson.scripts['android:build:client:apk']).toBe('node ./scripts/build-android-client-bundle.mjs --kind apk')
+    expect(packageJson.scripts['android:build:thin:apk']).toBe('pnpm android:build:client:apk')
+    expect(packageJson.scripts['android:build:thin:apk']).not.toBe('node ./scripts/build-android-thin-bundle.mjs --kind apk')
+    expect(packageJson.scripts['android:build:client:apk:arm64']).toBe(
+      'node ./scripts/build-android-client-bundle.mjs --kind apk --target aarch64',
     )
-    expect(packageJson.scripts['android:build:thin:aab']).toBe('node ./scripts/build-android-thin-bundle.mjs --kind aab')
-    expect(androidThinBuildWrapper).toContain("run('pnpm', ['android:sync-native-plugin'])")
-    expect(androidThinBuildWrapper).toContain("buildArgs.push('--config', tempConfigPath)")
-    expect(androidThinBuildWrapper).toContain('sourceConfigWritten: false')
-    expect(androidThinBuildWrapper).toContain('rmSync(sourceConfigPath, { force: true })')
+    expect(packageJson.scripts['android:build:thin:apk:arm64']).toBe('pnpm android:build:client:apk:arm64')
+    expect(packageJson.scripts['android:build:client:aab']).toBe('node ./scripts/build-android-client-bundle.mjs --kind aab')
+    expect(packageJson.scripts['android:build:thin:aab']).toBe('pnpm android:build:client:aab')
+    expect(packageJson.scripts['android:build:thin:aab']).not.toBe('node ./scripts/build-android-thin-bundle.mjs --kind aab')
+    expect(androidClientBuildWrapper).toContain("run('pnpm', ['android:sync-native-plugin'])")
+    expect(androidClientBuildWrapper).toContain("buildArgs.push('--config', tempConfigPath)")
+    expect(androidClientBuildWrapper).toContain('sourceConfigWritten: false')
+    expect(androidClientBuildWrapper).toContain('rmSync(sourceConfigPath, { force: true })')
     expect(packageJson.scripts['ios:policy']).toBe('node ./scripts/ios-preflight.mjs --policy-only')
-    expect(packageJson.scripts['ios:prepare:thin']).toContain('prepare-ios-thin-bundle.mjs')
-    expect(packageJson.scripts['ios:build:thin:simulator']).toContain('build-ios-thin-bundle.mjs')
+    expect(packageJson.scripts['ios:prepare:client']).toBe('node ./scripts/prepare-ios-client-bundle.mjs')
+    expect(packageJson.scripts['ios:prepare:thin']).toBe('pnpm ios:prepare:client')
+    expect(packageJson.scripts['ios:prepare:thin']).not.toContain('prepare-ios-thin-bundle.mjs')
+    expect(packageJson.scripts['ios:build:client:simulator']).toBe('node ./scripts/build-ios-client-bundle.mjs')
+    expect(packageJson.scripts['ios:build:thin:simulator']).toBe('pnpm ios:build:client:simulator')
+    expect(packageJson.scripts['ios:build:thin:simulator']).not.toContain('build-ios-thin-bundle.mjs')
     expect(packageJson.scripts['ios:smoke:simulator']).toContain('ios-simulator-smoke.mjs')
     expect(packageJson.scripts['ios:webrtc:mobile-browser']).toContain(
       'ios-python-webrtc.e2e.test.ts',
@@ -207,7 +216,8 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosInteropTest).toContain(
       'forbiddenMatchCount: 0',
     )
-    expect(packageJson.scripts['build:frontend:ios-thin']).toBe('node ./scripts/build-ios-thin-frontend.mjs')
+    expect(packageJson.scripts['build:frontend:ios-client']).toBe('node ./scripts/build-ios-client-frontend.mjs')
+    expect(packageJson.scripts['build:frontend:ios-thin']).toBe('pnpm build:frontend:ios-client')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:thin:apk')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:thin:apk')
@@ -263,6 +273,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).not.toContain('AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS')
     expect(iosBaselineWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(iosBaselineWorkflow).not.toContain('https://gateway.example.invalid')
+    expect(repoText('apps/aurora-tauri/scripts/build-ios-client-bundle.mjs')).toContain('ios-client-simulator-build-provenance.json')
     expect(iosBaselineWorkflow).toContain('ios-thin-simulator-build-provenance.json')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:smoke:simulator')
     expect(iosBaselineWorkflow).toContain('ios-simulator-smoke.json')
@@ -308,7 +319,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(gate).toContain('test:e2e:runtime')
     expect(gate).toContain('test:e2e:outcomes')
     expect(gate).toContain('test:ci-native-evidence')
-    expect(gate).toContain('test:desktop-thin-bundle')
+    expect(gate).toContain('test:desktop-client-bundle')
     expect(gate).toContain('test:service-boundary')
     expect(packageJson.scripts['tauri:smoke:linux']).toContain('test:ci-regression-gates')
   })
@@ -478,36 +489,45 @@ describe('Tauri CI native evidence contract', () => {
     )
   })
 
-  it('defines a Python-free desktop-thin bundle lane with deterministic artifact proof', () => {
+  it('defines a Python-free desktop client bundle lane with deterministic artifact proof and thin aliases', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
+    const prepareClient = repoText('apps/aurora-tauri/scripts/prepare-client-bundle.mjs')
+    const assertClient = repoText('apps/aurora-tauri/scripts/assert-client-bundle-clean.mjs')
     const prepareThin = repoText('apps/aurora-tauri/scripts/prepare-thin-bundle.mjs')
     const assertThin = repoText('apps/aurora-tauri/scripts/assert-thin-bundle-clean.mjs')
     const thinCapability = repoText('apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json')
-    const thinConfig = generatedDesktopThinConfigText()
+    const clientConfig = generatedDesktopClientConfigText()
     const workflow = repoText('.github/workflows/tauri-desktop.yml')
 
     expect(packageJson.scripts['build:bundle:desktop-local']).toBe('pnpm build:bundle:desktop-local-minimal')
-    expect(packageJson.scripts['build:bundle:thin']).toBe('pnpm build:bundle:desktop-thin')
+    expect(packageJson.scripts['build:bundle:thin']).toBe('pnpm build:bundle:desktop-client')
     for (const [name, command] of Object.entries(packageJson.scripts)) {
-      if (!name.endsWith(':thin')) continue
+      if (!name.endsWith(':thin') && !name.endsWith(':client')) continue
       expect(command, `${name} must be Python-free`).not.toMatch(/prepare-sidecar|python/i)
     }
-    expect(packageJson.scripts['prepare:bundle:desktop-thin']).toBe('node ./scripts/prepare-thin-bundle.mjs')
-    expect(packageJson.scripts['verify:bundle:desktop-thin']).toBe('node ./scripts/assert-thin-bundle-clean.mjs')
-    expect(packageJson.scripts['test:desktop-thin-bundle']).toContain('desktop-thin-bundle-proof.test.ts')
-    expect(packageJson.scripts['build:bundle:desktop-thin']).toContain('prepare-thin-bundle.mjs')
-    expect(packageJson.scripts['build:bundle:desktop-thin']).toContain('src-tauri/tauri.thin.conf.json')
-    expect(packageJson.scripts['build:bundle:desktop-thin']).toContain('assert-thin-bundle-clean.mjs')
+    expect(packageJson.scripts['prepare:bundle:desktop-client']).toBe('node ./scripts/prepare-client-bundle.mjs')
+    expect(packageJson.scripts['prepare:bundle:desktop-thin']).toBe('pnpm prepare:bundle:desktop-client')
+    expect(packageJson.scripts['verify:bundle:desktop-client']).toBe('node ./scripts/assert-client-bundle-clean.mjs')
+    expect(packageJson.scripts['verify:bundle:desktop-thin']).toBe('pnpm verify:bundle:desktop-client')
+    expect(packageJson.scripts['test:desktop-client-bundle']).toContain('desktop-client-bundle-proof.test.ts')
+    expect(packageJson.scripts['test:desktop-thin-bundle']).toBe('pnpm test:desktop-client-bundle')
+    expect(packageJson.scripts['build:bundle:desktop-client']).toContain('prepare-client-bundle.mjs')
+    expect(packageJson.scripts['build:bundle:desktop-client']).toContain('src-tauri/tauri.client.conf.json')
+    expect(packageJson.scripts['build:bundle:desktop-client']).toContain('assert-client-bundle-clean.mjs')
+    expect(packageJson.scripts['build:bundle:desktop-thin']).toBe('pnpm build:bundle:desktop-client')
+    expect(packageJson.scripts['build:bundle:desktop-thin']).not.toContain('prepare-thin-bundle.mjs')
     expect(packageJson.scripts['build:bundle:desktop-thin']).not.toContain('prepare-sidecar')
-    expect(prepareThin).toContain("const connectSrc = [\"'self'\", 'http:', 'https:', 'ws:', 'wss:']")
-    expect(prepareThin).toContain("capabilities: ['aurora-thin']")
-    expect(prepareThin).toContain("connectionMode: 'runtime-configurable'")
-    expect(assertThin).toContain('forbiddenPathPatterns')
-    expect(assertThin).toContain('aurora-sidecar')
-    expect(assertThin).toContain('config_defaults')
-    expect(assertThin).toContain('site-packages')
-    expect(assertThin).toContain('archivesFound')
-    expect(assertThin).toContain('failed to inspect deb archive')
+    expect(prepareClient).toContain("const connectSrc = [\"'self'\", 'http:', 'https:', 'ws:', 'wss:']")
+    expect(prepareClient).toContain("capabilities: ['aurora-thin']")
+    expect(prepareClient).toContain("connectionMode: 'runtime-configurable'")
+    expect(prepareThin).toContain("await import('./prepare-client-bundle.mjs')")
+    expect(assertClient).toContain('forbiddenPathPatterns')
+    expect(assertClient).toContain('aurora-sidecar')
+    expect(assertClient).toContain('config_defaults')
+    expect(assertClient).toContain('site-packages')
+    expect(assertClient).toContain('archivesFound')
+    expect(assertClient).toContain('failed to inspect deb archive')
+    expect(assertThin).toContain("await import('./assert-client-bundle-clean.mjs')")
     expect(thinCapability).toContain('aurora-thin-profile')
     expect(thinCapability).toContain('aurora-thin-peer-credentials')
     expect(thinCapability).not.toContain('aurora-secure-storage')
@@ -516,12 +536,12 @@ describe('Tauri CI native evidence contract', () => {
     expect(thinCapability).not.toContain('aurora-subscribe')
     expect(thinCapability).not.toContain('aurora-local-file')
     expect(thinCapability).not.toContain('aurora-audio-bridge')
-    expect(thinConfig).toContain('aurora-thin')
-    expect(thinConfig).toContain("connect-src 'self' http: https: ws: wss:")
-    expect(thinConfig).not.toContain('wss://signaling.example.invalid')
-    expect(thinConfig).not.toContain('https://gateway.example.invalid')
-    expect(thinConfig).not.toContain('binaries/aurora-sidecar')
-    expect(thinConfig).not.toContain('config_defaults.json')
+    expect(clientConfig).toContain('aurora-thin')
+    expect(clientConfig).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(clientConfig).not.toContain('wss://signaling.example.invalid')
+    expect(clientConfig).not.toContain('https://gateway.example.invalid')
+    expect(clientConfig).not.toContain('binaries/aurora-sidecar')
+    expect(clientConfig).not.toContain('config_defaults.json')
     expect(workflow).toContain('Desktop Tauri bundle (${{ matrix.bundle_mode }})')
     expect(workflow).toContain('desktop-thin')
     expect(workflow).toContain('desktop-local')

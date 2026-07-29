@@ -50,21 +50,35 @@ const manifestIntegration = androidNativeManifestIntegration()
 const barcodeScannerCancellation = androidBarcodeScannerCancellationIntegration()
 const signingEvidence = signingInputs()
 const expectedCommands = {
-  prepareThin: 'pnpm --filter @aurora/tauri-ui android:prepare:thin',
-  apk: 'pnpm --filter @aurora/tauri-ui android:build:thin:apk',
-  verifyApk: 'pnpm --filter @aurora/tauri-ui android:verify:thin:apk',
-  aab: 'pnpm --filter @aurora/tauri-ui android:build:thin:aab',
-  verifyAab: 'pnpm --filter @aurora/tauri-ui android:verify:thin:aab'
+  prepareClient: 'pnpm --filter @aurora/tauri-ui android:prepare:client',
+  prepareThinAlias: 'pnpm --filter @aurora/tauri-ui android:prepare:thin',
+  apk: 'pnpm --filter @aurora/tauri-ui android:build:client:apk',
+  apkThinAlias: 'pnpm --filter @aurora/tauri-ui android:build:thin:apk',
+  verifyApk: 'pnpm --filter @aurora/tauri-ui android:verify:client:apk',
+  verifyApkThinAlias: 'pnpm --filter @aurora/tauri-ui android:verify:thin:apk',
+  aab: 'pnpm --filter @aurora/tauri-ui android:build:client:aab',
+  aabThinAlias: 'pnpm --filter @aurora/tauri-ui android:build:thin:aab',
+  verifyAab: 'pnpm --filter @aurora/tauri-ui android:verify:client:aab',
+  verifyAabThinAlias: 'pnpm --filter @aurora/tauri-ui android:verify:thin:aab'
 }
 
 const checks = [
   check('tauri-cli-script', Boolean(packageJson.scripts?.tauri), 'package exposes the Tauri CLI script'),
-  check('android-thin-prepare-command', packageJson.scripts?.['android:prepare:thin'] === 'node ./scripts/prepare-android-thin-bundle.mjs', packageJson.scripts?.['android:prepare:thin'] ?? 'missing'),
-  check('android-thin-apk-command', isAndroidThinBuildWrapper(packageJson.scripts?.['android:build:thin:apk'], 'apk'), packageJson.scripts?.['android:build:thin:apk'] ?? 'missing'),
-  check('android-thin-aab-command', isAndroidThinBuildWrapper(packageJson.scripts?.['android:build:thin:aab'], 'aab'), packageJson.scripts?.['android:build:thin:aab'] ?? 'missing'),
-  check('android-thin-apk-proof-command', packageJson.scripts?.['android:verify:thin:apk']?.includes('assert-android-thin-artifact-clean.mjs --kind apk'), packageJson.scripts?.['android:verify:thin:apk'] ?? 'missing'),
-  check('android-thin-aab-proof-command', packageJson.scripts?.['android:verify:thin:aab']?.includes('assert-android-thin-artifact-clean.mjs --kind aab'), packageJson.scripts?.['android:verify:thin:aab'] ?? 'missing'),
-  check('android-thin-scripts-python-free', thinScriptsPythonFree(packageJson.scripts ?? {}), 'all *:thin scripts avoid uv/python/prepare-sidecar'),
+  check('android-client-prepare-command', packageJson.scripts?.['android:prepare:client'] === 'node ./scripts/prepare-android-client-bundle.mjs', packageJson.scripts?.['android:prepare:client'] ?? 'missing'),
+  check('android-thin-prepare-alias', packageJson.scripts?.['android:prepare:thin'] === 'pnpm android:prepare:client', packageJson.scripts?.['android:prepare:thin'] ?? 'missing'),
+  check('android-client-apk-command', isAndroidClientBuildWrapper(packageJson.scripts?.['android:build:client:apk'], 'apk'), packageJson.scripts?.['android:build:client:apk'] ?? 'missing'),
+  check('android-thin-apk-alias', packageJson.scripts?.['android:build:thin:apk'] === 'pnpm android:build:client:apk', packageJson.scripts?.['android:build:thin:apk'] ?? 'missing'),
+  check('android-client-apk-arm64-command', packageJson.scripts?.['android:build:client:apk:arm64'] === 'node ./scripts/build-android-client-bundle.mjs --kind apk --target aarch64', packageJson.scripts?.['android:build:client:apk:arm64'] ?? 'missing'),
+  check('android-thin-apk-arm64-alias', packageJson.scripts?.['android:build:thin:apk:arm64'] === 'pnpm android:build:client:apk:arm64', packageJson.scripts?.['android:build:thin:apk:arm64'] ?? 'missing'),
+  check('android-client-apk-x86_64-command', packageJson.scripts?.['android:build:client:apk:x86_64'] === 'node ./scripts/build-android-client-bundle.mjs --kind apk --target x86_64', packageJson.scripts?.['android:build:client:apk:x86_64'] ?? 'missing'),
+  check('android-thin-apk-x86_64-alias', packageJson.scripts?.['android:build:thin:apk:x86_64'] === 'pnpm android:build:client:apk:x86_64', packageJson.scripts?.['android:build:thin:apk:x86_64'] ?? 'missing'),
+  check('android-client-aab-command', isAndroidClientBuildWrapper(packageJson.scripts?.['android:build:client:aab'], 'aab'), packageJson.scripts?.['android:build:client:aab'] ?? 'missing'),
+  check('android-thin-aab-alias', packageJson.scripts?.['android:build:thin:aab'] === 'pnpm android:build:client:aab', packageJson.scripts?.['android:build:thin:aab'] ?? 'missing'),
+  check('android-client-apk-proof-command', packageJson.scripts?.['android:verify:client:apk']?.includes('assert-android-client-artifact-clean.mjs --kind apk'), packageJson.scripts?.['android:verify:client:apk'] ?? 'missing'),
+  check('android-thin-apk-proof-alias', packageJson.scripts?.['android:verify:thin:apk'] === 'pnpm android:verify:client:apk', packageJson.scripts?.['android:verify:thin:apk'] ?? 'missing'),
+  check('android-client-aab-proof-command', packageJson.scripts?.['android:verify:client:aab']?.includes('assert-android-client-artifact-clean.mjs --kind aab'), packageJson.scripts?.['android:verify:client:aab'] ?? 'missing'),
+  check('android-thin-aab-proof-alias', packageJson.scripts?.['android:verify:thin:aab'] === 'pnpm android:verify:client:aab', packageJson.scripts?.['android:verify:thin:aab'] ?? 'missing'),
+  check('android-client-and-thin-scripts-python-free', clientAndThinScriptsPythonFree(packageJson.scripts ?? {}), 'all *:client and *:thin scripts avoid uv/python/prepare-sidecar'),
   check('android-sync-native-plugin-script', packageJson.scripts?.['android:sync-native-plugin'] === 'node ./scripts/install-android-native-plugin.mjs', packageJson.scripts?.['android:sync-native-plugin'] ?? 'missing'),
   check('android-init-syncs-native-plugin', packageJson.scripts?.['android:init']?.includes('android:sync-native-plugin'), packageJson.scripts?.['android:init'] ?? 'missing'),
   check('android-preflight-syncs-native-plugin', ['android:preflight', 'android:preflight:ci', 'android:preflight:strict'].every((name) => packageJson.scripts?.[name]?.includes('android:sync-native-plugin')), 'android preflight package scripts run android:sync-native-plugin before node ./scripts/android-preflight.mjs'),
@@ -246,17 +260,20 @@ function check(id, passed, detail, required = false) {
   }
 }
 
-function thinScriptsPythonFree(scripts) {
-  return Object.entries(scripts).every(([name, value]) => !name.includes(':thin') || isPythonFreeThinScript(value))
+function clientAndThinScriptsPythonFree(scripts) {
+  return Object.entries(scripts).every(([name, value]) => {
+    if (!name.includes(':thin') && !name.includes(':client')) return true
+    return isPythonFreeScript(value)
+  })
 }
 
-function isPythonFreeThinScript(value) {
+function isPythonFreeScript(value) {
   return typeof value === 'string' && !/prepare-sidecar|\bpython\b|\buv\b/i.test(value)
 }
 
-function isAndroidThinBuildWrapper(value, kind) {
-  return isPythonFreeThinScript(value)
-    && value === `node ./scripts/build-android-thin-bundle.mjs --kind ${kind}`
+function isAndroidClientBuildWrapper(value, kind) {
+  return isPythonFreeScript(value)
+    && value === `node ./scripts/build-android-client-bundle.mjs --kind ${kind}`
 }
 
 function androidThinCapabilityObservable() {
