@@ -110,7 +110,7 @@ describe('Tauri CI native evidence contract', () => {
       ['.github/workflows/tauri-ios.yml', 'Tauri iOS Baseline', ['macOS Xcode Tauri iOS init and build']],
       ['.github/workflows/tauri-ios-release.yml', 'Tauri iOS Policy and Signing', ['iOS manifest and UI policy', 'macOS Xcode iOS preflight']],
       ['.github/workflows/python-tests.yml', 'Python Tests', ['Unit, integration, and E2E tests']],
-      ['.github/workflows/webrtc-interop.yml', 'WebRTC live interop', ['Browser persistence and cross-engine network paths']],
+      ['.github/workflows/webrtc-interop.yml', 'WebRTC live interop', ['Hosted thin-shell and cross-engine network paths']],
     ]
     const seen = new Set<string>()
 
