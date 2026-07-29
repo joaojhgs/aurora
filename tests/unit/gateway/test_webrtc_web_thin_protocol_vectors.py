@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,11 @@ from app.services.gateway.webrtc.pairing_sas import (
     PairingSASHandshake,
     derive_channel_binding,
     pairing_identity,
+)
+from app.services.gateway.webrtc.peer_protocol import (
+    CAP_PROVIDER_LEASE_V1,
+    PeerProtocolError,
+    parse_provider_lease_frame,
 )
 from app.services.gateway.webrtc.protocol_contract import protocol_descriptor
 from app.services.gateway.webrtc.signaling.mqtt_client import MQTTSignaling
@@ -46,6 +52,47 @@ def test_protocol_descriptor_matches_fixture_and_reserves_future_features() -> N
     assert descriptor["capabilities"]["rpc"]["backpressure"] is True
     assert descriptor["capabilities"]["rpc"]["scoped_event_subscriptions"] is True
     assert descriptor["capabilities"]["rpc"]["consumer_only_peer"] is True
+
+
+@pytest.mark.unit
+def test_provider_lease_numeric_vectors_match_python_safe_integer_semantics() -> None:
+    vectors = _fixture()["peer_protocol"]["provider_lease_numbers"]
+
+    assert vectors["capability"] == CAP_PROVIDER_LEASE_V1
+    accepted = {vector["name"]: vector for vector in vectors["accepted"]}
+    assert set(accepted) == {
+        "canonical_integer_provider_lease",
+        "integral_decimal_provider_lease",
+        "safe_exponent_provider_lease",
+        "canonical_integer_provider_unavailable",
+        "max_safe_integer_provider_unavailable",
+    }
+    assert {vector["name"] for vector in vectors["rejected"]} == {
+        "fractional_revision_provider_lease",
+        "boolean_revision_provider_lease",
+        "negative_revision_provider_unavailable",
+        "unsafe_revision_provider_unavailable",
+        "negative_issued_at_provider_unavailable",
+        "expiry_regression_provider_lease",
+    }
+    assert ".0" in accepted["integral_decimal_provider_lease"]["json"]
+    assert "1e3" in accepted["safe_exponent_provider_lease"]["json"]
+
+    for vector in vectors["accepted"]:
+        parsed = parse_provider_lease_frame(json.loads(vector["json"]))
+        normalized = {key: value for key, value in asdict(parsed).items() if value is not None}
+        assert normalized == vector["frame"], vector["name"]
+        if vector["canonical_json"]:
+            assert vector["json"] == json.dumps(
+                vector["frame"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+
+    for vector in vectors["rejected"]:
+        with pytest.raises(PeerProtocolError, match=vector["error_fragment"]):
+            parse_provider_lease_frame(json.loads(vector["json"]))
 
 
 @pytest.mark.unit

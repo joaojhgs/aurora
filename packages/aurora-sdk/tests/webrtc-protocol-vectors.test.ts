@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { CAP_PROVIDER_LEASE_V1 } from '../src/webrtc/peer-protocol.js'
+import { parseWebRtcJsonFrame } from '../src/webrtc/protocol.js'
 import {
   AEAD_PARAMETERS,
   DATA_CHANNEL_LABEL,
@@ -35,6 +37,16 @@ interface Fixture {
     consumer_only: {
       call: { frame: Record<string, any>; json: string }
       error: { frame: Record<string, any>; json: string }
+    }
+    provider_lease_numbers: {
+      capability: string
+      accepted: Array<{
+        name: string
+        canonical_json: boolean
+        frame: Record<string, unknown>
+        json: string
+      }>
+      rejected: Array<{ name: string; error_fragment: string; json: string }>
     }
   }
   invite: { payload: Record<string, unknown>; token: string; url: string; json: string }
@@ -145,6 +157,45 @@ describe('WebRTC web thin protocol vectors', () => {
     const consumerError = peerProtocol.consumer_only.error
     expect(JSON.parse(consumerError.json)).toEqual(consumerError.frame)
     expect(consumerError.frame.error).toEqual({ code: 405, message: 'Local peer is consumer-only' })
+  })
+
+  it('enforces shared provider lease safe-integer semantics from raw JSON', () => {
+    const vectors = fixture().peer_protocol.provider_lease_numbers
+    const accepted = Object.fromEntries(vectors.accepted.map((vector) => [vector.name, vector]))
+
+    expect(vectors.capability).toBe(CAP_PROVIDER_LEASE_V1)
+    expect(new Set(vectors.accepted.map((vector) => vector.name))).toEqual(
+      new Set([
+        'canonical_integer_provider_lease',
+        'integral_decimal_provider_lease',
+        'safe_exponent_provider_lease',
+        'canonical_integer_provider_unavailable',
+        'max_safe_integer_provider_unavailable'
+      ])
+    )
+    expect(new Set(vectors.rejected.map((vector) => vector.name))).toEqual(
+      new Set([
+        'fractional_revision_provider_lease',
+        'boolean_revision_provider_lease',
+        'negative_revision_provider_unavailable',
+        'unsafe_revision_provider_unavailable',
+        'negative_issued_at_provider_unavailable',
+        'expiry_regression_provider_lease'
+      ])
+    )
+    expect(accepted.integral_decimal_provider_lease?.json).toContain('.0')
+    expect(accepted.safe_exponent_provider_lease?.json).toContain('1e3')
+
+    for (const vector of vectors.accepted) {
+      expect(parseWebRtcJsonFrame(vector.json), vector.name).toEqual(vector.frame)
+      if (vector.canonical_json) {
+        expect(vector.json, vector.name).toBe(JSON.stringify(vector.frame))
+      }
+    }
+
+    for (const vector of vectors.rejected) {
+      expect(() => parseWebRtcJsonFrame(vector.json), vector.name).toThrow(vector.error_fragment)
+    }
   })
 
 

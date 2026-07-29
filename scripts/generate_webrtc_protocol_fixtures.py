@@ -36,6 +36,7 @@ from app.services.gateway.webrtc.peer_protocol import (  # noqa: E402
     CAP_BACKPRESSURE_V1,
     CAP_CONSUMER_ONLY_V1,
     CAP_FRAGMENTATION_V1,
+    CAP_PROVIDER_LEASE_V1,
     CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
     PeerProtocolLimits,
     build_protocol_hello,
@@ -291,6 +292,141 @@ def _rpc_vectors() -> dict[str, Any]:
     return {name: {"frame": frame, "json": json.dumps(frame)} for name, frame in frames.items()}
 
 
+def _provider_lease_number_vectors() -> dict[str, Any]:
+    canonical_lease = {
+        "type": "provider_lease",
+        "peer_id": "peer-a",
+        "connection_epoch": "epoch-1",
+        "availability_revision": 1,
+        "issued_at_ms": 1000,
+        "expires_at_ms": 61000,
+        "available": True,
+    }
+    canonical_unavailable = {
+        "type": "provider_unavailable",
+        "peer_id": "peer-a",
+        "connection_epoch": "epoch-1",
+        "availability_revision": 2,
+        "issued_at_ms": 61000,
+        "expires_at_ms": 61000,
+        "available": False,
+        "reason_code": "page_hidden",
+    }
+    max_safe_integer = (2**53) - 1
+    max_safe_unavailable = {
+        "type": "provider_unavailable",
+        "peer_id": "peer-a",
+        "connection_epoch": "epoch-max-safe",
+        "availability_revision": max_safe_integer,
+        "issued_at_ms": max_safe_integer,
+        "expires_at_ms": max_safe_integer,
+        "available": False,
+        "reason_code": "max_safe_boundary",
+    }
+    return {
+        "capability": CAP_PROVIDER_LEASE_V1,
+        "accepted": [
+            {
+                "name": "canonical_integer_provider_lease",
+                "canonical_json": True,
+                "frame": canonical_lease,
+                "json": _canonical_json(canonical_lease),
+            },
+            {
+                "name": "integral_decimal_provider_lease",
+                "canonical_json": False,
+                "frame": canonical_lease,
+                "json": (
+                    '{"availability_revision":1.0,"available":true,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":61000.0,'
+                    '"issued_at_ms":1000.0,"peer_id":"peer-a","type":"provider_lease"}'
+                ),
+            },
+            {
+                "name": "safe_exponent_provider_lease",
+                "canonical_json": False,
+                "frame": canonical_lease,
+                "json": (
+                    '{"availability_revision":1,"available":true,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":61e3,'
+                    '"issued_at_ms":1e3,"peer_id":"peer-a","type":"provider_lease"}'
+                ),
+            },
+            {
+                "name": "canonical_integer_provider_unavailable",
+                "canonical_json": True,
+                "frame": canonical_unavailable,
+                "json": _canonical_json(canonical_unavailable),
+            },
+            {
+                "name": "max_safe_integer_provider_unavailable",
+                "canonical_json": True,
+                "frame": max_safe_unavailable,
+                "json": _canonical_json(max_safe_unavailable),
+            },
+        ],
+        "rejected": [
+            {
+                "name": "fractional_revision_provider_lease",
+                "error_fragment": "integer",
+                "json": (
+                    '{"availability_revision":1.5,"available":true,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":61000,'
+                    '"issued_at_ms":1000,"peer_id":"peer-a","type":"provider_lease"}'
+                ),
+            },
+            {
+                "name": "boolean_revision_provider_lease",
+                "error_fragment": "integer",
+                "json": (
+                    '{"availability_revision":true,"available":true,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":61000,'
+                    '"issued_at_ms":1000,"peer_id":"peer-a","type":"provider_lease"}'
+                ),
+            },
+            {
+                "name": "negative_revision_provider_unavailable",
+                "error_fragment": "integer",
+                "json": (
+                    '{"availability_revision":-1,"available":false,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":61000,'
+                    '"issued_at_ms":1000,"peer_id":"peer-a",'
+                    '"reason_code":"negative_revision","type":"provider_unavailable"}'
+                ),
+            },
+            {
+                "name": "unsafe_revision_provider_unavailable",
+                "error_fragment": "integer",
+                "json": (
+                    '{"availability_revision":9007199254740992,"available":false,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":61000,'
+                    '"issued_at_ms":1000,"peer_id":"peer-a",'
+                    '"reason_code":"unsafe_revision","type":"provider_unavailable"}'
+                ),
+            },
+            {
+                "name": "negative_issued_at_provider_unavailable",
+                "error_fragment": "integer",
+                "json": (
+                    '{"availability_revision":3,"available":false,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":0,'
+                    '"issued_at_ms":-1,"peer_id":"peer-a",'
+                    '"reason_code":"negative_issue_time","type":"provider_unavailable"}'
+                ),
+            },
+            {
+                "name": "expiry_regression_provider_lease",
+                "error_fragment": "expires",
+                "json": (
+                    '{"availability_revision":1,"available":true,'
+                    '"connection_epoch":"epoch-1","expires_at_ms":999,'
+                    '"issued_at_ms":1000,"peer_id":"peer-a","type":"provider_lease"}'
+                ),
+            },
+        ],
+    }
+
+
 def _peer_protocol_vectors() -> dict[str, Any]:
     limits = PeerProtocolLimits(
         fragment_payload_bytes=8,
@@ -388,6 +524,7 @@ def _peer_protocol_vectors() -> dict[str, Any]:
             "call": {"frame": consumer_only_call, "json": _compact_json(consumer_only_call)},
             "error": {"frame": consumer_only_error, "json": json.dumps(consumer_only_error)},
         },
+        "provider_lease_numbers": _provider_lease_number_vectors(),
     }
 
 
