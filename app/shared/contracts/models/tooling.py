@@ -1612,8 +1612,14 @@ class ToolingGetExportCatalogResponse(IOModel):
 
     @model_validator(mode="after")
     def _validate_projection_identity(self) -> "ToolingGetExportCatalogResponse":
-        if _tooling_projection_has_surrogate(self.provider_peer_id):
-            raise ValueError("projection provider_peer_id must be valid Unicode")
+        if (
+            self.provider_peer_id != self.provider_peer_id.strip()
+            or _tooling_projection_has_control(self.provider_peer_id)
+            or _tooling_projection_has_surrogate(self.provider_peer_id)
+        ):
+            raise ValueError(
+                "projection provider_peer_id must be trimmed, control-free, and valid Unicode"
+            )
         expected_local = _tooling_projection_service_instance_id(self.provider_peer_id)
         expected_remote = f"remote:{self.provider_peer_id}:Tooling"
         if self.service_instance_id not in {expected_local, expected_remote}:

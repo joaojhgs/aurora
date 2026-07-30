@@ -413,6 +413,22 @@
       "path": "provider_peer_id"
     },
     {
+      "case": "untrimmed_provider_peer_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "provider_peer_id": " peer:台北/room 42?x=1#node"
+      },
+      "path": "provider_peer_id"
+    },
+    {
+      "case": "control_provider_peer_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "provider_peer_id": "peer:台北\nroom"
+      },
+      "path": "provider_peer_id"
+    },
+    {
       "case": "oversized_service_instance_rejected",
       "expected_category": "pydantic_string_too_long",
       "patch": {

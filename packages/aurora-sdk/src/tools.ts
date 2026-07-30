@@ -1953,6 +1953,8 @@ function isProjectionPageShape(value: JsonObject): boolean {
     typeof value.provider_peer_id !== 'string'
     || value.provider_peer_id.length === 0
     || codePointLength(value.provider_peer_id) > 160
+    || value.provider_peer_id !== value.provider_peer_id.trim()
+    || hasControlCharacter(value.provider_peer_id)
     || hasLoneSurrogate(value.provider_peer_id)
     || typeof value.service_instance_id !== 'string'
     || value.service_instance_id.length === 0
@@ -2061,6 +2063,14 @@ function hasLoneSurrogate(value: string): boolean {
     } else if (code >= 0xDC00 && code <= 0xDFFF) {
       return true
     }
+  }
+  return false
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0
+    if (codePoint < 0x20 || codePoint === 0x7F) return true
   }
   return false
 }

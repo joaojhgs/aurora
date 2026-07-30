@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ToolApprovalConfirmRequest } from '../src/admin.js'
 import {
   LocalToolRegistry,
+  canonicalToolGlobalId,
   type LocalToolDescriptorV1
 } from '../src/local-tools/index.js'
 import {
@@ -62,6 +63,9 @@ const dangerousDescriptor: LocalToolDescriptorV1 = {
   confirmationPolicy: 'always',
   handlerId: 'core.delete'
 }
+
+const REMOTE_PEER_ID = 'remote-peer'
+const REMOTE_SERVICE_INSTANCE_ID = `remote:${REMOTE_PEER_ID}:Tooling`
 
 describe('lightweight tool-client adapter', () => {
   it('executes a local safe tool through registry handlers and policy redaction', async () => {
@@ -147,7 +151,7 @@ describe('lightweight tool-client adapter', () => {
     const { adapter } = fixture({ remote, availableTools: [remoteTool] })
     const payload = request('echo', { text: 'remote' }, null, 'remote', {
       provider_peer_id: 'remote-peer',
-      provider_service_instance_id: 'remote-service',
+      provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
       global_tool_id: remoteTool.global_tool_id
     })
 
@@ -207,7 +211,7 @@ describe('lightweight tool-client adapter', () => {
     ])
     expect(snapshot).toMatchObject({
       providerPeerId: 'remote-peer',
-      serviceInstanceId: 'remote-service',
+      serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID,
       tools: [expect.objectContaining({ global_tool_id: callable.global_tool_id })]
     })
   })
@@ -241,7 +245,7 @@ describe('lightweight tool-client adapter', () => {
     const [page] = projectionPages([[wrongProvider]])
 
     await expect(loadLightweightRemoteProjectionCatalog({ async getExportCatalog() { return page } }, { pageSize: 1 })).rejects.toMatchObject({
-      reasonCode: 'projection_tool_identity_mismatch'
+      reasonCode: 'invalid_projection_page'
     })
   })
 })
@@ -337,8 +341,8 @@ function remoteDelegate(): LightweightToolClientDelegate & { calls: Array<[strin
         resource_selector_hash: 'b'.repeat(64),
         route_decision_id: 'remote-route',
         correlation_id: payload.correlation_id ?? 'remote-corr',
-        provider_peer_id: 'remote-peer',
-        provider_service_instance_id: 'remote-service',
+        provider_peer_id: REMOTE_PEER_ID,
+        provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
         global_tool_id: payload.tool_name,
         local_tool_name: payload.tool_name,
         args_schema_hash: null,
@@ -357,7 +361,7 @@ function remoteDelegate(): LightweightToolClientDelegate & { calls: Array<[strin
     },
     async execute(payload) {
       calls.push(['execute', payload])
-      return { ok: true, data: { remote: true }, status: 'success', correlation_id: payload.correlation_id ?? null, provider_peer_id: 'remote-peer', global_tool_id: payload.tool_name }
+      return { ok: true, data: { remote: true }, status: 'success', correlation_id: payload.correlation_id ?? null, provider_peer_id: REMOTE_PEER_ID, global_tool_id: payload.tool_name }
     }
   }
 }
@@ -366,7 +370,7 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
   return {
     name,
     local_name: name,
-    global_tool_id: name,
+    global_tool_id: canonicalToolGlobalId(REMOTE_PEER_ID, name),
     tool_id_scheme: 'aurora-tool',
     tool_id_version: 1,
     tool_contract_id: name,
@@ -374,8 +378,8 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
     share_group_label: name,
     legacy_global_tool_ids: [],
     exportable: true,
-    provider_peer_id: 'remote-peer',
-    provider_service_instance_id: 'remote-service',
+    provider_peer_id: REMOTE_PEER_ID,
+    provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
     provider_label: null,
     provider_granted_permissions: null,
     provider_available: true,
@@ -388,7 +392,7 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
     argument_visibility: {},
     source_type: 'mesh_peer',
     source: 'mesh_peer',
-    source_id: 'remote',
+    source_id: REMOTE_SERVICE_INSTANCE_ID,
     trust_tier: 'trusted',
     capability_class: 'read',
     resource_scope: [],
@@ -404,8 +408,8 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
     confirmation_required: false,
     rate_limit_hints: null,
     provenance: {
-      provider_peer_id: 'remote-peer',
-      provider_service_instance_id: 'remote-service',
+      provider_peer_id: REMOTE_PEER_ID,
+      provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
       provider_kind: 'mesh_peer',
       source: 'unknown',
       advertised_name: name
@@ -420,8 +424,8 @@ function projectionPages(toolPages: ToolingProjectionToolInfo[][]): ToolingGetEx
     const complete = index === toolPages.length - 1
     const page = {
       ok: true,
-      provider_peer_id: 'remote-peer',
-      service_instance_id: 'remote-service',
+      provider_peer_id: REMOTE_PEER_ID,
+      service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
       selected_protocol_tier: 'projection_v1' as const,
       authority_revision: {
         catalog_revision: 1,

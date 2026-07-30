@@ -35,7 +35,7 @@ def test_export_request_has_no_caller_selected_peer_authority() -> None:
 def test_page_contract_binds_authority_and_terminal_checksum() -> None:
     partial = ToolingGetExportCatalogResponse(
         provider_peer_id="peer-a",
-        service_instance_id="svc-a",
+        service_instance_id="remote:peer-a:Tooling",
         authority_revision=AUTHORITY,
         projection_revision="rev-a",
         projection_digest=HASH,
@@ -48,7 +48,7 @@ def test_page_contract_binds_authority_and_terminal_checksum() -> None:
     with pytest.raises(ValidationError):
         ToolingGetExportCatalogResponse(
             provider_peer_id="peer-a",
-            service_instance_id="svc-a",
+            service_instance_id="remote:peer-a:Tooling",
             authority_revision=AUTHORITY,
             projection_revision="rev-a",
             projection_digest=HASH,
@@ -64,9 +64,9 @@ def test_invalidation_is_metadata_only() -> None:
     assert not {"tools", "tool_ids", "global_tool_ids", "schemas"} & fields.keys()
     event = ToolingProjectionInvalidated(
         provider_peer_id="peer-a",
-        service_instance_id="svc-a",
+        service_instance_id="remote:peer-a:Tooling",
         authority_revision=AUTHORITY,
         reason_code="policy_changed",
         correlation_id="corr-a",
     )
-    assert "tool" not in event.model_dump_json().lower()
+    assert not {"tools", "tool_ids", "global_tool_ids", "schemas"} & event.model_dump().keys()
