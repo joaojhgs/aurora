@@ -839,6 +839,7 @@ def _annotate_lossless_model_schema(model_name: str, schema: dict[str, Any]) -> 
     _annotate_tooling_tool_info_schemas(schema)
     if model_name == "ToolingGetExportCatalogResponse":
         schema[PROJECTION_PAGE_TERMINATION_MARKER] = True
+        schema[PROJECTION_IDENTITY_MARKER] = True
         properties = schema.get("properties")
         if isinstance(properties, dict):
             digest_pattern = "^[0-9a-f]{64}$"

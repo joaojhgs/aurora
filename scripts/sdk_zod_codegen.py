@@ -372,46 +372,33 @@ class ZodCompiler:
                 raise ctx.at(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER).unsupported(
                     f"{UNIQUE_STRING_ARRAY_NORMALIZE_MARKER} only applies to string arrays"
                 )
-        if PROJECTION_PAGE_TERMINATION_MARKER in schema:
-            if schema.get(PROJECTION_PAGE_TERMINATION_MARKER) is not True:
-                raise ctx.at(PROJECTION_PAGE_TERMINATION_MARKER).unsupported(
-                    f"{PROJECTION_PAGE_TERMINATION_MARKER} must be literal true"
-                )
+        for marker in (PROJECTION_PAGE_TERMINATION_MARKER, PROJECTION_IDENTITY_MARKER):
+            if marker not in schema:
+                continue
+            if schema.get(marker) is not True:
+                raise ctx.at(marker).unsupported(f"{marker} must be literal true")
             properties = schema.get("properties")
-            required_fields = {
-                "complete",
-                "final_checksum",
-                "next_cursor",
-                "total_count",
-            }
+            required_fields = (
+                {
+                    "provider_peer_id",
+                    "service_instance_id",
+                    "tools",
+                    "blocked_tools",
+                }
+                if marker == PROJECTION_IDENTITY_MARKER
+                else {
+                    "complete",
+                    "final_checksum",
+                    "next_cursor",
+                    "total_count",
+                }
+            )
             if (
                 schema.get("type") != "object"
                 or not isinstance(properties, dict)
                 or not required_fields.issubset(properties)
             ):
-                raise ctx.at(PROJECTION_PAGE_TERMINATION_MARKER).unsupported(
-                    f"{PROJECTION_PAGE_TERMINATION_MARKER} only applies to export page objects"
-                )
-        if PROJECTION_IDENTITY_MARKER in schema:
-            if schema.get(PROJECTION_IDENTITY_MARKER) is not True:
-                raise ctx.at(PROJECTION_IDENTITY_MARKER).unsupported(
-                    f"{PROJECTION_IDENTITY_MARKER} must be literal true"
-                )
-            properties = schema.get("properties")
-            required_fields = {
-                "blocked_tools",
-                "provider_peer_id",
-                "service_instance_id",
-                "tools",
-            }
-            if (
-                schema.get("type") != "object"
-                or not isinstance(properties, dict)
-                or not required_fields.issubset(properties)
-            ):
-                raise ctx.at(PROJECTION_IDENTITY_MARKER).unsupported(
-                    f"{PROJECTION_IDENTITY_MARKER} only applies to export page objects"
-                )
+                raise ctx.at(marker).unsupported(f"{marker} only applies to export page objects")
 
     def _apply_default(self, expression: str, schema: dict[str, Any], ctx: CompileContext) -> str:
         if "default" in schema:
@@ -429,9 +416,9 @@ class ZodCompiler:
                 STRING_TRIMMED_MARKER,
                 STRING_NON_BLANK_MARKER,
                 PROJECTION_PAGE_TERMINATION_MARKER,
-                PROJECTION_IDENTITY_MARKER,
                 UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
                 "x-aurora-extra-behavior",
+                PROJECTION_IDENTITY_MARKER,
             )
             if key in schema
         }
@@ -585,35 +572,26 @@ class ZodCompiler:
         if schema.get(PROJECTION_IDENTITY_MARKER) is True:
             expression = (
                 f"{expression}.superRefine((value, ctx) => {{"
-                " const isRecord = (candidate: unknown): candidate is Record<string, unknown> => Boolean(candidate) && typeof candidate === 'object' && !Array.isArray(candidate);"
-                " const hasControl = (text: string): boolean => /[\\u0000-\\u001F\\u007F]/u.test(text);"
-                " const hasSurrogate = (text: string): boolean => /[\\uD800-\\uDFFF]/u.test(text);"
-                " const encodePart = (text: string): string => encodeURIComponent(text).replace(/[!'()*]/g, (character: string) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);"
-                " const failIdentity = (issue: Parameters<typeof ctx.addIssue>[0]) => { ctx.addIssue(issue); ctx.addIssue({ code: 'custom', message: 'projection identity invalid' }); };"
-                " const peerId = value.provider_peer_id;"
-                " const serviceId = value.service_instance_id;"
-                " if (typeof peerId !== 'string' || peerId !== peerId.trim() || hasControl(peerId) || hasSurrogate(peerId)) { failIdentity({ code: 'custom', path: ['provider_peer_id'], message: 'projection provider_peer_id invalid' }); return; }"
-                " const expectedServices = new Set([`local:${encodePart(peerId)}:Tooling`, `remote:${peerId}:Tooling`]);"
-                " if (typeof serviceId !== 'string' || !expectedServices.has(serviceId)) { failIdentity({ code: 'custom', path: ['service_instance_id'], message: 'projection service_instance_id invalid' }); return; }"
-                " const checkTool = (tool: unknown, path: Array<string | number>) => {"
-                " if (!isRecord(tool)) { failIdentity({ code: 'custom', path, message: 'projection tool identity invalid' }); return; }"
-                " const contractId = tool.tool_contract_id;"
-                " if (typeof contractId !== 'string' || contractId.length === 0 || contractId !== contractId.trim() || [...contractId].length > 160 || hasControl(contractId) || hasSurrogate(contractId)) { failIdentity({ code: 'custom', path: [...path, 'tool_contract_id'], message: 'projection tool_contract_id invalid' }); return; }"
-                " const globalId = tool.global_tool_id;"
-                " if (typeof globalId !== 'string' || globalId.length === 0 || [...globalId].length > 1024) { failIdentity({ code: 'custom', path: [...path, 'global_tool_id'], message: 'projection global_tool_id invalid' }); return; }"
-                " if (tool.tool_id_scheme !== 'aurora-tool' || tool.tool_id_version !== 1) { failIdentity({ code: 'custom', path, message: 'projection tool identity scheme invalid' }); return; }"
-                " if (tool.provider_peer_id !== peerId) { failIdentity({ code: 'custom', path: [...path, 'provider_peer_id'], message: 'projection tool provider peer mismatch' }); return; }"
-                " if (tool.provider_service_instance_id !== serviceId) { failIdentity({ code: 'custom', path: [...path, 'provider_service_instance_id'], message: 'projection tool service mismatch' }); return; }"
-                " const provenance = tool.provenance;"
-                " if (!isRecord(provenance) || provenance.provider_peer_id !== peerId) { failIdentity({ code: 'custom', path: [...path, 'provenance', 'provider_peer_id'], message: 'projection provenance peer mismatch' }); return; }"
-                " if (provenance.provider_service_instance_id !== serviceId) { failIdentity({ code: 'custom', path: [...path, 'provenance', 'provider_service_instance_id'], message: 'projection provenance service mismatch' }); return; }"
-                " const expectedGlobalId = `aurora-tool:v1:${encodePart(peerId)}:Tooling:${encodePart(contractId)}`;"
-                " if (globalId !== expectedGlobalId) { failIdentity({ code: 'custom', path: [...path, 'global_tool_id'], message: 'projection global_tool_id mismatch' }); }"
+                " const add = (path: Array<string | number>, message: string): void => {"
+                " ctx.addIssue({ code: 'custom', path, message });"
+                " ctx.addIssue({ code: 'custom', message: 'projection identity invalid' });"
                 " };"
-                " const tools: unknown[] = Array.isArray(value.tools) ? value.tools : [];"
-                " const blockedTools: unknown[] = Array.isArray(value.blocked_tools) ? value.blocked_tools : [];"
-                " tools.forEach((tool: unknown, index: number) => checkTool(tool, ['tools', index]));"
-                " blockedTools.forEach((blocked: unknown, index: number) => { if (!isRecord(blocked)) { failIdentity({ code: 'custom', path: ['blocked_tools', index], message: 'projection blocked tool identity invalid' }); return; } checkTool(blocked.tool, ['blocked_tools', index, 'tool']); });"
+                " const providerPeerId = value.provider_peer_id;"
+                " const serviceInstanceId = value.service_instance_id;"
+                " if (typeof providerPeerId !== 'string' || providerPeerId.length === 0 || codePointLength(providerPeerId) > 160 || providerPeerId !== providerPeerId.trim() || hasControlCharacter(providerPeerId) || hasLoneSurrogate(providerPeerId)) { add(['provider_peer_id'], 'projection provider_peer_id invalid'); return; }"
+                " if (typeof serviceInstanceId !== 'string' || serviceInstanceId.length === 0 || codePointLength(serviceInstanceId) > 256 || hasLoneSurrogate(serviceInstanceId)) { add(['service_instance_id'], 'projection service_instance_id invalid'); return; }"
+                " const expectedLocal = `local:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling`;"
+                " const expectedRemote = `remote:${providerPeerId}:Tooling`;"
+                " if (serviceInstanceId !== expectedLocal && serviceInstanceId !== expectedRemote) { add(['service_instance_id'], 'projection service_instance_id does not match provider identity'); return; }"
+                " const visibleTools: unknown[] = Array.isArray(value.tools) ? value.tools : [];"
+                " const blockedEntries: unknown[] = Array.isArray(value.blocked_tools) ? value.blocked_tools : [];"
+                " for (const [index, tool] of visibleTools.entries()) {"
+                " if (!isProjectionToolIdentity(tool, providerPeerId, serviceInstanceId)) add(['tools', index], 'projection tool identity invalid');"
+                " }"
+                " for (const [index, blocked] of blockedEntries.entries()) {"
+                " const tool = blocked && typeof blocked === 'object' ? (blocked as Record<string, unknown>).tool : undefined;"
+                " if (!isProjectionToolIdentity(tool, providerPeerId, serviceInstanceId)) add(['blocked_tools', index, 'tool'], 'projection tool identity invalid');"
+                " }"
                 "})"
             )
         return expression
@@ -642,7 +620,7 @@ class ZodCompiler:
         if schema.get(UNIQUE_STRING_ARRAY_NORMALIZE_MARKER) is True:
             expression = (
                 f"{expression}.superRefine((value, ctx) => {{"
-                " if (value.some((item) => item.length === 0 || item !== item.trim() || item.length > 512))"
+                " if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512))"
                 " ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });"
                 "}).overwrite((value) => [...new Set(value)].sort())"
             )
@@ -657,11 +635,19 @@ class ZodCompiler:
         if "minLength" in schema:
             if not _is_nonnegative_int(schema["minLength"]):
                 raise ctx.at("minLength").unsupported("minLength must be a nonnegative integer")
-            expression = f"{expression}.min({schema['minLength']})"
+            expression = (
+                f"{expression}.refine((value) => codePointLength(value) >= {schema['minLength']}, "
+                f"{{ message: 'string must contain at least {schema['minLength']} Unicode code points' }})"
+                f".meta({canonical_json({'minLength': schema['minLength']})})"
+            )
         if "maxLength" in schema:
             if not _is_nonnegative_int(schema["maxLength"]):
                 raise ctx.at("maxLength").unsupported("maxLength must be a nonnegative integer")
-            expression = f"{expression}.max({schema['maxLength']})"
+            expression = (
+                f"{expression}.refine((value) => codePointLength(value) <= {schema['maxLength']}, "
+                f"{{ message: 'string must contain at most {schema['maxLength']} Unicode code points' }})"
+                f".meta({canonical_json({'maxLength': schema['maxLength']})})"
+            )
         if (
             "minLength" in schema
             and "maxLength" in schema
@@ -765,9 +751,62 @@ def render_zod_module(contract_schema: dict[str, Any]) -> str:
         "type JsonPrimitive = string | number | boolean | null",
         "type JsonValue = JsonPrimitive | { [key: string]: JsonValue | undefined } | JsonValue[]",
         "",
+        "const toolingProjectionTextEncoder = new TextEncoder()",
+        "const TOOLING_PROJECTION_SAFE_BYTES = new Set([0x2D, 0x2E, 0x5F, 0x7E])",
+        "const TOOLING_PROJECTION_HEX = '0123456789ABCDEF'",
+        "",
         "const auroraJsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>",
         "  z.union([z.string(), z.number().finite(), z.boolean(), z.null(), z.array(auroraJsonValueSchema), z.record(z.string(), auroraJsonValueSchema)])",
         ")",
+        "",
+        "function codePointLength(value: string): number { return Array.from(value).length }",
+        "",
+        "function hasControlCharacter(value: string): boolean {",
+        "  for (const character of value) {",
+        "    const codePoint = character.codePointAt(0) ?? 0",
+        "    if (codePoint < 0x20 || codePoint === 0x7F) return true",
+        "  }",
+        "  return false",
+        "}",
+        "",
+        "function hasLoneSurrogate(value: string): boolean {",
+        "  for (let index = 0; index < value.length; index += 1) {",
+        "    const code = value.charCodeAt(index)",
+        "    if (code >= 0xD800 && code <= 0xDBFF) {",
+        "      const next = value.charCodeAt(index + 1)",
+        "      if (next < 0xDC00 || next > 0xDFFF) return true",
+        "      index += 1",
+        "    } else if (code >= 0xDC00 && code <= 0xDFFF) {",
+        "      return true",
+        "    }",
+        "  }",
+        "  return false",
+        "}",
+        "",
+        "function percentEncodeRfc3986Utf8ForProjection(value: string): string {",
+        "  let encoded = ''",
+        "  for (const byte of toolingProjectionTextEncoder.encode(value)) {",
+        "    if ((byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5A) || (byte >= 0x61 && byte <= 0x7A) || TOOLING_PROJECTION_SAFE_BYTES.has(byte)) encoded += String.fromCharCode(byte)",
+        "    else encoded += `%${TOOLING_PROJECTION_HEX[(byte >> 4) & 0xF]}${TOOLING_PROJECTION_HEX[byte & 0xF]}`",
+        "  }",
+        "  return encoded",
+        "}",
+        "",
+        "function isProjectionToolIdentity(tool: unknown, providerPeerId: string, serviceInstanceId: string): boolean {",
+        "  if (!tool || typeof tool !== 'object') return false",
+        "  const value = tool as Record<string, unknown>",
+        "  const provenance = value.provenance",
+        "  if (!provenance || typeof provenance !== 'object') return false",
+        "  const prov = provenance as Record<string, unknown>",
+        "  const toolContractId = value.tool_contract_id",
+        "  const globalToolId = value.global_tool_id",
+        "  if (value.tool_id_scheme !== 'aurora-tool' || value.tool_id_version !== 1) return false",
+        "  if (value.provider_peer_id !== providerPeerId || value.provider_service_instance_id !== serviceInstanceId) return false",
+        "  if (prov.provider_peer_id !== providerPeerId || prov.provider_service_instance_id !== serviceInstanceId) return false",
+        "  if (typeof toolContractId !== 'string' || codePointLength(toolContractId) < 1 || codePointLength(toolContractId) > 160 || toolContractId !== toolContractId.trim() || hasControlCharacter(toolContractId) || hasLoneSurrogate(toolContractId)) return false",
+        "  if (typeof globalToolId !== 'string' || codePointLength(globalToolId) < 1 || codePointLength(globalToolId) > 1024) return false",
+        "  return globalToolId === `aurora-tool:v1:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling:${percentEncodeRfc3986Utf8ForProjection(toolContractId)}`",
+        "}",
         "",
     ]
     schema_exports: list[str] = []

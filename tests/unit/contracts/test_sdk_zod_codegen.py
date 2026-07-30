@@ -7,6 +7,7 @@ from pydantic import Field, ValidationError, field_validator
 from scripts import generate_backend_inventory
 from scripts.sdk_zod_codegen import (
     JSON_VALUE_MARKER,
+    PROJECTION_IDENTITY_MARKER,
     PROJECTION_PAGE_TERMINATION_MARKER,
     STRING_NON_BLANK_MARKER,
     STRING_TRIMMED_MARKER,
@@ -161,6 +162,23 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
             "only applies to export page objects",
         ),
         (
+            {"type": "string", PROJECTION_IDENTITY_MARKER: True},
+            "only applies to export page objects",
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {
+                    "provider_peer_id": {"type": "string"},
+                    "service_instance_id": {"type": "string"},
+                    "tools": {"type": "array", "items": {"type": "object"}},
+                    "blocked_tools": {"type": "array", "items": {"type": "object"}},
+                },
+                PROJECTION_IDENTITY_MARKER: False,
+            },
+            "must be literal true",
+        ),
+        (
             {"type": "object", STRING_NON_BLANK_MARKER: False},
             "must be literal true",
         ),
@@ -228,6 +246,47 @@ def test_zod_codegen_maps_extra_modes_without_weakened_fallbacks() -> None:
     assert ".catchall(z.string())" in rendered
     assert "z.any(" not in rendered
     assert "z.unknown(" not in rendered
+
+
+def test_zod_codegen_uses_unicode_code_point_string_bounds() -> None:
+    compiler = ZodCompiler(
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+        },
+        ctx=CompileContext("Tooling.GetExportCatalog", "output", "UnicodeBounded"),
+        symbol_prefix="UnicodeBounded",
+    )
+
+    expression = compiler.compile_root()[1]
+
+    assert "codePointLength(value) >= 1" in expression
+    assert "codePointLength(value) <= 160" in expression
+    assert '.meta({"minLength":1})' in expression
+    assert '.meta({"maxLength":160})' in expression
+    assert ".min(" not in expression
+    assert ".max(" not in expression
+
+
+def test_zod_codegen_uses_unicode_code_point_legacy_id_bounds() -> None:
+    compiler = ZodCompiler(
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "array",
+            "items": {"type": "string"},
+            UNIQUE_STRING_ARRAY_NORMALIZE_MARKER: True,
+        },
+        ctx=CompileContext("Tooling.GetTools", "output", "LegacyIds"),
+        symbol_prefix="LegacyIds",
+    )
+
+    expression = compiler.compile_root()[1]
+
+    assert "codePointLength(item) === 0" in expression
+    assert "codePointLength(item) > 512" in expression
+    assert "item.length" not in expression
 
 
 def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path) -> None:

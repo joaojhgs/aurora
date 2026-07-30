@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from app.services.db.manager import DatabaseManager
 from app.services.db.tooling_remote_catalog_store import compute_projection_page_hash
@@ -211,6 +212,14 @@ async def test_generated_projection_rejects_mutated_authority_or_hash(
     assert (
         await manager.begin_tooling_remote_catalog_sync(_begin_request(page, sync_id=sync_id))
     ).ok
+
+    if mutation == "service_authority":
+        with pytest.raises(
+            ValidationError,
+            match="projection service_instance_id does not match provider identity",
+        ):
+            DBAppendToolingRemoteCatalogPageRequest(sync_id=sync_id, page=page)
+        return
 
     rejected = await manager.append_tooling_remote_catalog_page(
         DBAppendToolingRemoteCatalogPageRequest(sync_id=sync_id, page=page)

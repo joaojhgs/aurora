@@ -3,12 +3,12 @@
   "artifact": "aurora-sdk-backend-contracts-manifest",
   "content_hashes": {
     "backend-contracts.schema.json": "a365bfc2f4e1a15dedb25720735cee83895a4def713f999eeabecfd337ef703b",
-    "backend-contracts.zod.ts": "ff0bbea4591055a7025768b5fdb30e5cd23eb97c6370a4d10b790f9f97ee9c07",
+    "backend-contracts.zod.ts": "31841c019379b4a6d1849e5439e4868545803b61bfcfa34cd5897d9d7b7ede1b",
     "tooling-local-provider-v1.json": "08e8986359133a5d214b5099aecbfba356046ce290d365d6e0dca254e2ed5531"
   },
-  "final_checksum": "0498c574e60c86ad484393d599a281dfe1e4dc3bfce050763094c56115305990",
+  "final_checksum": "bbacd65504e0a513ca59e34c0dacf2b96bcba23a783346efbfaa397f360d436b",
   "generator_format_version": "aurora-sdk-zod-codegen-v1",
-  "generator_source_hash": "92f436c02d010be26b4e24d4066ed3d7034ea59eb66931d10fe02f23828a64b4",
+  "generator_source_hash": "8f161c90dfdd727ec21d471157d2d5486f0552475949c2a9ac5867b8b12d8f89",
   "pydantic_version": "2.12.5",
   "python_version": "3.11.14",
   "schema_draft": "https://json-schema.org/draft/2020-12/schema",

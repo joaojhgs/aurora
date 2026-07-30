@@ -2019,7 +2019,11 @@ function isProjectionToolIdentity(
   if (tool.provider_peer_id !== providerPeerId || tool.provider_service_instance_id !== serviceInstanceId) return false
   if (provenance.provider_peer_id !== providerPeerId || provenance.provider_service_instance_id !== serviceInstanceId) return false
   if (typeof tool.tool_contract_id !== 'string' || !isProjectionToolContractId(tool.tool_contract_id)) return false
-  if (typeof tool.global_tool_id !== 'string' || tool.global_tool_id.length < 1 || tool.global_tool_id.length > 1024) return false
+  if (
+    typeof tool.global_tool_id !== 'string'
+    || codePointLength(tool.global_tool_id) < 1
+    || codePointLength(tool.global_tool_id) > 1024
+  ) return false
   return tool.global_tool_id === `aurora-tool:v1:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling:${percentEncodeRfc3986Utf8ForProjection(tool.tool_contract_id)}`
 }
 

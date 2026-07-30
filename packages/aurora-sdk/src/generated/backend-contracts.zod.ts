@@ -5,9 +5,62 @@ import { z } from 'zod/v4'
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | { [key: string]: JsonValue | undefined } | JsonValue[]
 
+const toolingProjectionTextEncoder = new TextEncoder()
+const TOOLING_PROJECTION_SAFE_BYTES = new Set([0x2D, 0x2E, 0x5F, 0x7E])
+const TOOLING_PROJECTION_HEX = '0123456789ABCDEF'
+
 const auroraJsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([z.string(), z.number().finite(), z.boolean(), z.null(), z.array(auroraJsonValueSchema), z.record(z.string(), auroraJsonValueSchema)])
 )
+
+function codePointLength(value: string): number { return Array.from(value).length }
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0
+    if (codePoint < 0x20 || codePoint === 0x7F) return true
+  }
+  return false
+}
+
+function hasLoneSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = value.charCodeAt(index + 1)
+      if (next < 0xDC00 || next > 0xDFFF) return true
+      index += 1
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      return true
+    }
+  }
+  return false
+}
+
+function percentEncodeRfc3986Utf8ForProjection(value: string): string {
+  let encoded = ''
+  for (const byte of toolingProjectionTextEncoder.encode(value)) {
+    if ((byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5A) || (byte >= 0x61 && byte <= 0x7A) || TOOLING_PROJECTION_SAFE_BYTES.has(byte)) encoded += String.fromCharCode(byte)
+    else encoded += `%${TOOLING_PROJECTION_HEX[(byte >> 4) & 0xF]}${TOOLING_PROJECTION_HEX[byte & 0xF]}`
+  }
+  return encoded
+}
+
+function isProjectionToolIdentity(tool: unknown, providerPeerId: string, serviceInstanceId: string): boolean {
+  if (!tool || typeof tool !== 'object') return false
+  const value = tool as Record<string, unknown>
+  const provenance = value.provenance
+  if (!provenance || typeof provenance !== 'object') return false
+  const prov = provenance as Record<string, unknown>
+  const toolContractId = value.tool_contract_id
+  const globalToolId = value.global_tool_id
+  if (value.tool_id_scheme !== 'aurora-tool' || value.tool_id_version !== 1) return false
+  if (value.provider_peer_id !== providerPeerId || value.provider_service_instance_id !== serviceInstanceId) return false
+  if (prov.provider_peer_id !== providerPeerId || prov.provider_service_instance_id !== serviceInstanceId) return false
+  if (typeof toolContractId !== 'string' || codePointLength(toolContractId) < 1 || codePointLength(toolContractId) > 160 || toolContractId !== toolContractId.trim() || hasControlCharacter(toolContractId) || hasLoneSurrogate(toolContractId)) return false
+  if (typeof globalToolId !== 'string' || codePointLength(globalToolId) < 1 || codePointLength(globalToolId) > 1024) return false
+  return globalToolId === `aurora-tool:v1:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling:${percentEncodeRfc3986Utf8ForProjection(toolContractId)}`
+}
 
 const ToolingExecuteToolInputToolingExecuteToolRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().default(null).optional(),
@@ -66,9 +119,9 @@ export const ToolingExecuteToolOutputToolingExecuteToolResponseSchema = z.object
 export type ToolingExecuteToolOutputToolingExecuteToolResponse = z.infer<typeof ToolingExecuteToolOutputToolingExecuteToolResponseSchema>
 
 export const ToolingGetExportCatalogInputToolingGetExportCatalogRequestSchema = z.object({
-  "cursor": z.string().min(1).max(4096).nullable().default(null).optional(),
-  "last_projection_digest": z.string().max(128).nullable().default(null).optional(),
-  "last_projection_revision": z.string().max(256).nullable().default(null).optional(),
+  "cursor": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 4096, { message: 'string must contain at most 4096 Unicode code points' }).meta({"maxLength":4096}).nullable().default(null).optional(),
+  "last_projection_digest": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().default(null).optional(),
+  "last_projection_revision": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().default(null).optional(),
   "page_size": z.number().finite().multipleOf(1).min(1).max(256).default(100).optional(),
   "protocol_tier": z.literal("projection_v1").default("projection_v1").optional()
 }).meta({"x-aurora-extra-behavior":"strip"})
@@ -91,9 +144,9 @@ const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingP
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionRetirementSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "availability": z.enum(["permission_blocked", "removed", "stale", "unshared"]),
-  "global_tool_id": z.string().min(1).max(1024),
-  "last_schema_hash": z.string().max(128).nullable().default(null).optional(),
-  "reason_code": z.string().min(1).max(128)
+  "global_tool_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 1024, { message: 'string must contain at most 1024 Unicode code points' }).meta({"maxLength":1024}),
+  "last_schema_hash": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().default(null).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128})
 }).meta({"x-aurora-extra-behavior":"strip"}))
 
 const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingRateLimitHintsSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
@@ -120,7 +173,7 @@ const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingT
   "exportable": z.boolean().default(false).optional(),
   "external": z.boolean().default(false).optional(),
   "global_tool_id": z.string(),
-  "legacy_global_tool_ids": z.array(z.string().min(1).max(512)).max(16).superRefine((value, ctx) => { if (value.some((item) => item.length === 0 || item !== item.trim() || item.length > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => [...new Set(value)].sort()).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
+  "legacy_global_tool_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 512, { message: 'string must contain at most 512 Unicode code points' }).meta({"maxLength":512})).max(16).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => [...new Set(value)].sort()).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
   "local_name": z.string(),
   "mutating": z.boolean().default(false).optional(),
   "name": z.string(),
@@ -165,22 +218,22 @@ export const ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema 
   "authority_revision": ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionAuthorityRevisionSchemaDef,
   "blocked_tools": z.array(ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionBlockedToolSchemaDef).max(256).optional(),
   "complete": z.boolean().default(false).optional(),
-  "final_checksum": z.string().min(1).max(128).regex(new RegExp("^[0-9a-f]{64}$")).nullable().default(null).optional(),
-  "next_cursor": z.string().min(1).max(4096).regex(/^(?!\s)(?:[\s\S]*\S)?$/).meta({"x-aurora-string-trimmed":true}).nullable().default(null).optional(),
+  "final_checksum": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[0-9a-f]{64}$")).nullable().default(null).optional(),
+  "next_cursor": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 4096, { message: 'string must contain at most 4096 Unicode code points' }).meta({"maxLength":4096}).regex(/^(?!\s)(?:[\s\S]*\S)?$/).meta({"x-aurora-string-trimmed":true}).nullable().default(null).optional(),
   "ok": z.boolean().default(true).optional(),
-  "page_hash": z.string().min(1).max(128).regex(new RegExp("^[0-9a-f]{64}$")),
+  "page_hash": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[0-9a-f]{64}$")),
   "page_index": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
   "page_size": z.number().finite().multipleOf(1).min(1).max(256),
-  "projection_digest": z.string().min(1).max(128).regex(new RegExp("^[0-9a-f]{64}$")),
-  "projection_revision": z.string().min(1).max(256),
-  "provider_peer_id": z.string().min(1).max(160),
-  "reason_code": z.string().max(128).nullable().default(null).optional(),
+  "projection_digest": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[0-9a-f]{64}$")),
+  "projection_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "provider_peer_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 160, { message: 'string must contain at most 160 Unicode code points' }).meta({"maxLength":160}),
+  "reason_code": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().default(null).optional(),
   "retirements": z.array(ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingProjectionRetirementSchemaDef).max(256).optional(),
   "selected_protocol_tier": z.literal("projection_v1").default("projection_v1").optional(),
-  "service_instance_id": z.string().min(1).max(256),
+  "service_instance_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
   "tools": z.array(ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchemaToolingToolInfoSchemaDef).max(256).optional(),
   "total_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().default(null).optional()
-}).superRefine((value, ctx) => { let invalid = false; if (value.complete === true) { if (value.next_cursor !== null && value.next_cursor !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['next_cursor'], message: 'complete pages cannot carry next_cursor' }); } if (value.total_count === null || value.total_count === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['total_count'], message: 'complete pages require total_count' }); } if (value.final_checksum === null || value.final_checksum === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['final_checksum'], message: 'complete pages require final_checksum' }); } } else { if (value.next_cursor === null || value.next_cursor === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['next_cursor'], message: 'partial pages require next_cursor' }); } if (value.total_count !== null && value.total_count !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['total_count'], message: 'partial pages cannot carry total_count' }); } if (value.final_checksum !== null && value.final_checksum !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['final_checksum'], message: 'partial pages cannot carry final_checksum' }); } } if (invalid) ctx.addIssue({ code: 'custom', message: 'projection page termination invalid' });}).superRefine((value, ctx) => { const isRecord = (candidate: unknown): candidate is Record<string, unknown> => Boolean(candidate) && typeof candidate === 'object' && !Array.isArray(candidate); const hasControl = (text: string): boolean => /[\u0000-\u001F\u007F]/u.test(text); const hasSurrogate = (text: string): boolean => /[\uD800-\uDFFF]/u.test(text); const encodePart = (text: string): string => encodeURIComponent(text).replace(/[!'()*]/g, (character: string) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`); const failIdentity = (issue: Parameters<typeof ctx.addIssue>[0]) => { ctx.addIssue(issue); ctx.addIssue({ code: 'custom', message: 'projection identity invalid' }); }; const peerId = value.provider_peer_id; const serviceId = value.service_instance_id; if (typeof peerId !== 'string' || peerId !== peerId.trim() || hasControl(peerId) || hasSurrogate(peerId)) { failIdentity({ code: 'custom', path: ['provider_peer_id'], message: 'projection provider_peer_id invalid' }); return; } const expectedServices = new Set([`local:${encodePart(peerId)}:Tooling`, `remote:${peerId}:Tooling`]); if (typeof serviceId !== 'string' || !expectedServices.has(serviceId)) { failIdentity({ code: 'custom', path: ['service_instance_id'], message: 'projection service_instance_id invalid' }); return; } const checkTool = (tool: unknown, path: Array<string | number>) => { if (!isRecord(tool)) { failIdentity({ code: 'custom', path, message: 'projection tool identity invalid' }); return; } const contractId = tool.tool_contract_id; if (typeof contractId !== 'string' || contractId.length === 0 || contractId !== contractId.trim() || [...contractId].length > 160 || hasControl(contractId) || hasSurrogate(contractId)) { failIdentity({ code: 'custom', path: [...path, 'tool_contract_id'], message: 'projection tool_contract_id invalid' }); return; } const globalId = tool.global_tool_id; if (typeof globalId !== 'string' || globalId.length === 0 || [...globalId].length > 1024) { failIdentity({ code: 'custom', path: [...path, 'global_tool_id'], message: 'projection global_tool_id invalid' }); return; } if (tool.tool_id_scheme !== 'aurora-tool' || tool.tool_id_version !== 1) { failIdentity({ code: 'custom', path, message: 'projection tool identity scheme invalid' }); return; } if (tool.provider_peer_id !== peerId) { failIdentity({ code: 'custom', path: [...path, 'provider_peer_id'], message: 'projection tool provider peer mismatch' }); return; } if (tool.provider_service_instance_id !== serviceId) { failIdentity({ code: 'custom', path: [...path, 'provider_service_instance_id'], message: 'projection tool service mismatch' }); return; } const provenance = tool.provenance; if (!isRecord(provenance) || provenance.provider_peer_id !== peerId) { failIdentity({ code: 'custom', path: [...path, 'provenance', 'provider_peer_id'], message: 'projection provenance peer mismatch' }); return; } if (provenance.provider_service_instance_id !== serviceId) { failIdentity({ code: 'custom', path: [...path, 'provenance', 'provider_service_instance_id'], message: 'projection provenance service mismatch' }); return; } const expectedGlobalId = `aurora-tool:v1:${encodePart(peerId)}:Tooling:${encodePart(contractId)}`; if (globalId !== expectedGlobalId) { failIdentity({ code: 'custom', path: [...path, 'global_tool_id'], message: 'projection global_tool_id mismatch' }); } }; const tools: unknown[] = Array.isArray(value.tools) ? value.tools : []; const blockedTools: unknown[] = Array.isArray(value.blocked_tools) ? value.blocked_tools : []; tools.forEach((tool: unknown, index: number) => checkTool(tool, ['tools', index])); blockedTools.forEach((blocked: unknown, index: number) => { if (!isRecord(blocked)) { failIdentity({ code: 'custom', path: ['blocked_tools', index], message: 'projection blocked tool identity invalid' }); return; } checkTool(blocked.tool, ['blocked_tools', index, 'tool']); });}).meta({"x-aurora-extra-behavior":"strip","x-aurora-projection-identity":true,"x-aurora-projection-page-termination":true})
+}).superRefine((value, ctx) => { let invalid = false; if (value.complete === true) { if (value.next_cursor !== null && value.next_cursor !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['next_cursor'], message: 'complete pages cannot carry next_cursor' }); } if (value.total_count === null || value.total_count === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['total_count'], message: 'complete pages require total_count' }); } if (value.final_checksum === null || value.final_checksum === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['final_checksum'], message: 'complete pages require final_checksum' }); } } else { if (value.next_cursor === null || value.next_cursor === undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['next_cursor'], message: 'partial pages require next_cursor' }); } if (value.total_count !== null && value.total_count !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['total_count'], message: 'partial pages cannot carry total_count' }); } if (value.final_checksum !== null && value.final_checksum !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['final_checksum'], message: 'partial pages cannot carry final_checksum' }); } } if (invalid) ctx.addIssue({ code: 'custom', message: 'projection page termination invalid' });}).superRefine((value, ctx) => { const add = (path: Array<string | number>, message: string): void => { ctx.addIssue({ code: 'custom', path, message }); ctx.addIssue({ code: 'custom', message: 'projection identity invalid' }); }; const providerPeerId = value.provider_peer_id; const serviceInstanceId = value.service_instance_id; if (typeof providerPeerId !== 'string' || providerPeerId.length === 0 || codePointLength(providerPeerId) > 160 || providerPeerId !== providerPeerId.trim() || hasControlCharacter(providerPeerId) || hasLoneSurrogate(providerPeerId)) { add(['provider_peer_id'], 'projection provider_peer_id invalid'); return; } if (typeof serviceInstanceId !== 'string' || serviceInstanceId.length === 0 || codePointLength(serviceInstanceId) > 256 || hasLoneSurrogate(serviceInstanceId)) { add(['service_instance_id'], 'projection service_instance_id invalid'); return; } const expectedLocal = `local:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling`; const expectedRemote = `remote:${providerPeerId}:Tooling`; if (serviceInstanceId !== expectedLocal && serviceInstanceId !== expectedRemote) { add(['service_instance_id'], 'projection service_instance_id does not match provider identity'); return; } const visibleTools: unknown[] = Array.isArray(value.tools) ? value.tools : []; const blockedEntries: unknown[] = Array.isArray(value.blocked_tools) ? value.blocked_tools : []; for (const [index, tool] of visibleTools.entries()) { if (!isProjectionToolIdentity(tool, providerPeerId, serviceInstanceId)) add(['tools', index], 'projection tool identity invalid'); } for (const [index, blocked] of blockedEntries.entries()) { const tool = blocked && typeof blocked === 'object' ? (blocked as Record<string, unknown>).tool : undefined; if (!isProjectionToolIdentity(tool, providerPeerId, serviceInstanceId)) add(['blocked_tools', index, 'tool'], 'projection tool identity invalid'); }}).meta({"x-aurora-extra-behavior":"strip","x-aurora-projection-identity":true,"x-aurora-projection-page-termination":true})
 export type ToolingGetExportCatalogOutputToolingGetExportCatalogResponse = z.infer<typeof ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema>
 
 const ToolingGetToolsInputToolingGetToolsRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
@@ -224,7 +277,7 @@ const ToolingGetToolsOutputToolingGetToolsResponseSchemaToolingToolInfoSchemaDef
   "exportable": z.boolean().default(false).optional(),
   "external": z.boolean().default(false).optional(),
   "global_tool_id": z.string(),
-  "legacy_global_tool_ids": z.array(z.string().min(1).max(512)).max(16).superRefine((value, ctx) => { if (value.some((item) => item.length === 0 || item !== item.trim() || item.length > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => [...new Set(value)].sort()).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
+  "legacy_global_tool_ids": z.array(z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 512, { message: 'string must contain at most 512 Unicode code points' }).meta({"maxLength":512})).max(16).superRefine((value, ctx) => { if (value.some((item) => codePointLength(item) === 0 || item !== item.trim() || codePointLength(item) > 512)) ctx.addIssue({ code: 'custom', message: 'legacy IDs must be non-empty, trimmed, and bounded' });}).overwrite((value) => [...new Set(value)].sort()).meta({"x-aurora-unique-string-array-normalize":true}).optional(),
   "local_name": z.string(),
   "mutating": z.boolean().default(false).optional(),
   "name": z.string(),

@@ -7,6 +7,7 @@ import { z } from 'zod/v4'
 import {
   backendContractSchemaById,
   ToolingExecuteToolInputToolingExecuteToolRequestSchema,
+  ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema,
   ToolingGetToolsInputToolingGetToolsRequestSchema
 } from '../src/generated/index.js'
 
@@ -394,6 +395,68 @@ describe('generated backend contracts', () => {
     expect(ToolingGetToolsInputToolingGetToolsRequestSchema.safeParse({ top_k: -(2 ** 53) }).success).toBe(false)
     expect(ToolingGetToolsInputToolingGetToolsRequestSchema.safeParse({ top_k: Number.NaN }).success).toBe(false)
     expect(ToolingGetToolsInputToolingGetToolsRequestSchema.safeParse({ top_k: Number.POSITIVE_INFINITY }).success).toBe(false)
+  })
+
+  it('matches Pydantic Unicode code-point bounds at the projection boundary', () => {
+    const providerPeerId = '😀'.repeat(100)
+    const page = {
+      ok: true,
+      reason_code: null,
+      provider_peer_id: providerPeerId,
+      service_instance_id: `remote:${providerPeerId}:Tooling`,
+      selected_protocol_tier: 'projection_v1',
+      authority_revision: {
+        catalog_revision: 1,
+        export_policy_revision: 1,
+        auth_grant_revision: 1,
+        manifest_revision: 1,
+        switch_revision: 1,
+        protocol_revision: 1
+      },
+      projection_revision: 'unicode-boundary',
+      projection_digest: '1'.repeat(64),
+      page_index: 0,
+      page_size: 1,
+      page_hash: '2'.repeat(64),
+      tools: [],
+      blocked_tools: [],
+      retirements: [],
+      next_cursor: null,
+      complete: true,
+      total_count: 0,
+      final_checksum: '3'.repeat(64)
+    }
+
+    expect(
+      ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema.safeParse(page).success
+    ).toBe(true)
+    expect(
+      ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema.safeParse({
+        ...page,
+        provider_peer_id: 'a'.repeat(161),
+        service_instance_id: `remote:${'a'.repeat(161)}:Tooling`
+      }).success
+    ).toBe(false)
+  })
+
+  it('matches Pydantic Unicode code-point bounds for normalized legacy IDs', () => {
+    const item = (contractSchema.schemas as ContractSchemaItem[]).find(
+      (candidate) =>
+        candidate.method_id === 'Tooling.GetTools'
+        && candidate.direction === 'output'
+        && candidate.model_name === 'ToolingGetToolsResponse'
+    )
+    expect(item?.vectors.positive).toBeDefined()
+
+    const input = structuredClone(item!.vectors.positive!.input) as {
+      tools: Array<Record<string, unknown>>
+    }
+    const schema = backendContractSchemaById[item!.schema_id]
+    input.tools[0]!.legacy_global_tool_ids = ['😀'.repeat(512)]
+    expect(schema.safeParse(input).success).toBe(true)
+
+    input.tools[0]!.legacy_global_tool_ids = ['😀'.repeat(513)]
+    expect(schema.safeParse(input).success).toBe(false)
   })
 
   it('keeps manifest and local provider identities stable', () => {
