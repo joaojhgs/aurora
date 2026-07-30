@@ -3,7 +3,7 @@
 from typing import Any, Literal
 from urllib.parse import quote
 
-from pydantic import ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
@@ -1543,13 +1543,6 @@ class ToolingProjectionBlockedTool(IOModel):
 
 class ToolingGetExportCatalogResponse(IOModel):
     """One non-bindable page of a recipient-specific full projection."""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "x-aurora-projection-page-termination": True,
-            "x-aurora-projection-identity": True,
-        }
-    )
 
     ok: bool = True
     reason_code: str | None = Field(default=None, max_length=128)
