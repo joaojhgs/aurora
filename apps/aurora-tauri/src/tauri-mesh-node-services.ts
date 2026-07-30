@@ -26,8 +26,12 @@ import {
   type PeerGrantRepository,
 } from "@aurora/client/webrtc";
 import {
+  DurableFeatureSharingController,
   LocalToolRegistry,
+  TrackingPeerPairingIssuer,
   createMeshNodeLocalToolProvider,
+  type LocalFeatureSharingPort,
+  type PeerPairingIssuerLike,
   type LocalToolAuditPort,
   type LocalToolAuditRecord,
   type LocalToolAuditResult,
@@ -65,6 +69,7 @@ export type TauriMeshNodeServicesDisabledReason =
   | "runtime_tier_not_lightweight_ts"
   | "rollout_disabled"
   | "capability_packs_disabled"
+  | "mesh_membership_missing"
   | "native_evidence_missing"
   | "native_tools_unavailable"
   | "local_tool_audit_unavailable"
@@ -95,7 +100,8 @@ export interface EnabledTauriMeshNodeServices {
   readonly auditSink: LocalDataPeerAuditSink;
   readonly challengeStore: MemoryReconnectChallengeStore;
   readonly authorityResolver: PeerAuthorityResolver;
-  readonly pairingIssuer: PeerPairingIssuer;
+  readonly pairingIssuer: PeerPairingIssuerLike;
+  readonly localFeatureSharing: LocalFeatureSharingPort;
   readonly revocationBroadcaster: MemoryPeerRevocationBroadcaster;
   readonly revocationController: MemoryPeerRevocationController;
   readonly grantManager: PeerGrantManager;
@@ -134,6 +140,8 @@ export async function createTauriMeshNodeServices(
   if (!profile.localNode.enabledCapabilityPacks.includes(NATIVE_CAPABILITY_PACK_ID)) {
     return disabled("capability_packs_disabled");
   }
+  const meshMembership = profile.localNode.meshMembership;
+  if (!meshMembership) return disabled("mesh_membership_missing");
   if (!options.nativeTransport || !(await nativeEvidenceAvailable(options.nativeTransport))) {
     return disabled("native_evidence_missing");
   }
@@ -225,7 +233,7 @@ export async function createTauriMeshNodeServices(
       challengeStore,
       auditSink,
     });
-    const pairingIssuer = new PeerPairingIssuer({
+    const basePairingIssuer = new PeerPairingIssuer({
       verifierStore,
       auditSink,
       randomBytes,
@@ -245,13 +253,26 @@ export async function createTauriMeshNodeServices(
       ...(options.now ? { now: options.now } : {}),
       ...(options.randomId ? { randomId: options.randomId } : {}),
     });
+    const localFeatureSharing = new DurableFeatureSharingController({
+      registry,
+      session,
+      grantManager,
+      localVerifierPeerId: localPeerId,
+      roomName: meshMembership.webrtcProfile.room,
+      ...(options.now ? { now: options.now } : {}),
+    });
+    await localFeatureSharing.load();
+    const pairingIssuer = new TrackingPeerPairingIssuer({
+      delegate: basePairingIssuer,
+      registry: localFeatureSharing,
+    });
     const localToolProvider = createMeshNodeLocalToolProvider({
       nodeMode: "mesh-node",
       localPeerId,
       nodeName,
       registry,
       authorityResolver,
-      exportDecision: options.exportDecision ?? DENY_ALL_LOCAL_TOOLS,
+      exportDecision: options.exportDecision ?? localFeatureSharing,
       audit: localToolAudit,
       cursorSecret: randomBytes(32),
       providerEnabled: true,
@@ -279,6 +300,7 @@ export async function createTauriMeshNodeServices(
       challengeStore,
       authorityResolver,
       pairingIssuer,
+      localFeatureSharing,
       revocationBroadcaster,
       revocationController,
       grantManager,
@@ -351,10 +373,6 @@ function secureRandomBytes(length: number): Uint8Array {
   globalThis.crypto.getRandomValues(bytes);
   return bytes;
 }
-
-const DENY_ALL_LOCAL_TOOLS: LocalToolExportDecisionPort = Object.freeze({
-  isShared: () => false,
-});
 
 class LocalToolAuditUnavailableError extends Error {
   constructor() {

@@ -55,6 +55,7 @@ import {
   type WebRtcPeerCredentialStore,
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
+import type { LocalFeatureSharingPort } from "@aurora/client/local-tools";
 import { createTauriNativePeerConnection } from "./native-webrtc";
 import {
   createTauriMeshNodeServices,
@@ -76,6 +77,7 @@ export interface AuroraTauriRuntime {
   nodeMode?: AuroraNodeMode | undefined;
   runtimeTier?: AuroraRuntimeTier | undefined;
   localNodeProviderStatus?: AuroraLocalNodeProviderStatus | undefined;
+  localFeatureSharing?: LocalFeatureSharingPort | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -420,6 +422,9 @@ export function createAuroraTauriRuntime({
           nodeMode: runtimeNodeMode,
           runtimeTier,
           localNodeProviderStatus: localNodeProviderStatus(meshNodeServices),
+          localFeatureSharing: meshNodeServices?.enabled
+            ? meshNodeServices.localFeatureSharing
+            : undefined,
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -545,6 +550,9 @@ export function createAuroraTauriRuntime({
         nodeMode: runtimeNodeMode,
         runtimeTier,
         localNodeProviderStatus: localNodeProviderStatus(meshNodeServices),
+        localFeatureSharing: meshNodeServices?.enabled
+          ? meshNodeServices.localFeatureSharing
+          : undefined,
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,

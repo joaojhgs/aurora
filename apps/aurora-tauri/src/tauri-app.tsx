@@ -172,8 +172,30 @@ export const tauriRouteRegistry = {
   ),
   mesh: ({ route, nativeContext, client }) => {
     const inviteParam = initialThinInviteFromUrl();
+    const providerStatus = nativeContext.localNodeProviderStatus;
     return (
-      <div className="ata-page-stack">
+      <div
+        className="ata-page-stack"
+        data-local-node-provider={
+          providerStatus?.available
+            ? "available"
+            : nativeContext.nodeMode === "mesh-node"
+              ? "unavailable"
+              : "not-configured"
+        }
+        data-local-data-writable={String(providerStatus?.available === true)}
+        data-local-feature-count={String(
+          providerStatus?.registeredToolIds.length ?? 0,
+        )}
+      >
+        {nativeContext.nodeMode === "mesh-node" &&
+        providerStatus &&
+        !providerStatus.available ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            Features from this device are unavailable right now. Review this
+            device&apos;s setup and try again.
+          </p>
+        ) : null}
         <MeshPeersResource
           key={inviteParam ?? "mesh-peers"}
           client={client}
@@ -181,6 +203,7 @@ export const tauriRouteRegistry = {
           surfaceProfile={nativeContext.surfaceProfile}
           thinPeer={nativeContext.thinPeer}
           initialInviteText={inviteParam}
+          localFeatureSharing={nativeContext.localFeatureSharing}
           {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
         />
         <ServiceRoutingResource
@@ -637,6 +660,9 @@ export function AuroraTauriApp({
     surfaceProfile,
     thinConnectionMode: runtime.thinConnectionMode,
     thinPeer: runtime.thinPeer,
+    nodeMode: runtime.nodeMode,
+    localNodeProviderStatus: runtime.localNodeProviderStatus,
+    localFeatureSharing: runtime.localFeatureSharing,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
@@ -1007,6 +1033,9 @@ interface NativeContext {
     typeof createAuroraTauriRuntime
   >["thinConnectionMode"];
   thinPeer?: ReturnType<typeof createAuroraTauriRuntime>["thinPeer"];
+  nodeMode?: AuroraTauriRuntime["nodeMode"];
+  localNodeProviderStatus?: AuroraTauriRuntime["localNodeProviderStatus"];
+  localFeatureSharing?: AuroraTauriRuntime["localFeatureSharing"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
   saveThinProfile: (

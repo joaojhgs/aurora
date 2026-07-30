@@ -181,15 +181,22 @@ function fakeAndroidThinRuntime(mode: 'http-only' | 'webrtc-only' | 'webrtc-pref
 
 function fakeEnabledMeshNodeServices() {
   const close = vi.fn(async () => undefined)
+  const localFeatureSharing = {
+    load: vi.fn(async () => ({ features: [], approvedDevices: [] })),
+    setFeatureEnabled: vi.fn(async () => undefined),
+    replacePeerSharing: vi.fn(async () => undefined),
+    revokePeerSharing: vi.fn(async () => undefined),
+  }
   const services = {
     enabled: true,
     peerHost: {},
     authorityResolver: {},
     pairingIssuer: {},
+    localFeatureSharing,
     registeredToolIds: ['native.get_device_status'],
     close,
   } as unknown as TauriMeshNodeServices
-  return { services, close }
+  return { services, close, localFeatureSharing }
 }
 
 function webRtcProfile(room: string): WebRtcPeerConnectionProfile {
@@ -257,7 +264,7 @@ describe('desktop-thin live connection profiles', () => {
       load: vi.fn(async () => runtimeDocument),
       save: vi.fn(async () => undefined),
     }
-    const { services, close } = fakeEnabledMeshNodeServices()
+    const { services, close, localFeatureSharing } = fakeEnabledMeshNodeServices()
     let release!: (value: TauriMeshNodeServices) => void
     const factory = vi.fn<TauriMeshNodeServicesFactory>(
       () =>
@@ -293,6 +300,7 @@ describe('desktop-thin live connection profiles', () => {
       reasonCode: null,
       registeredToolIds: ['native.get_device_status'],
     })
+    expect(runtime.localFeatureSharing).toBe(localFeatureSharing)
     await runtime.dispose()
     await runtime.dispose()
     expect(close).toHaveBeenCalledOnce()

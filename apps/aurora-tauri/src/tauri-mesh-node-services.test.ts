@@ -60,6 +60,7 @@ describe("Tauri mesh node services", () => {
     await expect(disabledReason(profile({ runtimeTier: "python-full" }))).resolves.toBe("runtime_tier_not_lightweight_ts");
     await expect(disabledReason(profile(), { rolloutFlags: { ...rolloutFlags, local_tool_provider_v1: false } })).resolves.toBe("rollout_disabled");
     await expect(disabledReason(profile({ enabledCapabilityPacks: [] }))).resolves.toBe("capability_packs_disabled");
+    await expect(disabledReason(profile({ meshMembership: false }))).resolves.toBe("mesh_membership_missing");
     await expect(disabledReason(profile(), { nativeTransport: nativeTransport({ manifestError: true }) })).resolves.toBe("native_evidence_missing");
   });
 
@@ -88,6 +89,15 @@ describe("Tauri mesh node services", () => {
     expect(services.authorityResolver).toBeDefined();
     expect(services.pairingIssuer).toBeDefined();
     expect(services.grantManager).toBeDefined();
+    await expect(services.localFeatureSharing.load()).resolves.toMatchObject({
+      features: [
+        expect.objectContaining({
+          id: AURORA_NATIVE_TOOL_IDS.getDeviceStatus,
+          enabled: false,
+        }),
+      ],
+      approvedDevices: [],
+    });
 
     await services.close();
     expect(backend.closed).toBe(true);
@@ -420,6 +430,7 @@ function profile(patch: {
   nodeMode?: AuroraRuntimeProfileV2["nodeMode"];
   runtimeTier?: AuroraRuntimeProfileV2["runtimeTier"];
   enabledCapabilityPacks?: AuroraCapabilityPack[];
+  meshMembership?: boolean;
 } = {}): AuroraRuntimeProfileV2 {
   const nodeMode = patch.nodeMode ?? "mesh-node";
   return {
@@ -440,7 +451,7 @@ function profile(patch: {
       nodeName: "Local Node",
       stablePeerId: "node-1",
       enabledCapabilityPacks: patch.enabledCapabilityPacks ?? ["native-actions"],
-      ...(nodeMode === "mesh-node"
+      ...(nodeMode === "mesh-node" && patch.meshMembership !== false
         ? {
             meshMembership: {
               signalingUrl: "wss://mesh.example.test",
