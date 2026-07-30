@@ -34,6 +34,7 @@ import {
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
 } from "@aurora/ui";
+import { createTauriNativePeerConnection } from "./native-webrtc";
 
 const HOOK_NAME = "__AURORA_DESKTOP_LIVE_E2E__";
 const HOOK_PAYLOAD_SCHEMA = "aurora.desktop_live_e2e.hook_payload.v1";
@@ -570,12 +571,12 @@ async function runMeshInteropContract({
     mutationStartedSub.close("desktop live mutation started ack received");
     const disconnectAtMs = Date.now();
     const settledBeforeDisconnect = mutationSettledBeforeDisconnect;
-    await runtime.peer.disconnect("desktop live uncertain transport loss before mutation response settled").catch(() => undefined);
+    await runtime.peer.disconnect("desktop live uncertain connection loss before mutation response settled").catch(() => undefined);
     const mutationResult = await Promise.race([
       mutationPromise,
       sleep(350).then(() => ({
         settled: "pending_after_forced_loss",
-        message: "no desktop response observed after forced transport loss",
+        message: "no desktop response observed after forced connection loss",
         settled_after_disconnect: false,
       })),
     ]);
@@ -1023,6 +1024,9 @@ function makePeerConnectionFactory(
     const next: RTCConfiguration = { ...configuration };
     if (iceServers !== undefined) next.iceServers = iceServers;
     if (forceRelay) next.iceTransportPolicy = "relay";
+    if (typeof globalThis.RTCPeerConnection !== "function") {
+      return createTauriNativePeerConnection(next);
+    }
     const pc = new RTCPeerConnection(next);
     return (suppressHostCandidates ? suppressHostIceCandidates(pc) : pc) as unknown as PeerConnectionLike;
   };

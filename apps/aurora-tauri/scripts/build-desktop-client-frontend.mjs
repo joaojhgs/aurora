@@ -11,9 +11,13 @@ const env = {
   ...process.env,
   VITE_AURORA_GATEWAY_URL: '',
   VITE_AURORA_SIGNALING_URL: '',
-  VITE_AURORA_RUNTIME_MODE: liveHookEnabled ? 'desktop-thin' : '',
   VITE_AURORA_CONNECTION_MODE: liveHookEnabled ? 'webrtc-only' : '',
   VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: liveHookEnabled ? '1' : '',
+  ...(liveHookEnabled
+    ? {
+        VITE_AURORA_RUNTIME_MODE: 'desktop-thin',
+      }
+    : {}),
 }
 
 const result = spawnSync('pnpm', ['build'], {

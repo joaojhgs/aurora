@@ -48,6 +48,7 @@ async function run() {
   let session
   try {
     session = await createSession(webdriverUrl, application)
+    await setSessionTimeouts(webdriverUrl, session.sessionId)
     tauriPid = await waitForApplicationPid(pidFile)
     const processTreeBefore = captureProcessTree(tauriPid)
     const payload = await buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath })
@@ -145,6 +146,16 @@ async function createSession(baseUrl, application) {
   const sessionId = value.sessionId ?? value.value?.sessionId
   if (!sessionId) throw new Error('WebDriver did not return a session id')
   return { sessionId }
+}
+
+async function setSessionTimeouts(baseUrl, sessionId) {
+  const scriptTimeoutMs = parsePositiveIntegerEnv(
+    'AURORA_DESKTOP_LIVE_E2E_SCRIPT_TIMEOUT_MS',
+    180_000,
+  )
+  await request(baseUrl, 'POST', `/session/${encodeURIComponent(sessionId)}/timeouts`, {
+    script: scriptTimeoutMs,
+  })
 }
 
 async function deleteSession(baseUrl, sessionId) {
@@ -376,6 +387,16 @@ function requireEnv(name) {
   const value = process.env[name]
   if (!value) throw new Error(`${name} is required`)
   return value
+}
+
+function parsePositiveIntegerEnv(name, fallback) {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`)
+  }
+  return parsed
 }
 
 function redactEndpoint(value) {
