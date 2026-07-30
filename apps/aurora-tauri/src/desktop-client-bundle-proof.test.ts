@@ -129,6 +129,11 @@ describe('desktop client bundle artifact proof', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-desktop-client-pnpm-'))
     const envPath = join(root, 'frontend-env.json')
     const pnpmStub = join(root, 'pnpm')
+    mkdirSync(join(packageRoot, 'dist', 'assets'), { recursive: true })
+    writeFileSync(
+      join(packageRoot, 'dist', 'assets', 'stale-live-hook.js'),
+      '__AURORA_DESKTOP_LIVE_E2E__\naurora.desktop_live_e2e.hook_payload.v1\n',
+    )
     writeFileSync(
       pnpmStub,
       `#!/usr/bin/env node\nconst fs = require('node:fs')\nfs.writeFileSync(${JSON.stringify(envPath)}, JSON.stringify({ argv: process.argv.slice(2), gateway: process.env.VITE_AURORA_GATEWAY_URL, signaling: process.env.VITE_AURORA_SIGNALING_URL, connectionMode: process.env.VITE_AURORA_CONNECTION_MODE, runtimeMode: process.env.VITE_AURORA_RUNTIME_MODE }, null, 2))\n`,

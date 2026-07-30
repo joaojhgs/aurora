@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -19,6 +19,8 @@ const env = {
       }
     : {}),
 }
+
+rmSync(outputRoot, { recursive: true, force: true })
 
 const result = spawnSync('pnpm', ['build'], {
   cwd: packageRoot,
@@ -52,6 +54,8 @@ console.log(
 )
 
 function readTextOutput(root) {
+  if (!existsSync(root)) return ''
+
   const files = []
   const pending = [root]
   while (pending.length > 0) {
