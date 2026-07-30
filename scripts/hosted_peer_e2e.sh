@@ -10,6 +10,7 @@ CONFIG_PATH="$RUNTIME_DIR/config.json"
 DATA_DIR="$RUNTIME_DIR/data"
 PYTHON_LOG="$ARTIFACT_DIR/python-service.log"
 WEB_LOG="$ARTIFACT_DIR/web-ui.log"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-aurora-hosted-peer-e2e}"
 GATEWAY_PORT="${AURORA_HOSTED_PEER_GATEWAY_PORT:-${AURORA_HOSTED_THIN_GATEWAY_PORT:-$(python - <<'PY'
 import socket
 with socket.socket() as sock:

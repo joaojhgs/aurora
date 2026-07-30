@@ -12,6 +12,7 @@ desktop_app_pid_file="${AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE:-$desktop_artifact_
 desktop_driver_log="$desktop_artifact_dir/tauri-driver.log"
 desktop_frontend_dist="$desktop_repo_root/apps/aurora-tauri/dist"
 desktop_driver_pid=""
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-aurora-desktop-live-e2e}"
 
 cleanup_desktop_driver() {
   if [[ -n "$desktop_driver_pid" ]] && kill -0 "$desktop_driver_pid" 2>/dev/null; then

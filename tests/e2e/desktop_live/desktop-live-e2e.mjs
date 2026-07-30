@@ -19,6 +19,8 @@ const liveRunnerScript = path.join(repoRoot, 'scripts/desktop_live_e2e.sh')
 const defaultArtifactDir = path.join(repoRoot, 'reports/desktop-live-e2e')
 const laneChoices = new Set(['direct', 'stun', 'turn'])
 
+process.env.COMPOSE_PROJECT_NAME ??= 'aurora-desktop-live-e2e'
+
 const args = new Set(process.argv.slice(2))
 
 if (args.has('--self-test')) {

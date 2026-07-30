@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ACTION="${1:-up}"
-COMPOSE=(docker compose -f docker-compose.webrtc-interop.yml)
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-aurora-webrtc-interop}"
+COMPOSE=(docker compose -p "$COMPOSE_PROJECT_NAME" -f docker-compose.webrtc-interop.yml)
 
 wait_for_tcp() {
   local name="$1"

@@ -11,6 +11,7 @@ DATA_DIR="$RUNTIME_DIR/data"
 PYTHON_LOG="$ARTIFACT_DIR/python-service.log"
 WEB_LOG="$ARTIFACT_DIR/web-ui.log"
 PYTHON_CMD="${AURORA_HOSTED_MESH_NODE_PYTHON_CMD:-uv run python}"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-aurora-hosted-mesh-node-e2e}"
 GATEWAY_PORT="${AURORA_HOSTED_MESH_NODE_GATEWAY_PORT:-$(python - <<'PY'
 import socket
 with socket.socket() as sock:

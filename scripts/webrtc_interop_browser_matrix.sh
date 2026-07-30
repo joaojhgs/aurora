@@ -2,6 +2,7 @@
 set -euo pipefail
 
 REQUIRE_ALL_BROWSERS="${WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS:-0}"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-aurora-webrtc-browser-matrix}"
 
 record_unavailable_browser() {
   local artifact_dir="$1"
