@@ -318,6 +318,18 @@ def test_parse_datachannel_frame_accepts_downstream_validated_provider_and_manif
     assert not client._diagnostic_errors  # noqa: SLF001
 
 
+def test_parse_datachannel_frame_rejects_unknown_pairing_v2_prefix() -> None:
+    client = _client()
+
+    parsed = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps({"type": "pairing_v2_probe", "id": "probe-1"}),
+    )
+
+    assert parsed is None
+    assert client._diagnostic_errors[0].code == "datachannel_frame_invalid"  # noqa: SLF001
+
+
 def test_parse_reassembled_fragment_payload_rejects_deep_call_before_dispatch() -> None:
     client = _client()
     handler = AsyncMock()
@@ -385,6 +397,62 @@ def test_parse_reassembled_fragmented_result_uses_negotiated_logical_limit() -> 
     assert parsed is not None
     assert parsed["type"] == "result"
     assert parsed["result"]["payload"] == "x" * (512 * 1024)
+    assert not client._diagnostic_errors  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_reassembled_fragmented_call_dispatches_without_default_size_reparse() -> None:
+    client = _client()
+    limits = PeerProtocolLimits(
+        fragment_payload_bytes=16 * 1024,
+        max_logical_bytes=1024 * 1024,
+        max_peer_aggregate_bytes=2 * 1024 * 1024,
+        incomplete_ttl_seconds=30.0,
+        max_fragments=128,
+    )
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_FRAGMENTATION_V1,), limits=limits)
+    negotiated = negotiate_protocol(hello, hello)
+    client._remember_stable_peer_id("session-peer", "stable-peer", "Remote")  # noqa: SLF001
+    client._peer_protocols["session-peer"] = negotiated  # noqa: SLF001
+    client._peer_protocols["stable-peer"] = negotiated  # noqa: SLF001
+    handler = AsyncMock()
+    logical_text = json.dumps(
+        {
+            "type": "call",
+            "id": "big-call",
+            "method": "Svc.Big",
+            "params": {"payload": "x" * (512 * 1024)},
+        }
+    )
+    frames = fragment_message(logical_text, message_id="big-call-logical", limits=limits)
+
+    completed = None
+    for frame in frames:
+        completed = client._handle_fragment_frame("session-peer", frame)  # noqa: SLF001
+
+    assert completed == logical_text
+    assert len(completed.encode("utf-8")) > 256 * 1024
+    parsed = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        completed,
+        diagnostic_code="fragment_reassembled_invalid",
+        parser_limits=client._logical_parser_limits("session-peer"),  # noqa: SLF001
+    )
+    assert parsed is not None
+
+    client._dispatch_authenticated_datachannel_message(  # noqa: SLF001
+        peer="session-peer",
+        handler=handler,
+        text=completed,
+        obj=parsed,
+    )
+    await asyncio.sleep(0)
+
+    handler.on_parsed_message.assert_awaited_once()
+    dispatched = handler.on_parsed_message.await_args.args[0]
+    assert dispatched["type"] == "call"
+    assert dispatched["params"]["payload"] == "x" * (512 * 1024)
+    handler.on_message.assert_not_called()
     assert not client._diagnostic_errors  # noqa: SLF001
 
 

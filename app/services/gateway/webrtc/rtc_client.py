@@ -1012,7 +1012,7 @@ class RTCClient:
             else:
                 log_debug(f"RTCClient: Received {msg_type} but no PeerBridge configured")
         else:
-            asyncio.create_task(handler.on_message(text))
+            asyncio.create_task(handler.on_parsed_message(obj))
 
     async def _send_to_peer_now(self, peer_id: str, text: str) -> bool:
         """Send one already-ordered message with fragmentation and backpressure."""

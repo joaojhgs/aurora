@@ -92,6 +92,13 @@ _DOWNSTREAM_VALIDATED_TYPES = frozenset(
         "manifest_ack",
     }
 )
+_PAIRING_V2_TYPES = frozenset(
+    {
+        "pairing_v2_commit",
+        "pairing_v2_reveal",
+        "pairing_v2_terminal",
+    }
+)
 
 
 def parse_webrtc_json_frame(
@@ -194,7 +201,7 @@ def parse_webrtc_frame(
         return _parse_mesh_auth_challenge(obj)
     if frame_type == "mesh_auth_proof_v1":
         return _parse_mesh_auth_proof(obj)
-    if frame_type in _DOWNSTREAM_VALIDATED_TYPES or frame_type.startswith("pairing_v2_"):
+    if frame_type in _DOWNSTREAM_VALIDATED_TYPES or frame_type in _PAIRING_V2_TYPES:
         # These authenticated/control frames are immediately parsed by existing
         # specialized handlers before side effects that depend on their fields.
         return obj
@@ -673,6 +680,10 @@ class RPCHandler:
         except WebRTCFrameParseError as exc:
             log_error(f"RPCHandler: Received invalid WebRTC frame: {exc}")
             return
+        await self.on_parsed_message(msg)
+
+    async def on_parsed_message(self, msg: dict[str, Any]) -> None:
+        """Dispatch an already parsed and validated WebRTC frame."""
 
         msg_type = msg.get("type")
         if msg_type == "call":
