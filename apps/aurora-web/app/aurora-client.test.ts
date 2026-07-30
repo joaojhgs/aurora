@@ -445,6 +445,39 @@ describe('createAuroraBrowserClient', () => {
     await nextRuntime.close()
   })
 
+  it('retries mesh composition when profile saving races an in-flight runtime build', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const storage = installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-race-a')
+    const closeFirstServices = vi.fn(async () => undefined)
+    const firstServices = fakeMeshNodeServices(closeFirstServices)
+    const secondServices = fakeMeshNodeServices(vi.fn(async () => undefined))
+    let resolveFirstServices!: (value: BrowserMeshNodeServices) => void
+    const factory = vi
+      .fn<() => Promise<BrowserMeshNodeServices>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<BrowserMeshNodeServices>((resolve) => {
+            resolveFirstServices = resolve
+          }),
+      )
+      .mockResolvedValueOnce(secondServices)
+    setAuroraBrowserMeshNodeServicesFactoryForTests(factory)
+
+    const runtimePromise = createAuroraBrowserRuntimeAsync()
+    const savePromise = saveMeshOnboardingProfile('mesh-race-b')
+    resolveFirstServices(firstServices)
+    await savePromise
+    const runtime = await runtimePromise
+
+    expect(factory).toHaveBeenCalledTimes(2)
+    expect(closeFirstServices).toHaveBeenCalledOnce()
+    expect(auroraBrowserRuntimeProfile()?.id).toBe('mesh-race-b')
+    expect(runtime.localData?.session).toBe(secondServices.session)
+    expect(JSON.stringify(storage.dump())).not.toContain('mesh-race-b-secret')
+    await runtime.close()
+  })
+
   it('keeps a second tab out of provider mode when another tab owns local data', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     installBrowserStorage()

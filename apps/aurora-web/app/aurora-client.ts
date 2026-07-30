@@ -92,6 +92,9 @@ export interface AuroraBrowserLightweightAssistantConfig {
 
 let browserRuntimeCache: BrowserRuntimeCache | null = null
 let browserCredentialStore: BrowserPersistentPeerCredentialStore | null = null
+let browserRuntimeProfileRevision = 0
+let browserRuntimeProfileTransition: Promise<void> | null = null
+const closedBrowserMeshNodeServices = new WeakSet<BrowserMeshNodeServices>()
 let browserMeshNodeCompositionInflight: {
   baseKey: string
   promise: Promise<BrowserMeshNodeServices | null>
@@ -154,8 +157,9 @@ export async function createAuroraBrowserRuntimeAsync({
 }: {
   readonly localAssistant?: AuroraBrowserLightweightAssistantConfig | null | undefined
 } = {}): Promise<AuroraBrowserRuntime> {
-  const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
-  browserCredentialStore = credentialStore
+  if (browserRuntimeProfileTransition) await browserRuntimeProfileTransition
+  const credentialStore = ensureBrowserCredentialStore()
+  const profileRevision = browserRuntimeProfileRevision
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   const runtimeProfile = activeRuntimeProfile(profileDocument)
   const rolloutFlags = browserWebRtcRolloutFlags()
@@ -184,6 +188,11 @@ export async function createAuroraBrowserRuntimeAsync({
     },
     envelopeCryptoFactory: (options) => new BrowserEnvelopeCryptoPort(options),
   }))
+  if (profileRevision !== browserRuntimeProfileRevision) {
+    await closeBrowserMeshNodeServices(meshNodeServices).catch(() => undefined)
+    if (browserRuntimeProfileTransition) await browserRuntimeProfileTransition
+    return await createAuroraBrowserRuntimeAsync({ localAssistant })
+  }
   return createAuroraBrowserRuntimeFromStore(meshNodeServices, localAssistant)
 }
 
@@ -195,7 +204,7 @@ async function resolveBrowserMeshNodeServices(
   if (existing?.baseKey === baseKey) return await existing.promise
   if (existing) {
     void existing.promise
-      .then((services) => services?.close())
+      .then(closeBrowserMeshNodeServices)
       .catch(() => undefined)
   }
   const promise = (async () => {
@@ -212,7 +221,7 @@ async function resolveBrowserMeshNodeServices(
   browserMeshNodeCompositionInflight = { baseKey, promise }
   const services = await promise
   if (browserMeshNodeCompositionInflight?.baseKey !== baseKey) {
-    await services?.close().catch(() => undefined)
+    await closeBrowserMeshNodeServices(services).catch(() => undefined)
     return null
   }
   browserMeshNodeCompositionInflight = null
@@ -223,8 +232,7 @@ function createAuroraBrowserRuntimeFromStore(
   meshNodeServices: BrowserMeshNodeServices | null,
   localAssistant: AuroraBrowserLightweightAssistantConfig | null = null,
 ): AuroraBrowserRuntime {
-  const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
-  browserCredentialStore = credentialStore
+  const credentialStore = ensureBrowserCredentialStore()
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   const runtimeProfile = activeRuntimeProfile(profileDocument)
   const thinProfile = thinRuntimeProfileFromRuntimeProfile(runtimeProfile)
@@ -304,7 +312,7 @@ function createAuroraBrowserRuntimeFromStore(
     }
     await Promise.all([
       closeRuntime(),
-      effectiveMeshNodeServices?.close().catch(() => undefined),
+      closeBrowserMeshNodeServices(effectiveMeshNodeServices).catch(() => undefined),
     ])
   }
   if (persistedProfile && rolloutFlags.webrtc_thin_client) {
@@ -328,7 +336,9 @@ export function createAuroraBrowserClient(): AuroraClient {
 
 export function resetAuroraBrowserClientForTests(): void {
   void closeBrowserRuntimeCache().catch(() => undefined)
+  void browserCredentialStore?.close().catch(() => undefined)
   browserCredentialStore = null
+  browserRuntimeProfileRevision += 1
   browserMeshNodeServicesFactoryForTests = null
 }
 
@@ -378,8 +388,7 @@ export function setAuroraBrowserMeshNodeServicesFactoryForTests(
 }
 
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
-  createAuroraBrowserRuntime()
-  const runtimeDocument = browserCredentialStore?.loadRuntimeProfileDocument()
+  const runtimeDocument = ensureBrowserCredentialStore().loadRuntimeProfileDocument()
   if (!runtimeDocument) return emptyThinProfileDocument()
   try {
     return runtimeProfileDocumentToThinDocument(runtimeDocument)
@@ -393,8 +402,7 @@ export function auroraBrowserThinProfile(): ThinConnectionProfile | undefined {
 }
 
 export function auroraBrowserRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 {
-  createAuroraBrowserRuntime()
-  return browserCredentialStore?.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  return ensureBrowserCredentialStore().loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
 }
 
 export function auroraBrowserRuntimeProfile(): AuroraRuntimeProfileV2 | undefined {
@@ -415,9 +423,7 @@ export async function saveAuroraBrowserThinProfile(
   },
 ): Promise<void> {
   const sanitized = sanitizeThinConnectionProfile(profile)
-  createAuroraBrowserRuntime()
-  const store = browserCredentialStore
-  if (!store) throw new Error('Browser thin-client persistence is unavailable')
+  const store = ensureBrowserCredentialStore()
   if (roomSecret) {
     if (sanitized.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef) {
       throw new Error('Browser thin-client room secret does not match the saved WebRTC profile')
@@ -436,8 +442,8 @@ export async function saveAuroraBrowserThinProfile(
   if (sanitized.webrtcProfile) {
     store.saveConnectionProfile(sanitized.webrtcProfile)
   }
-  await closeBrowserRuntimeCache()
-  browserCredentialStore = null
+  browserRuntimeProfileRevision += 1
+  await finishBrowserRuntimeProfileTransition(store)
 }
 
 export async function saveAuroraBrowserOnboardingProfile(
@@ -504,9 +510,7 @@ export async function saveAuroraBrowserRuntimeProfile(
   },
 ): Promise<void> {
   const sanitized = sanitizeRuntimeProfile(profile)
-  createAuroraBrowserRuntime()
-  const store = browserCredentialStore
-  if (!store) throw new Error('Browser runtime profile persistence is unavailable')
+  const store = ensureBrowserCredentialStore()
   if (roomSecret) {
     const allowedRefs = new Set([
       sanitized.homeConnection?.webrtcProfile?.roomSecretRef,
@@ -532,16 +536,14 @@ export async function saveAuroraBrowserRuntimeProfile(
   if (sanitized.localNode.meshMembership?.webrtcProfile) {
     store.saveConnectionProfile(sanitized.localNode.meshMembership.webrtcProfile)
   }
-  await closeBrowserRuntimeCache()
-  browserCredentialStore = null
+  browserRuntimeProfileRevision += 1
+  await finishBrowserRuntimeProfileTransition(store)
 }
 
 export async function selectAuroraBrowserThinProfile(
   profileId: string,
 ): Promise<void> {
-  createAuroraBrowserRuntime()
-  const store = browserCredentialStore
-  if (!store) throw new Error('Browser thin-client persistence is unavailable')
+  const store = ensureBrowserCredentialStore()
   const current = store.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   if (!current.profiles.some((profile) => profile.id === profileId)) {
     throw new Error('Browser runtime profile does not exist')
@@ -550,8 +552,8 @@ export async function selectAuroraBrowserThinProfile(
     ...current,
     activeProfileId: profileId,
   })
-  await closeBrowserRuntimeCache()
-  browserCredentialStore = null
+  browserRuntimeProfileRevision += 1
+  await finishBrowserRuntimeProfileTransition(store)
 }
 
 export function isAuroraWebDemoMode(): boolean {
@@ -593,9 +595,41 @@ async function closeBrowserRuntimeCache(): Promise<void> {
   await Promise.all([
     cached?.runtime.close().catch(() => undefined),
     inflight?.promise
-      .then((services) => services?.close())
+      .then(closeBrowserMeshNodeServices)
       .catch(() => undefined),
   ])
+}
+
+async function closeBrowserMeshNodeServices(
+  services: BrowserMeshNodeServices | null | undefined,
+): Promise<void> {
+  if (!services || closedBrowserMeshNodeServices.has(services)) return
+  closedBrowserMeshNodeServices.add(services)
+  await services.close()
+}
+
+function ensureBrowserCredentialStore(): BrowserPersistentPeerCredentialStore {
+  const store = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
+  browserCredentialStore = store
+  return store
+}
+
+async function finishBrowserRuntimeProfileTransition(
+  store: BrowserPersistentPeerCredentialStore,
+): Promise<void> {
+  const transition = (async () => {
+    await closeBrowserRuntimeCache()
+    await store.close()
+    if (browserCredentialStore === store) browserCredentialStore = null
+  })()
+  browserRuntimeProfileTransition = transition
+  try {
+    await transition
+  } finally {
+    if (browserRuntimeProfileTransition === transition) {
+      browserRuntimeProfileTransition = null
+    }
+  }
 }
 
 function thinProfileFromRuntimeProfile(
