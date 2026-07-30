@@ -46,7 +46,9 @@ type PersistedMeshPeer = {
   peer_id?: string
   node_name?: string
   outbound_status?: string
+  outbound_permissions?: string[]
   inbound_status?: string
+  inbound_permissions?: string[]
   connection_status?: string
 }
 
@@ -75,6 +77,18 @@ const permissions = [
   'Tooling.use',
   'Scheduler.use',
   'Backup.use',
+]
+
+const reducedPermissions = [
+  'Gateway.use',
+  'Gateway.GetRegistry',
+  'Gateway.GetCapabilityCatalog',
+  'Gateway.GetCapabilityGraph',
+  'Gateway.GetMeshStatus',
+  'Gateway.GetWebRTCDiagnostics',
+  'Auth.WhoAmI',
+  'Auth.MeshListPeers',
+  'Auth.MeshGetPeer',
 ]
 
 test.skip(
@@ -210,6 +224,12 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
   )
   expect(connectedPeer.connection_status).toBe('connected')
   expect(connectedPeer.node_name).toBe('E2E Hosted Peer')
+  expect(new Set(connectedPeer.outbound_permissions ?? [])).toEqual(
+    new Set(permissions),
+  )
+  expect(new Set(connectedPeer.inbound_permissions ?? [])).toEqual(
+    new Set(permissions),
+  )
 
   const meshRoot = page.locator('[data-thin-peer-status]').first()
   await expect(meshRoot).toHaveAttribute('data-thin-peer-status', 'authorized')
@@ -237,6 +257,7 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
   await expect(page.locator('body')).toContainText(expectedNodeName)
   await expect(page.locator('body')).toContainText('Member')
   await expect(page.locator('body')).not.toContainText('Operate · admin only')
+  await expectNonAdminNavigation(page)
   await expect(page.locator('body')).not.toContainText(
     /WebRTC mesh transport is not connected|secure browser\/webview context/i,
   )
@@ -287,6 +308,31 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
   expect(storageBeforeReload.serializedVault).not.toContain(roomSecret)
   expect(storageBeforeReload.localStorageDump).not.toContain(roomSecret)
   expect(storageBeforeReload.localStorageDump).not.toContain(pending.code ?? '')
+  expect(storageBeforeReload.runtimeProfileSummary).toMatchObject({
+    activeProfileNodeMode: 'remote-console',
+    activeProfileRuntimeTier: 'none',
+    savedProfileCount: 1,
+    localCapabilityPackCount: 0,
+    hasHomeConnection: true,
+    hasMeshMembership: false,
+    secretsPresentInProfile: false,
+  })
+
+  const secondPage = await page.context().newPage()
+  try {
+    await secondPage.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+    await expect(secondPage.locator('[data-browser-shell-boot="true"]')).toHaveCount(0, {
+      timeout: 30_000,
+    })
+    const secondTabStorage = await readRawBrowserVault(secondPage)
+    expect(secondTabStorage.encryptedRecordKeys).toEqual(
+      storageBeforeReload.encryptedRecordKeys,
+    )
+    expect(secondTabStorage.serializedVault).not.toContain(roomSecret)
+    await expectSingleWriterBrowserStorage(page, secondPage, stablePeerId)
+  } finally {
+    await secondPage.close()
+  }
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForURL(/\/mesh/, { timeout: 30_000 })
@@ -318,6 +364,73 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
     path: finalScreenshotPath,
     contentType: 'image/png',
   })
+
+  await confirmedAdminPost(
+    request,
+    '/api/Auth/MeshUpdatePeerPermissions',
+    'Auth.MeshUpdatePeerPermissions',
+    {
+      peer_id: stablePeerId,
+      permissions: reducedPermissions,
+    },
+  )
+  const reducedPeer = await waitFor(
+    async () => {
+      const peers = await post<{ peers?: PersistedMeshPeer[] }>(
+        request,
+        '/api/Auth/MeshListPeers',
+      )
+      return (
+        peers.peers?.find(
+          (peer) =>
+            peer.peer_id === stablePeerId &&
+            sameStringSet(peer.outbound_permissions ?? [], reducedPermissions),
+        ) ?? null
+      )
+    },
+    'reduced peer permissions persisted on the Python authority',
+  )
+  expect(reducedPeer.outbound_status).toBe('approved')
+  expect(reducedPeer.connection_status).toBe('connected')
+
+  await confirmedAdminPost(
+    request,
+    '/api/Auth/MeshRemovePeer',
+    'Auth.MeshRemovePeer',
+    {
+      peer_id: stablePeerId,
+      revoke_token: true,
+    },
+  )
+  const removedPeer = await waitFor(
+    async () => {
+      const peers = await post<{ peers?: PersistedMeshPeer[] }>(
+        request,
+        '/api/Auth/MeshListPeers',
+      )
+      return (
+        peers.peers?.find(
+          (peer) =>
+            peer.peer_id === stablePeerId &&
+            peer.outbound_status === 'removed' &&
+            (peer.outbound_permissions ?? []).length === 0,
+        ) ?? null
+      )
+    },
+    'removed peer authority tombstone after revocation',
+  )
+  expect(removedPeer.connection_status).toBe('disconnected')
+
+  await waitFor(
+    async () => {
+      const diagnostics = await post<{ peers?: WebRtcPeerDiagnostic[] }>(
+        request,
+        '/api/Gateway/GetWebRTCDiagnostics',
+      )
+      return liveDiagnosticFor(diagnostics.peers ?? [], stablePeerId) === null
+    },
+    'revoked browser peer disconnects from the Python WebRTC registry',
+  )
   expect(browserGatewayRequests).toEqual([])
   expect(consoleErrors).toEqual([])
 })
@@ -485,6 +598,15 @@ async function readRawBrowserVault(page: Page): Promise<{
   keyIsNonExtractable: boolean
   serializedVault: string
   localStorageDump: string
+  runtimeProfileSummary: {
+    activeProfileNodeMode: string | null
+    activeProfileRuntimeTier: string | null
+    savedProfileCount: number
+    localCapabilityPackCount: number
+    hasHomeConnection: boolean
+    hasMeshMembership: boolean
+    secretsPresentInProfile: boolean
+  }
 }> {
   return await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -533,9 +655,140 @@ async function readRawBrowserVault(page: Page): Promise<{
           vaultKey instanceof CryptoKey && vaultKey.extractable === false,
         serializedVault: JSON.stringify(values),
         localStorageDump: JSON.stringify({ ...localStorage }),
+        runtimeProfileSummary: runtimeProfileSummary(),
       }
     } finally {
       database.close()
     }
+
+    function runtimeProfileSummary() {
+      const raw = localStorage.getItem('aurora.runtimeProfiles.v2')
+      const document = raw ? JSON.parse(raw) as {
+        activeProfileId?: unknown
+        profiles?: Array<Record<string, unknown>>
+      } : null
+      const profiles = document?.profiles ?? []
+      const activeProfile =
+        profiles.find((profile) => profile.id === document?.activeProfileId) ??
+        profiles[0] ??
+        null
+      const localNode = activeProfile?.localNode as
+        | {
+          enabledCapabilityPacks?: unknown[]
+          meshMembership?: unknown
+        }
+        | undefined
+      const serializedProfile = JSON.stringify(document ?? {})
+      return {
+        activeProfileNodeMode:
+          typeof activeProfile?.nodeMode === 'string'
+            ? activeProfile.nodeMode
+            : null,
+        activeProfileRuntimeTier:
+          typeof activeProfile?.runtimeTier === 'string'
+            ? activeProfile.runtimeTier
+            : null,
+        savedProfileCount: profiles.length,
+        localCapabilityPackCount: Array.isArray(localNode?.enabledCapabilityPacks)
+          ? localNode.enabledCapabilityPacks.length
+          : 0,
+        hasHomeConnection: Boolean(activeProfile?.homeConnection),
+        hasMeshMembership: Boolean(localNode?.meshMembership),
+        secretsPresentInProfile:
+          /room_password|roomSecret|token|bearer|credential|password/iu.test(
+            serializedProfile,
+          ),
+      }
+    }
   })
+}
+
+async function expectNonAdminNavigation(page: Page): Promise<void> {
+  await expect(page.getByRole('link', { name: 'Admin Overview' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Services' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Access & RBAC' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Tokens' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
+}
+
+async function expectSingleWriterBrowserStorage(
+  firstPage: Page,
+  secondPage: Page,
+  localNodeId: string,
+): Promise<void> {
+  const release = await firstPage.evaluateHandle(async (nodeId) => {
+    if (!navigator.locks) {
+      throw new Error('Browser storage writer locks are unavailable')
+    }
+    const lockKey = deriveBrowserStorageOwnerKey(location.origin, nodeId)
+    let releaseLock: (() => void) | null = null
+    let acquiredLock: (() => void) | null = null
+    const acquired = new Promise<void>((resolve) => {
+      acquiredLock = resolve
+    })
+    const released = new Promise<void>((resolve) => {
+      releaseLock = resolve
+    })
+    const held = navigator.locks.request(
+      lockKey,
+      { mode: 'exclusive' },
+      async () => {
+        acquiredLock?.()
+        await released
+      },
+    )
+    await acquired
+    return {
+      release: () => {
+        releaseLock?.()
+      },
+      done: held,
+    }
+
+    function deriveBrowserStorageOwnerKey(origin: string, value: string): string {
+      return `aurora:browser-local-data:${stableHash(`${new URL(origin).origin}\u0000${value}`)}`
+    }
+
+    function stableHash(value: string): string {
+      let hash = 0x811c9dc5
+      for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index)
+        hash = Math.imul(hash, 0x01000193)
+      }
+      return (hash >>> 0).toString(16).padStart(8, '0')
+    }
+  }, localNodeId)
+  try {
+    const secondAcquired = await secondPage.evaluate(async (nodeId) => {
+      const lockKey = deriveBrowserStorageOwnerKey(location.origin, nodeId)
+      return await navigator.locks.request(
+        lockKey,
+        { ifAvailable: true },
+        (lock) => lock !== null,
+      )
+
+      function deriveBrowserStorageOwnerKey(origin: string, value: string): string {
+        return `aurora:browser-local-data:${stableHash(`${new URL(origin).origin}\u0000${value}`)}`
+      }
+
+      function stableHash(value: string): string {
+        let hash = 0x811c9dc5
+        for (let index = 0; index < value.length; index += 1) {
+          hash ^= value.charCodeAt(index)
+          hash = Math.imul(hash, 0x01000193)
+        }
+        return (hash >>> 0).toString(16).padStart(8, '0')
+      }
+    }, localNodeId)
+    expect(secondAcquired).toBe(false)
+  } finally {
+    await release.evaluate((handle) => handle.release())
+    await release.dispose()
+  }
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false
+  const rightSet = new Set(right)
+  return left.every((value) => rightSet.has(value))
 }
