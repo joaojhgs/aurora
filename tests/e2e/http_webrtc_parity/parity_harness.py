@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.mesh_policy_two_instance_harness import (
+from scripts.mesh_policy_two_instance_harness import (  # noqa: E402, I001
     PROTOCOL_KEY,
     _ProductionNodeServices,
     _WorkerRtcRuntime,
@@ -38,7 +38,7 @@ from scripts.mesh_policy_two_instance_harness import (
     _wait_for_gateway_authority_convergence,
 )
 
-DEFAULT_GRANTS = ["Config.*", "Gateway.*", "TTS.*", "Tooling.*"]
+DEFAULT_GRANTS = ["Config.*", "Gateway.use", "Gateway.manage", "TTS.*", "Tooling.*"]
 
 
 class ParityNode:
@@ -137,6 +137,12 @@ class ParityNode:
         self.request("rtc_complete", sdp=answer["sdp"], sdp_type=answer["sdp_type"])
         self.request("rtc_wait_open")
 
+    def restart(self) -> tuple[str, str]:
+        before = self.connection_id
+        self.stop()
+        self.start()
+        return before, self.connection_id
+
     def stop(self) -> None:
         process = self.process
         self.process = None
@@ -229,10 +235,13 @@ def run_parity_harness(output_dir: Path) -> dict[str, Any]:
 def _run_scenarios(provider: ParityNode, client: ParityNode) -> dict[str, Any]:
     provider.request("patch", paired_peers=[client.node_id], grants=DEFAULT_GRANTS)
     client.request("patch", paired_peers=[provider.node_id], grants=DEFAULT_GRANTS)
-    client.connect_rtc(provider)
     token = provider.request("create_http_token", permissions=DEFAULT_GRANTS)
     token_id = str(token["token_id"])
     bearer = str(token["token"])
+    http_home_node = _http_home_node_probe(provider, bearer)
+
+    client.connect_rtc(provider)
+    webrtc_membership = _membership_fields(provider.request("membership_snapshot"))
 
     allowed = _compare_call(
         provider,
@@ -242,39 +251,63 @@ def _run_scenarios(provider: ParityNode, client: ParityNode) -> dict[str, Any]:
         params={"topic": "TTS.Synthesize", "include_candidates": True},
     )
 
-    denied_grants = ["Config.*", "Gateway.*", "Tooling.*"]
-    provider.request("patch", grants=denied_grants, projection_revision=2)
-    provider.request("update_http_token", token_id=token_id, permissions=denied_grants)
-    denied = _compare_call(
-        provider,
-        client,
-        bearer,
-        method="Gateway.ExplainRoute",
-        params={"topic": "TTS.Synthesize", "include_candidates": True},
-    )
-
-    unsupported = _compare_unsupported(provider, client, bearer)
-    redaction = _compare_call(
+    support_allowed = _compare_call(
         provider,
         client,
         bearer,
         method="Gateway.GetSupportBundle",
         params={},
     )
+    denied_grants = ["Config.*", "Gateway.manage", "TTS.*", "Tooling.*"]
+    provider.request("patch", grants=denied_grants, projection_revision=2)
+    provider.request("update_http_token", token_id=token_id, permissions=denied_grants)
+    reconnect = dict(zip(("before", "after"), client.restart(), strict=True))
+    client.connect_rtc(provider)
+    method_denied = _compare_call(
+        provider,
+        client,
+        bearer,
+        method="Gateway.GetCapabilityCatalog",
+        params={"include_schemas": False},
+    )
+
+    unsupported = _compare_unsupported(provider, client, bearer)
     return {
         "status": "pass",
         "scenario_ids": [
             "PARITY-01-allowed-route",
-            "PARITY-02-revoked-grant",
+            "PARITY-02-method-permission-denied-after-reconnect",
             "PARITY-03-unsupported",
             "PARITY-04-redaction",
+            "PARITY-05-http-home-node-does-not-advertise-local-node",
         ],
         "results": {
             "allowed": allowed,
-            "denied": denied,
+            "method_denied": method_denied,
+            "reconnect": reconnect,
             "unsupported": unsupported,
-            "redaction": redaction,
+            "redaction": support_allowed,
+            "membership": {
+                "http_home_node": http_home_node,
+                "webrtc_membership": webrtc_membership,
+            },
         },
+    }
+
+
+def _http_home_node_probe(provider: ParityNode, bearer: str) -> dict[str, Any]:
+    catalog = _normalize_http(
+        provider.request(
+            "http_call",
+            token=bearer,
+            method="Gateway.GetCapabilityCatalog",
+            params={"include_schemas": False},
+        )
+    )
+    membership = provider.request("membership_snapshot")
+    return {
+        "catalog": catalog,
+        "membership": _membership_fields(membership),
     }
 
 
@@ -314,12 +347,24 @@ def _compare_unsupported(provider: ParityNode, client: ParityNode, bearer: str) 
     }
 
 
+def _membership_fields(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "remote_peer_id": snapshot.get("remote_peer_id"),
+        "remote_manifest_available": snapshot.get("remote_manifest_available"),
+        "remote_manifest_provider_peer_id": snapshot.get("remote_manifest_provider_peer_id"),
+        "remote_manifest_active_protocol": snapshot.get("remote_manifest_active_protocol"),
+    }
+
+
 def _normalize_http(response: dict[str, Any]) -> dict[str, Any]:
     body = response.get("body") if isinstance(response.get("body"), dict) else {}
     candidates = _candidate_reasons(body)
+    status_code = int(response["status_code"])
     return {
-        "allowed": int(response["status_code"]) < 400,
-        "status_code": response["status_code"],
+        "allowed": status_code < 400,
+        "status_code": status_code,
+        "error_code": status_code if status_code >= 400 else None,
+        "error_detail": str(body.get("detail") or ""),
         "reason_code": _route_reason(candidates, response),
         "candidate_reasons": candidates,
         "secrets_redacted": _secrets_redacted(body),
@@ -330,9 +375,12 @@ def _normalize_http(response: dict[str, Any]) -> dict[str, Any]:
 def _normalize_rtc(response: dict[str, Any]) -> dict[str, Any]:
     wire = response.get("wire") if isinstance(response.get("wire"), dict) else {}
     result = wire.get("result") if isinstance(wire.get("result"), dict) else {}
+    error = wire.get("error") if isinstance(wire.get("error"), dict) else {}
     return {
         "allowed": response.get("allowed") is True,
         "wire_type": wire.get("type"),
+        "error_code": error.get("code"),
+        "error_detail": str(error.get("message") or ""),
         "reason_code": _route_reason(_candidate_reasons(result), response),
         "candidate_reasons": _candidate_reasons(result),
         "secrets_redacted": _secrets_redacted(result),
@@ -354,6 +402,8 @@ def _route_reason(candidates: list[str], response: dict[str, Any]) -> str:
         return candidates[0]
     if response.get("reason_code"):
         return str(response["reason_code"])
+    if int(response.get("status_code", 200)) in {401, 403}:
+        return "permission_denied"
     if int(response.get("status_code", 200)) == 404:
         return "unsupported"
     return "eligible" if response.get("allowed", True) else "denied"
@@ -480,6 +530,8 @@ async def _handle_worker_action(
         return await _update_http_token(rtc.bus, request["token_id"], request["permissions"])
     if action == "http_call":
         return await http.call(str(request["token"]), str(request["method"]), request.get("params") or {})
+    if action == "membership_snapshot":
+        return await _membership_snapshot(rtc)
     if action == "patch":
         state.update(request)
         _save_state(state_path, state)
@@ -592,6 +644,25 @@ async def _update_http_token(bus: Any, token_id: str, permissions: list[str]) ->
         raise RuntimeError(result.error or "token update failed")
     updated = TokenScopeUpdateResponse.model_validate(result.data)
     return {"success": updated.success, "permissions": permissions}
+
+
+async def _membership_snapshot(rtc: _WorkerRtcRuntime) -> dict[str, Any]:
+    from app.services.gateway.mesh.negotiation import manifest_to_dict
+
+    deadline = time.monotonic() + 3.0
+    while rtc.remote_peer_id is not None and rtc.remote_manifest is None and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+    manifest = manifest_to_dict(rtc.remote_manifest) if rtc.remote_manifest is not None else None
+    return {
+        "remote_peer_id": rtc.remote_peer_id,
+        "remote_manifest_available": manifest is not None,
+        "remote_manifest_provider_peer_id": (
+            manifest.get("provider_peer_id") if isinstance(manifest, dict) else None
+        ),
+        "remote_manifest_active_protocol": (
+            manifest.get("active_protocol") if isinstance(manifest, dict) else None
+        ),
+    }
 
 
 def _parse_args() -> argparse.Namespace:
