@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   DesktopLiveE2eCredentialStore,
+  desktopLivePairingConfirmationMode,
   desktopLiveSignalingId,
   drainRemoteConsoleManifestHandshake,
   installDesktopLiveE2eHook,
@@ -53,6 +54,11 @@ describe("desktop live E2E WebView hook", () => {
     expect(remoteConsoleId).toBe(baseSignalingId);
     expect(meshNodeId).toBe(`${baseSignalingId}-mesh`);
     expect(meshNodeId).not.toBe(remoteConsoleId);
+  });
+
+  it("hands mesh-node pairing control to the revocation-aware contract", () => {
+    expect(desktopLivePairingConfirmationMode("remote-console")).toBe("automatic");
+    expect(desktopLivePairingConfirmationMode("mesh-node")).toBe("managed");
   });
 
   it("keeps shared credentials alive until both role runtimes are finished", async () => {

@@ -233,6 +233,12 @@ export function desktopLiveSignalingId(
     : `${baseSignalingId}-mesh`;
 }
 
+export function desktopLivePairingConfirmationMode(
+  nodeRole: DesktopLiveNodeRole,
+): "automatic" | "managed" {
+  return nodeRole === "remote-console" ? "automatic" : "managed";
+}
+
 export function installDesktopLiveE2eHook(
   options: HookInstallOptions = {},
 ): boolean {
@@ -442,7 +448,12 @@ function createInteropRuntime({
   runtime.peer.subscribe((snapshot) => {
     snapshots.push(snapshot);
     const pending = snapshot.pendingPairing;
-    if (pending) void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined);
+    if (
+      pending &&
+      desktopLivePairingConfirmationMode(nodeRole) === "automatic"
+    ) {
+      void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined);
+    }
   });
   return runtime;
 }
