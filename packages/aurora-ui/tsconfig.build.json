@@ -6,5 +6,5 @@
     "noEmit": false
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["tests", "dist"]
+  "exclude": ["tests", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }
