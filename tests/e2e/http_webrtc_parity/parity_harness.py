@@ -413,9 +413,10 @@ def _secrets_redacted(value: Any) -> bool:
     if isinstance(value, dict):
         if value.get("secrets_redacted") is True:
             return True
-        if isinstance(value.get("redaction"), dict) and value["redaction"].get(
-            "secrets_redacted"
-        ) is True:
+        if (
+            isinstance(value.get("redaction"), dict)
+            and value["redaction"].get("secrets_redacted") is True
+        ):
             return True
         return any(_secrets_redacted(item) for item in value.values())
     if isinstance(value, list):
@@ -529,7 +530,9 @@ async def _handle_worker_action(
     if action == "update_http_token":
         return await _update_http_token(rtc.bus, request["token_id"], request["permissions"])
     if action == "http_call":
-        return await http.call(str(request["token"]), str(request["method"]), request.get("params") or {})
+        return await http.call(
+            str(request["token"]), str(request["method"]), request.get("params") or {}
+        )
     if action == "membership_snapshot":
         return await _membership_snapshot(rtc)
     if action == "patch":
@@ -650,7 +653,11 @@ async def _membership_snapshot(rtc: _WorkerRtcRuntime) -> dict[str, Any]:
     from app.services.gateway.mesh.negotiation import manifest_to_dict
 
     deadline = time.monotonic() + 3.0
-    while rtc.remote_peer_id is not None and rtc.remote_manifest is None and time.monotonic() < deadline:
+    while (
+        rtc.remote_peer_id is not None
+        and rtc.remote_manifest is None
+        and time.monotonic() < deadline
+    ):
         await asyncio.sleep(0.05)
     manifest = manifest_to_dict(rtc.remote_manifest) if rtc.remote_manifest is not None else None
     return {

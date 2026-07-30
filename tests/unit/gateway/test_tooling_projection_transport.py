@@ -528,9 +528,7 @@ async def test_gateway_page_proxy_accepts_only_canonical_local_provider_identity
     gateway._mesh_peer_id = "stable-local"
     gateway._rtc_client = MagicMock()
     gateway._rtc_client.remote_tooling_authority_revisions.return_value = (17, 23)
-    gateway._rtc_client.remote_tooling_authority_grants.return_value = (
-        "Tooling.GetExportCatalog",
-    )
+    gateway._rtc_client.remote_tooling_authority_grants.return_value = ("Tooling.GetExportCatalog",)
     gateway._mesh_peer_bridge = MagicMock()
     request = GatewayFetchToolingExportCatalogPageRequest(
         provider_peer_id="peer:台北/room 42?x=1#node",
@@ -558,9 +556,7 @@ async def test_gateway_page_proxy_accepts_only_canonical_local_provider_identity
             final_checksum="3" * 64,
         )
 
-    canonical = (
-        "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling"
-    )
+    canonical = "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling"
     gateway._mesh_peer_bridge.call = AsyncMock(
         return_value=QueryResult(
             ok=True,

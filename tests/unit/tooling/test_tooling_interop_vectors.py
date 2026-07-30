@@ -63,8 +63,7 @@ def _projection_page(vectors: dict) -> ToolingGetExportCatalogResponse:
         tools=list(tools.values()),
         blocked_tools=blocked,
         retirements=[
-            ToolingProjectionRetirement.model_validate(item)
-            for item in projection["retirements"]
+            ToolingProjectionRetirement.model_validate(item) for item in projection["retirements"]
         ],
         complete=True,
         total_count=len(tools),
@@ -76,12 +75,9 @@ def test_accepts_local_percent_encoded_tooling_service_instance(vectors: dict):
     encoded_peer_id = quote(vectors["stable_peer_id"], safe="-._~")
 
     assert encoded_peer_id == vectors["percent_encoded_stable_peer_id"]
+    assert vectors["provider_service_instance_id"] == f"local:{encoded_peer_id}:Tooling"
     assert (
-        vectors["provider_service_instance_id"]
-        == f"local:{encoded_peer_id}:Tooling"
-    )
-    assert _projection_page(vectors).service_instance_id == (
-        vectors["provider_service_instance_id"]
+        _projection_page(vectors).service_instance_id == (vectors["provider_service_instance_id"])
     )
 
 
@@ -119,16 +115,22 @@ def test_python_recomputes_projection_checksum_and_page_hash(vectors: dict):
     expected_checksum = vectors["projection"]["final_checksum"]
     expected_page_hash = vectors["projection"]["page_hash"]
 
-    assert compute_projection_checksum(
-        page.tools,
-        page.retirements,
-        page.blocked_tools,
-    ) == expected_checksum
+    assert (
+        compute_projection_checksum(
+            page.tools,
+            page.retirements,
+            page.blocked_tools,
+        )
+        == expected_checksum
+    )
     page_without_hash = page.model_copy(update={"page_hash": "0" * 64})
     assert compute_projection_page_hash(page_without_hash) == expected_page_hash
 
 
-@pytest.mark.parametrize("negative_case", [case["case"] for case in json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))["negative"]])
+@pytest.mark.parametrize(
+    "negative_case",
+    [case["case"] for case in json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))["negative"]],
+)
 def test_python_rejects_negative_projection_vectors(vectors: dict, negative_case: str):
     base = _projection_page(vectors).model_dump(mode="json")
     case = next(item for item in vectors["negative"] if item["case"] == negative_case)

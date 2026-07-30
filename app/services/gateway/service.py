@@ -2814,9 +2814,7 @@ class GatewayService(BaseService):
                 reason_code="mesh_transport_unavailable",
             )
         revisions = rtc_client.remote_tooling_authority_revisions(request.provider_peer_id)
-        granted_permissions = rtc_client.remote_tooling_authority_grants(
-            request.provider_peer_id
-        )
+        granted_permissions = rtc_client.remote_tooling_authority_grants(request.provider_peer_id)
         if revisions is None or granted_permissions is None:
             return GatewayFetchToolingExportCatalogPageResponse(
                 ok=False,
@@ -2837,9 +2835,7 @@ class GatewayService(BaseService):
             manifest_revision=manifest_revision,
         )
         if not result.ok or result.data is None:
-            log_warning(
-                f"Tooling projection page fetch failed for {request.provider_peer_id}"
-            )
+            log_warning(f"Tooling projection page fetch failed for {request.provider_peer_id}")
             return GatewayFetchToolingExportCatalogPageResponse(
                 ok=False,
                 reason_code="projection_fetch_failed",

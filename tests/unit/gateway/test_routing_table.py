@@ -364,9 +364,7 @@ class TestRoutingTableResolve:
         assert route.target == "remote"
         assert route.peer_id == remote_peer_id
 
-    def test_canonical_local_service_id_stays_on_current_peer(
-        self, mesh_config, peer_registry
-    ):
+    def test_canonical_local_service_id_stays_on_current_peer(self, mesh_config, peer_registry):
         routing_table = RoutingTable(
             mesh_config,
             peer_registry,

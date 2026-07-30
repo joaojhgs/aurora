@@ -34,7 +34,9 @@ class Migration:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--migrations-dir", type=Path, default=DEFAULT_MIGRATIONS_DIR)
-    parser.add_argument("--manifest-output", type=Path, default=DEFAULT_MIGRATIONS_DIR / "manifest.json")
+    parser.add_argument(
+        "--manifest-output", type=Path, default=DEFAULT_MIGRATIONS_DIR / "manifest.json"
+    )
     parser.add_argument("--ts-output", type=Path, default=DEFAULT_TS_OUTPUT)
     parser.add_argument("--rust-output", type=Path, default=None)
     parser.add_argument("--schema-output", type=Path, default=DEFAULT_SCHEMA_OUTPUT)
@@ -54,7 +56,12 @@ def main() -> None:
         (args.schema_output, render_json(schema_artifact)),
     ]
     if args.rust_output is not None:
-        outputs.append((args.rust_output, render_rust_source(args.rust_output, args.migrations_dir, migrations)))
+        outputs.append(
+            (
+                args.rust_output,
+                render_rust_source(args.rust_output, args.migrations_dir, migrations),
+            )
+        )
     write_outputs(outputs)
 
 
@@ -67,7 +74,9 @@ def read_migrations(directory: Path) -> list[Migration]:
             raise SystemExit(f"invalid migration filename: {path.name}")
         version = int(match.group("version"))
         if version != expected:
-            raise SystemExit(f"non-contiguous migration version: expected {expected:04d}, got {version:04d}")
+            raise SystemExit(
+                f"non-contiguous migration version: expected {expected:04d}, got {version:04d}"
+            )
         sql = path.read_text(encoding="utf-8")
         checksum = hashlib.sha256(sql.encode("utf-8")).hexdigest()
         name = match.group("name")
@@ -121,7 +130,7 @@ def render_rust_source(output_path: Path, migrations_dir: Path, migrations: list
         "    pub sql: &'static str,\n"
         "    pub ledger_sql: &'static str,\n"
         "}\n\n"
-        "pub const LOCAL_DATA_DATABASE_NAME: &str = \"aurora-lightweight.db\";\n"
+        'pub const LOCAL_DATA_DATABASE_NAME: &str = "aurora-lightweight.db";\n'
         f"pub const LOCAL_DATA_LATEST_VERSION: u32 = {latest};\n"
         "pub const LOCAL_DATA_MIGRATIONS: &[LocalDataMigration] = &[\n"
         + "\n".join(entries)

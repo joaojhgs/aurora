@@ -2710,9 +2710,7 @@ class ToolingService(BaseService):
                         else fetched.data
                     )
                     proxy_reason = (
-                        fetched_data.get("reason_code")
-                        if isinstance(fetched_data, dict)
-                        else None
+                        fetched_data.get("reason_code") if isinstance(fetched_data, dict) else None
                     )
                     log_warning(
                         "Tooling projection proxy request failed for "
@@ -2797,10 +2795,7 @@ class ToolingService(BaseService):
             if isinstance(committed_data, dict) and committed_data.get("ok") is False:
                 raise RuntimeError(str(committed_data.get("error") or "projection_commit_failed"))
             begun = False
-            if (
-                verified_granted_permissions is None
-                or verified_service_instance_id is None
-            ):
+            if verified_granted_permissions is None or verified_service_instance_id is None:
                 raise RuntimeError("projection_authority_missing")
             self._update_remote_provider_state(
                 peer_id=request.provider_peer_id,

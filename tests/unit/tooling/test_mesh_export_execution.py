@@ -921,9 +921,7 @@ async def test_projection_sync_stages_the_validated_page_service_identity(toolin
 
     assert len(begin_requests) == 1
     assert begin_requests[0].service_instance_id == local_service_instance_id
-    assert tooling_service._remote_provider_states[
-        (provider, local_service_instance_id)
-    ] == (
+    assert tooling_service._remote_provider_states[(provider, local_service_instance_id)] == (
         ["Native.GetDeviceStatus", "Tooling.GetExportCatalog"],
         True,
     )

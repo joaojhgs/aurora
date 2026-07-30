@@ -3439,8 +3439,7 @@ class RTCClient:
                     self._non_routable_manifest_for(stable_peer_id, manifest),
                 )
             log_warning(
-                f"RTCClient: Invalid manifest from peer {peer_id}: "
-                f"{parse_result.reason_code}"
+                f"RTCClient: Invalid manifest from peer {peer_id}: {parse_result.reason_code}"
             )
             return
         mesh_config = self._current_mesh_config()
@@ -4075,7 +4074,10 @@ class RTCClient:
 
     def _drop_reconnect_challenges_for_stable_peer(self, stable_peer_id: str) -> None:
         for peer, record in list(self._peer_auth_challenges.items()):
-            if record.claimant_peer_id == stable_peer_id or record.verifier_peer_id == stable_peer_id:
+            if (
+                record.claimant_peer_id == stable_peer_id
+                or record.verifier_peer_id == stable_peer_id
+            ):
                 self._peer_auth_challenges.pop(peer, None)
 
     def _issue_reconnect_challenge_value(self, now_ms: int) -> str:
@@ -4296,13 +4298,10 @@ class RTCClient:
         challenge_entry = self._peer_auth_challenges.get(peer)
         remote_stable_peer_id, remote_node_name = self._transport_identity_for_peer(peer, pc)
         channel_binding = self._channel_binding_for_peer(peer, pc)
-        if (
-            challenge_entry is None
-            or not self._reconnect_record_matches(
-                record=challenge_entry,
-                pc=pc,
-                message=message,
-            )
+        if challenge_entry is None or not self._reconnect_record_matches(
+            record=challenge_entry,
+            pc=pc,
+            message=message,
         ):
             raise PairingProtocolError("Reconnect proof does not match the active challenge")
         if channel_binding != challenge_entry.channel_binding:

@@ -172,7 +172,9 @@ def _install_reconnect_transport(client: RTCClient, peer: str, pc: object) -> st
     return client._channel_binding_for_peer(peer, pc)
 
 
-def _install_reconnect_record(client: RTCClient, peer: str, pc: object) -> _ReconnectChallengeRecord:
+def _install_reconnect_record(
+    client: RTCClient, peer: str, pc: object
+) -> _ReconnectChallengeRecord:
     channel_binding = _install_reconnect_transport(client, peer, pc)
     record = _ReconnectChallengeRecord(
         pc=pc,
