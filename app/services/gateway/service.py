@@ -2299,6 +2299,7 @@ class GatewayService(BaseService):
         if rtc_client is None:
             return
         reannounce_peers: tuple[str, ...] = ()
+        disconnect_peer_id: str | None = None
         async with self._mesh_authority_lock:
             result = rtc_client.apply_peer_authority_changed_detailed(event)
             if result.status.name in {"GAP", "CONFLICT"} and result.peer_id:
@@ -2308,8 +2309,17 @@ class GatewayService(BaseService):
                 )
                 if reconcile.success:
                     reannounce_peers = reconcile.reannounce_peers
+            elif (
+                result.status.name in {"APPLIED", "DUPLICATE"}
+                and result.peer_id
+                and event.state != "active"
+            ):
+                disconnect_peer_id = result.peer_id
             elif result.reannounce and result.peer_id:
                 reannounce_peers = (result.peer_id,)
+        if disconnect_peer_id:
+            await rtc_client.disconnect_peer(disconnect_peer_id)
+            return
         for peer_id in reannounce_peers:
             await rtc_client.reannounce_manifest_for_peer(peer_id)
 

@@ -451,6 +451,51 @@ def test_revoked_removed_and_revision_zero_clear_aliases_and_token_scopes() -> N
 
 
 @pytest.mark.asyncio
+async def test_revoked_authority_event_disconnects_active_peer_and_subscriptions() -> None:
+    service = GatewayService()
+    client = _client()
+    service._rtc_client = client
+    service._bus = _FakeBus()
+    client.reannounce_manifest_for_peer = AsyncMock(return_value=True)
+    assert client.apply_peer_authority_changed(_event(revision=1, perms=("*",)))
+    subscription = client.event_subscriptions.subscribe(
+        peer_id="peer-a",
+        subscription_id="sub-1",
+        requested_topics=("Gateway.GetServices",),
+        allowed_topics=("Gateway.GetServices",),
+    )
+    pending_call = asyncio.get_running_loop().create_future()
+    client._pending_rpc["call-1"] = pending_call
+    client._pending_rpc_peers["call-1"] = "session-a"
+    assert subscription.accepted is True
+    assert client.get_diagnostics().authenticated_peer_count == 1
+
+    await service._handle_mesh_peer_authority_changed(
+        Envelope(
+            type=MeshEvents.PEER_AUTHORITY_CHANGED,
+            payload=MeshPeerAuthorityChangedEvent(
+                peer_id="peer-a",
+                auth_grant_revision=2,
+                disposition="removed",
+                state="revoked",
+                effective_permissions=(),
+                reason="removed",
+            ),
+            origin="internal",
+        )
+    )
+
+    assert "session-a" not in client._pcs
+    assert "peer-a" not in client._stable_peer_sessions
+    assert pending_call.done() and pending_call.result() is None
+    assert client._pending_rpc == {}
+    assert client._pending_rpc_peers == {}
+    assert client.get_diagnostics().authenticated_peer_count == 0
+    assert client.event_subscriptions.snapshot().subscription_count == 0
+    client.reannounce_manifest_for_peer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_reconnect_challenge_revoked_removed_and_trusted_absence_reject_before_auth() -> None:
     client = _client()
     client._peer_id = "local-session"
