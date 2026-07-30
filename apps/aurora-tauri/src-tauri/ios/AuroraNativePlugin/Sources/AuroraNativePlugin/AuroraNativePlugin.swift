@@ -430,13 +430,22 @@ public final class AuroraNativePlugin: Plugin {
       .filter { ($0["support"] as? String) == "supported-path" }
       .map { $0["id"] as? String ?? "" }
       .filter { !$0.isEmpty }
+    let hasPendingNativeTargets = mobileIntegrations.contains {
+      ($0["support"] as? String) == "pending"
+    }
+    let invocationState = hasPendingNativeTargets ? "degraded" : "available"
+    let reason: Any = hasPendingNativeTargets
+      ? "Some iOS extension, widget, or file association targets remain pending until macOS/Xcode build and simulator or device invocation proof exists."
+      : NSNull()
     invoke.resolve([
       "available": true,
+      "state": invocationState,
       "surface": "Siri/Shortcuts/App Intents integration",
       "supportedActions": executableActions,
       "mobileIntegrations": mobileIntegrations,
       "siriReplacement": false,
       "requiresBackendEvidence": true,
+      "reason": reason,
       "entrypoints": AuroraNativePlugin.entrypoints(),
       "secretsRedacted": true
     ])

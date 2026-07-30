@@ -2103,9 +2103,7 @@ export function nativeFeatureLabel(
 export function iosInvocationLabel(
   status: TauriIosInvocationStatus | null | undefined,
 ): string {
-  const stateValue = (status as unknown as { state?: unknown } | null | undefined)
-    ?.state;
-  const state = typeof stateValue === "string" ? stateValue : null;
+  const state = status?.state ?? null;
   if (status?.available && state !== "degraded" && !state?.startsWith("pending")) {
     return "Available; Aurora does not replace the system assistant";
   }

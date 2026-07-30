@@ -342,6 +342,10 @@ describe('Tauri CI native evidence contract', () => {
     expect(swiftPlugin).toContain('private static let pendingNativeTargetReason')
     expect(swiftEntrypoints).toContain('private static let pendingNativeTargetReason')
     expect(app).toContain('state === "degraded" || state?.startsWith("pending")')
+    expect(app).not.toContain('status as unknown as { state?: unknown }')
+    expect(swiftPlugin).toContain('let hasPendingNativeTargets = mobileIntegrations.contains')
+    expect(swiftPlugin).toContain('let invocationState = hasPendingNativeTargets ? "degraded" : "available"')
+    expect(swiftPlugin).toContain('"state": invocationState')
 
     for (const claim of pendingIosNativeTargetClaims) {
       const integration = preflight.integrations.find(({ id }) => id === claim.integrationId)

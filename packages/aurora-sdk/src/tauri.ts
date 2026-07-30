@@ -171,6 +171,7 @@ export type IosAuroraActionId =
 
 export interface TauriIosInvocationStatus {
   available: boolean
+  state: 'available' | 'degraded' | 'pending_native_target' | 'needs_native_permission' | 'unsupported_platform' | string
   surface: string
   supportedActions: IosAuroraActionId[]
   siriReplacement: false

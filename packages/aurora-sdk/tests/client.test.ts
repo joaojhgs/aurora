@@ -4300,6 +4300,7 @@ describe('AuroraClient', () => {
           case 'aurora_ios_invocation_status':
             return {
               available: true,
+              state: 'degraded',
               surface: 'Siri/Shortcuts/App Intents integration',
               supportedActions: [
                 'app-intent.open-assistant',
@@ -4342,6 +4343,8 @@ describe('AuroraClient', () => {
     )
     await expect(transport.getIosInvocationStatus()).resolves.toEqual(
       expect.objectContaining({
+        available: true,
+        state: 'degraded',
         surface: 'Siri/Shortcuts/App Intents integration',
         supportedActions: expect.arrayContaining(['app-intent.open-assistant', 'share.import-context']),
         siriReplacement: false,

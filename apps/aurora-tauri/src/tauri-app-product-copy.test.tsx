@@ -58,7 +58,7 @@ describe("Tauri application product copy", () => {
         siriReplacement: false,
         requiresBackendEvidence: true,
         secretsRedacted: true,
-      } as never),
+      }),
       localLightInferenceLabel({
         available: false,
         state: "fallback",
