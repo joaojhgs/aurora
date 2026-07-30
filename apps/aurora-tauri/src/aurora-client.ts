@@ -824,16 +824,13 @@ async function persistTauriRoomSecret(
 async function composeTauriMeshNodeServices(
   profile: AuroraRuntimeProfileV2 | undefined,
   factory: TauriMeshNodeServicesFactory,
-): Promise<TauriMeshNodeServices | null> {
-  try {
-    return await factory({
-      profile,
-      rolloutFlags: tauriWebRtcRolloutFlags(),
-      nativeTransport: new TauriLocalTransport({ invoke, listen }),
-    });
-  } catch {
-    return null;
-  }
+): Promise<TauriMeshNodeServices> {
+  return factory({
+    profile,
+    rolloutFlags: tauriWebRtcRolloutFlags(),
+    nativeTransport: new TauriLocalTransport({ invoke, listen }),
+    invokeCommand: invoke,
+  });
 }
 
 function localNodeProviderStatus(

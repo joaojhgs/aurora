@@ -298,6 +298,28 @@ describe('desktop-thin live connection profiles', () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
+  it('fails bootstrap when mesh-node composition throws unexpectedly', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    const store: AuroraRuntimeProfileStore = {
+      kind: 'runtime-profile',
+      evidence: 'test runtime profile store',
+      load: vi.fn(async () => runtimeDocument),
+      save: vi.fn(async () => undefined),
+    }
+    const factory = vi.fn<TauriMeshNodeServicesFactory>(async () => {
+      throw new Error('mesh composition failed')
+    })
+
+    await expect(
+      bootstrapAuroraTauriRuntime(
+        store,
+        { pythonFullRuntime: false },
+        factory,
+      ),
+    ).rejects.toThrow('mesh composition failed')
+  })
+
   it('composes desktop thin runtime from an actual v2 runtime profile document', async () => {
     vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })

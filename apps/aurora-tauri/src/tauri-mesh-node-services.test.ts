@@ -93,6 +93,19 @@ describe("Tauri mesh node services", () => {
     expect(backend.closed).toBe(true);
   });
 
+  it("fails closed when durable Tauri adapters are not injected", async () => {
+    const services = await createTauriMeshNodeServices({
+      profile: profile(),
+      rolloutFlags,
+      nativeTransport: nativeTransport({ manifest: readyDesktopShareManifest() }),
+    });
+
+    expect(services).toMatchObject({
+      enabled: false,
+      reason: "durable_store_unavailable",
+    });
+  });
+
   it("keeps native tools hidden by default until an explicit export policy shares them", async () => {
     const defaultServices = await createEnabledServices();
     const defaultVisibility = await toolingVisibility(defaultServices);

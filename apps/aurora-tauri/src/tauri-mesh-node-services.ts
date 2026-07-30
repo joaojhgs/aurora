@@ -41,7 +41,6 @@ import {
   type AuroraWebRtcRolloutFlags,
   type TauriNativeCapabilityTransport,
 } from "@aurora/ui";
-import { invoke } from "@tauri-apps/api/core";
 
 import { TauriEnvelopeCryptoPort, TauriSqliteLocalDataBackend } from "./local-data/index.js";
 import { createTauriInboundVerifierSecretStorage } from "./tauri-inbound-verifier-storage.js";
@@ -160,8 +159,15 @@ export async function createTauriMeshNodeServices(
     return disabled("native_tools_unavailable", { registry, registeredToolIds: [] });
   }
 
-  const invokeCommand = options.invokeCommand ?? invoke;
-  const backend = options.backend ?? new TauriSqliteLocalDataBackend({ invokeCommand });
+  const invokeCommand = options.invokeCommand;
+  const backend = options.backend
+    ?? (invokeCommand ? new TauriSqliteLocalDataBackend({ invokeCommand }) : null);
+  if (!backend) {
+    return disabled("durable_store_unavailable", {
+      registry,
+      registeredToolIds: registered.registered,
+    });
+  }
   let session: LocalDataSession;
   try {
     session = await backend.open(profile.id, localPeerId);
@@ -174,13 +180,23 @@ export async function createTauriMeshNodeServices(
   }
 
   try {
-    const crypto = options.crypto ?? new TauriEnvelopeCryptoPort({
-      profileId: profile.id,
-      localNodeId: localPeerId,
-      invokeCommand,
-    });
+    const crypto = options.crypto
+      ?? (invokeCommand
+        ? new TauriEnvelopeCryptoPort({
+            profileId: profile.id,
+            localNodeId: localPeerId,
+            invokeCommand,
+          })
+        : null);
+    const verifierSecretStorage = options.verifierSecretStorage
+      ?? (invokeCommand
+        ? createTauriInboundVerifierSecretStorage({ invoke: invokeCommand })
+        : null);
+    if (!crypto || !verifierSecretStorage) {
+      throw new Error("Tauri durable authority adapters are unavailable");
+    }
     const verifierStore = new SecureInboundCredentialVerifierStore({
-      storage: options.verifierSecretStorage ?? createTauriInboundVerifierSecretStorage({ invoke: invokeCommand }),
+      storage: verifierSecretStorage,
     });
     const grantRepository = new EncryptedPeerGrantRepository({
       metadataRepository: session.peerGrants,
