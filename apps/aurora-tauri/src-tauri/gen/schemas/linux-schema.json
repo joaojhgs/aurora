@@ -501,6 +501,12 @@
           "markdownDescription": "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately."
         },
         {
+          "description": "Allow the trusted Tauri shell to configure a narrow assistant provider, check redacted provider status, and complete assistant turns without returning provider secrets to WebView JavaScript.",
+          "type": "string",
+          "const": "aurora-assistant-provider",
+          "markdownDescription": "Allow the trusted Tauri shell to configure a narrow assistant provider, check redacted provider status, and complete assistant turns without returning provider secrets to WebView JavaScript."
+        },
+        {
           "description": "Allow audio bridge status checks for raw-audio permission UX without granting microphone capture, live streaming, or playback control.",
           "type": "string",
           "const": "aurora-audio-bridge",

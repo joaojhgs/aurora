@@ -4,7 +4,7 @@ use aes_gcm::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hmac::{Hmac, Mac};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -48,6 +48,9 @@ const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
 const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
+const ASSISTANT_PROVIDER_STORAGE_SERVICE: &str = "dev.aurora.desktop.assistant-provider";
+const ASSISTANT_PROVIDER_CONFIG_KEY: &str = "aurora.assistant.provider.openai-compatible.v1";
+const ASSISTANT_PROVIDER_KIND: &str = "openai-compatible";
 #[cfg(desktop)]
 const INBOUND_VERIFIER_STORAGE_SERVICE: &str = "dev.aurora.desktop.inbound-verifier";
 const INBOUND_VERIFIER_KEY_PREFIX: &str = "aurora.peer-host.inbound-verifier.v1";
@@ -256,6 +259,98 @@ struct ThinRoomSecretSetRequest {
 struct ThinRoomSecretGetRequest {
     #[serde(rename = "ref")]
     ref_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AssistantProviderConfigureRequest {
+    provider: Option<String>,
+    endpoint: Option<String>,
+    model: Option<String>,
+    api_key: Option<String>,
+    enabled: Option<bool>,
+    clear: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AssistantProviderStoredConfig {
+    provider: String,
+    endpoint: String,
+    model: String,
+    api_key: String,
+    enabled: bool,
+    updated_at_ms: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AssistantProviderStatus {
+    configured: bool,
+    enabled: bool,
+    provider: String,
+    endpoint: Option<String>,
+    model: Option<String>,
+    backend: String,
+    persisted: bool,
+    secrets_redacted: bool,
+    redacted_fields: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AssistantProviderCompleteRequest {
+    messages: Vec<AssistantProviderMessage>,
+    tools: Vec<AssistantProviderTool>,
+    max_tool_calls: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AssistantProviderMessage {
+    role: String,
+    content: String,
+    tool_call_id: Option<String>,
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AssistantProviderTool {
+    global_tool_id: String,
+    description: String,
+    args_schema: Value,
+    execution_location: String,
+}
+
+#[derive(Clone, Debug)]
+struct AssistantToolAlias {
+    global_tool_id: String,
+    alias: String,
+    execution_location: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+enum AssistantProviderCompleteResponse {
+    #[serde(rename = "message")]
+    Message { content: String },
+    #[serde(rename = "tool_calls")]
+    ToolCalls {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        content: Option<String>,
+        tool_calls: Vec<AssistantProviderToolCall>,
+    },
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AssistantProviderToolCall {
+    id: String,
+    tool_name: String,
+    provider_tool_name: String,
+    arguments: Value,
+    route: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -2936,6 +3031,68 @@ async fn aurora_secure_storage_delete(
 }
 
 #[tauri::command]
+async fn aurora_assistant_provider_status() -> Result<AssistantProviderStatus, AuroraCommandError> {
+    let config = load_assistant_provider_config()?;
+    Ok(assistant_provider_status(config.as_ref()))
+}
+
+#[tauri::command]
+async fn aurora_assistant_provider_configure(
+    request: AssistantProviderConfigureRequest,
+) -> Result<AssistantProviderStatus, AuroraCommandError> {
+    if request.clear.unwrap_or(false) || request.enabled == Some(false) {
+        delete_assistant_provider_config()?;
+        return Ok(assistant_provider_status(None));
+    }
+    let config = validate_assistant_provider_config(request)?;
+    store_assistant_provider_config(&config)?;
+    Ok(assistant_provider_status(Some(&config)))
+}
+
+#[tauri::command]
+async fn aurora_assistant_provider_complete(
+    request: AssistantProviderCompleteRequest,
+) -> Result<AssistantProviderCompleteResponse, AuroraCommandError> {
+    let config = load_assistant_provider_config()?
+        .filter(|config| config.enabled)
+        .ok_or_else(|| {
+            AuroraCommandError::UnsupportedFeature(
+                "assistant provider is not configured".to_string(),
+            )
+        })?;
+    validate_assistant_provider_request(&request)?;
+    let aliases = assistant_tool_aliases(&request.tools)?;
+    let body = assistant_provider_openai_body(&config, &request, &aliases)?;
+    let response = reqwest::Client::new()
+        .post(&config.endpoint)
+        .header(CONTENT_TYPE, "application/json")
+        .header(AUTHORIZATION, format!("Bearer {}", config.api_key))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| {
+            AuroraCommandError::Gateway(format!(
+                "assistant provider request failed: {}",
+                redact_sensitive_text(&error.to_string())
+            ))
+        })?;
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
+    validate_assistant_provider_text_bound(&text, 256 * 1024, "assistant provider response")?;
+    if !status.is_success() {
+        return Err(AuroraCommandError::Gateway(format!(
+            "assistant provider returned HTTP {status}"
+        )));
+    }
+    let raw: Value =
+        serde_json::from_str(&text).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+    parse_assistant_provider_response(&raw, &aliases)
+}
+
+#[tauri::command]
 async fn aurora_local_data_envelope_encrypt(
     request: LocalDataEnvelopeEncryptRequest,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
@@ -4365,6 +4522,440 @@ fn inbound_verifier_storage_delete<B: InboundVerifierStorageBackend>(
 fn raw_secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
     keyring::Entry::new(SECURE_STORAGE_SERVICE, key)
         .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+#[cfg(desktop)]
+fn assistant_provider_storage_entry() -> Result<keyring::Entry, AuroraCommandError> {
+    keyring::Entry::new(
+        ASSISTANT_PROVIDER_STORAGE_SERVICE,
+        ASSISTANT_PROVIDER_CONFIG_KEY,
+    )
+    .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+fn load_assistant_provider_config(
+) -> Result<Option<AssistantProviderStoredConfig>, AuroraCommandError> {
+    #[cfg(desktop)]
+    {
+        let entry = assistant_provider_storage_entry()?;
+        let value = match entry.get_password() {
+            Ok(value) => value,
+            Err(keyring::Error::NoEntry) => return Ok(None),
+            Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
+        };
+        let config: AssistantProviderStoredConfig =
+            serde_json::from_str(&value).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+        validate_assistant_provider_stored_config(&config)?;
+        Ok(Some(config))
+    }
+    #[cfg(not(desktop))]
+    {
+        Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider keychain is only available on trusted desktop Tauri targets"
+                .to_string(),
+        ))
+    }
+}
+
+fn store_assistant_provider_config(
+    config: &AssistantProviderStoredConfig,
+) -> Result<(), AuroraCommandError> {
+    #[cfg(desktop)]
+    {
+        let serialized = serde_json::to_string(config)
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+        assistant_provider_storage_entry()?
+            .set_password(&serialized)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = config;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider keychain is only available on trusted desktop Tauri targets"
+                .to_string(),
+        ))
+    }
+}
+
+fn delete_assistant_provider_config() -> Result<(), AuroraCommandError> {
+    #[cfg(desktop)]
+    {
+        match assistant_provider_storage_entry()?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+        }
+    }
+    #[cfg(not(desktop))]
+    {
+        Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider keychain is only available on trusted desktop Tauri targets"
+                .to_string(),
+        ))
+    }
+}
+
+fn assistant_provider_status(
+    config: Option<&AssistantProviderStoredConfig>,
+) -> AssistantProviderStatus {
+    AssistantProviderStatus {
+        configured: config.is_some(),
+        enabled: config.is_some_and(|item| item.enabled),
+        provider: ASSISTANT_PROVIDER_KIND.to_string(),
+        endpoint: config.map(|item| item.endpoint.clone()),
+        model: config.map(|item| item.model.clone()),
+        backend: "platform-keychain".to_string(),
+        persisted: config.is_some(),
+        secrets_redacted: true,
+        redacted_fields: vec!["apiKey".to_string()],
+    }
+}
+
+fn validate_assistant_provider_config(
+    request: AssistantProviderConfigureRequest,
+) -> Result<AssistantProviderStoredConfig, AuroraCommandError> {
+    let provider = request
+        .provider
+        .unwrap_or_else(|| ASSISTANT_PROVIDER_KIND.to_string());
+    if provider != ASSISTANT_PROVIDER_KIND {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider supports only openai-compatible endpoints".to_string(),
+        ));
+    }
+    let endpoint = request.endpoint.ok_or_else(|| {
+        AuroraCommandError::UnsupportedFeature(
+            "assistant provider endpoint is required".to_string(),
+        )
+    })?;
+    validate_assistant_provider_endpoint(&endpoint)?;
+    let model = request.model.ok_or_else(|| {
+        AuroraCommandError::UnsupportedFeature("assistant provider model is required".to_string())
+    })?;
+    validate_assistant_provider_token("model", &model, 128)?;
+    let api_key = request.api_key.ok_or_else(|| {
+        AuroraCommandError::UnsupportedFeature("assistant provider API key is required".to_string())
+    })?;
+    validate_assistant_provider_secret(&api_key)?;
+    let config = AssistantProviderStoredConfig {
+        provider,
+        endpoint,
+        model,
+        api_key,
+        enabled: request.enabled.unwrap_or(true),
+        updated_at_ms: current_unix_ms(),
+    };
+    validate_assistant_provider_stored_config(&config)?;
+    Ok(config)
+}
+
+fn validate_assistant_provider_stored_config(
+    config: &AssistantProviderStoredConfig,
+) -> Result<(), AuroraCommandError> {
+    if config.provider != ASSISTANT_PROVIDER_KIND {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider configuration is not supported".to_string(),
+        ));
+    }
+    validate_assistant_provider_endpoint(&config.endpoint)?;
+    validate_assistant_provider_token("model", &config.model, 128)?;
+    validate_assistant_provider_secret(&config.api_key)
+}
+
+fn validate_assistant_provider_endpoint(endpoint: &str) -> Result<(), AuroraCommandError> {
+    validate_assistant_provider_text_bound(endpoint, 2_048, "assistant provider endpoint")?;
+    let url = Url::parse(endpoint).map_err(|_| {
+        AuroraCommandError::UnsupportedFeature("assistant provider endpoint is invalid".to_string())
+    })?;
+    if url.host_str().is_none() || !has_explicit_url_authority(endpoint) {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider endpoint must include a host".to_string(),
+        ));
+    }
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" if is_loopback_host(&url) => Ok(()),
+        _ => Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider endpoint must use HTTPS or loopback HTTP".to_string(),
+        )),
+    }
+}
+
+fn validate_assistant_provider_secret(secret: &str) -> Result<(), AuroraCommandError> {
+    validate_assistant_provider_text_bound(secret, 8_192, "assistant provider API key")?;
+    if secret.trim().is_empty() || secret.chars().any(char::is_control) {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider API key is invalid".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_assistant_provider_token(
+    label: &str,
+    value: &str,
+    max_len: usize,
+) -> Result<(), AuroraCommandError> {
+    validate_assistant_provider_text_bound(value, max_len, label)?;
+    if value.trim().is_empty() || value.chars().any(char::is_control) {
+        return Err(AuroraCommandError::UnsupportedFeature(format!(
+            "{label} is invalid"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_assistant_provider_text_bound(
+    value: &str,
+    max_len: usize,
+    label: &str,
+) -> Result<(), AuroraCommandError> {
+    if value.is_empty() || value.len() > max_len {
+        return Err(AuroraCommandError::UnsupportedFeature(format!(
+            "{label} must be between 1 and {max_len} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_assistant_provider_request(
+    request: &AssistantProviderCompleteRequest,
+) -> Result<(), AuroraCommandError> {
+    if request.messages.is_empty() || request.messages.len() > 40 {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider message count is outside the allowed range".to_string(),
+        ));
+    }
+    if request.tools.len() > 32 {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider tool count is outside the allowed range".to_string(),
+        ));
+    }
+    for message in &request.messages {
+        match message.role.as_str() {
+            "system" | "user" | "assistant" | "tool" => {}
+            _ => {
+                return Err(AuroraCommandError::UnsupportedFeature(
+                    "assistant provider message role is unsupported".to_string(),
+                ))
+            }
+        }
+        validate_assistant_provider_text_bound(&message.content, 64 * 1024, "assistant message")?;
+        if let Some(name) = &message.name {
+            validate_assistant_provider_token("assistant message name", name, 128)?;
+        }
+        if let Some(tool_call_id) = &message.tool_call_id {
+            validate_assistant_provider_token("assistant tool call id", tool_call_id, 128)?;
+        }
+    }
+    for tool in &request.tools {
+        validate_assistant_provider_token("tool id", &tool.global_tool_id, 512)?;
+        validate_assistant_provider_text_bound(&tool.description, 8 * 1024, "tool description")?;
+        match tool.execution_location.as_str() {
+            "local" | "remote" => {}
+            _ => {
+                return Err(AuroraCommandError::UnsupportedFeature(
+                    "tool execution location is unsupported".to_string(),
+                ))
+            }
+        }
+    }
+    let serialized =
+        serde_json::to_string(request).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+    validate_assistant_provider_text_bound(&serialized, 128 * 1024, "assistant provider request")
+}
+
+fn assistant_provider_openai_body(
+    config: &AssistantProviderStoredConfig,
+    request: &AssistantProviderCompleteRequest,
+    aliases: &HashMap<String, AssistantToolAlias>,
+) -> Result<Value, AuroraCommandError> {
+    let messages: Vec<Value> = request
+        .messages
+        .iter()
+        .map(|message| {
+            let mut object = serde_json::Map::new();
+            object.insert("role".to_string(), json!(message.role));
+            object.insert("content".to_string(), json!(message.content));
+            if let Some(tool_call_id) = &message.tool_call_id {
+                object.insert("tool_call_id".to_string(), json!(tool_call_id));
+            }
+            if let Some(name) = &message.name {
+                object.insert("name".to_string(), json!(name));
+            }
+            Value::Object(object)
+        })
+        .collect();
+    let tools: Vec<Value> = request
+        .tools
+        .iter()
+        .map(|tool| {
+            let alias = aliases
+                .get(&tool.global_tool_id)
+                .ok_or_else(|| AuroraCommandError::InvalidGatewayResponse)?;
+            Ok(json!({
+                "type": "function",
+                "function": {
+                    "name": alias.alias,
+                    "description": tool.description,
+                    "parameters": tool.args_schema
+                }
+            }))
+        })
+        .collect::<Result<Vec<_>, AuroraCommandError>>()?;
+    Ok(json!({
+        "model": config.model,
+        "messages": messages,
+        "tools": tools,
+        "tool_choice": "auto",
+        "parallel_tool_calls": false
+    }))
+}
+
+fn assistant_tool_aliases(
+    tools: &[AssistantProviderTool],
+) -> Result<HashMap<String, AssistantToolAlias>, AuroraCommandError> {
+    let mut by_global = HashMap::new();
+    let mut by_alias = HashMap::new();
+    for tool in tools {
+        let alias = openai_tool_alias(&tool.global_tool_id)?;
+        if let Some(existing) = by_alias.get(&alias) {
+            if existing != &tool.global_tool_id {
+                return Err(AuroraCommandError::UnsupportedFeature(
+                    "assistant provider tool alias collision".to_string(),
+                ));
+            }
+        }
+        by_alias.insert(alias.clone(), tool.global_tool_id.clone());
+        by_global.insert(
+            tool.global_tool_id.clone(),
+            AssistantToolAlias {
+                global_tool_id: tool.global_tool_id.clone(),
+                alias,
+                execution_location: tool.execution_location.clone(),
+            },
+        );
+    }
+    Ok(by_global)
+}
+
+fn parse_assistant_provider_response(
+    raw: &Value,
+    aliases: &HashMap<String, AssistantToolAlias>,
+) -> Result<AssistantProviderCompleteResponse, AuroraCommandError> {
+    let by_alias: HashMap<String, AssistantToolAlias> = aliases
+        .values()
+        .map(|alias| (alias.alias.clone(), alias.clone()))
+        .collect();
+    let message = raw
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .ok_or(AuroraCommandError::InvalidGatewayResponse)?;
+    let content = message
+        .get("content")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let Some(tool_calls) = message.get("tool_calls") else {
+        return Ok(AssistantProviderCompleteResponse::Message { content });
+    };
+    let tool_calls = tool_calls
+        .as_array()
+        .ok_or(AuroraCommandError::InvalidGatewayResponse)?
+        .iter()
+        .map(|tool_call| parse_assistant_tool_call(tool_call, &by_alias))
+        .collect::<Result<Vec<_>, AuroraCommandError>>()?;
+    Ok(AssistantProviderCompleteResponse::ToolCalls {
+        content: Some(content),
+        tool_calls,
+    })
+}
+
+fn parse_assistant_tool_call(
+    raw: &Value,
+    aliases: &HashMap<String, AssistantToolAlias>,
+) -> Result<AssistantProviderToolCall, AuroraCommandError> {
+    let id = raw
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or(AuroraCommandError::InvalidGatewayResponse)?
+        .to_string();
+    let function = raw
+        .get("function")
+        .and_then(Value::as_object)
+        .ok_or(AuroraCommandError::InvalidGatewayResponse)?;
+    let provider_tool_name = function
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or(AuroraCommandError::InvalidGatewayResponse)?
+        .to_string();
+    let arguments_text = function
+        .get("arguments")
+        .and_then(Value::as_str)
+        .ok_or(AuroraCommandError::InvalidGatewayResponse)?;
+    let arguments: Value = serde_json::from_str(arguments_text)
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+    if !arguments.is_object() {
+        return Err(AuroraCommandError::InvalidGatewayResponse);
+    }
+    let alias = aliases.get(&provider_tool_name);
+    Ok(AssistantProviderToolCall {
+        id,
+        tool_name: alias
+            .map(|item| item.global_tool_id.clone())
+            .unwrap_or_else(|| provider_tool_name.clone()),
+        provider_tool_name,
+        arguments,
+        route: alias
+            .map(|item| item.execution_location.clone())
+            .unwrap_or_else(|| "remote".to_string()),
+    })
+}
+
+fn openai_tool_alias(global_tool_id: &str) -> Result<String, AuroraCommandError> {
+    let suffix = stable_fnv1a_hash(global_tool_id);
+    let mut previous_was_underscore = false;
+    let mut base = String::new();
+    for ch in global_tool_id.chars() {
+        let next = if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+            ch
+        } else {
+            '_'
+        };
+        if next == '_' {
+            if previous_was_underscore {
+                continue;
+            }
+            previous_was_underscore = true;
+        } else {
+            previous_was_underscore = false;
+        }
+        base.push(next);
+    }
+    let base = base.trim_matches('_');
+    let base = if base.is_empty() { "tool" } else { base };
+    let prefix: String = base.chars().take(55).collect();
+    let alias = format!("{prefix}_{suffix}");
+    if alias.len() > 64
+        || !alias
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+    {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider generated an unsafe tool alias".to_string(),
+        ));
+    }
+    Ok(alias)
+}
+
+fn stable_fnv1a_hash(value: &str) -> String {
+    let mut hash = 0x811c9dc5_u32;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    format!("{hash:08x}")
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -6462,6 +7053,9 @@ pub fn run() {
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
+            aurora_assistant_provider_status,
+            aurora_assistant_provider_configure,
+            aurora_assistant_provider_complete,
             aurora_local_data_open,
             aurora_local_data_status,
             aurora_local_data_close,
@@ -7153,6 +7747,114 @@ mod tests {
         assert!(build_script.contains(".with_package(\"AuroraNativePlugin\""));
         assert!(build_script.contains("emit_ios_swift_package_link_search_hints"));
         assert!(build_script.contains("apple-ios-simulator"));
+    }
+
+    #[test]
+    fn assistant_provider_validation_requires_https_or_loopback_and_redacts_status() {
+        let config = validate_assistant_provider_config(AssistantProviderConfigureRequest {
+            provider: Some(ASSISTANT_PROVIDER_KIND.to_string()),
+            endpoint: Some("https://llm.example/v1/chat/completions".to_string()),
+            model: Some("model-a".to_string()),
+            api_key: Some("sk-secret-value".to_string()),
+            enabled: None,
+            clear: None,
+        })
+        .unwrap();
+        assert_eq!(config.provider, ASSISTANT_PROVIDER_KIND);
+
+        let status = assistant_provider_status(Some(&config));
+        assert!(status.configured);
+        assert!(status.enabled);
+        assert!(status.secrets_redacted);
+        assert_eq!(status.redacted_fields, vec!["apiKey".to_string()]);
+
+        assert!(
+            validate_assistant_provider_endpoint("http://127.0.0.1:11434/v1/chat/completions")
+                .is_ok()
+        );
+        assert!(
+            validate_assistant_provider_endpoint("http://llm.example/v1/chat/completions").is_err()
+        );
+    }
+
+    #[test]
+    fn assistant_provider_openai_aliases_match_sdk_shape() {
+        assert_eq!(
+            openai_tool_alias("global:native.get_device_status").unwrap(),
+            "global_native_get_device_status_75d27037"
+        );
+        let tools = vec![AssistantProviderTool {
+            global_tool_id: "global:native.get_device_status".to_string(),
+            description: "Get status".to_string(),
+            args_schema: json!({"type": "object", "additionalProperties": false}),
+            execution_location: "local".to_string(),
+        }];
+        let aliases = assistant_tool_aliases(&tools).unwrap();
+        let body = assistant_provider_openai_body(
+            &AssistantProviderStoredConfig {
+                provider: ASSISTANT_PROVIDER_KIND.to_string(),
+                endpoint: "https://llm.example/v1/chat/completions".to_string(),
+                model: "model-a".to_string(),
+                api_key: "sk-secret".to_string(),
+                enabled: true,
+                updated_at_ms: 1,
+            },
+            &AssistantProviderCompleteRequest {
+                messages: vec![AssistantProviderMessage {
+                    role: "user".to_string(),
+                    content: "status".to_string(),
+                    tool_call_id: None,
+                    name: None,
+                }],
+                tools,
+                max_tool_calls: Some(4),
+            },
+            &aliases,
+        )
+        .unwrap();
+        assert_eq!(
+            body["tools"][0]["function"]["name"],
+            json!("global_native_get_device_status_75d27037")
+        );
+        assert!(!body.to_string().contains("sk-secret"));
+    }
+
+    #[test]
+    fn assistant_provider_response_normalizes_tool_calls_without_secrets() {
+        let tools = vec![AssistantProviderTool {
+            global_tool_id: "global:native.get_device_status".to_string(),
+            description: "Get status".to_string(),
+            args_schema: json!({"type": "object", "additionalProperties": false}),
+            execution_location: "local".to_string(),
+        }];
+        let aliases = assistant_tool_aliases(&tools).unwrap();
+        let raw = json!({
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                            "id": "call-1",
+                        "function": {
+                            "name": "global_native_get_device_status_75d27037",
+                            "arguments": "{}"
+                        }
+                    }]
+                }
+            }]
+        });
+
+        let parsed = parse_assistant_provider_response(&raw, &aliases).unwrap();
+        match parsed {
+            AssistantProviderCompleteResponse::ToolCalls { tool_calls, .. } => {
+                assert_eq!(tool_calls[0].tool_name, "global:native.get_device_status");
+                assert_eq!(
+                    tool_calls[0].provider_tool_name,
+                    "global_native_get_device_status_75d27037"
+                );
+                assert_eq!(tool_calls[0].route, "local");
+            }
+            AssistantProviderCompleteResponse::Message { .. } => panic!("expected tool calls"),
+        }
     }
 
     #[test]

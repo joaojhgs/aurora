@@ -17,6 +17,7 @@
     "aurora-inbound-verifier-storage",
     "aurora-local-data-storage",
     "aurora-local-data-envelope-crypto",
+    "aurora-assistant-provider",
     "aurora-native-webrtc",
     "aurora-tray",
     "aurora-notifications",
