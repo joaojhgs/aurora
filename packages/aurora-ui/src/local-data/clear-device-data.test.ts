@@ -143,6 +143,41 @@ describe('clearBrowserDeviceData', () => {
     ])
     expect(indexedDB.databases.has(envelopeDatabaseName)).toBe(true)
   })
+
+  it('returns structured failures when default browser metadata storage is unavailable', async () => {
+    const indexedDB = new MemoryIndexedDbFactory()
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new DOMException('storage blocked', 'SecurityError')
+      },
+    })
+    try {
+      const result = await clearBrowserDeviceData({
+        profileId,
+        localNodeId,
+        origin,
+        indexedDB: indexedDB as unknown as IDBFactory,
+        storageManager: new FakeOpfsRoot().storageManager,
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.failures).toEqual([
+        expect.objectContaining({
+          step: 'backend-pointer',
+          ok: false,
+          reason: 'backend pointer store unavailable',
+        }),
+      ])
+    } finally {
+      if (descriptor === undefined) {
+        Reflect.deleteProperty(globalThis, 'localStorage')
+      } else {
+        Object.defineProperty(globalThis, 'localStorage', descriptor)
+      }
+    }
+  })
 })
 
 async function seedLocalDataDocument(indexedDB: MemoryIndexedDbFactory): Promise<void> {

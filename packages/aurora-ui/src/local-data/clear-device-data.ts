@@ -191,10 +191,18 @@ async function removeBrowserSqliteOpfsNodeDirectory(
 function defaultPointerStore(
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null | undefined,
 ): BrowserLocalDataBackendPointerStore | null {
-  const selected = storage === undefined ? globalThis.localStorage : storage
+  const selected = storage === undefined ? browserLocalStorage() : storage
   return selected === null || selected === undefined
     ? null
     : new LocalStorageBrowserLocalDataBackendPointerStore({ storage: selected })
+}
+
+function browserLocalStorage(): (Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) | null {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
 }
 
 function requireIndexedDb(indexedDB: IDBFactory | undefined): asserts indexedDB is IDBFactory {
