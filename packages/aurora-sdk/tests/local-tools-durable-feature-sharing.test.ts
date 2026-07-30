@@ -1,0 +1,405 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import {
+  type EncryptedDataEnvelopeV1,
+  type EnvelopeCryptoPort,
+  type LocalDataKeyPurpose,
+  type LocalToolStateRecord,
+  MemoryLocalDataBackend,
+  type LocalDataSession
+} from '../src/local-data/index.js'
+import {
+  EncryptedPeerGrantRepository,
+  MemoryInboundCredentialVerifierStore,
+  PeerPairingIssuer,
+  type PeerRelationshipSelector
+} from '../src/peer-host/index.js'
+import { PeerGrantManager } from '../src/peer-host/grant-management.js'
+import {
+  DurableFeatureSharingController,
+  DurableFeatureSharingError,
+  TrackingPeerPairingIssuer,
+  type LocalFeatureSharingSnapshot
+} from '../src/local-tools/durable-feature-sharing.js'
+import {
+  LocalToolRegistry,
+  MESH_NODE_TOOLING_METHOD_IDS,
+  type LocalToolDescriptorV1
+} from '../src/local-tools/index.js'
+
+const profileId = 'profile-1'
+const localNodeId = 'provider'
+const roomName = 'room-a'
+
+const selector: PeerRelationshipSelector = {
+  tokenId: 'token-1',
+  claimantPeerId: 'peer-a',
+  verifierPeerId: localNodeId,
+  roomName
+}
+
+const secondSelector: PeerRelationshipSelector = {
+  ...selector,
+  tokenId: 'token-2'
+}
+
+const descriptor: LocalToolDescriptorV1 = {
+  version: 1,
+  toolContractId: 'aurora.local.native.share_text.v1',
+  localName: 'native.share_text',
+  displayName: 'Share text',
+  description: 'Share selected text.',
+  argsSchema: {
+    type: 'object',
+    properties: { text: { type: 'string', minLength: 1 } },
+    required: ['text'],
+    additionalProperties: false
+  },
+  outputSchema: {
+    type: 'object',
+    properties: { shared: { type: 'boolean' } },
+    required: ['shared'],
+    additionalProperties: false
+  },
+  argumentVisibility: { text: 'public' },
+  requiredPermissions: ['Native.ShareText'],
+  resourceScopes: ['native.share'],
+  safetyClass: 'sensitive',
+  privacyClass: 'personal',
+  mutating: true,
+  dataEgress: true,
+  nativeRequirements: { capabilityIds: ['aurora.browser.share'], osPermissions: ['share'] },
+  confirmationPolicy: 'sensitive',
+  handlerId: 'native.share_text'
+}
+
+const statusDescriptor: LocalToolDescriptorV1 = {
+  ...descriptor,
+  toolContractId: 'aurora.local.native.get_device_status.v1',
+  localName: 'native.get_device_status',
+  displayName: 'Get device status',
+  description: 'Return local device availability.',
+  argsSchema: { type: 'object', properties: {}, additionalProperties: false },
+  outputSchema: { type: 'object', properties: { online: { type: 'boolean' } }, required: ['online'], additionalProperties: false },
+  argumentVisibility: {},
+  requiredPermissions: ['Native.GetDeviceStatus'],
+  resourceScopes: [],
+  safetyClass: 'standard',
+  mutating: false,
+  dataEgress: false,
+  nativeRequirements: { capabilityIds: ['aurora.device.status'], osPermissions: [] },
+  confirmationPolicy: 'never',
+  handlerId: 'native.get_device_status'
+}
+
+describe('durable local feature sharing controller', () => {
+  it('denies synchronously before load and defaults registered features off', async () => {
+    const fixture = await controllerFixture()
+    const [tool] = fixture.registry.publicTools()
+
+    expect(fixture.controller.isShared(tool!, projectionContext())).toBe(false)
+    const snapshot = await fixture.controller.load()
+    expect(feature(snapshot, descriptor.toolContractId)).toMatchObject({
+      id: descriptor.toolContractId,
+      enabled: false,
+      label: 'Share text',
+      requiresAuroraOpen: true,
+      requiresLocalConfirmation: true,
+      permissionNeeded: true,
+      nativeCapabilityIds: ['aurora.browser.share'],
+      nativePermissionIds: ['share']
+    })
+    expect(snapshot.approvedDevices).toEqual([])
+    expect(fixture.controller.isShared(tool!, projectionContext())).toBe(false)
+  })
+
+  it('persists local feature state and reloads it durably', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+
+    const seen: LocalFeatureSharingSnapshot[] = []
+    const unsubscribe = fixture.controller.subscribe((snapshot) => seen.push(snapshot))
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    unsubscribe()
+
+    expect(seen).toHaveLength(2)
+    expect(feature(seen.at(-1)!, descriptor.toolContractId)).toMatchObject({ enabled: true })
+    expect(await fixture.session.localTools.listLocalToolStates()).toEqual([
+      expect.objectContaining({
+        profileId,
+        localNodeId,
+        toolContractId: descriptor.toolContractId,
+        enabled: true,
+        revision: 1,
+        descriptorHash: expect.stringMatching(/^[a-f0-9]{64}$/u)
+      })
+    ])
+
+    const reloaded = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, fixture.grantManager))
+    expect(feature(await reloaded.load(), descriptor.toolContractId)).toMatchObject({ enabled: true })
+  })
+
+  it('does not mutate memory when a durable local-tool write fails', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    const original = fixture.session.localTools.upsertLocalToolState.bind(fixture.session.localTools)
+    ;(fixture.session.localTools as unknown as { upsertLocalToolState: typeof fixture.session.localTools.upsertLocalToolState }).upsertLocalToolState = async () => {
+      throw new Error('write failed')
+    }
+    const controller = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, fixture.grantManager))
+    await controller.load()
+
+    await expect(controller.setFeatureEnabled(descriptor.toolContractId, true)).rejects.toMatchObject({
+      code: 'storage_unavailable'
+    })
+    ;(fixture.session.localTools as unknown as { upsertLocalToolState: typeof fixture.session.localTools.upsertLocalToolState }).upsertLocalToolState = original
+    expect(feature(await controller.load(), descriptor.toolContractId)).toMatchObject({ enabled: false })
+  })
+
+  it('tracks pairing only after successful durable issue and exposes no selector material in snapshots', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const issuer = new TrackingPeerPairingIssuer({
+      delegate: new PeerPairingIssuer({
+        verifierStore: new MemoryInboundCredentialVerifierStore(),
+        randomBytes: () => new Uint8Array(32).fill(8),
+        now: () => 100
+      }),
+      registry: fixture.controller,
+      labelForSelector: () => 'Phone'
+    })
+
+    await expect(issuer.issue(selector)).resolves.toMatchObject({ tokenId: selector.tokenId })
+    const snapshot = await fixture.controller.load()
+
+    expect(snapshot.approvedDevices).toEqual([
+      { peerId: selector.claimantPeerId, peerLabel: 'Phone', featureIds: [], expiresAtMs: null }
+    ])
+    expect(JSON.stringify(snapshot)).not.toMatch(/token-1|room-a|verifier|provider/u)
+
+    const failingIssuer = new TrackingPeerPairingIssuer({
+      delegate: { issue: async () => { throw new Error('persistence failed') } },
+      registry: fixture.controller
+    })
+    await expect(failingIssuer.issue({ ...selector, claimantPeerId: 'peer-b', tokenId: 'token-b' })).rejects.toThrow(/persistence/u)
+    expect((await fixture.controller.load()).approvedDevices.map((peer) => peer.peerId)).toEqual(['peer-a'])
+  })
+
+  it('validates enabled registered features and writes exact grant contents and expiry', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    fixture.controller.registerTrustedRelationship(selector, 'Phone')
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+
+    await expect(fixture.controller.replacePeerSharing(selector.claimantPeerId, ['unknown'], 2_000)).rejects.toMatchObject({
+      code: 'invalid_feature'
+    })
+    await expect(fixture.controller.replacePeerSharing(selector.claimantPeerId, [statusDescriptor.toolContractId], 2_000)).rejects.toMatchObject({
+      code: 'feature_disabled'
+    })
+    await fixture.controller.replacePeerSharing(selector.claimantPeerId, [descriptor.toolContractId], 2_000)
+
+    const grants = await fixture.grantManager.listActiveGrants(selector)
+    expect(grants).toEqual([
+      expect.objectContaining({
+        claimantPeerId: selector.claimantPeerId,
+        allowedMethodIds: [...MESH_NODE_TOOLING_METHOD_IDS].sort(),
+        allowedToolContractIds: [descriptor.toolContractId],
+        capabilityPackIds: ['aurora.browser.share'],
+        resourceScopes: ['native.share'],
+        expiresAtMs: 2_000,
+        secretFieldsRedacted: true
+      })
+    ])
+    expect(fixture.controller.isShared(publicTool(fixture.registry, descriptor.toolContractId), projectionContext())).toBe(true)
+  })
+
+  it('revokes sharing without revoking the credential relationship', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    fixture.controller.registerTrustedRelationship(selector, 'Phone')
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    await fixture.controller.replacePeerSharing(selector.claimantPeerId, [descriptor.toolContractId], null)
+
+    await fixture.controller.revokePeerSharing(selector.claimantPeerId)
+
+    await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
+    await expect(fixture.controller.load()).resolves.toMatchObject({
+      approvedDevices: [{ peerId: selector.claimantPeerId, peerLabel: 'Phone', featureIds: [], expiresAtMs: null }]
+    })
+  })
+
+  it('rehydrates selectors only from validated encrypted grant metadata', async () => {
+    const fixture = await controllerFixture()
+    await fixture.repository.upsertGrant({
+      version: 1,
+      grantId: 'grant-1',
+      ...selector,
+      allowedMethodIds: MESH_NODE_TOOLING_METHOD_IDS,
+      allowedToolContractIds: [descriptor.toolContractId],
+      capabilityPackIds: ['aurora.browser.share'],
+      resourceScopes: ['native.share'],
+      createdAtMs: 1_000,
+      expiresAtMs: 5_000,
+      grantRevision: 1
+    })
+    await fixture.session.peerGrants.upsertPeerGrant({
+      ...(await fixture.session.peerGrants.listPeerGrants())[0]!,
+      grantId: 'unvalidated-metadata',
+      tokenId: 'token-no-active-grant',
+      claimantPeerId: 'peer-z'
+    })
+    await fixture.session.localTools.upsertLocalToolState({
+      profileId,
+      localNodeId,
+      toolContractId: descriptor.toolContractId,
+      descriptorJson: fixture.registry.resolvePublicId(descriptor.toolContractId)!.publicDescriptor as unknown as LocalToolStateRecord['descriptorJson'],
+      descriptorHash: fixture.registry.resolvePublicId(descriptor.toolContractId)!.descriptorHash,
+      enabled: true,
+      settingsEnvelope: null,
+      revision: 1,
+      updatedAtMs: 1_000
+    })
+
+    const reloaded = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, fixture.grantManager))
+    const snapshot = await reloaded.load()
+
+    expect(snapshot.approvedDevices).toEqual([
+      { peerId: selector.claimantPeerId, peerLabel: selector.claimantPeerId, featureIds: [descriptor.toolContractId], expiresAtMs: 5_000 }
+    ])
+    expect(JSON.stringify(snapshot)).not.toMatch(/token|room-a|provider|verifier/u)
+  })
+
+  it('fails closed for ambiguous peer selectors and returns product-safe errors', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    fixture.controller.registerTrustedRelationship(selector, 'Phone')
+    fixture.controller.registerTrustedRelationship(secondSelector, 'Phone')
+
+    await expect(fixture.controller.replacePeerSharing(selector.claimantPeerId, [descriptor.toolContractId], null)).rejects.toMatchObject({
+      code: 'ambiguous_peer',
+      message: 'This device cannot be changed right now'
+    })
+    await expect(fixture.controller.revokePeerSharing(selector.claimantPeerId)).rejects.toBeInstanceOf(DurableFeatureSharingError)
+  })
+
+  it('sends immutable cloned snapshots to subscribers', async () => {
+    const fixture = await controllerFixture()
+    await fixture.controller.load()
+    const listener = vi.fn((snapshot: LocalFeatureSharingSnapshot) => {
+      ;(snapshot.features as unknown as Array<{ enabled: boolean }>)[0]!.enabled = true
+    })
+    fixture.controller.subscribe(listener)
+
+    const snapshot = await fixture.controller.load()
+
+    expect(listener).toHaveBeenCalled()
+    expect(snapshot.features[0]?.enabled).toBe(false)
+  })
+})
+
+function feature(snapshot: LocalFeatureSharingSnapshot, id: string) {
+  const item = snapshot.features.find((candidate) => candidate.id === id)
+  if (!item) throw new Error(`missing feature ${id}`)
+  return item
+}
+
+function publicTool(registry: LocalToolRegistry, id: string) {
+  const item = registry.publicTools().find((tool) => tool.tool_contract_id === id)
+  if (!item) throw new Error(`missing public tool ${id}`)
+  return item
+}
+
+async function controllerFixture() {
+  const backend = new MemoryLocalDataBackend()
+  const session = await backend.open(profileId, localNodeId)
+  const registry = new LocalToolRegistry({ stablePeerId: localNodeId })
+  registry.register({ descriptor, handler: () => ({ shared: true }) })
+  registry.register({ descriptor: statusDescriptor, handler: () => ({ online: true }) })
+  const crypto = new RecordingEnvelopeCryptoPort()
+  const repository = new EncryptedPeerGrantRepository({
+    metadataRepository: session.peerGrants,
+    crypto,
+    profileId,
+    localNodeId
+  })
+  const grantManager = new PeerGrantManager({
+    repository,
+    now: () => 1_000,
+    randomId: () => 'grant-1'
+  })
+  const controller = new DurableFeatureSharingController(controllerOptions(session, registry, grantManager))
+  return { backend, session, registry, crypto, repository, grantManager, controller }
+}
+
+function controllerOptions(session: LocalDataSession, registry: LocalToolRegistry, grantManager: PeerGrantManager) {
+  return {
+    registry,
+    session,
+    grantManager,
+    localVerifierPeerId: localNodeId,
+    roomName,
+    now: () => 1_000
+  }
+}
+
+function projectionContext() {
+  return {
+    recipientPeerId: selector.claimantPeerId,
+    recipientPermissions: ['Tooling.GetTools', 'Tooling.ExecuteTool', 'Native.ShareText'],
+    authorityRevision: {
+      catalog_revision: 1,
+      export_policy_revision: 1,
+      auth_grant_revision: 1,
+      manifest_revision: 1,
+      switch_revision: 1,
+      protocol_revision: 1
+    },
+    providerEnabled: true,
+    serviceExported: true,
+    discoveryExported: true,
+    executionExported: true
+  }
+}
+
+class RecordingEnvelopeCryptoPort implements EnvelopeCryptoPort {
+  private readonly retained = new Map<string, { plaintext: Uint8Array; aad: string }>()
+  private counter = 0
+
+  async encrypt(keyPurpose: LocalDataKeyPurpose, plaintext: Uint8Array, aad: Uint8Array): Promise<EncryptedDataEnvelopeV1> {
+    expect(keyPurpose).toBe('local-structured-data')
+    this.counter += 1
+    const ciphertextAndTagB64Url = encodeBase64Url(new Uint8Array([this.counter, ...new Uint8Array(16).fill(7)]))
+    this.retained.set(ciphertextAndTagB64Url, {
+      plaintext: new Uint8Array(plaintext),
+      aad: new TextDecoder().decode(aad)
+    })
+    return {
+      version: 1,
+      algorithm: 'AES-GCM-256',
+      keyId: `test-key-${this.counter}`,
+      nonceB64Url: encodeBase64Url(new Uint8Array(12).fill(this.counter)),
+      ciphertextAndTagB64Url,
+      createdAtMs: 1_000 + this.counter
+    }
+  }
+
+  async decrypt(envelope: EncryptedDataEnvelopeV1, aad: Uint8Array): Promise<Uint8Array> {
+    const retained = this.retained.get(envelope.ciphertextAndTagB64Url)
+    if (retained === undefined) throw new Error('ciphertext not found')
+    if (retained.aad !== new TextDecoder().decode(aad)) throw new Error('aad mismatch')
+    return new Uint8Array(retained.plaintext)
+  }
+
+  async rotateKey(_keyPurpose: LocalDataKeyPurpose): Promise<{ previousKeyId: string; newKeyId: string }> {
+    return { previousKeyId: 'old', newKeyId: 'new' }
+  }
+}
+
+function encodeBase64Url(value: Uint8Array): string {
+  let binary = ''
+  for (const byte of value) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/u, '')
+}
