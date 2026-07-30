@@ -3,18 +3,22 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuroraError } from '@aurora/client'
+import type { BrowserMeshNodeServices } from './browser-mesh-node-services'
 import {
+  auroraBrowserMeshNodeCompositionStatus,
   auroraBrowserRequiresOnboarding,
   auroraBrowserRuntimeProfile,
   auroraBrowserRuntimeProfileDocument,
   auroraBrowserThinProfileDocument,
   createAuroraBrowserClient,
   createAuroraBrowserRuntime,
+  createAuroraBrowserRuntimeAsync,
   createAuroraWebClient,
   resetAuroraBrowserClientForTests,
   saveAuroraBrowserOnboardingProfile,
   saveAuroraBrowserRuntimeProfile,
   saveAuroraBrowserThinProfile,
+  setAuroraBrowserMeshNodeServicesFactoryForTests,
 } from './aurora-client'
 import { consumeFragmentInviteFromUrl } from './mesh/mesh-client'
 
@@ -336,6 +340,7 @@ describe('createAuroraBrowserClient', () => {
       runtimeTier: 'lightweight-ts',
       localNode: {
         stablePeerId: 'aurora-web-mesh-peer',
+        enabledCapabilityPacks: ['native-actions'],
         meshMembership: {
           signalingUrl: 'wss://signaling.example.invalid',
         },
@@ -345,6 +350,62 @@ describe('createAuroraBrowserClient', () => {
     expect(serialized).toContain('aurora.runtimeProfiles.v2')
     expect(serialized).not.toContain('mesh-room-secret')
     expect(serialized).not.toContain('aurora.webThin.connectionProfiles.v1')
+  })
+
+  it('activates mesh-node runtime from saved onboarding when composition gates are ready', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-ready')
+    const closeServices = vi.fn(async () => undefined)
+    const services = fakeMeshNodeServices(closeServices)
+    const factory = vi.fn(async () => services)
+    setAuroraBrowserMeshNodeServicesFactoryForTests(factory)
+
+    const runtime = await createAuroraBrowserRuntimeAsync()
+
+    expect(factory).toHaveBeenCalledTimes(1)
+    expect(auroraBrowserRuntimeProfile()?.localNode.enabledCapabilityPacks).toEqual(['native-actions'])
+    expect(runtime.features).toMatchObject({
+      requestedNodeRole: 'mesh-node',
+      activeNodeRole: 'mesh-node',
+      meshNodeRuntimeEnabled: true,
+      localToolProviderEnabled: true,
+      lightweightOrchestratorEnabled: true,
+    })
+    expect(auroraBrowserMeshNodeCompositionStatus()).toMatchObject({ state: 'ready' })
+    await runtime.close()
+    expect(closeServices).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesces async mesh composition and closes cached services exactly once', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-concurrent')
+    const closeServices = vi.fn(async () => undefined)
+    const services = fakeMeshNodeServices(closeServices)
+    let resolveServices!: (value: BrowserMeshNodeServices) => void
+    const factory = vi.fn(() => new Promise<BrowserMeshNodeServices>((resolve) => {
+      resolveServices = resolve
+    }))
+    setAuroraBrowserMeshNodeServicesFactoryForTests(factory)
+
+    const first = createAuroraBrowserRuntimeAsync()
+    const second = createAuroraBrowserRuntimeAsync()
+    expect(factory).toHaveBeenCalledTimes(1)
+    resolveServices(services)
+    const [firstRuntime, secondRuntime] = await Promise.all([first, second])
+
+    expect(firstRuntime).toBe(secondRuntime)
+    await firstRuntime.close()
+    await secondRuntime.close()
+    expect(closeServices).toHaveBeenCalledTimes(1)
+
+    const nextServices = fakeMeshNodeServices(vi.fn(async () => undefined))
+    factory.mockResolvedValueOnce(nextServices)
+    const nextRuntime = await createAuroraBrowserRuntimeAsync()
+    expect(nextRuntime).not.toBe(firstRuntime)
+    expect(factory).toHaveBeenCalledTimes(2)
+    await nextRuntime.close()
   })
 
   it('returns an empty v1 compatibility document for a valid mesh-only v2 profile', () => {
@@ -481,6 +542,53 @@ async function saveHttpThinProfile(gatewayUrl: string): Promise<void> {
     nodeName: 'Aurora Web',
     localStablePeerId: 'aurora-web-test-peer',
   })
+}
+
+async function saveMeshOnboardingProfile(id: string): Promise<void> {
+  await saveAuroraBrowserOnboardingProfile({
+    id,
+    label: 'Mesh onboarding',
+    mode: 'webrtc-only',
+    gatewayUrl: '',
+    signalingUrl: 'wss://signaling.example.invalid',
+    nodeName: 'Hosted browser',
+    localStablePeerId: `aurora-web-${id}`,
+    webrtcProfile: {
+      mode: 'webrtc-only',
+      appId: 'aurora',
+      room: id,
+      roomSecretRef: `ref:browser:${id}`,
+      signalingBrokers: ['wss://signaling.example.invalid'],
+    },
+  }, 'make-this-device-available', {
+    roomSecretRef: `ref:browser:${id}`,
+    roomSecret: `${id}-secret`,
+  })
+}
+
+function fakeMeshNodeServices(close: () => Promise<void>): BrowserMeshNodeServices {
+  return {
+    enabled: true,
+    peerHost: undefined,
+    peerAuthorityResolver: undefined,
+    peerPairingIssuer: undefined,
+    peerGrantManager: {} as BrowserMeshNodeServices['peerGrantManager'],
+    peerRevocationController: {} as BrowserMeshNodeServices['peerRevocationController'],
+    session: {} as BrowserMeshNodeServices['session'],
+    backend: { kind: 'indexeddb', persistent: true, sqlite: false } as BrowserMeshNodeServices['backend'],
+    crypto: {} as BrowserMeshNodeServices['crypto'],
+    provider: { enabled: true } as BrowserMeshNodeServices['provider'],
+    localToolRegistry: {} as BrowserMeshNodeServices['localToolRegistry'],
+    compositionStatus: {
+      state: 'ready',
+      message: 'Device sharing services are ready',
+      productMessage: 'This device is available for sharing.',
+    },
+    registeredToolIds: ['aurora.local.native.get_device_status.v1'],
+    storageBackendKind: 'indexeddb',
+    grantStorePersistent: true,
+    close,
+  }
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

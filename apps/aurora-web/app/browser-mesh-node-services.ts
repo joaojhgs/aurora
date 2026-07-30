@@ -1,8 +1,5 @@
 import type { AuroraRuntimeProfileV2, AuroraWebRtcRolloutFlags, BrowserPersistentPeerCredentialStore } from '@aurora/ui'
 import type { BrowserNativeCapabilityPack } from '@aurora/ui'
-import type {
-  BrowserEnvelopeCryptoPortOptions,
-} from '../../../packages/aurora-ui/src/local-data/browser-envelope-crypto'
 import type { EnvelopeCryptoPort, LocalDataBackend, LocalDataSession } from '@aurora/client/local-data'
 import type {
   LocalToolAuditRecord,
@@ -66,6 +63,15 @@ export type BrowserLocalDataBackendFactory = (
   localNodeId: string,
 ) => Promise<BrowserLocalDataAuthority> | BrowserLocalDataAuthority
 
+export interface BrowserEnvelopeCryptoPortOptions {
+  readonly origin?: string
+  readonly profileId: string
+  readonly localNodeId: string
+  readonly indexedDB?: IDBFactory
+  readonly crypto?: Crypto
+  readonly nowMs?: () => number
+}
+
 export type BrowserEnvelopeCryptoFactory = (
   options: BrowserEnvelopeCryptoPortOptions,
 ) => EnvelopeCryptoPort
@@ -124,11 +130,12 @@ export async function createBrowserMeshNodeServices(
   const profile = options.runtimeProfile
   assertProfileEligible(profile, options.rolloutFlags)
   assertCredentialStoreDurable(options.credentialStore)
+  if (!options.localDataBackendFactory) throw failedCompositionError('local_data_unavailable')
+  if (!options.envelopeCryptoFactory) throw failedCompositionError('envelope_crypto_unavailable')
 
   const localNodeId = parseIdentity(options.localStablePeerId, 'local node')
   const profileId = parseIdentity(profile.id, 'profile')
-  const [{ createBrowserEnvelopeCryptoPort }, peerHost, localTools] = await Promise.all([
-    import('../../../packages/aurora-ui/src/local-data/browser-envelope-crypto'),
+  const [peerHost, localTools] = await Promise.all([
     import('@aurora/client/webrtc'),
     import('@aurora/client/local-tools'),
   ])
@@ -136,7 +143,7 @@ export async function createBrowserMeshNodeServices(
   let backend: LocalDataBackend | null = null
   let crypto: (EnvelopeCryptoPort & { close?: () => Promise<void> }) | null = null
   try {
-    const authority = await (options.localDataBackendFactory ?? createDefaultBrowserLocalDataAuthority)(profileId, localNodeId)
+    const authority = await options.localDataBackendFactory(profileId, localNodeId)
     backend = authority.backend
     const session = authority.session
     const status = await backend.status()
@@ -144,7 +151,7 @@ export async function createBrowserMeshNodeServices(
       throw failedCompositionError('local_data_memory_only')
     }
 
-    crypto = (options.envelopeCryptoFactory ?? createBrowserEnvelopeCryptoPort)({
+    crypto = options.envelopeCryptoFactory({
       profileId,
       localNodeId,
       ...(options.origin !== undefined ? { origin: options.origin } : {}),
@@ -341,16 +348,6 @@ function isDisabledCompositionCode(code: BrowserMeshNodeCompositionFailureCode):
     || code === 'not_lightweight_ts'
     || code === 'rollout_disabled'
     || code === 'capability_pack_disabled'
-}
-
-async function createDefaultBrowserLocalDataAuthority(
-  profileId: string,
-  localNodeId: string,
-): Promise<BrowserLocalDataAuthority> {
-  const { BrowserIndexedDbLocalDataBackend } = await import('../../../packages/aurora-ui/src/local-data/browser-indexeddb')
-  const backend = new BrowserIndexedDbLocalDataBackend()
-  const session = await backend.open(profileId, localNodeId)
-  return { backend, session }
 }
 
 async function recordLocalToolAudit(

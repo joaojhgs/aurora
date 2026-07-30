@@ -34,6 +34,7 @@ import {
   BrowserMeshNodeCompositionError,
   browserMeshNodeCompositionStatusFromError,
   createBrowserMeshNodeServices,
+  type BrowserMeshNodeServicesOptions,
   type BrowserMeshNodeCompositionStatus,
   type BrowserMeshNodeServices,
 } from './browser-mesh-node-services'
@@ -57,6 +58,11 @@ let browserMeshNodeCompositionStatus: BrowserMeshNodeCompositionStatus = {
   message: 'Device sharing services disabled: not_mesh_node',
   productMessage: 'This device is not set up for sharing.',
 }
+let browserMeshNodeServicesFactoryForTests: BrowserMeshNodeServicesFactory | null = null
+
+type BrowserMeshNodeServicesFactory = (
+  options: BrowserMeshNodeServicesOptions,
+) => Promise<BrowserMeshNodeServices>
 
 class MissingGatewayTransport implements AuroraTransport {
   readonly kind = 'http'
@@ -107,7 +113,8 @@ export async function createAuroraBrowserRuntimeAsync(): Promise<BrowserWebThinR
   const rolloutFlags = browserWebRtcRolloutFlags()
   const localStablePeerId = runtimeProfile?.localNode.stablePeerId || credentialStore.getOrCreateLocalStablePeerId()
   const baseKey = browserClientCacheKey(null)
-  const meshNodeServices = await resolveBrowserMeshNodeServices(baseKey, () => createBrowserMeshNodeServices({
+  const factory = browserMeshNodeServicesFactoryForTests ?? createBrowserMeshNodeServices
+  const meshNodeServices = await resolveBrowserMeshNodeServices(baseKey, () => factory({
     runtimeProfile,
     credentialStore,
     rolloutFlags,
@@ -151,6 +158,7 @@ async function resolveBrowserMeshNodeServices(
     await services?.close().catch(() => undefined)
     return null
   }
+  browserMeshNodeCompositionInflight = null
   return services
 }
 
@@ -168,7 +176,6 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
     return cached.runtime
   }
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
-  void browserRuntimeCache?.meshNodeServices?.close().catch(() => undefined)
   const mode = thinProfile?.mode ?? 'http-only'
   const rolloutFlags = browserWebRtcRolloutFlags()
   const gatewayUrl = thinProfile?.gatewayUrl
@@ -200,6 +207,20 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
     createClient: (transport) => new AuroraClient({ transport }),
     createDemoClient: () => new AuroraClient({ transport: new MockAuroraTransport() }),
   })
+  const closeRuntime = runtime.close.bind(runtime)
+  let closed = false
+  runtime.close = async () => {
+    if (closed) return
+    closed = true
+    if (browserRuntimeCache?.runtime === runtime) {
+      browserRuntimeCache = null
+      browserCredentialStore = null
+    }
+    await Promise.all([
+      closeRuntime(),
+      effectiveMeshNodeServices?.close().catch(() => undefined),
+    ])
+  }
   if (persistedProfile && rolloutFlags.webrtc_thin_client) {
     queueMicrotask(() => {
       void runtime.peer.connect(persistedProfile).catch(() => undefined)
@@ -216,10 +237,17 @@ export function createAuroraBrowserClient(): AuroraClient {
 export function resetAuroraBrowserClientForTests(): void {
   void closeBrowserRuntimeCache().catch(() => undefined)
   browserCredentialStore = null
+  browserMeshNodeServicesFactoryForTests = null
 }
 
 export function auroraBrowserMeshNodeCompositionStatus(): BrowserMeshNodeCompositionStatus {
   return browserMeshNodeCompositionStatus
+}
+
+export function setAuroraBrowserMeshNodeServicesFactoryForTests(
+  factory: BrowserMeshNodeServicesFactory | null,
+): void {
+  browserMeshNodeServicesFactoryForTests = factory
 }
 
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
@@ -324,7 +352,7 @@ export async function saveAuroraBrowserOnboardingProfile(
     localNode: {
       nodeName: sanitized.nodeName,
       stablePeerId: sanitized.localStablePeerId,
-      enabledCapabilityPacks: [],
+      enabledCapabilityPacks: selectedNodeMode === 'mesh-node' ? ['native-actions'] : [],
       ...(selectedNodeMode === 'mesh-node' && sanitized.webrtcProfile
         ? {
           meshMembership: {
@@ -437,7 +465,6 @@ async function closeBrowserRuntimeCache(): Promise<void> {
   browserMeshNodeCompositionInflight = null
   await Promise.all([
     cached?.runtime.close().catch(() => undefined),
-    cached?.meshNodeServices?.close().catch(() => undefined),
     inflight?.promise
       .then((services) => services?.close())
       .catch(() => undefined),
