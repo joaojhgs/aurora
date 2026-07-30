@@ -67,6 +67,8 @@ private const val LOCAL_DATA_ENVELOPE_CURRENT_VERSION_PREFIX = "aurora_local_dat
 private const val LOCAL_DATA_ENVELOPE_ALGORITHM = "AES-GCM-256"
 private const val LOCAL_DATA_ENVELOPE_PURPOSE = "local-structured-data"
 private const val PEER_PROOF_PREFIX = "aurora.mesh.peer-proof."
+private const val INBOUND_VERIFIER_KEY_PREFIX = "aurora.peer-host.inbound-verifier.v1"
+private const val INBOUND_VERIFIER_STORAGE_PREFIX = "aurora.mesh.inbound-verifier."
 private const val ROOM_SECRET_PREFIX = "aurora.mesh.room-secret."
 private const val ANDROID_KEYSTORE = "AndroidKeyStore"
 private const val AES_GCM_TRANSFORMATION = "AES/GCM/NoPadding"
@@ -180,6 +182,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.biometric", biometricReady)
         permissions.put("aurora.android.secureStorage", secureStorageReady)
         permissions.put("aurora.android.thinPeerProof", secureStorageReady)
+        permissions.put("aurora.android.inboundVerifierStorage", secureStorageReady)
         permissions.put("aurora.android.thinProfile", true)
         permissions.put("aurora.android.webviewMicMediation", true)
         permissions.put("aurora.android.lifecycleEvents", true)
@@ -219,6 +222,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.biometric", biometricReady)
         capabilities.put("android.secureCredentialStorage", secureStorageReady)
         capabilities.put("android.thinPeerProof", secureStorageReady)
+        capabilities.put("android.inboundVerifierStorage", secureStorageReady)
         capabilities.put("android.thinProfile", true)
         capabilities.put("android.webviewMicMediation", true)
         capabilities.put("android.lifecycleEvents", true)
@@ -256,6 +260,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.biometric", if (biometricReady) "available" else "unsupported_platform")
         permissionStates.put("aurora.android.secureStorage", if (secureStorageReady) "available" else "unsupported_platform")
         permissionStates.put("aurora.android.thinPeerProof", if (secureStorageReady) "available" else "unsupported_platform")
+        permissionStates.put("aurora.android.inboundVerifierStorage", if (secureStorageReady) "available" else "unsupported_platform")
         permissionStates.put("aurora.android.thinProfile", "available")
         permissionStates.put("aurora.android.webviewMicMediation", "available")
         permissionStates.put("aurora.android.lifecycleEvents", if (foreground && focused) "available" else "degraded")
@@ -295,6 +300,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.biometric", if (biometricReady) "available" else "unsupported_platform")
         capabilityStates.put("android.secureCredentialStorage", if (secureStorageReady) "available" else "unsupported_platform")
         capabilityStates.put("android.thinPeerProof", if (secureStorageReady) "available" else "unsupported_platform")
+        capabilityStates.put("android.inboundVerifierStorage", if (secureStorageReady) "available" else "unsupported_platform")
         capabilityStates.put("android.thinProfile", "available")
         capabilityStates.put("android.webviewMicMediation", "available")
         capabilityStates.put("android.lifecycleEvents", if (foreground && focused) "available" else "degraded")
@@ -335,6 +341,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("adminUnlock", adminUnlock)
         ret.put("secureStorage", secureStorageStatusObject())
         ret.put("thinPeerCredentialStorage", thinPeerCredentialStorageStatusObject())
+        ret.put("inboundVerifierStorage", inboundVerifierStatusObject())
         ret.put("thinProfileStorage", thinProfileStatusObject())
         ret.put("webviewMicrophonePolicy", webviewMicrophonePolicyStatusObject())
         ret.put("lifecycle", lifecycleStatusObject())
@@ -773,6 +780,58 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.resolve(thinPeerProofResponse(args.peerId, record, true, proof))
         } catch (error: Exception) {
             invoke.reject(error.message ?: "thin_peer_reconnect_prove_failed")
+        }
+    }
+
+    @Command
+    fun inboundVerifierGet(invoke: Invoke) {
+        val args = inboundVerifierArgs(invoke.parseArgs(InboundVerifierSecretArgs::class.java))
+        try {
+            validateInboundVerifierSecretKey(args.key)
+            val stored = securePrefs().getString(inboundVerifierStorageAccount(args.key), null)
+            val value = stored?.let {
+                val plaintext = decryptSecureValue(it)
+                validateInboundVerifierSecretValueForSelector(plaintext, parseInboundVerifierSecretKey(args.key))
+                plaintext
+            }
+            invoke.resolve(inboundVerifierGetResponse(value))
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "inbound_verifier_get_failed")
+        }
+    }
+
+    @Command
+    fun inboundVerifierSet(invoke: Invoke) {
+        val args = inboundVerifierArgs(invoke.parseArgs(InboundVerifierSecretArgs::class.java))
+        try {
+            val selector = parseInboundVerifierSecretKey(args.key)
+            validateInboundVerifierSecretValueForSelector(args.value, selector)
+            securePrefs().edit()
+                .putString(inboundVerifierStorageAccountFromValidKey(args.key), encryptSecureValue(args.value))
+                .apply()
+            invoke.resolve(inboundVerifierWriteResponse(true))
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "inbound_verifier_set_failed")
+        }
+    }
+
+    @Command
+    fun inboundVerifierDelete(invoke: Invoke) {
+        val args = inboundVerifierArgs(invoke.parseArgs(InboundVerifierSecretArgs::class.java))
+        try {
+            val selector = parseInboundVerifierSecretKey(args.key)
+            val account = inboundVerifierStorageAccountFromValidKey(args.key)
+            val stored = securePrefs().getString(account, null)
+            if (stored != null) {
+                val record = parseInboundVerifierSecretValue(decryptSecureValue(stored))
+                if (!inboundVerifierSelectorMatchesRecord(selector, record)) {
+                    throw IllegalArgumentException("inbound verifier value does not match key selector")
+                }
+                securePrefs().edit().remove(account).apply()
+            }
+            invoke.resolve(inboundVerifierWriteResponse(true))
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "inbound_verifier_delete_failed")
         }
     }
 
@@ -1444,6 +1503,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         if (key.startsWith(PEER_PROOF_PREFIX)) {
             throw IllegalArgumentException("peer reconnect credential namespace is opaque-only")
         }
+        if (key.startsWith(INBOUND_VERIFIER_STORAGE_PREFIX) || key.startsWith("$INBOUND_VERIFIER_KEY_PREFIX:")) {
+            throw IllegalArgumentException("inbound verifier namespace is opaque-only")
+        }
         if (key.isEmpty() || key.length > 128) {
             throw IllegalArgumentException("secure storage key length must be 1..128 characters")
         }
@@ -1619,6 +1681,292 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         fields.put("rawBearerToken")
         return fields
     }
+
+    private fun inboundVerifierRedactedFields(): JSArray {
+        val fields = JSArray()
+        fields.put("tokenHashHex")
+        fields.put("rawBearerToken")
+        fields.put("proof")
+        fields.put("verifierKey")
+        return fields
+    }
+
+    private fun inboundVerifierGetResponse(value: String?): JSObject {
+        val ret = inboundVerifierStatusObject()
+        ret.put("found", value != null)
+        ret.put("value", value ?: JSONObject.NULL)
+        return ret
+    }
+
+    private fun inboundVerifierWriteResponse(ok: Boolean): JSObject {
+        val ret = inboundVerifierStatusObject()
+        ret.put("ok", ok)
+        return ret
+    }
+
+    private fun inboundVerifierStatusObject(): JSObject {
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("backend", "android-keystore")
+        ret.put("persisted", true)
+        ret.put("privacyClass", "inbound-verifier")
+        ret.put("rawGetter", true)
+        ret.put("allowedGenericSecureStorage", false)
+        ret.put("evidenceSource", "android-keystore-inbound-verifier-namespace")
+        ret.put("secretsRedacted", true)
+        ret.put("redactedFields", inboundVerifierRedactedFields())
+        return ret
+    }
+
+    private fun inboundVerifierArgs(args: InboundVerifierSecretArgs): InboundVerifierSecretRequestArg =
+        if (args.request.key.isNotEmpty() || args.request.value.isNotEmpty()) args.request else args
+
+    private fun validateInboundVerifierSecretKey(key: String) {
+        parseInboundVerifierSecretKey(key)
+    }
+
+    private fun parseInboundVerifierSecretKey(key: String): InboundVerifierSelector {
+        if (key.isEmpty() || key.toByteArray(Charsets.UTF_8).size > 4096) {
+            throw IllegalArgumentException("inbound verifier key length must be 1..4096 bytes")
+        }
+        val prefix = "$INBOUND_VERIFIER_KEY_PREFIX:"
+        if (!key.startsWith(prefix)) {
+            throw IllegalArgumentException("inbound verifier key must use the SDK peer-host namespace")
+        }
+        val parts = key.removePrefix(prefix).split(":")
+        if (parts.size != 4 || parts.any { it.isEmpty() }) {
+            throw IllegalArgumentException("inbound verifier key selector is invalid")
+        }
+        val verifierPeerId = decodeSdkKeyPart(parts[0], "verifierPeerId")
+        val claimantPeerId = decodeSdkKeyPart(parts[1], "claimantPeerId")
+        val roomName = decodeSdkKeyPart(parts[2], "roomName")
+        val tokenId = decodeSdkKeyPart(parts[3], "tokenId")
+        if (
+            encodeSdkKeyPart(verifierPeerId) != parts[0] ||
+            encodeSdkKeyPart(claimantPeerId) != parts[1] ||
+            encodeSdkKeyPart(roomName) != parts[2] ||
+            encodeSdkKeyPart(tokenId) != parts[3]
+        ) {
+            throw IllegalArgumentException("inbound verifier key must be canonical")
+        }
+        validateSafePeerAuthorityId("verifierPeerId", verifierPeerId, 256)
+        validateSafePeerAuthorityId("claimantPeerId", claimantPeerId, 256)
+        validateNonEmptyBytes("roomName", roomName, 512)
+        validateSafePeerAuthorityId("tokenId", tokenId, 256)
+        return InboundVerifierSelector(tokenId, claimantPeerId, verifierPeerId, roomName)
+    }
+
+    private fun inboundVerifierStorageAccount(key: String): String {
+        validateInboundVerifierSecretKey(key)
+        return inboundVerifierStorageAccountFromValidKey(key)
+    }
+
+    private fun inboundVerifierStorageAccountFromValidKey(key: String): String =
+        INBOUND_VERIFIER_STORAGE_PREFIX + sha256Hex(key.toByteArray(Charsets.UTF_8))
+
+    private fun validateInboundVerifierSecretValueForSelector(value: String, selector: InboundVerifierSelector) {
+        val record = parseInboundVerifierSecretValue(value)
+        if (!inboundVerifierSelectorMatchesRecord(selector, record)) {
+            throw IllegalArgumentException("inbound verifier value does not match key selector")
+        }
+        validateCanonicalInboundVerifierSecretValue(value, record)
+    }
+
+    private fun validateCanonicalInboundVerifierSecretValue(value: String, record: InboundVerifierSecretRecord) {
+        if (canonicalInboundVerifierSecretValue(record) != value) {
+            throw IllegalArgumentException("inbound verifier value must be canonical SDK JSON")
+        }
+    }
+
+    private fun parseInboundVerifierSecretValue(value: String): InboundVerifierSecretRecord {
+        if (value.isEmpty() || value.toByteArray(Charsets.UTF_8).size > 8192) {
+            throw IllegalArgumentException("inbound verifier value length must be 1..8192 bytes")
+        }
+        val rawRecord = try {
+            JSONObject(value)
+        } catch (_: Exception) {
+            throw IllegalArgumentException("inbound verifier value must be canonical JSON")
+        }
+        val allowed = setOf(
+            "version",
+            "tokenId",
+            "claimantPeerId",
+            "verifierPeerId",
+            "roomName",
+            "tokenHashHex",
+            "createdAtMs",
+            "expiresAtMs",
+            "revokedAtMs",
+            "credentialRevision",
+        )
+        val keys = rawRecord.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key !in allowed || isForbiddenInboundVerifierField(key)) {
+                throw IllegalArgumentException("inbound verifier value contains unsupported secret material")
+            }
+        }
+        val record = InboundVerifierSecretRecord(
+            version = strictJsonLong(rawRecord, "version").toInt(),
+            tokenId = strictJsonString(rawRecord, "tokenId"),
+            claimantPeerId = strictJsonString(rawRecord, "claimantPeerId"),
+            verifierPeerId = strictJsonString(rawRecord, "verifierPeerId"),
+            roomName = strictJsonString(rawRecord, "roomName"),
+            tokenHashHex = strictJsonString(rawRecord, "tokenHashHex"),
+            createdAtMs = strictJsonLong(rawRecord, "createdAtMs"),
+            expiresAtMs = optionalStrictJsonLong(rawRecord, "expiresAtMs"),
+            revokedAtMs = optionalStrictJsonLong(rawRecord, "revokedAtMs"),
+            credentialRevision = strictJsonLong(rawRecord, "credentialRevision"),
+        )
+        if (record.version != 1) throw IllegalArgumentException("inbound verifier version is unsupported")
+        validateSafePeerAuthorityId("tokenId", record.tokenId, 256)
+        validateSafePeerAuthorityId("claimantPeerId", record.claimantPeerId, 256)
+        validateSafePeerAuthorityId("verifierPeerId", record.verifierPeerId, 256)
+        validateNonEmptyBytes("roomName", record.roomName, 512)
+        validateLowerHex64("tokenHashHex", record.tokenHashHex)
+        validateSafeEpoch("createdAtMs", record.createdAtMs)
+        record.expiresAtMs?.let { validateSafeEpoch("expiresAtMs", it) }
+        record.revokedAtMs?.let { validateSafeEpoch("revokedAtMs", it) }
+        validateSafeEpoch("credentialRevision", record.credentialRevision)
+        return record
+    }
+
+    private fun inboundVerifierSelectorMatchesRecord(selector: InboundVerifierSelector, record: InboundVerifierSecretRecord): Boolean =
+        selector.tokenId == record.tokenId &&
+            selector.claimantPeerId == record.claimantPeerId &&
+            selector.verifierPeerId == record.verifierPeerId &&
+            selector.roomName == record.roomName
+
+    private fun canonicalInboundVerifierSecretValue(record: InboundVerifierSecretRecord): String {
+        val fields = mutableListOf(
+            "\"version\":${record.version}",
+            "\"tokenId\":${canonicalJsonQuote(record.tokenId)}",
+            "\"claimantPeerId\":${canonicalJsonQuote(record.claimantPeerId)}",
+            "\"verifierPeerId\":${canonicalJsonQuote(record.verifierPeerId)}",
+            "\"roomName\":${canonicalJsonQuote(record.roomName)}",
+            "\"tokenHashHex\":${canonicalJsonQuote(record.tokenHashHex)}",
+            "\"createdAtMs\":${record.createdAtMs}",
+        )
+        record.expiresAtMs?.let { fields.add("\"expiresAtMs\":$it") }
+        record.revokedAtMs?.let { fields.add("\"revokedAtMs\":$it") }
+        fields.add("\"credentialRevision\":${record.credentialRevision}")
+        return "{${fields.joinToString(",")}}"
+    }
+
+    private fun strictJsonString(record: JSONObject, field: String): String {
+        if (!record.has(field) || record.isNull(field)) throw IllegalArgumentException("inbound verifier value has invalid fields")
+        return record.get(field) as? String
+            ?: throw IllegalArgumentException("inbound verifier value has invalid fields")
+    }
+
+    private fun strictJsonLong(record: JSONObject, field: String): Long {
+        if (!record.has(field) || record.isNull(field)) throw IllegalArgumentException("inbound verifier value has invalid fields")
+        val value = record.get(field)
+        if (value !is Number || value is Double || value is Float || !value.toString().matches(Regex("^[0-9]+$"))) {
+            throw IllegalArgumentException("inbound verifier value has invalid fields")
+        }
+        return value.toLong()
+    }
+
+    private fun optionalStrictJsonLong(record: JSONObject, field: String): Long? {
+        if (!record.has(field)) return null
+        if (record.isNull(field)) throw IllegalArgumentException("inbound verifier value has invalid fields")
+        return strictJsonLong(record, field)
+    }
+
+    private fun isForbiddenInboundVerifierField(field: String): Boolean {
+        val normalized = field
+            .filter { it.isLetterOrDigit() }
+            .lowercase()
+        return normalized in setOf(
+            "bearer",
+            "rawbearertoken",
+            "rawtoken",
+            "proof",
+            "proofhex",
+            "verifierkey",
+            "password",
+            "secret",
+            "authorization",
+        )
+    }
+
+    private fun validateSafePeerAuthorityId(field: String, value: String, maxLen: Int) {
+        validateNonEmptyBytes(field, value, maxLen)
+        if (!value.all { it.isLetterOrDigit() || it == '_' || it == '.' || it == ':' || it == '@' || it == '/' || it == '-' }) {
+            throw IllegalArgumentException("$field contains unsupported characters")
+        }
+        if (!value.all { it.code <= 0x7f }) throw IllegalArgumentException("$field contains unsupported characters")
+    }
+
+    private fun validateNonEmptyBytes(field: String, value: String, maxLen: Int) {
+        val byteLength = value.toByteArray(Charsets.UTF_8).size
+        if (byteLength == 0 || byteLength > maxLen) throw IllegalArgumentException("$field length must be 1..$maxLen bytes")
+    }
+
+    private fun validateLowerHex64(field: String, value: String) {
+        if (value.length != 64 || !value.all { it in '0'..'9' || it in 'a'..'f' }) {
+            throw IllegalArgumentException("$field must be 64 lowercase hex characters")
+        }
+    }
+
+    private fun validateSafeEpoch(field: String, value: Long) {
+        if (value < 0L || value > 9_007_199_254_740_991L) throw IllegalArgumentException("$field is outside the safe integer range")
+    }
+
+    private fun decodeSdkKeyPart(value: String, field: String): String {
+        val output = ByteArray(value.length)
+        var outputLength = 0
+        var index = 0
+        while (index < value.length) {
+            val char = value[index]
+            if (char == '%') {
+                if (index + 2 >= value.length) throw IllegalArgumentException("$field has invalid percent encoding")
+                val high = hexValue(value[index + 1]) ?: throw IllegalArgumentException("$field has invalid percent encoding")
+                val low = hexValue(value[index + 2]) ?: throw IllegalArgumentException("$field has invalid percent encoding")
+                output[outputLength] = ((high shl 4) or low).toByte()
+                outputLength += 1
+                index += 3
+            } else {
+                if (char.code > 0x7f) throw IllegalArgumentException("$field is not valid UTF-8")
+                output[outputLength] = char.code.toByte()
+                outputLength += 1
+                index += 1
+            }
+        }
+        return String(output, 0, outputLength, Charsets.UTF_8)
+    }
+
+    private fun encodeSdkKeyPart(value: String): String = buildString(value.length) {
+        value.toByteArray(Charsets.UTF_8).forEach { rawByte ->
+            val byte = rawByte.toInt() and 0xff
+            val char = byte.toChar()
+            if (
+                char.isLetterOrDigit() ||
+                byte == '-'.code ||
+                byte == '_'.code ||
+                byte == '!'.code ||
+                byte == '~'.code ||
+                byte == '*'.code ||
+                byte == '\''.code ||
+                byte == '('.code ||
+                byte == ')'.code
+            ) {
+                append(char)
+            } else {
+                append('%')
+                append(byte.toString(16).uppercase().padStart(2, '0'))
+            }
+        }
+    }
+
+    private fun hexValue(char: Char): Int? =
+        when (char) {
+            in '0'..'9' -> char.code - '0'.code
+            in 'a'..'f' -> char.code - 'a'.code + 10
+            in 'A'..'F' -> char.code - 'A'.code + 10
+            else -> null
+        }
 
     private fun validateThinPeerSetArgs(args: ThinPeerCredentialSetArgs) {
         validateNonEmpty("peerId", args.peerId, 256)
@@ -2149,6 +2497,37 @@ class ThinPeerReconnectProveArgs {
     var peerId: String = ""
     var challenge: MeshReconnectChallengeFrameArgs = MeshReconnectChallengeFrameArgs()
 }
+
+@InvokeArg
+open class InboundVerifierSecretRequestArg {
+    var key: String = ""
+    var value: String = ""
+}
+
+@InvokeArg
+class InboundVerifierSecretArgs : InboundVerifierSecretRequestArg() {
+    var request: InboundVerifierSecretRequestArg = InboundVerifierSecretRequestArg()
+}
+
+data class InboundVerifierSelector(
+    val tokenId: String,
+    val claimantPeerId: String,
+    val verifierPeerId: String,
+    val roomName: String,
+)
+
+data class InboundVerifierSecretRecord(
+    val version: Int,
+    val tokenId: String,
+    val claimantPeerId: String,
+    val verifierPeerId: String,
+    val roomName: String,
+    val tokenHashHex: String,
+    val createdAtMs: Long,
+    val expiresAtMs: Long?,
+    val revokedAtMs: Long?,
+    val credentialRevision: Long,
+)
 
 @InvokeArg
 class MeshReconnectChallengeFrameArgs {

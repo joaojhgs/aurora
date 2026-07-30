@@ -1,10 +1,13 @@
 [[permission]]
 identifier = "aurora-android-native-plugin"
-description = "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability."
+description = "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately."
 commands.allow = [
   "aurora_android_baseline_status",
   "aurora_android_native_plugin_payload",
   "aurora_android_lifecycle_status",
   "aurora_android_webview_microphone_permission_decision",
-  "aurora_android_voice_foreground_service_status"
+  "aurora_android_voice_foreground_service_status",
+  "aurora_inbound_verifier_get",
+  "aurora_inbound_verifier_set",
+  "aurora_inbound_verifier_delete"
 ]
