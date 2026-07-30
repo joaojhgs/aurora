@@ -1,6 +1,7 @@
 """Tooling service contract models."""
 
 from typing import Any, Literal
+from urllib.parse import quote
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 
@@ -8,6 +9,29 @@ from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.registry import IOModel
 
 JS_SAFE_INTEGER_MAX = 2**53 - 1
+
+
+def _tooling_projection_encoded(value: str) -> str:
+    return quote(value, safe="-._~")
+
+
+def _tooling_projection_service_instance_id(provider_peer_id: str) -> str:
+    encoded_peer_id = _tooling_projection_encoded(provider_peer_id)
+    return f"local:{encoded_peer_id}:Tooling"
+
+
+def _tooling_projection_global_tool_id(provider_peer_id: str, tool_contract_id: str) -> str:
+    encoded_peer_id = _tooling_projection_encoded(provider_peer_id)
+    encoded_tool_contract_id = _tooling_projection_encoded(tool_contract_id)
+    return f"aurora-tool:v1:{encoded_peer_id}:Tooling:{encoded_tool_contract_id}"
+
+
+def _tooling_projection_has_control(value: str) -> bool:
+    return any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+
+
+def _tooling_projection_has_surrogate(value: str) -> bool:
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
 
 
 # Module identifier
@@ -1585,6 +1609,52 @@ class ToolingGetExportCatalogResponse(IOModel):
                 "partial projection page requires next_cursor and no final count/checksum"
             )
         return self
+
+    @model_validator(mode="after")
+    def _validate_projection_identity(self) -> "ToolingGetExportCatalogResponse":
+        if _tooling_projection_has_surrogate(self.provider_peer_id):
+            raise ValueError("projection provider_peer_id must be valid Unicode")
+        expected_local = _tooling_projection_service_instance_id(self.provider_peer_id)
+        expected_remote = f"remote:{self.provider_peer_id}:Tooling"
+        if self.service_instance_id not in {expected_local, expected_remote}:
+            raise ValueError("projection service_instance_id does not match provider identity")
+
+        for tool in self.tools:
+            self._validate_projection_tool_identity(tool)
+        for blocked in self.blocked_tools:
+            self._validate_projection_tool_identity(blocked.tool)
+        return self
+
+    def _validate_projection_tool_identity(self, tool: ToolingToolInfo) -> None:
+        contract_id = tool.tool_contract_id
+        if (
+            not contract_id
+            or contract_id != contract_id.strip()
+            or len(contract_id) > 160
+            or _tooling_projection_has_control(contract_id)
+            or _tooling_projection_has_surrogate(contract_id)
+        ):
+            raise ValueError(
+                "projection tool_contract_id must be non-empty, trimmed, bounded, and control-free"
+            )
+        if not tool.global_tool_id or len(tool.global_tool_id) > 1024:
+            raise ValueError("projection tool global_tool_id must be non-empty and bounded")
+        if tool.tool_id_scheme != "aurora-tool" or tool.tool_id_version != 1:
+            raise ValueError("projection tool identity must use aurora-tool v1")
+        if tool.provider_peer_id != self.provider_peer_id:
+            raise ValueError("projection tool provider_peer_id must match page")
+        if tool.provider_service_instance_id != self.service_instance_id:
+            raise ValueError("projection tool provider_service_instance_id must match page")
+        if tool.provenance.provider_peer_id != self.provider_peer_id:
+            raise ValueError("projection tool provenance peer must match page")
+        if tool.provenance.provider_service_instance_id != self.service_instance_id:
+            raise ValueError("projection tool provenance service must match page")
+        expected_global_tool_id = _tooling_projection_global_tool_id(
+            self.provider_peer_id,
+            contract_id,
+        )
+        if tool.global_tool_id != expected_global_tool_id:
+            raise ValueError("projection tool global_tool_id must match canonical identity")
 
 
 class ToolingProjectionInvalidated(IOModel):

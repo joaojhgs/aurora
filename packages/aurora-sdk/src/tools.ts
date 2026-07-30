@@ -48,6 +48,10 @@ const TOOLING_REMOTE_AVAILABILITIES = new Set<ToolingRemoteAvailability>([
   'protocol_unsupported'
 ])
 
+const toolingProjectionTextEncoder = new TextEncoder()
+const TOOLING_PROJECTION_SAFE_BYTES = new Set([0x2D, 0x2E, 0x5F, 0x7E])
+const TOOLING_PROJECTION_HEX = '0123456789ABCDEF'
+
 /** Missing/unknown protocol evidence is legacy and therefore never bindable. */
 export function normalizeToolingExportProtocolTier(value: unknown): ToolingExportProtocolTier {
   return value === 'projection_v1' || value === 'projection_v1_delta'
@@ -1948,8 +1952,12 @@ function isProjectionPageShape(value: JsonObject): boolean {
   if (
     typeof value.provider_peer_id !== 'string'
     || value.provider_peer_id.length === 0
+    || codePointLength(value.provider_peer_id) > 160
+    || hasLoneSurrogate(value.provider_peer_id)
     || typeof value.service_instance_id !== 'string'
     || value.service_instance_id.length === 0
+    || codePointLength(value.service_instance_id) > 256
+    || hasLoneSurrogate(value.service_instance_id)
     || typeof value.projection_revision !== 'string'
     || value.projection_revision.length === 0
     || !isSha256(value.projection_digest)
@@ -1965,6 +1973,8 @@ function isProjectionPageShape(value: JsonObject): boolean {
     || !hasAuthorityRevision(value.authority_revision)
   ) return false
 
+  if (!hasProjectionIdentity(value)) return false
+
   if (value.complete === true) {
     return (value.next_cursor === null || value.next_cursor === undefined)
       && nonNegativeInteger(value.total_count) === value.total_count
@@ -1976,6 +1986,81 @@ function isProjectionPageShape(value: JsonObject): boolean {
       && value.next_cursor === value.next_cursor.trim()
       && value.total_count === undefined
       && value.final_checksum === undefined
+  }
+  return false
+}
+
+function hasProjectionIdentity(value: JsonObject): boolean {
+  const providerPeerId = value.provider_peer_id
+  const serviceInstanceId = value.service_instance_id
+  if (typeof providerPeerId !== 'string' || typeof serviceInstanceId !== 'string') return false
+  const expectedLocal = `local:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling`
+  const expectedRemote = `remote:${providerPeerId}:Tooling`
+  if (serviceInstanceId !== expectedLocal && serviceInstanceId !== expectedRemote) return false
+
+  const tools = [
+    ...(value.tools as unknown[]),
+    ...((value.blocked_tools ?? []) as unknown[]).map((blocked) => objectOrNull(blocked)?.tool)
+  ]
+  return tools.every((tool) => isProjectionToolIdentity(tool, providerPeerId, serviceInstanceId))
+}
+
+function isProjectionToolIdentity(
+  rawTool: unknown,
+  providerPeerId: string,
+  serviceInstanceId: string
+): boolean {
+  const tool = objectOrNull(rawTool)
+  const provenance = objectOrNull(tool?.provenance)
+  if (!tool || !provenance) return false
+  if (tool.tool_id_scheme !== 'aurora-tool' || tool.tool_id_version !== 1) return false
+  if (tool.provider_peer_id !== providerPeerId || tool.provider_service_instance_id !== serviceInstanceId) return false
+  if (provenance.provider_peer_id !== providerPeerId || provenance.provider_service_instance_id !== serviceInstanceId) return false
+  if (typeof tool.tool_contract_id !== 'string' || !isProjectionToolContractId(tool.tool_contract_id)) return false
+  if (typeof tool.global_tool_id !== 'string' || tool.global_tool_id.length < 1 || tool.global_tool_id.length > 1024) return false
+  return tool.global_tool_id === `aurora-tool:v1:${percentEncodeRfc3986Utf8ForProjection(providerPeerId)}:Tooling:${percentEncodeRfc3986Utf8ForProjection(tool.tool_contract_id)}`
+}
+
+function isProjectionToolContractId(value: string): boolean {
+  if (codePointLength(value) < 1 || codePointLength(value) > 160 || value !== value.trim()) return false
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0
+    if (codePoint < 0x20 || codePoint === 0x7F) return false
+  }
+  return !hasLoneSurrogate(value)
+}
+
+function percentEncodeRfc3986Utf8ForProjection(value: string): string {
+  let encoded = ''
+  for (const byte of toolingProjectionTextEncoder.encode(value)) {
+    if (
+      (byte >= 0x30 && byte <= 0x39)
+      || (byte >= 0x41 && byte <= 0x5A)
+      || (byte >= 0x61 && byte <= 0x7A)
+      || TOOLING_PROJECTION_SAFE_BYTES.has(byte)
+    ) {
+      encoded += String.fromCharCode(byte)
+    } else {
+      encoded += `%${TOOLING_PROJECTION_HEX[(byte >> 4) & 0xF]}${TOOLING_PROJECTION_HEX[byte & 0xF]}`
+    }
+  }
+  return encoded
+}
+
+function codePointLength(value: string): number {
+  return Array.from(value).length
+}
+
+function hasLoneSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = value.charCodeAt(index + 1)
+      if (next < 0xDC00 || next > 0xDFFF) return true
+      index += 1
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      return true
+    }
   }
   return false
 }

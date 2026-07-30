@@ -421,6 +421,126 @@
       "path": "service_instance_id"
     },
     {
+      "case": "malformed_service_instance_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "service_instance_id": "local:peer:台北/room 42?x=1#node:Tooling"
+      },
+      "path": "service_instance_id"
+    },
+    {
+      "case": "provider_peer_service_instance_mismatch_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "provider_peer_id": "peer-other"
+      },
+      "path": "provider_peer_id"
+    },
+    {
+      "case": "tool_provider_peer_mismatch_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.provider_peer_id": "peer-other"
+      },
+      "path": "tools.0.provider_peer_id"
+    },
+    {
+      "case": "tool_provider_service_mismatch_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.provider_service_instance_id": "remote:peer-other:Tooling"
+      },
+      "path": "tools.0.provider_service_instance_id"
+    },
+    {
+      "case": "tool_provenance_peer_mismatch_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.provenance.provider_peer_id": "peer-other"
+      },
+      "path": "tools.0.provenance.provider_peer_id"
+    },
+    {
+      "case": "tool_provenance_service_mismatch_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.provenance.provider_service_instance_id": "remote:peer-other:Tooling"
+      },
+      "path": "tools.0.provenance.provider_service_instance_id"
+    },
+    {
+      "case": "tool_legacy_scheme_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.tool_id_scheme": "legacy"
+      },
+      "path": "tools.0.tool_id_scheme"
+    },
+    {
+      "case": "tool_legacy_version_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.tool_id_version": 0
+      },
+      "path": "tools.0.tool_id_version"
+    },
+    {
+      "case": "tool_contract_blank_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.tool_contract_id": ""
+      },
+      "path": "tools.0.tool_contract_id"
+    },
+    {
+      "case": "tool_contract_untrimmed_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.tool_contract_id": " native.notes.search/v1:😀"
+      },
+      "path": "tools.0.tool_contract_id"
+    },
+    {
+      "case": "tool_contract_control_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.tool_contract_id": "native.notes.search\nv1"
+      },
+      "path": "tools.0.tool_contract_id"
+    },
+    {
+      "case": "tool_contract_oversized_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.tool_contract_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "path": "tools.0.tool_contract_id"
+    },
+    {
+      "case": "tool_global_id_mismatch_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "tools.0.global_tool_id": "aurora-tool:v1:peer-other:Tooling:native.notes.search%2Fv1%3A%F0%9F%98%80"
+      },
+      "path": "tools.0.global_tool_id"
+    },
+    {
+      "case": "tool_global_id_oversized_rejected",
+      "expected_category": "pydantic_string_too_long",
+      "patch": {
+        "tools.0.global_tool_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "path": "tools.0.global_tool_id"
+    },
+    {
+      "case": "blocked_tool_global_id_mismatch_rejected",
+      "expected_category": "pydantic_value_error",
+      "patch": {
+        "blocked_tools.0.tool.global_tool_id": "aurora-tool:v1:peer-other:Tooling:native.empty.visibility.v1"
+      },
+      "path": "blocked_tools.0.tool.global_tool_id"
+    },
+    {
       "case": "blank_cursor_rejected",
       "expected_category": "pydantic_string_too_short",
       "patch": {
@@ -431,9 +551,5 @@
       },
       "path": "next_cursor"
     }
-  ],
-  "current_dependency_gaps": [
-    "Python ToolingToolInfo currently accepts non-aurora global_tool_id strings and provider_service_instance_id values without enforcing the local:<percent-encoded-peer>:Tooling pattern; stricter negative identity validation depends on the future generated contract/parser lane.",
-    "The current SDK projection-page parser accepts oversized service_instance_id values that Python rejects at max_length=256; full parity depends on the generated boundary parser lane."
   ]
 }

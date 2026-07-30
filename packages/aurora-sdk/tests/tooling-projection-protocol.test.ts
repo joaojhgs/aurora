@@ -116,6 +116,25 @@ describe('Tooling projection-v1 SDK protocol', () => {
     }
   })
 
+  it('counts projection identity bounds as Unicode code points', () => {
+    const acceptedPeerId = '😀'.repeat(160)
+    const rejectedPeerId = '😀'.repeat(161)
+    const acceptedPage = emptyRemoteProjectionPage(acceptedPeerId)
+
+    expect(parseToolingExportCatalogPage(acceptedPage)).toEqual({ ok: true, page: acceptedPage })
+    expect(parseToolingExportCatalogPage(emptyRemoteProjectionPage(rejectedPeerId))).toMatchObject({
+      ok: false,
+      reasonCode: 'invalid_projection_page',
+    })
+  })
+
+  it('rejects invalid Unicode surrogates before projection percent encoding', () => {
+    expect(parseToolingExportCatalogPage(emptyRemoteProjectionPage('\uD800'))).toMatchObject({
+      ok: false,
+      reasonCode: 'invalid_projection_page',
+    })
+  })
+
   it('preserves every retained availability distinction and never binds legacy rows', () => {
     const availabilities: ToolingRemoteAvailability[] = [
       'active',
@@ -223,7 +242,7 @@ function projectionPage(termination: Record<string, unknown>): ToolingGetExportC
   return {
     ok: true,
     provider_peer_id: 'peer-stable-1',
-    service_instance_id: 'peer-stable-1:Tooling',
+    service_instance_id: 'local:peer-stable-1:Tooling',
     selected_protocol_tier: 'projection_v1',
     authority_revision: authority,
     projection_revision: 'projection-11',
@@ -234,6 +253,28 @@ function projectionPage(termination: Record<string, unknown>): ToolingGetExportC
     tools: [],
     retirements: [],
     ...termination,
+  } as unknown as ToolingGetExportCatalogResponse
+}
+
+function emptyRemoteProjectionPage(providerPeerId: string): ToolingGetExportCatalogResponse {
+  return {
+    ok: true,
+    provider_peer_id: providerPeerId,
+    service_instance_id: `remote:${providerPeerId}:Tooling`,
+    selected_protocol_tier: 'projection_v1',
+    authority_revision: authority,
+    projection_revision: 'projection-boundary',
+    projection_digest: digest,
+    page_index: 0,
+    page_size: 1,
+    page_hash: pageHash,
+    tools: [],
+    blocked_tools: [],
+    retirements: [],
+    complete: true,
+    next_cursor: null,
+    total_count: 0,
+    final_checksum: checksum,
   } as unknown as ToolingGetExportCatalogResponse
 }
 

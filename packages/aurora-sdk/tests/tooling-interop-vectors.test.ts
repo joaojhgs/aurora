@@ -62,12 +62,8 @@ describe('Tooling Python interop vectors', () => {
   it('rejects negative projection vectors through the current SDK consumer', () => {
     const vectors = loadToolingInteropVectors()
     for (const entry of vectors.negative) {
-      if (entry.case === 'oversized_service_instance_rejected') continue
       const page = buildToolingInteropProjectionPage(vectors) as unknown as Record<string, unknown>
-      for (const [key, value] of Object.entries(entry.patch)) {
-        if (value === null) delete page[key]
-        else page[key] = value
-      }
+      applyFixturePatch(page, entry.patch)
       expect(parseToolingExportCatalogPage(page), entry.case).toMatchObject({
         ok: false,
         reasonCode: 'invalid_projection_page'
@@ -103,14 +99,29 @@ describe('Tooling Python interop vectors', () => {
     expect(harness.grants).toEqual([])
   })
 
-  it('records only parser-boundary gaps outside production helper coverage', () => {
-    const gaps = loadToolingInteropVectors().current_dependency_gaps.filter(
-      (gap) => !gap.includes('final checksums')
-    )
-
-    expect(gaps).toEqual([
-      'Python ToolingToolInfo currently accepts non-aurora global_tool_id strings and provider_service_instance_id values without enforcing the local:<percent-encoded-peer>:Tooling pattern; stricter negative identity validation depends on the future generated contract/parser lane.',
-      'The current SDK projection-page parser accepts oversized service_instance_id values that Python rejects at max_length=256; full parity depends on the generated boundary parser lane.'
-    ])
+  it('records no parser-boundary gaps outside production helper coverage', () => {
+    expect(loadToolingInteropVectors()).not.toHaveProperty('current_dependency_gaps')
   })
 })
+
+function applyFixturePatch(payload: Record<string, unknown>, patch: Record<string, unknown>): void {
+  for (const [rawPath, value] of Object.entries(patch)) {
+    const path = rawPath.split('.')
+    let target: unknown = payload
+    for (const segment of path.slice(0, -1)) {
+      target = Array.isArray(target)
+        ? target[Number(segment)]
+        : (target as Record<string, unknown>)[segment]
+    }
+    const key = path.at(-1)
+    if (key === undefined) continue
+    if (Array.isArray(target)) {
+      if (value === null) target.splice(Number(key), 1)
+      else target[Number(key)] = value
+    } else if (target && typeof target === 'object') {
+      const record = target as Record<string, unknown>
+      if (value === null) delete record[key]
+      else record[key] = value
+    }
+  }
+}

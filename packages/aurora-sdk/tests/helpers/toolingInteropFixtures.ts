@@ -44,7 +44,6 @@ export interface ToolingInteropVector {
     patch: Record<string, unknown>
     expected_category: string
   }>
-  current_dependency_gaps: string[]
 }
 
 export function loadToolingInteropVectors(): ToolingInteropVector {

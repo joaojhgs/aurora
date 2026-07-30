@@ -71,6 +71,53 @@ def _projection_page(vectors: dict) -> ToolingGetExportCatalogResponse:
     )
 
 
+def _empty_projection_payload(provider_peer_id: str) -> dict:
+    return {
+        "ok": True,
+        "provider_peer_id": provider_peer_id,
+        "service_instance_id": f"remote:{provider_peer_id}:Tooling",
+        "selected_protocol_tier": "projection_v1",
+        "authority_revision": {
+            "auth_grant_revision": 0,
+            "catalog_revision": 0,
+            "export_policy_revision": 0,
+            "manifest_revision": 0,
+            "protocol_revision": 1,
+            "switch_revision": 0,
+        },
+        "projection_revision": "projection-boundary",
+        "projection_digest": "a" * 64,
+        "page_index": 0,
+        "page_size": 1,
+        "page_hash": "b" * 64,
+        "tools": [],
+        "blocked_tools": [],
+        "retirements": [],
+        "complete": True,
+        "next_cursor": None,
+        "total_count": 0,
+        "final_checksum": "c" * 64,
+    }
+
+
+def _apply_fixture_patch(payload: dict, patch: dict) -> None:
+    for raw_path, value in patch.items():
+        path = str(raw_path).split(".")
+        target = payload
+        for segment in path[:-1]:
+            target = target[int(segment)] if isinstance(target, list) else target[segment]
+        key = path[-1]
+        if value is None:
+            if isinstance(target, list):
+                target.pop(int(key))
+            else:
+                target.pop(key, None)
+        elif isinstance(target, list):
+            target[int(key)] = value
+        else:
+            target[key] = value
+
+
 def test_accepts_local_percent_encoded_tooling_service_instance(vectors: dict):
     encoded_peer_id = quote(vectors["stable_peer_id"], safe="-._~")
 
@@ -79,6 +126,25 @@ def test_accepts_local_percent_encoded_tooling_service_instance(vectors: dict):
     assert (
         _projection_page(vectors).service_instance_id == (vectors["provider_service_instance_id"])
     )
+
+
+def test_python_counts_projection_identity_bounds_as_unicode_code_points():
+    accepted_peer_id = "😀" * 160
+    rejected_peer_id = "😀" * 161
+
+    accepted = ToolingGetExportCatalogResponse.model_validate(
+        _empty_projection_payload(accepted_peer_id)
+    )
+    assert accepted.provider_peer_id == accepted_peer_id
+    assert accepted.service_instance_id == f"remote:{accepted_peer_id}:Tooling"
+
+    with pytest.raises(ValidationError):
+        ToolingGetExportCatalogResponse.model_validate(_empty_projection_payload(rejected_peer_id))
+
+
+def test_python_rejects_invalid_unicode_surrogate_before_percent_encoding():
+    with pytest.raises(ValidationError):
+        ToolingGetExportCatalogResponse.model_validate(_empty_projection_payload("\ud800"))
 
 
 def test_canonical_method_ids_match_python_tooling_contract(vectors: dict):
@@ -135,18 +201,11 @@ def test_python_rejects_negative_projection_vectors(vectors: dict, negative_case
     base = _projection_page(vectors).model_dump(mode="json")
     case = next(item for item in vectors["negative"] if item["case"] == negative_case)
     payload = copy.deepcopy(base)
-    for key, value in case["patch"].items():
-        if value is None:
-            payload.pop(key, None)
-        else:
-            payload[key] = value
+    _apply_fixture_patch(payload, case["patch"])
 
     with pytest.raises(ValidationError):
         ToolingGetExportCatalogResponse.model_validate(payload)
 
 
-def test_fixture_records_current_generation_dependencies(vectors: dict):
-    assert vectors["current_dependency_gaps"] == [
-        "Python ToolingToolInfo currently accepts non-aurora global_tool_id strings and provider_service_instance_id values without enforcing the local:<percent-encoded-peer>:Tooling pattern; stricter negative identity validation depends on the future generated contract/parser lane.",
-        "The current SDK projection-page parser accepts oversized service_instance_id values that Python rejects at max_length=256; full parity depends on the generated boundary parser lane.",
-    ]
+def test_fixture_has_no_current_dependency_gaps(vectors: dict):
+    assert "current_dependency_gaps" not in vectors
