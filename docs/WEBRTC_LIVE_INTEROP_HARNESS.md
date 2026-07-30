@@ -85,13 +85,13 @@ The STUN lane uses the same local coturn server in STUN mode and applies harness
 
 | Lane | Report | Current status | ICE proof |
 | --- | --- | --- | --- |
-| Chromium direct | `reports/webrtc-interop/direct/report.json` | Passed | Current selected category is raw `prflx`, with a peer-reflexive/host pair and no gathered STUN or relay evidence |
+| Chromium direct | `reports/webrtc-interop/direct/report.json` | Passed | Current selected category is `host`, with a selected host/host pair and no gathered STUN or relay evidence |
 | Chromium STUN/reflexive | `reports/webrtc-interop/stun/report.json` | Passed | Current selected category is `srflx`, with a configured-STUN URL match from `getStats()` |
 | TURN relay | `reports/webrtc-interop/turn/report.json` | Passed | `selectedCandidatePair.category=relay` |
 | Firefox direct | `reports/webrtc-interop/firefox-direct/report.json` | Passed | `selectedCandidatePair.category=host` |
 | Firefox STUN/reflexive | `reports/webrtc-interop/firefox-stun/report.json` | Passed | Selected raw `prflx` plus a gathered `srflx`; one configured STUN server makes the source unambiguous when Firefox omits the candidate URL |
 | Firefox TURN relay | `reports/webrtc-interop/firefox-turn/report.json` | Passed | `selectedCandidatePair.category=relay` under relay-only policy |
-| WebKit direct | `reports/webrtc-interop/webkit-direct/report.json` | Passed | Current selected category is raw `prflx`; the scanner accepts the peer-reflexive/host pair only without gathered STUN or relay evidence |
+| WebKit direct | `reports/webrtc-interop/webkit-direct/report.json` | Passed | Current selected category is `host`, with a selected host/host pair and no gathered STUN or relay evidence |
 | WebKit STUN/reflexive | `reports/webrtc-interop/webkit-stun/report.json` | Passed | Current selected category is `srflx`, with configured-STUN URL-match evidence from `getStats()` |
 | WebKit TURN relay | `reports/webrtc-interop/webkit-turn/report.json` | Passed | `selectedCandidatePair.category=relay` |
 | Android System WebView TURN relay | `apps/aurora-tauri/reports/webrtc-interop/android-webview/report.json` | Fresh passing CI evidence pending | The existing Android API 35 job owns the packaged WebView ↔ Python peer test and requires a selected relay pair |
