@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  TOOLING_METHODS,
   nativeCapabilityManifestFixture,
   type AndroidVoiceForegroundServiceRequestResult,
   type AndroidVoiceForegroundServiceStatus,
@@ -22,6 +23,7 @@ import type {
   PeerGrantMetadataRecord,
 } from "@aurora/client/local-data";
 import type {
+  PeerHostCallContext,
   InboundVerifierSecretStoragePort,
   PeerRelationshipSelector,
 } from "@aurora/client/webrtc";
@@ -141,6 +143,119 @@ describe("Tauri mesh node services", () => {
     nowMs = 2_001;
     await expect(services.grantManager.listActiveGrants(selector)).resolves.toEqual([]);
     await services.close();
+  });
+
+  it("persists redacted native prepare and execute audit metadata on the enabled path", async () => {
+    let nowMs = 1_000;
+    const backend = new FakeLocalDataBackend();
+    const services = await createTauriMeshNodeServices({
+      profile: profile(),
+      rolloutFlags,
+      nativeTransport: nativeTransport({ manifest: readyDesktopShareManifest() }),
+      backend,
+      crypto: new FakeEnvelopeCrypto(),
+      verifierSecretStorage: new MemorySecretStorage(),
+      randomBytes: randomBytes(9),
+      randomId: sequentialIds("id"),
+      now: () => nowMs,
+    });
+
+    expect(services.enabled).toBe(true);
+    if (!services.enabled) throw new Error("expected enabled services");
+    await services.grantManager.replaceGrant(selector, {
+      allowedMethodIds: [TOOLING_METHODS.executeTool],
+      allowedToolContractIds: [AURORA_NATIVE_TOOL_IDS.getDeviceStatus],
+      capabilityPackIds: ["native.deviceStatus"],
+    });
+
+    const prepare = services.localToolProvider.peerHostRegistry.get(TOOLING_METHODS.prepareExecution);
+    const execute = services.localToolProvider.peerHostRegistry.get(TOOLING_METHODS.executeTool);
+    if (!prepare || !execute) throw new Error("expected native tooling handlers");
+
+    const prepareOutput = await services.localToolProvider.peerHostRegistry.dispatch(prepare, {
+      tool_name: AURORA_NATIVE_TOOL_IDS.getDeviceStatus,
+      arguments: {},
+      correlation_id: "corr-native-1",
+    }, peerHostCallContext(TOOLING_METHODS.prepareExecution, nowMs));
+    expect(prepareOutput).toMatchObject({ ok: true, correlation_id: "corr-native-1" });
+
+    nowMs = 1_001;
+    const executeOutput = await services.localToolProvider.peerHostRegistry.dispatch(execute, {
+      tool_name: AURORA_NATIVE_TOOL_IDS.getDeviceStatus,
+      arguments: {},
+      correlation_id: "corr-native-1",
+    }, peerHostCallContext(TOOLING_METHODS.executeTool, nowMs));
+    expect(executeOutput).toMatchObject({ ok: true, status: "success", correlation_id: "corr-native-1" });
+
+    const audits = await services.localDataSession.localAudit.listAudit();
+    const localToolAudits = audits.filter((record) => record.action.startsWith("local_tool."));
+    expect(localToolAudits).toEqual([
+      expect.objectContaining({
+        profileId: "profile-1",
+        localNodeId: "node-1",
+        peerId: "peer-recipient",
+        action: "local_tool.prepare",
+        decision: "allowed",
+        resultStatus: "complete",
+        connectionEpoch: null,
+        methodId: TOOLING_METHODS.prepareExecution,
+        toolContractId: expect.stringContaining(AURORA_NATIVE_TOOL_IDS.getDeviceStatus),
+        correlationId: "corr-native-1",
+        createdAtMs: 1_000,
+      }),
+      expect.objectContaining({
+        profileId: "profile-1",
+        localNodeId: "node-1",
+        peerId: "peer-recipient",
+        action: "local_tool.execute",
+        decision: "success",
+        resultStatus: "complete",
+        connectionEpoch: null,
+        methodId: TOOLING_METHODS.executeTool,
+        toolContractId: expect.stringContaining(AURORA_NATIVE_TOOL_IDS.getDeviceStatus),
+        correlationId: "corr-native-1",
+        createdAtMs: 1_001,
+      }),
+    ]);
+    for (const audit of localToolAudits) {
+      expect(audit.redactedDetailJson).toMatchObject({
+        providerPeerId: "node-1",
+        callerPrincipalId: "principal-1",
+        redacted: true,
+        secretsRedacted: true,
+      });
+      expect([AURORA_NATIVE_TOOL_IDS.getDeviceStatus, "native.get_device_status"]).toContain(
+        audit.redactedDetailJson.localToolName,
+      );
+      expect(audit.redactedDetailJson).not.toHaveProperty("display_args_preview");
+      expect(audit.redactedDetailJson).not.toHaveProperty("displayArgsPreview");
+      expect(audit.redactedDetailJson).not.toHaveProperty("detail");
+    }
+    await services.close();
+  });
+
+  it("does not claim enabled when durable local tool audit storage is unavailable", async () => {
+    const backend = new FakeLocalDataBackend(new FakeLocalDataSession({} as MemoryLocalAuditRepository));
+    const services = await createTauriMeshNodeServices({
+      profile: profile(),
+      rolloutFlags,
+      nativeTransport: nativeTransport({ manifest: readyDesktopShareManifest() }),
+      backend,
+      crypto: new FakeEnvelopeCrypto(),
+      verifierSecretStorage: new MemorySecretStorage(),
+      randomBytes: randomBytes(10),
+      randomId: sequentialIds("id"),
+    });
+
+    expect(services).toMatchObject({
+      enabled: false,
+      reason: "local_tool_audit_unavailable",
+    });
+    expect(services.peerHost).toBeUndefined();
+    expect(services.authorityResolver).toBeUndefined();
+    expect(services.grantManager).toBeUndefined();
+    expect(backend.opened).toHaveLength(1);
+    expect(backend.closed).toBe(true);
   });
 
   it("closes durable storage when composition setup fails after open", async () => {
@@ -325,8 +440,12 @@ class FakeLocalDataBackend implements LocalDataBackend {
   readonly persistent = true;
   readonly sqlite = true;
   readonly opened: Array<{ profileId: string; localNodeId: string }> = [];
-  readonly session = new FakeLocalDataSession();
+  readonly session: FakeLocalDataSession;
   closed = false;
+
+  constructor(session = new FakeLocalDataSession()) {
+    this.session = session;
+  }
 
   async open(profileId: string, localNodeId: string): Promise<LocalDataSession> {
     this.opened.push({ profileId, localNodeId });
@@ -361,8 +480,12 @@ class FakeLocalDataSession implements LocalDataSession {
   readonly memory = emptyMemoryRepository();
   readonly localTools = emptyLocalToolRepository();
   readonly peerGrants = new MemoryPeerGrantMetadataRepository();
-  readonly localAudit = new MemoryLocalAuditRepository();
+  readonly localAudit: MemoryLocalAuditRepository;
   closed = false;
+
+  constructor(localAudit = new MemoryLocalAuditRepository()) {
+    this.localAudit = localAudit;
+  }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
     return await work(this);
@@ -471,6 +594,35 @@ function emptyLocalToolRepository() {
   return {
     upsertLocalToolState: async () => undefined,
     listLocalToolStates: async () => [],
+  };
+}
+
+function peerHostCallContext(methodId: string, receivedAtMs: number): PeerHostCallContext {
+  return {
+    id: `call-${methodId}`,
+    methodId,
+    remotePeerId: "peer-recipient",
+    identity: {
+      callerPeerId: "peer-recipient",
+      principalId: "principal-1",
+      effectivePermissions: [TOOLING_METHODS.executeTool, "Native.GetDeviceStatus"],
+      authGrantRevision: 1,
+      manifestRevision: 1,
+    },
+    authenticatedPeerContext: {
+      selector,
+      transport: {
+        channelBinding: "binding-1",
+        claimantSignalingPeerId: "peer-recipient",
+        verifierSignalingPeerId: "node-1",
+      },
+      connectionEpoch: "epoch-1",
+      credentialRevision: 1,
+      authenticatedAtMs: receivedAtMs,
+    },
+    signal: new AbortController().signal,
+    receivedAtMs,
+    deadlineAtMs: receivedAtMs + 1_000,
   };
 }
 

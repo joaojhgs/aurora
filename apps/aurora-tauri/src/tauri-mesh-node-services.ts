@@ -4,7 +4,14 @@ import type {
   NativeCapabilityManifest,
   TauriSidecarStatus,
 } from "@aurora/client";
-import type { EnvelopeCryptoPort, LocalDataBackend, LocalDataSession } from "@aurora/client/local-data";
+import type {
+  EnvelopeCryptoPort,
+  JsonValue as LocalDataJsonValue,
+  LocalAuditRecord,
+  LocalAuditRepository,
+  LocalDataBackend,
+  LocalDataSession,
+} from "@aurora/client/local-data";
 import {
   EncryptedPeerGrantRepository,
   LocalDataPeerAuditSink,
@@ -22,6 +29,8 @@ import {
   LocalToolRegistry,
   createMeshNodeLocalToolProvider,
   type LocalToolAuditPort,
+  type LocalToolAuditRecord,
+  type LocalToolAuditResult,
   type LocalToolExportDecisionPort,
   type MeshNodeLocalToolProviderComposition,
 } from "@aurora/client/local-tools";
@@ -47,7 +56,6 @@ export interface TauriMeshNodeServicesOptions {
   readonly randomBytes?: (length: number) => Uint8Array;
   readonly randomId?: () => string;
   readonly now?: () => number;
-  readonly localToolAudit?: LocalToolAuditPort | undefined;
   readonly exportDecision?: LocalToolExportDecisionPort | undefined;
   readonly invokeCommand?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 }
@@ -60,6 +68,7 @@ export type TauriMeshNodeServicesDisabledReason =
   | "capability_packs_disabled"
   | "native_evidence_missing"
   | "native_tools_unavailable"
+  | "local_tool_audit_unavailable"
   | "durable_store_unavailable";
 
 export interface DisabledTauriMeshNodeServices {
@@ -186,6 +195,13 @@ export async function createTauriMeshNodeServices(
       localNodeId: localPeerId,
       ...(options.randomId ? { randomId: options.randomId } : {}),
     });
+    const localToolAudit = createDurableLocalToolAudit({
+      auditRepository: session.localAudit,
+      profileId: profile.id,
+      localNodeId: localPeerId,
+      ...(options.randomId ? { randomId: options.randomId } : {}),
+      ...(options.now ? { now: options.now } : {}),
+    });
     const randomBytes = options.randomBytes ?? secureRandomBytes;
     const challengeStore = new MemoryReconnectChallengeStore({ randomBytes });
     const authorityResolver = new PeerAuthorityResolver({
@@ -221,7 +237,7 @@ export async function createTauriMeshNodeServices(
       registry,
       authorityResolver,
       exportDecision: options.exportDecision ?? SHARE_ALL_LOCAL_TOOLS,
-      audit: options.localToolAudit ?? NOOP_LOCAL_TOOL_AUDIT,
+      audit: localToolAudit,
       cursorSecret: randomBytes(32),
       providerEnabled: true,
       ...(options.now ? { clock: options.now } : {}),
@@ -260,9 +276,11 @@ export async function createTauriMeshNodeServices(
         await backend.close();
       },
     };
-  } catch {
+  } catch (error) {
     await backend.close().catch(() => undefined);
-    return disabled("durable_store_unavailable", {
+    return disabled(error instanceof LocalToolAuditUnavailableError
+      ? "local_tool_audit_unavailable"
+      : "durable_store_unavailable", {
       registry,
       registeredToolIds: registered.registered,
     });
@@ -323,7 +341,90 @@ const SHARE_ALL_LOCAL_TOOLS: LocalToolExportDecisionPort = Object.freeze({
   isShared: () => true,
 });
 
-const NOOP_LOCAL_TOOL_AUDIT: LocalToolAuditPort = () => undefined;
+class LocalToolAuditUnavailableError extends Error {
+  constructor() {
+    super("local tool audit repository unavailable");
+    this.name = "LocalToolAuditUnavailableError";
+  }
+}
+
+function createDurableLocalToolAudit(options: {
+  readonly auditRepository: LocalAuditRepository | null | undefined;
+  readonly profileId: string;
+  readonly localNodeId: string;
+  readonly randomId?: () => string;
+  readonly now?: () => number;
+}): LocalToolAuditPort {
+  if (!options.auditRepository || typeof options.auditRepository.appendAudit !== "function") {
+    throw new LocalToolAuditUnavailableError();
+  }
+  const randomId = options.randomId ?? defaultLocalToolAuditId;
+  const now = options.now ?? Date.now;
+  return async (record: LocalToolAuditRecord) => {
+    await options.auditRepository!.appendAudit(localAuditRecordFromLocalToolAudit({
+      record,
+      profileId: options.profileId,
+      localNodeId: options.localNodeId,
+      id: randomId(),
+      createdAtMs: now(),
+    }));
+  };
+}
+
+function localAuditRecordFromLocalToolAudit(options: {
+  readonly record: LocalToolAuditRecord;
+  readonly profileId: string;
+  readonly localNodeId: string;
+  readonly id: string;
+  readonly createdAtMs: number;
+}): LocalAuditRecord {
+  const record = options.record;
+  return {
+    id: options.id,
+    profileId: options.profileId,
+    localNodeId: options.localNodeId,
+    peerId: boundedNullable(record.caller_peer_id),
+    action: record.action === "prepare" ? "local_tool.prepare" : "local_tool.execute",
+    decision: record.result,
+    resultStatus: resultStatus(record.result),
+    connectionEpoch: boundedNullable(record.connection_epoch),
+    methodId: boundedNullable(record.method_id),
+    toolContractId: boundedNullable(record.global_tool_id ?? record.local_tool_name ?? null),
+    correlationId: boundedNullable(record.correlation_id),
+    redactedDetailJson: redactedLocalToolAuditDetails(record),
+    createdAtMs: options.createdAtMs,
+  };
+}
+
+function redactedLocalToolAuditDetails(record: LocalToolAuditRecord): Record<string, LocalDataJsonValue> {
+  return {
+    providerPeerId: record.provider_peer_id,
+    providerServiceInstanceId: record.provider_service_instance_id,
+    callerPrincipalId: record.caller_principal_id ?? null,
+    localToolName: record.local_tool_name ?? null,
+    policyDecisionId: record.policy_decision_id ?? null,
+    reasonCode: record.reason_code ?? null,
+    argsHash: record.args_hash ?? null,
+    redacted: true,
+    secretsRedacted: true,
+  };
+}
+
+function resultStatus(result: LocalToolAuditResult): string {
+  if (result === "allowed" || result === "dry_run" || result === "success") return "complete";
+  if (result === "cancelled") return "cancelled";
+  return "failed";
+}
+
+function boundedNullable(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.slice(0, 256);
+}
+
+function defaultLocalToolAuditId(): string {
+  const bytes = secureRandomBytes(16);
+  return `audit-${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
 
 export function createDisabledTauriNativeCapabilityTransport(): TauriNativeCapabilityTransport {
   const unavailable = async (): Promise<never> => {
