@@ -2103,9 +2103,16 @@ export function nativeFeatureLabel(
 export function iosInvocationLabel(
   status: TauriIosInvocationStatus | null | undefined,
 ): string {
-  return status?.available
-    ? "Available; Aurora does not replace the system assistant"
-    : "Not available; Aurora does not replace the system assistant";
+  const stateValue = (status as unknown as { state?: unknown } | null | undefined)
+    ?.state;
+  const state = typeof stateValue === "string" ? stateValue : null;
+  if (status?.available && state !== "degraded" && !state?.startsWith("pending")) {
+    return "Available; Aurora does not replace the system assistant";
+  }
+  if (state === "degraded" || state?.startsWith("pending")) {
+    return "Needs attention; Aurora does not replace the system assistant";
+  }
+  return "Not available; Aurora does not replace the system assistant";
 }
 
 export function localLightInferenceLabel(

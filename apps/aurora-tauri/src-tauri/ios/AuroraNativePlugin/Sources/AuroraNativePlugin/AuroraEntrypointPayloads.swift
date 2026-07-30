@@ -38,14 +38,16 @@ public struct AuroraEntrypointDescriptor: Codable {
 }
 
 public enum AuroraEntrypointFactory {
+  private static let pendingNativeTargetReason = "iOS native target proof is pending; this source is described but must not be reported available until a macOS/Xcode build and simulator or device invocation proves it."
+
   public static func descriptors() -> [AuroraEntrypointDescriptor] {
     [
       AuroraEntrypointDescriptor(
         id: "ios_share_extension",
         platform: "ios",
         label: "iOS share extension",
-        state: "available",
-        available: true,
+        state: "pending_native_target",
+        available: false,
         capability: "ios.shareExtension",
         permission: "aurora.ios.shareExtension",
         intakeType: "share_extension",
@@ -56,7 +58,7 @@ public enum AuroraEntrypointFactory {
         backendRequired: true,
         payloadCommand: "iosEntrypointPayload",
         privacyClass: "personal",
-        reason: "Share extension target hands redacted item metadata to backend attachment/context ingestion."
+        reason: pendingNativeTargetReason
       ),
       AuroraEntrypointDescriptor(
         id: "ios_deep_link",
@@ -80,8 +82,8 @@ public enum AuroraEntrypointFactory {
         id: "ios_widget",
         platform: "ios",
         label: "iOS widget",
-        state: "available",
-        available: true,
+        state: "pending_native_target",
+        available: false,
         capability: "ios.widgets",
         permission: "aurora.ios.widgets",
         intakeType: "widget",
@@ -92,14 +94,14 @@ public enum AuroraEntrypointFactory {
         backendRequired: true,
         payloadCommand: "iosEntrypointPayload",
         privacyClass: "personal",
-        reason: "Widget actions open Aurora and do not run orchestrator logic in the extension."
+        reason: pendingNativeTargetReason
       ),
       AuroraEntrypointDescriptor(
         id: "ios_file_association",
         platform: "ios",
         label: "iOS file association",
-        state: "available",
-        available: true,
+        state: "pending_native_target",
+        available: false,
         capability: "ios.fileAssociations",
         permission: "aurora.ios.fileAssociations",
         intakeType: "file_association",
@@ -110,7 +112,7 @@ public enum AuroraEntrypointFactory {
         backendRequired: true,
         payloadCommand: "iosEntrypointPayload",
         privacyClass: "personal",
-        reason: "File open events pass file URL metadata to the app; backend ingestion owns storage and redaction."
+        reason: pendingNativeTargetReason
       )
     ]
   }

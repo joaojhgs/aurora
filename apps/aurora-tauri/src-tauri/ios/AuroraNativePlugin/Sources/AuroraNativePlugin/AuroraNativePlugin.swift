@@ -44,6 +44,7 @@ public final class AuroraNativePlugin: Plugin {
   private static let maxTitleLength = 120
   private static let maxNotificationBodyLength = 512
   private static let maxUrlLength = 2048
+  private static let pendingNativeTargetReason = "iOS native target proof is pending; this source is described but must not be reported available until a macOS/Xcode build and simulator or device invocation proves it."
   private static let allowedOutgoingLinkSchemes: Set<String> = [
     "https",
     "mailto",
@@ -135,7 +136,7 @@ public final class AuroraNativePlugin: Plugin {
       "platform": "ios",
       "id": "shareExtension",
       "label": "iOS share extension intake",
-      "support": "supported-path",
+      "support": "pending",
       "capability": "ios.shareExtension",
       "permission": "aurora.ios.shareExtension",
       "invocation": "share_extension",
@@ -143,8 +144,9 @@ public final class AuroraNativePlugin: Plugin {
       "privacyClass": "sensitive",
       "requiresConfirmation": true,
       "siriReplacement": false,
-      "evidenceSource": "IOS-004 native plugin manifest",
-      "userCopy": "Share extension payloads pass redacted metadata to AuroraClient/backend ingestion before any assistant action is claimed.",
+      "evidenceSource": "src-tauri/ios/preflight.json:share-extension-flow",
+      "reason": AuroraNativePlugin.pendingNativeTargetReason,
+      "userCopy": "Share extension intake will stay unavailable until Aurora verifies the iOS app target.",
       "verifier": "tauri ios build plus compiled IOS-004 entrypoint payload smoke"
     ],
     [
@@ -167,7 +169,7 @@ public final class AuroraNativePlugin: Plugin {
       "platform": "ios",
       "id": "widgets",
       "label": "iOS widgets",
-      "support": "supported-path",
+      "support": "pending",
       "capability": "ios.widgets",
       "permission": "aurora.ios.widgets",
       "invocation": "widget",
@@ -175,15 +177,16 @@ public final class AuroraNativePlugin: Plugin {
       "privacyClass": "personal",
       "requiresConfirmation": false,
       "siriReplacement": false,
-      "evidenceSource": "IOS-004 native plugin manifest",
-      "userCopy": "Widget actions open Aurora through app-owned entrypoints and do not run orchestrator logic in the extension process.",
+      "evidenceSource": "src-tauri/ios/preflight.json:simulator-plugin-app-intent",
+      "reason": AuroraNativePlugin.pendingNativeTargetReason,
+      "userCopy": "Widget actions will stay unavailable until Aurora verifies the iOS widget target.",
       "verifier": "tauri ios build plus compiled IOS-004 entrypoint payload smoke"
     ],
     [
       "platform": "ios",
       "id": "fileAssociations",
       "label": "iOS file associations",
-      "support": "supported-path",
+      "support": "pending",
       "capability": "ios.fileAssociations",
       "permission": "aurora.ios.fileAssociations",
       "invocation": "file_association",
@@ -191,8 +194,9 @@ public final class AuroraNativePlugin: Plugin {
       "privacyClass": "sensitive",
       "requiresConfirmation": true,
       "siriReplacement": false,
-      "evidenceSource": "IOS-004 native plugin manifest",
-      "userCopy": "File-open events pass redacted file URL metadata to AuroraClient/backend ingestion; file contents are not embedded in native diagnostics.",
+      "evidenceSource": "src-tauri/ios/preflight.json:share-extension-flow",
+      "reason": AuroraNativePlugin.pendingNativeTargetReason,
+      "userCopy": "File-open intake will stay unavailable until Aurora verifies iOS file association handling.",
       "verifier": "tauri ios build plus Tauri mobile file-association config and compiled IOS-004 payload smoke"
     ],
     [
@@ -272,10 +276,10 @@ public final class AuroraNativePlugin: Plugin {
       "permissions": [
         "aurora.iosAppIntents": true,
         "aurora.iosShortcuts": true,
-        "aurora.ios.shareExtension": true,
+        "aurora.ios.shareExtension": false,
         "aurora.ios.deepLinks": true,
-        "aurora.ios.widgets": true,
-        "aurora.ios.fileAssociations": true,
+        "aurora.ios.widgets": false,
+        "aurora.ios.fileAssociations": false,
         "aurora.ios.entrypointPayload": true,
         "aurora.iosLocalLightInference": false,
         "aurora.ios.shareText": true,
@@ -300,10 +304,10 @@ public final class AuroraNativePlugin: Plugin {
       "capabilities": [
         "ios.appIntents": true,
         "ios.shortcuts": true,
-        "ios.shareExtension": true,
+        "ios.shareExtension": false,
         "ios.deepLinks": true,
-        "ios.widgets": true,
-        "ios.fileAssociations": true,
+        "ios.widgets": false,
+        "ios.fileAssociations": false,
         "ios.entrypointPayload": true,
         "ios.localLightInference.provider": true,
         "ios.localLightInference.modelRuntime": false,
@@ -329,10 +333,10 @@ public final class AuroraNativePlugin: Plugin {
       "permissionStates": [
         "aurora.iosAppIntents": "available",
         "aurora.iosShortcuts": "available",
-        "aurora.ios.shareExtension": "available",
+        "aurora.ios.shareExtension": "pending_native_target",
         "aurora.ios.deepLinks": "available",
-        "aurora.ios.widgets": "available",
-        "aurora.ios.fileAssociations": "available",
+        "aurora.ios.widgets": "pending_native_target",
+        "aurora.ios.fileAssociations": "pending_native_target",
         "aurora.ios.entrypointPayload": "available",
         "aurora.iosLocalLightInference": "degraded",
         "aurora.ios.shareText": "available",
@@ -353,10 +357,10 @@ public final class AuroraNativePlugin: Plugin {
       "capabilityStates": [
         "ios.appIntents": "available",
         "ios.shortcuts": "available",
-        "ios.shareExtension": "available",
+        "ios.shareExtension": "pending_native_target",
         "ios.deepLinks": "available",
-        "ios.widgets": "available",
-        "ios.fileAssociations": "available",
+        "ios.widgets": "pending_native_target",
+        "ios.fileAssociations": "pending_native_target",
         "ios.entrypointPayload": "available",
         "ios.localLightInference.provider": "degraded",
         "ios.localLightInference.modelRuntime": "needs_native_permission",
@@ -382,16 +386,16 @@ public final class AuroraNativePlugin: Plugin {
         "platform": "ios",
         "appIntentsAvailable": true,
         "shortcutsAvailable": true,
-        "shareExtensionAvailable": true,
+        "shareExtensionAvailable": false,
         "deepLinksAvailable": true,
-        "widgetsAvailable": true,
-        "fileAssociationsAvailable": true,
+        "widgetsAvailable": false,
+        "fileAssociationsAvailable": false,
         "siriReplacement": false,
         "backendHandoffRequired": true,
         "privacyLabels": ["personal", "sensitive"],
-        "state": "available",
-        "reason": "iOS actions are available; Aurora still confirms whether shared content was processed.",
-        "evidenceSource": "IOS-004 native plugin manifest",
+        "state": "degraded",
+        "reason": "Deep-link and app-owned source wiring is present, but share extension, widget, and file association targets remain pending until macOS/Xcode build and simulator or device invocation proof exists.",
+        "evidenceSource": "src-tauri/ios/preflight.json",
         "secretsRedacted": true
       ],
       "localLightInference": AuroraNativePlugin.localLightInferenceStatusPayload(),
@@ -423,7 +427,7 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func invocationStatus(_ invoke: Invoke) throws {
     let executableActions = mobileIntegrations
-      .filter { ($0["support"] as? String) != "unsupported" }
+      .filter { ($0["support"] as? String) == "supported-path" }
       .map { $0["id"] as? String ?? "" }
       .filter { !$0.isEmpty }
     invoke.resolve([

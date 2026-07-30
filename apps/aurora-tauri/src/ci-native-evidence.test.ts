@@ -29,6 +29,36 @@ function generatedDesktopClientConfigText() {
   return readFileSync(configPath, 'utf8')
 }
 
+const pendingIosNativeTargetClaims = [
+  {
+    id: 'shareExtension',
+    integrationId: 'ios-share-extension',
+    releaseGateId: 'share-extension-flow',
+    capability: 'ios.shareExtension',
+    permission: 'aurora.ios.shareExtension',
+    entrypointId: 'ios_share_extension',
+    booleanKeys: ['shareExtensionAvailable'],
+  },
+  {
+    id: 'widgets',
+    integrationId: 'ios-widget-status',
+    releaseGateId: 'simulator-plugin-app-intent',
+    capability: 'ios.widgets',
+    permission: 'aurora.ios.widgets',
+    entrypointId: 'ios_widget',
+    booleanKeys: ['widgetsAvailable'],
+  },
+  {
+    id: 'fileAssociations',
+    integrationId: 'ios-share-extension',
+    releaseGateId: 'share-extension-flow',
+    capability: 'ios.fileAssociations',
+    permission: 'aurora.ios.fileAssociations',
+    entrypointId: 'ios_file_association',
+    booleanKeys: ['fileAssociationsAvailable'],
+  },
+] as const
+
 describe('Tauri CI native evidence contract', () => {
   it('keeps the Linux Tauri smoke script from being only jsdom/web route tests', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
@@ -294,6 +324,66 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosPolicyWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:policy')
     expect(iosPolicyWorkflow).toContain("if: inputs.app_store_dry_run == 'true'")
     expect(iosPolicyWorkflow).toContain('APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}')
+  })
+
+  it('keeps pending iOS native targets from claiming runtime availability before preflight proof exists', () => {
+    const preflight = JSON.parse(repoText('apps/aurora-tauri/src-tauri/ios/preflight.json')) as {
+      integrations: Array<{ id: string; status: string }>
+      releaseGates: Array<{ id: string; status: string }>
+    }
+    const swiftPlugin = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',
+    )
+    const swiftEntrypoints = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift',
+    )
+    const app = repoText('apps/aurora-tauri/src/tauri-app.tsx')
+
+    expect(swiftPlugin).toContain('private static let pendingNativeTargetReason')
+    expect(swiftEntrypoints).toContain('private static let pendingNativeTargetReason')
+    expect(app).toContain('state === "degraded" || state?.startsWith("pending")')
+
+    for (const claim of pendingIosNativeTargetClaims) {
+      const integration = preflight.integrations.find(({ id }) => id === claim.integrationId)
+      const releaseGate = preflight.releaseGates.find(({ id }) => id === claim.releaseGateId)
+      expect(integration, claim.integrationId).toBeDefined()
+      expect(releaseGate, claim.releaseGateId).toBeDefined()
+      expect(
+        ['pending', 'partial', 'requires-macos', 'requires-credentials'].includes(releaseGate?.status ?? ''),
+        `${claim.releaseGateId} must remain a non-proof gate until Xcode evidence exists`,
+      ).toBe(true)
+
+      const manifestBlock = swiftPlugin.match(
+        new RegExp(`"id": "${claim.id}"[\\s\\S]*?"verifier": "[^"]+"`),
+      )?.[0] ?? ''
+      expect(manifestBlock, claim.id).toContain('"support": "pending"')
+      expect(manifestBlock, claim.id).toContain('"reason": AuroraNativePlugin.pendingNativeTargetReason')
+      expect(manifestBlock, claim.id).not.toContain('"support": "supported-path"')
+
+      const descriptorBlock = swiftEntrypoints.match(
+        new RegExp(`id: "${claim.entrypointId}"[\\s\\S]*?reason: pendingNativeTargetReason`),
+      )?.[0] ?? ''
+      expect(descriptorBlock, claim.entrypointId).toContain('state: "pending_native_target"')
+      expect(descriptorBlock, claim.entrypointId).toContain('available: false')
+      expect(descriptorBlock, claim.entrypointId).not.toContain('state: "available"')
+      expect(descriptorBlock, claim.entrypointId).not.toContain('available: true')
+
+      expect(swiftPlugin, `${claim.permission} permission boolean`).toContain(`"${claim.permission}": false`)
+      expect(swiftPlugin, `${claim.capability} capability boolean`).toContain(`"${claim.capability}": false`)
+      expect(swiftPlugin, `${claim.permission} permission state`).toContain(`"${claim.permission}": "pending_native_target"`)
+      expect(swiftPlugin, `${claim.capability} capability state`).toContain(`"${claim.capability}": "pending_native_target"`)
+      for (const key of claim.booleanKeys) {
+        expect(swiftPlugin, key).toContain(`"${key}": false`)
+        expect(swiftPlugin, key).not.toContain(`"${key}": true`)
+      }
+    }
+
+    expect(swiftEntrypoints).toContain('id: "ios_deep_link"')
+    expect(swiftEntrypoints).toContain('state: "available"')
+    expect(swiftEntrypoints).toContain('available: true')
+    expect(swiftPlugin).toContain('"deepLinksAvailable": true')
+    expect(swiftPlugin).toContain('"ios.deepLinks": "available"')
+    expect(swiftPlugin).toContain('.filter { ($0["support"] as? String) == "supported-path" }')
   })
 
   it('uploads failing route screenshots, traces, and logs from CI gates', () => {
