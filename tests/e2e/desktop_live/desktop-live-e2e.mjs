@@ -12,6 +12,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const serviceScript = path.join(repoRoot, 'scripts/webrtc_interop_services.sh')
 const gatewayScript = path.join(repoRoot, 'scripts/webrtc_interop_gateway.py')
 const scannerScript = path.join(repoRoot, 'scripts/webrtc_interop_scan.py')
+const localWebDriverScript = path.join(repoRoot, 'tests/e2e/desktop_live/desktop-webdriver-driver.mjs')
 const defaultArtifactDir = path.join(repoRoot, 'reports/desktop-live-e2e')
 const laneChoices = new Set(['direct', 'stun', 'turn'])
 const forbiddenDesktopChildPattern = /\b(?:python(?:3(?:\.\d+)?)?|uv|aurora-sidecar)\b|(?:^|\s)main\.py(?:\s|$)/i
@@ -41,6 +42,7 @@ async function runCheckOnly() {
       pythonPeerHarness: await fileExists(gatewayScript),
       signalingServicesHarness: await fileExists(serviceScript),
       scanner: await fileExists(scannerScript),
+      repoOwnedWebDriverFixture: await fileExists(localWebDriverScript),
     },
     launchContract: desktopClientLaunchContract(),
     stopCondition:
@@ -62,11 +64,14 @@ async function runLive() {
   const donePath = path.join(artifactDir, 'desktop-done.json')
   const pythonReportPath = path.join(artifactDir, 'python-gateway-report.json')
   const desktopReportPath = path.join(artifactDir, 'desktop-client-report.json')
+  const driverLogPath = path.join(artifactDir, 'desktop-driver.log')
+  const sessionReportPath = path.join(artifactDir, 'desktop-session-report.json')
   const finalReportPath = path.join(artifactDir, 'report.json')
   const runtimeProfilePath = path.join(runtimeDir, 'runtime-profile.json')
   const invitePath = path.join(runtimeDir, 'mesh-invite.json')
   const roomSecret = crypto.randomBytes(32).toString('base64url')
   const token = `desktop.${crypto.randomBytes(24).toString('base64url')}`
+  const sessionNonce = crypto.randomBytes(24).toString('base64url')
   const room = `desktop-live-${process.pid}-${Date.now().toString(36)}`
   const timeoutMs = Number(process.env.AURORA_DESKTOP_LIVE_E2E_TIMEOUT_MS ?? 180_000)
   const driverCommand = process.env.AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND
@@ -94,6 +99,8 @@ async function runLive() {
       fs.rm(donePath, { force: true }),
       fs.rm(pythonReportPath, { force: true }),
       fs.rm(desktopReportPath, { force: true }),
+      fs.rm(driverLogPath, { force: true }),
+      fs.rm(sessionReportPath, { force: true }),
       fs.rm(finalReportPath, { force: true }),
     ])
 
@@ -175,14 +182,17 @@ async function runLive() {
     })
 
     await waitForTauriClientLaunch(tauri, () => tauriOutput, timeoutMs)
-    const processTree = await assertNoTauriOwnedPythonChild(tauri.pid)
+    const processTreeBefore = await assertNoTauriOwnedPythonChild(tauri.pid)
 
     if (!driverCommand) {
+      const processTreeAfter = await assertNoTauriOwnedPythonChild(tauri.pid)
       await writeJson(desktopReportPath, {
         schema: 'aurora.desktop_live_e2e.desktop_report.v1',
         status: 'blocked',
         blocker: 'missing-driver-command',
         driverCommandEnv: 'AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND',
+        sessionNonce,
+        tauriPid: String(tauri.pid),
         requiredDriverEvidence: [
           'open the Tauri desktop-client WebView in /mesh with the generated invite',
           'approve the Python peer pairing in the desktop WebView',
@@ -190,16 +200,28 @@ async function runLive() {
           'write desktop-done.json and desktop-client-report.json',
         ],
         launchContract: desktopClientLaunchContract(),
-        processTree,
+        processTree: {
+          beforeDriver: processTreeBefore,
+          afterDriver: processTreeAfter,
+        },
         secretsRedacted: true,
       })
+      await writeSessionReport(sessionReportPath, {
+        status: 'blocked',
+        sessionNonce,
+        tauriPid: String(tauri.pid),
+        processTreeBefore,
+        processTreeAfter,
+        driverReportPath: desktopReportPath,
+      })
       await writeJson(donePath, { ok: false, at: new Date().toISOString(), reason: 'missing-driver-command' })
+      await assertNoSeededSecretsInTree(artifactDir, seededSecrets)
       throw new Error(
         'AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND is required for full desktop WebView approval/RPC assertions',
       )
     }
 
-    await runDriver(driverCommand, {
+    const driverRun = await runDriver(driverCommand, {
       AURORA_DESKTOP_LIVE_E2E_READY: readyPath,
       AURORA_DESKTOP_LIVE_E2E_DONE: donePath,
       AURORA_DESKTOP_LIVE_E2E_DESKTOP_REPORT: desktopReportPath,
@@ -207,15 +229,29 @@ async function runLive() {
       AURORA_DESKTOP_LIVE_E2E_INVITE: invitePath,
       AURORA_DESKTOP_LIVE_E2E_ROOM_SECRET: roomSecret,
       AURORA_DESKTOP_LIVE_E2E_TAURI_PID: String(tauri.pid),
+      AURORA_DESKTOP_LIVE_E2E_SESSION_NONCE: sessionNonce,
       WEBRTC_INTEROP_LANE: lane,
       WEBRTC_INTEROP_READY: readyPath,
       WEBRTC_INTEROP_DONE: donePath,
       WEBRTC_INTEROP_BROWSER_REPORT: desktopReportPath,
       WEBRTC_INTEROP_ARTIFACT_DIR: artifactDir,
       WEBRTC_INTEROP_ROOM_SECRET: roomSecret,
-    }, timeoutMs)
+    }, timeoutMs, seededSecrets, driverLogPath)
 
     await waitForJson(donePath, timeoutMs, 'desktop driver completion', tauri)
+    const desktopReport = await waitForJson(desktopReportPath, 10_000, 'desktop driver report')
+    validateDriverReport(desktopReport, { sessionNonce, tauriPid: String(tauri.pid) })
+    const processTreeAfter = await assertNoTauriOwnedPythonChild(tauri.pid)
+    await writeSessionReport(sessionReportPath, {
+      status: 'passed',
+      sessionNonce,
+      tauriPid: String(tauri.pid),
+      processTreeBefore,
+      processTreeAfter,
+      driverReportPath: desktopReportPath,
+      driverLogDigest: driverRun.outputDigest,
+    })
+    await assertNoSeededSecretsInTree(artifactDir, seededSecrets)
     await waitForChild(pythonPeer, 30_000, 'Python peer')
     run('uv', [
       'run',
@@ -235,6 +271,21 @@ async function runLive() {
     const aggregate = await waitForJson(finalReportPath, 10_000, 'aggregate report')
     assert.equal(aggregate.status, 'passed')
     assert.equal(aggregate.secretsRedacted, true)
+    await writeJson(finalReportPath, {
+      ...aggregate,
+      desktopSession: {
+        tauriPid: String(tauri.pid),
+        sessionNonceDigest: sha256Hex(sessionNonce),
+        processTree: {
+          beforeDriver: processTreeBefore,
+          afterDriver: processTreeAfter,
+        },
+        driverReportDigest: sha256Hex(JSON.stringify(desktopReport)),
+        driverLogDigest: driverRun.outputDigest,
+      },
+      secretsRedacted: true,
+    })
+    await assertNoSeededSecretsInTree(artifactDir, seededSecrets)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await writeJson(path.join(artifactDir, 'desktop-live-failure.json'), {
@@ -245,6 +296,7 @@ async function runLive() {
       tauriOutputTail: redactSeeded(redactProcessOutput(tauriOutput).slice(-20_000), seededSecrets),
       secretsRedacted: true,
     })
+    await assertNoSeededSecretsInTree(artifactDir, seededSecrets).catch(() => undefined)
     throw error
   } finally {
     await cleanup()
@@ -441,14 +493,38 @@ async function waitForTauriClientLaunch(child, output, timeoutMs) {
   throw new Error('Timed out waiting for Tauri desktop-client launch markers')
 }
 
-async function runDriver(command, env, timeoutMs) {
+async function runDriver(command, env, timeoutMs, seededSecrets, logPath) {
   const child = spawn(command, {
     cwd: repoRoot,
     env: { ...process.env, ...env },
-    stdio: 'inherit',
+    stdio: ['ignore', 'pipe', 'pipe'],
     shell: true,
   })
-  await waitForChild(child, timeoutMs, 'desktop driver command')
+  let stdout = ''
+  let stderr = ''
+  child.stdout.on('data', (chunk) => {
+    stdout += String(chunk)
+  })
+  child.stderr.on('data', (chunk) => {
+    stderr += String(chunk)
+  })
+  const exit = await waitForExit(child, timeoutMs, 'desktop driver command')
+  const redacted = redactSeeded(redactProcessOutput(`stdout:\n${stdout}\nstderr:\n${stderr}`), seededSecrets)
+  assertNoSeededSecretsInText(redacted, seededSecrets, 'desktop driver log')
+  await fs.writeFile(logPath, redacted)
+  if (exit.code !== 0) {
+    throw new Error(`desktop driver command exited with ${exit.code ?? `signal ${exit.signal}`}`)
+  }
+  return {
+    outputDigest: sha256Hex(redacted),
+  }
+}
+
+function validateDriverReport(report, { sessionNonce, tauriPid }) {
+  assert.equal(report.status, 'passed', 'desktop driver report must pass before aggregate scan')
+  assert.equal(report.sessionNonce, sessionNonce, 'desktop driver report must echo the launch nonce')
+  assert.equal(String(report.tauriPid), tauriPid, 'desktop driver report must bind to the launched Tauri PID')
+  assert.equal(report.secretsRedacted, true, 'desktop driver report must declare redacted artifacts')
 }
 
 async function waitForJson(file, timeoutMs, label, child, childOutput) {
@@ -478,6 +554,17 @@ async function waitForChild(child, timeoutMs, label) {
       clearTimeout(timer)
       if (code === 0) resolve()
       else reject(new Error(`${label} exited with ${code ?? `signal ${signal}`}`))
+    })
+  })
+}
+
+async function waitForExit(child, timeoutMs, label) {
+  if (child.exitCode !== null) return { code: child.exitCode, signal: child.signalCode }
+  return await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), timeoutMs)
+    child.once('exit', (code, signal) => {
+      clearTimeout(timer)
+      resolve({ code, signal })
     })
   })
 }
@@ -529,6 +616,65 @@ function run(command, args) {
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with status ${result.status}`)
 }
 
+async function writeSessionReport(file, {
+  status,
+  sessionNonce,
+  tauriPid,
+  processTreeBefore,
+  processTreeAfter,
+  driverReportPath,
+  driverLogDigest,
+}) {
+  await writeJson(file, {
+    schema: 'aurora.desktop_live_e2e.session.v1',
+    status,
+    tauriPid,
+    sessionNonceDigest: sha256Hex(sessionNonce),
+    processTree: {
+      beforeDriver: processTreeBefore,
+      afterDriver: processTreeAfter,
+    },
+    driverReportPath: path.relative(repoRoot, driverReportPath),
+    ...(driverLogDigest ? { driverLogDigest } : {}),
+    secretsRedacted: true,
+  })
+}
+
+async function assertNoSeededSecretsInTree(root, seededSecrets) {
+  const findings = []
+  for (const file of await collectArtifactFiles(root)) {
+    const text = await fs.readFile(file, 'utf8')
+    for (const secret of seededSecrets) {
+      if (secret && text.includes(secret)) {
+        findings.push({ file: path.relative(repoRoot, file), secretDigest: sha256Hex(secret) })
+      }
+    }
+  }
+  assert.deepEqual(findings, [], 'desktop live artifacts/logs must not contain seeded room secrets or tokens')
+}
+
+async function collectArtifactFiles(root) {
+  const out = []
+  async function visit(directory) {
+    let entries = []
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        await visit(full)
+      } else if (entry.isFile() && /\.(json|log|txt)$/i.test(entry.name)) {
+        out.push(full)
+      }
+    }
+  }
+  await visit(root)
+  return out
+}
+
 function resolveArtifactDir() {
   return path.resolve(process.env.AURORA_DESKTOP_LIVE_E2E_ARTIFACT_DIR ?? defaultArtifactDir)
 }
@@ -570,6 +716,15 @@ function redactSeeded(text, secrets) {
   return secrets.reduce((next, secret) => next.split(secret).join('<redacted>'), text)
 }
 
+function assertNoSeededSecretsInText(text, seededSecrets, label) {
+  const leaked = seededSecrets.filter((secret) => secret && text.includes(secret))
+  assert.deepEqual(leaked.map(sha256Hex), [], `${label} must not contain exact seeded secrets`)
+}
+
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex')
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -605,5 +760,28 @@ function runSelfTest() {
   const invite = buildDesktopInvite(ready, 'secret-room')
   assert.equal(invite.signaling.room_password, 'secret-room')
   assert.match(JSON.stringify(desktopClientLaunchContract()), /AURORA_TAURI_DEV_AUTOSIDECAR/)
+  const redacted = redactSeeded('token-value room-secret', ['token-value', 'room-secret'])
+  assert.equal(redacted, '<redacted> <redacted>')
+  assert.doesNotThrow(() => assertNoSeededSecretsInText(redacted, ['token-value'], 'self-test redaction'))
+  assert.throws(
+    () => assertNoSeededSecretsInText('leaked token-value', ['token-value'], 'self-test leak'),
+    /self-test leak/,
+  )
+  assert.doesNotThrow(() =>
+    validateDriverReport({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
+  assert.throws(() =>
+    validateDriverReport({
+      status: 'passed',
+      sessionNonce: 'wrong',
+      tauriPid: '123',
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
   console.log('desktop-live-e2e self-test passed')
 }
