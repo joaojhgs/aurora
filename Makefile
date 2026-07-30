@@ -142,7 +142,8 @@ check-sdk-backend-contracts:
 	@uv run python scripts/check_sdk_backend_conformance.py \
 		--inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
 		--sdk-types packages/aurora-sdk/src/types.ts \
-		--evidence-dir .artifacts/sdk-backend-conformance
+		--evidence-dir .artifacts/sdk-backend-conformance \
+		--enforce-nonfatal-finding-budget
 	@git diff --exit-code -- \
 		packages/aurora-sdk/src/generated/backend-contracts.schema.json \
 		packages/aurora-sdk/src/generated/backend-contracts.zod.ts \

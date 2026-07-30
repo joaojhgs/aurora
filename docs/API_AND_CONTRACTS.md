@@ -78,7 +78,9 @@ Shared Python/Pydantic DTOs that cross the SDK boundary are generated into check
 - `packages/aurora-sdk/src/generated/backend-contracts.manifest.json`
 - `packages/aurora-sdk/src/generated/tooling-local-provider-v1.json`
 
-Use `make check-sdk-backend-contracts` after changing allowlisted contract models. The generator fails on unsupported schema constructs instead of weakening them to permissive TypeScript validators. SDK, WebRTC, native bridge, persistence, and import/export boundaries should parse untrusted values through the shared validation wrapper and return redacted validation errors.
+Use `make check-sdk-backend-contracts` after changing allowlisted contract models. The generator fails on unsupported schema constructs instead of weakening them to permissive TypeScript validators, and the checker fails strict schema, generated-artifact, stale fixture, and secret-redaction issues.
+
+Some SDK fixture coverage and descriptor drift is known debt rather than a strict schema failure. The conformance checker keeps that debt behind an explicit nonfatal finding budget: current debt may be ratcheted down, but new categories or count increases fail the gate. SDK, WebRTC, native bridge, persistence, and import/export boundaries should parse untrusted values through the shared validation wrapper and return redacted validation errors.
 
 The lightweight mesh-node implementation uses those generated contracts for the bounded TypeScript peer host and local Tooling provider. It may advertise only approved local tools through the existing Tooling contract shape; it must not introduce literal ad hoc bus topics, arbitrary SQL surfaces, generic native process execution, or a second hand-maintained wire DTO model.
 

@@ -30,6 +30,14 @@ SDK_TYPE_INTERFACES = (
     "GatewayBuiltinInventoryRoute",
 )
 EXPECTED_TOOLING_PROVIDER_SERVICE_INSTANCE_ID = "local:aurora-sdk-local-provider-v1:Tooling"
+DEFAULT_NONFATAL_FINDING_BUDGETS = {
+    "sdk_fixture_builtin_coverage_gap": 11,
+    "sdk_fixture_coverage_gap": 217,
+    "sdk_fixture_model_drift": 7,
+    "sdk_fixture_policy_exposure_drift": 24,
+    "sdk_mock_only_method": 1,
+}
+DEFAULT_NONFATAL_FINDING_TOTAL_BUDGET = sum(DEFAULT_NONFATAL_FINDING_BUDGETS.values())
 
 SECRET_VALUE_PATTERNS = (
     re.compile(r"sk-[A-Za-z0-9_-]{12,}"),
@@ -600,6 +608,94 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
+def _nonfatal_finding_counts(findings: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for finding in findings:
+        if finding.get("fatal", True):
+            continue
+        kind = finding.get("kind")
+        if not isinstance(kind, str) or not kind:
+            kind = "<missing>"
+        counts[kind] = counts.get(kind, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _parse_nonfatal_finding_budget_overrides(values: list[str] | None) -> dict[str, int]:
+    budgets: dict[str, int] = {}
+    for value in values or []:
+        if "=" not in value:
+            raise argparse.ArgumentTypeError(
+                f"Nonfatal finding budget must use kind=count format: {value!r}"
+            )
+        kind, count_text = value.split("=", 1)
+        kind = kind.strip()
+        if not kind:
+            raise argparse.ArgumentTypeError("Nonfatal finding budget kind cannot be empty")
+        try:
+            count = int(count_text)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                f"Nonfatal finding budget count must be an integer: {value!r}"
+            ) from exc
+        if count < 0:
+            raise argparse.ArgumentTypeError(
+                f"Nonfatal finding budget count cannot be negative: {value!r}"
+            )
+        budgets[kind] = count
+    return budgets
+
+
+def check_nonfatal_finding_budget(
+    findings: list[dict[str, Any]],
+    *,
+    category_budgets: dict[str, int],
+    total_budget: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    counts = _nonfatal_finding_counts(findings)
+    total = sum(counts.values())
+    issues: list[dict[str, Any]] = []
+    for kind, count in counts.items():
+        budget = category_budgets.get(kind)
+        if budget is None:
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "nonfatal_finding_unexpected_category",
+                    "finding_kind": kind,
+                    "count": count,
+                }
+            )
+        elif count > budget:
+            issues.append(
+                {
+                    "fatal": True,
+                    "kind": "nonfatal_finding_category_budget_exceeded",
+                    "finding_kind": kind,
+                    "count": count,
+                    "budget": budget,
+                }
+            )
+    if total > total_budget:
+        issues.append(
+            {
+                "fatal": True,
+                "kind": "nonfatal_finding_total_budget_exceeded",
+                "count": total,
+                "budget": total_budget,
+            }
+        )
+
+    budget_report = {
+        "ok": not issues,
+        "counts": counts,
+        "total": total,
+        "category_budgets": dict(sorted(category_budgets.items())),
+        "total_budget": total_budget,
+        "issues": issues,
+    }
+    return issues, budget_report
+
+
 def _walk_schema_objects(value: Any) -> list[dict[str, Any]]:
     objects: list[dict[str, Any]] = []
     if isinstance(value, dict):
@@ -867,7 +963,32 @@ def main() -> int:
         action="store_true",
         help="Fail on model, permission, and method-type fixture drift",
     )
+    parser.add_argument(
+        "--enforce-nonfatal-finding-budget",
+        action="store_true",
+        help=(
+            "Fail when known nonfatal drift findings exceed the approved baseline "
+            "or when a new nonfatal finding category appears"
+        ),
+    )
+    parser.add_argument(
+        "--nonfatal-finding-budget",
+        action="append",
+        metavar="KIND=COUNT",
+        help=(
+            "Override one nonfatal finding category budget; repeat to intentionally "
+            "ratchet an approved category down"
+        ),
+    )
+    parser.add_argument(
+        "--nonfatal-finding-total-budget",
+        type=int,
+        default=DEFAULT_NONFATAL_FINDING_TOTAL_BUDGET,
+        help="Approved total nonfatal finding budget",
+    )
     args = parser.parse_args()
+    if args.nonfatal_finding_total_budget < 0:
+        parser.error("--nonfatal-finding-total-budget cannot be negative")
 
     report, evidence = build_report(
         args.inventory,
@@ -881,6 +1002,27 @@ def main() -> int:
         strict_sdk_coverage=args.strict_sdk_coverage,
         strict_field_drift=args.strict_field_drift,
     )
+    if args.enforce_nonfatal_finding_budget:
+        category_budgets = dict(DEFAULT_NONFATAL_FINDING_BUDGETS)
+        try:
+            category_budgets.update(
+                _parse_nonfatal_finding_budget_overrides(args.nonfatal_finding_budget)
+            )
+        except argparse.ArgumentTypeError as exc:
+            parser.error(str(exc))
+        budget_issues, budget_report = check_nonfatal_finding_budget(
+            report["findings"],
+            category_budgets=category_budgets,
+            total_budget=args.nonfatal_finding_total_budget,
+        )
+        report["nonfatal_finding_budget"] = budget_report
+        if budget_issues:
+            report["issues"].extend(budget_issues)
+            report["checked"]["fatal_issues"] = len(report["issues"])
+            report["checked"]["nonfatal_finding_budget_issues"] = len(budget_issues)
+            report["ok"] = False
+        else:
+            report["checked"]["nonfatal_finding_budget_issues"] = 0
     args.evidence_dir.mkdir(parents=True, exist_ok=True)
     _write_json(args.evidence_dir / "conformance-report.json", report)
     _write_json(

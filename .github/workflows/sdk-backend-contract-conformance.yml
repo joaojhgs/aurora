@@ -60,7 +60,8 @@ jobs:
           python scripts/check_sdk_backend_conformance.py \
             --inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
             --sdk-types packages/aurora-sdk/src/types.ts \
-            --evidence-dir .artifacts/sdk-backend-conformance
+            --evidence-dir .artifacts/sdk-backend-conformance \
+            --enforce-nonfatal-finding-budget
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
