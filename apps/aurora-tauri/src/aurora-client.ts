@@ -57,9 +57,13 @@ import {
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
 import type { EnvelopeCryptoPort, LocalDataSession } from "@aurora/client/local-data";
-import type { LightweightAssistantProvider } from "@aurora/client/lightweight-orchestrator";
+import {
+  loadLightweightRemoteProjectionCatalog,
+  type LightweightAssistantProvider,
+} from "@aurora/client/lightweight-orchestrator";
 import type { LocalFeatureSharingPort } from "@aurora/client/local-tools";
 import { createTauriNativePeerConnection } from "./native-webrtc";
+import { createTauriAssistantProviderClient } from "./tauri-assistant-provider";
 import {
   createTauriMeshNodeServices,
   type EnabledTauriMeshNodeServices,
@@ -303,7 +307,13 @@ export async function bootstrapAuroraTauriRuntime(
   meshNodeServicesFactory: TauriMeshNodeServicesFactory = createTauriMeshNodeServices,
   localAssistant: AuroraTauriLightweightAssistantConfig | null = null,
 ): Promise<AuroraTauriRuntime> {
-  if (!requiresAsyncAuroraTauriBootstrap()) return createAuroraTauriRuntime();
+  const localAssistantPromise =
+    resolveTauriProductionLocalAssistant(localAssistant);
+  if (!requiresAsyncAuroraTauriBootstrap()) {
+    return createAuroraTauriRuntime({
+      localAssistant: await localAssistantPromise,
+    });
+  }
   const thinInviteText = consumeFragmentInviteFromRuntime();
   const preferredStore =
     profileStore ??
@@ -320,19 +330,51 @@ export async function bootstrapAuroraTauriRuntime(
     ? store
     : runtimeStoreFromThinStore(store);
   const configuredRuntimeProfile = activeRuntimeProfile(document);
-  const meshNodeServices = await composeTauriMeshNodeServices(
-    configuredRuntimeProfile,
-    meshNodeServicesFactory,
-  );
+  const [meshNodeServices, resolvedLocalAssistant] = await Promise.all([
+    composeTauriMeshNodeServices(
+      configuredRuntimeProfile,
+      meshNodeServicesFactory,
+    ),
+    localAssistantPromise,
+  ]);
   return createAuroraTauriRuntime({
     runtimeProfileStore: runtimeStore,
     runtimeProfileDocument: document,
     packageCapabilities,
     meshNodeServices,
-    localAssistant,
+    localAssistant: resolvedLocalAssistant,
     thinInviteText,
     consumeThinInvite: false,
   });
+}
+
+export async function loadTauriRemoteAssistantTools(
+  runtime: AuroraTauriRuntime,
+): Promise<readonly ToolingProjectionToolInfo[]> {
+  if (!runtime.localAssistant) return [];
+  try {
+    const snapshot = await loadLightweightRemoteProjectionCatalog(
+      runtime.client.tools,
+      { pageSize: 100, maxPages: 16 },
+    );
+    return snapshot.tools;
+  } catch {
+    return [];
+  }
+}
+
+async function resolveTauriProductionLocalAssistant(
+  explicit: AuroraTauriLightweightAssistantConfig | null,
+): Promise<AuroraTauriLightweightAssistantConfig | null> {
+  if (explicit) return explicit;
+  if (!isTauriRuntime()) return null;
+  const client = createTauriAssistantProviderClient({ invoke });
+  const status = await client.status().catch(() => null);
+  if (!status?.enabled) return null;
+  return {
+    provider: client.provider,
+    remoteTools: [],
+  };
 }
 
 export function createInitialAuroraTauriRuntime(): AuroraTauriRuntime {

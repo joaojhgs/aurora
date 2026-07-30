@@ -19,6 +19,7 @@ import {
   nativeCapabilityManifestFixture,
   routeExplainFixture,
   type AuroraTransportRequest,
+  type ToolingGetExportCatalogResponse,
 } from "@aurora/client";
 import {
   auroraNavSections,
@@ -39,6 +40,10 @@ import {
   type LightweightMemoryRecord,
   type LocalDataSession,
 } from "@aurora/client/local-data";
+import {
+  computeProjectionChecksum,
+  computeProjectionPageHash,
+} from "@aurora/client/local-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAuroraTauriRuntime,
@@ -1384,6 +1389,80 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(markup).toContain("Device connection");
     expect(markup).toContain("Direct device connection");
     expect(markup).not.toContain("aurora_sidecar_start");
+  });
+
+  it("refreshes verified remote assistant tools when the Tauri peer becomes authorized", async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() });
+    const digest = computeProjectionChecksum([], [], []);
+    const pageBase = {
+      ok: true,
+      provider_peer_id: "python-peer",
+      service_instance_id: "python:Tooling",
+      selected_protocol_tier: "projection_v1" as const,
+      authority_revision: {
+        catalog_revision: 1,
+        export_policy_revision: 1,
+        auth_grant_revision: 1,
+        manifest_revision: 1,
+        switch_revision: 1,
+        protocol_revision: 1,
+      },
+      projection_revision: "projection-1",
+      projection_digest: digest,
+      page_index: 0,
+      page_size: 100,
+      page_hash: "0".repeat(64),
+      tools: [],
+      blocked_tools: [],
+      retirements: [],
+      complete: true as const,
+      next_cursor: null,
+      total_count: 0,
+      final_checksum: digest,
+    };
+    const page = {
+      ...pageBase,
+      page_hash: computeProjectionPageHash(
+        pageBase as ToolingGetExportCatalogResponse,
+      ),
+    } as ToolingGetExportCatalogResponse;
+    const getExportCatalog = vi
+      .spyOn(client.tools, "getExportCatalog")
+      .mockResolvedValue(page);
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(client),
+      mode: "desktop-thin",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: fakeThinPeer({ status: "authorized" }),
+      thinFeatures: {
+        requestedNodeRole: "mesh-node",
+        activeNodeRole: "mesh-node",
+        meshNodeRuntimeEnabled: true,
+        localToolProviderEnabled: true,
+        lightweightOrchestratorEnabled: true,
+      },
+      localAssistant: {
+        provider: {
+          complete: async () => ({ type: "message", content: "Ready." }),
+        },
+      },
+    };
+    window.history.replaceState({}, "", "/assistant");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => expect(getExportCatalog).toHaveBeenCalledOnce());
+      expect(getExportCatalog).toHaveBeenCalledWith({
+        protocol_tier: "projection_v1",
+        page_size: 100,
+        cursor: null,
+        last_projection_revision: null,
+        last_projection_digest: null,
+      });
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
   });
 
   it.each([

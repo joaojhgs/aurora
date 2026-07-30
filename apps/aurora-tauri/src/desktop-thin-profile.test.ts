@@ -9,7 +9,12 @@ import {
 import { NativePeerCredentialStore, type MeshReconnectChallengeMessage, type WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 
 const tauriCoreMock = vi.hoisted(() => ({
-  invoke: vi.fn(async () => { throw new Error('Tauri invoke is not mocked in this test') }),
+  invoke: vi.fn(async (
+    _command: string,
+    _args?: Record<string, unknown>,
+  ): Promise<unknown> => {
+    throw new Error('Tauri invoke is not mocked in this test')
+  }),
   pluginListeners: [] as Array<{
     plugin: string
     event: string
@@ -220,7 +225,13 @@ describe('desktop-thin live connection profiles', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
-    tauriCoreMock.invoke.mockClear()
+    tauriCoreMock.invoke.mockReset()
+    tauriCoreMock.invoke.mockImplementation(async (
+      _command: string,
+      _args?: Record<string, unknown>,
+    ): Promise<unknown> => {
+      throw new Error('Tauri invoke is not mocked in this test')
+    })
     tauriCoreMock.addPluginListener.mockClear()
     tauriCoreMock.pluginListeners.splice(0)
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
@@ -304,6 +315,89 @@ describe('desktop-thin live connection profiles', () => {
     await runtime.dispose()
     await runtime.dispose()
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('composes the configured native assistant provider without exposing its credential to JavaScript', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    const store: AuroraRuntimeProfileStore = {
+      kind: 'runtime-profile',
+      evidence: 'test runtime profile store',
+      load: vi.fn(async () => runtimeDocument),
+      save: vi.fn(async () => undefined),
+    }
+    const { services } = fakeEnabledMeshNodeServices()
+    tauriCoreMock.invoke.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === 'aurora_assistant_provider_status') {
+        return {
+          configured: true,
+          enabled: true,
+          provider: 'openai-compatible',
+          endpoint: 'https://llm.example/v1/chat/completions',
+          model: 'model-a',
+          backend: 'platform-keychain',
+          persisted: true,
+          secretsRedacted: true,
+          redactedFields: ['apiKey'],
+        }
+      }
+      if (command === 'aurora_assistant_provider_complete') {
+        expect(JSON.stringify(args)).not.toContain('provider-secret')
+        return { type: 'message', content: 'Ready.' }
+      }
+      throw new Error(`Unexpected native command: ${command}`)
+    })
+
+    const runtime = await bootstrapAuroraTauriRuntime(
+      store,
+      { pythonFullRuntime: false },
+      vi.fn(async () => services),
+    )
+    const response = await runtime.localAssistant?.provider.complete({
+      messages: [{ role: 'user', content: 'Hello' }],
+      tools: [],
+      maxToolCalls: 1,
+      signal: new AbortController().signal,
+    })
+
+    expect(runtime.localAssistant?.remoteTools).toEqual([])
+    expect(response).toEqual({ type: 'message', content: 'Ready.' })
+    expect(tauriCoreMock.invoke).toHaveBeenCalledWith('aurora_assistant_provider_status')
+    expect(tauriCoreMock.invoke).toHaveBeenCalledWith(
+      'aurora_assistant_provider_complete',
+      expect.objectContaining({
+        request: expect.objectContaining({
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      }),
+    )
+    await runtime.dispose()
+  })
+
+  it('keeps an explicitly injected assistant provider ahead of native provider discovery', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    const store: AuroraRuntimeProfileStore = {
+      kind: 'runtime-profile',
+      evidence: 'test runtime profile store',
+      load: vi.fn(async () => runtimeDocument),
+      save: vi.fn(async () => undefined),
+    }
+    const { services } = fakeEnabledMeshNodeServices()
+    const provider = {
+      complete: vi.fn(async () => ({ type: 'message' as const, content: 'Injected.' })),
+    }
+
+    const runtime = await bootstrapAuroraTauriRuntime(
+      store,
+      { pythonFullRuntime: false },
+      vi.fn(async () => services),
+      { provider },
+    )
+
+    expect(runtime.localAssistant?.provider).toBe(provider)
+    expect(tauriCoreMock.invoke).not.toHaveBeenCalledWith('aurora_assistant_provider_status')
+    await runtime.dispose()
   })
 
   it('fails bootstrap when mesh-node composition throws unexpectedly', async () => {

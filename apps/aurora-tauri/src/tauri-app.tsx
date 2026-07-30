@@ -80,6 +80,7 @@ import type {
   ToolApprovalConfirmRequest,
   ToolApprovalConfirmResponse,
   ToolApprovalRequestResponse,
+  ToolingProjectionToolInfo,
   ToolingPrepareExecutionRequest,
   ToolingPrepareExecutionResponse,
 } from "@aurora/client";
@@ -91,6 +92,7 @@ import {
   bootstrapAuroraTauriRuntime,
   createAuroraTauriRuntime,
   createInitialAuroraTauriRuntime,
+  loadTauriRemoteAssistantTools,
   requiresAsyncAuroraTauriBootstrap,
   type AndroidForegroundRuntimeStatus,
   type AndroidMediaPolicyStatus,
@@ -358,6 +360,9 @@ export function AuroraTauriApp({
   );
   const [runtime, setRuntime] = useState(initialRuntime);
   const [thinPeerReadyRevision, setThinPeerReadyRevision] = useState(0);
+  const [assistantRemoteTools, setAssistantRemoteTools] = useState<
+    readonly ToolingProjectionToolInfo[]
+  >(() => initialRuntime.localAssistant?.remoteTools ?? []);
   const [profileBootstrapReady, setProfileBootstrapReady] = useState(
     () => Boolean(runtimeOverride) || !requiresAsyncAuroraTauriBootstrap(),
   );
@@ -456,17 +461,49 @@ export function AuroraTauriApp({
 
   useEffect(() => {
     const peer = runtime.thinPeer;
-    if (!peer) return;
+    let cancelled = false;
+    let refreshEpoch = 0;
     let ready = false;
-    return peer.subscribe((peerSnapshot) => {
+    setAssistantRemoteTools(runtime.localAssistant?.remoteTools ?? []);
+
+    const refreshRemoteTools = async () => {
+      const epoch = ++refreshEpoch;
+      const tools = await loadTauriRemoteAssistantTools(runtime);
+      if (!cancelled && epoch === refreshEpoch) {
+        setAssistantRemoteTools(tools);
+      }
+    };
+
+    if (!runtime.localAssistant) return;
+    if (!peer) {
+      void refreshRemoteTools();
+      return () => {
+        cancelled = true;
+        refreshEpoch += 1;
+      };
+    }
+
+    const onPeerSnapshot = (peerSnapshot: ReturnType<typeof peer.snapshot>) => {
       const nextReady =
         peerSnapshot.status === "authorized" ||
         peerSnapshot.status === "fallback-http";
       if (nextReady && !ready) {
+        ready = true;
         setThinPeerReadyRevision((revision) => revision + 1);
+        void refreshRemoteTools();
+      } else if (!nextReady && ready) {
+        ready = false;
+        refreshEpoch += 1;
+        setAssistantRemoteTools([]);
       }
-      ready = nextReady;
-    });
+    };
+    const unsubscribe = peer.subscribe(onPeerSnapshot);
+    onPeerSnapshot(peer.snapshot());
+    return () => {
+      cancelled = true;
+      refreshEpoch += 1;
+      unsubscribe();
+    };
   }, [runtime]);
 
   useEffect(() => {
@@ -701,7 +738,12 @@ export function AuroraTauriApp({
     localNodeProviderStatus: runtime.localNodeProviderStatus,
     localFeatureSharing: runtime.localFeatureSharing,
     localToolProvider: runtime.localToolProvider,
-    localAssistant: runtime.localAssistant,
+    localAssistant: runtime.localAssistant
+      ? {
+          ...runtime.localAssistant,
+          remoteTools: assistantRemoteTools,
+        }
+      : undefined,
     localData: runtime.localData,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
