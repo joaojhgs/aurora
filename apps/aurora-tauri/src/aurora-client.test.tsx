@@ -29,6 +29,14 @@ import {
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
 } from "@aurora/ui";
+import {
+  MemoryLocalDataBackend,
+  type ConversationMessageRecord,
+  type ConversationRecord,
+  type EncryptedDataEnvelopeV1,
+  type LightweightMemoryRecord,
+  type LocalDataSession,
+} from "@aurora/client/local-data";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAuroraTauriRuntime,
@@ -743,6 +751,125 @@ function memoryGatewayTransport(): RecordingMockAuroraTransport {
     memoryCapabilityCatalog(),
   );
   return transport;
+}
+
+async function tauriMeshNodeMemoryRuntime({
+  ownerAvailable = true,
+}: {
+  ownerAvailable?: boolean;
+} = {}): Promise<AuroraTauriRuntime> {
+  const backend = new MemoryLocalDataBackend({ schemaVersion: 3 });
+  const session = await backend.open("profile-1", "node-1");
+  await seedTauriLocalData(session);
+  return {
+    ...testRuntime(new Aurora({ transport: memoryGatewayTransport() })),
+    mode: "desktop-thin",
+    thinConnectionMode: "webrtc-only",
+    nodeMode: "mesh-node",
+    runtimeTier: "lightweight-ts",
+    localNodeProviderStatus: {
+      available: true,
+      reasonCode: null,
+      registeredToolIds: ["native-actions.share-text"],
+    },
+    localData: {
+      profileId: "profile-1",
+      localNodeId: "node-1",
+      session,
+      ownerAvailable,
+    },
+    dispose: async () => backend.close(),
+    shutdown: async () => backend.close(),
+  };
+}
+
+function unavailableTauriMeshNodeRuntime(): AuroraTauriRuntime {
+  return {
+    ...testRuntime(new Aurora({ transport: memoryGatewayTransport() })),
+    mode: "desktop-thin",
+    thinConnectionMode: "webrtc-only",
+    nodeMode: "mesh-node",
+    runtimeTier: "lightweight-ts",
+    localNodeProviderStatus: {
+      available: false,
+      reasonCode: "durable_store_unavailable",
+      registeredToolIds: [],
+    },
+  };
+}
+
+async function seedTauriLocalData(session: LocalDataSession): Promise<void> {
+  await session.conversations.upsertConversation(
+    conversationFixture({ id: "conversation-local", updatedAtMs: 1_000 }),
+  );
+  await session.conversations.appendMessage(
+    messageFixture({
+      id: "message-local",
+      conversationId: "conversation-local",
+      sequence: 1,
+    }),
+  );
+  await session.memory.upsertMemoryItem(
+    memoryFixture({ id: "memory-local", namespace: "notes" }),
+  );
+}
+
+const encryptedEnvelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
+  version: 1,
+  algorithm: "AES-GCM-256",
+  keyId: "key-1",
+  nonceB64Url: "AAAAAAAAAAAAAAAA",
+  ciphertextAndTagB64Url: "AAAAAAAAAAAAAAAAAAAAAA",
+  createdAtMs: 1,
+});
+
+function conversationFixture(
+  overrides: Partial<ConversationRecord> = {},
+): ConversationRecord {
+  return {
+    id: "conversation-1",
+    profileId: "profile-1",
+    localNodeId: "node-1",
+    titleEnvelope: null,
+    createdAtMs: 1,
+    updatedAtMs: 2,
+    archivedAtMs: null,
+    ...overrides,
+  };
+}
+
+function messageFixture(
+  overrides: Partial<ConversationMessageRecord> = {},
+): ConversationMessageRecord {
+  return {
+    id: "message-1",
+    conversationId: "conversation-1",
+    sequence: 0,
+    role: "assistant",
+    contentEnvelope: null,
+    toolEnvelope: null,
+    status: "complete",
+    createdAtMs: 3,
+    ...overrides,
+  };
+}
+
+function memoryFixture(
+  overrides: Partial<LightweightMemoryRecord> = {},
+): LightweightMemoryRecord {
+  return {
+    id: "memory-1",
+    profileId: "profile-1",
+    localNodeId: "node-1",
+    namespace: "notes",
+    payloadEnvelope: encryptedEnvelopeFixture,
+    sourceType: "conversation",
+    sourceId: "conversation-1",
+    createdAtMs: 4,
+    updatedAtMs: 5,
+    expiresAtMs: null,
+    ...overrides,
+  };
 }
 
 function toolsCapabilityCatalog() {
@@ -1582,6 +1709,90 @@ describe("Tauri CI/E2E route gates", () => {
     } finally {
       await act(async () => memory.root.unmount());
       memory.container.remove();
+    }
+  });
+
+  it("e2e:routes renders this-device local data only for eligible Tauri mesh-node runtimes", async () => {
+    window.history.replaceState({}, "", "/memory");
+    const memory = await mountOutcomeApp(await tauriMeshNodeMemoryRuntime());
+    try {
+      await waitUntil(() => {
+        expect(memory.container.textContent).toContain("This device");
+        expect(memory.container.textContent).toContain(
+          "Saved on this device",
+        );
+        expect(memory.container.textContent).toContain("Conversation Local");
+        expect(memory.container.textContent).toContain(
+          "Memory on this device",
+        );
+        expect(memory.container.textContent).toContain(
+          "Connected Aurora device",
+        );
+      });
+      writeOutcomeArtifact(
+        "memory-route-tauri-local-data",
+        memory.container.innerHTML,
+      );
+    } finally {
+      await act(async () => memory.root.unmount());
+      memory.container.remove();
+    }
+  });
+
+  it("e2e:routes keeps Tauri local data absent or safe for ineligible runtimes", async () => {
+    const cases: Array<{
+      name: string;
+      runtime: AuroraTauriRuntime | Promise<AuroraTauriRuntime>;
+      expected: "absent" | "owner-blocked";
+    }> = [
+      {
+        name: "remote-console",
+        runtime: {
+          ...testRuntime(new Aurora({ transport: memoryGatewayTransport() })),
+          mode: "desktop-thin",
+          nodeMode: "remote-console",
+          runtimeTier: "none",
+        },
+        expected: "absent",
+      },
+      {
+        name: "unavailable-storage",
+        runtime: unavailableTauriMeshNodeRuntime(),
+        expected: "absent",
+      },
+      {
+        name: "non-owner",
+        runtime: tauriMeshNodeMemoryRuntime({ ownerAvailable: false }),
+        expected: "owner-blocked",
+      },
+    ];
+
+    for (const testCase of cases) {
+      window.history.replaceState({}, "", "/memory");
+      const memory = await mountOutcomeApp(await testCase.runtime);
+      try {
+        await waitUntil(() => {
+          expect(memory.container.textContent).toContain("Memory & Knowledge");
+          expect(memory.container.textContent).toContain(
+            "Connected Aurora device",
+          );
+          if (testCase.expected === "absent") {
+            expect(memory.container.textContent).not.toContain("This device");
+          } else {
+            expect(memory.container.textContent).toContain("This device");
+            expect(memory.container.textContent).toContain(
+              "Local features are already active in another Aurora window",
+            );
+          }
+        });
+        writeOutcomeArtifact(
+          `memory-route-tauri-local-data-${testCase.name}`,
+          memory.container.innerHTML,
+        );
+      } finally {
+        await act(async () => memory.root.unmount());
+        memory.container.remove();
+      }
     }
   });
 

@@ -55,6 +55,7 @@ import {
   type WebRtcPeerCredentialStore,
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
+import type { LocalDataSession } from "@aurora/client/local-data";
 import type { LocalFeatureSharingPort } from "@aurora/client/local-tools";
 import { createTauriNativePeerConnection } from "./native-webrtc";
 import {
@@ -78,6 +79,7 @@ export interface AuroraTauriRuntime {
   runtimeTier?: AuroraRuntimeTier | undefined;
   localNodeProviderStatus?: AuroraLocalNodeProviderStatus | undefined;
   localFeatureSharing?: LocalFeatureSharingPort | undefined;
+  localData?: AuroraTauriLocalDataRuntime | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -128,6 +130,13 @@ export interface AuroraLocalNodeProviderStatus {
   readonly available: boolean;
   readonly reasonCode: string | null;
   readonly registeredToolIds: readonly string[];
+}
+
+export interface AuroraTauriLocalDataRuntime {
+  readonly profileId: string;
+  readonly localNodeId: string;
+  readonly session: LocalDataSession;
+  readonly ownerAvailable: boolean;
 }
 
 export type TauriMeshNodeServicesFactory = (
@@ -425,6 +434,7 @@ export function createAuroraTauriRuntime({
           localFeatureSharing: meshNodeServices?.enabled
             ? meshNodeServices.localFeatureSharing
             : undefined,
+          localData: localDataRuntime(meshNodeServices),
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -553,6 +563,7 @@ export function createAuroraTauriRuntime({
         localFeatureSharing: meshNodeServices?.enabled
           ? meshNodeServices.localFeatureSharing
           : undefined,
+        localData: localDataRuntime(meshNodeServices),
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -730,6 +741,18 @@ export function createAuroraTauriRuntime({
     dispose: async () => undefined,
     ...noopOverlayControls(),
     shutdown: async () => undefined,
+  };
+}
+
+function localDataRuntime(
+  services: TauriMeshNodeServices | null | undefined,
+): AuroraTauriLocalDataRuntime | undefined {
+  if (!services?.enabled) return undefined;
+  return {
+    profileId: services.profileId,
+    localNodeId: services.localNodeId,
+    session: services.localDataSession,
+    ownerAvailable: true,
   };
 }
 

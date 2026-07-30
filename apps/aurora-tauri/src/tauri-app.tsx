@@ -49,6 +49,10 @@ import {
   type RouteAvailability,
   type WebThinRoomSecret,
 } from "@aurora/ui";
+import {
+  LocalDataProvider,
+  type LocalDataBackendFactory,
+} from "@aurora/ui/local-data";
 import owlSrc from "./assets/aurora-owl.png";
 import { GATEWAY_METHODS } from "@aurora/client";
 import type {
@@ -62,6 +66,10 @@ import type {
   TauriNativePermissionStatus,
   TauriSidecarStatus,
 } from "@aurora/client";
+import type {
+  LocalDataBackend,
+  LocalDataBackendStatus,
+} from "@aurora/client/local-data";
 import {
   bootstrapAuroraTauriRuntime,
   createAuroraTauriRuntime,
@@ -163,7 +171,13 @@ export const tauriRouteRegistry = {
       }}
     />
   ),
-  memory: ({ route, client }) => <MemoryView client={client} route={route} />,
+  memory: ({ route, nativeContext, client }) => (
+    <TauriMemoryPage
+      route={route}
+      nativeContext={nativeContext}
+      client={client}
+    />
+  ),
   tools: ({ route, client }) => (
     <div className="ata-page-stack">
       <p className="text-xs font-medium text-muted-foreground">Sources</p>
@@ -663,6 +677,7 @@ export function AuroraTauriApp({
     nodeMode: runtime.nodeMode,
     localNodeProviderStatus: runtime.localNodeProviderStatus,
     localFeatureSharing: runtime.localFeatureSharing,
+    localData: runtime.localData,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
@@ -1036,6 +1051,7 @@ interface NativeContext {
   nodeMode?: AuroraTauriRuntime["nodeMode"];
   localNodeProviderStatus?: AuroraTauriRuntime["localNodeProviderStatus"];
   localFeatureSharing?: AuroraTauriRuntime["localFeatureSharing"];
+  localData?: AuroraTauriRuntime["localData"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
   saveThinProfile: (
@@ -1096,6 +1112,67 @@ function TauriRouteContent({
     assistantNativePermissions,
     assistantNativeCapabilities,
   });
+}
+
+function TauriMemoryPage({
+  route,
+  nativeContext,
+  client,
+}: {
+  route: RouteAvailability;
+  nativeContext: NativeContext;
+  client: ReturnType<typeof createAuroraTauriRuntime>["client"];
+}) {
+  const localData = nativeContext.localData;
+  const backendFactory = useMemo(
+    () => (localData ? tauriLocalDataBackendFactory(localData) : null),
+    [localData],
+  );
+  if (!localData) return <MemoryView client={client} route={route} />;
+  return (
+    <LocalDataProvider
+      profileId={localData.profileId}
+      localNodeId={localData.localNodeId}
+      ownerAvailable={localData.ownerAvailable}
+      backendFactory={backendFactory ?? undefined}
+    >
+      <MemoryView client={client} route={route} />
+    </LocalDataProvider>
+  );
+}
+
+function tauriLocalDataBackendFactory(
+  localData: NonNullable<AuroraTauriRuntime["localData"]>,
+): LocalDataBackendFactory {
+  return async () => tauriLocalDataBackend(localData);
+}
+
+function tauriLocalDataBackend(
+  localData: NonNullable<AuroraTauriRuntime["localData"]>,
+): LocalDataBackend {
+  return {
+    kind: "sqlite-tauri",
+    persistent: true,
+    sqlite: true,
+    open: async (profileId, localNodeId) => {
+      if (
+        profileId !== localData.profileId ||
+        localNodeId !== localData.localNodeId
+      ) {
+        throw new Error("Local data is available only for this device.");
+      }
+      return localData.session;
+    },
+    status: async (): Promise<LocalDataBackendStatus> => ({
+      kind: "sqlite-tauri",
+      persistent: true,
+      sqlite: true,
+      profileId: localData.profileId,
+      schemaVersion: localData.session.schemaVersion,
+      migrationState: "idle",
+    }),
+    close: async () => undefined,
+  };
 }
 
 function TauriNativeSettingsPage({
