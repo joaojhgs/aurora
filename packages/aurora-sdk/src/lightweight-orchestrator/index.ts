@@ -25,6 +25,13 @@ export {
   LightweightOrchestrator,
   createLightweightOrchestrator
 } from './react-loop.js'
+export {
+  createLightweightToolClientAdapter
+} from './tool-client-adapter.js'
+export type {
+  LightweightToolClientAdapterOptions,
+  LightweightToolClientDelegate
+} from './tool-client-adapter.js'
 export type {
   LightweightAssistantProvider,
   LightweightConfirmationDecision,
