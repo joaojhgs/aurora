@@ -1377,15 +1377,18 @@ async def test_rtc_reannounce_reports_partial_broadcast_failure(mock_deps):
     client._peer_registry.get_negotiated_peers.return_value = [peer_a, peer_b]
     captured_configs = []
     captured_snapshots = []
+    captured_force_send = []
 
     async def send_manifest(
         peer_id: str,
         *,
         mesh_config: MeshConfig | None = None,
         live_policy_snapshot: Any = None,
+        force_send: bool = False,
     ) -> bool:
         captured_configs.append(mesh_config)
         captured_snapshots.append(live_policy_snapshot)
+        captured_force_send.append(force_send)
         return peer_id == "peer-a"
 
     client._send_manifest = AsyncMock(side_effect=send_manifest)  # type: ignore[method-assign]
@@ -1394,6 +1397,7 @@ async def test_rtc_reannounce_reports_partial_broadcast_failure(mock_deps):
     assert client._send_manifest.await_count == 2
     assert captured_configs[0] is captured_configs[1]
     assert captured_snapshots == [None, None]
+    assert captured_force_send == [True, True]
 
 
 @pytest.mark.asyncio
@@ -1417,15 +1421,18 @@ async def test_rtc_reannounce_broadcast_captures_one_policy_snapshot(mock_deps):
     client._peer_registry.get_negotiated_peers.return_value = [peer_a, peer_b]
     captured_configs = []
     captured_snapshots = []
+    captured_force_send = []
 
     async def send_manifest(
         peer_id: str,
         *,
         mesh_config: MeshConfig | None = None,
         live_policy_snapshot: Any = None,
+        force_send: bool = False,
     ) -> bool:
         captured_configs.append(mesh_config)
         captured_snapshots.append(live_policy_snapshot)
+        captured_force_send.append(force_send)
         return True
 
     client._send_manifest = AsyncMock(side_effect=send_manifest)  # type: ignore[method-assign]
@@ -1435,6 +1442,7 @@ async def test_rtc_reannounce_broadcast_captures_one_policy_snapshot(mock_deps):
     assert client._send_manifest.await_count == 2
     assert captured_configs[0] is captured_configs[1] is store.current().mesh_config
     assert captured_snapshots[0] is captured_snapshots[1] is store.current()
+    assert captured_force_send == [True, True]
 
 
 @pytest.mark.asyncio
