@@ -170,6 +170,8 @@ type MeshInteropContractReport = Record<string, unknown> & {
   noHttpFetchTransportUsed: boolean;
 };
 
+type DesktopLiveNodeRole = "remote-console" | "mesh-node";
+
 class DesktopLiveE2eCredentialStore extends MemoryPeerCredentialStore {
   private readonly roomSecrets = new Map<string, Uint8Array>();
 
@@ -214,6 +216,15 @@ export function resolveDesktopLivePeerConnectionPrimitive(
   return isDesktopLiveNativeWebRtcForced(env) || !hasBrowserRtcPeerConnection
     ? "tauri-native-webrtc"
     : "browser-rtcpeerconnection";
+}
+
+export function desktopLiveSignalingId(
+  baseSignalingId: string,
+  nodeRole: DesktopLiveNodeRole,
+): string {
+  return nodeRole === "remote-console"
+    ? baseSignalingId
+    : `${baseSignalingId}-mesh`;
 }
 
 export function installDesktopLiveE2eHook(
@@ -290,6 +301,7 @@ export async function runDesktopLiveE2e(
       profile: homeProfile,
       credentialStore,
       nodeRole: "remote-console",
+      signalingPeerId: desktopLiveSignalingId(ready.localSignalingId, "remote-console"),
       localNodeName: "Aurora desktop live E2E",
       snapshots,
     });
@@ -307,6 +319,7 @@ export async function runDesktopLiveE2e(
       profile: meshProfile,
       credentialStore,
       nodeRole: "mesh-node",
+      signalingPeerId: desktopLiveSignalingId(ready.localSignalingId, "mesh-node"),
       localNodeName: profile.localNode.nodeName,
       snapshots,
       ...(ac18 ? { peerHost: ac18.peerHost } : {}),
@@ -379,6 +392,7 @@ function createInteropRuntime({
   profile,
   credentialStore,
   nodeRole,
+  signalingPeerId,
   localNodeName,
   snapshots,
   peerHost,
@@ -386,7 +400,8 @@ function createInteropRuntime({
   ready: DesktopLiveReadyPayload;
   profile: WebRtcPeerConnectionProfile;
   credentialStore: DesktopLiveE2eCredentialStore;
-  nodeRole: "remote-console" | "mesh-node";
+  nodeRole: DesktopLiveNodeRole;
+  signalingPeerId: string;
   localNodeName: string;
   snapshots: Snapshot[];
   peerHost?: WebRtcPeerHost | undefined;
@@ -406,7 +421,7 @@ function createInteropRuntime({
       ready.turnUsername,
       ready.turnCredential,
     ),
-    randomId: signalingIdFactory(ready.localSignalingId),
+    randomId: signalingIdFactory(signalingPeerId),
     allowInsecureLoopback: true,
     windowLocation: typeof window === "undefined"
       ? { protocol: "tauri:", hostname: "localhost" }

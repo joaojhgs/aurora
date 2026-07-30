@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  desktopLiveSignalingId,
   drainRemoteConsoleManifestHandshake,
   installDesktopLiveE2eHook,
   isDesktopLiveE2eHookEnabled,
@@ -41,6 +42,16 @@ describe("desktop live E2E WebView hook", () => {
       ...liveEnv,
       VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
     }, true)).toBe("tauri-native-webrtc");
+  });
+
+  it("uses a fresh transient signaling identity after switching roles", () => {
+    const baseSignalingId = "desktop-browser-g009";
+    const remoteConsoleId = desktopLiveSignalingId(baseSignalingId, "remote-console");
+    const meshNodeId = desktopLiveSignalingId(baseSignalingId, "mesh-node");
+
+    expect(remoteConsoleId).toBe(baseSignalingId);
+    expect(meshNodeId).toBe(`${baseSignalingId}-mesh`);
+    expect(meshNodeId).not.toBe(remoteConsoleId);
   });
 
   it("does not install outside the gated environment", () => {
