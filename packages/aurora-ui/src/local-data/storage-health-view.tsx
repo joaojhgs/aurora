@@ -31,7 +31,8 @@ import {
 import { Bubble, BubbleContent } from '#components/ui/bubble'
 
 import { PRODUCT_COPY } from '../product-copy.js'
-import { useOptionalLocalData } from './local-data-provider.js'
+import type { ProductCopyResult } from '../product-copy.js'
+import { useOptionalLocalData, type LocalDataProductError } from './local-data-provider.js'
 import type { BrowserStorageHealth } from './storage-health.js'
 import { useLocalConversations } from './use-local-conversations.js'
 import { useLightweightMemory } from './use-lightweight-memory.js'
@@ -39,15 +40,18 @@ import { useLightweightMemory } from './use-lightweight-memory.js'
 export interface StorageHealthViewProps {
   readonly health?: BrowserStorageHealth | undefined
   readonly loading?: boolean | undefined
-  readonly error?: string | null | undefined
+  readonly error?: StorageHealthProductError | null | undefined
   readonly onRetry?: (() => void) | undefined
 }
+
+export type StorageHealthProductError = ProductCopyResult | LocalDataProductError
 
 export function StorageHealthView({ health: healthProp, loading = false, error = null, onRetry }: StorageHealthViewProps) {
   const localData = useOptionalLocalData()
   const health = healthProp ?? localData?.storageHealth ?? null
   if (health === null) return null
   const copy = storageProductCopy(health)
+  const productError = storageHealthProductError(error)
 
   return (
     <Card size="sm" aria-label="Local data status">
@@ -67,7 +71,7 @@ export function StorageHealthView({ health: healthProp, loading = false, error =
         <CardContent>
           <Alert variant="destructive">
             <AlertTitle>{copy.alertTitle}</AlertTitle>
-            <AlertDescription>{safeStorageErrorCopy(error)}</AlertDescription>
+            <AlertDescription>{productError.description ?? productError.title}</AlertDescription>
           </Alert>
         </CardContent>
       ) : null}
@@ -91,7 +95,7 @@ function LocalDataMemoryPanelContent() {
   const selectedSummary = selectedId
     ? conversations.summaries.find((summary) => summary.record.id === selectedId) ?? null
     : null
-  const error = localData?.error?.title ?? conversations.error ?? memory.error
+  const error = localData?.error ?? localHookProductError(conversations.error ?? memory.error)
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby="local-data-title">
@@ -289,9 +293,54 @@ function storageProductCopy(health: BrowserStorageHealth): { title: string; deta
   }
 }
 
-function safeStorageErrorCopy(error: string): string {
-  if (/another|window|owner|identity/i.test(error)) return 'Close another Aurora window or try again here.'
-  if (/cancel/i.test(error)) return 'Action cancelled.'
+function storageHealthProductError(error: StorageHealthProductError | null): ProductCopyResult {
+  if (error === null) return { title: PRODUCT_COPY.localData.unchanged }
+  const title = safeStructuredCopy(productErrorField(error, 'title'))
+  const description = safeStructuredCopy(productErrorField(error, 'description') ?? productErrorField(error, 'detail'))
+  return {
+    title: title ?? PRODUCT_COPY.localData.unchanged,
+    ...(description === undefined ? {} : { description })
+  }
+}
+
+function productErrorField(error: StorageHealthProductError, field: 'title' | 'description' | 'detail'): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined
+  const value = field in error ? error[field as keyof StorageHealthProductError] : undefined
+  return typeof value === 'string' ? value : undefined
+}
+
+function localHookProductError(error: string | null): StorageHealthProductError | null {
+  if (error === null) return null
+  if (error === 'Action cancelled') return { title: 'Action cancelled' }
+  if (error === 'Local features are already active in another Aurora window') {
+    return {
+      title: PRODUCT_COPY.localData.ownedElsewhere,
+      description: 'Close another Aurora window or try again here.'
+    }
+  }
+  if (error === 'Local data needs attention') {
+    return {
+      title: 'Local data needs attention',
+      description: 'Aurora could not safely use recent activity. Try again.'
+    }
+  }
+  return {
+    title: PRODUCT_COPY.localData.unchanged,
+    description: 'Aurora kept recent activity unchanged.'
+  }
+}
+
+function safeStructuredCopy(value: string | null | undefined): string | undefined {
+  if (value === undefined || value === null || value.trim() === '') return undefined
+  if (value === PRODUCT_COPY.localData.unchanged) return value
+  if (value === PRODUCT_COPY.localData.ownedElsewhere) return value
+  if (value === PRODUCT_COPY.localData.saved) return value
+  if (value === PRODUCT_COPY.localData.temporary) return value
+  if (value === 'Action cancelled') return value
+  if (value === 'Local data needs attention') return value
+  if (value === 'Close another Aurora window or try again here.') return value
+  if (value === 'Aurora could not safely use recent activity. Try again.') return value
+  if (value === 'Aurora kept recent activity unchanged.') return value
   return PRODUCT_COPY.localData.unchanged
 }
 

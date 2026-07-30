@@ -26,7 +26,7 @@ import { BrowserIndexedDbLocalDataBackend } from './browser-indexeddb.js'
 import { FakeWebLocks, MapBrowserLocalDataDocumentStore } from './__tests__/local-data-test-helpers.js'
 import { LocalDataProvider, useLocalData } from './local-data-provider.js'
 import { describeBrowserStorageHealth } from './storage-health.js'
-import { LocalDataMemoryPanel, StorageHealthView } from './storage-health-view.js'
+import { LocalDataMemoryPanel, StorageHealthView, type StorageHealthProductError } from './storage-health-view.js'
 import { useLightweightMemory, type UseLightweightMemoryResult } from './use-lightweight-memory.js'
 import { useLocalConversations, type UseLocalConversationsResult } from './use-local-conversations.js'
 
@@ -196,6 +196,33 @@ describe('local data product UI', () => {
       expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
       expect(text).not.toContain('[object Object]')
     }
+  })
+
+  it('does not render raw storage error text even when a caller bypasses the structured boundary', () => {
+    const health = describeBrowserStorageHealth({
+      backend: {
+        kind: 'indexeddb',
+        persistent: true,
+        sqlite: false,
+        profileId: 'profile-1',
+        schemaVersion: 3,
+        migrationState: 'failed'
+      },
+      ownerAvailable: true,
+      internalState: 'needs_attention'
+    })
+    const raw = 'schema migration fallback IndexedDB backend failed'
+    const text = visibleText(renderToStaticMarkup(
+      <StorageHealthView health={health} error={raw as unknown as StorageHealthProductError} />
+    ))
+
+    expect(text).toContain('Your existing local data was not changed. Try again.')
+    expect(text).not.toContain(raw)
+    expect(text).not.toContain('schema')
+    expect(text).not.toContain('migration')
+    expect(text).not.toContain('fallback')
+    expect(text).not.toContain('IndexedDB')
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
   })
 
   it('adds a This device panel to Memory without replacing connected-device history', async () => {
