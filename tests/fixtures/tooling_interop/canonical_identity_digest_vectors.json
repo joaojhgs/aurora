@@ -433,7 +433,6 @@
     }
   ],
   "current_dependency_gaps": [
-    "No production TypeScript API computes Tooling canonical global IDs, schema hashes, projection page hashes, or final checksums at this base; SDK tests consume Python-authoritative vectors through current projection-page parsing only.",
     "Python ToolingToolInfo currently accepts non-aurora global_tool_id strings and provider_service_instance_id values without enforcing the local:<percent-encoded-peer>:Tooling pattern; stricter negative identity validation depends on the future generated contract/parser lane.",
     "The current SDK projection-page parser accepts oversized service_instance_id values that Python rejects at max_length=256; full parity depends on the generated boundary parser lane."
   ]
