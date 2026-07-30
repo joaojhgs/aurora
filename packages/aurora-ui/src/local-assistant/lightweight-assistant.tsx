@@ -316,12 +316,12 @@ function ConfirmationCard({
 }
 
 interface DependencyInput {
-  readonly provider: LightweightAssistantProvider | null | undefined
-  readonly tools: LightweightToolClientPort | null | undefined
-  readonly localData: LocalDataSession | null | undefined
-  readonly envelopeCrypto: EnvelopeCryptoPort | null | undefined
-  readonly scope: LocalDataScope | null | undefined
-  readonly availableTools: readonly ToolingProjectionToolInfo[] | null | undefined
+  readonly provider?: LightweightAssistantProvider | null | undefined
+  readonly tools?: LightweightToolClientPort | null | undefined
+  readonly localData?: LocalDataSession | null | undefined
+  readonly envelopeCrypto?: EnvelopeCryptoPort | null | undefined
+  readonly scope?: LocalDataScope | null | undefined
+  readonly availableTools?: readonly ToolingProjectionToolInfo[] | null | undefined
 }
 
 interface ReadyDependencies {
@@ -331,6 +331,10 @@ interface ReadyDependencies {
   readonly envelopeCrypto: EnvelopeCryptoPort
   readonly scope: LocalDataScope
   readonly availableTools: readonly ToolingProjectionToolInfo[]
+}
+
+export function isLightweightLocalAssistantAvailable(input: DependencyInput): boolean {
+  return resolveReadiness(input).ready
 }
 
 function resolveReadiness(input: DependencyInput): { ready: false } | ({ ready: true } & ReadyDependencies) {
