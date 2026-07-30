@@ -19,7 +19,7 @@ Aurora is a modular assistant runtime for local automation, voice interaction, m
 - **Auth and permissions:** principals, pairing, tokens, topic permissions, audit, and Gateway ACL boundaries.
 - **Mesh:** peer pairing, capability graph, explicit routing/share policy, and transport E2E harnesses.
 - **Frontend:** TypeScript SDK, shared React UI package, web shell, Tauri desktop/mobile shell, and PyQt fallback/reference.
-- **Tauri desktop packaging:** profile-specific Python sidecar builds, thin default packages, and explicit heavy local-model profiles.
+- **Tauri desktop packaging:** profile-specific Python sidecar builds, Python-free client packages, and explicit heavy local-model profiles.
 - **Process mode:** Redis-backed service containers for production-style development and deployment.
 - **Backup contracts:** admin backup manifests, list/verify, and dry-run restore/rollback impact plans.
 
@@ -80,22 +80,25 @@ pnpm run tauri dev
 # Equivalent named shortcut
 pnpm dev:desktop-local
 
-# Desktop thin: Tauri/WebView only, no Python sidecar; configure HTTP/WebRTC in onboarding
-pnpm dev:desktop-thin
+# Desktop client: Tauri/WebView only, no Python sidecar; choose remote console or mesh node at runtime
+pnpm dev:desktop-client
 
-# Hosted web thin on localhost; configure HTTP/WebRTC in onboarding
-pnpm dev:web-thin
+# Hosted web on localhost; choose remote console or mesh node at runtime
+pnpm dev:web
 
 # Python services independently, using config.json/AURORA_CONFIG_FILE and no PyQt UI
 pnpm dev:python-service
 ```
 
-Thin clients do not compile a Gateway or signaling endpoint into the artifact.
-On first launch they require a runtime profile entered manually or imported
-from an Aurora invite/QR code. Native shells keep nonsecret profile metadata
-in native storage and room/reconnect secrets in the platform credential store;
-hosted web uses browser metadata storage plus an AES-GCM IndexedDB vault with
-an explicitly reported memory-only fallback.
+Python-free client artifacts do not compile a Gateway or signaling endpoint
+into the artifact. On first launch they choose a runtime role: remote console
+for managing a home Aurora node, or mesh node for advertising approved local
+capabilities while still using a home node for full Python-backed services.
+Native shells keep nonsecret profile metadata in native storage and
+room/reconnect secrets in the platform credential store; hosted web uses
+browser metadata storage plus an AES-GCM IndexedDB vault with an explicitly
+reported memory-only fallback. Legacy `*thin*` scripts remain as compatibility
+aliases for the neutral client commands.
 
 ## Development checks
 

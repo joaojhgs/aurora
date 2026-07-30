@@ -2,7 +2,7 @@
 
 **Status:** Current source of truth
 
-**Last reviewed:** 2026-07-27
+**Last reviewed:** 2026-07-30
 
 **Audience:** product, frontend, SDK, Gateway, mesh, mobile, packaging, and release contributors
 
@@ -26,6 +26,21 @@ Shared Aurora React UI
 The recommended direct-peer transport keeps Aurora's signaling, cryptography, pairing, reconnect, RPC, and routing implementation in the TypeScript/browser layer. The same implementation runs in a normal browser, a desktop Tauri WebView, and Android/iOS WebViews. Rust, Kotlin, and Swift should normally supply only capabilities that browsers cannot safely or durably own, such as secure credential storage, lifecycle/background services, OS integrations, and platform permission evidence.
 
 A full Rust Aurora WebRTC protocol remains rejected because it would duplicate signaling/auth/mesh behavior and reduce cross-platform reuse. One measured exception now exists: common Linux WebKitGTK packages can omit the `RTCPeerConnection` DOM feature. Desktop thin therefore injects a narrow Rust `webrtc-rs` peer-connection/DataChannel primitive only when that browser API is absent; the TypeScript protocol above it is unchanged.
+
+Current runtime-role model separates these axes:
+
+- **Surface:** hosted web, desktop Tauri, Android Tauri, iOS Tauri, or PyQt fallback.
+- **Node mode:** remote console, mesh node, or full local node when the desktop package includes the Python sidecar.
+- **Transport:** HTTP, WebRTC, or WebRTC-preferred with explicit HTTP fallback for new calls.
+- **Runtime tier:** Python full service graph or bounded TypeScript/native lightweight capabilities.
+- **Authority:** authenticated home-node session authority and peer-specific inbound grants remain distinct from pairing.
+- **Capability packs:** local tools and native actions advertise only after platform capability evidence plus user enablement.
+- **Lifecycle:** hosted web and mobile WebViews are foreground peers; durable background behavior requires platform-native support and evidence.
+
+Python-free artifacts now use neutral `client` command names (`desktop-client`,
+Android client, iOS client, hosted peer). Legacy `thin` command names remain as
+compatibility aliases while older branch protection and release scripts are
+retired.
 
 ## Current progress marker
 

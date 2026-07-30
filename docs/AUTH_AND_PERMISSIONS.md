@@ -104,4 +104,4 @@ Backend authority stays in Tooling/Auth/Config contracts:
 
 Mesh tool catalogs shown here come from negotiated/cached Tooling announcements. The UI must not fan out to peers during prompt or page render; it displays epoch/hash/stale/unshared/removed state from the local Tooling cache. Newly announced child tools require review unless the operator explicitly enabled future-tool trust.
 
-Surface behavior is resolved through `getAuroraSurfaceProfile`: desktop-local may show local sidecar affordances, desktop/web thin show Gateway-backed controls only, and Android/iOS/mobile must not claim a Python sidecar. Demo/mock data must be labeled as fixture/demo.
+Surface behavior is resolved through `getAuroraSurfaceProfile`, while runtime role is stored in the runtime profile: desktop-local may show local sidecar affordances, remote-console clients show Gateway/home-peer controls only, mesh-node clients expose local capabilities only from real grants and platform evidence, and Android/iOS/mobile must not claim a Python sidecar. Sample/mock data must stay test-only or be explicitly labeled outside production UI.

@@ -47,7 +47,7 @@ The selected direct-peer direction is implemented as one TypeScript WebRTC runti
 
 The shared runtime also owns rollout behavior. Hosted web reads
 `NEXT_PUBLIC_AURORA_WEBRTC_*` gates and Tauri reads matching
-`VITE_AURORA_WEBRTC_*` gates for the thin-client entry point, scoped
+`VITE_AURORA_WEBRTC_*` gates for the Python-free client entry point, scoped
 subscriptions, fragmentation/backpressure, and optional app-layer E2EE. The
 main kill switch leaves HTTP and desktop-local factories intact:
 `webrtc-preferred` selects configured HTTP without consuming or rewriting peer
@@ -63,28 +63,28 @@ Assistant screens consume `AuroraClient.assistant.streamMessage(...)` and `strea
 Platform playback rules:
 
 - Desktop local daemon/STT requests keep wakeword and background capture in Python services. The orchestrator starts `TTS.StreamStart` with `play_on_server=true`, so the local TTS service speaks even if the WebView is minimized.
-- Desktop thin, web thin, and mobile push-to-talk/read-aloud paths use client playback from `TTS.AudioChunk` events unless a native bridge later advertises a tested playback surface.
+- Desktop client, hosted web, and mobile push-to-talk/read-aloud paths use client playback from `TTS.AudioChunk` events unless a native bridge later advertises a tested playback surface.
 - UI-origin text messages do not auto-read responses unless runtime config enables the UI assistant readback preference.
 - Tool-call cards must use redacted stream previews from the SDK; no component may display raw tool args, tokens, audio, or unredacted support data.
 
-## Tauri desktop modes
+## Tauri desktop roles and modes
 
-| Mode | Behavior |
+| Role/mode | Behavior |
 | --- | --- |
 | Desktop local | Rust supervises a Python thread-mode sidecar and exposes a narrow command/session bridge to the SDK. |
-| Desktop thin HTTP | Async nonsecret profile selects a runtime-configured HTTP/HTTPS Gateway; live SDK session/pairing state supplies authentication and no local sidecar starts. |
-| Desktop thin WebRTC | Shared WebView runtime supports WebRTC-only with runtime-configured WS/WSS signaling and no Gateway origin, or WebRTC-preferred with optional HTTP/HTTPS Gateway plus WS/WSS signaling; invite secrets are promoted into native secure storage when available and browser encrypted storage otherwise. |
+| Remote console | Async nonsecret profile selects a runtime-configured HTTP/HTTPS Gateway or WebRTC home peer; live SDK session/pairing state supplies authentication and no local sidecar starts. |
+| Mesh node | Shared WebView runtime joins WebRTC membership, advertises only approved local capability packs, and may still select a home node for full Python-backed service/admin work. |
 | Profiled local bundles | Sidecar profile selects desktop-local-minimal/local CPU/GPU/full dependency sets. |
 
-First-run thin setup is invite-first on every shared WebView surface. It asks
-only for the local node name and a QR/file/deep-link/pasted mesh invite; the
-invite supplies signaling and pairing material. Connection mode, profile name,
-Gateway/signaling endpoints, and stable peer metadata remain editable from the
-normal connection settings after the shell is unlocked. The full-screen gate
-owns an explicit touch-scroll viewport rather than changing the fixed-shell
-document overflow contract.
+First-run client setup is invite-first on every shared WebView surface. It
+asks only for the local node name, runtime role, and a QR/file/deep-link/pasted
+mesh invite; the invite supplies signaling and pairing material. Connection
+mode, profile name, Gateway/signaling endpoints, local capability packs, and
+stable peer metadata remain editable from the normal connection settings after
+the shell is unlocked. The full-screen gate owns an explicit touch-scroll
+viewport rather than changing the fixed-shell document overflow contract.
 
-Default bundles are unsigned and use the lean `desktop-local-minimal` sidecar profile. Every `*:thin` bundle command is the Python-free desktop-thin lane. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), and `apps/aurora-tauri/README.md`.
+Default bundles are unsigned and use the lean `desktop-local-minimal` sidecar profile. Python-free packages use the neutral `*:client` bundle commands; legacy `*:thin` commands delegate to them for compatibility. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), and `apps/aurora-tauri/README.md`.
 
 ## Platform capability truth matrix
 
@@ -92,9 +92,9 @@ UI copy and controls must report capabilities from SDK/native evidence, not from
 
 | Platform mode | Supported evidence path | Native/local claims allowed | Required limit copy |
 | --- | --- | --- | --- |
-| Web thin | `createBrowserWebThinRuntime()` selected by the runtime onboarding profile: HTTP-only, WebRTC-only, or WebRTC-preferred. | Gateway-backed state in HTTP mode; direct/configured-STUN/forced-TURN WebRTC DataChannel RPC/events live-proven in Chromium, Firefox, and Playwright WebKit; hosted Chromium invite/SAS/approval/route/navigation/blur/reload UI flow live-proven against the full Python service; browser-supported permissions; AES-GCM/IndexedDB reconnect and room vault with validated nonsecret profile/stable-ID metadata and memory-only fallback. | No Tauri sidecar, keychain, Android role, or iOS App Intent claims; the origin-scoped WebCrypto key does not resist active same-origin XSS or full browser-profile compromise; actual OS page suspension, packaged-WebView, and production-scale certification remain open. |
+| Hosted web client | `createBrowserWebThinRuntime()` selected by the runtime onboarding profile: HTTP-only, WebRTC-only, or WebRTC-preferred, with remote-console or mesh-node role state. | Gateway-backed state in HTTP mode; direct/configured-STUN/forced-TURN WebRTC DataChannel RPC/events live-proven in Chromium, Firefox, and Playwright WebKit; hosted Chromium invite/SAS/approval/route/navigation/blur/reload UI flow live-proven against the full Python service; browser-supported permissions; AES-GCM/IndexedDB reconnect and room vault with validated nonsecret profile/stable-ID metadata and memory-only fallback. | No Tauri sidecar, keychain, Android role, or iOS App Intent claims; the origin-scoped WebCrypto key does not resist active same-origin XSS or full browser-profile compromise; actual OS page suspension, packaged-WebView, and production-scale certification remain open. |
 | Desktop local | `pnpm --filter @aurora/tauri-ui tauri dev` or packaged local build starts/probes the Rust-supervised Python sidecar and loopback Gateway. | Local sidecar status, secure storage, Gateway health, and native desktop command evidence. | Dev uses direct Python sidecar defaults; packaged builds stage profiled sidecar executables separately. |
-| Desktop thin | Tauri shell asynchronously loads/saves a nonsecret HTTP/WebRTC connection profile and rebuilds the shared WebView runtime on profile selection. | Tauri shell capability evidence, remote Gateway/peer data, OS-keychain peer credential status/proofs without raw token reads, room-secret retrieval scoped to runtime WebRTC reconnect, and Python-free AppImage/deb artifact proof. | No local Python sidecar readiness claim; bearer auth remains in the SDK session, and live desktop WebView network proof is separate from browser-engine interop. |
+| Desktop client | Tauri shell asynchronously loads/saves a nonsecret HTTP/WebRTC runtime profile and rebuilds the shared WebView runtime on profile selection. | Remote-console and mesh-node profile persistence, Tauri shell capability evidence, remote Gateway/peer data, OS-keychain peer credential status/proofs without raw token reads, room-secret retrieval scoped to runtime WebRTC reconnect, and Python-free AppImage/deb artifact proof. | No local Python sidecar readiness claim unless the desktop-local package is selected; bearer auth remains in the SDK session, and live desktop WebView network proof is separate from browser-engine interop. |
 | Linux CI | Vitest/Playwright route gates, `tauri:smoke:linux`, `cargo check`, `dev:smoke` under Xvfb. | Linux desktop smoke and policy baseline evidence. | Linux cannot satisfy iOS build/preflight evidence and does not replace Android emulator/device evidence. |
 | Android | Tauri generated Android project, runtime-configurable HTTP/HTTPS/WS/WSS thin wrappers, Android native plugin payloads, Android preflight reports, and Android thin APK/AAB artifact proof. | Assistant role, fallback entrypoints, Android Keystore peer credentials/proofs, biometric/admin-unlock, foreground WebView microphone policy, and lifecycle states only from native manifest payloads. | PR preflight can be unsigned; local emulator/physical-device runtime smoke is not proven here; release readiness requires signing inputs and signed AAB/Play evidence. |
 | iOS | Shared iOS WebView thin routing, runtime-configurable thin overlay generation, device-only Keychain reconnect proof and room-secret storage, nonsecret profile source checks on any platform, and Tauri iOS build/runtime plus MobileSafari and packaged-Tauri-WKWebView ↔ Python direct interop gates on macOS/Xcode. | Foreground thin-shell source capability plus Keychain/profile/proof evidence; Siri/Shortcuts/App Intents, share/deep-link/widget/file-association evidence only after native targets exist and pass runtime smoke. | Linux can transform/typecheck the E2E and verify workflow wiring, but cannot produce an Xcode simulator result. Passing MobileSafari and packaged WKWebView reports are pending the macOS job; physical-device direct/STUN/TURN evidence remains separate. Aurora must not claim default iOS system-assistant ownership. |
@@ -137,7 +137,7 @@ pnpm test:webrtc:turn
 pnpm test:webrtc:browsers
 ```
 
-Run `pnpm --filter @aurora/tauri-ui dev:smoke` in a GUI-capable environment when validating the desktop-local sidecar/WebView path. Run `pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin`, `android:verify:thin:apk`, and `android:verify:thin:aab` when validating Python-free thin artifacts. Run iOS build/preflight commands only on macOS with Xcode.
+Run `pnpm --filter @aurora/tauri-ui dev:smoke` in a GUI-capable environment when validating the desktop-local sidecar/WebView path. Run `pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client`, `android:verify:client:apk`, and `android:verify:client:aab` when validating Python-free client artifacts. Run iOS build/preflight commands only on macOS with Xcode.
 
 - Assistant streaming requests pass `clientTtsPlayback` through the SDK to keep desktop-local server playback distinct from web/thin/mobile client playback.
 
@@ -155,4 +155,4 @@ Backend authority stays in Tooling/Auth/Config contracts:
 
 Mesh tool catalogs shown here come from negotiated/cached Tooling announcements. The UI must not fan out to peers during prompt or page render; it displays epoch/hash/stale/unshared/removed state from the local Tooling cache. Newly announced child tools require review unless the operator explicitly enabled future-tool trust.
 
-Surface behavior is resolved through `getAuroraSurfaceProfile`: desktop-local may show local sidecar affordances, desktop/web thin show Gateway-backed controls only, and Android/iOS/mobile must not claim a Python sidecar. Demo/mock data must be labeled as fixture/demo.
+Surface behavior is resolved through `getAuroraSurfaceProfile`, while runtime role is stored in the runtime profile: desktop-local may show local sidecar affordances, remote-console clients show Gateway/home-peer controls only, mesh-node clients show local capability packs only after real capability and grant evidence, and Android/iOS/mobile must not claim a Python sidecar. Demo/mock data must be labeled as fixture/demo.
