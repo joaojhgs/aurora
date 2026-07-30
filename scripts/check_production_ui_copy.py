@@ -9,7 +9,6 @@ import re
 import sys
 from dataclasses import dataclass
 
-
 DEFAULT_PATHS = (
     "packages/aurora-ui/src",
     "apps/aurora-web/app",
@@ -53,7 +52,13 @@ FORBIDDEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("daemon", re.compile(r"\bdaemon\b", re.I)),
     ("orchestrator", re.compile(r"\borchestrator\b", re.I)),
     ("raw", re.compile(r"\braw\b(?!-render-expression)", re.I)),
-    ("key-path", re.compile(r"\bkey[-_ ]?paths?\b|\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)(?:[._/-][a-z0-9]+){2,}\b", re.I)),
+    (
+        "key-path",
+        re.compile(
+            r"\bkey[-_ ]?paths?\b|\b(?:services|gateway|auth|config|orchestrator|tts|stt|db|tooling|scheduler)(?:[._/-][a-z0-9]+){2,}\b",
+            re.I,
+        ),
+    ),
 )
 
 ATTRIBUTE_NAMES = {
@@ -82,20 +87,46 @@ INTERNAL_DATA_FIELD_NAMES = {
 }
 
 ADVANCED_CONNECTION_ALLOWLIST: tuple[tuple[str, str, re.Pattern[str]], ...] = (
-    ("packages/aurora-ui/src/product-copy.ts", "Aurora address", re.compile(r"\baddressLabel\s*:", re.S)),
-    ("packages/aurora-ui/src/product-copy.ts", "Connection method", re.compile(r"\bmethodLabel\s*:", re.S)),
-    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "HTTP only", re.compile(r"<SelectItem\b[^>]*\bvalue=\"http-only\"", re.S)),
-    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC only", re.compile(r"<SelectItem\b[^>]*\bvalue=\"webrtc-only\"", re.S)),
-    ("packages/aurora-ui/src/web-thin-connection-panel.tsx", "WebRTC preferred", re.compile(r"<SelectItem\b[^>]*\bvalue=\"webrtc-preferred\"", re.S)),
+    (
+        "packages/aurora-ui/src/product-copy.ts",
+        "Aurora address",
+        re.compile(r"\baddressLabel\s*:", re.S),
+    ),
+    (
+        "packages/aurora-ui/src/product-copy.ts",
+        "Connection method",
+        re.compile(r"\bmethodLabel\s*:", re.S),
+    ),
+    (
+        "packages/aurora-ui/src/web-thin-connection-panel.tsx",
+        "HTTP only",
+        re.compile(r"<SelectItem\b[^>]*\bvalue=\"http-only\"", re.S),
+    ),
+    (
+        "packages/aurora-ui/src/web-thin-connection-panel.tsx",
+        "WebRTC only",
+        re.compile(r"<SelectItem\b[^>]*\bvalue=\"webrtc-only\"", re.S),
+    ),
+    (
+        "packages/aurora-ui/src/web-thin-connection-panel.tsx",
+        "WebRTC preferred",
+        re.compile(r"<SelectItem\b[^>]*\bvalue=\"webrtc-preferred\"", re.S),
+    ),
     (
         "packages/aurora-ui/src/tooling/tooling-console.tsx",
         "stdio command or https://server",
-        re.compile(r"\bServer URL or command profile\b[\s\S]{0,900}\bplaceholder=\{canLaunchLocalCommands \?", re.S),
+        re.compile(
+            r"\bServer URL or command profile\b[\s\S]{0,900}\bplaceholder=\{canLaunchLocalCommands \?",
+            re.S,
+        ),
     ),
     (
         "packages/aurora-ui/src/tooling/tooling-console.tsx",
         "https://server",
-        re.compile(r"\bServer URL or command profile\b[\s\S]{0,900}\bplaceholder=\{canLaunchLocalCommands \?", re.S),
+        re.compile(
+            r"\bServer URL or command profile\b[\s\S]{0,900}\bplaceholder=\{canLaunchLocalCommands \?",
+            re.S,
+        ),
     ),
     (
         "packages/aurora-ui/src/components/assistant-ui/mcp-config.tsx",
@@ -127,7 +158,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if findings:
         for finding in findings:
-            rel = finding.path.relative_to(repo_root) if finding.path.is_relative_to(repo_root) else finding.path
+            rel = (
+                finding.path.relative_to(repo_root)
+                if finding.path.is_relative_to(repo_root)
+                else finding.path
+            )
             print(f"{rel}:{finding.line}: {finding.term_id}: {finding.text}", file=sys.stderr)
         print(f"Found {len(findings)} production UI copy issue(s).", file=sys.stderr)
         return 1
@@ -139,9 +174,8 @@ def expand_paths(paths: list[pathlib.Path]) -> list[pathlib.Path]:
     for path in paths:
         if path.is_dir():
             expanded.extend(sorted(child for child in path.rglob("*") if is_scan_target(child)))
-        elif path.exists():
-            if is_scan_target(path):
-                expanded.append(path)
+        elif path.exists() and is_scan_target(path):
+            expanded.append(path)
     return expanded
 
 
@@ -150,9 +184,7 @@ def is_scan_target(path: pathlib.Path) -> bool:
         return False
     if "tests" in path.parts or re.search(r"\.test\.[tj]sx?$", path.name):
         return False
-    if path.name.endswith(".d.ts"):
-        return False
-    return True
+    return not path.name.endswith(".d.ts")
 
 
 def scan_file(path: pathlib.Path, repo_root: pathlib.Path) -> list[Finding]:
@@ -162,10 +194,7 @@ def scan_file(path: pathlib.Path, repo_root: pathlib.Path) -> list[Finding]:
     rel_path = repo_relative_path(path, repo_root)
     for line_no, literal, context in rendered_literals(clean, rel_path):
         stripped = normalize_literal(literal)
-        if (
-            not stripped
-            or is_allowed_connection_copy(rel_path, stripped, context)
-        ):
+        if not stripped or is_allowed_connection_copy(rel_path, stripped, context):
             continue
         for term_id, pattern in FORBIDDEN_PATTERNS:
             if pattern.search(stripped):
@@ -239,11 +268,20 @@ def rendered_literals(text: str, rel_path: str) -> list[tuple[int, str, str]]:
                 high = mid
         return low + 1
 
-    attr_pattern = re.compile(rf"(?:{'|'.join(re.escape(name) for name in ATTRIBUTE_NAMES)})\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|\{{\s*(['\"])(.*?)\3\s*\}})", re.S)
+    attr_pattern = re.compile(
+        rf"(?:{'|'.join(re.escape(name) for name in ATTRIBUTE_NAMES)})\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|\{{\s*(['\"])(.*?)\3\s*\}})",
+        re.S,
+    )
     for match in attr_pattern.finditer(text):
         value = next((group for group in match.groups() if group and group not in {"'", '"'}), "")
         if value.strip():
-            results.append((line_for(match.start()), value, literal_render_context(text, match.start(), match.end())))
+            results.append(
+                (
+                    line_for(match.start()),
+                    value,
+                    literal_render_context(text, match.start(), match.end()),
+                )
+            )
 
     for line_no, line in enumerate(text.splitlines(), start=1):
         for match in re.finditer(r">([^<>{}]+)<", line):
@@ -256,7 +294,13 @@ def rendered_literals(text: str, rel_path: str) -> list[tuple[int, str, str]]:
     for literal in string_literals(text):
         context = literal_context(text, literal.start)
         if is_rendered_literal_context(context, rel_path):
-            results.append((line_for(literal.start), literal.value, literal_render_context(text, literal.start, literal.end)))
+            results.append(
+                (
+                    line_for(literal.start),
+                    literal.value,
+                    literal_render_context(text, literal.start, literal.end),
+                )
+            )
 
     results.extend(rendered_dynamic_expressions(text, line_for))
 
@@ -302,7 +346,7 @@ def string_literals(text: str) -> list[StringLiteral]:
 
 
 def literal_context(text: str, start: int, width: int = 480) -> str:
-    return text[max(0, start - width):start]
+    return text[max(0, start - width) : start]
 
 
 def is_rendered_literal_context(context: str, rel_path: str) -> bool:
@@ -310,22 +354,46 @@ def is_rendered_literal_context(context: str, rel_path: str) -> bool:
     if is_internal_data_literal_context(stripped):
         return False
     copy_field = r"(?:label|title|description|detail|reason|repair|error|message|evidence|summary|empty|action|placeholder|aria-label|disabledReason)"
-    if re.search(r"\b(?:setMessage|setError|set[A-Za-z]+Error|set[A-Za-z]+Message|toast|alert)\s*\([^)]*$", stripped):
+    if re.search(
+        r"\b(?:setMessage|setError|set[A-Za-z]+Error|set[A-Za-z]+Message|toast|alert)\s*\([^)]*$",
+        stripped,
+    ):
         return True
     if re.search(rf"\b{copy_field}\s*:\s*$", stripped):
         nearby = stripped[-240:]
-        return bool(re.search(r"\b(?:return|render|visible|copy|message|status|diagnostic|alert|toast|view|panel|card|dialog|empty)\b", nearby, re.I))
+        return bool(
+            re.search(
+                r"\b(?:return|render|visible|copy|message|status|diagnostic|alert|toast|view|panel|card|dialog|empty)\b",
+                nearby,
+                re.I,
+            )
+        )
     if rel_path.endswith(".tsx") and re.search(r"\breturn\s*$", stripped):
         nearby = stripped[-320:]
-        return bool(re.search(r"\b(?:copy|message|status|diagnostic|alert|toast|view|panel|card|dialog|label|title|description|detail|reason|repair|error|evidence)\b", nearby, re.I))
+        return bool(
+            re.search(
+                r"\b(?:copy|message|status|diagnostic|alert|toast|view|panel|card|dialog|label|title|description|detail|reason|repair|error|evidence)\b",
+                nearby,
+                re.I,
+            )
+        )
     current_line = stripped.splitlines()[-1] if stripped else ""
-    if (current_line.endswith("?") and not current_line.endswith("??")) or re.search(r"\?[^{};]*:\s*$", current_line):
+    if (current_line.endswith("?") and not current_line.endswith("??")) or re.search(
+        r"\?[^{};]*:\s*$", current_line
+    ):
         nearby = stripped[-160:]
         return bool(
             (rel_path.endswith(".tsx") and re.search(r"\breturn\b", nearby))
             or re.search(rf"\b{copy_field}\b", nearby)
-            or re.search(r"\b(?:copy|message|status|diagnostic|alert|toast|view|panel|card|dialog)\b", nearby, re.I)
-            or re.search(r"\b[A-Za-z]*(?:Label|Title|Description|Detail|Reason|Repair|Error|Message|Evidence|Copy)\b", nearby)
+            or re.search(
+                r"\b(?:copy|message|status|diagnostic|alert|toast|view|panel|card|dialog)\b",
+                nearby,
+                re.I,
+            )
+            or re.search(
+                r"\b[A-Za-z]*(?:Label|Title|Description|Detail|Reason|Repair|Error|Message|Evidence|Copy)\b",
+                nearby,
+            )
         )
     return False
 
@@ -343,13 +411,14 @@ def is_internal_data_literal_context(context: str) -> bool:
         nearby,
     ):
         return True
-    if re.search(r"\blabel\s*:\s*$", current_line) and re.search(
-        r"\bid\s*:\s*['\"][a-z0-9-]+['\"],\s*\n\s*label\s*:\s*$",
-        nearby,
-        re.I,
-    ):
-        return True
-    return False
+    return bool(
+        re.search(r"\blabel\s*:\s*$", current_line)
+        and re.search(
+            r"\bid\s*:\s*['\"][a-z0-9-]+['\"],\s*\n\s*label\s*:\s*$",
+            nearby,
+            re.I,
+        )
+    )
 
 
 def rendered_dynamic_expressions(text: str, line_for) -> list[tuple[int, str, str]]:
@@ -357,7 +426,9 @@ def rendered_dynamic_expressions(text: str, line_for) -> list[tuple[int, str, st
     jsx_sink_patterns = (
         re.compile(r"<(?:AlertTitle|AlertDescription)\b[^>]*>\s*\{([^{}]+)\}", re.S),
         re.compile(r"<[^>]*\brole\s*=\s*(?:\"alert\"|'alert')[^>]*>\s*\{([^{}]+)\}", re.S),
-        re.compile(r"\b(?:title|disabledReason|aria-label|label|description)\s*=\s*\{([^{}]+)\}", re.S),
+        re.compile(
+            r"\b(?:title|disabledReason|aria-label|label|description)\s*=\s*\{([^{}]+)\}", re.S
+        ),
     )
     call_sink_pattern = re.compile(
         r"\b(?:setMessage|setError|set[A-Za-z]+Error|set[A-Za-z]+Message|toast|alert)\s*\(([^;\n]+)\)",
@@ -367,11 +438,23 @@ def rendered_dynamic_expressions(text: str, line_for) -> list[tuple[int, str, st
         for match in pattern.finditer(text):
             expression = normalize_expression(match.group(1))
             if is_suspicious_render_expression(expression):
-                results.append((line_for(match.start(1)), f"raw-render-expression {expression}", literal_render_context(text, match.start(1), match.end(1))))
+                results.append(
+                    (
+                        line_for(match.start(1)),
+                        f"raw-render-expression {expression}",
+                        literal_render_context(text, match.start(1), match.end(1)),
+                    )
+                )
     for match in call_sink_pattern.finditer(text):
         expression = normalize_expression(match.group(1))
         if is_suspicious_render_expression(expression):
-            results.append((line_for(match.start(1)), f"raw-render-expression {expression}", literal_render_context(text, match.start(1), match.end(1))))
+            results.append(
+                (
+                    line_for(match.start(1)),
+                    f"raw-render-expression {expression}",
+                    literal_render_context(text, match.start(1), match.end(1)),
+                )
+            )
     return results
 
 
@@ -389,7 +472,10 @@ def is_suspicious_render_expression(expression: str) -> bool:
         return False
     return bool(
         re.search(r"\.message\b", expression)
-        or re.search(r"\b(?:error|diagnostic|diagnostics|disabledReason|methodId|method_id|busTopic|topic|keyPath|key_path)\b", expression)
+        or re.search(
+            r"\b(?:error|diagnostic|diagnostics|disabledReason|methodId|method_id|busTopic|topic|keyPath|key_path)\b",
+            expression,
+        )
         or re.search(r"\b[A-Z][A-Za-z0-9]*_METHODS\b|\b[A-Z][A-Za-z0-9]*Methods\b", expression)
     )
 
@@ -399,18 +485,14 @@ def normalize_literal(value: str) -> str:
 
 
 def literal_render_context(text: str, start: int, end: int, width: int = 900) -> str:
-    return text[max(0, start - width):min(len(text), end + width)]
+    return text[max(0, start - width) : min(len(text), end + width)]
 
 
 def is_allowed_connection_copy(path: str, value: str, context: str) -> bool:
     return any(
-        path == allowed_path
-        and value == allowed_value
-        and context_pattern.search(context)
+        path == allowed_path and value == allowed_value and context_pattern.search(context)
         for allowed_path, allowed_value, context_pattern in ADVANCED_CONNECTION_ALLOWLIST
     )
-
-
 
 
 if __name__ == "__main__":
