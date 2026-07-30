@@ -25,6 +25,10 @@ export {
   SecureInboundCredentialVerifierStore,
   inboundVerifierSecretKey
 } from './local-data-authority-adapters.js'
+export {
+  PeerGrantManagementError,
+  PeerGrantManager
+} from './grant-management.js'
 export type {
   AuthenticatedPeerContext,
   InboundCredentialVerifierStore,
@@ -60,6 +64,12 @@ export type {
   LocalDataPeerAuditSinkOptions,
   SecureInboundCredentialVerifierStoreOptions
 } from './local-data-authority-adapters.js'
+export type {
+  PeerGrantManagementErrorCode,
+  PeerGrantManagerOptions,
+  PeerGrantSelection,
+  PeerGrantSummary
+} from './grant-management.js'
 export {
   PeerHostContractRegistry,
   createToolingPeerHostRegistry
