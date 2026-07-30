@@ -28,6 +28,10 @@ import {
 } from './platform-surface'
 import { presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
+import {
+  LocalFeatureSharingPanel,
+  type LocalFeatureSharingPort,
+} from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
 import {
   isBrowserWebRtcConfigured,
@@ -170,6 +174,8 @@ export interface MeshPeersResourceProps {
   initialInviteText?: string | null
   /** Native QR scanner (mobile shells); resolves to the scanned text or null when cancelled. */
   onScanQr?: () => Promise<string | null>
+  /** Local authority facade; omitted when this surface cannot safely offer local features. */
+  localFeatureSharing?: LocalFeatureSharingPort | undefined
 }
 
 export interface MeshPeersViewProps {
@@ -201,6 +207,8 @@ export interface MeshPeersViewProps {
   onReconnectThinPeer?: () => void
   /** Invite text handed off by a deep link (`aurora://mesh/invite`); opens the connect dialog pre-filled. */
   initialInviteText?: string | null
+  /** Local authority facade; omitted when this surface cannot safely offer local features. */
+  localFeatureSharing?: LocalFeatureSharingPort | undefined
 }
 
 export interface MeshInviteImportOperation {
@@ -271,6 +279,7 @@ export function MeshPeersResource({
   thinPeer,
   initialInviteText: initialInviteTextProp = null,
   onScanQr,
+  localFeatureSharing,
 }: MeshPeersResourceProps) {
   const [snapshot, setSnapshot] = useState<MeshPeersSnapshot>(loadingSnapshot)
   const [permissions, setPermissions] = useState('Gateway.use')
@@ -587,6 +596,7 @@ export function MeshPeersResource({
       {...(onScanQr ? { onScanQr } : {})}
       inviteImport={inviteImport}
       initialInviteText={initialInviteText}
+      {...(localFeatureSharing ? { localFeatureSharing } : {})}
     />
   )
 }
@@ -981,6 +991,7 @@ export function MeshPeersView({
   onConfirmThinPairing,
   onRejectThinPairing,
   onReconnectThinPeer,
+  localFeatureSharing,
 }: MeshPeersViewProps) {
   const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
   const [connectOpen, setConnectOpen] = useState<boolean>(() => Boolean(initialInviteText))
@@ -1071,6 +1082,8 @@ export function MeshPeersView({
       />
 
       <MeshSummaryCards snapshot={snapshot} connectedPeers={connectedPeers.length} pendingPeers={pendingRequests.length} />
+
+      {localFeatureSharing ? <LocalFeatureSharingPanel port={localFeatureSharing} /> : null}
 
       <Card>
         <CardHeader>

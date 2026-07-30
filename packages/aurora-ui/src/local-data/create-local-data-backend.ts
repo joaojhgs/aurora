@@ -1,13 +1,13 @@
 import { LocalDataError, type LocalDataBackend } from '@aurora/client/local-data'
 
-import { BrowserIndexedDbLocalDataBackend } from './browser-indexeddb.js'
-import { BrowserSqliteLocalDataBackend, fallbackReasonFromError, type BrowserSqliteLocalDataBackendOptions } from './browser-sqlite-worker-client.js'
+import { BrowserIndexedDbLocalDataBackend } from './browser-indexeddb'
+import { BrowserSqliteLocalDataBackend, fallbackReasonFromError, type BrowserSqliteLocalDataBackendOptions } from './browser-sqlite-worker-client'
 import {
   commitBrowserLocalDataBackendPointer,
   LocalStorageBrowserLocalDataBackendPointerStore,
   type BrowserLocalDataBackendPointerStore,
   type BrowserTransferableBackendKind
-} from './browser-backend-transfer.js'
+} from './browser-backend-transfer'
 
 export type BrowserLocalDataFallbackReason =
   | 'worker_unavailable'

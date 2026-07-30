@@ -10,7 +10,7 @@ import type {
   UpsertLocalConversationInput
 } from '@aurora/client/local-data'
 
-import { localDataProductError, useLocalData } from './local-data-provider.js'
+import { localDataProductError, useLocalData } from './local-data-context'
 
 export interface UseLocalConversationsOptions {
   readonly includeArchived?: boolean | undefined

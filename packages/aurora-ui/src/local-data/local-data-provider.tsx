@@ -1,9 +1,7 @@
 'use client'
 
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -13,45 +11,34 @@ import {
 import {
   createLocalConversations,
   createLocalLightweightMemory,
-  LocalDataError,
-  type LocalConversationsFacade,
   type LocalDataBackend,
   type LocalDataBackendStatus,
-  type LocalDataScope,
-  type LocalDataSession,
-  type LocalLightweightMemoryFacade
+  type LocalDataSession
 } from '@aurora/client/local-data'
 
-import { createLocalDataBackend } from './create-local-data-backend.js'
+import { createLocalDataBackend } from './create-local-data-backend'
+import {
+  LocalDataContext,
+  localDataErrorCode,
+  localDataProductError,
+  type LocalDataProductError,
+  type LocalDataProviderState,
+  type LocalDataProviderValue
+} from './local-data-context'
 import {
   describeBrowserStorageHealth,
   type BrowserStorageHealth,
   type BrowserStorageInternalState
-} from './storage-health.js'
+} from './storage-health'
 
-export type LocalDataProviderState = 'opening' | 'ready' | 'error'
-
-export interface LocalDataProviderValue {
-  readonly profileId: string
-  readonly localNodeId: string
-  readonly scope: LocalDataScope
-  readonly state: LocalDataProviderState
-  readonly session: LocalDataSession | null
-  readonly backend: LocalDataBackend | null
-  readonly conversations: LocalConversationsFacade | null
-  readonly memory: LocalLightweightMemoryFacade | null
-  readonly storageHealth: BrowserStorageHealth
-  readonly error: LocalDataProductError | null
-  readonly reopen: () => void
-  readonly refreshStorageHealth: () => Promise<void>
-}
-
-export interface LocalDataProductError {
-  readonly title: string
-  readonly detail: string
-  readonly retryable: boolean
-  readonly code: string
-}
+export {
+  localDataProductError,
+  useLocalData,
+  useOptionalLocalData,
+  type LocalDataProductError,
+  type LocalDataProviderState,
+  type LocalDataProviderValue
+} from './local-data-context'
 
 export interface LocalDataProviderProps {
   readonly profileId: string
@@ -65,8 +52,6 @@ export type LocalDataBackendFactory = (
   profileId: string,
   localNodeId: string,
 ) => LocalDataBackend | Promise<LocalDataBackend>
-
-const LocalDataContext = createContext<LocalDataProviderValue | null>(null)
 
 export function LocalDataProvider({
   profileId,
@@ -151,53 +136,6 @@ export function LocalDataProvider({
   return <LocalDataContext.Provider value={value}>{children}</LocalDataContext.Provider>
 }
 
-export function useLocalData(): LocalDataProviderValue {
-  const value = useContext(LocalDataContext)
-  if (value === null) {
-    throw new Error('LocalDataProvider is required for local data UI')
-  }
-  return value
-}
-
-export function useOptionalLocalData(): LocalDataProviderValue | null {
-  return useContext(LocalDataContext)
-}
-
-export function localDataProductError(error: unknown): LocalDataProductError {
-  if (isAbortError(error)) {
-    return {
-      title: 'Action cancelled',
-      detail: 'Aurora stopped the local action before saving changes.',
-      retryable: true,
-      code: 'cancelled'
-    }
-  }
-  const code = localDataErrorCode(error)
-  const reason = localDataErrorReason(error)
-  if (reason === 'owner_exists' || code === 'memory_session_only') {
-    return {
-      title: 'Local features are already active in another Aurora window',
-      detail: 'Close the other Aurora window or try again here.',
-      retryable: true,
-      code: code ?? 'owner_exists'
-    }
-  }
-  if (code === 'session_closed') {
-    return {
-      title: 'Local data needs attention',
-      detail: 'Aurora could not safely use recent activity. Try again.',
-      retryable: true,
-      code
-    }
-  }
-  return {
-    title: 'Your existing local data was not changed. Try again.',
-    detail: 'Aurora kept recent activity unchanged.',
-    retryable: true,
-    code: code ?? 'local_data_unavailable'
-  }
-}
-
 interface ProviderSnapshot {
   readonly state: LocalDataProviderState
   readonly backend: LocalDataBackend | null
@@ -276,26 +214,4 @@ function internalStateForError(error: unknown, ownerAvailable: boolean): Browser
   const code = localDataErrorCode(error)
   if (code === 'identity_mismatch' || code === 'memory_session_only') return 'owner_blocked'
   return 'needs_attention'
-}
-
-function localDataErrorCode(error: unknown): string | null {
-  if (error instanceof LocalDataError) return error.code
-  if (typeof error !== 'object' || error === null) return null
-  const code = 'code' in error ? (error as { code?: unknown }).code : null
-  return typeof code === 'string' ? code : null
-}
-
-function localDataErrorReason(error: unknown): string | null {
-  if (error instanceof LocalDataError) return error.metadata?.reason ?? null
-  if (typeof error !== 'object' || error === null) return null
-  const metadata = 'metadata' in error ? (error as { metadata?: unknown }).metadata : null
-  if (typeof metadata !== 'object' || metadata === null) return null
-  const reason = 'reason' in metadata ? (metadata as { reason?: unknown }).reason : null
-  return typeof reason === 'string' ? reason : null
-}
-
-function isAbortError(error: unknown): boolean {
-  return typeof DOMException !== 'undefined'
-    && error instanceof DOMException
-    && error.name === 'AbortError'
 }

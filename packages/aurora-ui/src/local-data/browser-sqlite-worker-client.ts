@@ -32,13 +32,13 @@ import {
   type BrowserSqliteOwnership,
   type BrowserSqliteOwnershipLock,
   type BrowserSqliteStorageIdentity
-} from './browser-sqlite-opfs.js'
+} from './browser-sqlite-opfs'
 import type {
   BrowserSqliteMigrationSql,
   BrowserSqliteRepositoryOperation,
   BrowserSqliteWorkerRequest,
   BrowserSqliteWorkerResponse
-} from './browser-sqlite-worker.js'
+} from './browser-sqlite-worker'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const MAX_OUTBOUND_BYTES = 2 * 1024 * 1024

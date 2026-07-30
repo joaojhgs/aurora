@@ -30,12 +30,12 @@ import {
 } from '#components/ui/message-scroller'
 import { Bubble, BubbleContent } from '#components/ui/bubble'
 
-import { PRODUCT_COPY } from '../product-copy.js'
-import type { ProductCopyResult } from '../product-copy.js'
-import { useOptionalLocalData, type LocalDataProductError } from './local-data-provider.js'
-import type { BrowserStorageHealth } from './storage-health.js'
-import { useLocalConversations } from './use-local-conversations.js'
-import { useLightweightMemory } from './use-lightweight-memory.js'
+import { PRODUCT_COPY } from '../product-copy'
+import type { ProductCopyResult } from '../product-copy'
+import { useOptionalLocalData, type LocalDataProductError } from './local-data-context'
+import type { BrowserStorageHealth } from './storage-health'
+import { useLocalConversations } from './use-local-conversations'
+import { useLightweightMemory } from './use-lightweight-memory'
 
 export interface StorageHealthViewProps {
   readonly health?: BrowserStorageHealth | undefined

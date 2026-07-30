@@ -24,7 +24,7 @@ import {
   type PeerGrantMetadataRecord
 } from '@aurora/client/local-data'
 
-import { sha256Hex, type BrowserSqliteStorageIdentity } from './browser-sqlite-opfs.js'
+import { sha256Hex, type BrowserSqliteStorageIdentity } from './browser-sqlite-opfs'
 
 type WorkerResult =
   | { readonly ok: true; readonly value: unknown }

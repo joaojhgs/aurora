@@ -10,7 +10,7 @@ import {
   type UpsertLocalMemoryItemInput
 } from '@aurora/client/local-data'
 
-import { localDataProductError, useLocalData } from './local-data-provider.js'
+import { localDataProductError, useLocalData } from './local-data-context'
 
 export interface UseLightweightMemoryOptions {
   readonly namespace?: string | undefined
