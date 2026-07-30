@@ -60,6 +60,7 @@ import type { LocalFeatureSharingPort } from "@aurora/client/local-tools";
 import { createTauriNativePeerConnection } from "./native-webrtc";
 import {
   createTauriMeshNodeServices,
+  type EnabledTauriMeshNodeServices,
   type TauriMeshNodeServices,
   type TauriMeshNodeServicesOptions,
 } from "./tauri-mesh-node-services";
@@ -79,6 +80,7 @@ export interface AuroraTauriRuntime {
   runtimeTier?: AuroraRuntimeTier | undefined;
   localNodeProviderStatus?: AuroraLocalNodeProviderStatus | undefined;
   localFeatureSharing?: LocalFeatureSharingPort | undefined;
+  localToolProvider?: EnabledTauriMeshNodeServices["localToolProvider"] | undefined;
   localData?: AuroraTauriLocalDataRuntime | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
@@ -434,6 +436,9 @@ export function createAuroraTauriRuntime({
           localFeatureSharing: meshNodeServices?.enabled
             ? meshNodeServices.localFeatureSharing
             : undefined,
+          localToolProvider: meshNodeServices?.enabled
+            ? meshNodeServices.localToolProvider
+            : undefined,
           localData: localDataRuntime(meshNodeServices),
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
@@ -562,6 +567,9 @@ export function createAuroraTauriRuntime({
         localNodeProviderStatus: localNodeProviderStatus(meshNodeServices),
         localFeatureSharing: meshNodeServices?.enabled
           ? meshNodeServices.localFeatureSharing
+          : undefined,
+        localToolProvider: meshNodeServices?.enabled
+          ? meshNodeServices.localToolProvider
           : undefined,
         localData: localDataRuntime(meshNodeServices),
         thinProfileConfigured: runtimeProfileConfigured,

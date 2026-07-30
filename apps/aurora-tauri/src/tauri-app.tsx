@@ -50,11 +50,16 @@ import {
   type WebThinRoomSecret,
 } from "@aurora/ui";
 import {
+  AssistantSurfaceSelector,
+  type LightweightAssistantProps,
+} from "@aurora/ui/local-assistant";
+import {
   LocalDataProvider,
   type LocalDataBackendFactory,
 } from "@aurora/ui/local-data";
 import owlSrc from "./assets/aurora-owl.png";
 import { GATEWAY_METHODS } from "@aurora/client";
+import { createLightweightToolClientAdapter } from "@aurora/client/lightweight-orchestrator";
 import type {
   AdminOverviewManifest,
   AndroidLocalLightInferenceStatus,
@@ -145,30 +150,35 @@ export const tauriRouteRegistry = {
     assistantNativePermissions,
     assistantNativeCapabilities,
   }) => (
-    <AssistantView
-      client={client}
-      route={route}
-      cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
-      voiceRoutes={snapshot.assistantVoiceRoutes}
-      nativePlatform={snapshot.nativePlatform}
-      nativeAvailable={snapshot.nativeAvailable}
-      nativePermissions={assistantNativePermissions}
-      nativeCapabilities={assistantNativeCapabilities}
-      runtimeHealth={{
-        selectedModel: null,
-        routeLabel: routeAvailabilityLabel(route),
-        sidecarHealth: nativeContext.sidecar?.running
-          ? "Ready"
-          : nativeContext.localMode
-            ? "Starting Aurora on this computer"
-            : "Not needed for this connection",
-        gatewayHealth: nativeContext.sidecar?.gatewayUrl
-          ? "Connected on this computer"
-          : transportKindLabel(
-              snapshot.transportKind,
-              nativeContext.runtimeMode,
-            ),
-      }}
+    <AssistantSurfaceSelector
+      connectedAssistant={
+        <AssistantView
+          client={client}
+          route={route}
+          cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
+          voiceRoutes={snapshot.assistantVoiceRoutes}
+          nativePlatform={snapshot.nativePlatform}
+          nativeAvailable={snapshot.nativeAvailable}
+          nativePermissions={assistantNativePermissions}
+          nativeCapabilities={assistantNativeCapabilities}
+          runtimeHealth={{
+            selectedModel: null,
+            routeLabel: routeAvailabilityLabel(route),
+            sidecarHealth: nativeContext.sidecar?.running
+              ? "Ready"
+              : nativeContext.localMode
+                ? "Starting Aurora on this computer"
+                : "Not needed for this connection",
+            gatewayHealth: nativeContext.sidecar?.gatewayUrl
+              ? "Connected on this computer"
+              : transportKindLabel(
+                  snapshot.transportKind,
+                  nativeContext.runtimeMode,
+                ),
+          }}
+        />
+      }
+      localAssistant={tauriLocalAssistant(nativeContext)}
     />
   ),
   memory: ({ route, nativeContext, client }) => (
@@ -677,6 +687,7 @@ export function AuroraTauriApp({
     nodeMode: runtime.nodeMode,
     localNodeProviderStatus: runtime.localNodeProviderStatus,
     localFeatureSharing: runtime.localFeatureSharing,
+    localToolProvider: runtime.localToolProvider,
     localData: runtime.localData,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
@@ -1051,6 +1062,7 @@ interface NativeContext {
   nodeMode?: AuroraTauriRuntime["nodeMode"];
   localNodeProviderStatus?: AuroraTauriRuntime["localNodeProviderStatus"];
   localFeatureSharing?: AuroraTauriRuntime["localFeatureSharing"];
+  localToolProvider?: AuroraTauriRuntime["localToolProvider"];
   localData?: AuroraTauriRuntime["localData"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
@@ -1066,6 +1078,35 @@ interface NativeContext {
   androidBaseline: TauriAndroidBaselineStatus | null;
   androidForeground: AndroidForegroundRuntimeStatus | null;
   androidMediaPolicy: AndroidMediaPolicyStatus | null;
+}
+
+function tauriLocalAssistant(
+  nativeContext: NativeContext,
+): LightweightAssistantProps | null {
+  const localData = nativeContext.localData;
+  const localToolProvider = nativeContext.localToolProvider;
+  if (!localData || !localData.ownerAvailable || !localToolProvider) {
+    return null;
+  }
+  const availableTools = localToolProvider.localToolRegistry.publicTools();
+  return {
+    tools: createLightweightToolClientAdapter({
+      localRegistry: localToolProvider.localToolRegistry,
+      localPolicy: localToolProvider.policy,
+      availableTools,
+      providerPeerId: localToolProvider.providerPeerId,
+      serviceInstanceId: localToolProvider.serviceInstanceId,
+      callerPeerId: localData.localNodeId,
+      callerPrincipalId: localData.profileId,
+      callerPermissions: ["Tooling.ExecuteTool"],
+    }),
+    localData: localData.session,
+    scope: {
+      profileId: localData.session.profileId,
+      localNodeId: localData.session.localNodeId,
+    },
+    availableTools,
+  };
 }
 
 function TauriRouteContent({

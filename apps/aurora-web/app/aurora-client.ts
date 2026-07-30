@@ -77,6 +77,7 @@ export interface AuroraBrowserLocalNodeProviderStatus {
 export interface AuroraBrowserRuntime extends BrowserWebThinRuntime {
   readonly localData?: AuroraBrowserLocalDataContext | undefined
   readonly localFeatureSharing?: LocalFeatureSharingPort | undefined
+  readonly localToolProvider?: BrowserMeshNodeServices['provider'] | undefined
   readonly localNodeProviderStatus: AuroraBrowserLocalNodeProviderStatus
 }
 
@@ -259,6 +260,7 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
             crypto: effectiveMeshNodeServices.crypto,
           },
           localFeatureSharing: effectiveMeshNodeServices.localFeatureSharing,
+          localToolProvider: effectiveMeshNodeServices.provider,
         }
       : {}),
     localNodeProviderStatus: localNodeProviderStatus(
