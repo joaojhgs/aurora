@@ -22,4 +22,3 @@ describe('browser sqlite OPFS identity', () => {
     expect(rejectsPythonServiceDatabaseName('profile-1')).toBe(false)
   })
 })
-
