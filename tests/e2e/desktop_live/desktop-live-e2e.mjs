@@ -7,6 +7,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertRoleSwitchEvidence } from './role-switch-evidence.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const serviceScript = path.join(repoRoot, 'scripts/webrtc_interop_services.sh')
@@ -525,6 +526,7 @@ function validateDriverReport(report, { sessionNonce, tauriPid }) {
   assert.equal(report.sessionNonce, sessionNonce, 'desktop driver report must echo the launch nonce')
   assert.equal(String(report.tauriPid), tauriPid, 'desktop driver report must bind to the launched Tauri PID')
   assert.equal(report.secretsRedacted, true, 'desktop driver report must declare redacted artifacts')
+  assertRoleSwitchEvidence(report.roleSwitchEvidence, 'desktop driver report')
 }
 
 async function waitForJson(file, timeoutMs, label, child, childOutput) {
@@ -809,6 +811,7 @@ async function runSelfTest() {
       status: 'passed',
       sessionNonce: 'nonce',
       tauriPid: '123',
+      roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
   )
@@ -817,8 +820,38 @@ async function runSelfTest() {
       status: 'passed',
       sessionNonce: 'wrong',
       tauriPid: '123',
+      roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
+  assert.throws(() =>
+    validateDriverReport({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+    /roleSwitchEvidence\.passed/,
+  )
+  assert.throws(() =>
+    validateDriverReport({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      roleSwitchEvidence: { passed: false, from: 'remote-console', to: 'mesh-node' },
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+    /roleSwitchEvidence\.passed/,
+  )
+  assert.throws(() =>
+    validateDriverReport({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      roleSwitchEvidence: { passed: true, from: 'mesh-node', to: 'remote-console' },
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+    /roleSwitchEvidence\.from/,
   )
   const artifactRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-secret-self-test.'))
   const leaking = path.join(artifactRoot, 'driver-report.json')

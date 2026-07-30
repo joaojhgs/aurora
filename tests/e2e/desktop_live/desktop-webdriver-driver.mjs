@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { assertRoleSwitchEvidence } from './role-switch-evidence.mjs'
 
 const args = new Set(process.argv.slice(2))
 
@@ -36,7 +37,22 @@ async function run() {
     const payload = await buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath })
     const hookResult = await invokeDesktopHook(webdriverUrl, session.sessionId, payload)
     if (hookResult?.status === 'passed') {
-      validatePassedHookResult(hookResult, { sessionNonce, tauriPid })
+      try {
+        validatePassedHookResult(hookResult, { sessionNonce, tauriPid })
+      } catch (error) {
+        await writeBlocked(reportPath, donePath, {
+          blocker: 'desktop-webview-hook-invalid-report',
+          sessionNonce,
+          tauriPid,
+          detail: error instanceof Error ? error.message : String(error),
+          webdriver: {
+            endpoint: redactEndpoint(webdriverUrl),
+            sessionIdDigest: sha256Like(session.sessionId),
+          },
+          runtime: hookResult.runtime,
+        })
+        process.exit(2)
+      }
       await writeJson(reportPath, {
         schema: 'aurora.desktop_live_e2e.webdriver_driver.v1',
         ...hookResult,
@@ -188,11 +204,7 @@ function validatePassedHookResult(result, { sessionNonce, tauriPid }) {
   assert.equal(result.sessionNonce, sessionNonce)
   assert.equal(String(result.tauriPid), String(tauriPid))
   assert.equal(result.secretsRedacted, true)
-  assert.deepEqual(result.roleSwitchEvidence, {
-    passed: true,
-    from: 'remote-console',
-    to: 'mesh-node',
-  })
+  assertRoleSwitchEvidence(result.roleSwitchEvidence, 'hook result')
   assert.ok(
     result.browserResult || result.desktopResult,
     'hook result must include browserResult or desktopResult evidence',
