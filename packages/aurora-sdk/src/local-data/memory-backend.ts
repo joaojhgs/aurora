@@ -27,6 +27,7 @@ import {
   localDataIdSchema
 } from './records.zod.js'
 import { assertOpen, type LocalDataSession } from './session.js'
+import type { LocalDataScope } from './provenance.js'
 import { parseLocalDataBoundary } from './validation.js'
 
 export interface MemoryLocalDataBackendOptions {
@@ -319,12 +320,18 @@ class MemoryLightweightMemoryRepository {
     })
   }
 
-  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+  async deleteExpiredMemoryItems(scope: LocalDataScope, nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
     return await this.session.withRepositoryAccess(this.access, () => {
+      this.session.assertIdentity(scope.profileId, scope.localNodeId)
       const cutoffMs = requireDeleteNowMs(nowMs)
       const normalizedLimit = requireDeleteLimit(limit)
       const expiredIds = this.session.mutable.memoryItems
-        .filter((record) => record.expiresAtMs !== null && record.expiresAtMs <= cutoffMs)
+        .filter((record) =>
+          record.profileId === scope.profileId
+          && record.localNodeId === scope.localNodeId
+          && record.expiresAtMs !== null
+          && record.expiresAtMs <= cutoffMs
+        )
         .sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id))
         .slice(0, normalizedLimit)
         .map((record) => record.id)

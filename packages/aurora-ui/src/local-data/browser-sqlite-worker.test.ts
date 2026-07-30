@@ -261,7 +261,7 @@ describe('browser sqlite worker protocol guardrails', () => {
       {
         id: 'delete-expired-memory',
         command: 'repo',
-        operation: { kind: 'memory.deleteExpiredMemoryItems', nowMs: 1000, limit: 2 }
+        operation: { kind: 'memory.deleteExpiredMemoryItems', scope: { profileId: 'profile-1', localNodeId: 'node-1' }, nowMs: 1000, limit: 2 }
       },
       (response) => expiredResponses.push(response),
       openWorkerState(expiredDb, 'profile-1', 'node-1') as never
@@ -286,7 +286,7 @@ describe('browser sqlite worker protocol guardrails', () => {
         {
           id: `invalid-now-${String(nowMs)}`,
           command: 'repo',
-          operation: { kind: 'memory.deleteExpiredMemoryItems', nowMs, limit: 1 }
+          operation: { kind: 'memory.deleteExpiredMemoryItems', scope: { profileId: 'profile-1', localNodeId: 'node-1' }, nowMs, limit: 1 }
         },
         (response) => responses.push(response),
         openWorkerState(db, 'profile-1', 'node-1') as never

@@ -20,6 +20,7 @@ import {
   type LocalDataExportV1,
   type LocalDataImportResult,
   type LocalDataRepositories,
+  type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
   type PeerGrantMetadataRecord
@@ -379,8 +380,8 @@ class BrowserSqliteMemoryRepository {
     return await this.client.repositoryOperation<DeleteRecordResult>({ kind: 'memory.deleteMemoryItem', memoryItemId }, this.txId)
   }
 
-  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
-    return await this.client.repositoryOperation<DeleteExpiredMemoryItemsResult>({ kind: 'memory.deleteExpiredMemoryItems', nowMs, limit }, this.txId)
+  async deleteExpiredMemoryItems(scope: LocalDataScope, nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+    return await this.client.repositoryOperation<DeleteExpiredMemoryItemsResult>({ kind: 'memory.deleteExpiredMemoryItems', scope, nowMs, limit }, this.txId)
   }
 
   async listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]> {

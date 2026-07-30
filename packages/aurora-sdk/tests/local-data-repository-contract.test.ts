@@ -11,6 +11,8 @@ import {
   peerGrantFixture
 } from './fixtures/local-data-fixtures.js'
 
+const scope = { profileId: 'profile-1', localNodeId: 'node-1' }
+
 describe('local-data memory repository contract', () => {
   it('stores every repository type through typed ports without exposing SQL', async () => {
     const backend = new MemoryLocalDataBackend({ nowMs: () => 2000 })
@@ -58,15 +60,15 @@ describe('local-data memory repository contract', () => {
 
     await expect(session.memory.deleteMemoryItem('missing-memory')).resolves.toEqual({ deleted: false })
     await expect(session.memory.deleteMemoryItem('memory-keep')).resolves.toEqual({ deleted: true })
-    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(session.memory.deleteExpiredMemoryItems(scope, 1000, 2)).resolves.toEqual({ deleted: 2 })
     await expect(session.memory.listMemoryItems()).resolves.toEqual([
       memoryFixture({ id: 'memory-expired-b', expiresAtMs: 1000 }),
       memoryFixture({ id: 'memory-new', expiresAtMs: 3000 })
     ])
-    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 1 })
-    await expect(session.memory.deleteExpiredMemoryItems(3000, 5)).resolves.toEqual({ deleted: 1 })
+    await expect(session.memory.deleteExpiredMemoryItems(scope, 1000, 2)).resolves.toEqual({ deleted: 1 })
+    await expect(session.memory.deleteExpiredMemoryItems(scope, 3000, 5)).resolves.toEqual({ deleted: 1 })
     await expect(session.memory.listMemoryItems()).resolves.toEqual([])
-    await expect(session.memory.deleteExpiredMemoryItems(1000, 0)).rejects.toMatchObject({
+    await expect(session.memory.deleteExpiredMemoryItems(scope, 1000, 0)).rejects.toMatchObject({
       code: 'invalid_record',
       metadata: { reason: 'delete_limit' }
     })
@@ -78,7 +80,7 @@ describe('local-data memory repository contract', () => {
       const session = await backend.open('profile-1', 'node-1')
       await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired', expiresAtMs: 1000 }))
 
-      await expect(session.memory.deleteExpiredMemoryItems(nowMs, 1)).rejects.toMatchObject({
+      await expect(session.memory.deleteExpiredMemoryItems(scope, nowMs, 1)).rejects.toMatchObject({
         code: 'invalid_record',
         metadata: { reason: 'delete_now_ms' }
       })

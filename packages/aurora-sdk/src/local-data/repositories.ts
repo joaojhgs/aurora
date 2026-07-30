@@ -7,6 +7,7 @@ import type {
   LocalToolStateRecord,
   PeerGrantMetadataRecord
 } from './records.zod.js'
+import type { LocalDataScope } from './provenance.js'
 
 export interface ConversationRepository {
   upsertConversation(record: ConversationRecord): Promise<void>
@@ -19,7 +20,7 @@ export interface ConversationRepository {
 export interface LightweightMemoryRepository {
   upsertMemoryItem(record: LightweightMemoryRecord): Promise<void>
   deleteMemoryItem(memoryItemId: string): Promise<DeleteRecordResult>
-  deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult>
+  deleteExpiredMemoryItems(scope: LocalDataScope, nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult>
   listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]>
 }
 

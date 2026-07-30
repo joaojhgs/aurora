@@ -26,6 +26,7 @@ import {
   type LocalDataImportResult,
   type LocalDataRecordCollections,
   type LocalDataRepositories,
+  type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
   type MutableLocalDataCollections,
@@ -606,14 +607,15 @@ export class BrowserLightweightMemoryRepository {
     })
   }
 
-  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+  async deleteExpiredMemoryItems(scope: LocalDataScope, nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
     return await this.session.withRepositoryAccess(this.access, true, () => {
+      this.session.assertIdentity(scope.profileId, scope.localNodeId)
       const cutoffMs = requireDeleteNowMs(nowMs)
       const normalizedLimit = requireDeleteLimit(limit)
       const expiredIds = this.session.mutable.memoryItems
         .filter((record) =>
-          record.profileId === this.session.profileId
-          && record.localNodeId === this.session.localNodeId
+          record.profileId === scope.profileId
+          && record.localNodeId === scope.localNodeId
           && record.expiresAtMs !== null
           && record.expiresAtMs <= cutoffMs
         )

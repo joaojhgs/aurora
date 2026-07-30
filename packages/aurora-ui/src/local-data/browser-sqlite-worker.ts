@@ -16,6 +16,7 @@ import {
   type LocalDataExportV1,
   type LocalDataMigrationManifest,
   type LocalDataRepositories,
+  type LocalDataScope,
   type LocalDataSession,
   type LocalDataRecordCollections,
   type LocalAuditRecord,
@@ -60,7 +61,7 @@ export type BrowserSqliteRepositoryOperation =
   | { readonly kind: 'conversations.listMessages'; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
-  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly nowMs: number; readonly limit: number }
+  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly scope: LocalDataScope; readonly nowMs: number; readonly limit: number }
   | { readonly kind: 'memory.listMemoryItems'; readonly namespace?: string }
   | { readonly kind: 'localTools.upsertLocalToolState'; readonly record: LocalToolStateRecord }
   | { readonly kind: 'localTools.listLocalToolStates' }
@@ -408,15 +409,16 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
       return { deleted: true }
     }
     case 'memory.deleteExpiredMemoryItems': {
+      assertRecordIdentity(workerState, operation.scope.profileId, operation.scope.localNodeId)
       const cutoffMs = requireDeleteNowMs(operation.nowMs)
       const normalizedLimit = requireDeleteLimit(operation.limit)
       const rows = selectObjects<{ id: string }>(
         db,
         'SELECT id FROM aurora_memory_items WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?;',
-        [workerState.profileId, workerState.localNodeId, cutoffMs, normalizedLimit]
+        [operation.scope.profileId, operation.scope.localNodeId, cutoffMs, normalizedLimit]
       )
       for (const row of rows) {
-        run(db, 'DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [row.id, workerState.profileId, workerState.localNodeId])
+        run(db, 'DELETE FROM aurora_memory_items WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [row.id, operation.scope.profileId, operation.scope.localNodeId])
       }
       return { deleted: rows.length }
     }

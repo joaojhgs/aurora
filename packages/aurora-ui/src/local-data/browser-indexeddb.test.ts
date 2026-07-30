@@ -256,11 +256,11 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
       deletedMessages: 1
     })
     await expect(second.memory.deleteMemoryItem('memory-profile-1-expired')).resolves.toEqual({ deleted: false })
-    await expect(second.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(second.memory.deleteExpiredMemoryItems({ profileId: 'profile-2', localNodeId: 'node-1' }, 1000, 2)).resolves.toEqual({ deleted: 2 })
     await expect(second.memory.listMemoryItems()).resolves.toEqual([
       memoryFixture({ id: 'memory-profile-2-b', profileId: 'profile-2', expiresAtMs: 1000 })
     ])
-    await expect(second.memory.deleteExpiredMemoryItems(1000, 0)).rejects.toMatchObject({
+    await expect(second.memory.deleteExpiredMemoryItems({ profileId: 'profile-2', localNodeId: 'node-1' }, 1000, 0)).rejects.toMatchObject({
       code: 'invalid_record',
       metadata: { reason: 'delete_limit' }
     })
@@ -280,7 +280,7 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
       const session = await openSession(store, leases)
       await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-expired', expiresAtMs: 1000 }))
 
-      await expect(session.memory.deleteExpiredMemoryItems(nowMs, 1)).rejects.toMatchObject({
+      await expect(session.memory.deleteExpiredMemoryItems({ profileId: 'profile-1', localNodeId: 'node-1' }, nowMs, 1)).rejects.toMatchObject({
         code: 'invalid_record',
         metadata: { reason: 'delete_now_ms' }
       })

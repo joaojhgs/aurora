@@ -437,7 +437,7 @@ class UnusedSession implements LocalDataSession {
   readonly memory: LocalDataRepositories['memory'] = {
     upsertMemoryItem: async () => undefined,
     deleteMemoryItem: async () => ({ deleted: false }),
-    deleteExpiredMemoryItems: async () => ({ deleted: 0 }),
+    deleteExpiredMemoryItems: async (_scope, _nowMs, _limit) => ({ deleted: 0 }),
     listMemoryItems: async () => []
   }
   readonly localTools: LocalDataRepositories['localTools'] = {

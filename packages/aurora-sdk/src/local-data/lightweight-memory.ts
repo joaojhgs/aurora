@@ -1,4 +1,3 @@
-import { LocalDataError } from './backend.js'
 import { compareUtf8 } from './export-v1.js'
 import {
   parseLightweightMemoryRecord,
@@ -135,12 +134,7 @@ class SessionLocalLightweightMemoryFacade implements LocalLightweightMemoryFacad
     throwIfAborted(input.signal)
     const nowMs = requireEpochMs(input.nowMs, 'memory_cleanup_now_ms')
     const limit = requirePositiveLimit(input.limit, MAX_EXPIRED_DELETE_LIMIT, 'memory_cleanup_limit')
-    const before = await this.session.memory.listMemoryItems()
-    throwIfAborted(input.signal)
-    if (before.some((record) => (record.profileId !== scope.profileId || record.localNodeId !== scope.localNodeId) && isExpiredAt(record, nowMs))) {
-      throw new LocalDataError('identity_mismatch', 'Repository contains expired records outside the requested cleanup scope')
-    }
-    return await this.session.memory.deleteExpiredMemoryItems(nowMs, limit)
+    return await this.session.memory.deleteExpiredMemoryItems(scope, nowMs, limit)
   }
 
   private parseScope(scope: LocalDataScope): LocalDataScope {

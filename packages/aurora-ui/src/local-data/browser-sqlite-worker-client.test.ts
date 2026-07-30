@@ -82,7 +82,7 @@ describe('browser sqlite worker client backend', () => {
     })
     await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([])
     await expect(session.memory.deleteMemoryItem('memory-live')).resolves.toEqual({ deleted: true })
-    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(session.memory.deleteExpiredMemoryItems({ profileId: 'profile-1', localNodeId: 'node-1' }, 1000, 2)).resolves.toEqual({ deleted: 2 })
     await expect(session.memory.listMemoryItems()).resolves.toEqual([
       memoryFixture({ id: 'memory-b', expiresAtMs: 1000 })
     ])
@@ -245,7 +245,7 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
       case 'memory.deleteMemoryItem':
         return await session.memory.deleteMemoryItem(operation.memoryItemId)
       case 'memory.deleteExpiredMemoryItems':
-        return await session.memory.deleteExpiredMemoryItems(operation.nowMs, operation.limit)
+        return await session.memory.deleteExpiredMemoryItems(operation.scope, operation.nowMs, operation.limit)
       case 'memory.listMemoryItems':
         return await session.memory.listMemoryItems(operation.namespace)
       case 'localTools.upsertLocalToolState':

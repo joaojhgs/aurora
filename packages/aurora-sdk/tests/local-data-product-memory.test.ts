@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createLocalLightweightMemory } from '../src/local-data/lightweight-memory.js'
-import { MemoryLocalDataBackend } from '../src/local-data/index.js'
+import { MemoryLocalDataBackend, type LightweightMemoryRecord, type LocalDataSession } from '../src/local-data/index.js'
 import { memoryFixture } from './fixtures/local-data-fixtures.js'
 
 const scope = { profileId: 'profile-1', localNodeId: 'node-1' }
@@ -74,5 +74,47 @@ describe('local-data product lightweight memory facade', () => {
       code: 'invalid_record',
       metadata: { reason: 'memory_cleanup_limit' }
     })
+  })
+
+  it('scopes expired cleanup without throwing on other profiles or deleting them', async () => {
+    const records = [
+      memoryFixture({ id: 'memory-profile-1-expired', expiresAtMs: 1000 }),
+      memoryFixture({ id: 'memory-profile-2-expired', profileId: 'profile-2', expiresAtMs: 1000 })
+    ]
+    const deletedScopes: Array<{ profileId: string; localNodeId: string }> = []
+    const session = {
+      profileId: scope.profileId,
+      localNodeId: scope.localNodeId,
+      schemaVersion: 3,
+      memory: {
+        upsertMemoryItem: async () => undefined,
+        deleteMemoryItem: async () => ({ deleted: false }),
+        deleteExpiredMemoryItems: async (cleanupScope: { profileId: string; localNodeId: string }, nowMs: number, limit: number) => {
+          deletedScopes.push(cleanupScope)
+          const expiredIds = records
+            .filter((record) =>
+              record.profileId === cleanupScope.profileId
+              && record.localNodeId === cleanupScope.localNodeId
+              && record.expiresAtMs !== null
+              && record.expiresAtMs <= nowMs
+            )
+            .slice(0, limit)
+            .map((record) => record.id)
+          for (const id of expiredIds) {
+            records.splice(records.findIndex((record) => record.id === id), 1)
+          }
+          return { deleted: expiredIds.length }
+        },
+        listMemoryItems: async () => records.map((record) => structuredClone(record))
+      }
+    } as unknown as LocalDataSession
+    const memory = createLocalLightweightMemory(session)
+
+    await expect(memory.deleteExpiredMemoryItems({ scope, nowMs: 1000, limit: 10 })).resolves.toEqual({ deleted: 1 })
+
+    expect(deletedScopes).toEqual([scope])
+    expect(records).toEqual<LightweightMemoryRecord[]>([
+      memoryFixture({ id: 'memory-profile-2-expired', profileId: 'profile-2', expiresAtMs: 1000 })
+    ])
   })
 })
