@@ -271,6 +271,62 @@ describe('durable local feature sharing controller', () => {
     expect(JSON.stringify(snapshot)).not.toMatch(/token|room-a|provider|verifier/u)
   })
 
+  it('does not publish false empty sharing when grant reads are unavailable during load or refresh', async () => {
+    const fixture = await controllerFixture()
+    const throwingGrantManager = {
+      listActiveGrants: async () => { throw new Error('grant store unavailable') },
+      replaceGrant: fixture.grantManager.replaceGrant.bind(fixture.grantManager),
+      revokeSharing: fixture.grantManager.revokeSharing.bind(fixture.grantManager)
+    } as unknown as PeerGrantManager
+    const loadingController = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, throwingGrantManager))
+    loadingController.registerTrustedRelationship(selector, 'Phone')
+    const loadListener = vi.fn()
+    loadingController.subscribe(loadListener)
+
+    await expect(loadingController.load()).rejects.toMatchObject({
+      code: 'sharing_unavailable',
+      message: 'Sharing choices are unavailable'
+    })
+    expect(loadListener).not.toHaveBeenCalled()
+    expect(loadingController.isShared(publicTool(fixture.registry, descriptor.toolContractId), projectionContext())).toBe(false)
+
+    const working = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, fixture.grantManager))
+    await working.load()
+    const refreshListener = vi.fn()
+    working.subscribe(refreshListener)
+    ;(fixture.grantManager as unknown as { listActiveGrants: typeof fixture.grantManager.listActiveGrants }).listActiveGrants = async () => {
+      throw new Error('grant store unavailable')
+    }
+    working.registerTrustedRelationship({ ...selector, claimantPeerId: 'peer-refresh', tokenId: 'token-refresh' }, 'Tablet')
+    await Promise.resolve()
+
+    expect(refreshListener).toHaveBeenCalledTimes(1)
+    expect(refreshListener.mock.calls[0]?.[0]).toMatchObject({ approvedDevices: [] })
+  })
+
+  it('accepts non-safe room names while keeping peer and token IDs safe', async () => {
+    const fixture = await controllerFixture()
+    const specialRoom = 'room with spaces / 東京 ?#=1'
+    const specialSelector: PeerRelationshipSelector = {
+      ...selector,
+      roomName: specialRoom,
+      tokenId: 'token-special'
+    }
+    const controller = new DurableFeatureSharingController({
+      ...controllerOptions(fixture.session, fixture.registry, fixture.grantManager),
+      roomName: specialRoom
+    })
+
+    controller.registerTrustedRelationship(specialSelector, 'Phone')
+    const snapshot = await controller.load()
+
+    expect(snapshot.approvedDevices).toEqual([
+      { peerId: selector.claimantPeerId, peerLabel: 'Phone', featureIds: [], expiresAtMs: null }
+    ])
+    expect(JSON.stringify(snapshot)).not.toContain(specialRoom)
+    expect(() => controller.registerTrustedRelationship({ ...specialSelector, tokenId: 'bad token' })).toThrow(DurableFeatureSharingError)
+  })
+
   it('fails closed for ambiguous peer selectors and returns product-safe errors', async () => {
     const fixture = await controllerFixture()
     await fixture.controller.load()

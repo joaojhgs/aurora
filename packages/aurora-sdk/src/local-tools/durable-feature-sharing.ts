@@ -138,7 +138,7 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
     this.session = options.session
     this.grantManager = options.grantManager
     this.localVerifierPeerId = validateId(options.localVerifierPeerId, 'invalid_peer')
-    this.roomName = validateId(options.roomName, 'invalid_peer', 512)
+    this.roomName = validateRoomName(options.roomName)
     this.now = options.now ?? Date.now
   }
 
@@ -294,7 +294,7 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
     try {
       return await this.grantManager.listActiveGrants(selector)
     } catch {
-      return []
+      throw new DurableFeatureSharingError('sharing_unavailable')
     }
   }
 
@@ -444,7 +444,7 @@ function normalizeSelector(selector: PeerRelationshipSelector): PeerRelationship
     tokenId: validateId(selector.tokenId, 'invalid_peer'),
     claimantPeerId: validateId(selector.claimantPeerId, 'invalid_peer'),
     verifierPeerId: validateId(selector.verifierPeerId, 'invalid_peer'),
-    roomName: validateId(selector.roomName, 'invalid_peer', 512)
+    roomName: validateRoomName(selector.roomName)
   }
 }
 
@@ -455,6 +455,13 @@ function validateId<TCode extends DurableFeatureSharingError['code']>(value: str
     throw new DurableFeatureSharingError(code)
   }
   return normalized
+}
+
+function validateRoomName(value: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 512) {
+    throw new DurableFeatureSharingError('invalid_peer')
+  }
+  return value
 }
 
 function selectorKey(selector: PeerRelationshipSelector): string {
