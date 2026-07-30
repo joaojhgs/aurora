@@ -379,6 +379,85 @@ describe('WebRtcMeshPeerBridge', () => {
     expect(session.sent.some((frame) => (frame as any).type === 'manifest_ack')).toBe(true)
   })
 
+  it('does not return a cached manifest while a newer manifest ACK is pending', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
+    const first = bridge.getManifest('peer-a')
+    await flush()
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer A',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await expect(first).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer A' })
+    await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({ nodeName: 'Peer A' })
+
+    const ackRelease: { current: (() => void) | null } = { current: null }
+    session.sendFrameGate = (frame) => {
+      if ((frame as any).type !== 'manifest_ack') return
+      return new Promise<void>((resolve) => {
+        ackRelease.current = resolve
+      })
+    }
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer B',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await flush()
+
+    const second = bridge.getManifest('peer-a')
+    expect(await isSettled(second)).toBe(false)
+
+    const releaseAck = ackRelease.current
+    if (!releaseAck) throw new Error('manifest ACK send was not held')
+    releaseAck()
+    await expect(second).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer B' })
+  })
+
+  it('does not resolve provider-lease manifest waiters from a stale cache during a newer manifest ACK', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
+    session.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
+    const first = bridge.getManifest('peer-a')
+    await flush()
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer A',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 1, issued_at_ms: 1000, expires_at_ms: 61_000, available: true })
+    await expect(first).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer A' })
+
+    const ackRelease: { current: (() => void) | null } = { current: null }
+    session.sendFrameGate = (frame) => {
+      if ((frame as any).type !== 'manifest_ack') return
+      return new Promise<void>((resolve) => {
+        ackRelease.current = resolve
+      })
+    }
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer B',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await flush()
+
+    const second = bridge.getManifest('peer-a')
+    session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 2, issued_at_ms: 2000, expires_at_ms: 62_000, available: true })
+    await flush()
+    expect(await isSettled(second)).toBe(false)
+
+    const releaseAck = ackRelease.current
+    if (!releaseAck) throw new Error('manifest ACK send was not held')
+    releaseAck()
+    await expect(second).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer B' })
+  })
+
   it('preserves consumer-only 405 and dispatches authorized hybrid inbound calls through peer host', async () => {
     const consumerSession = new FakeSession()
     const consumerBridge = new WebRtcMeshPeerBridge({ session: consumerSession, remotePeerId: 'peer-a' })

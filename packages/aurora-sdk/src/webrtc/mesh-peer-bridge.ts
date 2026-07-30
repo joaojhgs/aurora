@@ -107,6 +107,12 @@ type RemoteLeaseCursor = {
   revision: number
 }
 
+type IncomingManifestAck = {
+  generation: number
+  manifest: MeshPeerManifest
+  leaseCursorBeforeAck: RemoteLeaseCursor | null
+}
+
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_STREAM_QUEUE_LIMIT = 128
 const DEFAULT_FRAGMENT_THRESHOLD = 16 * 1024
@@ -144,6 +150,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private remoteLeaseFloor: RemoteLeaseCursor | null = null
   private remoteLeaseTimer: unknown | null = null
   private remoteAvailability: 'unknown' | 'active' | 'unavailable' = 'unknown'
+  private incomingManifestAck: IncomingManifestAck | null = null
+  private incomingManifestGeneration = 0
   private asyncDispatchFailureCount = 0
   private lastAsyncDispatchFailure: AsyncDispatchFailure | null = null
   private authenticatedPeerContext: AuthenticatedPeerContext | undefined
@@ -270,6 +278,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   async getManifest(peerId: string): Promise<MeshPeerManifest | null> {
     this.assertOpen()
     this.assertPeer(peerId)
+    if (this.incomingManifestAck) return await this.waitForIncomingManifest()
     if (this.manifest && this.isRemoteProviderAvailable()) return this.manifest
     if (this.remoteAvailability === 'unavailable') return null
     if (!this.manifestParser) return null
@@ -351,6 +360,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       pending.reject(new Error(reason))
     }
     this.pendingManifests.clear()
+    this.incomingManifestAck = null
     for (const stream of this.streams.values()) this.failStream(stream, new Error(reason))
     this.streams.clear()
     for (const stream of this.rpcStreams.values()) this.failRpcStream(stream, new Error(reason))
@@ -819,26 +829,43 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
 
   private async handleManifest(frame: unknown): Promise<void> {
     if (!this.manifestParser) return
+    const generation = this.incomingManifestGeneration + 1
+    this.incomingManifestGeneration = generation
+    let incoming: IncomingManifestAck | null = null
     try {
       const manifest = this.manifestParser(frame, this.remotePeerId)
-      const leaseCursorBeforeAck = this.remoteLeaseCursor
+      incoming = {
+        generation,
+        manifest,
+        leaseCursorBeforeAck: this.remoteLeaseCursor
+      }
+      this.incomingManifestAck = incoming
       await this.sendLogicalFrame(buildManifestAck(manifest))
+      if (this.incomingManifestAck?.generation !== generation) return
+      this.incomingManifestAck = null
       if (!this.remoteRequiresProviderLease()) {
-        this.manifest = manifest
+        this.manifest = incoming.manifest
         if (this.remoteAvailability === 'unknown') this.remoteAvailability = 'active'
         for (const pending of this.pendingManifests.values()) {
           this.clearTimer(pending.timer)
-          pending.resolve(manifest)
+          pending.resolve(incoming.manifest)
         }
         this.pendingManifests.clear()
       } else {
-        const leaseChangedDuringAck = !sameLeaseCursor(leaseCursorBeforeAck, this.remoteLeaseCursor)
-        if (this.remoteAvailability === 'unavailable' && leaseChangedDuringAck && this.remoteLease === null) return
-        this.manifest = manifest
+        const leaseChangedDuringAck = !sameLeaseCursor(incoming.leaseCursorBeforeAck, this.remoteLeaseCursor)
+        if (this.remoteAvailability === 'unavailable' && leaseChangedDuringAck && this.remoteLease === null) {
+          for (const pending of this.pendingManifests.values()) {
+            this.clearTimer(pending.timer)
+            pending.resolve(null)
+          }
+          this.pendingManifests.clear()
+          return
+        }
+        this.manifest = incoming.manifest
         if (this.remoteLease !== null && leaseChangedDuringAck) {
           for (const pending of this.pendingManifests.values()) {
             this.clearTimer(pending.timer)
-            pending.resolve(manifest)
+            pending.resolve(incoming.manifest)
           }
           this.pendingManifests.clear()
           return
@@ -848,11 +875,14 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.remoteAvailability = 'unknown'
       }
     } catch (error) {
-      for (const pending of this.pendingManifests.values()) {
-        this.clearTimer(pending.timer)
-        pending.reject(error)
+      if (!incoming || this.incomingManifestAck?.generation === generation) {
+        this.incomingManifestAck = null
+        for (const pending of this.pendingManifests.values()) {
+          this.clearTimer(pending.timer)
+          pending.reject(error)
+        }
+        this.pendingManifests.clear()
       }
-      this.pendingManifests.clear()
       throw error
     }
   }
@@ -874,13 +904,27 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.remoteLease = frame
     this.remoteAvailability = 'active'
     this.rearmRemoteLease(frame.expires_at_ms)
-    if (this.manifest) {
+    if (this.manifest && !this.incomingManifestAck) {
       for (const pending of this.pendingManifests.values()) {
         this.clearTimer(pending.timer)
         pending.resolve(this.manifest)
       }
       this.pendingManifests.clear()
     }
+  }
+
+  private async waitForIncomingManifest(): Promise<MeshPeerManifest | null> {
+    return await new Promise<MeshPeerManifest | null>((resolve, reject) => {
+      const key = `wait-${this.pendingManifests.size + 1}`
+      this.pendingManifests.set(key, {
+        resolve,
+        reject,
+        timer: this.armTimer(this.timeoutMs, () => {
+          this.pendingManifests.delete(key)
+          reject(new TimeoutError('WebRTC mesh manifest request timed out'))
+        })
+      })
+    })
   }
 
   private isRemoteProviderAvailable(): boolean {
