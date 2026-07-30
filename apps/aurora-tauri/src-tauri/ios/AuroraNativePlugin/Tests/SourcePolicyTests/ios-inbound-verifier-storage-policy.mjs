@@ -22,6 +22,7 @@ const iosCapability = readFileSync(
   resolve(tauriRoot, 'capabilities', 'aurora-ios-thin.json'),
   'utf8',
 )
+const rustSource = readFileSync(resolve(tauriRoot, 'src', 'lib.rs'), 'utf8')
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -32,7 +33,12 @@ for (const command of ['inboundVerifierGet', 'inboundVerifierSet', 'inboundVerif
     pluginSource.includes(`@objc public func ${command}(_ invoke: Invoke)`),
     `missing Swift command ${command}`,
   )
+  assert(rustSource.includes(`"${command}"`), `shared Rust command layer must route ${command}`)
 }
+assert(
+  rustSource.includes('run_ios_plugin_command('),
+  'shared Rust command layer must delegate inbound verifier storage to the iOS plugin',
+)
 
 for (const manifestEntry of [
   '"aurora.inboundVerifierStorage": true',

@@ -10,6 +10,7 @@ const androidPermissionPath =
   'apps/aurora-tauri/src-tauri/permissions/aurora-android-native-plugin.toml'
 const androidCapabilityPath =
   'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'
+const rustPath = 'apps/aurora-tauri/src-tauri/src/lib.rs'
 
 function repoText(path: string): string {
   return readFileSync(resolve(repoRoot, path), 'utf8')
@@ -20,6 +21,7 @@ describe('Android inbound verifier native storage', () => {
     const kotlin = repoText(kotlinPath)
     const permission = repoText(androidPermissionPath)
     const capability = repoText(androidCapabilityPath)
+    const rust = repoText(rustPath)
 
     for (const command of [
       'inboundVerifierGet',
@@ -43,6 +45,14 @@ describe('Android inbound verifier native storage', () => {
     expect(kotlin).toContain('INBOUND_VERIFIER_STORAGE_PREFIX = "aurora.mesh.inbound-verifier."')
     expect(kotlin).toContain('inbound verifier namespace is opaque-only')
     expect(kotlin).toContain('allowedGenericSecureStorage", false')
+    expect(rust).toContain('run_android_plugin_command(')
+    for (const command of [
+      'inboundVerifierGet',
+      'inboundVerifierSet',
+      'inboundVerifierDelete',
+    ]) {
+      expect(rust).toContain(`"${command}"`)
+    }
   })
 
   it('locks selector validation, canonical record shape, and opaque account derivation', () => {

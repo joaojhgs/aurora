@@ -2687,18 +2687,38 @@ async fn aurora_thin_room_secret_get(
 #[tauri::command]
 async fn aurora_inbound_verifier_get(
     request: InboundVerifierSecretGetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     validate_inbound_verifier_secret_key(&request.key)?;
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "inboundVerifierGet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "inboundVerifierGet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
     #[cfg(desktop)]
     {
+        let _ = native;
         let backend = DesktopInboundVerifierStorageBackend;
         let value = inbound_verifier_storage_get(&backend, &request.key)?;
         serde_json::to_value(inbound_verifier_get_response(value))
             .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
     }
-    #[cfg(not(desktop))]
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
     {
-        let _ = request;
+        let _ = (request, native);
         Err(inbound_verifier_unsupported())
     }
 }
@@ -2706,19 +2726,39 @@ async fn aurora_inbound_verifier_get(
 #[tauri::command]
 async fn aurora_inbound_verifier_set(
     request: InboundVerifierSecretSetRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     validate_inbound_verifier_secret_key(&request.key)?;
     validate_inbound_verifier_secret_value(&request.value)?;
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "inboundVerifierSet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "inboundVerifierSet",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
     #[cfg(desktop)]
     {
+        let _ = native;
         let backend = DesktopInboundVerifierStorageBackend;
         inbound_verifier_storage_set(&backend, &request.key, &request.value)?;
         serde_json::to_value(inbound_verifier_write_response(true))
             .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
     }
-    #[cfg(not(desktop))]
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
     {
-        let _ = request;
+        let _ = (request, native);
         Err(inbound_verifier_unsupported())
     }
 }
@@ -2726,18 +2766,38 @@ async fn aurora_inbound_verifier_set(
 #[tauri::command]
 async fn aurora_inbound_verifier_delete(
     request: InboundVerifierSecretDeleteRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     validate_inbound_verifier_secret_key(&request.key)?;
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "inboundVerifierDelete",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "inboundVerifierDelete",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
     #[cfg(desktop)]
     {
+        let _ = native;
         let backend = DesktopInboundVerifierStorageBackend;
         inbound_verifier_storage_delete(&backend, &request.key)?;
         serde_json::to_value(inbound_verifier_write_response(true))
             .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
     }
-    #[cfg(not(desktop))]
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
     {
-        let _ = request;
+        let _ = (request, native);
         Err(inbound_verifier_unsupported())
     }
 }

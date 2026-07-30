@@ -495,10 +495,10 @@
           "markdownDescription": "Enables the native_capabilities command without any pre-configured scope."
         },
         {
-          "description": "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability.",
+          "description": "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately.",
           "type": "string",
           "const": "aurora-android-native-plugin",
-          "markdownDescription": "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability."
+          "markdownDescription": "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately."
         },
         {
           "description": "Allow audio bridge status checks for raw-audio permission UX without granting microphone capture, live streaming, or playback control.",
@@ -525,10 +525,10 @@
           "markdownDescription": "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access."
         },
         {
-          "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability.",
+          "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability.",
           "type": "string",
           "const": "aurora-ios-native-plugin",
-          "markdownDescription": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability."
+          "markdownDescription": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability."
         },
         {
           "description": "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or system assistant ownership.",
