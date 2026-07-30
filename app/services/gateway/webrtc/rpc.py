@@ -75,8 +75,7 @@ _ID_MAX = 128
 _METHOD_MAX = 256
 _TOPIC_RE = re.compile(r"^[A-Za-z0-9_.:/-]+$")
 _HEX_64_RE = re.compile(r"^[0-9a-f]{64}$")
-_BASE64URL_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-_KNOWN_CONTROL_TYPES = frozenset(
+_DOWNSTREAM_VALIDATED_TYPES = frozenset(
     {
         "auth",
         "reauth",
@@ -88,6 +87,9 @@ _KNOWN_CONTROL_TYPES = frozenset(
         "protocol_hello",
         "fragment",
         "capacity_update",
+        "provider_lease",
+        "provider_unavailable",
+        "manifest_ack",
     }
 )
 
@@ -99,7 +101,7 @@ def parse_webrtc_json_frame(
 ) -> dict[str, Any]:
     """Parse one inbound WebRTC JSON frame with SDK-equivalent structural limits."""
 
-    if not isinstance(text, str) or len(text.encode("utf-8")) > WEBRTC_MAX_FRAME_TEXT_BYTES:
+    if not isinstance(text, str) or len(text.encode("utf-8")) > limits.max_string_length:
         raise WebRTCFrameParseError("frame JSON must be a bounded string")
     try:
         decoded = json.loads(text)
@@ -180,9 +182,21 @@ def parse_webrtc_frame(
                 obj.get("ttl_seconds"), "ttl_seconds", limits.max_ttl_seconds
             )
         return out
+    if frame_type == "subscribed":
+        return _parse_subscribed(obj, limits)
+    if frame_type == "subscribe_rejected":
+        return _parse_subscribe_rejected(obj, limits)
     if frame_type == "unsubscribe":
         return {"type": frame_type, "id": _require_id(obj.get("id"))}
-    if frame_type in _KNOWN_CONTROL_TYPES or frame_type.startswith("pairing_v2_"):
+    if frame_type == "unsubscribed":
+        return _parse_unsubscribed(obj)
+    if frame_type == "mesh_auth_challenge_v1":
+        return _parse_mesh_auth_challenge(obj)
+    if frame_type == "mesh_auth_proof_v1":
+        return _parse_mesh_auth_proof(obj)
+    if frame_type in _DOWNSTREAM_VALIDATED_TYPES or frame_type.startswith("pairing_v2_"):
+        # These authenticated/control frames are immediately parsed by existing
+        # specialized handlers before side effects that depend on their fields.
         return obj
     raise WebRTCFrameParseError(f"unsupported frame type: {frame_type}")
 
@@ -206,6 +220,120 @@ def _require_plain_record(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise WebRTCFrameParseError(f"{field} must be a plain object")
     return value
+
+
+def _parse_subscribed(obj: dict[str, Any], limits: WebRTCParserLimits) -> dict[str, Any]:
+    if "expires_at" in obj:
+        raise WebRTCFrameParseError("subscribed uses ttl_seconds, not expires_at")
+    return {
+        "type": "subscribed",
+        "id": _require_id(obj.get("id")),
+        "subscription_id": _require_id(obj.get("subscription_id")),
+        "accepted": _require_bool(obj.get("accepted"), "accepted"),
+        "accepted_topics": _normalize_topics(
+            _require_string_array(
+                obj.get("accepted_topics"),
+                "accepted_topics",
+                limits.max_topics,
+                limits.max_topic_length,
+            ),
+            limits,
+        ),
+        "rejected_topics": _parse_rejected_topics(obj.get("rejected_topics"), limits),
+        "correlation_ids": _normalize_ids(
+            _require_string_array(
+                obj.get("correlation_ids"),
+                "correlation_ids",
+                limits.max_array_length,
+                _ID_MAX,
+            )
+        ),
+        "ttl_seconds": _require_positive_number(
+            obj.get("ttl_seconds"), "ttl_seconds", limits.max_ttl_seconds
+        ),
+        "reason": None
+        if obj.get("reason") is None
+        else _require_string(obj.get("reason"), "reason", 4096),
+        "idempotent": _require_bool(obj.get("idempotent"), "idempotent"),
+    }
+
+
+def _parse_subscribe_rejected(
+    obj: dict[str, Any], limits: WebRTCParserLimits
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "type": "subscribe_rejected",
+        "id": _require_id(obj.get("id")),
+        "reason": _require_string(obj.get("reason"), "reason", 4096),
+    }
+    if "rejected_topics" in obj:
+        out["rejected_topics"] = _normalize_topics(
+            _require_string_array(
+                obj.get("rejected_topics"),
+                "rejected_topics",
+                limits.max_topics,
+                limits.max_topic_length,
+            ),
+            limits,
+        )
+    return out
+
+
+def _parse_unsubscribed(obj: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {"type": "unsubscribed", "id": _require_id(obj.get("id"))}
+    if "subscription_id" in obj:
+        out["subscription_id"] = _require_id(obj.get("subscription_id"))
+    if "removed" in obj:
+        out["removed"] = _require_bool(obj.get("removed"), "removed")
+    return out
+
+
+def _parse_mesh_auth_challenge(obj: dict[str, Any]) -> dict[str, Any]:
+    if "token_id" in obj:
+        raise WebRTCFrameParseError("mesh_auth_challenge_v1 must not include token_id")
+    if "proof" in obj or "proof_hmac_sha256" in obj:
+        raise WebRTCFrameParseError("mesh_auth_challenge_v1 must not include proof")
+    return _parse_mesh_auth_bindings(obj, "mesh_auth_challenge_v1")
+
+
+def _parse_mesh_auth_proof(obj: dict[str, Any]) -> dict[str, Any]:
+    if "proof_hmac_sha256" in obj:
+        raise WebRTCFrameParseError("mesh_auth_proof_v1 uses proof, not proof_hmac_sha256")
+    out = _parse_mesh_auth_bindings(obj, "mesh_auth_proof_v1")
+    out["token_id"] = _require_string(obj.get("token_id"), "token_id", _ID_MAX)
+    out["proof"] = _require_hex64(obj.get("proof"), "proof")
+    return out
+
+
+def _parse_mesh_auth_bindings(obj: dict[str, Any], frame_type: str) -> dict[str, Any]:
+    return {
+        "type": frame_type,
+        "challenge": _require_hex64(obj.get("challenge"), "challenge"),
+        "channel_binding": _require_hex64(obj.get("channel_binding"), "channel_binding"),
+        "claimant_peer_id": _require_id(obj.get("claimant_peer_id")),
+        "verifier_peer_id": _require_id(obj.get("verifier_peer_id")),
+        "claimant_signaling_peer_id": _require_id(obj.get("claimant_signaling_peer_id")),
+        "verifier_signaling_peer_id": _require_id(obj.get("verifier_signaling_peer_id")),
+        "room_name": _require_string(obj.get("room_name"), "room_name", _ID_MAX),
+    }
+
+
+def _parse_rejected_topics(
+    value: Any, limits: WebRTCParserLimits
+) -> list[str | dict[str, str]]:
+    if not isinstance(value, list) or len(value) > limits.max_topics:
+        raise WebRTCFrameParseError("rejected_topics must be a bounded array")
+    out: list[str | dict[str, str]] = []
+    for item in value:
+        if isinstance(item, str):
+            out.append(_require_topic(item, limits))
+            continue
+        topic_obj = _require_plain_record(item, "rejected_topic")
+        parsed: dict[str, str] = {"topic": _require_topic(topic_obj.get("topic"), limits)}
+        if "reason" in topic_obj:
+            parsed["reason"] = _require_string(topic_obj.get("reason"), "reason", 4096)
+        out.append(parsed)
+    return out
 
 
 def _validate_json_tree(value: Any, limits: WebRTCParserLimits, depth: int = 0) -> None:
@@ -300,6 +428,13 @@ def _require_topic(value: Any, limits: WebRTCParserLimits) -> str:
     if not _TOPIC_RE.fullmatch(topic) or "*" in topic or "+" in topic:
         raise WebRTCFrameParseError("topic must be an exact typed topic")
     return topic
+
+
+def _require_hex64(value: Any, field: str) -> str:
+    parsed = _require_string(value, field, 64)
+    if not _HEX_64_RE.fullmatch(parsed):
+        raise WebRTCFrameParseError(f"{field} must be lowercase sha256 hex")
+    return parsed
 
 
 def _json_default(obj: object) -> str:

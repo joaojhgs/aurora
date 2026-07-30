@@ -197,6 +197,28 @@ def _authenticated_identity() -> Identity:
     )
 
 
+def _reconnect_challenge_frame() -> dict[str, str]:
+    return {
+        "type": "mesh_auth_challenge_v1",
+        "challenge": "56" * 32,
+        "channel_binding": "ab" * 32,
+        "claimant_peer_id": "claimant-peer",
+        "verifier_peer_id": "verifier-peer",
+        "claimant_signaling_peer_id": "claimant-signal",
+        "verifier_signaling_peer_id": "verifier-signal",
+        "room_name": "fixture-room",
+    }
+
+
+def _reconnect_proof_frame() -> dict[str, str]:
+    return {
+        **_reconnect_challenge_frame(),
+        "type": "mesh_auth_proof_v1",
+        "token_id": "token-id-123",
+        "proof": "ef" * 32,
+    }
+
+
 def test_parse_datachannel_frame_rejects_invalid_direct_call_before_dispatch() -> None:
     client = _client()
     handler = AsyncMock()
@@ -223,6 +245,77 @@ def test_parse_datachannel_frame_rejects_invalid_direct_call_before_dispatch() -
     assert parsed is None
     assert client._diagnostic_errors[0].code == "datachannel_frame_invalid"  # noqa: SLF001
     handler.on_message.assert_not_called()
+
+
+def test_parse_datachannel_frame_accepts_reconnect_auth_bindings() -> None:
+    client = _client()
+
+    challenge = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps(_reconnect_challenge_frame()),
+    )
+    proof = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps(_reconnect_proof_frame()),
+    )
+    rejected = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps({**_reconnect_challenge_frame(), "proof": "ef" * 32}),
+    )
+
+    assert challenge is not None
+    assert challenge["type"] == "mesh_auth_challenge_v1"
+    assert proof is not None
+    assert proof["type"] == "mesh_auth_proof_v1"
+    assert proof["proof"] == "ef" * 32
+    assert rejected is None
+    assert client._diagnostic_errors[0].code == "datachannel_frame_invalid"  # noqa: SLF001
+
+
+def test_parse_datachannel_frame_accepts_downstream_validated_provider_and_manifest_frames() -> None:
+    client = _client()
+
+    provider_lease = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps(_provider_lease_frame()),
+    )
+    provider_unavailable = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps(
+            _provider_lease_frame(
+                frame_type="provider_unavailable",
+                available=False,
+                expires_at_ms=1000,
+            )
+        ),
+    )
+    manifest_ack = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps(
+            {
+                "type": "manifest_ack",
+                "compatible_services": [],
+                "incompatible_services": [],
+                "unused_services": [],
+                "active_protocol": None,
+                "active_version": None,
+                "active_tier": None,
+                "protocol_revision": None,
+                "registry_revision": None,
+                "export_policy_revision": None,
+                "auth_grant_revision": None,
+                "projection_digest": None,
+            }
+        ),
+    )
+
+    assert provider_lease is not None
+    assert provider_lease["type"] == "provider_lease"
+    assert provider_unavailable is not None
+    assert provider_unavailable["type"] == "provider_unavailable"
+    assert manifest_ack is not None
+    assert manifest_ack["type"] == "manifest_ack"
+    assert not client._diagnostic_errors  # noqa: SLF001
 
 
 def test_parse_reassembled_fragment_payload_rejects_deep_call_before_dispatch() -> None:
@@ -255,6 +348,44 @@ def test_parse_reassembled_fragment_payload_rejects_deep_call_before_dispatch() 
     assert parsed is None
     assert client._diagnostic_errors[0].code == "fragment_reassembled_invalid"  # noqa: SLF001
     handler.on_message.assert_not_called()
+
+
+@pytest.mark.unit
+def test_parse_reassembled_fragmented_result_uses_negotiated_logical_limit() -> None:
+    client = _client()
+    limits = PeerProtocolLimits(
+        fragment_payload_bytes=16 * 1024,
+        max_logical_bytes=1024 * 1024,
+        max_peer_aggregate_bytes=2 * 1024 * 1024,
+        incomplete_ttl_seconds=30.0,
+        max_fragments=128,
+    )
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_FRAGMENTATION_V1,), limits=limits)
+    negotiated = negotiate_protocol(hello, hello)
+    client._remember_stable_peer_id("session-peer", "stable-peer", "Remote")  # noqa: SLF001
+    client._peer_protocols["session-peer"] = negotiated  # noqa: SLF001
+    client._peer_protocols["stable-peer"] = negotiated  # noqa: SLF001
+    logical_text = json.dumps(
+        {"type": "result", "id": "big-result", "result": {"payload": "x" * (512 * 1024)}}
+    )
+    frames = fragment_message(logical_text, message_id="big-logical", limits=limits)
+
+    completed = None
+    for frame in frames:
+        completed = client._handle_fragment_frame("session-peer", frame)  # noqa: SLF001
+
+    assert completed == logical_text
+    assert len(completed.encode("utf-8")) > 256 * 1024
+    parsed = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        completed,
+        diagnostic_code="fragment_reassembled_invalid",
+        parser_limits=client._logical_parser_limits("session-peer"),  # noqa: SLF001
+    )
+    assert parsed is not None
+    assert parsed["type"] == "result"
+    assert parsed["result"]["payload"] == "x" * (512 * 1024)
+    assert not client._diagnostic_errors  # noqa: SLF001
 
 
 @pytest.mark.unit

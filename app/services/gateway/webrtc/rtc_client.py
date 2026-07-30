@@ -88,6 +88,7 @@ from .rpc import (
     WEBRTC_MAX_FRAME_TEXT_BYTES,
     RPCHandler,
     WebRTCFrameParseError,
+    WebRTCParserLimits,
     parse_webrtc_json_frame,
 )
 from .signaling.mqtt_client import MQTTSignaling
@@ -2041,15 +2042,31 @@ class RTCClient:
         text: str,
         *,
         diagnostic_code: str = "datachannel_frame_invalid",
+        parser_limits: WebRTCParserLimits | None = None,
     ) -> dict[str, Any] | None:
         """Parse one decoded DataChannel JSON frame before any work is scheduled."""
 
         try:
-            return parse_webrtc_json_frame(text)
+            return parse_webrtc_json_frame(text, limits=parser_limits or WebRTCParserLimits())
         except WebRTCFrameParseError as exc:
             self._record_diagnostic_error(diagnostic_code, str(exc), peer)
             log_warning(f"RTCClient: Rejected invalid DataChannel frame from {peer}: {exc}")
             return None
+
+    def _logical_parser_limits(self, peer: str) -> WebRTCParserLimits:
+        """Return parser limits for an already reassembled logical frame."""
+
+        session_peer_id = self._session_for_peer_id(peer)
+        stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
+        negotiated = self._peer_protocols.get(session_peer_id) or self._peer_protocols.get(
+            stable_peer_id
+        )
+        max_string_length = (
+            negotiated.limits.max_logical_bytes
+            if negotiated is not None
+            else PeerProtocolLimits().max_logical_bytes
+        )
+        return WebRTCParserLimits(max_string_length=max_string_length)
 
     def _send_channel_text(self, channel: Any, text: str) -> bool:
         """Send JSON text on a DataChannel after applying configured encoding."""
@@ -5425,6 +5442,7 @@ class RTCClient:
                             peer,
                             logical_text,
                             diagnostic_code="fragment_reassembled_invalid",
+                            parser_limits=self._logical_parser_limits(peer),
                         )
                         if logical_obj is None:
                             return
