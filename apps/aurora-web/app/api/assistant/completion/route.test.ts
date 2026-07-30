@@ -23,6 +23,24 @@ describe('/api/assistant/completion', () => {
     await expect(postResponse.json()).resolves.toEqual({ ok: false, error: 'assistant_unavailable' })
   })
 
+  it('uses the public request host when Next normalizes its internal URL', async () => {
+    vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_ENDPOINT', '')
+    vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_MODEL', '')
+    vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_API_KEY', '')
+
+    const response = GET(new NextRequest('http://localhost:3000/api/assistant/completion', {
+      method: 'GET',
+      headers: {
+        host: '127.0.0.1:54775',
+        referer: 'http://127.0.0.1:54775/mesh',
+        'sec-fetch-site': 'same-origin',
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ enabled: false })
+  })
+
   it('keeps the provider secret on the server-side request only', async () => {
     vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_ENDPOINT', 'https://provider.example/v1/chat/completions')
     vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_MODEL', 'small-model')

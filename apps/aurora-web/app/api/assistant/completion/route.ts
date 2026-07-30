@@ -132,19 +132,36 @@ function isProjectionTool(value: unknown): value is ToolingProjectionToolInfo {
 }
 
 function sameOriginRequest(request: NextRequest): boolean {
+  const requestOrigin = effectiveRequestOrigin(request)
   const origin = request.headers.get('origin')
-  if (origin && origin !== request.nextUrl.origin) return false
+  if (origin && origin !== requestOrigin) return false
   const fetchSite = request.headers.get('sec-fetch-site')
   if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') return false
   const referer = request.headers.get('referer')
   if (!origin && referer) {
     try {
-      if (new URL(referer).origin !== request.nextUrl.origin) return false
+      if (new URL(referer).origin !== requestOrigin) return false
     } catch {
       return false
     }
   }
   return true
+}
+
+function effectiveRequestOrigin(request: NextRequest): string {
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',', 1)[0]?.trim()
+  const host = forwardedHost || request.headers.get('host')
+  if (!host) return request.nextUrl.origin
+  const forwardedProtocol = request.headers.get('x-forwarded-proto')?.split(',', 1)[0]?.trim()
+  const protocol =
+    forwardedProtocol === 'http' || forwardedProtocol === 'https'
+      ? forwardedProtocol
+      : request.nextUrl.protocol.replace(/:$/u, '')
+  try {
+    return new URL(`${protocol}://${host}`).origin
+  } catch {
+    return request.nextUrl.origin
+  }
 }
 
 function jsonResponse(body: unknown, status = 200): NextResponse {
