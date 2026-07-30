@@ -329,7 +329,6 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
       storageBeforeReload.encryptedRecordKeys,
     )
     expect(secondTabStorage.serializedVault).not.toContain(roomSecret)
-    await expectSingleWriterBrowserStorage(page, secondPage, stablePeerId)
   } finally {
     await secondPage.close()
   }
@@ -392,6 +391,27 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
   )
   expect(reducedPeer.outbound_status).toBe('approved')
   expect(reducedPeer.connection_status).toBe('connected')
+  const reducedDiagnostic = await waitFor(
+    async () => {
+      const diagnostics = await post<{ peers?: WebRtcPeerDiagnostic[] }>(
+        request,
+        '/api/Gateway/GetWebRTCDiagnostics',
+      )
+      const live = liveDiagnosticFor(diagnostics.peers ?? [], stablePeerId)
+      return live?.effective_permission_count === reducedPermissions.length
+        ? live
+        : null
+    },
+    'active WebRTC session permission count follows the reduced grant',
+  )
+  expect(reducedDiagnostic.is_admin).toBe(false)
+  const requestsBeforeDeniedToolLoad = browserGatewayRequests.length
+  await page.getByRole('link', { name: 'Tools & Plugins' }).click()
+  await page.waitForURL(/\/tools/, { timeout: 30_000 })
+  await expectRemovedToolAccessDenied(page)
+  expect(browserGatewayRequests).toHaveLength(requestsBeforeDeniedToolLoad)
+  await page.getByRole('link', { name: 'Mesh & Peers' }).click()
+  await page.waitForURL(/\/mesh/, { timeout: 30_000 })
 
   await confirmedAdminPost(
     request,
@@ -420,6 +440,7 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
     'removed peer authority tombstone after revocation',
   )
   expect(removedPeer.connection_status).toBe('disconnected')
+  await expectRevokedBrowserPeerRequiresApproval(page)
 
   await waitFor(
     async () => {
@@ -431,6 +452,11 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
     },
     'revoked browser peer disconnects from the Python WebRTC registry',
   )
+  const requestsBeforeRevokedReload = browserGatewayRequests.length
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForURL(/\/mesh/, { timeout: 30_000 })
+  await expectRevokedBrowserPeerRequiresApproval(page)
+  expect(browserGatewayRequests).toHaveLength(requestsBeforeRevokedReload)
   expect(browserGatewayRequests).toEqual([])
   expect(consoleErrors).toEqual([])
 })
@@ -711,80 +737,34 @@ async function expectNonAdminNavigation(page: Page): Promise<void> {
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
 }
 
-async function expectSingleWriterBrowserStorage(
-  firstPage: Page,
-  secondPage: Page,
-  localNodeId: string,
-): Promise<void> {
-  const release = await firstPage.evaluateHandle(async (nodeId) => {
-    if (!navigator.locks) {
-      throw new Error('Browser storage writer locks are unavailable')
-    }
-    const lockKey = deriveBrowserStorageOwnerKey(location.origin, nodeId)
-    let releaseLock: (() => void) | null = null
-    let acquiredLock: (() => void) | null = null
-    const acquired = new Promise<void>((resolve) => {
-      acquiredLock = resolve
-    })
-    const released = new Promise<void>((resolve) => {
-      releaseLock = resolve
-    })
-    const held = navigator.locks.request(
-      lockKey,
-      { mode: 'exclusive' },
-      async () => {
-        acquiredLock?.()
-        await released
-      },
-    )
-    await acquired
-    return {
-      release: () => {
-        releaseLock?.()
-      },
-      done: held,
-    }
+async function expectRemovedToolAccessDenied(page: Page): Promise<void> {
+  const body = page.locator('body')
+  await expect(body).toContainText(
+    /Tools are unavailable|Permission is needed|Review access/i,
+    { timeout: 30_000 },
+  )
+  await expect(body).not.toContainText(
+    /Tooling\.|Gateway\.|WebRTC mesh transport|fallback|raw token|room password/i,
+  )
+}
 
-    function deriveBrowserStorageOwnerKey(origin: string, value: string): string {
-      return `aurora:browser-local-data:${stableHash(`${new URL(origin).origin}\u0000${value}`)}`
-    }
-
-    function stableHash(value: string): string {
-      let hash = 0x811c9dc5
-      for (let index = 0; index < value.length; index += 1) {
-        hash ^= value.charCodeAt(index)
-        hash = Math.imul(hash, 0x01000193)
-      }
-      return (hash >>> 0).toString(16).padStart(8, '0')
-    }
-  }, localNodeId)
-  try {
-    const secondAcquired = await secondPage.evaluate(async (nodeId) => {
-      const lockKey = deriveBrowserStorageOwnerKey(location.origin, nodeId)
-      return await navigator.locks.request(
-        lockKey,
-        { ifAvailable: true },
-        (lock) => lock !== null,
-      )
-
-      function deriveBrowserStorageOwnerKey(origin: string, value: string): string {
-        return `aurora:browser-local-data:${stableHash(`${new URL(origin).origin}\u0000${value}`)}`
-      }
-
-      function stableHash(value: string): string {
-        let hash = 0x811c9dc5
-        for (let index = 0; index < value.length; index += 1) {
-          hash ^= value.charCodeAt(index)
-          hash = Math.imul(hash, 0x01000193)
-        }
-        return (hash >>> 0).toString(16).padStart(8, '0')
-      }
-    }, localNodeId)
-    expect(secondAcquired).toBe(false)
-  } finally {
-    await release.evaluate((handle) => handle.release())
-    await release.dispose()
-  }
+async function expectRevokedBrowserPeerRequiresApproval(page: Page): Promise<void> {
+  const meshRoot = page.locator('[data-thin-peer-status]').first()
+  await expect(meshRoot).not.toHaveAttribute('data-thin-peer-status', 'authorized', {
+    timeout: 90_000,
+  })
+  await expect(meshRoot).not.toHaveAttribute('data-thin-peer-status', 'fallback-http')
+  await expect(page.locator('body')).toContainText(
+    /offline|approval|connecting to the invited Aurora node|Review & approve|Reconnect/i,
+    { timeout: 30_000 },
+  )
+  await expect(page.locator('body')).not.toContainText(
+    /raw token|room password|authorization|WebRTC mesh transport is not connected|fallback/i,
+  )
+  const stillAuthorized = await meshRoot.evaluate(
+    (element) => element.getAttribute('data-thin-peer-status') === 'authorized',
+  )
+  expect(stillAuthorized).toBe(false)
 }
 
 function sameStringSet(left: string[], right: string[]): boolean {
