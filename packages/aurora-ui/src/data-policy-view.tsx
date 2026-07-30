@@ -181,7 +181,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
     { key: 'flows', header: 'Data flows', hideAt: 'md', render: (namespace) => <span className="text-sm text-muted-foreground">{dataFlowText(namespace)}</span> },
     {
       key: 'audit',
-      header: 'Audit and AdminAction',
+      header: 'Review and approval',
       hideAt: 'lg',
       render: (namespace) => (
         <span className="text-sm text-muted-foreground">
@@ -214,7 +214,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
           { label: 'Retention defaults', value: totals.retentionModes, caption: `${snapshot.namespaces.length} collection(s)` },
           { label: 'Collection visibility', value: `${totals.localNamespaces} local / ${totals.remoteNamespaces} shared`, caption: `${totals.deniedNamespaces} denied or stale` },
           { label: 'Audio and transcripts', value: `${snapshot.conversations.length} transcript record(s)`, caption: 'audio storage off by default' },
-          { label: 'Audit trail', value: `${totals.auditTargets} target(s)`, caption: `${totals.policyDecisions} policy decision(s)` }
+          { label: 'Activity history', value: `${totals.auditTargets} area(s)`, caption: `${totals.policyDecisions} policy decision(s)` }
         ]}
       />
 
@@ -274,7 +274,7 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       </div>
 
       <Card
-        title="Audit trail for policy changes"
+        title="Activity history for policy changes"
         description="Aurora previews account history, policy decisions, sharing behavior, and blockers before data-policy changes."
         icon={<History size={18} aria-hidden />}
         actions={
@@ -282,11 +282,11 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
             href="/admin/audit"
             className="inline-flex h-7 items-center rounded-lg px-2.5 text-xs font-medium text-foreground hover:bg-muted"
           >
-            Open audit log
+            Open activity history
           </a>
         }
       >
-        <div className="flex flex-col gap-3" role="list" aria-label="Data policy audit trail">
+        <div className="flex flex-col gap-3" role="list" aria-label="Data policy activity history">
           {snapshot.checks.map((check) => (
             <article
               key={check.id}

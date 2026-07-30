@@ -17,6 +17,7 @@ DEFAULT_PATHS = (
 
 FORBIDDEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("raw-render-expression", re.compile(r"\braw-render-expression\b", re.I)),
+    ("admin-action", re.compile(r"\bAdminAction\b", re.I)),
     ("proof", re.compile(r"\bproof\b", re.I)),
     ("evidence", re.compile(r"\bevidence\b", re.I)),
     ("fixture", re.compile(r"\bfixtures?\b", re.I)),

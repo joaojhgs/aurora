@@ -54,7 +54,7 @@ describe('Memory and data policy production stories', () => {
     expect(markup).not.toContain('Backend capability report')
   })
 
-  it('renders data-policy privacy controls, namespace visibility, AdminAction gates, and audit link separately from /memory search', async () => {
+  it('renders data-policy privacy controls, namespace visibility, approval gates, and activity link separately from /memory search', async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() })
     const dataRoute = await enabledRoute(client, 'data')
     const snapshot = await buildDataPolicySnapshot(client, dataRoute)
@@ -68,8 +68,13 @@ describe('Memory and data policy production stories', () => {
     expect(markup).toContain('Transcript storage')
     expect(markup).toContain('Shared-device help')
     expect(markup).toContain('Export, delete, and import data flows')
+    expect(markup).toContain('Review and approval')
+    expect(markup).toContain('Activity history')
     expect(markup).toContain('Policy edits require administrator review and account history')
     expect(markup).toContain('href="/admin/audit"')
+    expect(markup).not.toContain('Audit trail')
+    expect(markup).not.toContain('AdminAction')
+    expect(markup).not.toContain('Open audit log')
     expect(markup).not.toContain('id="memory-query"')
     expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
   })

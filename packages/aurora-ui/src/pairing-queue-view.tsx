@@ -215,7 +215,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
   const submitPairingAction = useCallback(
     async (entry: PendingPairingEntry, action: 'approve' | 'deny') => {
       setPendingAction(`${entry.request_id}:${action}`)
-      setOperation({ status: 'pending', message: `${action} pairing pending AdminAction draft, confirmation, and audit.`, auditReceipt: null })
+      setOperation({ status: 'pending', message: `${action} pairing is waiting for administrator approval.`, auditReceipt: null })
       setMutationError(null)
       setCopyError(null)
       const reason = adminReason.trim() || `${action} pairing request ${entry.request_id}`
@@ -223,7 +223,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
         const result = await client.admin.execute(buildPairingAdminActionRequest(entry, action, { reason, permissions, grantAdmin, reauthConfirmed }))
         setOperation({
           status: 'success',
-          message: `${action} pairing completed through AdminAction; queue refresh requested.`,
+          message: `${action} pairing completed; queue refresh requested.`,
           auditReceipt: result.confirmation.audit_receipt
         })
         await loadQueue()
@@ -249,7 +249,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     setPendingAction('create')
     setMutationError(null)
     setCreatedCredential(null)
-    setOperation({ status: 'pending', message: 'Creating pairing code through AdminAction draft, confirmation, and audit.', auditReceipt: null })
+    setOperation({ status: 'pending', message: 'Creating pairing code after administrator approval.', auditReceipt: null })
     try {
       const result = await client.admin.execute<AuthPairingStartResponse>(request)
       setCreatedCredential(buildPairingCredentialModel(result.data, result.confirmation.audit_receipt))
@@ -273,7 +273,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     setPendingAction('exchange')
     setMutationError(null)
     setExchangeResult(null)
-    setOperation({ status: 'pending', message: 'Exchanging pairing code through AdminAction; returned token secrets will be redacted.', auditReceipt: null })
+    setOperation({ status: 'pending', message: 'Exchanging pairing code after administrator approval; credential details stay hidden.', auditReceipt: null })
     try {
       const result = await client.admin.execute<AuthPairingExchangeResponse>(request)
       setExchangeResult({
@@ -285,8 +285,8 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
       setOperation({
         status: 'success',
         message: result.data.token_id
-          ? 'Pairing exchange completed and token id captured for optional revoke.'
-          : 'Pairing exchange completed; backend did not return a token id for revoke.',
+          ? 'Pairing exchange completed and credential reference captured for optional revoke.'
+          : 'Pairing exchange completed; Aurora did not return a credential reference for revoke.',
         auditReceipt: result.confirmation.audit_receipt
       })
     } catch (error) {
@@ -303,7 +303,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     const request = buildPairingTokenRevokeAdminActionRequest({ tokenId: exchangeResult.tokenId, reason: adminReason, reauthConfirmed })
     setPendingAction('revoke-token')
     setMutationError(null)
-    setOperation({ status: 'pending', message: 'Revoking exchanged token through AdminAction.', auditReceipt: null })
+    setOperation({ status: 'pending', message: 'Revoking exchanged credential after administrator approval.', auditReceipt: null })
     try {
       const result = await client.admin.execute<TokenRevokeResponse>(request)
       setOperation({
@@ -458,7 +458,7 @@ export function PairingQueueSurface({
   const canCreate = adminActionReady && reauthConfirmed && Boolean(createDeviceName.trim()) && !pendingAction && Boolean(onCreate)
   const canExchange = adminActionReady && reauthConfirmed && Boolean(exchangeCode.trim()) && !pendingAction && Boolean(onExchange)
   const canRevokeToken = adminActionReady && reauthConfirmed && Boolean(exchangeResult?.tokenId) && !pendingAction && Boolean(onRevokeExchangedToken)
-  const reauthReason = reauthConfirmed ? undefined : 'Confirm the in-session admin unlock to submit AdminAction requests.'
+  const reauthReason = reauthConfirmed ? undefined : 'Confirm the in-session administrator unlock before submitting.'
 
   const queueColumns: Array<DataColumn<PendingPairingEntry>> = [
     {
@@ -495,7 +495,7 @@ export function PairingQueueSurface({
               : reauthReason}
             onClick={() => onApprove?.(entry)}
           >
-            {pendingAction === `${entry.request_id}:approve` ? 'Submitting AdminAction' : 'AdminAction approve'}
+            {pendingAction === `${entry.request_id}:approve` ? 'Submitting approval' : 'Approve'}
           </Button>
           <Button
             variant="danger"
@@ -503,7 +503,7 @@ export function PairingQueueSurface({
             disabledReason={reauthReason}
             onClick={() => onDeny?.(entry)}
           >
-            {pendingAction === `${entry.request_id}:deny` ? 'Submitting AdminAction' : 'AdminAction deny'}
+            {pendingAction === `${entry.request_id}:deny` ? 'Submitting denial' : 'Deny'}
           </Button>
         </div>
       )
@@ -517,7 +517,7 @@ export function PairingQueueSurface({
         title="Pairing queue"
         description={model.meshPairingManaged
           ? 'Review pairing requests. Both Auroras create an incoming request automatically after they connect.'
-          : 'Review pending device and peer pairing requests, and mint or exchange pairing codes through audited AdminAction.'}
+          : 'Review pending device and peer pairing requests, and create or exchange pairing codes with administrator approval.'}
         badges={<StatusBadge state={route.state} />}
         badgesLabel="Pairing route status"
         actions={
@@ -541,15 +541,15 @@ export function PairingQueueSurface({
         ]}
       />
 
-      <Card title="AdminAction options" ariaLabel="Pairing AdminAction options">
+      <Card title="Administrator approval" ariaLabel="Pairing administrator approval options">
         <p className="text-sm text-muted-foreground">
           {model.meshPairingManaged
             ? 'Mesh pairing creates requests automatically. Compare the verification code on both Auroras, then approve or deny independently on this Aurora after confirming the in-session unlock.'
-            : 'Approve, deny, create, and exchange all route through Aurora AdminAction; provide a reason and confirm the in-session unlock before submitting.'}
+            : 'Approve, deny, create, and exchange requests require an approval reason and the in-session unlock before submitting.'}
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pairing-reason">AdminAction reason</Label>
+            <Label htmlFor="pairing-reason">Approval reason</Label>
             <Textarea
               id="pairing-reason"
               value={adminReason}
@@ -587,7 +587,7 @@ export function PairingQueueSurface({
             checked={reauthConfirmed}
             disabled={controlsDisabled}
             onChange={(value) => onReauthConfirmedChange?.(value)}
-            label="In-session admin unlock confirmed for AdminAction submit"
+            label="In-session administrator unlock confirmed"
           />
         </div>
       </Card>
@@ -625,7 +625,7 @@ export function PairingQueueSurface({
               busy={pendingAction === 'create'}
               onClick={onCreate}
             >
-              {pendingAction === 'create' ? 'Creating through AdminAction' : 'Create pairing code via AdminAction'}
+              {pendingAction === 'create' ? 'Creating pairing code' : 'Create pairing code'}
             </Button>
           </div>
           {createdCredential ? (
@@ -637,7 +637,7 @@ export function PairingQueueSurface({
                   { label: 'Expires', value: createdCredential.expiresAt ? formatDate(createdCredential.expiresAt) : `${createdCredential.expiresInSeconds ?? 'unknown'} seconds` },
                   { label: 'Deep link', value: <code className="font-mono text-xs">{createdCredential.deepLink}</code> },
                   { label: 'QR', value: createdCredential.qrUnavailableReason },
-                  { label: 'Audit', value: createdCredential.auditReceipt ?? 'audit receipt pending' }
+                  { label: 'Activity history', value: createdCredential.auditReceipt ?? 'history update pending' }
                 ]}
               />
               <div className="mt-2 flex flex-wrap gap-2">
@@ -664,16 +664,16 @@ export function PairingQueueSurface({
               busy={pendingAction === 'exchange'}
               onClick={onExchange}
             >
-              {pendingAction === 'exchange' ? 'Exchanging through AdminAction' : 'Exchange via AdminAction'}
+              {pendingAction === 'exchange' ? 'Exchanging pairing code' : 'Exchange pairing code'}
             </Button>
             <Button
               variant="outline"
               disabled={!canRevokeToken}
-              disabledReason="Revoke needs a token id returned from a completed exchange."
+              disabledReason="Revoke needs a credential reference returned from a completed exchange."
               busy={pendingAction === 'revoke-token'}
               onClick={onRevokeExchangedToken}
             >
-              {pendingAction === 'revoke-token' ? 'Revoking through AdminAction' : 'Revoke exchanged token via AdminAction'}
+              {pendingAction === 'revoke-token' ? 'Revoking credential' : 'Revoke exchanged credential'}
             </Button>
           </div>
           <p className="text-sm text-muted-foreground" role="note">Pending pairing revoke is unavailable in this Aurora setup.</p>
@@ -683,9 +683,9 @@ export function PairingQueueSurface({
                 columns={1}
                 items={[
                   { label: 'Session state', value: exchangeResult.state },
-                  { label: 'Token id', value: exchangeResult.tokenId ?? 'not returned' },
-                  { label: 'Token secret', value: 'redacted after exchange' },
-                  { label: 'Audit', value: exchangeResult.auditReceipt ?? 'audit receipt pending' }
+                  { label: 'Credential reference', value: exchangeResult.tokenId ?? 'not returned' },
+                  { label: 'Secret value', value: 'hidden after exchange' },
+                  { label: 'Activity history', value: exchangeResult.auditReceipt ?? 'history update pending' }
                 ]}
               />
             </section>
@@ -712,7 +712,7 @@ export function PairingQueueSurface({
       ) : null}
       {copiedRequestId ? (
         <p className="text-sm text-muted-foreground" role="status">
-          Pairing value copied from the controlled Admin pairing surface; it is not logged.
+          Pairing value copied from the controlled pairing screen; it is not added to history.
         </p>
       ) : null}
       {model.disabledReason ? (

@@ -87,7 +87,7 @@ describe('PairingQueueView live refresh', () => {
       expect(container.textContent).toContain('Outgoing pairing is active')
       expect(container.textContent).toContain('Mesh pairing creates requests automatically')
       expect(container.textContent).not.toContain('Create pairing code via AdminAction')
-      expect(container.textContent).not.toContain('Exchange via AdminAction')
+      expect(container.textContent).not.toContain('Pairing code to exchange')
       expect(container.textContent).not.toContain('No pending device or peer pairing requests were reported by Auth')
     } finally {
       await act(async () => root.unmount())

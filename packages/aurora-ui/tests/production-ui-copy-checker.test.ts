@@ -31,7 +31,7 @@ describe('production UI copy checker', () => {
     const file = join(dir, 'unsafe-render.tsx')
     writeFileSync(file, `
       export function UnsafeRender() {
-        return <section aria-label="Transport details"><p>Runtime status</p></section>
+        return <section aria-label="Transport details"><p>Runtime status</p><p>AdminAction required</p></section>
       }
     `)
 
@@ -39,6 +39,7 @@ describe('production UI copy checker', () => {
     expect(result.ok).toBe(false)
     expect(result.stderr).toContain('transport')
     expect(result.stderr).toContain('runtime')
+    expect(result.stderr).toContain('admin-action')
     rmSync(dir, { recursive: true, force: true })
   })
 

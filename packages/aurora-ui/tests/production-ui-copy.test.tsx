@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
@@ -104,7 +104,7 @@ describe('production UI copy', () => {
           client={client('mesh')}
           snapshot={safeShellSnapshot()}
           setupRequired
-          thinConnectionPanel={<div data-testid="home-node-panel">Invite panel</div>}
+          thinConnectionPanel={<FirstRunInvitePanel />}
         />,
       )
     })
@@ -118,7 +118,26 @@ describe('production UI copy', () => {
       buttonByText(container, 'Continue').click()
     })
     expect(container.querySelector('[data-testid="home-node-panel"]')).not.toBeNull()
+    expect(container.textContent).toContain('Device name')
+    expect(container.textContent).toContain('Scan invite')
+    expect(container.textContent).toContain('Open invite file')
+    expect(container.textContent).toContain('Paste invite')
+    expect(container.textContent).toContain('Use deep link')
+    expect(container.textContent).not.toContain('Sign in')
+    expect(container.textContent).not.toContain('Access key')
+    expect(container.textContent).not.toContain('Request pairing code')
+    expect(container.textContent).not.toContain('Exchange code')
     expect(container.querySelector('#aurora-endpoint')).toBeNull()
+
+    await act(async () => {
+      buttonByText(container, 'Show invite error').click()
+    })
+    expect(container.textContent).toContain('Invite needs attention')
+
+    await act(async () => {
+      buttonByText(container, 'Try another invite').click()
+    })
+    expect(container.textContent).not.toContain('Invite needs attention')
 
     await act(async () => {
       buttonByText(container, 'Connect with an address').click()
@@ -342,6 +361,25 @@ function visibleText(markup: string): string {
     .replace(/&#x27;|&apos;/g, "'")
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function FirstRunInvitePanel() {
+  const [error, setError] = useState(false)
+  return (
+    <div data-testid="home-node-panel">
+      <button type="button">Scan invite</button>
+      <button type="button">Open invite file</button>
+      <button type="button">Paste invite</button>
+      <button type="button">Use deep link</button>
+      <button type="button" onClick={() => setError(true)}>Show invite error</button>
+      {error ? (
+        <p role="alert">
+          Invite needs attention
+          <button type="button" onClick={() => setError(false)}>Try another invite</button>
+        </p>
+      ) : null}
+    </div>
+  )
 }
 
 function client(kind: string = 'http'): AuroraClient {

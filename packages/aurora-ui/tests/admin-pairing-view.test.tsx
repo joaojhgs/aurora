@@ -44,18 +44,23 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(markup).toContain('Expired wall panel')
     expect(markup).toContain('Expiry state')
     expect(markup).toContain('expired')
-    expect(markup).toContain('Create pairing code via AdminAction')
+    expect(markup).toContain('Administrator approval')
+    expect(markup).toContain('Approval reason')
+    expect(markup).toContain('Create pairing code')
     expect(markup).toContain('One-time pairing code')
     expect(markup).toContain('PAIR-123456')
     expect(markup).toContain('aurora://pairing/exchange?code=PAIR-123456')
     expect(markup).toContain('QR image unavailable')
-    expect(markup).toContain('Exchange via AdminAction')
-    expect(markup).toContain('Revoke exchanged token via AdminAction')
+    expect(markup).toContain('Exchange pairing code')
+    expect(markup).toContain('Revoke exchanged credential')
+    expect(markup).toContain('Credential reference')
+    expect(markup).toContain('Secret value')
     expect(markup).toContain('Pending pairing revoke is unavailable in this Aurora setup.')
     expect(markup).toContain('audit-create-001')
     expect(markup).toContain('audit-exchange-001')
     expect(markup).toContain('Account history updated.')
     expect(markup).not.toContain('secret-token')
+    expect(visibleText(markup)).not.toMatch(/\b(?:AdminAction|Token id|Token secret|raw token)\b/i)
     expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
   })
 
@@ -174,7 +179,7 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(waitingMarkup).toContain('Aurora creates pairing requests automatically')
     expect(waitingMarkup).toContain('Manual Create pairing code and Exchange controls are disabled while this mode is active')
     expect(waitingMarkup).not.toContain('Create pairing code via AdminAction')
-    expect(waitingMarkup).not.toContain('Exchange via AdminAction')
+    expect(waitingMarkup).not.toContain('Pairing code to exchange')
 
     const receivingRequest = { ...pendingPairing(), expires_at: '2099-01-01T00:00:00Z' }
     const receivingModel = buildPairingQueueModel({
@@ -198,7 +203,7 @@ describe('PairingQueueView admin pairing surface', () => {
     expect(model.meshPairingManaged).toBe(true)
     expect(markup).toContain('Aurora creates pairing requests automatically')
     expect(markup).not.toContain('Create pairing code via AdminAction')
-    expect(markup).not.toContain('Exchange via AdminAction')
+    expect(markup).not.toContain('Pairing code to exchange')
   })
 
   it('shows the same verification code on both Auroras without exposing opaque handles', () => {
@@ -250,12 +255,13 @@ describe('PairingQueueView admin pairing surface', () => {
       expect(markup).toContain(verificationCode)
       expect(markup).toContain('matches on both Auroras')
       expect(markup).toContain('approve independently on each Aurora')
-      expect(markup).toContain('AdminAction approve')
+      expect(markup).toContain('Approve')
+      expect(markup).not.toContain('AdminAction approve')
       expect(markup).not.toContain('opaque-request-handle')
       expect(markup).not.toContain('Copy code')
       expect(markup).not.toContain('Pairing code to exchange')
       expect(markup).not.toContain('Create pairing code via AdminAction')
-      expect(markup).not.toContain('Exchange via AdminAction')
+      expect(markup).not.toContain('Pairing code to exchange')
     }
   })
 

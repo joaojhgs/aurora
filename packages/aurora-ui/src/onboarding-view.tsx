@@ -111,8 +111,9 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
         endpoint,
         userAgent,
         allowBrowserDeviceSetup,
+        setupRequired,
       }),
-    [allowBrowserDeviceSetup, client, snapshot, selectedModeId, endpoint, session, userAgent],
+    [allowBrowserDeviceSetup, client, snapshot, selectedModeId, endpoint, session, setupRequired, userAgent],
   )
 
   useEffect(() => {
@@ -255,6 +256,8 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   const allStepsComplete = model.setupSteps.length > 0 && completedStepCount === model.setupSteps.length
   const manualAddressGated = setupRequired && Boolean(thinConnectionPanel)
   const showManualAddress = !manualAddressGated || manualAddressVisible
+  const showFirstRunInviteFlow = setupRequired
+  const showAccountAuthFlow = !setupRequired
 
   return (
     <section className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-10" aria-labelledby="onboarding-title">
@@ -324,6 +327,17 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
             <div className="flex flex-col gap-3" data-step="home-node-connection">
               {thinConnectionPanel}
             </div>
+          ) : null}
+
+          {showFirstRunInviteFlow ? (
+            <section aria-labelledby="first-run-device-title" className="flex flex-col gap-2.5">
+              <h2 id="first-run-device-title" className="text-sm font-semibold">
+                This device
+              </h2>
+              <FormField label="Device name" htmlFor="aurora-device-name">
+                <Input id="aurora-device-name" value={pairingDevice} onChange={(event) => setPairingDevice(event.currentTarget.value)} />
+              </FormField>
+            </section>
           ) : null}
 
           {manualAddressGated && !manualAddressVisible ? (
@@ -398,60 +412,64 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
             </section>
           ) : null}
 
-          <section aria-labelledby="account-title" aria-live="polite" className="flex flex-col gap-2.5">
-            <h2 id="account-title" className="text-sm font-semibold">
-              Sign in
-            </h2>
-            {session.isAuthenticated ? (
-              <p className="text-[13px] text-muted-foreground">Signed in as {session.principalName ?? session.principalId ?? 'Aurora user'}.</p>
-            ) : (
-              <p className="text-[13px] text-muted-foreground">Sign in, restore an access key, or pair this device.</p>
-            )}
-            <form className="flex flex-col gap-2.5" onSubmit={onLogin}>
-              <FormField label="Username" htmlFor="aurora-username">
-                <Input id="aurora-username" value={username} onChange={(event) => setUsername(event.currentTarget.value)} autoComplete="username" />
-              </FormField>
-              <FormField label="Password" htmlFor="aurora-password">
-                <Input id="aurora-password" value={password} onChange={(event) => setPassword(event.currentTarget.value)} type="password" autoComplete="current-password" />
-              </FormField>
-              <Button type="submit" variant="outline" disabled={busy !== null || !username.trim() || !password}>
-                Login
-              </Button>
-            </form>
-            <form className="flex flex-col gap-2.5" onSubmit={onValidateToken}>
-              <FormField label="Access key" htmlFor="aurora-token">
-                <Input id="aurora-token" value={token} onChange={(event) => setToken(event.currentTarget.value)} type="password" autoComplete="off" />
-              </FormField>
-              <Button type="submit" variant="outline" disabled={busy !== null || !token.trim()}>
-                Restore access
-              </Button>
-            </form>
-            {session.isTerminal ? (
-              <Button variant="ghost" onClick={() => client.auth.clear()}>
-                Clear session
-              </Button>
-            ) : null}
-          </section>
+          {showAccountAuthFlow ? (
+            <>
+              <section aria-labelledby="account-title" aria-live="polite" className="flex flex-col gap-2.5">
+                <h2 id="account-title" className="text-sm font-semibold">
+                  Sign in
+                </h2>
+                {session.isAuthenticated ? (
+                  <p className="text-[13px] text-muted-foreground">Signed in as {session.principalName ?? session.principalId ?? 'Aurora user'}.</p>
+                ) : (
+                  <p className="text-[13px] text-muted-foreground">Sign in, restore an access key, or pair this device.</p>
+                )}
+                <form className="flex flex-col gap-2.5" onSubmit={onLogin}>
+                  <FormField label="Username" htmlFor="aurora-username">
+                    <Input id="aurora-username" value={username} onChange={(event) => setUsername(event.currentTarget.value)} autoComplete="username" />
+                  </FormField>
+                  <FormField label="Password" htmlFor="aurora-password">
+                    <Input id="aurora-password" value={password} onChange={(event) => setPassword(event.currentTarget.value)} type="password" autoComplete="current-password" />
+                  </FormField>
+                  <Button type="submit" variant="outline" disabled={busy !== null || !username.trim() || !password}>
+                    Login
+                  </Button>
+                </form>
+                <form className="flex flex-col gap-2.5" onSubmit={onValidateToken}>
+                  <FormField label="Access key" htmlFor="aurora-token">
+                    <Input id="aurora-token" value={token} onChange={(event) => setToken(event.currentTarget.value)} type="password" autoComplete="off" />
+                  </FormField>
+                  <Button type="submit" variant="outline" disabled={busy !== null || !token.trim()}>
+                    Restore access
+                  </Button>
+                </form>
+                {session.isTerminal ? (
+                  <Button variant="ghost" onClick={() => client.auth.clear()}>
+                    Clear session
+                  </Button>
+                ) : null}
+              </section>
 
-          <section aria-labelledby="pairing-title" className="flex flex-col gap-2.5">
-            <h2 id="pairing-title" className="text-sm font-semibold">
-              Approve this device
-            </h2>
-            <FormField label="Device name" htmlFor="aurora-device-name">
-              <Input id="aurora-device-name" value={pairingDevice} onChange={(event) => setPairingDevice(event.currentTarget.value)} />
-            </FormField>
-            <Button variant="outline" disabled={busy !== null} onClick={onStartPairing}>
-              Request pairing code
-            </Button>
-            <form className="flex flex-col gap-2.5" onSubmit={onExchangePairing}>
-              <FormField label="Approved code" htmlFor="aurora-pairing-code">
-                <Input id="aurora-pairing-code" value={pairingCode} onChange={(event) => setPairingCode(event.currentTarget.value)} autoComplete="one-time-code" />
-              </FormField>
-              <Button type="submit" variant="outline" disabled={busy !== null || !pairingCode.trim()}>
-                Exchange code
-              </Button>
-            </form>
-          </section>
+              <section aria-labelledby="pairing-title" className="flex flex-col gap-2.5">
+                <h2 id="pairing-title" className="text-sm font-semibold">
+                  Approve this device
+                </h2>
+                <FormField label="Device name" htmlFor="aurora-device-name">
+                  <Input id="aurora-device-name" value={pairingDevice} onChange={(event) => setPairingDevice(event.currentTarget.value)} />
+                </FormField>
+                <Button variant="outline" disabled={busy !== null} onClick={onStartPairing}>
+                  Request pairing code
+                </Button>
+                <form className="flex flex-col gap-2.5" onSubmit={onExchangePairing}>
+                  <FormField label="Approved code" htmlFor="aurora-pairing-code">
+                    <Input id="aurora-pairing-code" value={pairingCode} onChange={(event) => setPairingCode(event.currentTarget.value)} autoComplete="one-time-code" />
+                  </FormField>
+                  <Button type="submit" variant="outline" disabled={busy !== null || !pairingCode.trim()}>
+                    Exchange code
+                  </Button>
+                </form>
+              </section>
+            </>
+          ) : null}
 
           <Button
             variant="primary"
@@ -496,6 +514,7 @@ export function buildOnboardingViewModel({
   endpoint,
   userAgent,
   allowBrowserDeviceSetup = false,
+  setupRequired = false,
 }: {
   client: AuroraClient
   snapshot: AuroraShellSnapshot
@@ -503,6 +522,7 @@ export function buildOnboardingViewModel({
   endpoint?: string
   userAgent?: string
   allowBrowserDeviceSetup?: boolean
+  setupRequired?: boolean
 }): OnboardingViewModel {
   const session = client.auth.refreshClock()
   const modes = deploymentModes(client.transport.kind, snapshot, userAgent, { allowBrowserDeviceSetup })
@@ -516,6 +536,7 @@ export function buildOnboardingViewModel({
     selectedMode,
     authState,
     pairingState,
+    setupRequired,
   })
   return {
     session,
@@ -758,8 +779,19 @@ function mode(id: OnboardingProductModeId, label: string, routeLabel: string, de
   }
 }
 
-function setupSteps(input: { session: AuthSessionSnapshot; snapshot: AuroraShellSnapshot; selectedMode: DeploymentModeCard; authState: AvailabilityState; pairingState: AvailabilityState }): OnboardingSetupStep[] {
+function setupSteps(input: { session: AuthSessionSnapshot; snapshot: AuroraShellSnapshot; selectedMode: DeploymentModeCard; authState: AvailabilityState; pairingState: AvailabilityState; setupRequired?: boolean }): OnboardingSetupStep[] {
   const selectedMode = input.selectedMode.id === 'connect-to-aurora' ? 'available-remote' : 'available-local'
+  const accessStep = input.setupRequired
+    ? {
+      title: 'Connect this device',
+      detail: 'Use an invite, scan, file, paste, link, or address to connect this device.',
+      repair: input.session.isAuthenticated ? 'Access ready.' : 'Use an invite or address from the Aurora device you want to use.',
+    }
+    : {
+      title: 'Authenticate / pair',
+      detail: 'Sign in, restore an access key, or approve this device.',
+      repair: input.session.isAuthenticated ? 'Access ready.' : 'If sign-in fails, check the address and try again.',
+    }
   return [
     {
       title: 'Select mode',
@@ -769,11 +801,11 @@ function setupSteps(input: { session: AuthSessionSnapshot; snapshot: AuroraShell
       repair: input.selectedMode.repair,
     },
     {
-      title: 'Authenticate / pair',
-      detail: 'Sign in, restore an access key, or approve this device.',
+      title: accessStep.title,
+      detail: accessStep.detail,
       state: input.authState === 'pending' ? input.pairingState : input.authState,
       progress: input.session.isAuthenticated ? 100 : input.session.state === 'pairing' ? 45 : null,
-      repair: input.session.isAuthenticated ? 'Access ready.' : 'If sign-in fails, check the address and try again.',
+      repair: accessStep.repair,
     },
     {
       title: 'Load capability graph',
