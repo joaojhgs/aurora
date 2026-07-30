@@ -314,10 +314,10 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['memory', 'data'],
     routeOracles: [
       routeOracle('memory', ['Memory & Knowledge'], ['Search memory and RAG']),
-      routeOracle('data', ['Data policy and retention'], ['Audit trail for policy changes'])
+      routeOracle('data', ['Data policy and retention'], ['Activity history for policy changes'])
     ],
     mockReferenceFiles: ['app/(cockpit)/memory/page.tsx'],
-    mockUxAnchors: ['Memory & Knowledge', 'Memory collections', 'Search conversations', 'Export, delete, and import data flows', 'Data policy and retention', 'Audit trail for policy changes'],
+    mockUxAnchors: ['Memory & Knowledge', 'Memory collections', 'Search conversations', 'Export, delete, and import data flows', 'Data policy and retention', 'Activity history for policy changes'],
     componentFiles: ['memory-view.tsx', 'data-policy-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy'],
     truthSources: [

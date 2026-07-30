@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useState } from 'react'
+import { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
@@ -10,8 +10,9 @@ import { MeshPeersView, type MeshPeersSnapshot } from '../src/mesh-peers-view'
 import { OnboardingView, type OnboardingModePreferenceStore } from '../src/onboarding-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import { ServiceRoutingView, type ServiceRoutingSnapshot } from '../src/service-routing-view'
-import { HomeNodeConnectionPanel } from '../src/web-thin-connection-panel'
-import type { BrowserWebRtcPeerController, BrowserWebRtcSnapshot } from '../src/web-thin-runtime'
+import { HomeNodeConnectionPanel, type WebThinConnectionProfile } from '../src/web-thin-connection-panel'
+import { webRtcProfileFromInvite, type BrowserWebRtcPeerController, type BrowserWebRtcSnapshot } from '../src/web-thin-runtime'
+import { encodeMeshInviteUrl } from '../src/mesh-invite'
 
 describe('production UI copy', () => {
   it('keeps runtime-role surfaces free of internal wording', () => {
@@ -95,16 +96,32 @@ describe('production UI copy', () => {
   })
 
   it('keeps setup-required onboarding on the role chooser before invite setup', async () => {
+    const savedProfiles: WebThinConnectionProfile[] = []
+    const onSaveProfile = vi.fn(async (profile: WebThinConnectionProfile) => {
+      savedProfiles.push(profile)
+    })
+    const inviteText = firstRunInviteText()
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
     await act(async () => {
       root.render(
         <OnboardingView
-          client={client('mesh')}
-          snapshot={safeShellSnapshot()}
+          client={client('native-mobile')}
+          snapshot={safeShellSnapshot({ nativePlatform: 'android', nativeAvailable: true })}
           setupRequired
-          thinConnectionPanel={<FirstRunInvitePanel />}
+          thinConnectionPanel={
+            <HomeNodeConnectionPanel
+              peer={peerController({ status: 'needs-invite', secureContext: true, hasHttpFallback: false })}
+              mode="webrtc-only"
+              transportKind="native-mobile"
+              nativePlatform="android"
+              initialInviteText={inviteText}
+              configureOnly
+              onScanQr={async () => firstRunInviteText('scan-room')}
+              onSaveProfile={onSaveProfile}
+            />
+          }
         />,
       )
     })
@@ -117,12 +134,12 @@ describe('production UI copy', () => {
     await act(async () => {
       buttonByText(container, 'Continue').click()
     })
-    expect(container.querySelector('[data-testid="home-node-panel"]')).not.toBeNull()
-    expect(container.textContent).toContain('Device name')
+    expect(container.querySelector('[data-thin-invite-onboarding="true"]')).not.toBeNull()
+    expect(container.querySelectorAll('#webthin-profile-node-name, #aurora-device-name')).toHaveLength(1)
     expect(container.textContent).toContain('Scan invite')
     expect(container.textContent).toContain('Open invite file')
     expect(container.textContent).toContain('Paste invite')
-    expect(container.textContent).toContain('Use deep link')
+    expect(container.querySelector<HTMLTextAreaElement>('#webthin-invite')?.value).toContain('aurora://mesh/invite?')
     expect(container.textContent).not.toContain('Sign in')
     expect(container.textContent).not.toContain('Access key')
     expect(container.textContent).not.toContain('Request pairing code')
@@ -130,14 +147,17 @@ describe('production UI copy', () => {
     expect(container.querySelector('#aurora-endpoint')).toBeNull()
 
     await act(async () => {
-      buttonByText(container, 'Show invite error').click()
+      const deviceName = container.querySelector<HTMLInputElement>('#webthin-profile-node-name')
+      if (!deviceName) throw new Error('Device name input not found')
+      setInputValue(deviceName, 'Kitchen tablet')
     })
-    expect(container.textContent).toContain('Invite needs attention')
 
     await act(async () => {
-      buttonByText(container, 'Try another invite').click()
+      buttonByText(container, 'Save invite and continue').click()
     })
-    expect(container.textContent).not.toContain('Invite needs attention')
+    await flushReactWork()
+    expect(onSaveProfile).toHaveBeenCalledTimes(1)
+    expect(savedProfiles[0]).toMatchObject({ nodeName: 'Kitchen tablet' })
 
     await act(async () => {
       buttonByText(container, 'Connect with an address').click()
@@ -363,25 +383,6 @@ function visibleText(markup: string): string {
     .trim()
 }
 
-function FirstRunInvitePanel() {
-  const [error, setError] = useState(false)
-  return (
-    <div data-testid="home-node-panel">
-      <button type="button">Scan invite</button>
-      <button type="button">Open invite file</button>
-      <button type="button">Paste invite</button>
-      <button type="button">Use deep link</button>
-      <button type="button" onClick={() => setError(true)}>Show invite error</button>
-      {error ? (
-        <p role="alert">
-          Invite needs attention
-          <button type="button" onClick={() => setError(false)}>Try another invite</button>
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
 function client(kind: string = 'http'): AuroraClient {
   return {
     transport: { kind },
@@ -478,12 +479,27 @@ function peerController(overrides: Partial<BrowserWebRtcSnapshot> = {}): Browser
   return {
     snapshot: () => snapshot,
     subscribe: () => () => undefined,
-    importInvite: vi.fn(),
+    importInvite: vi.fn((invite: string) => webRtcProfileFromInvite(invite)),
     connect: vi.fn(),
     disconnect: vi.fn(),
     confirmPairing: vi.fn(),
     rejectPairing: vi.fn(),
   } as unknown as BrowserWebRtcPeerController
+}
+
+function firstRunInviteText(room = 'first-run-room') {
+  return encodeMeshInviteUrl({
+    kind: 'aurora.mesh.invite',
+    version: 1,
+    node: { node_name: 'Home Aurora', peer_id: 'home-peer' },
+    signaling: {
+      provider: 'mqtt',
+      mqtt_brokers: ['wss://broker.example/mqtt'],
+      room,
+      room_password: 'secret-room-password',
+    },
+    generated_at: '2026-07-30T00:00:00Z',
+  })
 }
 
 function meshSnapshot(): MeshPeersSnapshot {
@@ -633,6 +649,12 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((candidate) => candidate.textContent?.trim() === text)
   if (!button) throw new Error(`Button not found: ${text}`)
   return button
+}
+
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
 function choiceByText(container: HTMLElement, text: string): HTMLButtonElement {

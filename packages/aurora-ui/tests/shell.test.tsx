@@ -383,6 +383,10 @@ describe('Aurora production shell', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const uiSrcRoot = join(repoRoot, 'packages/aurora-ui/src')
     const genericStatusOnly = /\b(catalog|status|loading|backend|Aurora|SDK|route status)\b/i
+    const memoryRagContract = productionSurfaceContracts.find((surface) => surface.id === 'memory-rag')
+
+    expect(memoryRagContract?.mockUxAnchors).toContain('Activity history for policy changes')
+    expect(memoryRagContract?.mockUxAnchors).not.toContain('Audit trail for policy changes')
 
     for (const surface of productionSurfaceContracts) {
       const sourceText = surface.componentFiles

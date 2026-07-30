@@ -637,7 +637,7 @@ export function PairingQueueSurface({
                   { label: 'Expires', value: createdCredential.expiresAt ? formatDate(createdCredential.expiresAt) : `${createdCredential.expiresInSeconds ?? 'unknown'} seconds` },
                   { label: 'Deep link', value: <code className="font-mono text-xs">{createdCredential.deepLink}</code> },
                   { label: 'QR', value: createdCredential.qrUnavailableReason },
-                  { label: 'Activity history', value: createdCredential.auditReceipt ?? 'history update pending' }
+                  { label: 'Activity history', value: createdCredential.auditReceipt ? 'Recorded' : 'Pending' }
                 ]}
               />
               <div className="mt-2 flex flex-wrap gap-2">
@@ -685,7 +685,7 @@ export function PairingQueueSurface({
                   { label: 'Session state', value: exchangeResult.state },
                   { label: 'Credential reference', value: exchangeResult.tokenId ?? 'not returned' },
                   { label: 'Secret value', value: 'hidden after exchange' },
-                  { label: 'Activity history', value: exchangeResult.auditReceipt ?? 'history update pending' }
+                  { label: 'Activity history', value: exchangeResult.auditReceipt ? 'Recorded' : 'Pending' }
                 ]}
               />
             </section>

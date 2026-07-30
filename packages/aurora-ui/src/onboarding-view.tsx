@@ -256,7 +256,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   const allStepsComplete = model.setupSteps.length > 0 && completedStepCount === model.setupSteps.length
   const manualAddressGated = setupRequired && Boolean(thinConnectionPanel)
   const showManualAddress = !manualAddressGated || manualAddressVisible
-  const showFirstRunInviteFlow = setupRequired
+  const showFirstRunInviteFlow = setupRequired && !thinConnectionPanel
   const showAccountAuthFlow = !setupRequired
 
   return (
