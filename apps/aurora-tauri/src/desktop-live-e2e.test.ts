@@ -11,7 +11,7 @@ import {
 } from "./desktop-live-e2e";
 
 const liveEnv = {
-  DEV: true,
+  VITE_AURORA_DESKTOP_LIVE_E2E: "1",
   VITE_AURORA_RUNTIME_MODE: "desktop-thin",
   VITE_AURORA_CONNECTION_MODE: "webrtc-only",
   VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: "1",
@@ -20,7 +20,7 @@ const liveEnv = {
 describe("desktop live E2E WebView hook", () => {
   it("is gated to the explicit desktop live dev/test WebView environment", () => {
     expect(isDesktopLiveE2eHookEnabled(liveEnv)).toBe(true);
-    expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, DEV: false })).toBe(false);
+    expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, VITE_AURORA_DESKTOP_LIVE_E2E: "0" })).toBe(false);
     expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, VITE_AURORA_RUNTIME_MODE: "desktop-local" })).toBe(false);
     expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, VITE_AURORA_CONNECTION_MODE: "http-only" })).toBe(false);
     expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: "0" })).toBe(false);
@@ -28,7 +28,7 @@ describe("desktop live E2E WebView hook", () => {
 
   it("does not install outside the gated environment", () => {
     const target = {} as Window;
-    expect(installDesktopLiveE2eHook({ target, env: { ...liveEnv, DEV: false } })).toBe(false);
+    expect(installDesktopLiveE2eHook({ target, env: { ...liveEnv, VITE_AURORA_DESKTOP_LIVE_E2E: "0" } })).toBe(false);
     expect((target as { __AURORA_DESKTOP_LIVE_E2E__?: unknown }).__AURORA_DESKTOP_LIVE_E2E__).toBeUndefined();
   });
 

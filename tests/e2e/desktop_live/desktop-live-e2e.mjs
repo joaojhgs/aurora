@@ -14,9 +14,10 @@ const serviceScript = path.join(repoRoot, 'scripts/webrtc_interop_services.sh')
 const gatewayScript = path.join(repoRoot, 'scripts/webrtc_interop_gateway.py')
 const scannerScript = path.join(repoRoot, 'scripts/webrtc_interop_scan.py')
 const localWebDriverScript = path.join(repoRoot, 'tests/e2e/desktop_live/desktop-webdriver-driver.mjs')
+const applicationWrapperScript = path.join(repoRoot, 'scripts/desktop_live_application.sh')
+const liveRunnerScript = path.join(repoRoot, 'scripts/desktop_live_e2e.sh')
 const defaultArtifactDir = path.join(repoRoot, 'reports/desktop-live-e2e')
 const laneChoices = new Set(['direct', 'stun', 'turn'])
-const forbiddenDesktopChildPattern = /\b(?:python(?:3(?:\.\d+)?)?|uv|aurora-sidecar)\b|(?:^|\s)main\.py(?:\s|$)/i
 
 const args = new Set(process.argv.slice(2))
 
@@ -44,6 +45,8 @@ async function runCheckOnly() {
       signalingServicesHarness: await fileExists(serviceScript),
       scanner: await fileExists(scannerScript),
       repoOwnedWebDriverFixture: await fileExists(localWebDriverScript),
+      applicationWrapper: await fileExists(applicationWrapperScript),
+      maintainedLiveRunner: await fileExists(liveRunnerScript),
     },
     launchContract: desktopClientLaunchContract(),
     stopCondition:
@@ -54,6 +57,8 @@ async function runCheckOnly() {
   assert.equal(report.prerequisites.pythonPeerHarness, true)
   assert.equal(report.prerequisites.signalingServicesHarness, true)
   assert.equal(report.prerequisites.scanner, true)
+  assert.equal(report.prerequisites.applicationWrapper, true)
+  assert.equal(report.prerequisites.maintainedLiveRunner, true)
   console.log(JSON.stringify(report, null, 2))
 }
 
@@ -76,16 +81,15 @@ async function runLive() {
   const room = `desktop-live-${process.pid}-${Date.now().toString(36)}`
   const timeoutMs = Number(process.env.AURORA_DESKTOP_LIVE_E2E_TIMEOUT_MS ?? 180_000)
   const driverCommand = process.env.AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND
+  const driverApplication = process.env.AURORA_DESKTOP_LIVE_E2E_APPLICATION
+  const applicationPidFile = process.env.AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE
 
   let servicesStarted = false
   let pythonPeer
-  let tauri
   let pythonOutput = ''
-  let tauriOutput = ''
   const seededSecrets = [roomSecret, token]
 
   const cleanup = async () => {
-    await terminateChild(tauri, 5_000)
     await terminateChild(pythonPeer, 5_000)
     if (servicesStarted) {
       spawnSync(serviceScript, ['down'], { cwd: repoRoot, stdio: 'ignore' })
@@ -103,6 +107,7 @@ async function runLive() {
       fs.rm(driverLogPath, { force: true }),
       fs.rm(sessionReportPath, { force: true }),
       fs.rm(finalReportPath, { force: true }),
+      applicationPidFile ? fs.rm(applicationPidFile, { force: true }) : Promise.resolve(),
     ])
 
     run(serviceScript, ['up'])
@@ -154,71 +159,31 @@ async function runLive() {
     await writeJson(runtimeProfilePath, runtimeProfile)
     await writeJson(invitePath, invite)
 
-    tauri = spawn('pnpm', [
-      '--filter',
-      '@aurora/tauri-ui',
-      'tauri',
-      'dev',
-      '--config',
-      'src-tauri/tauri.client.conf.json',
-    ], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        AURORA_TAURI_DEV_AUTOSIDECAR: '0',
-        VITE_AURORA_RUNTIME_MODE: 'desktop-thin',
-        VITE_AURORA_CONNECTION_MODE: 'webrtc-only',
-        VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
-      },
-      stdio: 'pipe',
-      detached: process.platform !== 'win32',
-    })
-    tauri.stdout.on('data', (chunk) => {
-      tauriOutput += String(chunk)
-      process.stdout.write(chunk)
-    })
-    tauri.stderr.on('data', (chunk) => {
-      tauriOutput += String(chunk)
-      process.stderr.write(chunk)
-    })
-
-    await waitForTauriClientLaunch(tauri, () => tauriOutput, timeoutMs)
-    const processTreeBefore = await assertNoTauriOwnedPythonChild(tauri.pid)
-
-    if (!driverCommand) {
-      const processTreeAfter = await assertNoTauriOwnedPythonChild(tauri.pid)
+    if (!driverCommand || !driverApplication || !applicationPidFile) {
+      const blocker = !driverCommand
+        ? 'missing-driver-command'
+        : 'missing-driver-application'
       await writeJson(desktopReportPath, {
         schema: 'aurora.desktop_live_e2e.desktop_report.v1',
         status: 'blocked',
-        blocker: 'missing-driver-command',
+        blocker,
         driverCommandEnv: 'AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND',
         sessionNonce,
-        tauriPid: String(tauri.pid),
+        tauriPid: 'unavailable',
         requiredDriverEvidence: [
-          'open the Tauri desktop-client WebView in /mesh with the generated invite',
+          'launch the exact desktop-client binary through tauri-driver',
+          'bind the WebView report to the wrapper-recorded application PID',
           'approve the Python peer pairing in the desktop WebView',
           'run the WebRTC interop browser-entry contract inside the Tauri WebView',
           'write desktop-done.json and desktop-client-report.json',
         ],
         launchContract: desktopClientLaunchContract(),
-        processTree: {
-          beforeDriver: processTreeBefore,
-          afterDriver: processTreeAfter,
-        },
         secretsRedacted: true,
       })
-      await writeSessionReport(sessionReportPath, {
-        status: 'blocked',
-        sessionNonce,
-        tauriPid: String(tauri.pid),
-        processTreeBefore,
-        processTreeAfter,
-        driverReportPath: desktopReportPath,
-      })
-      await writeJson(donePath, { ok: false, at: new Date().toISOString(), reason: 'missing-driver-command' })
+      await writeJson(donePath, { ok: false, at: new Date().toISOString(), reason: blocker })
       await enforceNoSeededSecretsInTree(artifactDir, seededSecrets)
       throw new Error(
-        'AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND is required for full desktop WebView approval/RPC assertions',
+        'Desktop live E2E requires the driver command, tauri-driver application wrapper, and application PID file',
       )
     }
 
@@ -229,7 +194,8 @@ async function runLive() {
       AURORA_DESKTOP_LIVE_E2E_RUNTIME_PROFILE: runtimeProfilePath,
       AURORA_DESKTOP_LIVE_E2E_INVITE: invitePath,
       AURORA_DESKTOP_LIVE_E2E_ROOM_SECRET: roomSecret,
-      AURORA_DESKTOP_LIVE_E2E_TAURI_PID: String(tauri.pid),
+      AURORA_DESKTOP_LIVE_E2E_APPLICATION: driverApplication,
+      AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE: applicationPidFile,
       AURORA_DESKTOP_LIVE_E2E_SESSION_NONCE: sessionNonce,
       WEBRTC_INTEROP_LANE: lane,
       WEBRTC_INTEROP_READY: readyPath,
@@ -239,14 +205,16 @@ async function runLive() {
       WEBRTC_INTEROP_ROOM_SECRET: roomSecret,
     }, timeoutMs, seededSecrets, driverLogPath)
 
-    await waitForJson(donePath, timeoutMs, 'desktop driver completion', tauri)
+    await waitForJson(donePath, timeoutMs, 'desktop driver completion')
     const desktopReport = await waitForJson(desktopReportPath, 10_000, 'desktop driver report')
-    validateDriverReport(desktopReport, { sessionNonce, tauriPid: String(tauri.pid) })
-    const processTreeAfter = await assertNoTauriOwnedPythonChild(tauri.pid)
+    validateDriverReport(desktopReport, { sessionNonce })
+    const tauriPid = String(desktopReport.tauriPid)
+    const processTreeBefore = desktopReport.processTree.beforeHook
+    const processTreeAfter = desktopReport.processTree.afterHook
     await writeSessionReport(sessionReportPath, {
       status: 'passed',
       sessionNonce,
-      tauriPid: String(tauri.pid),
+      tauriPid,
       processTreeBefore,
       processTreeAfter,
       driverReportPath: desktopReportPath,
@@ -275,7 +243,7 @@ async function runLive() {
     await writeJson(finalReportPath, {
       ...aggregate,
       desktopSession: {
-        tauriPid: String(tauri.pid),
+        tauriPid,
         sessionNonceDigest: sha256Hex(sessionNonce),
         processTree: {
           beforeDriver: processTreeBefore,
@@ -294,7 +262,6 @@ async function runLive() {
       status: 'failed',
       error: redactSeeded(message, seededSecrets),
       pythonOutputTail: redactSeeded(redactProcessOutput(pythonOutput).slice(-20_000), seededSecrets),
-      tauriOutputTail: redactSeeded(redactProcessOutput(tauriOutput).slice(-20_000), seededSecrets),
       secretsRedacted: true,
     })
     await enforceNoSeededSecretsInTree(artifactDir, seededSecrets, { originalError: error })
@@ -307,9 +274,12 @@ async function runLive() {
 function desktopClientLaunchContract() {
   return {
     package: '@aurora/tauri-ui',
-    command: 'pnpm --filter @aurora/tauri-ui tauri dev --config src-tauri/tauri.client.conf.json',
+    command: 'scripts/desktop_live_e2e.sh',
+    application: 'scripts/desktop_live_application.sh',
+    webdriverCapability: 'tauri:options.application',
     env: {
       AURORA_TAURI_DEV_AUTOSIDECAR: '0',
+      VITE_AURORA_DESKTOP_LIVE_E2E: '1',
       VITE_AURORA_RUNTIME_MODE: 'desktop-thin',
       VITE_AURORA_CONNECTION_MODE: 'webrtc-only',
       VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
@@ -422,78 +392,6 @@ function buildDesktopInvite(ready, roomSecret) {
   }
 }
 
-async function assertNoTauriOwnedPythonChild(rootPid) {
-  const entries = parseProcessTable(psOutput())
-  const descendants = descendantsOf(entries, rootPid)
-  const forbidden = descendants.filter((entry) => forbiddenDesktopChildPattern.test(`${entry.command} ${entry.args}`))
-  assert.deepEqual(forbidden, [], 'desktop-client Tauri process tree must not own Python or sidecar descendants')
-  return {
-    rootPid,
-    descendantCount: descendants.length,
-    checkedAt: new Date().toISOString(),
-    forbiddenMatches: [],
-  }
-}
-
-function parseProcessTable(output) {
-  return output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const match = line.match(/^(\d+)\s+(\d+)\s+(\S+)\s*(.*)$/)
-      if (!match) return null
-      return {
-        pid: Number(match[1]),
-        ppid: Number(match[2]),
-        command: match[3],
-        args: match[4] ?? '',
-      }
-    })
-    .filter(Boolean)
-}
-
-function descendantsOf(entries, rootPid) {
-  const byParent = new Map()
-  for (const entry of entries) {
-    const bucket = byParent.get(entry.ppid) ?? []
-    bucket.push(entry)
-    byParent.set(entry.ppid, bucket)
-  }
-  const out = []
-  const queue = [...(byParent.get(rootPid) ?? [])]
-  while (queue.length > 0) {
-    const entry = queue.shift()
-    out.push(entry)
-    queue.push(...(byParent.get(entry.pid) ?? []))
-  }
-  return out
-}
-
-function psOutput() {
-  const result = spawnSync('ps', ['-eo', 'pid=,ppid=,comm=,args='], { encoding: 'utf8' })
-  if (result.error) throw result.error
-  if (result.status !== 0) throw new Error(`ps failed: ${result.stderr}`)
-  return result.stdout
-}
-
-async function waitForTauriClientLaunch(child, output, timeoutMs) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Tauri desktop-client exited with ${child.exitCode}`)
-    const text = output()
-    if (
-      text.includes('desktop client: enabled') ||
-      text.includes('no Rust-supervised Python sidecar') ||
-      text.includes('tauri://localhost')
-    ) {
-      return
-    }
-    await sleep(500)
-  }
-  throw new Error('Timed out waiting for Tauri desktop-client launch markers')
-}
-
 async function runDriver(command, env, timeoutMs, seededSecrets, logPath) {
   const child = spawn(command, {
     cwd: repoRoot,
@@ -521,12 +419,52 @@ async function runDriver(command, env, timeoutMs, seededSecrets, logPath) {
   }
 }
 
-function validateDriverReport(report, { sessionNonce, tauriPid }) {
+function validateDriverReport(report, { sessionNonce }) {
   assert.equal(report.status, 'passed', 'desktop driver report must pass before aggregate scan')
   assert.equal(report.sessionNonce, sessionNonce, 'desktop driver report must echo the launch nonce')
-  assert.equal(String(report.tauriPid), tauriPid, 'desktop driver report must bind to the launched Tauri PID')
+  assert.match(String(report.tauriPid), /^[1-9]\d{0,19}$/u, 'desktop driver report must contain the launched Tauri PID')
   assert.equal(report.secretsRedacted, true, 'desktop driver report must declare redacted artifacts')
+  assert.equal(
+    report.noHttpFetchTransportUsed,
+    true,
+    'desktop driver report must declare WebRTC-only application traffic',
+  )
+  assert.equal(
+    report.browserResult?.noHttpFetchTransportUsed,
+    true,
+    'desktop browser result must declare WebRTC-only application traffic',
+  )
+  assert.deepEqual(
+    report.browserResult?.httpFetchCalls,
+    [],
+    'desktop browser result must contain no observed HTTP requests',
+  )
   assertRoleSwitchEvidence(report.roleSwitchEvidence, 'desktop driver report')
+  assert.equal(
+    report.desktopResult?.pidBinding?.actualOsPidVerified,
+    true,
+    'desktop driver report must verify the actual driver-launched OS PID',
+  )
+  assert.equal(
+    String(report.desktopResult?.pidBinding?.observedPid),
+    String(report.tauriPid),
+    'desktop WebView PID binding must match the wrapper-recorded application PID',
+  )
+  for (const [label, snapshot] of Object.entries({
+    beforeHook: report.processTree?.beforeHook,
+    afterHook: report.processTree?.afterHook,
+  })) {
+    assert.equal(
+      String(snapshot?.rootPid),
+      String(report.tauriPid),
+      `${label} process snapshot must bind to the launched Tauri PID`,
+    )
+    assert.deepEqual(
+      snapshot?.forbiddenMatches,
+      [],
+      `${label} process snapshot must contain no Python or sidecar descendants`,
+    )
+  }
 }
 
 async function waitForJson(file, timeoutMs, label, child, childOutput) {
@@ -769,17 +707,6 @@ function sleep(ms) {
 }
 
 async function runSelfTest() {
-  const sample = [
-    '100 1 tauri pnpm --filter @aurora/tauri-ui tauri dev',
-    '101 100 vite node vite',
-    '102 101 renderer aurora desktop',
-    '200 1 python python main.py',
-  ].join('\n')
-  const entries = parseProcessTable(sample)
-  assert.deepEqual(descendantsOf(entries, 100).map((entry) => entry.pid), [101, 102])
-  assert.equal(descendantsOf(entries, 200).length, 0)
-  assert.equal(forbiddenDesktopChildPattern.test('python main.py'), true)
-  assert.equal(forbiddenDesktopChildPattern.test('node vite'), false)
   const ready = {
     lane: 'direct',
     appId: 'app',
@@ -806,52 +733,75 @@ async function runSelfTest() {
     () => assertNoSeededSecretsInText('leaked token-value', ['token-value'], 'self-test leak'),
     /self-test leak/,
   )
+  const passedDriverReport = {
+    status: 'passed',
+    sessionNonce: 'nonce',
+    tauriPid: '123',
+    roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
+    noHttpFetchTransportUsed: true,
+    browserResult: {
+      noHttpFetchTransportUsed: true,
+      httpFetchCalls: [],
+    },
+    desktopResult: {
+      pidBinding: {
+        actualOsPidVerified: true,
+        observedPid: '123',
+      },
+    },
+    processTree: {
+      beforeHook: { rootPid: '123', forbiddenMatches: [] },
+      afterHook: { rootPid: '123', forbiddenMatches: [] },
+    },
+    secretsRedacted: true,
+  }
   assert.doesNotThrow(() =>
-    validateDriverReport({
-      status: 'passed',
-      sessionNonce: 'nonce',
-      tauriPid: '123',
-      roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
-      secretsRedacted: true,
-    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+    validateDriverReport(passedDriverReport, { sessionNonce: 'nonce' }),
   )
   assert.throws(() =>
     validateDriverReport({
-      status: 'passed',
+      ...passedDriverReport,
       sessionNonce: 'wrong',
-      tauriPid: '123',
-      roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
-      secretsRedacted: true,
-    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+    }, { sessionNonce: 'nonce' }),
   )
   assert.throws(() =>
     validateDriverReport({
-      status: 'passed',
-      sessionNonce: 'nonce',
-      tauriPid: '123',
+      ...passedDriverReport,
       secretsRedacted: true,
-    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+      roleSwitchEvidence: undefined,
+    }, { sessionNonce: 'nonce' }),
     /roleSwitchEvidence\.passed/,
   )
   assert.throws(() =>
     validateDriverReport({
-      status: 'passed',
-      sessionNonce: 'nonce',
-      tauriPid: '123',
+      ...passedDriverReport,
       roleSwitchEvidence: { passed: false, from: 'remote-console', to: 'mesh-node' },
-      secretsRedacted: true,
-    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+    }, { sessionNonce: 'nonce' }),
     /roleSwitchEvidence\.passed/,
   )
   assert.throws(() =>
     validateDriverReport({
-      status: 'passed',
-      sessionNonce: 'nonce',
-      tauriPid: '123',
+      ...passedDriverReport,
       roleSwitchEvidence: { passed: true, from: 'mesh-node', to: 'remote-console' },
-      secretsRedacted: true,
-    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+    }, { sessionNonce: 'nonce' }),
     /roleSwitchEvidence\.from/,
+  )
+  assert.throws(() =>
+    validateDriverReport({
+      ...passedDriverReport,
+      noHttpFetchTransportUsed: false,
+    }, { sessionNonce: 'nonce' }),
+    /WebRTC-only application traffic/,
+  )
+  assert.throws(() =>
+    validateDriverReport({
+      ...passedDriverReport,
+      browserResult: {
+        noHttpFetchTransportUsed: false,
+        httpFetchCalls: ['https://unexpected.example/'],
+      },
+    }, { sessionNonce: 'nonce' }),
+    /WebRTC-only/,
   )
   const artifactRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-secret-self-test.'))
   const leaking = path.join(artifactRoot, 'driver-report.json')

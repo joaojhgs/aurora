@@ -9,6 +9,8 @@
     "dev:desktop-client": "AURORA_TAURI_DEV_AUTOSIDECAR=0 VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 pnpm tauri dev --config src-tauri/tauri.client.conf.json",
     "dev:desktop-local": "pnpm dev:desktop-full",
     "dev:desktop-thin": "pnpm dev:desktop-client",
+    "test:desktop-client:live": "../../scripts/desktop_live_e2e.sh",
+    "test:desktop-thin:live": "pnpm test:desktop-client:live",
     "build": "tsc --noEmit --incremental false && vite build",
     "build:bundle": "pnpm build:bundle:desktop-local",
     "build:bundle:thin": "pnpm build:bundle:desktop-client",

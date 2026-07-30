@@ -4,8 +4,13 @@ on:
   pull_request:
     paths:
       - "apps/aurora-tauri/**"
+      - "app/services/auth/**"
+      - "app/services/gateway/**"
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
+      - "scripts/desktop_live_*.sh"
+      - "scripts/webrtc_interop*"
+      - "tests/e2e/desktop_live/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -171,6 +176,71 @@ jobs:
         with:
           name: tauri-eventstream-smoke-report
           path: apps/aurora-tauri/reports/eventstream-smoke.json
+          if-no-files-found: warn
+
+  desktop-client-live:
+    name: Desktop client live Python-peer E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri WebDriver and audio prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            webkit2gtk-driver \
+            portaudio19-dev \
+            python3-dev \
+            xvfb
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Python and workspace dependencies
+        run: |
+          uv sync --extra gateway
+          pnpm install --frozen-lockfile
+
+      - name: Build desktop client workspace dependencies
+        run: |
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Install the official Tauri WebDriver bridge
+        run: cargo install tauri-driver --locked
+
+      - name: Run the Python-free desktop client against the real Python peer
+        run: pnpm test:desktop-client:live
+
+      - name: Upload desktop live E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-client-live-e2e
+          path: reports/desktop-live-e2e/
           if-no-files-found: warn
 
   desktop-client-native-packages:

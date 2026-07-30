@@ -149,6 +149,12 @@ type Ac18BrowserLocalToolProbe = {
   serviceInstanceId: string;
 };
 
+type MeshInteropContractReport = Record<string, unknown> & {
+  authorized: boolean;
+  httpFetchCalls: string[];
+  noHttpFetchTransportUsed: boolean;
+};
+
 class DesktopLiveE2eCredentialStore extends MemoryPeerCredentialStore {
   private readonly roomSecrets = new Map<string, Uint8Array>();
 
@@ -173,7 +179,7 @@ export function isDesktopLiveE2eHookEnabled(
   env: Record<string, unknown> = import.meta.env,
 ): boolean {
   return Boolean(
-    env.DEV === true &&
+    env.VITE_AURORA_DESKTOP_LIVE_E2E === "1" &&
     env.VITE_AURORA_RUNTIME_MODE === "desktop-thin" &&
     env.VITE_AURORA_CONNECTION_MODE === "webrtc-only" &&
     env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK === "1",
@@ -280,6 +286,16 @@ export async function runDesktopLiveE2e(
       snapshots,
       ac18,
     });
+    const observedHttpFetchCalls = Array.isArray(browserResult.httpFetchCalls)
+      ? browserResult.httpFetchCalls
+      : null;
+    if (
+      browserResult.noHttpFetchTransportUsed !== true ||
+      observedHttpFetchCalls === null ||
+      observedHttpFetchCalls.length !== 0
+    ) {
+      throw new Error("Desktop live E2E observed an HTTP request outside WebRTC");
+    }
     const durationMs = Math.round(performance.now() - startedAt);
     const meshNodeAuthorized = browserResult.authorized === true;
     return {
@@ -288,7 +304,7 @@ export async function runDesktopLiveE2e(
       sessionNonce: payload.sessionNonce,
       tauriPid: payload.tauriPid,
       secretsRedacted: true,
-      noHttpFetchTransportUsed: true,
+      noHttpFetchTransportUsed: browserResult.noHttpFetchTransportUsed,
       roleSwitchEvidence: {
         passed: true,
         from: "remote-console",
@@ -396,7 +412,7 @@ async function runMeshInteropContract({
   profile: WebRtcPeerConnectionProfile;
   snapshots: Snapshot[];
   ac18: Ac18BrowserLocalToolProbe | null;
-}): Promise<Record<string, unknown>> {
+}): Promise<MeshInteropContractReport> {
   const fetchCalls: string[] = [];
   const originalFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

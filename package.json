@@ -18,6 +18,8 @@
     "test:web-persistence": "node scripts/run_browser_storage_gate.mjs",
     "test:hosted-peer:live": "scripts/hosted_peer_e2e.sh",
     "test:web-thin:live": "pnpm test:hosted-peer:live",
+    "test:desktop-client:live": "scripts/desktop_live_e2e.sh",
+    "test:desktop-thin:live": "pnpm test:desktop-client:live",
     "test:webrtc:interop": "scripts/webrtc_interop_local.sh direct",
     "test:webrtc:turn": "scripts/webrtc_interop_local.sh turn",
     "test:webrtc:browsers": "scripts/webrtc_interop_browser_matrix.sh"
