@@ -71,9 +71,19 @@ test('harness source preserves real-peer, Python-free desktop-client, driver, an
   assert.match(source, /AURORA_DESKTOP_LIVE_E2E_SESSION_NONCE/)
   assert.match(source, /assertNoTauriOwnedPythonChild/)
   assert.match(source, /assertNoSeededSecretsInTree/)
+  assert.match(source, /enforceNoSeededSecretsInTree/)
+  assert.match(source, /desktop-secret-quarantine/)
   assert.match(source, /validateDriverReport/)
   assert.match(source, /WEBRTC_INTEROP_AC18_LOCAL_TOOL_PROVIDER: '1'/)
   assert.doesNotMatch(source, /stdio:\s*'inherit'[\s\S]{0,120}shell:\s*true/)
+})
+
+test('webdriver fixture source invokes the narrow desktop live WebView hook', async () => {
+  const source = await fs.readFile(webdriverDriver, 'utf8')
+  assert.match(source, /__AURORA_DESKTOP_LIVE_E2E__/)
+  assert.match(source, /buildHookPayload/)
+  assert.match(source, /validatePassedHookResult/)
+  assert.match(source, /desktop-webview-hook-incomplete/)
 })
 
 function execNode(args, extraEnv = {}) {

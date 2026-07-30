@@ -20,7 +20,7 @@ const forbiddenDesktopChildPattern = /\b(?:python(?:3(?:\.\d+)?)?|uv|aurora-side
 const args = new Set(process.argv.slice(2))
 
 if (args.has('--self-test')) {
-  runSelfTest()
+  await runSelfTest()
 } else if (args.has('--check-only') || process.env.AURORA_DESKTOP_LIVE_E2E !== '1') {
   await runCheckOnly()
 } else {
@@ -215,7 +215,7 @@ async function runLive() {
         driverReportPath: desktopReportPath,
       })
       await writeJson(donePath, { ok: false, at: new Date().toISOString(), reason: 'missing-driver-command' })
-      await assertNoSeededSecretsInTree(artifactDir, seededSecrets)
+      await enforceNoSeededSecretsInTree(artifactDir, seededSecrets)
       throw new Error(
         'AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND is required for full desktop WebView approval/RPC assertions',
       )
@@ -251,7 +251,7 @@ async function runLive() {
       driverReportPath: desktopReportPath,
       driverLogDigest: driverRun.outputDigest,
     })
-    await assertNoSeededSecretsInTree(artifactDir, seededSecrets)
+    await enforceNoSeededSecretsInTree(artifactDir, seededSecrets)
     await waitForChild(pythonPeer, 30_000, 'Python peer')
     run('uv', [
       'run',
@@ -285,7 +285,7 @@ async function runLive() {
       },
       secretsRedacted: true,
     })
-    await assertNoSeededSecretsInTree(artifactDir, seededSecrets)
+    await enforceNoSeededSecretsInTree(artifactDir, seededSecrets)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await writeJson(path.join(artifactDir, 'desktop-live-failure.json'), {
@@ -296,7 +296,7 @@ async function runLive() {
       tauriOutputTail: redactSeeded(redactProcessOutput(tauriOutput).slice(-20_000), seededSecrets),
       secretsRedacted: true,
     })
-    await assertNoSeededSecretsInTree(artifactDir, seededSecrets).catch(() => undefined)
+    await enforceNoSeededSecretsInTree(artifactDir, seededSecrets, { originalError: error })
     throw error
   } finally {
     await cleanup()
@@ -640,7 +640,26 @@ async function writeSessionReport(file, {
   })
 }
 
+async function enforceNoSeededSecretsInTree(root, seededSecrets, { originalError } = {}) {
+  const findings = await findSeededSecretFindingsInTree(root, seededSecrets)
+  if (findings.length === 0) return
+  const quarantine = await redactLeakingArtifacts(root, seededSecrets, findings)
+  const originalMessage = originalError instanceof Error
+    ? originalError.message
+    : String(originalError ?? '')
+  const message = redactSeeded(
+    `seeded secret scan failed; redacted ${quarantine.redactedFileCount} leaking artifact(s) before upload${originalMessage ? `; original failure: ${originalMessage}` : ''}`,
+    seededSecrets,
+  )
+  throw new Error(message, { cause: originalError })
+}
+
 async function assertNoSeededSecretsInTree(root, seededSecrets) {
+  const findings = await findSeededSecretFindingsInTree(root, seededSecrets)
+  assert.deepEqual(findings, [], 'desktop live artifacts/logs must not contain seeded room secrets or tokens')
+}
+
+async function findSeededSecretFindingsInTree(root, seededSecrets) {
   const findings = []
   for (const file of await collectArtifactFiles(root)) {
     const text = await fs.readFile(file, 'utf8')
@@ -650,7 +669,25 @@ async function assertNoSeededSecretsInTree(root, seededSecrets) {
       }
     }
   }
-  assert.deepEqual(findings, [], 'desktop live artifacts/logs must not contain seeded room secrets or tokens')
+  return findings
+}
+
+async function redactLeakingArtifacts(root, seededSecrets, findings) {
+  const uniqueFiles = [...new Set(findings.map((finding) => path.resolve(repoRoot, finding.file)))]
+  for (const file of uniqueFiles) {
+    const text = await fs.readFile(file, 'utf8')
+    await fs.writeFile(file, redactSeeded(text, seededSecrets))
+  }
+  const quarantineReport = {
+    schema: 'aurora.desktop_live_e2e.secret_quarantine.v1',
+    redactedFileCount: uniqueFiles.length,
+    redactedFiles: uniqueFiles.map((file) => path.relative(repoRoot, file)),
+    findingDigests: findings.map((finding) => finding.secretDigest),
+    at: new Date().toISOString(),
+    secretsRedacted: true,
+  }
+  await writeJson(path.join(root, 'desktop-secret-quarantine.json'), quarantineReport)
+  return quarantineReport
 }
 
 async function collectArtifactFiles(root) {
@@ -729,7 +766,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function runSelfTest() {
+async function runSelfTest() {
   const sample = [
     '100 1 tauri pnpm --filter @aurora/tauri-ui tauri dev',
     '101 100 vite node vite',
@@ -783,5 +820,22 @@ function runSelfTest() {
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
   )
+  const artifactRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aurora-desktop-secret-self-test.'))
+  const leaking = path.join(artifactRoot, 'driver-report.json')
+  await writeJson(leaking, { token: 'token-value', status: 'failed' })
+  await assert.rejects(
+    enforceNoSeededSecretsInTree(artifactRoot, ['token-value'], {
+      originalError: new Error('driver failed'),
+    }),
+    /seeded secret scan failed/,
+  )
+  const redactedLeak = await fs.readFile(leaking, 'utf8')
+  assert.equal(redactedLeak.includes('token-value'), false)
+  const quarantineReport = JSON.parse(
+    await fs.readFile(path.join(artifactRoot, 'desktop-secret-quarantine.json'), 'utf8'),
+  )
+  assert.equal(quarantineReport.redactedFileCount, 1)
+  assert.equal(JSON.stringify(quarantineReport).includes('token-value'), false)
+  await assertNoSeededSecretsInTree(artifactRoot, ['token-value'])
   console.log('desktop-live-e2e self-test passed')
 }

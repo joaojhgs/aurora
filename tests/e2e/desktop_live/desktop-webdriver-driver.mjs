@@ -33,25 +33,39 @@ async function run() {
   let session
   try {
     session = await createSession(webdriverUrl)
-    const runtime = await executeScript(webdriverUrl, session.sessionId, `
-      return {
-        href: String(window.location.href),
-        tauriPresent: Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__),
-        title: String(document.title || ''),
-        readyState: String(document.readyState || '')
-      };
-    `)
+    const payload = await buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath })
+    const hookResult = await invokeDesktopHook(webdriverUrl, session.sessionId, payload)
+    if (hookResult?.status === 'passed') {
+      validatePassedHookResult(hookResult, { sessionNonce, tauriPid })
+      await writeJson(reportPath, {
+        schema: 'aurora.desktop_live_e2e.webdriver_driver.v1',
+        ...hookResult,
+        sessionNonce,
+        tauriPid: String(tauriPid),
+        webdriver: {
+          endpoint: redactEndpoint(webdriverUrl),
+          sessionIdDigest: sha256Like(session.sessionId),
+        },
+        secretsRedacted: true,
+      })
+      await writeJson(donePath, {
+        ok: true,
+        at: new Date().toISOString(),
+      })
+      return
+    }
     await writeBlocked(reportPath, donePath, {
-      blocker: 'missing-desktop-webview-interop-hook',
+      blocker: hookResult?.blocker ?? 'desktop-webview-hook-incomplete',
       sessionNonce,
       tauriPid,
       detail:
-        'The no-dependency WebDriver fixture reached the Tauri WebView, but app code does not expose the WebRTC interop runner/profile seeding hook needed for full approval/RPC/revoke assertions.',
+        hookResult?.detail ??
+        'window.__AURORA_DESKTOP_LIVE_E2E__ did not return a passed report.',
       webdriver: {
         endpoint: redactEndpoint(webdriverUrl),
         sessionIdDigest: sha256Like(session.sessionId),
       },
-      runtime,
+      runtime: hookResult?.runtime,
     })
     process.exit(2)
   } catch (error) {
@@ -96,6 +110,88 @@ async function executeScript(baseUrl, sessionId, script) {
     { script, args: [] },
   )
   return value.value ?? value
+}
+
+async function executeAsyncScript(baseUrl, sessionId, script, args = []) {
+  const value = await request(
+    baseUrl,
+    'POST',
+    `/session/${encodeURIComponent(sessionId)}/execute/async`,
+    { script, args },
+  )
+  return value.value ?? value
+}
+
+async function buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath }) {
+  return {
+    schema: 'aurora.desktop_live_e2e.hook_payload.v1',
+    sessionNonce,
+    tauriPid: String(tauriPid),
+    reportPath,
+    donePath,
+    readyPath: process.env.AURORA_DESKTOP_LIVE_E2E_READY,
+    runtimeProfilePath: process.env.AURORA_DESKTOP_LIVE_E2E_RUNTIME_PROFILE,
+    invitePath: process.env.AURORA_DESKTOP_LIVE_E2E_INVITE,
+    roomSecret: process.env.AURORA_DESKTOP_LIVE_E2E_ROOM_SECRET,
+    ready: await readJsonEnv('AURORA_DESKTOP_LIVE_E2E_READY'),
+    runtimeProfile: await readJsonEnv('AURORA_DESKTOP_LIVE_E2E_RUNTIME_PROFILE'),
+    invite: await readJsonEnv('AURORA_DESKTOP_LIVE_E2E_INVITE'),
+  }
+}
+
+async function readJsonEnv(name) {
+  const file = process.env[name]
+  if (!file) return null
+  return JSON.parse(await fs.readFile(file, 'utf8'))
+}
+
+async function invokeDesktopHook(baseUrl, sessionId, payload) {
+  return await executeAsyncScript(baseUrl, sessionId, `
+    const payload = arguments[0];
+    const done = arguments[arguments.length - 1];
+    Promise.resolve().then(async () => {
+      const runtime = {
+        href: String(window.location.href),
+        tauriPresent: Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__),
+        title: String(document.title || ''),
+        readyState: String(document.readyState || '')
+      };
+      const hook = window.__AURORA_DESKTOP_LIVE_E2E__;
+      if (typeof hook !== 'function') {
+        return {
+          status: 'blocked',
+          blocker: 'missing-desktop-webview-hook',
+          detail: 'window.__AURORA_DESKTOP_LIVE_E2E__ is not installed.',
+          runtime
+        };
+      }
+      const result = await hook(payload);
+      if (!result || typeof result !== 'object') {
+        return {
+          status: 'blocked',
+          blocker: 'desktop-webview-hook-returned-no-report',
+          detail: 'window.__AURORA_DESKTOP_LIVE_E2E__ must return a report object.',
+          runtime
+        };
+      }
+      return { runtime, ...result };
+    }).then(done, (error) => done({
+      status: 'failed',
+      blocker: 'desktop-webview-hook-threw',
+      detail: error?.message ?? String(error)
+    }));
+  `, [payload])
+}
+
+function validatePassedHookResult(result, { sessionNonce, tauriPid }) {
+  assert.equal(result.status, 'passed')
+  assert.equal(result.sessionNonce, sessionNonce)
+  assert.equal(String(result.tauriPid), String(tauriPid))
+  assert.equal(result.secretsRedacted, true)
+  assert.ok(
+    result.browserResult || result.desktopResult,
+    'hook result must include browserResult or desktopResult evidence',
+  )
 }
 
 async function request(baseUrl, method, pathname, body) {
@@ -156,5 +252,23 @@ function runSelfTest() {
   assert.equal(redactEndpoint('http://user:pass@127.0.0.1:4444'), 'http://<redacted>@127.0.0.1:4444')
   assert.equal(sha256Like('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
   assert.throws(() => requireEnv('AURORA_DESKTOP_LIVE_E2E_SELF_TEST_MISSING'))
+  assert.doesNotThrow(() =>
+    validatePassedHookResult({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      desktopResult: { approved: true },
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
+  assert.throws(() =>
+    validatePassedHookResult({
+      status: 'passed',
+      sessionNonce: 'wrong',
+      tauriPid: '123',
+      desktopResult: { approved: true },
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
   console.log('desktop-webdriver-driver self-test passed')
 }

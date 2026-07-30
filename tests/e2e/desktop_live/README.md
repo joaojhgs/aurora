@@ -32,9 +32,29 @@ command. The driver must perform WebView approval/RPC assertions and write
 `scripts/webrtc_interop_scan.py` for the aggregate report.
 
 `desktop-webdriver-driver.mjs` is the repo-owned no-new-dependency fixture. It
-can connect to a running Tauri/WebDriver endpoint and fails closed with a
-nonce/PID-bound blocked report until a maintained WebView interaction hook or
-workflow wrapper is added. The minimal shared follow-up is a workflow/package
-script that starts `tauri-driver` and exposes enough app state to seed the
-runtime profile, approve pairing, execute the existing WebRTC interop contract,
-and write a passed `desktop-client-report.json`.
+connects to a running Tauri/WebDriver endpoint and invokes the narrow test-only
+WebView hook `window.__AURORA_DESKTOP_LIVE_E2E__(payload)`.
+
+Hook payload contract:
+
+- `schema`: `aurora.desktop_live_e2e.hook_payload.v1`
+- `sessionNonce`: launch nonce that must be echoed in the returned report
+- `tauriPid`: launched Tauri PID that must be echoed in the returned report
+- `ready`, `runtimeProfile`, `invite`: parsed Python peer/profile/invite inputs
+- `readyPath`, `runtimeProfilePath`, `invitePath`, `reportPath`, `donePath`
+- `roomSecret`: seeded room secret already present in the invite
+
+The hook must seed the runtime profile/invite, approve pairing in the Tauri
+WebView, execute the existing WebRTC interop approval/RPC/revoke/role-switch
+contract, and return a report object with:
+
+- `status: "passed"`
+- matching `sessionNonce` and `tauriPid`
+- `secretsRedacted: true`
+- `browserResult` or `desktopResult` evidence
+
+The fixture writes `desktop-client-report.json` and `desktop-done.json` only for
+a passed hook result. It fails closed when the hook is absent, throws, returns no
+report, omits required evidence, or echoes the wrong nonce/PID. The minimal
+shared follow-up is a workflow/package script that starts `tauri-driver` and a
+Tauri bootstrap test hook implementing this contract.
