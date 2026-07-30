@@ -84,7 +84,12 @@ from .peer_protocol import (
     parse_protocol_hello,
     parse_provider_lease_frame,
 )
-from .rpc import RPCHandler
+from .rpc import (
+    WEBRTC_MAX_FRAME_TEXT_BYTES,
+    RPCHandler,
+    WebRTCFrameParseError,
+    parse_webrtc_json_frame,
+)
 from .signaling.mqtt_client import MQTTSignaling
 
 if TYPE_CHECKING:
@@ -1297,6 +1302,14 @@ class RTCClient:
             if future is not None and not future.done():
                 future.set_result(None)
 
+    def _cancel_peer_rpc_work(self, *peer_ids: str) -> None:
+        """Cancel inbound RPC handler tasks for session or stable peer IDs."""
+
+        for peer_id in peer_ids:
+            handler = self._rpc_handlers.get(peer_id)
+            if handler is not None:
+                handler.cancel_active_work()
+
     def _clear_pairing_state(
         self,
         peer: str,
@@ -1352,6 +1365,7 @@ class RTCClient:
         if pairing_task is not None and pairing_task is not asyncio.current_task():
             pairing_task.cancel()
         self._resolve_peer_rpc_calls(peer)
+        self._cancel_peer_rpc_work(peer)
         self._clear_pairing_state(peer, pc)
         self._pcs.pop(peer, None)
         self._peer_acl.pop(peer, None)
@@ -1514,6 +1528,8 @@ class RTCClient:
                 future.set_result(None)
         self._pending_rpc.clear()
         self._pending_rpc_peers.clear()
+        for handler in list(self._rpc_handlers.values()):
+            handler.cancel_active_work()
         for peer in list(self._negotiation_watchdogs):
             self._cancel_negotiation_watchdog(peer)
         reconnect_tasks = list(self._peer_reconnect_tasks.values())
@@ -1792,6 +1808,7 @@ class RTCClient:
         if pairing_task:
             pairing_task.cancel()
         self._resolve_peer_rpc_calls(session_peer_id)
+        self._cancel_peer_rpc_work(session_peer_id, stable_peer_id, peer_id)
         self._clear_pairing_state(session_peer_id, pc)
         await pc.close()
         self._pcs.pop(session_peer_id, None)
@@ -1964,6 +1981,13 @@ class RTCClient:
         e2ee_enabled = self._settings.webrtc.enable_app_layer_e2ee
 
         if isinstance(message, str):
+            if len(message.encode("utf-8")) > WEBRTC_MAX_FRAME_TEXT_BYTES:
+                self._record_diagnostic_error(
+                    "datachannel_plaintext_oversize",
+                    "DataChannel plaintext exceeded maximum frame size",
+                    peer,
+                )
+                return None
             if e2ee_enabled:
                 log_warning(
                     "RTCClient: Dropping plaintext DataChannel message from "
@@ -1974,11 +1998,27 @@ class RTCClient:
 
         if isinstance(message, (bytes, bytearray, memoryview)):
             payload = bytes(message)
+            if len(payload) > WEBRTC_MAX_FRAME_TEXT_BYTES:
+                self._record_diagnostic_error(
+                    "datachannel_ciphertext_oversize",
+                    "DataChannel binary payload exceeded maximum frame size",
+                    peer,
+                )
+                return None
             try:
                 if e2ee_enabled:
                     obj = aead_open(self._keys.k_data, payload)
-                    return json.dumps(obj)
-                return payload.decode()
+                    text = json.dumps(obj)
+                else:
+                    text = payload.decode()
+                if len(text.encode("utf-8")) > WEBRTC_MAX_FRAME_TEXT_BYTES:
+                    self._record_diagnostic_error(
+                        "datachannel_decoded_oversize",
+                        "Decoded DataChannel payload exceeded maximum frame size",
+                        peer,
+                    )
+                    return None
+                return text
             except Exception as e:
                 mode = "decrypt" if e2ee_enabled else "decode"
                 self._record_diagnostic_error(
@@ -1994,6 +2034,22 @@ class RTCClient:
             f"{peer}: {type(message).__name__}"
         )
         return None
+
+    def _parse_datachannel_frame(
+        self,
+        peer: str,
+        text: str,
+        *,
+        diagnostic_code: str = "datachannel_frame_invalid",
+    ) -> dict[str, Any] | None:
+        """Parse one decoded DataChannel JSON frame before any work is scheduled."""
+
+        try:
+            return parse_webrtc_json_frame(text)
+        except WebRTCFrameParseError as exc:
+            self._record_diagnostic_error(diagnostic_code, str(exc), peer)
+            log_warning(f"RTCClient: Rejected invalid DataChannel frame from {peer}: {exc}")
+            return None
 
     def _send_channel_text(self, channel: Any, text: str) -> bool:
         """Send JSON text on a DataChannel after applying configured encoding."""
@@ -2662,6 +2718,7 @@ class RTCClient:
         else:
             scopes = ()
             replacement = self._zero_authority_identity(session_identity)
+            self._cancel_peer_rpc_work(session_peer_id, stable_peer_id)
         self._peer_acl[session_peer_id] = replacement
         self._peer_acl[stable_peer_id] = replacement
         self._replace_peer_token_scopes(stable_peer_id, session_peer_id, scopes)
@@ -5102,7 +5159,9 @@ class RTCClient:
                     return
 
                 try:
-                    obj = json.loads(text)
+                    obj = self._parse_datachannel_frame(peer, text)
+                    if obj is None:
+                        return
                     msg_type = obj.get("type")
 
                     # Intercept RPC responses for our outbound calls
@@ -5362,21 +5421,12 @@ class RTCClient:
                         logical_text = self._handle_fragment_frame(peer, obj)
                         if logical_text is None:
                             return
-                        try:
-                            logical_obj = json.loads(logical_text)
-                        except json.JSONDecodeError:
-                            self._record_diagnostic_error(
-                                "fragment_reassembled_non_json",
-                                "Reassembled fragment payload was not JSON",
-                                peer,
-                            )
-                            return
-                        if not isinstance(logical_obj, dict):
-                            self._record_diagnostic_error(
-                                "fragment_reassembled_non_object",
-                                "Reassembled fragment payload was not a JSON object",
-                                peer,
-                            )
+                        logical_obj = self._parse_datachannel_frame(
+                            peer,
+                            logical_text,
+                            diagnostic_code="fragment_reassembled_invalid",
+                        )
+                        if logical_obj is None:
                             return
                         self._dispatch_authenticated_datachannel_message(
                             peer=peer, handler=handler, text=logical_text, obj=logical_obj
@@ -5480,6 +5530,7 @@ class RTCClient:
                 if pairing_task:
                     pairing_task.cancel()
                 self._resolve_peer_rpc_calls(peer)
+                self._cancel_peer_rpc_work(peer, stable_peer_id)
                 self._clear_pairing_state(peer, pc)
                 self._pcs.pop(peer, None)
                 self._peer_acl.pop(peer, None)

@@ -197,6 +197,66 @@ def _authenticated_identity() -> Identity:
     )
 
 
+def test_parse_datachannel_frame_rejects_invalid_direct_call_before_dispatch() -> None:
+    client = _client()
+    handler = AsyncMock()
+
+    parsed = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps(
+            {
+                "type": "call",
+                "id": "bad-call",
+                "method": "Svc.Call",
+                "params": {"payload": "x" * (256 * 1024 + 1)},
+            }
+        ),
+    )
+    if parsed is not None:
+        client._dispatch_authenticated_datachannel_message(  # noqa: SLF001
+            peer="session-peer",
+            handler=handler,
+            text="{}",
+            obj=parsed,
+        )
+
+    assert parsed is None
+    assert client._diagnostic_errors[0].code == "datachannel_frame_invalid"  # noqa: SLF001
+    handler.on_message.assert_not_called()
+
+
+def test_parse_reassembled_fragment_payload_rejects_deep_call_before_dispatch() -> None:
+    client = _client()
+    handler = AsyncMock()
+    nested: object = "leaf"
+    for _ in range(18):
+        nested = {"next": nested}
+
+    parsed = client._parse_datachannel_frame(  # noqa: SLF001
+        "session-peer",
+        json.dumps(
+            {
+                "type": "call",
+                "id": "deep-call",
+                "method": "Svc.Call",
+                "params": nested,
+            }
+        ),
+        diagnostic_code="fragment_reassembled_invalid",
+    )
+    if parsed is not None:
+        client._dispatch_authenticated_datachannel_message(  # noqa: SLF001
+            peer="session-peer",
+            handler=handler,
+            text="{}",
+            obj=parsed,
+        )
+
+    assert parsed is None
+    assert client._diagnostic_errors[0].code == "fragment_reassembled_invalid"  # noqa: SLF001
+    handler.on_message.assert_not_called()
+
+
 @pytest.mark.unit
 def test_peer_protocol_defaults_legacy_to_hybrid_and_no_capabilities() -> None:
     client = _client()

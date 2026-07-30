@@ -265,6 +265,47 @@ async def test_external_user_input_allowed_with_orchestrator_use_permission(
 
 
 @pytest.mark.asyncio
+async def test_typed_payload_validation_failure_returns_400_without_bus_request(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = MagicMock(spec=MethodInfo)
+    method_info.name = "ExternalUserInput"
+    method_info.bus_topic = OrchestratorMethods.EXTERNAL_USER_INPUT
+    method_info.exposure = "external"
+    method_info.input_model = OrchestratorProcessRequest
+    method_info.required_perms = ["Orchestrator.use"]
+    method_info.method_type = "use"
+    announcement = MagicMock(spec=ServiceAnnouncement)
+    announcement.methods = [method_info]
+    mock_registry.get_service.return_value = announcement
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use"),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "invalid-typed",
+                "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+                "params": {},
+            }
+        )
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["type"] == "error"
+    assert response["error"]["code"] == 400
+    assert response["error"]["message"] == "Invalid request payload"
+    mock_bus.request.assert_not_called()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "selector_payload",
     [
@@ -515,6 +556,72 @@ async def test_on_message_invalid_json(rpc_handler):
 
 
 @pytest.mark.asyncio
+async def test_on_message_rejects_oversized_frame_before_registry_or_bus(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    handler = RPCHandler(mock_bus, mock_registry, mock_send_fn, _make_acl_with_perms("Svc.Call"))
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "oversized",
+                "method": "Svc.Call",
+                "params": {"payload": "x" * (256 * 1024 + 1)},
+            }
+        )
+    )
+
+    mock_registry.get_service.assert_not_called()
+    mock_bus.request.assert_not_called()
+    mock_send_fn.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_on_message_rejects_deep_frame_before_registry_or_bus(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    nested: object = "leaf"
+    for _ in range(18):
+        nested = {"next": nested}
+    handler = RPCHandler(mock_bus, mock_registry, mock_send_fn, _make_acl_with_perms("Svc.Call"))
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "deep",
+                "method": "Svc.Call",
+                "params": nested,
+            }
+        )
+    )
+
+    mock_registry.get_service.assert_not_called()
+    mock_bus.request.assert_not_called()
+    mock_send_fn.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_on_message_rejects_malformed_subscribe_before_handler_work(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    handler = RPCHandler(mock_bus, mock_registry, mock_send_fn, _make_acl_with_perms("Svc.Call"))
+
+    await handler.on_message(json.dumps({"type": "subscribe", "id": "sub-1", "topics": ["Svc.*"]}))
+
+    mock_registry.get_service.assert_not_called()
+    mock_bus.request.assert_not_called()
+    mock_send_fn.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_on_message_ignore_non_call(rpc_handler):
     await rpc_handler.on_message(json.dumps({"type": "not_call"}))
     rpc_handler._send.assert_not_called()
@@ -522,11 +629,9 @@ async def test_on_message_ignore_non_call(rpc_handler):
 
 @pytest.mark.asyncio
 async def test_handle_call_missing_method(rpc_handler):
-    await rpc_handler.on_message(json.dumps({"type": "call", "id": 1}))
-    rpc_handler._send.assert_called_once()
-    response = json.loads(rpc_handler._send.call_args[0][0])
-    assert response["type"] == "error"
-    assert response["error"]["code"] == 400
+    await rpc_handler.on_message(json.dumps({"type": "call", "id": "1"}))
+    rpc_handler._send.assert_not_called()
+    rpc_handler._bus.request.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -534,7 +639,9 @@ async def test_handle_call_method_not_found(rpc_handler, mock_registry):
     mock_registry.get_service.return_value = None
     mock_registry.get_external_methods.return_value = []
 
-    await rpc_handler.on_message(json.dumps({"type": "call", "id": 1, "method": "Svc.NonExistent"}))
+    await rpc_handler.on_message(
+        json.dumps({"type": "call", "id": "1", "method": "Svc.NonExistent"})
+    )
 
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
@@ -549,7 +656,7 @@ async def test_handle_call_forbidden(rpc_handler, mock_registry, mock_acl_provid
     )
     # The default mock_acl_provider only has "user" permission, not "admin"
 
-    await rpc_handler.on_message(json.dumps({"type": "call", "id": 1, "method": "Svc.Secret"}))
+    await rpc_handler.on_message(json.dumps({"type": "call", "id": "1", "method": "Svc.Secret"}))
 
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
@@ -788,7 +895,7 @@ async def test_handle_call_bus_error(rpc_handler, mock_registry, mock_bus):
 
     mock_bus.request.return_value = QueryResult(ok=False, error="Something went wrong")
 
-    await rpc_handler.on_message(json.dumps({"type": "call", "id": 1, "method": "Svc.Fail"}))
+    await rpc_handler.on_message(json.dumps({"type": "call", "id": "1", "method": "Svc.Fail"}))
 
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
@@ -812,10 +919,10 @@ async def test_handle_call_returns_typed_contract_denial_payload(
     }
     mock_bus.request.return_value = QueryResult(ok=False, data=denial)
 
-    await rpc_handler.on_message(json.dumps({"type": "call", "id": 2, "method": "Svc.Prepare"}))
+    await rpc_handler.on_message(json.dumps({"type": "call", "id": "2", "method": "Svc.Prepare"}))
 
     response = json.loads(rpc_handler._send.call_args[0][0])
-    assert response == {"type": "result", "id": 2, "result": denial}
+    assert response == {"type": "result", "id": "2", "result": denial}
 
 
 @pytest.mark.asyncio
@@ -827,12 +934,54 @@ async def test_handle_call_timeout(rpc_handler, mock_registry, mock_bus):
 
     mock_bus.request.side_effect = TimeoutError()
 
-    await rpc_handler.on_message(json.dumps({"type": "call", "id": 1, "method": "Svc.Slow"}))
+    await rpc_handler.on_message(json.dumps({"type": "call", "id": "1", "method": "Svc.Slow"}))
 
     response = json.loads(rpc_handler._send.call_args[0][0])
     assert response["type"] == "error"
     assert response["error"]["code"] == 504
     assert response["correlation_id"] == "1"
+
+
+@pytest.mark.asyncio
+async def test_cancel_frame_cancels_active_non_stream_bus_request(
+    mock_registry,
+    mock_send_fn,
+):
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+    completed = False
+    bus = AsyncMock()
+
+    async def request(*args, **kwargs):
+        nonlocal completed
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        completed = True
+        return QueryResult(ok=True, data={"ok": True})
+
+    bus.request.side_effect = request
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[MethodInfo(name="Slow", bus_topic="Svc.Slow", exposure="external")],
+    )
+    handler = RPCHandler(bus, mock_registry, mock_send_fn, _make_acl_with_perms("Svc.Slow"))
+
+    active = asyncio.create_task(
+        handler.on_message(json.dumps({"type": "call", "id": "slow-1", "method": "Svc.Slow"}))
+    )
+    await started.wait()
+    await handler.on_message(json.dumps({"type": "cancel", "id": "slow-1"}))
+
+    with contextlib.suppress(asyncio.CancelledError):
+        await active
+    assert cancelled.is_set()
+    assert completed is False
+    assert handler._active_rpc_tasks == {}  # noqa: SLF001
 
 
 @pytest.mark.asyncio

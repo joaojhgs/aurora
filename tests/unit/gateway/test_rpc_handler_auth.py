@@ -453,7 +453,7 @@ async def test_scoped_subscribe_blocks_unacknowledged_provider_service_events(
             {
                 "type": "subscribe",
                 "id": "sub-not-ready",
-                "params": {"subscription_id": "sub-1", "topics": [TTSMethods.STARTED]},
+                "topics": [TTSMethods.STARTED],
             }
         )
     )
@@ -471,7 +471,7 @@ async def test_scoped_subscribe_blocks_unacknowledged_provider_service_events(
             {
                 "type": "subscribe",
                 "id": "sub-ready",
-                "params": {"subscription_id": "sub-2", "topics": [TTSMethods.STARTED]},
+                "topics": [TTSMethods.STARTED],
             }
         )
     )

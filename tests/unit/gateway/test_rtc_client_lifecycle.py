@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from datetime import datetime, timedelta
 from typing import Any
@@ -10,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.messaging.bus import QueryResult
 from app.services.db.models import Token, User
 from app.services.gateway.acl.identity import ANONYMOUS, Identity
 from app.services.gateway.config import MeshConfig
@@ -17,6 +19,7 @@ from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.utils.crypto import aead_open
 from app.services.gateway.webrtc.rpc import RPCHandler
 from app.services.gateway.webrtc.rtc_client import RTCClient, _ManifestAckExpectation
+from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
 
 
 @pytest.fixture
@@ -73,6 +76,48 @@ def _make_identity(
         effective_perms=frozenset(perms or ["TTS.*"]),
         source="webrtc_peer",
     )
+
+
+async def _start_blocked_rtc_rpc(
+    client: RTCClient,
+    peer_id: str,
+    stable_peer_id: str | None = None,
+) -> tuple[asyncio.Task[None], asyncio.Event, asyncio.Event, dict[str, bool]]:
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+    state = {"completed": False}
+    bus = AsyncMock()
+
+    async def request(*args, **kwargs):
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        state["completed"] = True
+        return QueryResult(ok=True, data={"ok": True})
+
+    bus.request.side_effect = request
+    registry = AsyncMock()
+    registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[MethodInfo(name="Slow", bus_topic="Svc.Slow", exposure="external")],
+    )
+    identity = _make_identity(perms=["Svc.Slow"])
+    client._peer_acl[peer_id] = identity  # noqa: SLF001
+    if stable_peer_id is not None:
+        client._peer_acl[stable_peer_id] = identity  # noqa: SLF001
+    handler = RPCHandler(bus, registry, MagicMock(), lambda: client._peer_acl[peer_id])  # noqa: SLF001
+    client._rpc_handlers[peer_id] = handler  # noqa: SLF001
+    if stable_peer_id is not None:
+        client._rpc_handlers[stable_peer_id] = handler  # noqa: SLF001
+    task = asyncio.create_task(
+        handler.on_message(json.dumps({"type": "call", "id": "slow-1", "method": "Svc.Slow"}))
+    )
+    await started.wait()
+    return task, started, cancelled, state
 
 
 # ── get_connected_peers ──────────────────────────────────────────────────
@@ -278,9 +323,47 @@ async def test_disconnect_peer_success(client):
 
 
 @pytest.mark.asyncio
+async def test_disconnect_peer_cancels_active_inbound_rpc_work(client):
+    pc = AsyncMock()
+    pc.connectionState = "connected"
+    client._pcs["peer-a"] = pc
+    client._peer_data_channels["peer-a"] = MagicMock(readyState="open")
+    client._audit = AsyncMock()
+    active, _started, cancelled, state = await _start_blocked_rtc_rpc(client, "peer-a")
+
+    assert await client.disconnect_peer("peer-a", by_principal_id="admin") is True
+
+    with contextlib.suppress(asyncio.CancelledError):
+        await active
+    assert cancelled.is_set()
+    assert state["completed"] is False
+
+
+@pytest.mark.asyncio
 async def test_disconnect_peer_not_found(client):
     result = await client.disconnect_peer("nonexistent")
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_authority_revocation_cancels_active_inbound_rpc_work(client):
+    pc = AsyncMock()
+    pc.connectionState = "connected"
+    client._pcs["peer-a"] = pc
+    client._peer_data_channels["peer-a"] = MagicMock(readyState="open")
+    client._remember_stable_peer_id("peer-a", "stable-peer-a", "remote")
+    active, _started, cancelled, state = await _start_blocked_rtc_rpc(
+        client,
+        "peer-a",
+        stable_peer_id="stable-peer-a",
+    )
+
+    assert client._sync_peer_authority_acl("stable-peer-a", None) is True  # noqa: SLF001
+
+    with contextlib.suppress(asyncio.CancelledError):
+        await active
+    assert cancelled.is_set()
+    assert state["completed"] is False
 
 
 # ── update_peer_permissions ──────────────────────────────────────────────

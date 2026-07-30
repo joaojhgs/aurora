@@ -10,8 +10,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
+import re
 import secrets
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -48,6 +51,255 @@ from app.shared.mesh.tracing import (
     ensure_correlation_id,
     redacted_copy,
 )
+
+
+class WebRTCFrameParseError(ValueError):
+    """Raised when an inbound WebRTC JSON frame violates protocol limits."""
+
+
+@dataclass(frozen=True, slots=True)
+class WebRTCParserLimits:
+    max_string_length: int = 256 * 1024
+    max_array_length: int = 4096
+    max_object_keys: int = 128
+    max_depth: int = 16
+    max_topic_length: int = 256
+    max_topics: int = 64
+    max_ttl_seconds: int = 300
+
+
+DEFAULT_WEBRTC_PARSER_LIMITS = WebRTCParserLimits()
+WEBRTC_MAX_FRAME_TEXT_BYTES = DEFAULT_WEBRTC_PARSER_LIMITS.max_string_length
+_TYPE_MAX = 64
+_ID_MAX = 128
+_METHOD_MAX = 256
+_TOPIC_RE = re.compile(r"^[A-Za-z0-9_.:/-]+$")
+_HEX_64_RE = re.compile(r"^[0-9a-f]{64}$")
+_BASE64URL_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_KNOWN_CONTROL_TYPES = frozenset(
+    {
+        "auth",
+        "reauth",
+        "manifest",
+        "manifest_request",
+        "ping",
+        "pong",
+        "mesh_event",
+        "protocol_hello",
+        "fragment",
+        "capacity_update",
+    }
+)
+
+
+def parse_webrtc_json_frame(
+    text: str,
+    *,
+    limits: WebRTCParserLimits = DEFAULT_WEBRTC_PARSER_LIMITS,
+) -> dict[str, Any]:
+    """Parse one inbound WebRTC JSON frame with SDK-equivalent structural limits."""
+
+    if not isinstance(text, str) or len(text.encode("utf-8")) > WEBRTC_MAX_FRAME_TEXT_BYTES:
+        raise WebRTCFrameParseError("frame JSON must be a bounded string")
+    try:
+        decoded = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise WebRTCFrameParseError("frame JSON is invalid") from exc
+    return parse_webrtc_frame(decoded, limits=limits)
+
+
+def parse_webrtc_frame(
+    frame: Any,
+    *,
+    limits: WebRTCParserLimits = DEFAULT_WEBRTC_PARSER_LIMITS,
+) -> dict[str, Any]:
+    obj = _require_plain_record(frame, "frame")
+    _validate_json_tree(obj, limits)
+    frame_type = _require_string(obj.get("type"), "type", _TYPE_MAX)
+    if frame_type == "call":
+        return _parse_call(obj)
+    if frame_type == "result":
+        out = {"type": frame_type, "id": _require_id(obj.get("id"))}
+        if "result" in obj:
+            out["result"] = obj["result"]
+        return out
+    if frame_type == "error":
+        error = _require_plain_record(obj.get("error"), "error")
+        out = {
+            "type": frame_type,
+            "id": _require_id(obj.get("id")),
+            "error": {
+                "code": _require_integer(error.get("code"), "error.code", 0, 9999),
+                "message": _require_string(error.get("message"), "error.message", 4096),
+            },
+        }
+        if "correlation_id" in obj:
+            out["correlation_id"] = _require_id(obj.get("correlation_id"))
+        return out
+    if frame_type == "chunk":
+        out = {"type": frame_type, "id": _require_id(obj.get("id"))}
+        if "data" in obj:
+            out["data"] = obj["data"]
+        return out
+    if frame_type == "eof":
+        out = {"type": frame_type, "id": _require_id(obj.get("id"))}
+        if "cancelled" in obj:
+            out["cancelled"] = _require_bool(obj.get("cancelled"), "cancelled")
+        return out
+    if frame_type == "cancel":
+        return {"type": frame_type, "id": _require_id(obj.get("id"))}
+    if frame_type == "event":
+        out = {"type": frame_type, "topic": _require_topic(obj.get("topic"), limits)}
+        if "params" in obj:
+            out["params"] = obj["params"]
+        if "correlation_id" in obj:
+            out["correlation_id"] = _require_id(obj.get("correlation_id"))
+        return out
+    if frame_type == "subscribe":
+        out = {
+            "type": frame_type,
+            "id": _require_id(obj.get("id")),
+            "topics": _normalize_topics(
+                _require_string_array(
+                    obj.get("topics"), "topics", limits.max_topics, limits.max_topic_length
+                ),
+                limits,
+            ),
+        }
+        if "correlation_ids" in obj:
+            out["correlation_ids"] = _normalize_ids(
+                _require_string_array(
+                    obj.get("correlation_ids"),
+                    "correlation_ids",
+                    limits.max_array_length,
+                    _ID_MAX,
+                )
+            )
+        if "ttl_seconds" in obj:
+            out["ttl_seconds"] = _require_positive_number(
+                obj.get("ttl_seconds"), "ttl_seconds", limits.max_ttl_seconds
+            )
+        return out
+    if frame_type == "unsubscribe":
+        return {"type": frame_type, "id": _require_id(obj.get("id"))}
+    if frame_type in _KNOWN_CONTROL_TYPES or frame_type.startswith("pairing_v2_"):
+        return obj
+    raise WebRTCFrameParseError(f"unsupported frame type: {frame_type}")
+
+
+def _parse_call(obj: dict[str, Any]) -> dict[str, Any]:
+    out = {
+        "type": "call",
+        "id": _require_id(obj.get("id")),
+        "method": _require_string(obj.get("method"), "method", _METHOD_MAX),
+    }
+    if "params" in obj:
+        out["params"] = obj["params"]
+    if "correlation_id" in obj:
+        out["correlation_id"] = _require_id(obj.get("correlation_id"))
+    if "identity" in obj:
+        out["identity"] = obj["identity"]
+    return out
+
+
+def _require_plain_record(value: Any, field: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise WebRTCFrameParseError(f"{field} must be a plain object")
+    return value
+
+
+def _validate_json_tree(value: Any, limits: WebRTCParserLimits, depth: int = 0) -> None:
+    if depth > limits.max_depth:
+        raise WebRTCFrameParseError("frame exceeds maximum nesting depth")
+    if value is None or isinstance(value, bool):
+        return
+    if isinstance(value, int | float):
+        if not math.isfinite(float(value)):
+            raise WebRTCFrameParseError("frame contains non-finite number")
+        return
+    if isinstance(value, str):
+        if len(value) > limits.max_string_length:
+            raise WebRTCFrameParseError("frame contains oversized string")
+        return
+    if isinstance(value, list):
+        if len(value) > limits.max_array_length:
+            raise WebRTCFrameParseError("frame contains oversized array")
+        for item in value:
+            _validate_json_tree(item, limits, depth + 1)
+        return
+    obj = _require_plain_record(value, "frame")
+    if len(obj) > limits.max_object_keys:
+        raise WebRTCFrameParseError("frame contains too many fields")
+    for item in obj.values():
+        _validate_json_tree(item, limits, depth + 1)
+
+
+def _require_string(value: Any, field: str, max_length: int) -> str:
+    if not isinstance(value, str) or not value or len(value) > max_length:
+        raise WebRTCFrameParseError(f"{field} must be a bounded string")
+    return value
+
+
+def _require_id(value: Any) -> str:
+    return _require_string(value, "id", _ID_MAX)
+
+
+def _require_bool(value: Any, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise WebRTCFrameParseError(f"{field} must be boolean")
+    return value
+
+
+def _require_integer(value: Any, field: str, minimum: int, maximum: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum or value > maximum:
+        raise WebRTCFrameParseError(f"{field} must be a bounded integer")
+    return value
+
+
+def _require_positive_number(value: Any, field: str, maximum: int) -> float:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise WebRTCFrameParseError(f"{field} must be a positive finite number")
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0 or parsed > maximum:
+        raise WebRTCFrameParseError(f"{field} must be a positive finite number")
+    return parsed
+
+
+def _require_string_array(value: Any, field: str, max_count: int, max_length: int) -> list[str]:
+    if not isinstance(value, list) or len(value) > max_count:
+        raise WebRTCFrameParseError(f"{field} must be a bounded array")
+    return [_require_string(item, field, max_length) for item in value]
+
+
+def _normalize_ids(values: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        parsed = _require_id(value)
+        if parsed not in seen:
+            seen.add(parsed)
+            out.append(parsed)
+    return out
+
+
+def _normalize_topics(topics: list[str], limits: WebRTCParserLimits) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for topic in topics:
+        parsed = _require_topic(topic, limits)
+        if parsed not in seen:
+            seen.add(parsed)
+            out.append(parsed)
+    if not out:
+        raise WebRTCFrameParseError("topics must be non-empty")
+    return out
+
+
+def _require_topic(value: Any, limits: WebRTCParserLimits) -> str:
+    topic = _require_string(value, "topic", limits.max_topic_length)
+    if not _TOPIC_RE.fullmatch(topic) or "*" in topic or "+" in topic:
+        raise WebRTCFrameParseError("topic must be an exact typed topic")
+    return topic
 
 
 def _json_default(obj: object) -> str:
@@ -177,7 +429,7 @@ class RPCHandler:
         self._provider_readiness_provider = provider_readiness_provider
         # Track active remote calls per module for capacity limiting
         self._active_remote_calls: dict[str, int] = {}
-        self._active_stream_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._active_rpc_tasks: dict[str, asyncio.Task[Any]] = {}
 
     def set_bus(self, bus: MessageBus) -> None:
         """Update the bus used for inbound RPC dispatch.
@@ -263,20 +515,45 @@ class RPCHandler:
         req_id = msg.get("id")
         if not req_id:
             return
-        task = self._active_stream_tasks.get(str(req_id)) or self._active_stream_tasks.get(req_id)
+        task = self._active_rpc_tasks.get(str(req_id))
         if task is not None and not task.done():
             task.cancel()
 
+    def cancel_active_work(self, request_id: str | None = None) -> None:
+        """Cancel retained inbound RPC work, optionally scoped to one request."""
+
+        if request_id is None:
+            tasks = list(self._active_rpc_tasks.values())
+        else:
+            task = self._active_rpc_tasks.get(str(request_id))
+            tasks = [task] if task is not None else []
+        current = asyncio.current_task()
+        for task in tasks:
+            if task is not None and task is not current and not task.done():
+                task.cancel()
+
     async def on_message(self, text: str) -> None:
         try:
-            msg = json.loads(text)
-        except json.JSONDecodeError:
-            log_error("RPCHandler: Received invalid JSON")
+            msg = parse_webrtc_json_frame(text)
+        except WebRTCFrameParseError as exc:
+            log_error(f"RPCHandler: Received invalid WebRTC frame: {exc}")
             return
 
         msg_type = msg.get("type")
         if msg_type == "call":
-            await self._handle_call(msg)
+            req_id = str(msg.get("id") or "")
+            task = asyncio.create_task(self._handle_call(msg))
+            if req_id:
+                self._active_rpc_tasks[req_id] = task
+            try:
+                await task
+            except asyncio.CancelledError:
+                if not task.done():
+                    task.cancel()
+                raise
+            finally:
+                if req_id and self._active_rpc_tasks.get(req_id) is task:
+                    self._active_rpc_tasks.pop(req_id, None)
         elif msg_type == "cancel":
             await self._handle_cancel(msg)
         elif msg_type == "event":
@@ -1098,9 +1375,15 @@ class RPCHandler:
                 except Exception as exc:
                     log_warning(
                         f"RPCHandler: Failed to construct {meta.input_model!r} "
-                        f"for {method_name}: {exc}. Falling back to raw params."
+                        f"for {method_name}: {exc}"
                     )
-                    typed_params = params
+                    self._send_error(
+                        req_id,
+                        400,
+                        "Invalid request payload",
+                        correlation_id=correlation_id,
+                    )
+                    return
             is_streaming_method = topic == OrchestratorMethods.STREAM_INFER_CHAT
             stream_request = getattr(self._bus, "stream_request", None)
             if is_streaming_method and not callable(stream_request):
@@ -1114,9 +1397,6 @@ class RPCHandler:
                 return
 
             if is_streaming_method and callable(stream_request):
-                current_task = asyncio.current_task()
-                if current_task is not None:
-                    self._active_stream_tasks[req_id] = current_task
                 try:
                     async for chunk in stream_request(
                         topic,
@@ -1154,8 +1434,6 @@ class RPCHandler:
                         correlation_id=correlation_id,
                     )
                     return
-                finally:
-                    self._active_stream_tasks.pop(req_id, None)
 
             auth_grant_revision = None
             manifest_revision = None

@@ -60,19 +60,16 @@ async def test_rpc_subscribe_accepts_exact_authorized_topics_and_unsubscribes() 
         json.dumps(
             {
                 "type": "subscribe",
-                "id": "sub-frame-1",
-                "params": {
-                    "subscription_id": "sub-1",
-                    "topics": [TTSMethods.STARTED],
-                    "ttl_seconds": 30,
-                },
+                "id": "sub-1",
+                "topics": [TTSMethods.STARTED],
+                "ttl_seconds": 30,
             }
         )
     )
 
     assert sent[-1] == {
         "type": "subscribed",
-        "id": "sub-frame-1",
+        "id": "sub-1",
         "subscription_id": "sub-1",
         "accepted": True,
         "accepted_topics": [TTSMethods.STARTED],
@@ -89,8 +86,7 @@ async def test_rpc_subscribe_accepts_exact_authorized_topics_and_unsubscribes() 
         json.dumps(
             {
                 "type": "unsubscribe",
-                "id": "unsub-frame-1",
-                "params": {"subscription_id": "sub-1"},
+                "id": "sub-1",
             }
         )
     )
@@ -105,12 +101,12 @@ async def test_rpc_subscribe_accepts_exact_authorized_topics_and_unsubscribes() 
 @pytest.mark.parametrize(
     "message, expected_code",
     [
-        ({"type": "subscribe", "id": "s1", "params": {"topics": ["TTS.*"]}}, None),
-        ({"type": "subscribe", "id": "s1", "params": {"topics": [TTSMethods.STARTED]}}, 426),
+        ({"type": "subscribe", "id": "s1", "topics": ["TTS.*"]}, "parse_rejected"),
+        ({"type": "subscribe", "id": "s1", "topics": [TTSMethods.STARTED]}, 426),
     ],
 )
 async def test_rpc_subscribe_rejects_wildcard_and_unnegotiated_without_mutation(
-    message: dict, expected_code: int | None
+    message: dict, expected_code: int | str | None
 ) -> None:
     sent: list[dict] = []
     registry = MeshEventSubscriptionRegistry()
@@ -131,7 +127,9 @@ async def test_rpc_subscribe_rejects_wildcard_and_unnegotiated_without_mutation(
     await handler.on_message(json.dumps(message))
 
     assert registry.snapshot().subscription_count == 0
-    if expected_code is None:
+    if expected_code == "parse_rejected":
+        assert sent == []
+    elif expected_code is None:
         assert sent[-1] == {
             "type": "subscribe_rejected",
             "id": "s1",
@@ -171,7 +169,7 @@ async def test_rpc_subscribe_rejects_anonymous_without_mutation() -> None:
             {
                 "type": "subscribe",
                 "id": "sub-anon",
-                "params": {"topics": [TTSMethods.STARTED]},
+                "topics": [TTSMethods.STARTED],
             }
         )
     )
@@ -595,11 +593,9 @@ async def test_production_rpc_subscribe_authorizes_targeted_assistant_topics() -
             {
                 "type": "subscribe",
                 "id": "sub-assistant",
-                "params": {
-                    "topics": [OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK],
-                    "correlation_ids": ["corr-a"],
-                    "ttl_seconds": 30,
-                },
+                "topics": [OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK],
+                "correlation_ids": ["corr-a"],
+                "ttl_seconds": 30,
             }
         )
     )
@@ -648,10 +644,8 @@ async def test_production_rpc_subscribe_rejects_unauthorized_or_uncorrelated_tar
             {
                 "type": "subscribe",
                 "id": "sub-assistant",
-                "params": {
-                    "topics": [OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK],
-                    "correlation_ids": correlation_ids,
-                },
+                "topics": [OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK],
+                "correlation_ids": correlation_ids,
             }
         )
     )
