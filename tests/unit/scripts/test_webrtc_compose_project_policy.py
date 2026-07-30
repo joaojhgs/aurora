@@ -123,9 +123,7 @@ def test_desktop_node_harness_sets_same_default_when_run_directly() -> None:
 
 
 def test_android_node_harnesses_set_caller_specific_defaults() -> None:
-    android_webview = read_repo(
-        "apps/aurora-tauri/tests/android/android-python-webrtc.e2e.test.ts"
-    )
+    android_webview = read_repo("apps/aurora-tauri/tests/android/android-python-webrtc.e2e.test.ts")
     android_mobile = read_repo(
         "apps/aurora-tauri/tests/android/android-browser-python-webrtc.e2e.test.ts"
     )
@@ -135,6 +133,5 @@ def test_android_node_harnesses_set_caller_specific_defaults() -> None:
         in android_webview
     )
     assert (
-        "process.env.COMPOSE_PROJECT_NAME ||= 'aurora-android-mobile-webrtc-e2e'"
-        in android_mobile
+        "process.env.COMPOSE_PROJECT_NAME ||= 'aurora-android-mobile-webrtc-e2e'" in android_mobile
     )
