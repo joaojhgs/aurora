@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   MemoryPeerGrantRepository,
@@ -34,6 +34,10 @@ const selection: PeerGrantSelection = {
 }
 
 describe('PeerGrantManager', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('is default-off and never turns an empty selection into a positive grant', async () => {
     const repository = new MemoryPeerGrantRepository()
     const manager = new PeerGrantManager({ repository, now: () => 1000, randomId: () => 'grant-default' })
@@ -164,6 +168,38 @@ describe('PeerGrantManager', () => {
     })
   })
 
+  it('rejects before grant writes when default secure random IDs are unavailable', async () => {
+    vi.stubGlobal('crypto', undefined)
+    const repository = new CountingRepository()
+    const manager = new PeerGrantManager({
+      repository,
+      now: () => 5500
+    })
+
+    await expect(manager.replaceGrant(selector, selection)).rejects.toMatchObject({
+      code: 'secure_random_unavailable',
+      message: 'Sharing cannot start without secure random IDs'
+    })
+    expect(repository.upsertCalls).toBe(0)
+    expect(repository.revokeCalls).toBe(0)
+  })
+
+  it('uses getRandomValues for default grant IDs when randomUUID is unavailable', async () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array): Uint8Array {
+        bytes.fill(0xab)
+        return bytes
+      }
+    })
+    const repository = new MemoryPeerGrantRepository()
+    const manager = new PeerGrantManager({ repository, now: () => 5600 })
+
+    await expect(manager.replaceGrant(selector, { allowedMethodIds: ['Tooling.GetTools'] })).resolves.toMatchObject({
+      grantId: `grant-${'ab'.repeat(16)}`,
+      grantRevision: 1
+    })
+  })
+
   it('fails closed on repository failures without leaking selector token material', async () => {
     const initial = grant({ grantRevision: 1 })
     const repository = new FailingUpsertRepository([initial])
@@ -249,6 +285,28 @@ class FailingUpsertRepository implements PeerGrantRepository {
 
   async revokeGrants(selectorValue: PeerRelationshipSelector, revokedAtMs: number): Promise<readonly LocalPeerGrantV1[]> {
     return await this.delegate.revokeGrants(selectorValue, revokedAtMs)
+  }
+}
+
+class CountingRepository implements PeerGrantRepository {
+  upsertCalls = 0
+  revokeCalls = 0
+
+  async upsertGrant(_grant: LocalPeerGrantV1): Promise<void> {
+    this.upsertCalls += 1
+  }
+
+  async resolveGrant(_request: PeerGrantResolutionRequest): Promise<PeerAuthorityDecision> {
+    return { allowed: false, reasonCode: 'grant_not_found' }
+  }
+
+  async listRecipientGrants(_selectorValue: PeerRelationshipSelector, _nowMs: number): Promise<readonly LocalPeerGrantV1[]> {
+    return []
+  }
+
+  async revokeGrants(_selectorValue: PeerRelationshipSelector, _revokedAtMs: number): Promise<readonly LocalPeerGrantV1[]> {
+    this.revokeCalls += 1
+    return []
   }
 }
 

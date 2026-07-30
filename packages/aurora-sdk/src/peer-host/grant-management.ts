@@ -17,6 +17,7 @@ export type PeerGrantManagementErrorCode =
   | 'invalid_selection'
   | 'invalid_expiry'
   | 'repository_unavailable'
+  | 'secure_random_unavailable'
 
 export interface PeerGrantSelection {
   readonly allowedMethodIds?: readonly string[]
@@ -277,5 +278,11 @@ function compareGrants(left: LocalPeerGrantV1, right: LocalPeerGrantV1): number 
 }
 
 function defaultGrantId(): string {
-  return `grant-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
+  if (typeof globalThis.crypto?.randomUUID === 'function') return `grant-${globalThis.crypto.randomUUID()}`
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16)
+    globalThis.crypto.getRandomValues(bytes)
+    return `grant-${[...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`
+  }
+  throw new PeerGrantManagementError('secure_random_unavailable', 'Sharing cannot start without secure random IDs')
 }
