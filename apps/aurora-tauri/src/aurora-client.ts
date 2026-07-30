@@ -56,6 +56,11 @@ import {
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
 import { createTauriNativePeerConnection } from "./native-webrtc";
+import {
+  createTauriMeshNodeServices,
+  type TauriMeshNodeServices,
+  type TauriMeshNodeServicesOptions,
+} from "./tauri-mesh-node-services";
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
@@ -64,11 +69,13 @@ export interface AuroraTauriRuntime {
   mode: "desktop-local" | "desktop-thin" | "mobile-native" | "mock";
   thinConnectionMode: AuroraThinConnectionMode;
   thinPeer?: BrowserWebThinRuntime["peer"] | undefined;
+  thinFeatures?: BrowserWebThinRuntime["features"] | undefined;
   thinDiagnostics: () => string[];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   runtimeProfile?: AuroraRuntimeProfileV2 | undefined;
   nodeMode?: AuroraNodeMode | undefined;
   runtimeTier?: AuroraRuntimeTier | undefined;
+  localNodeProviderStatus?: AuroraLocalNodeProviderStatus | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -115,6 +122,15 @@ export interface AuroraTauriRuntime {
   shutdown: () => Promise<void>;
 }
 
+export interface AuroraLocalNodeProviderStatus {
+  readonly available: boolean;
+  readonly reasonCode: string | null;
+  readonly registeredToolIds: readonly string[];
+}
+
+export type TauriMeshNodeServicesFactory = (
+  options: TauriMeshNodeServicesOptions,
+) => Promise<TauriMeshNodeServices>;
 
 export interface AndroidForegroundRuntimeStatus {
   platform: "android";
@@ -262,6 +278,7 @@ export const ANDROID_LIFECYCLE_EVENT = "aurora://android-lifecycle";
 export async function bootstrapAuroraTauriRuntime(
   profileStore?: AuroraRuntimeProfileStore | AuroraThinProfileStore,
   packageCapabilities = resolveTauriPackageCapabilities(),
+  meshNodeServicesFactory: TauriMeshNodeServicesFactory = createTauriMeshNodeServices,
 ): Promise<AuroraTauriRuntime> {
   if (!requiresAsyncAuroraTauriBootstrap()) return createAuroraTauriRuntime();
   const thinInviteText = consumeFragmentInviteFromRuntime();
@@ -279,10 +296,16 @@ export async function bootstrapAuroraTauriRuntime(
   const runtimeStore = isRuntimeProfileStore(store)
     ? store
     : runtimeStoreFromThinStore(store);
+  const configuredRuntimeProfile = activeRuntimeProfile(document);
+  const meshNodeServices = await composeTauriMeshNodeServices(
+    configuredRuntimeProfile,
+    meshNodeServicesFactory,
+  );
   return createAuroraTauriRuntime({
     runtimeProfileStore: runtimeStore,
     runtimeProfileDocument: document,
     packageCapabilities,
+    meshNodeServices,
     thinInviteText,
     consumeThinInvite: false,
   });
@@ -305,6 +328,7 @@ export function createAuroraTauriRuntime({
   runtimeProfileStore,
   runtimeProfileDocument,
   packageCapabilities = resolveTauriPackageCapabilities(),
+  meshNodeServices,
   thinInviteText: explicitThinInviteText,
   consumeThinInvite = true,
 }: {
@@ -313,6 +337,7 @@ export function createAuroraTauriRuntime({
   runtimeProfileStore?: AuroraRuntimeProfileStore;
   runtimeProfileDocument?: AuroraRuntimeProfileDocument;
   packageCapabilities?: AuroraTauriPackageCapabilities;
+  meshNodeServices?: TauriMeshNodeServices | null | undefined;
   thinInviteText?: string | null;
   consumeThinInvite?: boolean;
 } = {}): AuroraTauriRuntime {
@@ -365,15 +390,22 @@ export function createAuroraTauriRuntime({
             configuredProfile?.nodeName ||
             `Aurora ${mobilePlatform} thin WebView`,
           localStablePeerId: configuredProfile?.localStablePeerId,
+          meshNodeServices,
         });
         const releaseMobileLifecycle = isAndroidTauriRuntime()
           ? installAndroidLifecyclePolicy(thinRuntime)
           : async () => undefined;
+        const closeRuntime = closeOnce(async () => {
+          await releaseMobileLifecycle();
+          await thinRuntime.close();
+          await meshNodeServices?.close();
+        });
         return {
           client: thinRuntime.client,
           mode: "mobile-native",
           thinConnectionMode,
           thinPeer: thinRuntime.peer,
+          thinFeatures: thinRuntime.features,
           thinDiagnostics: () =>
             explainTauriThinRuntime(
               thinConnectionMode,
@@ -387,6 +419,7 @@ export function createAuroraTauriRuntime({
           runtimeProfile: configuredRuntimeProfile,
           nodeMode: runtimeNodeMode,
           runtimeTier,
+          localNodeProviderStatus: localNodeProviderStatus(meshNodeServices),
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -414,15 +447,9 @@ export function createAuroraTauriRuntime({
           androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
           androidForegroundStatus: () => androidForegroundStatus(),
           androidMediaPolicyStatus: () => androidMediaPolicyStatus(),
-          dispose: async () => {
-            await releaseMobileLifecycle();
-            await thinRuntime.close();
-          },
+          dispose: closeRuntime,
           ...noopOverlayControls(`${mobilePlatform}-thin-runtime`),
-          shutdown: async () => {
-            await releaseMobileLifecycle();
-            await thinRuntime.close();
-          },
+          shutdown: closeRuntime,
         };
       }
 
@@ -494,12 +521,18 @@ export function createAuroraTauriRuntime({
           configuredProfile?.nodeName ||
           "Aurora Tauri desktop thin shell",
         localStablePeerId: configuredProfile?.localStablePeerId,
+        meshNodeServices,
+      });
+      const closeRuntime = closeOnce(async () => {
+        await thinRuntime.close();
+        await meshNodeServices?.close();
       });
       return {
         client: thinRuntime.client,
         mode: "desktop-thin",
         thinConnectionMode,
         thinPeer: thinRuntime.peer,
+        thinFeatures: thinRuntime.features,
         thinDiagnostics: () =>
           explainTauriThinRuntime(
             thinConnectionMode,
@@ -511,6 +544,7 @@ export function createAuroraTauriRuntime({
         runtimeProfile: configuredRuntimeProfile,
         nodeMode: runtimeNodeMode,
         runtimeTier,
+        localNodeProviderStatus: localNodeProviderStatus(meshNodeServices),
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -538,10 +572,10 @@ export function createAuroraTauriRuntime({
         androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
         androidForegroundStatus: async () => null,
         androidMediaPolicyStatus: async () => null,
-        dispose: () => thinRuntime.close(),
+        dispose: closeRuntime,
         ...tauriOverlayControls(),
         shutdown: async () => {
-          await thinRuntime.close();
+          await closeRuntime();
           await invoke<void>("aurora_shutdown");
         },
       };
@@ -787,6 +821,45 @@ async function persistTauriRoomSecret(
   }
 }
 
+async function composeTauriMeshNodeServices(
+  profile: AuroraRuntimeProfileV2 | undefined,
+  factory: TauriMeshNodeServicesFactory,
+): Promise<TauriMeshNodeServices | null> {
+  try {
+    return await factory({
+      profile,
+      rolloutFlags: tauriWebRtcRolloutFlags(),
+      nativeTransport: new TauriLocalTransport({ invoke, listen }),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function localNodeProviderStatus(
+  services: TauriMeshNodeServices | null | undefined,
+): AuroraLocalNodeProviderStatus | undefined {
+  if (services === undefined) return undefined;
+  return Object.freeze({
+    available: services?.enabled === true,
+    reasonCode:
+      services === null
+        ? "composition_unavailable"
+        : services.enabled
+          ? null
+          : services.reason,
+    registeredToolIds: Object.freeze([...(services?.registeredToolIds ?? [])]),
+  });
+}
+
+function closeOnce(operation: () => Promise<void>): () => Promise<void> {
+  let pending: Promise<void> | null = null;
+  return () => {
+    pending ??= operation();
+    return pending;
+  };
+}
+
 function createTauriWebThinRuntime({
   mode,
   gatewayUrl,
@@ -796,6 +869,7 @@ function createTauriWebThinRuntime({
   runtimeMode,
   nodeName,
   localStablePeerId,
+  meshNodeServices,
 }: {
   mode: AuroraThinConnectionMode;
   gatewayUrl?: string | undefined;
@@ -805,6 +879,7 @@ function createTauriWebThinRuntime({
   runtimeMode: string;
   nodeName: string;
   localStablePeerId?: string | undefined;
+  meshNodeServices?: TauriMeshNodeServices | null | undefined;
 }): BrowserWebThinRuntime {
   let runtime: BrowserWebThinRuntime;
   const usesNativePeerConnection =
@@ -812,6 +887,7 @@ function createTauriWebThinRuntime({
     typeof globalThis.RTCPeerConnection !== "function";
   runtime = createBrowserWebThinRuntime({
     mode,
+    nodeRole: meshNodeServices?.enabled ? "mesh-node" : "remote-console",
     gatewayUrl,
     bearerToken: () => runtime.client.auth.bearerToken(),
     signalingUrl,
@@ -828,6 +904,13 @@ function createTauriWebThinRuntime({
     nativePlatform: tauriNativePlatform(),
     nodeName,
     localStablePeerId,
+    ...(meshNodeServices?.enabled
+      ? {
+          peerHost: meshNodeServices.peerHost,
+          peerAuthorityResolver: meshNodeServices.authorityResolver,
+          peerPairingIssuer: meshNodeServices.pairingIssuer,
+        }
+      : {}),
     ...(usesNativePeerConnection
       ? { peerConnectionFactory: createTauriNativePeerConnection }
       : {}),

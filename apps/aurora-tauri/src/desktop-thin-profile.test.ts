@@ -43,11 +43,13 @@ import {
   serializeThinProfileDocument,
   TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS,
   type AuroraTauriRuntime,
+  type TauriMeshNodeServicesFactory,
   type AuroraRuntimeProfileDocument,
   type AuroraRuntimeProfileStore,
   type AuroraThinConnectionProfile,
   type AuroraThinProfileDocument,
 } from './aurora-client'
+import type { TauriMeshNodeServices } from './tauri-mesh-node-services'
 import { rebuildAuroraThinRuntime } from './tauri-app'
 
 const profile: AuroraThinConnectionProfile = {
@@ -177,6 +179,19 @@ function fakeAndroidThinRuntime(mode: 'http-only' | 'webrtc-only' | 'webrtc-pref
   }
 }
 
+function fakeEnabledMeshNodeServices() {
+  const close = vi.fn(async () => undefined)
+  const services = {
+    enabled: true,
+    peerHost: {},
+    authorityResolver: {},
+    pairingIssuer: {},
+    registeredToolIds: ['native.get_device_status'],
+    close,
+  } as unknown as TauriMeshNodeServices
+  return { services, close }
+}
+
 function webRtcProfile(room: string): WebRtcPeerConnectionProfile {
   return {
     mode: 'webrtc-only',
@@ -233,6 +248,56 @@ describe('desktop-thin live connection profiles', () => {
     await runtime.dispose()
   })
 
+  it('awaits durable mesh-node services before advertising the desktop client as a mesh node', async () => {
+    vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    const store: AuroraRuntimeProfileStore = {
+      kind: 'runtime-profile',
+      evidence: 'test runtime profile store',
+      load: vi.fn(async () => runtimeDocument),
+      save: vi.fn(async () => undefined),
+    }
+    const { services, close } = fakeEnabledMeshNodeServices()
+    let release!: (value: TauriMeshNodeServices) => void
+    const factory = vi.fn<TauriMeshNodeServicesFactory>(
+      () =>
+        new Promise<TauriMeshNodeServices>((resolve) => {
+          release = resolve
+        }),
+    )
+
+    const pending = bootstrapAuroraTauriRuntime(
+      store,
+      { pythonFullRuntime: false },
+      factory,
+    )
+    await vi.waitFor(() => expect(factory).toHaveBeenCalledOnce())
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(factory.mock.calls[0]?.[0].profile).toEqual(runtimeDocument.profiles[0])
+
+    release(services)
+    const runtime = await pending
+
+    expect(runtime.thinFeatures).toMatchObject({
+      activeNodeRole: 'mesh-node',
+      meshNodeRuntimeEnabled: true,
+      localToolProviderEnabled: true,
+    })
+    expect(runtime.localNodeProviderStatus).toEqual({
+      available: true,
+      reasonCode: null,
+      registeredToolIds: ['native.get_device_status'],
+    })
+    await runtime.dispose()
+    await runtime.dispose()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
   it('composes desktop thin runtime from an actual v2 runtime profile document', async () => {
     vi.stubEnv('VITE_AURORA_RUNTIME_MODE', 'desktop-thin')
     Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
@@ -254,6 +319,12 @@ describe('desktop-thin live connection profiles', () => {
       localStablePeerId: 'desktop-peer-01',
     })
     expect(runtime.thinProfileConfigured).toBe(true)
+    expect(runtime.thinFeatures).toMatchObject({
+      activeNodeRole: 'remote-console',
+      meshNodeRuntimeEnabled: false,
+      localToolProviderEnabled: false,
+    })
+    expect(runtime.localNodeProviderStatus).toBeUndefined()
     await runtime.dispose()
   })
 
