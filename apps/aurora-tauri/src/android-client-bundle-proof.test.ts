@@ -248,14 +248,43 @@ describeIfNode('Android client bundle artifact proof', () => {
   it('builds Android client bundles through a temp config and records reusable provenance', () => {
     const context = createAndroidClientProofContext()
     const stubDir = mkdtempSync(join(tmpdir(), 'aurora-android-thin-build-pnpm-'))
+    const jdkHome = join(stubDir, 'jdk', 'temurin-17.0.20+8')
+    const jdkBin = join(jdkHome, 'bin')
     const callsPath = join(stubDir, 'calls.jsonl')
     const pnpmStub = join(stubDir, 'pnpm')
+    const javaStub = join(stubDir, 'java')
+    const asdfStub = join(stubDir, 'asdf')
+    mkdirSync(jdkBin, { recursive: true })
+    writeFileSync(join(jdkBin, 'java'), '#!/usr/bin/env sh\nexit 0\n')
+    chmodSync(join(jdkBin, 'java'), 0o755)
+    writeFileSync(javaStub, '#!/usr/bin/env sh\necho "No version is set for command java" >&2\nexit 126\n')
+    chmodSync(javaStub, 0o755)
+    writeFileSync(asdfStub, `#!/usr/bin/env node
+const command = process.argv[2]
+const plugin = process.argv[3]
+const version = process.argv[4]
+if (command === 'list' && plugin === 'java') {
+  process.stdout.write('  temurin-17.0.20+8\\n')
+  process.exit(0)
+}
+if (command === 'where' && plugin === 'java' && version === 'temurin-17.0.20+8') {
+  process.stdout.write(${JSON.stringify(jdkHome)} + '\\n')
+  process.exit(0)
+}
+process.exit(1)
+`)
+    chmodSync(asdfStub, 0o755)
     writeFileSync(pnpmStub, `#!/usr/bin/env node
 const fs = require('node:fs')
 const path = require('node:path')
 const callsPath = ${JSON.stringify(callsPath)}
 const argv = process.argv.slice(2)
-fs.appendFileSync(callsPath, JSON.stringify({ argv }) + '\\n')
+fs.appendFileSync(callsPath, JSON.stringify({
+  argv,
+  javaHome: process.env.JAVA_HOME,
+  asdfJavaVersion: process.env.ASDF_JAVA_VERSION,
+  pathHead: (process.env.PATH || '').split(${JSON.stringify(delimiter)}).slice(0, 2),
+}) + '\\n')
 if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
   const configPath = argv[argv.indexOf('--config') + 1]
   if (!configPath || !fs.existsSync(configPath)) {
@@ -277,6 +306,8 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
       encoding: 'utf8',
       env: androidClientEnv(context, 'aab', {
         PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+        ASDF_JAVA_VERSION: undefined,
+        JAVA_HOME: undefined,
         AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: 'https://gateway.example.invalid wss://signaling.example.invalid',
       }),
     })
@@ -288,6 +319,11 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
       'tauri android build --debug --aab --config ' + calls[1].argv.at(-1),
     ])
     expect(calls[1].argv.at(-1)).not.toContain('src-tauri/tauri.android-client.conf.json')
+    expect(calls[1]).toMatchObject({
+      javaHome: jdkHome,
+      asdfJavaVersion: 'temurin-17.0.20+8',
+    })
+    expect(calls[1].pathHead).toEqual([jdkBin, stubDir])
     expect(existsSync(calls[1].argv.at(-1))).toBe(false)
     expect(existsSync(context.configPath)).toBe(false)
     const provenance = JSON.parse(readFileSync(context.aabProvenancePath, 'utf8'))

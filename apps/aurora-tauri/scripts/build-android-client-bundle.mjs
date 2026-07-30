@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
@@ -62,7 +62,7 @@ try {
   if (target) buildArgs.push('--target', target)
   buildArgs.push('--config', tempConfigPath)
 
-  run('pnpm', buildArgs)
+  run('pnpm', buildArgs, androidBuildEnv())
 
   mkdirSync(dirname(buildProvenancePath), { recursive: true })
   writeAtomicJson(buildProvenancePath, {
@@ -112,6 +112,75 @@ function run(command, commandArgs, env = process.env) {
   if (result.status !== 0) {
     throw new Error(`${command} ${commandArgs.join(' ')} failed with status ${result.status}`)
   }
+}
+
+function androidBuildEnv(env = process.env) {
+  if (env.JAVA_HOME || javaCommandWorks(env)) return env
+
+  const asdfJava = resolveAsdfJava(env)
+  if (!asdfJava) return env
+
+  return {
+    ...env,
+    ASDF_JAVA_VERSION: asdfJava.version,
+    JAVA_HOME: asdfJava.home,
+    PATH: `${join(asdfJava.home, 'bin')}${delimiter}${env.PATH ?? ''}`,
+  }
+}
+
+function javaCommandWorks(env) {
+  const result = spawnSync('java', ['-version'], {
+    cwd: packageRoot,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  return result.status === 0
+}
+
+function resolveAsdfJava(env) {
+  const versions = asdfJavaVersions(env)
+  for (const version of versions) {
+    const home = asdfJavaHome(version, env)
+    if (!home || !existsSync(join(home, 'bin', process.platform === 'win32' ? 'java.exe' : 'java'))) {
+      continue
+    }
+    return { version, home }
+  }
+  return null
+}
+
+function asdfJavaVersions(env) {
+  const result = spawnSync('asdf', ['list', 'java'], {
+    cwd: packageRoot,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  if (result.status !== 0) return []
+  return result.stdout
+    .split('\n')
+    .map((line) => line.trim().replace(/^\*\s*/, ''))
+    .filter(Boolean)
+    .sort((left, right) => javaVersionRank(right) - javaVersionRank(left))
+}
+
+function asdfJavaHome(version, env) {
+  const result = spawnSync('asdf', ['where', 'java', version], {
+    cwd: packageRoot,
+    env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  if (result.status !== 0) return null
+  return result.stdout.trim()
+}
+
+function javaVersionRank(version) {
+  const match = version.match(/(?:^|[-_])(\d+)(?:[._-]|$)/)
+  if (!match) return 0
+  const major = Number(match[1])
+  return Number.isFinite(major) ? major : 0
 }
 
 function cleanAndroidBuildOutputs() {
