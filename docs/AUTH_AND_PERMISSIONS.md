@@ -56,9 +56,9 @@ HTTP/SSE/WebRTC request
   -> audit/result metadata returned to caller
 ```
 
-## WebRTC thin-client auth evidence
+## WebRTC client auth evidence
 
-WebView thin peers use the same public production Auth/Gateway permission boundary as Python peers. The current Chromium/Firefox/Playwright-WebKit direct, STUN, and forced-TURN reports prove the following with the Python HTTP API disabled and Aurora traffic on the DataChannel:
+WebView client peers use the same public production Auth/Gateway permission boundary as Python peers. The current Chromium/Firefox/Playwright-WebKit direct, STUN, and forced-TURN reports prove the following with the Python HTTP API disabled and Aurora traffic on the DataChannel:
 
 - bilateral SAS pairing is required before authorized service calls;
 - canonical reconnect HMAC proof can re-authorize a returning peer without another SAS prompt;

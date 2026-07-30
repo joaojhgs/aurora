@@ -57,7 +57,7 @@ Assistant generation uses the typed bus first, then the Gateway live-event bridg
 - Gateway event subscriptions for assistant response streams may include both `Orchestrator.Response` and `TTS.AudioChunk` when correlated to an `Orchestrator.use` request.
 - The SDK `assistant.streamMessage()` surface can fall back to the final `Orchestrator.ExternalUserInput` response when a transport cannot provide a live assistant event stream, when process-mode bridging only yields the completed response, or when the correlated event is missed. Fallback updates are a single `kind: "fallback"` item and include `metadata.assistant_stream_contract = "single_response_fallback"`, `metadata.assistant_stream_transport`, and `metadata.assistant_stream_fallback = true`. Clients must not treat fallback updates as token-level streaming evidence.
 
-Desktop daemon/STT-origin voice requests start streamed TTS with server playback enabled. Web, thin, and mobile UI read-aloud paths should consume `TTS.AudioChunk` through the SDK and play client-side unless a platform-specific native bridge explicitly owns playback.
+Desktop daemon/STT-origin voice requests start streamed TTS with server playback enabled. Web, desktop client, and mobile UI read-aloud paths should consume `TTS.AudioChunk` through the SDK and play client-side unless a platform-specific native bridge explicitly owns playback.
 
 ### Assistant inference routing policy
 

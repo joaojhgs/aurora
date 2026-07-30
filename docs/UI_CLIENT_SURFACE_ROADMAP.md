@@ -25,7 +25,7 @@ Shared Aurora React UI
 
 The recommended direct-peer transport keeps Aurora's signaling, cryptography, pairing, reconnect, RPC, and routing implementation in the TypeScript/browser layer. The same implementation runs in a normal browser, a desktop Tauri WebView, and Android/iOS WebViews. Rust, Kotlin, and Swift should normally supply only capabilities that browsers cannot safely or durably own, such as secure credential storage, lifecycle/background services, OS integrations, and platform permission evidence.
 
-A full Rust Aurora WebRTC protocol remains rejected because it would duplicate signaling/auth/mesh behavior and reduce cross-platform reuse. One measured exception now exists: common Linux WebKitGTK packages can omit the `RTCPeerConnection` DOM feature. Desktop thin therefore injects a narrow Rust `webrtc-rs` peer-connection/DataChannel primitive only when that browser API is absent; the TypeScript protocol above it is unchanged.
+A full Rust Aurora WebRTC protocol remains rejected because it would duplicate signaling/auth/mesh behavior and reduce cross-platform reuse. One measured exception now exists: common Linux WebKitGTK packages can omit the `RTCPeerConnection` DOM feature. The desktop client therefore injects a narrow Rust `webrtc-rs` peer-connection/DataChannel primitive only when that browser API is absent; the TypeScript protocol above it is unchanged.
 
 Current runtime-role model separates these axes:
 
@@ -57,21 +57,21 @@ The following are distinct supported deployment profiles, even where they share 
 | ID | Client profile | Runtime and transport | Local/native scope | Target status |
 | --- | --- | --- | --- | --- |
 | `desktop-local` | Desktop Tauri local node | Rust-supervised Python sidecar; SDK reaches its loopback Gateway | Full local service graph where the selected sidecar profile provides it; daemon-owned wakeword/background capture; desktop secure storage and lifecycle | First-class |
-| `desktop-thin-http` | Desktop Tauri remote shell over HTTP | No running Python sidecar; SDK uses HTTPS plus Gateway event streaming | Desktop shell, secure storage, tray/notifications, focused WebView microphone | First-class |
-| `desktop-thin-webrtc` | Desktop Tauri direct peer shell | No Python sidecar and no Aurora HTTP application server; WSS signaling and the shared TypeScript mesh/RPC runtime use WebView WebRTC on macOS/Windows or the narrow native peer primitive on Linux when WebKitGTK omits it | Desktop shell, secure storage, focused WebView microphone; optional native lifecycle aids | First-class |
+| `desktop-client-http` | Desktop Tauri remote shell over HTTP | No running Python sidecar; SDK uses HTTPS plus Gateway event streaming | Desktop shell, secure storage, tray/notifications, focused WebView microphone | First-class |
+| `desktop-client-webrtc` | Desktop Tauri direct peer shell | No Python sidecar and no Aurora HTTP application server; WSS signaling and the shared TypeScript mesh/RPC runtime use WebView WebRTC on macOS/Windows or the narrow native peer primitive on Linux when WebKitGTK omits it | Desktop shell, secure storage, focused WebView microphone; optional native lifecycle aids | First-class |
 | `web-http` | Hosted web shell over HTTP | HTTPS site plus remote Aurora Gateway HTTP/event transport | Browser permissions, focused microphone, browser playback, PWA features where supported | First-class |
 | `web-webrtc` | Hosted web direct peer shell | HTTPS site plus WSS signaling and WebRTC DataChannel to an Aurora peer; no Aurora HTTP application server required | Browser permissions, focused microphone, browser playback | First-class |
-| `android-http` | Android Tauri thin shell over HTTP | HTTPS Gateway transport in Android System WebView | Keystore-backed credentials, QR/deep link, notifications, focused microphone, foreground lifecycle evidence | First-class thin client |
-| `android-webrtc` | Android Tauri foreground direct peer shell | Shared WebView WebRTC transport while the app is foregrounded | Keystore, QR/deep link, microphone permission mediation, connectivity/lifecycle integration | First-class thin client |
+| `android-http` | Android Tauri client shell over HTTP | HTTPS Gateway transport in Android System WebView | Keystore-backed credentials, QR/deep link, notifications, focused microphone, foreground lifecycle evidence | First-class client |
+| `android-webrtc` | Android Tauri foreground direct peer shell | Shared WebView WebRTC transport while the app is foregrounded | Keystore, QR/deep link, microphone permission mediation, connectivity/lifecycle integration | First-class client |
 | `android-native-enhanced` | Android capability-enhanced client | HTTP or WebRTC plus native adapters | Foreground voice service where allowed, Android assistant entry points where qualified, notifications/actions, optional lightweight on-device models | Tiered follow-on |
-| `ios-http` | iOS Tauri thin shell over HTTP | HTTPS Gateway transport in WKWebView | Keychain, universal/deep links, App Intents/Shortcuts/share surfaces, focused microphone | First-class thin client |
-| `ios-webrtc` | iOS Tauri foreground direct peer shell | Shared WebView WebRTC transport while the app is foregrounded | Keychain, invite handoff, microphone permission mediation, connectivity/lifecycle integration | First-class thin client |
+| `ios-http` | iOS Tauri client shell over HTTP | HTTPS Gateway transport in WKWebView | Keychain, universal/deep links, App Intents/Shortcuts/share surfaces, focused microphone | First-class client |
+| `ios-webrtc` | iOS Tauri foreground direct peer shell | Shared WebView WebRTC transport while the app is foregrounded | Keychain, invite handoff, microphone permission mediation, connectivity/lifecycle integration | First-class client |
 | `ios-native-enhanced` | iOS capability-enhanced client | HTTP or WebRTC plus native adapters | App Intents, Shortcuts, share/widget surfaces, notifications, optional lightweight on-device models | Tiered follow-on |
 | `pyqt-fallback` | Legacy PyQt local client | Python UIBridge and local bus | Existing local/reference workflows only | Maintained fallback, not the target for new UI work |
 
 ### What “direct peer” removes—and what it does not
 
-A WebRTC-only thin shell removes the requirement for the client to reach an Aurora FastAPI/HTTP application server. It still requires:
+A WebRTC-only client removes the requirement for the client to reach an Aurora FastAPI/HTTP application server. It still requires:
 
 - an HTTPS origin for a hosted web client and a secure WebView application origin;
 - MQTT over secure WebSocket (`wss:`) or another compatible signaling service;
@@ -85,7 +85,7 @@ Signaling is rendezvous, not the application data path. After negotiation, Auror
 
 Legend: **R** required for the profile; **N** native/platform-enhanced; **—** intentionally not part of the profile; **L** legacy-only. “Required” is a roadmap obligation, not a current-state claim.
 
-| Capability | Desktop local | Desktop thin HTTP | Desktop thin WebRTC | Web HTTP | Web WebRTC | Android HTTP/WebRTC | iOS HTTP/WebRTC | Native-enhanced mobile | PyQt |
+| Capability | Desktop local | Desktop client HTTP | Desktop client WebRTC | Web HTTP | Web WebRTC | Android HTTP/WebRTC | iOS HTTP/WebRTC | Native-enhanced mobile | PyQt |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Shared assistant workspace | R | R | R | R | R | R | R | R | L |
 | Shared operator/admin routes, permission-scoped | R | R | R | R | R | R | R | R | L |
@@ -118,8 +118,8 @@ Legend: **R** required for the profile; **N** native/platform-enhanced; **—** 
 Voice behavior must remain surface-aware and centralized in `packages/aurora-ui/src/platform-surface.ts`.
 
 - **Desktop local:** focused push-to-talk and waveform capture belong to the WebView when available; durable wakeword/background capture remains owned by `STTCoordinator` in the Python node.
-- **Desktop/web thin:** focused WebView capture can provide push-to-talk and an optional focused-page wake experience. It must not claim durable background listening.
-- **Mobile thin:** focused WebView capture is valid. Durable wake/background behavior requires a native adapter and explicit OS/runtime evidence.
+- **Desktop/web client:** focused WebView capture can provide push-to-talk and an optional focused-page wake experience. It must not claim durable background listening.
+- **Mobile client:** focused WebView capture is valid. Durable wake/background behavior requires a native adapter and explicit OS/runtime evidence.
 - **WebRTC v1:** use the existing typed Aurora RPC path for captured audio. Do not introduce WebRTC media tracks until measurements show that data-channel audio requests cannot meet latency, size, and backpressure requirements.
 
 ## Security and privacy invariants
@@ -128,7 +128,7 @@ Every supported client profile must preserve these rules:
 
 1. UI code calls `AuroraClient`; it does not call raw Gateway routes, Tauri commands, MQTT, WebRTC, or Python services directly.
 2. Service calls and events preserve typed method/topic IDs, principal identity, permission metadata, correlation IDs, selector data, and redaction rules.
-3. A thin peer advertises a consumer-only or explicitly minimal manifest and rejects unsolicited inbound service calls by default.
+3. A client peer advertises a consumer-only or explicitly minimal manifest and rejects unsolicited inbound service calls by default.
 4. A peer invite pins the expected stable peer identity. Room membership alone is not trust.
 5. Production signaling uses `wss:`; hosted browser clients use HTTPS. Insecure loopback schemes are development-only.
 6. Long-lived peer secrets are never placed in logs, URLs, query strings, browser `localStorage`, or browser `sessionStorage`.
@@ -148,10 +148,10 @@ Every supported client profile must preserve these rules:
 
 **Exit:** every WebView implementation task can cite a stable wire contract and a current readiness boundary.
 
-### R1 — Production-grade HTTP thin shells
+### R1 — Production-grade HTTP client shells
 
 - Keep Gateway/signaling endpoint configuration runtime-editable and
-  persistent; thin artifacts must never compile an operator endpoint.
+  persistent; client artifacts must never compile an operator endpoint.
 - Keep first-run onboarding ahead of the normal shell until a valid profile is
   saved from a node name plus invite/QR/file/deep link. Keep manual connection
   mode, endpoint, profile-name, and stable-peer controls in post-onboarding
@@ -161,7 +161,7 @@ Every supported client profile must preserve these rules:
   selection while preserving URL validation, secret-query rejection, native
   secure storage, and explicit hosted-browser mixed-content/CORS limits.
 - Add a true no-sidecar Tauri bundle lane; verify the package contains no Python executable or Python runtime assets.
-- Certify desktop thin and hosted web HTTP paths before relying on them as WebRTC fallback.
+- Certify desktop client and hosted web HTTP paths before relying on them as WebRTC fallback.
 
 **Current exit:** runtime profile/onboarding and Python-free desktop/Android
 package proof are implemented. Live operator endpoint, signed release, and
@@ -195,12 +195,12 @@ claims.
 - Ship no-sidecar artifacts distinct from all local Python bundle profiles and verify AppImage/deb contents.
 - Preserve desktop-local selection and wakeword ownership without transport-specific checks scattered through UI screens.
 
-**Current exit:** desktop thin profiles and Python-free AppImage/deb artifact
+**Current exit:** desktop client profiles and Python-free AppImage/deb artifact
 proof pass with endpoint-agnostic HTTP/HTTPS/WS/WSS policy; desktop-local
 remains separate. Live desktop WebView WebRTC smoke is still separate from the
 shared browser-engine harness.
 
-### R5 — Android and iOS foreground thin clients
+### R5 — Android and iOS foreground clients
 
 - Reuse the shared WebView transport and peer-session controller.
 - Keep Android QR/deep-link, Keystore peer credential/proof, explicit WebView microphone permission mediation, lifecycle release policy, and foreground/resume/reconnect behavior evidence-backed.
@@ -214,7 +214,7 @@ shared browser-engine harness.
 - Run physical Android and iOS device tests that pair each mobile client with
   an external Python peer across direct, STUN, and TURN-relayed paths.
 
-**Current exit:** Android client source, native-policy, bundle, and preflight proof exist, and the KVM-backed API 35 CI lane owns both packaged-WebView and no-CDP Android-browser Python-peer WebRTC interop. This workspace cannot complete Android runtime E2E because KVM/device access is unavailable after the attempted x86 KVM, permission-change, and ARM64/software-device recovery paths. iOS client source/permission/Keychain/profile wiring plus a runtime-configurable simulator build/runtime lane exist, and the same macOS job owns MobileSafari and packaged-Tauri-WKWebView external-Python direct interop. Fresh Android KVM/physical-device reports, fresh macOS reports, physical-device, STUN, and TURN proof are still pending.
+**Current exit:** Android client source, native-policy, bundle, and preflight proof exist, and the KVM-backed API 35 CI lane owns both packaged-WebView and no-CDP Android-browser Python-peer WebRTC interop. This workspace cannot complete Android runtime E2E because KVM/device access is unavailable after the attempted x86 KVM, permission-change, and ARM64/software-device recovery paths. iOS client source/permission/Keychain/profile wiring plus a runtime-configurable simulator build/runtime lane exist, and the same macOS job owns MobileSafari and packaged-Tauri-WKWebView external-Python direct interop. Android KVM/physical-device reports, macOS reports, physical-device, STUN, and TURN proof are still pending.
 
 ### R6 — Native-enhanced mobile capabilities
 
@@ -227,7 +227,7 @@ shared browser-engine harness.
 ### R7 — Release certification and parity
 
 - Run cross-surface route, accessibility, auth, redaction, reconnect, NAT/TURN, lifecycle, package-content, upgrade, and rollback suites.
-- Keep the five rollout controls explicit and reversible: the hosted/Tauri thin-client, scoped-subscription, fragmentation/backpressure, and app-layer-E2EE gates plus the Gateway legacy-event compatibility gate. A thin-client kill-switch test must preserve HTTP/desktop-local operation and stored credentials; E2EE-required profiles must never downgrade.
+- Keep the five rollout controls explicit and reversible: the hosted/Tauri legacy client-entry gate, scoped-subscription, fragmentation/backpressure, and app-layer-E2EE gates plus the Gateway legacy-event compatibility gate. A client-entry kill-switch test must preserve HTTP/desktop-local operation and stored credentials; E2EE-required profiles must never downgrade.
 - Publish a release matrix that distinguishes automated harness proof from signed artifact, store, and physical-device proof.
 - Gate public “supported” claims on the evidence in [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md).
 
