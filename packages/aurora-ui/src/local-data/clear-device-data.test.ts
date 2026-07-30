@@ -243,6 +243,43 @@ describe('clearBrowserDeviceData', () => {
     expect(result.ok).toBe(true)
     expect(indexedDB.databases.has(BROWSER_STORAGE_LOCK_DATABASE_NAME)).toBe(false)
   })
+
+  it('reports unavailable backend pointer storage when localStorage access throws', async () => {
+    const indexedDB = new MemoryIndexedDbFactory()
+    const opfs = new FakeOpfsRoot()
+    const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new DOMException('secret-storage-token', 'SecurityError')
+      },
+    })
+    try {
+      const result = await clearBrowserDeviceData({
+        profileId,
+        localNodeId,
+        origin,
+        indexedDB: indexedDB as unknown as IDBFactory,
+        storageManager: opfs.storageManager,
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.failures).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          step: 'backend-pointer',
+          reason: 'backend_pointer_unavailable',
+        }),
+      ]))
+      expect(JSON.stringify(result)).not.toContain('secret-storage-token')
+      expect(JSON.stringify(result)).not.toContain('SecurityError')
+    } finally {
+      if (originalDescriptor === undefined) {
+        Reflect.deleteProperty(globalThis, 'localStorage')
+      } else {
+        Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
+      }
+    }
+  })
 })
 
 async function seedLocalDataDocument(indexedDB: MemoryIndexedDbFactory): Promise<void> {
