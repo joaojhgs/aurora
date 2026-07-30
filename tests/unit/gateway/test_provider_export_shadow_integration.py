@@ -80,6 +80,22 @@ def _authenticated_identity() -> Identity:
     )
 
 
+class _RecordingDataChannel:
+    def __init__(self, sent: list[str]) -> None:
+        self.readyState = "open"
+        self.sent = sent
+
+    def send(self, text: str) -> None:
+        self.sent.append(text)
+
+
+def _install_manifest_sender(client: RTCClient) -> list[str]:
+    sent: list[str] = []
+    client._peer_send_fns["signaling-peer"] = sent.append
+    client._peer_data_channels["signaling-peer"] = _RecordingDataChannel(sent)
+    return sent
+
+
 def _client() -> RTCClient:
     registry = SimpleNamespace(snapshot_registry=_registry_snapshot)
     client = RTCClient(_settings(), MagicMock(), registry, AsyncMock())
@@ -118,15 +134,13 @@ async def test_shadow_success_does_not_change_effective_manifest_wire(
     disabled = _client()
     disabled._peer_registry = MagicMock()
     disabled._peer_bridge = MagicMock()
-    disabled_sent: list[str] = []
-    disabled._peer_send_fns["signaling-peer"] = disabled_sent.append
+    disabled_sent = _install_manifest_sender(disabled)
     monkeypatch.setattr(disabled, "_schedule_provider_export_shadow", lambda *args, **kwargs: None)
 
     enabled = _client()
     enabled._peer_registry = MagicMock()
     enabled._peer_bridge = MagicMock()
-    enabled_sent: list[str] = []
-    enabled._peer_send_fns["signaling-peer"] = enabled_sent.append
+    enabled_sent = _install_manifest_sender(enabled)
     if seed_authority:
         assert enabled.apply_peer_authority_changed(
             MeshPeerAuthorityChangedEvent(
@@ -163,8 +177,7 @@ async def test_shadow_success_does_not_change_effective_manifest_wire(
 @pytest.mark.asyncio
 async def test_unknown_authority_shadow_is_fail_closed_and_uses_stable_peer_id() -> None:
     client = _client()
-    sent: list[str] = []
-    client._peer_send_fns["signaling-peer"] = sent.append
+    _install_manifest_sender(client)
 
     assert await client._send_manifest("recipient-peer") is True
     await _drain_shadow(client)
@@ -181,8 +194,7 @@ async def test_unknown_authority_shadow_is_fail_closed_and_uses_stable_peer_id()
 @pytest.mark.asyncio
 async def test_seeded_authority_populates_peer_isolated_shadow_cache() -> None:
     client = _client()
-    sent: list[str] = []
-    client._peer_send_fns["signaling-peer"] = sent.append
+    _install_manifest_sender(client)
     event = MeshPeerAuthorityChangedEvent(
         peer_id="recipient-peer",
         auth_grant_revision=1,
@@ -287,8 +299,7 @@ def test_authenticated_stable_peer_requires_bidirectional_webrtc_identity() -> N
 @pytest.mark.asyncio
 async def test_shadow_policy_uses_one_atomic_live_snapshot() -> None:
     client = _client()
-    sent: list[str] = []
-    client._peer_send_fns["signaling-peer"] = sent.append
+    _install_manifest_sender(client)
     assert client.apply_peer_authority_changed(
         MeshPeerAuthorityChangedEvent(
             peer_id="recipient-peer",
@@ -436,7 +447,7 @@ def test_live_policy_revision_change_produces_distinct_shadow_entry() -> None:
 @pytest.mark.asyncio
 async def test_policy_invalidation_cannot_be_repopulated_by_captured_task() -> None:
     client = _client()
-    client._peer_send_fns["signaling-peer"] = lambda _: None
+    _install_manifest_sender(client)
     assert client.apply_peer_authority_changed(
         MeshPeerAuthorityChangedEvent(
             peer_id="recipient-peer",
@@ -517,7 +528,7 @@ async def test_disconnect_preserves_authority_for_reconnect() -> None:
             reason="approved",
         )
     )
-    client._peer_send_fns["signaling-peer"] = lambda _: None
+    _install_manifest_sender(client)
     assert await client._send_manifest("recipient-peer") is True
     await _drain_shadow(client)
     assert client._provider_export_cache.peer_entry_count("recipient-peer") == 1
@@ -534,7 +545,7 @@ async def test_disconnect_preserves_authority_for_reconnect() -> None:
 @pytest.mark.asyncio
 async def test_active_signaling_departure_invalidates_entries_without_authority_reset() -> None:
     client = _client()
-    client._peer_send_fns["signaling-peer"] = lambda _: None
+    _install_manifest_sender(client)
     assert client.apply_peer_authority_changed(
         MeshPeerAuthorityChangedEvent(
             peer_id="recipient-peer",
@@ -562,8 +573,7 @@ async def test_active_signaling_departure_invalidates_entries_without_authority_
 @pytest.mark.asyncio
 async def test_permission_refresh_is_pending_until_committed_authority_recovers() -> None:
     client = _client()
-    sent: list[str] = []
-    client._peer_send_fns["signaling-peer"] = sent.append
+    _install_manifest_sender(client)
     client._peer_acl["signaling-peer"] = _authenticated_identity()
     client._peer_acl["recipient-peer"] = client._peer_acl["signaling-peer"]
     client._auth_service.get_principal.return_value = User(
@@ -646,7 +656,7 @@ async def test_permission_refresh_is_pending_until_committed_authority_recovers(
 @pytest.mark.asyncio
 async def test_local_mesh_identity_change_invalidates_shadow_entries() -> None:
     client = _client()
-    client._peer_send_fns["signaling-peer"] = lambda _: None
+    _install_manifest_sender(client)
     assert client.apply_peer_authority_changed(
         MeshPeerAuthorityChangedEvent(
             peer_id="recipient-peer",
@@ -706,8 +716,7 @@ async def test_shadow_evaluator_raise_is_redacted_and_nonblocking(monkeypatch) -
     monkeypatch.setattr(negotiation, "datetime", fixed_clock)
 
     baseline = _client()
-    baseline_sent: list[str] = []
-    baseline._peer_send_fns["signaling-peer"] = baseline_sent.append
+    _install_manifest_sender(baseline)
     monkeypatch.setattr(baseline, "_schedule_provider_export_shadow", lambda *args, **kwargs: None)
     baseline.apply_peer_authority_changed(
         MeshPeerAuthorityChangedEvent(
