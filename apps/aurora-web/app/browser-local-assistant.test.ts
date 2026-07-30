@@ -18,8 +18,8 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
     vi.unstubAllGlobals()
   })
 
-  it('omits the browser assistant when the same-origin provider route is unavailable', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ enabled: false }), { status: 404 })))
+  it('omits the browser assistant when the same-origin provider route is disabled', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ enabled: false })))
 
     await expect(createAuroraBrowserLocalAssistantConfig(fakeRuntime())).resolves.toBeNull()
   })
@@ -170,7 +170,7 @@ function projectionPages(
     const page = {
       ok: true,
       provider_peer_id: 'peer-python',
-      service_instance_id: 'python:Tooling',
+      service_instance_id: 'remote:peer-python:Tooling',
       selected_protocol_tier: 'projection_v1' as const,
       authority_revision: {
         catalog_revision: 1,
@@ -211,7 +211,7 @@ function projectionTool(id: string, executionLocation: 'local' | 'remote'): Tool
   return {
     name: id,
     local_name: id,
-    global_tool_id: id,
+    global_tool_id: `aurora-tool:v1:peer-python:Tooling:${id}`,
     tool_id_scheme: 'aurora-tool',
     tool_id_version: 1,
     tool_contract_id: id,
@@ -220,7 +220,7 @@ function projectionTool(id: string, executionLocation: 'local' | 'remote'): Tool
     legacy_global_tool_ids: [],
     exportable: true,
     provider_peer_id: 'peer-python',
-    provider_service_instance_id: 'python:Tooling',
+    provider_service_instance_id: 'remote:peer-python:Tooling',
     provider_available: true,
     namespace: 'remote',
     display_name: 'Weather',
@@ -247,7 +247,7 @@ function projectionTool(id: string, executionLocation: 'local' | 'remote'): Tool
     provenance: {
       provider_kind: 'mesh_peer',
       provider_peer_id: 'peer-python',
-      provider_service_instance_id: 'python:Tooling',
+      provider_service_instance_id: 'remote:peer-python:Tooling',
       source: 'unknown',
       advertised_name: 'Weather',
     },

@@ -8,7 +8,7 @@ describe('/api/assistant/completion', () => {
     vi.unstubAllGlobals()
   })
 
-  it('fails closed when the server-only provider config is absent', async () => {
+  it('reports disabled without exposing server-only provider config', async () => {
     vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_ENDPOINT', '')
     vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_MODEL', '')
     vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_API_KEY', '')
@@ -16,7 +16,7 @@ describe('/api/assistant/completion', () => {
     const getResponse = GET(configRequest())
     const postResponse = await POST(providerRequest({ messages: [], tools: [] }))
 
-    expect(getResponse.status).toBe(404)
+    expect(getResponse.status).toBe(200)
     expect(getResponse.headers.get('cache-control')).toBe('no-store, max-age=0')
     await expect(getResponse.json()).resolves.toEqual({ enabled: false })
     expect(postResponse.status).toBe(404)

@@ -22,7 +22,7 @@ export function GET(request: NextRequest) {
   if (!sameOriginRequest(request)) return unavailableResponse(404)
   const config = assistantCompletionPublicConfig()
   if (!config.enabled) {
-    return unavailableResponse(404, { enabled: false })
+    return jsonResponse({ enabled: false })
   }
   return jsonResponse(config)
 }
