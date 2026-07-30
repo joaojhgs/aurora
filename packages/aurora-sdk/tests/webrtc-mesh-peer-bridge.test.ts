@@ -27,6 +27,7 @@ import type { AuthenticatedPeerContext } from '../src/peer-host/authority.js'
 class FakeSession {
   sent: unknown[] = []
   sendFailure: Error | null = null
+  sendFrameGate: ((frame: unknown) => Promise<void> | void) | null = null
   frameListeners = new Set<(frame: unknown) => void>()
   snapshotListeners = new Set<(snapshot: PeerSessionSnapshot) => void>()
   snapshot: PeerSessionSnapshot = {
@@ -35,6 +36,7 @@ class FakeSession {
   }
   async sendFrame(frame: unknown): Promise<void> {
     if (this.sendFailure) throw this.sendFailure
+    if (this.sendFrameGate) await this.sendFrameGate(frame)
     this.sent.push(frame)
   }
   subscribeFrames(listener: (frame: unknown) => void): () => void { this.frameListeners.add(listener); return () => this.frameListeners.delete(listener) }
@@ -52,6 +54,16 @@ class FakeSession {
 
 async function flush(): Promise<void> {
   await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+}
+
+async function isSettled(promise: Promise<unknown>): Promise<boolean> {
+  let settled = false
+  promise.then(
+    () => { settled = true },
+    () => { settled = true },
+  )
+  await flush()
+  return settled
 }
 
 function hello(): unknown {
@@ -332,6 +344,39 @@ describe('WebRtcMeshPeerBridge', () => {
     await flush()
     session.emit({ type: 'result', id: 'transport-1', result: { registry: true } })
     await expect(resultPromise).resolves.toMatchObject({ ok: true, data: { registry: true } })
+  })
+
+  it('resolves manifest waiters only after the manifest ACK frame is sent', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
+    const manifestPromise = bridge.getManifest('peer-a')
+    await flush()
+    expect(session.sent.some((frame) => JSON.stringify(frame) === JSON.stringify({ type: 'manifest_request' }))).toBe(true)
+
+    const ackRelease: { current: (() => void) | null } = { current: null }
+    session.sendFrameGate = (frame) => {
+      if ((frame as any).type !== 'manifest_ack') return
+      return new Promise<void>((resolve) => {
+        ackRelease.current = resolve
+      })
+    }
+
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer A',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await flush()
+
+    expect(await isSettled(manifestPromise)).toBe(false)
+    expect(session.sent.some((frame) => (frame as any).type === 'manifest_ack')).toBe(false)
+
+    const releaseAck = ackRelease.current
+    if (!releaseAck) throw new Error('manifest ACK send was not held')
+    releaseAck()
+    await expect(manifestPromise).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer A', authenticated: true })
+    expect(session.sent.some((frame) => (frame as any).type === 'manifest_ack')).toBe(true)
   })
 
   it('preserves consumer-only 405 and dispatches authorized hybrid inbound calls through peer host', async () => {
