@@ -1,5 +1,6 @@
 export * from './browser-envelope-crypto'
 export * from './browser-backend-transfer'
+export * from './clear-device-data'
 export * from './browser-indexeddb'
 export * from './browser-sqlite-opfs'
 export * from './browser-sqlite-worker-client'

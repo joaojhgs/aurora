@@ -26,6 +26,7 @@ export interface BrowserLocalDataBackendPointer {
 export interface BrowserLocalDataBackendPointerStore {
   read(profileId: string, localNodeId: string): Promise<BrowserLocalDataBackendPointer | null>
   write(pointer: BrowserLocalDataBackendPointer): Promise<void>
+  delete?(profileId: string, localNodeId: string): Promise<void>
 }
 
 export interface BrowserBackendTransferOptions {
@@ -46,10 +47,10 @@ export interface BrowserBackendTransferResult {
 }
 
 export class LocalStorageBrowserLocalDataBackendPointerStore implements BrowserLocalDataBackendPointerStore {
-  private readonly storage: Pick<Storage, 'getItem' | 'setItem'> | undefined
+  private readonly storage: Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem'>> | undefined
   private readonly keyPrefix: string
 
-  constructor(options: { readonly storage?: Pick<Storage, 'getItem' | 'setItem'>; readonly keyPrefix?: string } = {}) {
+  constructor(options: { readonly storage?: Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem'>>; readonly keyPrefix?: string } = {}) {
     this.storage = options.storage ?? globalThis.localStorage
     this.keyPrefix = options.keyPrefix ?? 'aurora.localData.backendPointer'
   }
@@ -72,7 +73,15 @@ export class LocalStorageBrowserLocalDataBackendPointerStore implements BrowserL
     storage.setItem(pointerKey(this.keyPrefix, pointer.profileId, pointer.localNodeId), JSON.stringify(parsePointer(pointer, pointer.profileId, pointer.localNodeId)))
   }
 
-  private requireStorage(): Pick<Storage, 'getItem' | 'setItem'> {
+  async delete(profileId: string, localNodeId: string): Promise<void> {
+    const storage = this.requireStorage()
+    if (typeof storage.removeItem !== 'function') {
+      throw new LocalDataError('unsupported_backend', 'Browser local data selection cleanup is unavailable', { reason: 'pointer_store_unavailable' })
+    }
+    storage.removeItem(pointerKey(this.keyPrefix, profileId, localNodeId))
+  }
+
+  private requireStorage(): Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem'>> {
     if (this.storage === undefined) {
       throw new LocalDataError('unsupported_backend', 'Browser local data selection is unavailable', { reason: 'pointer_store_unavailable' })
     }
@@ -235,6 +244,10 @@ function asTransferableBackendKind(kind: LocalDataBackendKind): BrowserTransfera
   throw new LocalDataError('unsupported_backend', 'Local data backend cannot be selected in the browser', { reason: 'unsupported_pointer_backend' })
 }
 
-function pointerKey(prefix: string, profileId: string, localNodeId: string): string {
+export function deriveBrowserLocalDataBackendPointerKey(prefix: string, profileId: string, localNodeId: string): string {
   return `${prefix}:${encodeURIComponent(profileId)}:${encodeURIComponent(localNodeId)}`
+}
+
+function pointerKey(prefix: string, profileId: string, localNodeId: string): string {
+  return deriveBrowserLocalDataBackendPointerKey(prefix, profileId, localNodeId)
 }

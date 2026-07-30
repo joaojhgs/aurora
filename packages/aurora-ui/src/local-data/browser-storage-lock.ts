@@ -1,5 +1,8 @@
 import { LocalDataError } from '@aurora/client/local-data'
 
+export const BROWSER_STORAGE_LOCK_DATABASE_NAME = 'aurora-browser-storage-locks'
+export const BROWSER_STORAGE_LOCK_STORE_NAME = 'leases'
+
 export type BrowserStorageLockMode = 'web-locks' | 'indexeddb-lease'
 export type BrowserStorageLockFailureReason =
   | 'owner_exists'
@@ -123,8 +126,8 @@ export class IndexedDbBrowserStorageLeaseStore implements BrowserStorageLeaseSto
     const indexedDB = options.indexedDB ?? globalThis.indexedDB
     if (!indexedDB) throw new LocalDataError('unsupported_backend', 'Browser local data ownership is unavailable', { reason: 'lease_store_unavailable' })
     this.indexedDB = indexedDB
-    this.databaseName = options.databaseName ?? 'aurora-browser-storage-locks'
-    this.storeName = options.storeName ?? 'leases'
+    this.databaseName = options.databaseName ?? BROWSER_STORAGE_LOCK_DATABASE_NAME
+    this.storeName = options.storeName ?? BROWSER_STORAGE_LOCK_STORE_NAME
   }
 
   async get(lockKey: string): Promise<BrowserStorageLeaseRecord | null> {
@@ -203,6 +206,40 @@ export class IndexedDbBrowserStorageLeaseStore implements BrowserStorageLeaseSto
     })
     return await this.databasePromise
   }
+}
+
+export async function deleteBrowserStorageLeaseRecord(
+  lockKey: string,
+  options: { readonly indexedDB?: IDBFactory; readonly databaseName?: string; readonly storeName?: string } = {},
+): Promise<void> {
+  const indexedDB = options.indexedDB ?? globalThis.indexedDB
+  if (!indexedDB) throw new LocalDataError('unsupported_backend', 'Browser local data ownership is unavailable', { reason: 'lease_store_unavailable' })
+  const databaseName = options.databaseName ?? BROWSER_STORAGE_LOCK_DATABASE_NAME
+  const storeName = options.storeName ?? BROWSER_STORAGE_LOCK_STORE_NAME
+  const database = await openStorageLockDatabase(indexedDB, databaseName, storeName)
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction(storeName, 'readwrite')
+      tx.objectStore(storeName).delete(lockKey)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error ?? new Error('lease cleanup transaction failed'))
+      tx.onabort = () => reject(tx.error ?? new Error('lease cleanup transaction aborted'))
+    })
+  } finally {
+    database.close()
+  }
+}
+
+async function openStorageLockDatabase(indexedDB: IDBFactory, databaseName: string, storeName: string): Promise<IDBDatabase> {
+  return await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1)
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(storeName)) request.result.createObjectStore(storeName)
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('lease cleanup database open failed'))
+    request.onblocked = () => reject(new Error('lease cleanup database open blocked'))
+  })
 }
 
 class WebLocksWriterLock implements BrowserStorageWriterLock {

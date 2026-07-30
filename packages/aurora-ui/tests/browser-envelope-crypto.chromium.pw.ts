@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http'
 import { extname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
+import { build } from 'esbuild'
 
 const repositoryRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..')
 const contentTypes: Record<string, string> = {
@@ -14,10 +15,40 @@ const contentTypes: Record<string, string> = {
 
 let server: Server
 let origin: string
+let browserEnvelopeModule = ''
 
 test.beforeAll(async () => {
+  const bundled = await build({
+    stdin: {
+      contents: `
+        export {
+          BrowserEnvelopeCryptoPort,
+        } from './packages/aurora-ui/dist/local-data/browser-envelope-crypto.js'
+        export {
+          clearBrowserDeviceData,
+        } from './packages/aurora-ui/dist/local-data/clear-device-data.js'
+      `,
+      resolveDir: repositoryRoot,
+      sourcefile: 'browser-envelope-module.js',
+    },
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    write: false,
+    external: ['@aurora/client/local-data', '@aurora/client/webrtc'],
+  })
+  browserEnvelopeModule = bundled.outputFiles[0]?.text ?? ''
+  if (browserEnvelopeModule.length === 0) throw new Error('Browser envelope module bundle was empty')
   server = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
+    if (pathname === '/browser-envelope-module.js') {
+      response.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-store',
+      })
+      response.end(browserEnvelopeModule)
+      return
+    }
     if (pathname === '/') {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       response.end(`<!doctype html>
@@ -25,6 +56,7 @@ test.beforeAll(async () => {
         <script type="importmap">
           {"imports":{
             "@aurora/client/local-data":"/packages/aurora-sdk/dist/local-data/index.js",
+            "@aurora/client/webrtc":"/packages/aurora-sdk/dist/webrtc/index.js",
             "zod/v4":"/packages/aurora-sdk/node_modules/zod/v4/index.js",
             "@noble/hashes/":"/packages/aurora-sdk/node_modules/@noble/hashes/"
           }}
@@ -63,7 +95,7 @@ test('real Chromium IndexedDB persists a non-extractable local-data envelope key
   test.skip(browserName !== 'chromium', 'This smoke is scoped to real Chromium IndexedDB CryptoKey persistence.')
   await page.goto(origin)
   const result = await page.evaluate(async () => {
-    const modulePath = '/packages/aurora-ui/dist/local-data/index.js'
+    const modulePath = '/browser-envelope-module.js'
     const {
       BrowserEnvelopeCryptoPort,
     } = await import(modulePath)
@@ -181,6 +213,132 @@ test('real Chromium IndexedDB persists a non-extractable local-data envelope key
     usages: ['decrypt', 'encrypt'],
     missingKey: 'missing_key',
     ciphertextIncludesPlaintext: false
+  })
+})
+
+test('real Chromium clear-device removes local envelope keys and leaves unrelated databases alone', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'This smoke is scoped to real Chromium IndexedDB cleanup.')
+  await page.goto(origin)
+  const result = await page.evaluate(async () => {
+    const modulePath = '/browser-envelope-module.js'
+    const {
+      BrowserEnvelopeCryptoPort,
+      clearBrowserDeviceData,
+    } = await import(modulePath)
+
+    const profileId = `profile-clear-${Date.now()}`
+    const localNodeId = `node-clear-${Date.now()}`
+    const databaseName = deriveTestBrowserEnvelopeCryptoDatabaseName(location.origin, localNodeId)
+    const unrelatedDatabaseName = `unrelated-clear-${Date.now()}`
+    await deleteDatabase(databaseName)
+    await createUnrelatedDatabase(unrelatedDatabaseName)
+
+    const aad = new TextEncoder().encode('aad')
+    const plaintext = new TextEncoder().encode('clear browser secret')
+    const first = new BrowserEnvelopeCryptoPort({
+      origin: location.origin,
+      profileId,
+      localNodeId,
+    })
+    const envelope = await first.encrypt('local-structured-data', plaintext, aad)
+    await first.close()
+
+    const clearResult = await clearBrowserDeviceData({
+      profileId,
+      localNodeId,
+      origin: location.origin,
+    })
+    const reopened = new BrowserEnvelopeCryptoPort({
+      origin: location.origin,
+      profileId,
+      localNodeId,
+    })
+    const missingKey = await reopened.decrypt(envelope, aad).then(
+      () => null,
+      (error: unknown) => error instanceof Error && 'metadata' in error
+        ? (error as { metadata?: { reason?: string } }).metadata?.reason ?? null
+        : null,
+    )
+    await reopened.close()
+    const unrelatedValue = await readUnrelatedValue(unrelatedDatabaseName)
+    await deleteDatabase(unrelatedDatabaseName)
+
+    return {
+      clearOk: clearResult.ok,
+      failedSteps: clearResult.failures.map((step: { step: string }) => step.step),
+      missingKey,
+      unrelatedValue,
+    }
+
+    async function createUnrelatedDatabase(databaseName: string): Promise<void> {
+      const database = await openDatabase(databaseName, (upgrade) => {
+        if (!upgrade.objectStoreNames.contains('records')) upgrade.createObjectStore('records')
+      })
+      try {
+        await new Promise<void>((resolveWrite, rejectWrite) => {
+          const tx = database.transaction('records', 'readwrite')
+          tx.objectStore('records').put('kept', 'sentinel')
+          tx.oncomplete = () => resolveWrite()
+          tx.onerror = () => rejectWrite(tx.error ?? new Error('Unrelated write failed'))
+          tx.onabort = () => rejectWrite(tx.error ?? new Error('Unrelated write aborted'))
+        })
+      } finally {
+        database.close()
+      }
+    }
+
+    async function readUnrelatedValue(databaseName: string): Promise<unknown> {
+      const database = await openDatabase(databaseName)
+      try {
+        return await new Promise<unknown>((resolveRead, rejectRead) => {
+          const tx = database.transaction('records', 'readonly')
+          const request = tx.objectStore('records').get('sentinel')
+          request.onsuccess = () => resolveRead(request.result)
+          request.onerror = () => rejectRead(request.error ?? new Error('Unrelated read failed'))
+        })
+      } finally {
+        database.close()
+      }
+    }
+
+    async function openDatabase(databaseName: string, upgrade?: (database: IDBDatabase) => void): Promise<IDBDatabase> {
+      return await new Promise<IDBDatabase>((resolveDatabase, rejectDatabase) => {
+        const request = indexedDB.open(databaseName, 1)
+        request.onupgradeneeded = () => upgrade?.(request.result)
+        request.onsuccess = () => resolveDatabase(request.result)
+        request.onerror = () => rejectDatabase(request.error ?? new Error('IndexedDB open failed'))
+      })
+    }
+
+    async function deleteDatabase(databaseName: string): Promise<void> {
+      await new Promise<void>((resolveDelete, rejectDelete) => {
+        const request = indexedDB.deleteDatabase(databaseName)
+        request.onsuccess = () => resolveDelete()
+        request.onerror = () => rejectDelete(request.error ?? new Error('IndexedDB delete failed'))
+        request.onblocked = () => rejectDelete(new Error('IndexedDB delete blocked'))
+      })
+    }
+
+    function deriveTestBrowserEnvelopeCryptoDatabaseName(origin: string, nodeId: string): string {
+      return `aurora-local-data-envelope-${stableHash(`${new URL(origin).origin}\u0000${nodeId}`)}`
+    }
+
+    function stableHash(value: string): string {
+      let hash = 0xcbf29ce484222325n
+      const prime = 0x100000001b3n
+      for (const byte of new TextEncoder().encode(value)) {
+        hash ^= BigInt(byte)
+        hash = BigInt.asUintN(64, hash * prime)
+      }
+      return hash.toString(16).padStart(16, '0')
+    }
+  })
+
+  expect(result).toEqual({
+    clearOk: true,
+    failedSteps: [],
+    missingKey: 'missing_key',
+    unrelatedValue: 'kept',
   })
 })
 

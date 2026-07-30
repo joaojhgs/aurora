@@ -19,20 +19,26 @@ import {
   serializeRuntimeProfileDocument,
   type AuroraRuntimeProfileDocumentV2,
 } from './runtime-profile'
+import {
+  BROWSER_PEER_CREDENTIAL_PREFIX as CREDENTIAL_PREFIX,
+  BROWSER_PEER_INBOUND_VERIFIER_KEY_PREFIX as INBOUND_VERIFIER_KEY_PREFIX,
+  BROWSER_PEER_INBOUND_VERIFIER_PREFIX as INBOUND_VERIFIER_PREFIX,
+  BROWSER_PEER_PROFILE_KEY as PROFILE_KEY,
+  BROWSER_PEER_ROOM_PREFIX as ROOM_PREFIX,
+  BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY as RUNTIME_PROFILE_DOCUMENT_KEY,
+  BROWSER_PEER_STABLE_PEER_KEY as STABLE_PEER_KEY,
+  BROWSER_PEER_THIN_PROFILE_DOCUMENT_KEY as THIN_PROFILE_DOCUMENT_KEY,
+  BROWSER_PEER_VAULT_DATABASE_NAME,
+  BROWSER_PEER_VAULT_KEY_RECORD as KEY_RECORD,
+  BROWSER_PEER_VAULT_OBJECT_STORE_NAME,
+  BROWSER_PEER_VAULT_VERSION as VAULT_VERSION,
+  browserPeerVolatileMetadata as volatileMetadata,
+} from './browser-peer-persistence-keys'
 
-const VAULT_VERSION = 1
-const DEFAULT_DATABASE = 'aurora-web-thin-v1'
-const DEFAULT_OBJECT_STORE = 'vault'
-const KEY_RECORD = 'internal:vault-key'
-const PROFILE_KEY = 'aurora.webThin.profile.v1'
-const THIN_PROFILE_DOCUMENT_KEY = 'aurora.webThin.connectionProfiles.v1'
-const RUNTIME_PROFILE_DOCUMENT_KEY = 'aurora.runtimeProfiles.v2'
-const STABLE_PEER_KEY = 'aurora.webThin.localStablePeerId.v1'
-const CREDENTIAL_PREFIX = 'credential:'
-const ROOM_PREFIX = 'room:'
-const INBOUND_VERIFIER_PREFIX = 'aurora.peer-host.inbound-verifier.v1'
-const INBOUND_VERIFIER_KEY_PREFIX = `${INBOUND_VERIFIER_PREFIX}:`
-const volatileMetadata = new Map<string, string>()
+export {
+  BROWSER_PEER_VAULT_DATABASE_NAME,
+  clearBrowserPeerProfileMetadata,
+} from './browser-peer-persistence-keys'
 
 type PersistedProfile = Omit<WebRtcPeerConnectionProfile, 'signalingBrokers' | 'stunServers' | 'turnServers'> & {
   signalingBrokers: string[]
@@ -612,8 +618,8 @@ export class IndexedDbBrowserVaultStorage implements BrowserVaultStorage {
     const factory = options.indexedDB ?? globalThis.indexedDB
     if (!factory) throw new Error('IndexedDB is unavailable')
     this.factory = factory
-    this.databaseName = options.databaseName ?? DEFAULT_DATABASE
-    this.objectStoreName = options.objectStoreName ?? DEFAULT_OBJECT_STORE
+    this.databaseName = options.databaseName ?? BROWSER_PEER_VAULT_DATABASE_NAME
+    this.objectStoreName = options.objectStoreName ?? BROWSER_PEER_VAULT_OBJECT_STORE_NAME
   }
 
   async get(key: string): Promise<unknown> {

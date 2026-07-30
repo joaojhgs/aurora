@@ -4,6 +4,7 @@ interface MemoryDatabaseState {
 
 export class MemoryIndexedDbFactory {
   readonly databases = new Map<string, MemoryDatabaseState>()
+  readonly failDeleteDatabaseNames = new Map<string, Error>()
 
   open(name: string, _version?: number): IDBOpenDBRequest {
     const request = new MemoryOpenRequest()
@@ -24,6 +25,12 @@ export class MemoryIndexedDbFactory {
   deleteDatabase(name: string): IDBOpenDBRequest {
     const request = new MemoryOpenRequest()
     queueMicrotask(() => {
+      const failure = this.failDeleteDatabaseNames.get(name)
+      if (failure !== undefined) {
+        request.error = new DOMException(failure.message)
+        request.onerror?.(new Event('error'))
+        return
+      }
       this.databases.delete(name)
       request.result = undefined as unknown as IDBDatabase
       request.onsuccess?.(new Event('success'))

@@ -361,7 +361,7 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
-function deriveBrowserEnvelopeCryptoDatabaseName(origin: string | undefined, localNodeId: string): string {
+export function deriveBrowserEnvelopeCryptoDatabaseName(origin: string | undefined, localNodeId: string): string {
   return `${ENVELOPE_KEY_ID_PREFIX}-${stableHash(`${canonicalOrigin(origin)}\u0000${localNodeId}`)}`
 }
 
