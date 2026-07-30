@@ -165,6 +165,13 @@ function fakeAndroidThinRuntime(mode: 'http-only' | 'webrtc-only' | 'webrtc-pref
     peer,
     surface: {} as BrowserWebThinRuntime['surface'],
     mode,
+    features: {
+      requestedNodeRole: 'remote-console',
+      activeNodeRole: 'remote-console',
+      meshNodeRuntimeEnabled: false,
+      localToolProviderEnabled: false,
+      lightweightOrchestratorEnabled: false,
+    },
     close: vi.fn(async () => undefined),
     calls,
   }

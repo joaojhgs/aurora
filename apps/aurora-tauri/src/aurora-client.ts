@@ -1617,6 +1617,15 @@ function tauriWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {
     webrtc_app_layer_e2ee: enabledUnlessExplicitlyFalse(
       import.meta.env.VITE_AURORA_WEBRTC_APP_LAYER_E2EE,
     ),
+    mesh_node_runtime_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_MESH_NODE_RUNTIME_V1,
+    ),
+    local_tool_provider_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_LOCAL_TOOL_PROVIDER_V1,
+    ),
+    lightweight_orchestrator_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_LIGHTWEIGHT_ORCHESTRATOR_V1,
+    ),
   };
 }
 

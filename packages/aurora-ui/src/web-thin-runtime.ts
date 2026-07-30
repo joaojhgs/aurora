@@ -47,6 +47,9 @@ export interface AuroraWebRtcRolloutFlags {
   webrtc_scoped_subscriptions: boolean
   webrtc_fragmentation: boolean
   webrtc_app_layer_e2ee: boolean
+  mesh_node_runtime_v1: boolean
+  local_tool_provider_v1: boolean
+  lightweight_orchestrator_v1: boolean
 }
 
 export const DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS: Readonly<AuroraWebRtcRolloutFlags> = Object.freeze({
@@ -54,6 +57,9 @@ export const DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS: Readonly<AuroraWebRtcRolloutFl
   webrtc_scoped_subscriptions: true,
   webrtc_fragmentation: true,
   webrtc_app_layer_e2ee: true,
+  mesh_node_runtime_v1: true,
+  local_tool_provider_v1: true,
+  lightweight_orchestrator_v1: true,
 })
 
 export interface BrowserThinRuntimeConfig {
@@ -102,7 +108,16 @@ export interface BrowserWebThinRuntime {
   peer: BrowserWebRtcPeerController
   surface: AuroraSurfaceProfile
   mode: AuroraThinConnectionMode
+  features: BrowserRuntimeFeatureState
   close(): Promise<void>
+}
+
+export interface BrowserRuntimeFeatureState {
+  requestedNodeRole: BrowserThinNodeRole
+  activeNodeRole: BrowserThinNodeRole
+  meshNodeRuntimeEnabled: boolean
+  localToolProviderEnabled: boolean
+  lightweightOrchestratorEnabled: boolean
 }
 
 export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
@@ -160,6 +175,19 @@ export function isBrowserWebRtcConnected(
 export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {}): BrowserWebThinRuntime {
   const mode = normalizeConnectionMode(config.mode)
   const rolloutFlags = normalizeAuroraWebRtcRolloutFlags(config.rolloutFlags)
+  const requestedNodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
+  const activeNodeRole = requestedNodeRole === 'mesh-node' && rolloutFlags.mesh_node_runtime_v1
+    ? 'mesh-node'
+    : 'remote-console'
+  const localToolProviderEnabled = activeNodeRole === 'mesh-node' && rolloutFlags.local_tool_provider_v1
+  const features: BrowserRuntimeFeatureState = Object.freeze({
+    requestedNodeRole,
+    activeNodeRole,
+    meshNodeRuntimeEnabled: activeNodeRole === 'mesh-node',
+    localToolProviderEnabled,
+    lightweightOrchestratorEnabled:
+      activeNodeRole === 'mesh-node' && rolloutFlags.lightweight_orchestrator_v1,
+  })
   const http = httpOptionsFromConfig(config)
   const webrtcDisabled = mode !== 'http-only' && !rolloutFlags.webrtc_thin_client
   const rollbackHttp = webrtcDisabled && mode === 'webrtc-preferred' ? http : null
@@ -201,6 +229,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       peer,
       surface,
       mode,
+      features,
       async close() {
         await peer.disconnect('runtime closed')
         await rollbackRuntime?.close()
@@ -219,16 +248,15 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
   const localStablePeerId = config.localStablePeerId ?? credentialStore.getOrCreateLocalStablePeerId?.()
 
   let sdkRuntime: BrowserWebRtcRuntime<AuroraClient>
-  const nodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
   try {
     sdkRuntime = createBrowserWebRtcAuroraRuntime<AuroraClient>({
       mode,
-      nodeRole,
+      nodeRole: activeNodeRole,
       ...(http ? { http } : {}),
       ...(activeProfile ? { profile: activeProfile } : {}),
-      ...(config.peerHost ? { peerHost: config.peerHost } : {}),
-      ...(config.peerAuthorityResolver ? { peerAuthorityResolver: config.peerAuthorityResolver } : {}),
-      ...(config.peerPairingIssuer ? { peerPairingIssuer: config.peerPairingIssuer } : {}),
+      ...(localToolProviderEnabled && config.peerHost ? { peerHost: config.peerHost } : {}),
+      ...(localToolProviderEnabled && config.peerAuthorityResolver ? { peerAuthorityResolver: config.peerAuthorityResolver } : {}),
+      ...(localToolProviderEnabled && config.peerPairingIssuer ? { peerPairingIssuer: config.peerPairingIssuer } : {}),
       credentialStore,
       ...(config.initialCredentials ? { initialCredentials: config.initialCredentials } : {}),
       ...(localStablePeerId ? { localStablePeerId } : {}),
@@ -245,7 +273,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       ...(config.random ? { random: config.random } : {}),
       ...(config.scryptDeriver ? { scryptDeriver: config.scryptDeriver } : {}),
       ...(config.scryptWorkerFactory ? { scryptWorkerFactory: config.scryptWorkerFactory } : {}),
-      localProtocolCapabilities: localProtocolCapabilities(rolloutFlags, nodeRole),
+      localProtocolCapabilities: localProtocolCapabilities(rolloutFlags, activeNodeRole),
       appLayerE2eeAllowed: rolloutFlags.webrtc_app_layer_e2ee,
       ...(config.visibilityDocument ? { visibilityDocument: config.visibilityDocument } : {}),
       ...(config.windowLocation ? { windowLocation: config.windowLocation } : {}),
@@ -260,7 +288,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
         config: securityContext,
         visibilityDocument: config.visibilityDocument,
       })
-      return { client: demoClientFromFactory(config), peer: unavailable, surface, mode, close: () => unavailable.disconnect('runtime closed') }
+      return { client: demoClientFromFactory(config), peer: unavailable, surface, mode, features, close: () => unavailable.disconnect('runtime closed') }
     }
     const unavailable = new BrowserWebRtcPeerController(null, mode, {
       httpFallback: false,
@@ -274,6 +302,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       peer: unavailable,
       surface,
       mode,
+      features,
       async close() {
         await unavailable.disconnect('runtime closed')
         await credentialStore.close()
@@ -288,7 +317,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     visibilityDocument: config.visibilityDocument,
   })
   const localProviderLifecycle = config.peerHost as (WebRtcPeerHost & LocalProviderLifecyclePort) | undefined
-  const lifecycle = nodeRole === 'mesh-node' && localProviderLifecycle
+  const lifecycle = localToolProviderEnabled && localProviderLifecycle
     ? new LocalNodeLifecycleController({
         host: {
           resume: () => localProviderLifecycle.resumeLocalProvider(),
@@ -304,6 +333,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     peer,
     surface,
     mode,
+    features,
     async close() {
       lifecycle?.stop()
       await peer.disconnect('runtime closed')
@@ -337,6 +367,10 @@ export function explainBrowserThinRuntime(config: BrowserThinRuntimeConfig = {})
   if (mode !== 'http-only' && !rolloutFlags.webrtc_scoped_subscriptions) notes.push('scoped WebRTC subscriptions disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_fragmentation) notes.push('WebRTC fragmentation/backpressure disabled by rollout flag')
   if (mode !== 'http-only' && !rolloutFlags.webrtc_app_layer_e2ee) notes.push('application-layer WebRTC E2EE disabled by rollout flag; profiles requiring it fail closed')
+  const requestedNodeRole = config.nodeRole ?? (config.runtimeMode === 'mesh-node' ? 'mesh-node' : 'remote-console')
+  if (requestedNodeRole === 'mesh-node' && !rolloutFlags.mesh_node_runtime_v1) notes.push('mesh-node runtime disabled by rollout flag; remote-console behavior remains active')
+  if (requestedNodeRole === 'mesh-node' && !rolloutFlags.local_tool_provider_v1) notes.push('local tool provider disabled by rollout flag')
+  if (requestedNodeRole === 'mesh-node' && !rolloutFlags.lightweight_orchestrator_v1) notes.push('lightweight orchestrator disabled by rollout flag')
   if (summary) notes.push(`invite room=${summary.room}; brokers=${summary.brokerCount}; secret=${summary.includesPassword ? 'provided' : 'missing'}`)
   if (
     mode !== 'http-only'
@@ -714,6 +748,15 @@ export function normalizeAuroraWebRtcRolloutFlags(
     webrtc_app_layer_e2ee:
       value?.webrtc_app_layer_e2ee
       ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.webrtc_app_layer_e2ee,
+    mesh_node_runtime_v1:
+      value?.mesh_node_runtime_v1
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.mesh_node_runtime_v1,
+    local_tool_provider_v1:
+      value?.local_tool_provider_v1
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.local_tool_provider_v1,
+    lightweight_orchestrator_v1:
+      value?.lightweight_orchestrator_v1
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.lightweight_orchestrator_v1,
   }
 }
 

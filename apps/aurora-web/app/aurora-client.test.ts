@@ -200,6 +200,45 @@ describe('createAuroraBrowserClient', () => {
     })
   })
 
+  it('maps the three lightweight rollout kill switches into a fail-closed runtime', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_MESH_NODE_RUNTIME_V1', '0')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_LOCAL_TOOL_PROVIDER_V1', '0')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_LIGHTWEIGHT_ORCHESTRATOR_V1', '0')
+    installBrowserStorage()
+    await saveAuroraBrowserOnboardingProfile({
+      id: 'mesh-rollout',
+      label: 'Mesh rollout',
+      mode: 'webrtc-only',
+      gatewayUrl: '',
+      signalingUrl: 'wss://signaling.example.invalid',
+      nodeName: 'Hosted browser',
+      localStablePeerId: 'aurora-web-rollout-peer',
+      webrtcProfile: {
+        mode: 'webrtc-only',
+        appId: 'aurora',
+        room: 'mesh-rollout',
+        roomSecretRef: 'ref:browser:mesh-rollout',
+        signalingBrokers: ['wss://signaling.example.invalid'],
+      },
+    }, 'make-this-device-available', {
+      roomSecretRef: 'ref:browser:mesh-rollout',
+      roomSecret: 'mesh-rollout-secret',
+    })
+
+    const runtime = createAuroraBrowserRuntime()
+
+    expect(runtime.features).toEqual({
+      requestedNodeRole: 'mesh-node',
+      activeNodeRole: 'remote-console',
+      meshNodeRuntimeEnabled: false,
+      localToolProviderEnabled: false,
+      lightweightOrchestratorEnabled: false,
+    })
+    expect(runtime.peer.snapshot().protocolCapabilities).not.toContain('hybrid')
+    await runtime.close()
+  })
+
   it('loads and saves v2 runtime profiles as the hosted browser composition source', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT', '0')

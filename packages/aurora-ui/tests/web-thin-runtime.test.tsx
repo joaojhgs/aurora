@@ -317,8 +317,41 @@ describe('browser WebRTC thin-shell runtime', () => {
         nodeRole: 'remote-console',
         windowLocation: { protocol: 'https:', hostname: 'app.example' },
       })
+      const meshRuntimeDisabled = createIsolatedBrowserWebThinRuntime({
+        createClient,
+        createDemoClient,
+        mode: 'webrtc-only',
+        inviteText: inviteText(),
+        nodeRole: 'mesh-node',
+        peerAuthorityResolver,
+        peerPairingIssuer,
+        rolloutFlags: { mesh_node_runtime_v1: false },
+        windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      })
+      const localProviderDisabled = createIsolatedBrowserWebThinRuntime({
+        createClient,
+        createDemoClient,
+        mode: 'webrtc-only',
+        inviteText: inviteText(),
+        nodeRole: 'mesh-node',
+        peerAuthorityResolver,
+        peerPairingIssuer,
+        rolloutFlags: { local_tool_provider_v1: false },
+        windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      })
+      const localOrchestratorDisabled = createIsolatedBrowserWebThinRuntime({
+        createClient,
+        createDemoClient,
+        mode: 'webrtc-only',
+        inviteText: inviteText(),
+        nodeRole: 'mesh-node',
+        peerAuthorityResolver,
+        peerPairingIssuer,
+        rolloutFlags: { lightweight_orchestrator_v1: false },
+        windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      })
 
-      expect(runtimeOptions).toHaveLength(2)
+      expect(runtimeOptions).toHaveLength(5)
       expect(runtimeOptions[0]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[0]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
       expect(runtimeOptions[0]?.peerPairingIssuer).toBe(peerPairingIssuer)
@@ -326,9 +359,44 @@ describe('browser WebRTC thin-shell runtime', () => {
       expect(runtimeOptions[1]).not.toHaveProperty('peerAuthorityResolver')
       expect(runtimeOptions[1]).not.toHaveProperty('peerPairingIssuer')
       expect(runtimeOptions[1]?.localProtocolCapabilities).toContain(CAP_CONSUMER_ONLY_V1)
+      expect(runtimeOptions[2]?.nodeRole).toBe('remote-console')
+      expect(runtimeOptions[2]).not.toHaveProperty('peerAuthorityResolver')
+      expect(runtimeOptions[2]).not.toHaveProperty('peerPairingIssuer')
+      expect(runtimeOptions[2]?.localProtocolCapabilities).toContain(CAP_CONSUMER_ONLY_V1)
+      expect(meshRuntimeDisabled.features).toEqual({
+        requestedNodeRole: 'mesh-node',
+        activeNodeRole: 'remote-console',
+        meshNodeRuntimeEnabled: false,
+        localToolProviderEnabled: false,
+        lightweightOrchestratorEnabled: false,
+      })
+      expect(runtimeOptions[3]?.nodeRole).toBe('mesh-node')
+      expect(runtimeOptions[3]).not.toHaveProperty('peerAuthorityResolver')
+      expect(runtimeOptions[3]).not.toHaveProperty('peerPairingIssuer')
+      expect(runtimeOptions[3]?.localProtocolCapabilities).not.toContain(CAP_CONSUMER_ONLY_V1)
+      expect(localProviderDisabled.features).toEqual({
+        requestedNodeRole: 'mesh-node',
+        activeNodeRole: 'mesh-node',
+        meshNodeRuntimeEnabled: true,
+        localToolProviderEnabled: false,
+        lightweightOrchestratorEnabled: true,
+      })
+      expect(runtimeOptions[4]?.nodeRole).toBe('mesh-node')
+      expect(runtimeOptions[4]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
+      expect(runtimeOptions[4]?.peerPairingIssuer).toBe(peerPairingIssuer)
+      expect(localOrchestratorDisabled.features).toEqual({
+        requestedNodeRole: 'mesh-node',
+        activeNodeRole: 'mesh-node',
+        meshNodeRuntimeEnabled: true,
+        localToolProviderEnabled: true,
+        lightweightOrchestratorEnabled: false,
+      })
 
       await meshNode.close()
       await remoteConsole.close()
+      await meshRuntimeDisabled.close()
+      await localProviderDisabled.close()
+      await localOrchestratorDisabled.close()
     } finally {
       vi.doUnmock('@aurora/client/webrtc')
       vi.resetModules()
@@ -336,6 +404,11 @@ describe('browser WebRTC thin-shell runtime', () => {
   })
 
   it('keeps WebRTC remote-console runtime consumer-only with no local provider capabilities', async () => {
+    expect(normalizeAuroraWebRtcRolloutFlags(undefined)).toMatchObject({
+      mesh_node_runtime_v1: true,
+      local_tool_provider_v1: true,
+      lightweight_orchestrator_v1: true,
+    })
     const capabilities = localProtocolCapabilities(
       normalizeAuroraWebRtcRolloutFlags(undefined),
       'remote-console',

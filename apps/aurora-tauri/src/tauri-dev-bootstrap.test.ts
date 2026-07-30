@@ -30,6 +30,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     const wrapper = repoText('apps/aurora-tauri/scripts/tauri-cli.mjs')
     const hostedPeerRunner = repoText('scripts/hosted_peer_e2e.sh')
     const hostedThinAlias = repoText('scripts/hosted_thin_shell_e2e.sh')
+    const tauriRuntime = repoText('apps/aurora-tauri/src/aurora-client.ts')
 
     expect(rootPackage.scripts.tauri).toBe('pnpm --filter @aurora/tauri-ui tauri')
     expect(rootPackage.scripts['dev:web']).toBe(
@@ -60,6 +61,13 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(hostedThinAlias).toContain(
       'exec "$ROOT/scripts/hosted_peer_e2e.sh" "$@"',
     )
+    for (const rolloutFlag of [
+      'VITE_AURORA_MESH_NODE_RUNTIME_V1',
+      'VITE_AURORA_LOCAL_TOOL_PROVIDER_V1',
+      'VITE_AURORA_LIGHTWEIGHT_ORCHESTRATOR_V1',
+    ]) {
+      expect(tauriRuntime).toContain(rolloutFlag)
+    }
     expect(rootPackage.scripts['dev:python-service']).toContain(
       'AURORA_ARCHITECTURE_MODE=threads',
     )
