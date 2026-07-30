@@ -56,18 +56,18 @@ HTTP/SSE/WebRTC request
   -> audit/result metadata returned to caller
 ```
 
-## WebRTC client auth evidence
+## WebRTC client auth validation
 
-WebView client peers use the same public production Auth/Gateway permission boundary as Python peers. The current Chromium/Firefox/Playwright-WebKit direct, STUN, and forced-TURN reports, hosted Chromium peer flow, hosted mesh-node flow, and packaged Linux desktop live E2E prove the following with the Python HTTP API disabled and Aurora traffic on the DataChannel:
+WebView client peers use the same public production Auth/Gateway permission boundary as Python peers. The maintained Chromium/Firefox/Playwright-WebKit direct, STUN, and forced-TURN reports, hosted Chromium peer flow, hosted mesh-node flow, and packaged Linux desktop live E2E validate the following with the Python HTTP API disabled and Aurora traffic on the DataChannel:
 
 - bilateral SAS pairing is required before authorized service calls;
-- canonical reconnect HMAC proof can re-authorize a returning peer without another SAS prompt;
+- canonical reconnect HMAC validation can re-authorize a returning peer without another SAS prompt;
 - credential revocation fails closed;
 - the uncertain-loss mutation window is at-most-once: `G009Interop.Mutate` starts, `G009Interop.MutationStarted` is observed, disconnect happens before the response settles, and Python records execution count 1;
 - event delivery is subscription/correlation scoped; and
 - lane reports pass redacted secret scans.
 
-Reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,stun,firefox-stun,webkit-stun,turn,firefox-turn,webkit-turn}/report.json`; each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane proof. The current hosted peer, hosted mesh-node, and packaged Linux desktop reports are local verification artifacts under `/tmp/aurora-hosted-peer-final.OEeCaO`, `/tmp/aurora-hosted-mesh-node-final-third.hnTfjI`, and `/tmp/aurora-desktop-live-final-revoke.me2Yrz`. Packaged macOS/Windows WebViews and physical mobile runtime behavior are not claimed by those reports.
+Tracked cross-engine reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,stun,firefox-stun,webkit-stun,turn,firefox-turn,webkit-turn}/report.json`; each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane validation. Hosted Chromium peer/mesh-node, browser persistence, and packaged Linux desktop live behavior are maintained by `pnpm test:hosted-peer:live`, `pnpm test:web-persistence`, and `pnpm test:desktop-client:live`; those commands write per-run diagnostics to local generated locations rather than committed docs. Packaged macOS/Windows WebViews and physical mobile runtime behavior are not claimed by those reports. Android runtime validation needs usable KVM access or an authorized physical device. iOS runtime/build validation needs macOS/Xcode with the required simulator/runtime/toolchain prerequisites.
 
 ## Mesh and peer trust
 
