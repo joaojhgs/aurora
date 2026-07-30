@@ -19,9 +19,10 @@ const contentTypes: Record<string, string> = {
 let server: Server
 let origin: string
 let workerBundle = ''
+let transferModuleBundle = ''
 
 test.beforeAll(async () => {
-  const bundled = await build({
+  const bundledWorker = await build({
     entryPoints: [resolve(repositoryRoot, 'packages/aurora-ui/dist/local-data/browser-sqlite-worker.js')],
     bundle: true,
     format: 'esm',
@@ -29,8 +30,36 @@ test.beforeAll(async () => {
     write: false,
     external: ['*.wasm']
   })
-  workerBundle = bundled.outputFiles[0]?.text ?? ''
+  workerBundle = bundledWorker.outputFiles[0]?.text ?? ''
   if (workerBundle.length === 0) throw new Error('Browser transfer smoke worker bundle was empty')
+  const bundledTransferModule = await build({
+    stdin: {
+      contents: `
+        export {
+          BrowserIndexedDbLocalDataBackend,
+        } from './packages/aurora-ui/dist/local-data/browser-indexeddb.js'
+        export {
+          BrowserSqliteLocalDataBackend,
+        } from './packages/aurora-ui/dist/local-data/browser-sqlite-worker-client.js'
+        export {
+          LocalStorageBrowserLocalDataBackendPointerStore,
+          transferBrowserLocalDataBackend,
+        } from './packages/aurora-ui/dist/local-data/browser-backend-transfer.js'
+        export {
+          createLocalDataBackend,
+        } from './packages/aurora-ui/dist/local-data/create-local-data-backend.js'
+      `,
+      resolveDir: repositoryRoot,
+      sourcefile: 'browser-backend-transfer-module.js'
+    },
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    write: false,
+    external: ['*.wasm', '@aurora/client/local-data', '@sqlite.org/sqlite-wasm']
+  })
+  transferModuleBundle = bundledTransferModule.outputFiles[0]?.text ?? ''
+  if (transferModuleBundle.length === 0) throw new Error('Browser transfer smoke module bundle was empty')
   server = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
     if (pathname === '/browser-backend-transfer-worker-bundle.js') {
@@ -39,6 +68,14 @@ test.beforeAll(async () => {
         'cache-control': 'no-store'
       })
       response.end(workerBundle)
+      return
+    }
+    if (pathname === '/browser-backend-transfer-module.js') {
+      response.writeHead(200, {
+        'content-type': 'text/javascript; charset=utf-8',
+        'cache-control': 'no-store'
+      })
+      response.end(transferModuleBundle)
       return
     }
     if (pathname === '/') {
@@ -87,13 +124,13 @@ test('real Chromium transfers local data between IndexedDB and Worker OPFS SQLit
   test.skip(browserName !== 'chromium', 'This smoke is scoped to real Chromium IndexedDB and OPFS SQLite persistence.')
   await page.goto(origin)
   const result = await page.evaluate(async ({ wasmPath }) => {
-    const modulePath = '/packages/aurora-ui/dist/local-data/index.js'
+    const modulePath = '/browser-backend-transfer-module.js'
     const {
       BrowserIndexedDbLocalDataBackend,
       BrowserSqliteLocalDataBackend,
       LocalStorageBrowserLocalDataBackendPointerStore,
-      createLocalDataBackend,
       transferBrowserLocalDataBackend,
+      createLocalDataBackend,
     } = await import(modulePath)
 
     const profileId = `profile-transfer-${Date.now()}`

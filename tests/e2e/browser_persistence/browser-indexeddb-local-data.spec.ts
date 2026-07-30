@@ -66,7 +66,7 @@ test('real Chromium IndexedDB local data uses Web Locks ownership and persists a
     const {
       BrowserIndexedDbLocalDataBackend,
       deriveBrowserLocalDataDatabaseName,
-    } = await import('/packages/aurora-ui/dist/local-data/index.js')
+    } = await import('/packages/aurora-ui/dist/local-data/browser-indexeddb.js')
     await deleteDatabase(deriveBrowserLocalDataDatabaseName(location.origin, 'node-1'))
     await deleteDatabase(deriveBrowserLocalDataDatabaseName(location.origin, 'node-2'))
     await deleteDatabase('aurora-browser-storage-locks')
@@ -173,8 +173,10 @@ test('production browser selector uses durable IndexedDB when SQLite ownership i
   const result = await page.evaluate(async () => {
     const {
       createLocalDataBackend,
+    } = await import('/packages/aurora-ui/dist/local-data/create-local-data-backend.js')
+    const {
       deriveBrowserLocalDataDatabaseName,
-    } = await import('/packages/aurora-ui/dist/local-data/index.js')
+    } = await import('/packages/aurora-ui/dist/local-data/browser-indexeddb.js')
     const profileId = 'profile-selector'
     const localNodeId = 'node-selector'
     const databaseName = deriveBrowserLocalDataDatabaseName(location.origin, localNodeId)
