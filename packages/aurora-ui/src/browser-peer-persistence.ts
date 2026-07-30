@@ -318,37 +318,37 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.roomSecrets.clear()
     await this.memory.clear()
     await this.pendingWrites
-    let inboundVerifierClearError: unknown
+    let vaultClearError: unknown
     if (this.storage !== null) {
       let keys: string[] = []
       try {
         keys = await this.storage.keys()
       } catch (error) {
         this.fallbackToMemory(error)
-        inboundVerifierClearError = error
+        vaultClearError = error
       }
-      try {
-        await Promise.all(keys
-          .filter((key) => key.startsWith(CREDENTIAL_PREFIX) || key.startsWith(ROOM_PREFIX))
-          .map(async (key) => await this.storage!.delete(key)))
-      } catch (error) {
-        this.fallbackToMemory(error)
+      const deleteErrors: unknown[] = []
+      for (const key of keys) {
+        try {
+          await this.storage.delete(key)
+        } catch (error) {
+          deleteErrors.push(error)
+        }
       }
-      try {
-        await Promise.all(keys
-          .filter((key) => key.startsWith(INBOUND_VERIFIER_KEY_PREFIX))
-          .map(async (key) => await this.storage!.delete(key)))
-      } catch (error) {
+      if (deleteErrors.length > 0) {
+        const error = deleteErrors[0]
         this.fallbackToMemory(error)
-        inboundVerifierClearError = error
+        vaultClearError = error
+      } else if (vaultClearError === undefined) {
+        this.keyPromise = null
       }
     }
     this.removeMetadata(PROFILE_KEY)
     this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(STABLE_PEER_KEY)
-    if (inboundVerifierClearError !== undefined) {
-      throw inboundVerifierClearError
+    if (vaultClearError !== undefined) {
+      throw vaultClearError
     }
   }
 

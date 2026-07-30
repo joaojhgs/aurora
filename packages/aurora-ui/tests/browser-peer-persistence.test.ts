@@ -372,6 +372,50 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     await store.close()
   })
 
+  it('deletes the vault key and rotates to a fresh key before reusing persistent storage', async () => {
+    const storage = new MapVaultStorage()
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+    const staleCredential = {
+      ...credential,
+      tokenId: 'token-row-stale',
+      verifierPeerId: 'stale-host-peer',
+    }
+
+    await store.save('stale-host-peer', staleCredential)
+    await store.save('host-peer', credential)
+    store.setRoomSecret(profile.roomSecretRef, 'room-secret')
+    await store.setOpaqueSecret(verifierSecretKey, verifierSecret)
+    await expect(store.getRoomSecret(profile.roomSecretRef)).resolves.toBeDefined()
+    const firstVaultKey = storage.values.get('internal:vault-key')
+    const staleCiphertext = storage.values.get('credential:stale-host-peer')
+    expect(firstVaultKey).toBeDefined()
+    expect(staleCiphertext).toBeDefined()
+
+    await store.clear()
+
+    expect(await storage.keys()).toEqual([])
+    expect(storage.values.get('internal:vault-key')).toBeUndefined()
+    expect(await store.get('host-peer')).toBeUndefined()
+    expect(await store.get('stale-host-peer')).toBeUndefined()
+    expect(await store.getRoomSecret(profile.roomSecretRef)).toBeNull()
+    await expect(store.getOpaqueSecret(verifierSecretKey)).resolves.toBeUndefined()
+
+    await store.save('host-peer', credential)
+    const secondVaultKey = storage.values.get('internal:vault-key')
+    expect(secondVaultKey).toBeDefined()
+    expect(secondVaultKey).not.toBe(firstVaultKey)
+
+    storage.values.set('credential:stale-host-peer', staleCiphertext)
+    await expect(store.get('stale-host-peer')).resolves.toBeUndefined()
+    expect(await store.prove('stale-host-peer', challenge)).toBeUndefined()
+    await store.close()
+  })
+
   it('clears inbound verifier secrets after an unrelated queued vault downgrade when storage deletes still work', async () => {
     const storage = new MapVaultStorage()
     const store = new BrowserPersistentPeerCredentialStore({
@@ -410,6 +454,51 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     const keys = await storage.keys()
     expect(keys).toContain(verifierSecretKey)
     expect(keys.some((key) => key.startsWith('credential:') || key.startsWith('room:'))).toBe(false)
+    await store.close()
+  })
+
+  it('reports clear failures when the vault key cannot be deleted', async () => {
+    const storage = new MapVaultStorage()
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+
+    await store.save('host-peer', credential)
+    storage.failDeleteKeys.add('internal:vault-key')
+
+    await expect(store.clear()).rejects.toThrow('storage delete denied')
+
+    expect(await storage.keys()).toContain('internal:vault-key')
+    expect(store.persistenceStatus()).toMatchObject({
+      backend: 'memory',
+      secretsPersisted: false,
+    })
+    await store.close()
+  })
+
+  it('reports clear failures when any outbound credential or room secret cannot be deleted', async () => {
+    const storage = new MapVaultStorage()
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://provider.aurora.example.test',
+    })
+
+    await store.save('host-peer', credential)
+    store.setRoomSecret(profile.roomSecretRef, 'room-secret')
+    await expect(store.getRoomSecret(profile.roomSecretRef)).resolves.toBeDefined()
+    storage.failDeleteKeys.add('credential:host-peer')
+
+    await expect(store.clear()).rejects.toThrow('storage delete denied')
+
+    const keys = await storage.keys()
+    expect(keys).toContain('credential:host-peer')
+    expect(keys).not.toContain('room:ref:memory:family-room')
+    expect(keys).not.toContain('internal:vault-key')
     await store.close()
   })
 
