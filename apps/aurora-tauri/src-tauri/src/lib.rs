@@ -2982,8 +2982,8 @@ async fn aurora_local_data_envelope_encrypt(
         );
         let key = load_or_create_local_data_envelope_key(&key_id)?;
         let envelope = encrypt_local_data_envelope(&key_id, &key, &plaintext, &aad)?;
-        Ok(serde_json::to_value(envelope)
-            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?)
+        serde_json::to_value(envelope)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
     }
 }
 
@@ -4826,7 +4826,7 @@ fn validate_canonical_inbound_verifier_secret_value(
     value: &str,
     record: &InboundVerifierSecretRecord,
 ) -> Result<(), AuroraCommandError> {
-    let canonical = canonical_inbound_verifier_secret_value(&record)?;
+    let canonical = canonical_inbound_verifier_secret_value(record)?;
     if canonical != value {
         return Err(AuroraCommandError::SecureStorageKeyInvalid(
             "inbound verifier value must be canonical SDK JSON".to_string(),

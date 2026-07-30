@@ -19,7 +19,7 @@
           "label": "Ask Aurora",
           "backendMethod": "Orchestrator.ExternalUserInput",
           "privacyClass": "personal",
-          "policy": "Foreground or user-invoked action only; route through AuroraClient/backend evidence."
+          "policy": "Foreground or user-invoked action only; route through Aurora before assistant work runs."
         },
         {
           "id": "open-aurora",
@@ -79,7 +79,7 @@
       "id": "simulator-plugin-app-intent",
       "label": "Simulator native plugin and App Intent",
       "status": "pending",
-      "requiredEvidence": "Simulator invocation of native manifest plugin and one App Intent/Shortcut flow"
+      "requiredEvidence": "Simulator invocation of iOS app component and one App Intent/Shortcut flow"
     },
     {
       "id": "share-extension-flow",
@@ -99,13 +99,13 @@
       "id": "ios-simulator-current",
       "target": "iPhone simulator, current stable Xcode runtime",
       "minimumOs": "17.0",
-      "requiredEvidence": "Native plugin, App Intent, and share/deep-link smoke evidence"
+      "requiredEvidence": "Native plugin, App Intent, and share/deep-link smoke result"
     },
     {
       "id": "ios-device-current",
       "target": "Physical iPhone or iPad on a supported iOS release",
       "minimumOs": "17.0",
-      "requiredEvidence": "Signing/provisioning plus TestFlight or App Store Connect dry-run evidence"
+      "requiredEvidence": "Signing/provisioning plus TestFlight or App Store Connect dry-run result"
     }
   ]
 }

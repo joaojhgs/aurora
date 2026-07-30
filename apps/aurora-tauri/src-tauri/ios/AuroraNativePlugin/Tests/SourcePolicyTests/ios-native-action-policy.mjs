@@ -8,6 +8,13 @@ const source = readFileSync(
   resolve(packageRoot, 'Sources', 'AuroraNativePlugin', 'AuroraNativePlugin.swift'),
   'utf8',
 )
+const entrypointPayloadSource = readFileSync(
+  resolve(packageRoot, 'Sources', 'AuroraNativePlugin', 'AuroraEntrypointPayloads.swift'),
+  'utf8',
+)
+const preflight = JSON.parse(
+  readFileSync(resolve(packageRoot, '..', '..', 'ios', 'preflight.json'), 'utf8'),
+)
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -101,5 +108,48 @@ assert(
   'iOS outgoing action source must not expose raw execution surfaces',
 )
 assert(!source.includes('func invoke('), 'iOS plugin source must not expose a generic invoke command')
+
+const forbiddenAppleFacingCopy =
+  /\b(evidence|proof|fixture|assertion|implementation|tested|debug|fallback|provider|consumer|hybrid|runtime tier|sidecar|thin|manifest|contract|protocol|schema|migration|SQLite|IndexedDB|OPFS)\b/i
+const copyOffenders = []
+
+for (const match of source.matchAll(/"(userCopy|label)":\s*"([^"]*)"/g)) {
+  if (forbiddenAppleFacingCopy.test(match[2])) {
+    copyOffenders.push(`AuroraNativePlugin.${match[1]}: ${match[2]}`)
+  }
+}
+for (const match of entrypointPayloadSource.matchAll(/reason:\s*"([^"]*)"/g)) {
+  if (forbiddenAppleFacingCopy.test(match[1])) {
+    copyOffenders.push(`AuroraEntrypointPayloads.reason: ${match[1]}`)
+  }
+}
+
+collectPreflightAppleCopy(preflight)
+
+assert(
+  copyOffenders.length === 0,
+  `Apple-facing copy must avoid implementation/process wording:\n${copyOffenders.join('\n')}`,
+)
+
+function collectPreflightAppleCopy(value, path = []) {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => collectPreflightAppleCopy(entry, [...path, String(index)]))
+    return
+  }
+  if (!value || typeof value !== 'object') return
+  for (const [key, entry] of Object.entries(value)) {
+    const nextPath = [...path, key]
+    if (typeof entry === 'string') {
+      if (
+        ['label', 'policy', 'policyCopy', 'requiredEvidence', 'target'].includes(key) &&
+        forbiddenAppleFacingCopy.test(entry)
+      ) {
+        copyOffenders.push(`preflight.${nextPath.join('.')}: ${entry}`)
+      }
+      continue
+    }
+    collectPreflightAppleCopy(entry, nextPath)
+  }
+}
 
 console.log('iOS native action source policy passed')

@@ -74,7 +74,7 @@ public enum AuroraEntrypointFactory {
         backendRequired: true,
         payloadCommand: "iosEntrypointPayload",
         privacyClass: "personal",
-        reason: "Deep links launch Aurora-owned flows only; backend evidence decides whether intake succeeded."
+        reason: "Deep links launch Aurora-owned flows only; Aurora confirms whether intake succeeded."
       ),
       AuroraEntrypointDescriptor(
         id: "ios_widget",

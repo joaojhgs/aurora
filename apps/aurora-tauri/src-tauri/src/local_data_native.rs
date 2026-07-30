@@ -3294,8 +3294,8 @@ mod tests {
         (dir, path)
     }
 
-    fn db_version_and_ledger_count(path: &PathBuf) -> (u32, i64) {
-        let conn = SqliteConnection::open(path.clone()).unwrap();
+    fn db_version_and_ledger_count(path: &std::path::Path) -> (u32, i64) {
+        let conn = SqliteConnection::open(path.to_path_buf()).unwrap();
         let rows = conn
             .query(
                 "SELECT COUNT(*) AS ledger_count FROM aurora_schema_migrations",

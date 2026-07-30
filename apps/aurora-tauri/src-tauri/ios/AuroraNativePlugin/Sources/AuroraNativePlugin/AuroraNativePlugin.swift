@@ -82,7 +82,7 @@ public final class AuroraNativePlugin: Plugin {
       "requiresConfirmation": false,
       "siriReplacement": false,
       "evidenceSource": "IOS-003 native plugin manifest",
-      "userCopy": "Shortcut invocation hands off to AuroraClient/backend evidence before executing assistant work.",
+      "userCopy": "Shortcut actions open Aurora before assistant work runs.",
       "verifier": "simulator/device Shortcut invocation through the Xcode-managed iOS target"
     ],
     [
@@ -98,7 +98,7 @@ public final class AuroraNativePlugin: Plugin {
       "requiresConfirmation": true,
       "siriReplacement": false,
       "evidenceSource": "IOS-003 native plugin manifest",
-      "userCopy": "Requires explicit user invocation and backend route/privacy evidence before sending shared content.",
+      "userCopy": "Shared content is sent only after you start the action.",
       "verifier": "simulator/device Shortcut or share handoff smoke with backend correlation evidence"
     ],
     [
@@ -160,7 +160,7 @@ public final class AuroraNativePlugin: Plugin {
       "requiresConfirmation": false,
       "siriReplacement": false,
       "evidenceSource": "IOS-004 native plugin manifest",
-      "userCopy": "aurora:// links open app-owned Aurora flows; backend evidence proves any context or session handoff.",
+      "userCopy": "aurora:// links open Aurora flows and keep the session handoff inside the app.",
       "verifier": "tauri ios build plus compiled IOS-004 entrypoint payload smoke"
     ],
     [
@@ -198,7 +198,7 @@ public final class AuroraNativePlugin: Plugin {
     [
       "platform": "ios",
       "id": "iosLocalLightInference",
-      "label": "iOS local-light inference provider",
+      "label": "On-device model features",
       "support": "supported-path",
       "capability": "ios.localLightInference.provider",
       "permission": "aurora.iosLocalLightInference",
@@ -208,7 +208,7 @@ public final class AuroraNativePlugin: Plugin {
       "requiresConfirmation": false,
       "siriReplacement": false,
       "evidenceSource": "ios-native-local-light-adapter",
-      "userCopy": "Native adapter reports iOS Core ML/MLC/ExecuTorch-style local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.",
+      "userCopy": "On-device model features stay unavailable until Aurora confirms the device and model are ready.",
       "verifier": "tauri ios build plus simulator/device nativeCapabilityManifest payload smoke"
     ],
     [
@@ -390,7 +390,7 @@ public final class AuroraNativePlugin: Plugin {
         "backendHandoffRequired": true,
         "privacyLabels": ["personal", "sensitive"],
         "state": "available",
-        "reason": "iOS invocation targets are present; backend evidence still decides whether intake was processed.",
+        "reason": "iOS actions are available; Aurora still confirms whether shared content was processed.",
         "evidenceSource": "IOS-004 native plugin manifest",
         "secretsRedacted": true
       ],
@@ -411,7 +411,7 @@ public final class AuroraNativePlugin: Plugin {
           "id": "foregroundConsentRequired",
           "label": "Foreground consent required",
           "reason": "Always-on background assistant capture is unavailable on iOS without explicit app-owned foreground consent.",
-          "userCopy": "Audio and shared-content actions require app-owned user invocation and backend privacy evidence.",
+          "userCopy": "Audio and shared-content actions start only from an Aurora-owned user action.",
           "evidenceSource": "Apple App Intents, extensions, and privacy review requirements"
         ]
       ],
@@ -446,7 +446,7 @@ public final class AuroraNativePlugin: Plugin {
     let permission = AVAudioSession.sharedInstance().recordPermission
     let reason: Any = permission == .granted
       ? NSNull()
-      : "iOS microphone capture requires foreground AVAudioSession record permission, raw-audio consent, backend audio evidence, and a visible stop/revoke path."
+      : "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
     invoke.resolve([
       "available": permission == .granted,
       "permission": "aurora.iosMicrophoneCapture",
