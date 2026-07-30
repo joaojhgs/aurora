@@ -329,6 +329,73 @@ describe('lightweight orchestrator', () => {
     ] }]), session).runTurn({ text: 'x' })).rejects.toMatchObject({ reasonCode: 'tool_iteration_limit_exceeded' })
   })
 
+  it('rejects tool schemas that exceed the configured serialized byte bound', async () => {
+    const session = await dataSession()
+    let error: unknown
+
+    try {
+      createLightweightOrchestrator({
+        provider: sequenceProvider([]),
+        tools: toolPort(),
+        localData: session,
+        scope,
+        availableTools: [
+          tool('local.echo', 'local', {
+            args_schema: {
+              type: 'object',
+              description: 'x'.repeat(512),
+            },
+          }),
+        ],
+        limits: { maxToolSchemasBytes: 128 },
+      })
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error).toMatchObject({
+      name: 'LightweightOrchestratorError',
+      reasonCode: 'tool_schema_bytes_limit_exceeded',
+    })
+  })
+
+  it('rejects tool results that exceed the configured serialized byte bound', async () => {
+    const session = await dataSession()
+    const orchestrator = orchestratorWithProvider(
+      sequenceProvider([
+        {
+          type: 'tool_calls',
+          toolCalls: [
+            {
+              id: 'large-result',
+              toolName: 'local.echo',
+              arguments: {},
+              route: 'local',
+            },
+          ],
+        },
+      ]),
+      session,
+      { maxResultBytes: 64 },
+      toolPort({
+        execute: async (request) => ({
+          ok: true,
+          data: { value: 'x'.repeat(512) },
+          error: null,
+          error_code: null,
+          status: 'success',
+          correlation_id: request.correlation_id ?? null,
+          provider_peer_id: 'node-1',
+          global_tool_id: request.tool_name,
+        }),
+      }),
+    )
+
+    await expect(orchestrator.runTurn({ text: 'large result' })).rejects.toMatchObject({
+      reasonCode: 'tool_result_too_large',
+    })
+  })
+
   it('fails closed for malformed, duplicate, unknown, unsafe, ambiguous, and Python-only routes', async () => {
     const session = await dataSession()
     await expect(orchestratorWithProvider(sequenceProvider([{ type: 'tool_calls', toolCalls: [
