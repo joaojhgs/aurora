@@ -779,7 +779,7 @@
       "handler": "_on_get_export_catalog",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 5948
+        "line": 6036
       },
       "exposure": "both",
       "method_type": "use",
@@ -800,7 +800,7 @@
       "handler": "_on_get_tools",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 6366
+        "line": 6425
       },
       "exposure": "both",
       "method_type": "use",
@@ -821,7 +821,7 @@
       "handler": "_on_get_tool_catalog",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 6638
+        "line": 6697
       },
       "exposure": "both",
       "method_type": "use",
@@ -842,7 +842,7 @@
       "handler": "_on_get_tool_by_name",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7022
+        "line": 7081
       },
       "exposure": "both",
       "method_type": "use",
@@ -863,7 +863,7 @@
       "handler": "_on_get_stats",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7111
+        "line": 7170
       },
       "exposure": "both",
       "method_type": "use",
@@ -884,7 +884,7 @@
       "handler": "_on_get_sharing_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7143
+        "line": 7202
       },
       "exposure": "both",
       "method_type": "manage",
@@ -905,7 +905,7 @@
       "handler": "_on_set_sharing_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7160
+        "line": 7219
       },
       "exposure": "both",
       "method_type": "manage",
@@ -926,7 +926,7 @@
       "handler": "_on_get_tool_export_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7209
+        "line": 7268
       },
       "exposure": "both",
       "method_type": "use",
@@ -947,7 +947,7 @@
       "handler": "_on_set_tool_export_default",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7289
+        "line": 7348
       },
       "exposure": "both",
       "method_type": "manage",
@@ -968,7 +968,7 @@
       "handler": "_on_upsert_tool_group_export_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7326
+        "line": 7385
       },
       "exposure": "both",
       "method_type": "manage",
@@ -989,7 +989,7 @@
       "handler": "_on_upsert_tool_export_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7381
+        "line": 7440
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1010,7 +1010,7 @@
       "handler": "_on_clear_tool_export_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7432
+        "line": 7491
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1031,7 +1031,7 @@
       "handler": "_on_preview_tool_export_decision",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7471
+        "line": 7530
       },
       "exposure": "both",
       "method_type": "use",
@@ -1052,7 +1052,7 @@
       "handler": "_on_test_sharing_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 7988
+        "line": 8047
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1073,7 +1073,7 @@
       "handler": "_on_prepare_execution",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8009
+        "line": 8068
       },
       "exposure": "both",
       "method_type": "use",
@@ -1094,7 +1094,7 @@
       "handler": "_on_request_approval",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8072
+        "line": 8131
       },
       "exposure": "both",
       "method_type": "use",
@@ -1115,7 +1115,7 @@
       "handler": "_on_confirm_execution",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8158
+        "line": 8217
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1136,7 +1136,7 @@
       "handler": "_on_list_approval_grants",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8353
+        "line": 8412
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1157,7 +1157,7 @@
       "handler": "_on_create_approval_grant",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8391
+        "line": 8450
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1178,7 +1178,7 @@
       "handler": "_on_revoke_approval_grant",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8429
+        "line": 8488
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1199,7 +1199,7 @@
       "handler": "_on_evaluate_approval_grant",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8477
+        "line": 8536
       },
       "exposure": "both",
       "method_type": "use",
@@ -1220,7 +1220,7 @@
       "handler": "_on_get_policy_summary",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8790
+        "line": 8849
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1241,7 +1241,7 @@
       "handler": "_on_list_tool_sources",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8828
+        "line": 8887
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1262,7 +1262,7 @@
       "handler": "_on_list_pending_approvals",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8848
+        "line": 8907
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1283,7 +1283,7 @@
       "handler": "_on_get_tool_source_detail",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8864
+        "line": 8923
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1304,7 +1304,7 @@
       "handler": "_on_accept_remote_tool_schema",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 8965
+        "line": 9024
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1325,7 +1325,7 @@
       "handler": "_on_set_policy_mode",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9031
+        "line": 9090
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1346,7 +1346,7 @@
       "handler": "_on_upsert_source_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9095
+        "line": 9154
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1367,7 +1367,7 @@
       "handler": "_on_clear_source_policy",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9153
+        "line": 9212
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1388,7 +1388,7 @@
       "handler": "_on_upsert_tool_policy_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9191
+        "line": 9250
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1409,7 +1409,7 @@
       "handler": "_on_clear_tool_policy_override",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9251
+        "line": 9310
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1430,7 +1430,7 @@
       "handler": "_on_test_mcp_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9397
+        "line": 9456
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1451,7 +1451,7 @@
       "handler": "_on_test_plugin_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9425
+        "line": 9484
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1472,7 +1472,7 @@
       "handler": "_on_create_mcp_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9453
+        "line": 9512
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1493,7 +1493,7 @@
       "handler": "_on_create_plugin_source",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9477
+        "line": 9536
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1514,7 +1514,7 @@
       "handler": "_on_list_policy_audit_events",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9500
+        "line": 9559
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1535,7 +1535,7 @@
       "handler": "_on_get_onboarding_status",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9574
+        "line": 9633
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1556,7 +1556,7 @@
       "handler": "_on_get_mcp_status",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9696
+        "line": 9755
       },
       "exposure": "both",
       "method_type": "use",
@@ -1577,7 +1577,7 @@
       "handler": "_on_execute_tool",
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 9764
+        "line": 9823
       },
       "exposure": "both",
       "method_type": "use",
@@ -1815,7 +1815,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 313
+        "line": 315
       }
     },
     {
@@ -1830,7 +1830,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 1451
+        "line": 1478
       }
     },
     {
@@ -1848,7 +1848,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 996
+        "line": 1008
       }
     },
     {
@@ -1864,7 +1864,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1052
+        "line": 1064
       }
     },
     {
@@ -1879,7 +1879,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1755
+        "line": 1805
       }
     },
     {
@@ -1943,7 +1943,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1455
+        "line": 1505
       }
     },
     {
@@ -1959,7 +1959,7 @@
       ],
       "source": {
         "file": "app/services/tooling/service.py",
-        "line": 1395
+        "line": 1445
       }
     },
     {
@@ -1991,7 +1991,7 @@
       ],
       "source": {
         "file": "app/shared/contracts/models/tooling.py",
-        "line": 173
+        "line": 175
       }
     },
     {
@@ -2006,7 +2006,7 @@
       ],
       "source": {
         "file": "app/shared/contracts/models/tooling.py",
-        "line": 173
+        "line": 175
       }
     }
   ]
