@@ -51,6 +51,10 @@ const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
 const ASSISTANT_PROVIDER_STORAGE_SERVICE: &str = "dev.aurora.desktop.assistant-provider";
 const ASSISTANT_PROVIDER_CONFIG_KEY: &str = "aurora.assistant.provider.openai-compatible.v1";
 const ASSISTANT_PROVIDER_KIND: &str = "openai-compatible";
+const ASSISTANT_PROVIDER_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const ASSISTANT_PROVIDER_READ_TIMEOUT: Duration = Duration::from_secs(20);
+const ASSISTANT_PROVIDER_OVERALL_TIMEOUT: Duration = Duration::from_secs(30);
+const ASSISTANT_PROVIDER_RESPONSE_MAX_BYTES: usize = 256 * 1024;
 #[cfg(desktop)]
 const INBOUND_VERIFIER_STORAGE_SERVICE: &str = "dev.aurora.desktop.inbound-verifier";
 const INBOUND_VERIFIER_KEY_PREFIX: &str = "aurora.peer-host.inbound-verifier.v1";
@@ -3063,7 +3067,7 @@ async fn aurora_assistant_provider_complete(
     validate_assistant_provider_request(&request)?;
     let aliases = assistant_tool_aliases(&request.tools)?;
     let body = assistant_provider_openai_body(&config, &request, &aliases)?;
-    let response = reqwest::Client::new()
+    let response = assistant_provider_http_client()?
         .post(&config.endpoint)
         .header(CONTENT_TYPE, "application/json")
         .header(AUTHORIZATION, format!("Bearer {}", config.api_key))
@@ -3077,16 +3081,12 @@ async fn aurora_assistant_provider_complete(
             ))
         })?;
     let status = response.status();
-    let text = response
-        .text()
-        .await
-        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
-    validate_assistant_provider_text_bound(&text, 256 * 1024, "assistant provider response")?;
     if !status.is_success() {
         return Err(AuroraCommandError::Gateway(format!(
             "assistant provider returned HTTP {status}"
         )));
     }
+    let text = read_assistant_provider_response_bounded(response).await?;
     let raw: Value =
         serde_json::from_str(&text).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
     parse_assistant_provider_response(&raw, &aliases)
@@ -4602,7 +4602,8 @@ fn assistant_provider_status(
         configured: config.is_some(),
         enabled: config.is_some_and(|item| item.enabled),
         provider: ASSISTANT_PROVIDER_KIND.to_string(),
-        endpoint: config.map(|item| item.endpoint.clone()),
+        endpoint: config
+            .and_then(|item| sanitized_assistant_provider_endpoint(&item.endpoint).ok()),
         model: config.map(|item| item.model.clone()),
         backend: "platform-keychain".to_string(),
         persisted: config.is_some(),
@@ -4671,6 +4672,16 @@ fn validate_assistant_provider_endpoint(endpoint: &str) -> Result<(), AuroraComm
             "assistant provider endpoint must include a host".to_string(),
         ));
     }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider endpoint must not include credentials".to_string(),
+        ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "assistant provider endpoint must not include query or fragment components".to_string(),
+        ));
+    }
     match url.scheme() {
         "https" => Ok(()),
         "http" if is_loopback_host(&url) => Ok(()),
@@ -4678,6 +4689,64 @@ fn validate_assistant_provider_endpoint(endpoint: &str) -> Result<(), AuroraComm
             "assistant provider endpoint must use HTTPS or loopback HTTP".to_string(),
         )),
     }
+}
+
+fn sanitized_assistant_provider_endpoint(endpoint: &str) -> Result<String, AuroraCommandError> {
+    validate_assistant_provider_endpoint(endpoint)?;
+    let mut url = Url::parse(endpoint).map_err(|_| {
+        AuroraCommandError::UnsupportedFeature("assistant provider endpoint is invalid".to_string())
+    })?;
+    let _ = url.set_username("");
+    let _ = url.set_password(None);
+    url.set_query(None);
+    url.set_fragment(None);
+    Ok(url.to_string())
+}
+
+fn assistant_provider_http_client() -> Result<reqwest::Client, AuroraCommandError> {
+    reqwest::Client::builder()
+        .connect_timeout(ASSISTANT_PROVIDER_CONNECT_TIMEOUT)
+        .read_timeout(ASSISTANT_PROVIDER_READ_TIMEOUT)
+        .timeout(ASSISTANT_PROVIDER_OVERALL_TIMEOUT)
+        .build()
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))
+}
+
+async fn read_assistant_provider_response_bounded(
+    mut response: reqwest::Response,
+) -> Result<String, AuroraCommandError> {
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?
+    {
+        append_assistant_provider_response_chunk(
+            &mut bytes,
+            chunk.as_ref(),
+            ASSISTANT_PROVIDER_RESPONSE_MAX_BYTES,
+        )?;
+    }
+    String::from_utf8(bytes).map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+}
+
+fn append_assistant_provider_response_chunk(
+    bytes: &mut Vec<u8>,
+    chunk: &[u8],
+    max_bytes: usize,
+) -> Result<(), AuroraCommandError> {
+    let next_len = bytes.len().checked_add(chunk.len()).ok_or_else(|| {
+        AuroraCommandError::UnsupportedFeature(
+            "assistant provider response is too large".to_string(),
+        )
+    })?;
+    if next_len > max_bytes {
+        return Err(AuroraCommandError::UnsupportedFeature(format!(
+            "assistant provider response exceeds {max_bytes} bytes"
+        )));
+    }
+    bytes.extend_from_slice(chunk);
+    Ok(())
 }
 
 fn validate_assistant_provider_secret(secret: &str) -> Result<(), AuroraCommandError> {
@@ -7767,6 +7836,10 @@ mod tests {
         assert!(status.enabled);
         assert!(status.secrets_redacted);
         assert_eq!(status.redacted_fields, vec!["apiKey".to_string()]);
+        assert_eq!(
+            status.endpoint.as_deref(),
+            Some("https://llm.example/v1/chat/completions")
+        );
 
         assert!(
             validate_assistant_provider_endpoint("http://127.0.0.1:11434/v1/chat/completions")
@@ -7775,6 +7848,31 @@ mod tests {
         assert!(
             validate_assistant_provider_endpoint("http://llm.example/v1/chat/completions").is_err()
         );
+        for endpoint in [
+            "https://user@llm.example/v1/chat/completions",
+            "https://user:password@llm.example/v1/chat/completions",
+            "https://llm.example/v1/chat/completions?api_key=secret",
+            "https://llm.example/v1/chat/completions#token",
+        ] {
+            assert!(
+                validate_assistant_provider_endpoint(endpoint).is_err(),
+                "{endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn assistant_provider_http_bounds_are_configured_and_chunk_cap_is_incremental() {
+        assert!(ASSISTANT_PROVIDER_CONNECT_TIMEOUT < ASSISTANT_PROVIDER_OVERALL_TIMEOUT);
+        assert!(ASSISTANT_PROVIDER_READ_TIMEOUT < ASSISTANT_PROVIDER_OVERALL_TIMEOUT);
+        assert_eq!(ASSISTANT_PROVIDER_RESPONSE_MAX_BYTES, 256 * 1024);
+        assert!(assistant_provider_http_client().is_ok());
+
+        let mut bytes = Vec::new();
+        append_assistant_provider_response_chunk(&mut bytes, &[b'a'; 8], 10).unwrap();
+        assert_eq!(bytes.len(), 8);
+        assert!(append_assistant_provider_response_chunk(&mut bytes, &[b'b'; 3], 10,).is_err());
+        assert_eq!(bytes.len(), 8);
     }
 
     #[test]

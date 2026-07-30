@@ -104,6 +104,26 @@ describe("Tauri assistant provider boundary", () => {
     });
   });
 
+  it("rejects provider status from any backend other than the platform keychain", async () => {
+    const client = createTauriAssistantProviderClient({
+      invoke: async () => ({
+        configured: true,
+        enabled: true,
+        provider: "openai-compatible",
+        endpoint: "https://llm.example/v1/chat/completions",
+        model: "model-a",
+        backend: "memory",
+        persisted: false,
+        secretsRedacted: true,
+        redactedFields: ["apiKey"],
+      }),
+    });
+
+    await expect(client.status()).rejects.toMatchObject({
+      reasonCode: "provider_status_untrusted_backend",
+    });
+  });
+
   it("grants assistant provider commands without granting generic secure storage to thin", () => {
     const mainCapability = readFileSync(resolve(repoRoot, "apps/aurora-tauri/src-tauri/capabilities/aurora-main.json"), "utf8");
     const thinCapability = readFileSync(resolve(repoRoot, "apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json"), "utf8");

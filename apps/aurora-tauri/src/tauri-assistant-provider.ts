@@ -90,13 +90,16 @@ function parseStatus(raw: unknown): TauriAssistantProviderStatus {
   if (raw.secretsRedacted !== true) {
     throw new LightweightOrchestratorError("provider_status_unredacted");
   }
+  if (raw.backend !== "platform-keychain") {
+    throw new LightweightOrchestratorError("provider_status_untrusted_backend");
+  }
   return {
     configured: raw.configured === true,
     enabled: raw.enabled === true,
     provider,
     endpoint: typeof raw.endpoint === "string" ? raw.endpoint : null,
     model: typeof raw.model === "string" ? raw.model : null,
-    backend: raw.backend === "platform-keychain" ? raw.backend : "platform-keychain",
+    backend: raw.backend,
     persisted: raw.persisted === true,
     secretsRedacted: true,
     redactedFields: stringArray(raw.redactedFields),
