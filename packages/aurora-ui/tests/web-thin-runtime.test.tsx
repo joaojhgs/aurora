@@ -768,6 +768,44 @@ describe('browser WebRTC thin-shell runtime', () => {
     }
   })
 
+  it('binds browser timer receivers when provider lease renewal starts', () => {
+    const intervalHandle = 41 as unknown as ReturnType<typeof globalThis.setInterval>
+    const setIntervalSpy = vi
+      .spyOn(globalThis, 'setInterval')
+      .mockImplementation(function (this: unknown) {
+        expect(this).toBe(globalThis)
+        return intervalHandle
+      })
+    const clearIntervalSpy = vi
+      .spyOn(globalThis, 'clearInterval')
+      .mockImplementation(function (this: unknown, handle) {
+        expect(this).toBe(globalThis)
+        expect(handle).toBe(intervalHandle)
+      })
+    const controller = new LocalNodeLifecycleController({
+      host: {
+        resume: () => undefined,
+        renew: () => undefined,
+        suspend: () => undefined,
+      },
+      document: {
+        visibilityState: 'visible',
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      },
+      window: {
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      },
+    })
+
+    controller.start()
+    controller.stop()
+
+    expect(setIntervalSpy).toHaveBeenCalledOnce()
+    expect(clearIntervalSpy).toHaveBeenCalledOnce()
+  })
+
   it('wires mesh-node browser runtime lifecycle through the SDK provider port', async () => {
     vi.useFakeTimers()
     try {

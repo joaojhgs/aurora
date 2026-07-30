@@ -30,8 +30,8 @@ export class LocalNodeLifecycleController {
     this.document = options.document ?? (typeof document === 'undefined' ? undefined : document)
     this.windowTarget = options.window ?? (typeof window === 'undefined' ? undefined : window)
     this.renewMs = options.renewMs ?? DEFAULT_RENEW_MS
-    this.setIntervalFn = options.setInterval ?? globalThis.setInterval
-    this.clearIntervalFn = options.clearInterval ?? globalThis.clearInterval
+    this.setIntervalFn = options.setInterval ?? globalThis.setInterval.bind(globalThis)
+    this.clearIntervalFn = options.clearInterval ?? globalThis.clearInterval.bind(globalThis)
   }
 
   start(): void {
