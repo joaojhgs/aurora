@@ -101,14 +101,22 @@ def _page(
     revision: str = "revision-1",
 ) -> ToolingGetExportCatalogResponse:
     retirements = retirements or []
+    service_instance_id = "remote:provider:Tooling"
     tools = [
-        tool.model_copy(update={"provider_service_instance_id": "remote:provider:Tooling"})
+        tool.model_copy(
+            update={
+                "provider_service_instance_id": service_instance_id,
+                "provenance": tool.provenance.model_copy(
+                    update={"provider_service_instance_id": service_instance_id}
+                ),
+            }
+        )
         for tool in tools
     ]
     checksum = compute_projection_checksum(tools, retirements)
     page = ToolingGetExportCatalogResponse(
         provider_peer_id="provider",
-        service_instance_id="remote:provider:Tooling",
+        service_instance_id=service_instance_id,
         authority_revision=AUTHORITY,
         projection_revision=revision,
         projection_digest=checksum,
