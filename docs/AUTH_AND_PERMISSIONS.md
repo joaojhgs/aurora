@@ -73,6 +73,16 @@ Reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,
 
 Mesh access is not equivalent to local trust. A peer must pass pairing/authentication and still satisfy capability, permission, routing, and data-sharing policy checks. For mesh-specific flow details, see [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md) and [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md).
 
+Runtime-role mesh nodes keep pairing and provider authorization separate:
+
+- Pairing establishes stable peer identity, bilateral approval, and the reconnect credential relationship.
+- Provider-side authorization stores verifier records and peer-specific grants separately from claimant/outbound credential storage.
+- The provider stores only SHA-256 verifier material for inbound reconnect and returns any raw bearer material once to the claimant.
+- Grants control which local methods, local tool contract IDs, capability packs, and resource scopes a peer may discover or invoke.
+- Revocation rejects outstanding challenges, blocks new calls, and cancels active work tied to the revoked credential or grant.
+
+Hosted browser stores verifier secrets through the encrypted WebCrypto-backed vault and keeps grant metadata in the lightweight local-data repository. Tauri desktop, Android, and iOS use OS secure storage for verifier material and the shared lightweight local-data repository for redacted/encrypted grant metadata. Memory fallback is session-only and must not claim durable reconnect.
+
 ## Admin and sensitive surfaces
 
 Admin-style surfaces must declare `method_type="manage"` and explicit permissions. Examples include backup/restore, config mutation, peer management, and high-risk tooling. Destructive operations should also expose dry-run/impact-plan behavior where practical.

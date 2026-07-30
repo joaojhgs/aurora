@@ -12,7 +12,7 @@ Aurora uses `uv` and `pyproject.toml` optional dependency groups to avoid instal
 - Add dependencies to the narrowest service, mode, hardware, or integration group that owns them.
 - Do not commit generated dependency trees, audit snapshots, or temporary analysis JSON/TXT under `docs/`. Generate them locally or publish them as CI artifacts.
 - For Tauri bundles, choose an explicit sidecar profile instead of shipping every local dependency in one package.
-- For Python-free Tauri thin bundles, keep platform runtime dependencies target-specific. Linux links the native peer primitive only on Linux; Windows provisions WebView2; macOS/iOS use WKWebView; Android uses System WebView. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md#thin-shell-platform-runtime-prerequisites).
+- For Python-free Tauri client bundles, keep platform runtime dependencies target-specific. Linux links the native peer primitive only on Linux; Windows provisions WebView2; macOS/iOS use WKWebView; Android uses System WebView. See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md#thin-shell-platform-runtime-prerequisites).
 
 ## Common local installs
 
@@ -82,20 +82,23 @@ The service groups in `pyproject.toml` mirror Aurora process-mode boundaries:
 | DB OpenAI embeddings | `service-db` | Default small DB image/profile. |
 | DB local embeddings | `service-db-local-embeddings` or `embeddings-local` | Heavy local embedding profile. |
 
-## Tauri sidecar profiles
+## Tauri sidecar and client package profiles
 
 Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/prepare-sidecar.mjs` and `scripts/build.py`. Profiles are explicit so the default bundle does not install every local dependency.
 
 | Profile | Intent | Typical command |
 | --- | --- | --- |
-| `thin` | Default desktop package: Gateway/config/auth/db/tooling/orchestrator without heavy local audio/model deps. | `pnpm --filter @aurora/tauri-ui build:bundle:thin` |
+| `desktop-client` | Python-free remote-console/mesh-node desktop client. It does not call `prepare-sidecar`, compiles no operator endpoint, and stores HTTP/WebRTC role configuration at runtime. | `pnpm --filter @aurora/tauri-ui build:bundle:desktop-client` |
+| `desktop-local-minimal` | Default local desktop Python sidecar package. Gateway/config/auth/db/tooling/orchestrator only. Internally this maps to the Python builder's legacy `thin` dependency profile, but the package still contains and supervises Python. | `pnpm --filter @aurora/tauri-ui build:bundle:desktop-local-minimal` |
 | `local-cpu` | Local assistant bundle for CPU-only machines. | `pnpm --filter @aurora/tauri-ui build:bundle:local-cpu` |
 | `local-cuda` | NVIDIA CUDA local assistant bundle. | `pnpm --filter @aurora/tauri-ui build:bundle:local-cuda` |
 | `local-rocm` | AMD ROCm local assistant bundle. | `pnpm --filter @aurora/tauri-ui build:bundle:local-rocm` |
 | `local-metal` | macOS Metal local assistant bundle. | `pnpm --filter @aurora/tauri-ui build:bundle:local-metal` |
 | `local-vulkan` / `local-sycl` | Experimental hardware-specific local model profiles. | explicit package script |
-| `local-rpc` | Thin shell plus RPC/local-service boundary. | explicit package script |
+| `local-rpc` | Local sidecar/RPC boundary profile. | explicit package script |
 | `full` | Full local dependency profile; use intentionally because it can be large. | `pnpm --filter @aurora/tauri-ui build:bundle:full` |
+
+Legacy `*:thin` package scripts remain compatibility aliases for the neutral `*:client` scripts. Do not use the Python builder's internal `thin` dependency profile as evidence that a package is Python-free; Python-free client artifacts are the `desktop-client`, Android client, and iOS client bundle lanes.
 
 See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) for sidecar build mechanics and signing boundaries.
 

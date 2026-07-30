@@ -71,6 +71,17 @@ Desktop daemon/STT-origin voice requests start streamed TTS with server playback
 
 `SDK Backend Contract Conformance` checks prevent silent drift between backend contracts and TypeScript fixtures. The conformance docs live in [`SDK_BACKEND_CONFORMANCE_CI.md`](SDK_BACKEND_CONFORMANCE_CI.md).
 
+Shared Python/Pydantic DTOs that cross the SDK boundary are generated into checked TypeScript validation artifacts:
+
+- `packages/aurora-sdk/src/generated/backend-contracts.schema.json`
+- `packages/aurora-sdk/src/generated/backend-contracts.zod.ts`
+- `packages/aurora-sdk/src/generated/backend-contracts.manifest.json`
+- `packages/aurora-sdk/src/generated/tooling-local-provider-v1.json`
+
+Use `make check-sdk-backend-contracts` after changing allowlisted contract models. The generator fails on unsupported schema constructs instead of weakening them to permissive TypeScript validators. SDK, WebRTC, native bridge, persistence, and import/export boundaries should parse untrusted values through the shared validation wrapper and return redacted validation errors.
+
+The lightweight mesh-node implementation uses those generated contracts for the bounded TypeScript peer host and local Tooling provider. It may advertise only approved local tools through the existing Tooling contract shape; it must not introduce literal ad hoc bus topics, arbitrary SQL surfaces, generic native process execution, or a second hand-maintained wire DTO model.
+
 Relevant package commands:
 
 ```bash
