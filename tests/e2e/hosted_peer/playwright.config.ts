@@ -2,12 +2,12 @@ import { defineConfig } from '@playwright/test'
 import path from 'node:path'
 
 const artifactDir =
-  process.env.AURORA_HOSTED_THIN_ARTIFACT_DIR ??
-  path.join(process.cwd(), 'reports', 'hosted-thin-shell')
+  process.env.AURORA_HOSTED_PEER_ARTIFACT_DIR ??
+  path.join(process.cwd(), 'reports', 'hosted-peer')
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'hosted-thin-shell.spec.ts',
+  testMatch: 'hosted-peer.spec.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,

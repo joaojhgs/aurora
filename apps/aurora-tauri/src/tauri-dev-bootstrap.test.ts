@@ -28,6 +28,8 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     const tauriPackage = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
     const webPackage = JSON.parse(repoText('apps/aurora-web/package.json')) as { scripts: Record<string, string> }
     const wrapper = repoText('apps/aurora-tauri/scripts/tauri-cli.mjs')
+    const hostedPeerRunner = repoText('scripts/hosted_peer_e2e.sh')
+    const hostedThinAlias = repoText('scripts/hosted_thin_shell_e2e.sh')
 
     expect(rootPackage.scripts.tauri).toBe('pnpm --filter @aurora/tauri-ui tauri')
     expect(rootPackage.scripts['dev:web']).toBe(
@@ -43,6 +45,21 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(rootPackage.scripts['dev:desktop-thin']).toBe('pnpm dev:desktop-client')
     expect(rootPackage.scripts['dev:web-thin']).toBe('pnpm dev:web')
     expect(rootPackage.scripts['dev:python']).toBe('pnpm dev:python-service')
+    expect(rootPackage.scripts['test:hosted-peer:live']).toBe(
+      'scripts/hosted_peer_e2e.sh',
+    )
+    expect(rootPackage.scripts['test:web-thin:live']).toBe(
+      'pnpm test:hosted-peer:live',
+    )
+    expect(hostedPeerRunner).not.toContain(
+      'NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT',
+    )
+    expect(hostedPeerRunner).toContain(
+      '--config tests/e2e/hosted_peer/playwright.config.ts',
+    )
+    expect(hostedThinAlias).toContain(
+      'exec "$ROOT/scripts/hosted_peer_e2e.sh" "$@"',
+    )
     expect(rootPackage.scripts['dev:python-service']).toContain(
       'AURORA_ARCHITECTURE_MODE=threads',
     )
@@ -108,6 +125,15 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(packageJson.scripts['build:bundle']).toBe('pnpm build:bundle:desktop-local')
     expect(packageJson.scripts['build:bundle:thin']).toBe('pnpm build:bundle:desktop-client')
     expect(packageJson.scripts['build:bundle:thin']).not.toContain('prepare-sidecar')
+    expect(packageJson.scripts['build:bundle:linux-rpm:desktop-client']).toContain(
+      'src-tauri/tauri.client.conf.json',
+    )
+    expect(packageJson.scripts['build:bundle:linux-rpm:desktop-client']).not.toMatch(
+      /thin|THIN/,
+    )
+    expect(packageJson.scripts['build:bundle:linux-rpm:thin']).toBe(
+      'pnpm build:bundle:linux-rpm:desktop-client',
+    )
     for (const profile of ['desktop-local-minimal', 'local-cpu', 'local-cuda', 'local-rocm', 'local-metal', 'local-vulkan', 'local-sycl', 'local-rpc', 'full']) {
       expect(packageJson.scripts[`build:bundle:${profile}`]).toContain(`node ./scripts/prepare-sidecar.mjs --profile ${profile}`)
       expect(packageJson.scripts[`build:bundle:${profile}`]).toContain('pnpm tauri build --config src-tauri/tauri.release.conf.json --no-sign')

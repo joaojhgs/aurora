@@ -98,14 +98,14 @@ jobs:
           CODE_SIGNING_REQUIRED: "NO"
         run: pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim --config src-tauri/tauri.ios.conf.json
 
-      - name: Build Python-free Tauri iOS thin simulator app
+      - name: Build Python-free Tauri iOS client simulator app
         env:
           CODE_SIGN_IDENTITY: ""
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
-        run: pnpm --filter @aurora/tauri-ui ios:build:thin:simulator
+        run: pnpm --filter @aurora/tauri-ui ios:build:client:simulator
 
-      - name: Install, launch, and screenshot the thin app in an iOS simulator
+      - name: Install, launch, and screenshot the client app in an iOS simulator
         run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
 
       - name: Pair iOS MobileSafari and packaged WKWebView with the external Python peer over WebRTC
@@ -161,11 +161,11 @@ jobs:
           name: aurora-ios-entrypoint-payload-smoke
           path: /tmp/aurora-ios-entrypoint-payload-smoke.json
 
-      - name: Upload iOS thin build provenance
+      - name: Upload iOS client build provenance
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-ios-thin-build-provenance
-          path: apps/aurora-tauri/reports/ios-thin-simulator-build-provenance.json
+          name: aurora-ios-client-build-provenance
+          path: apps/aurora-tauri/reports/ios-client-simulator-build-provenance.json
 
       - name: Upload iOS simulator runtime evidence
         if: always()

@@ -105,12 +105,12 @@ describe('Tauri CI native evidence contract', () => {
   it('keeps Tauri and frontend CI check names canonical and non-duplicative', () => {
     const workflowExpectations: Array<[string, string, string[]]> = [
       ['.github/workflows/frontend-sdk.yml', 'Frontend and SDK', ['SDK, shared UI, and web app']],
-      ['.github/workflows/tauri-desktop.yml', 'Tauri Desktop Verification', ['Desktop Tauri bundle (${{ matrix.bundle_mode }})', 'Desktop thin package (${{ matrix.platform }})', 'Sidecar profile staging (${{ matrix.profile }})']],
-      ['.github/workflows/tauri-android.yml', 'Tauri Android Verification', ['Android thin APK/AAB build and emulator smoke']],
+      ['.github/workflows/tauri-desktop.yml', 'Tauri Desktop Verification', ['Desktop Tauri bundle (${{ matrix.bundle_mode }})', 'Desktop client package (${{ matrix.platform }})', 'Sidecar profile staging (${{ matrix.profile }})']],
+      ['.github/workflows/tauri-android.yml', 'Tauri Android Verification', ['Android client APK/AAB build and emulator smoke']],
       ['.github/workflows/tauri-ios.yml', 'Tauri iOS Baseline', ['macOS Xcode Tauri iOS init and build']],
       ['.github/workflows/tauri-ios-release.yml', 'Tauri iOS Policy and Signing', ['iOS manifest and UI policy', 'macOS Xcode iOS preflight']],
       ['.github/workflows/python-tests.yml', 'Python Tests', ['Unit, integration, and E2E tests']],
-      ['.github/workflows/webrtc-interop.yml', 'WebRTC live interop', ['Hosted thin-shell and cross-engine network paths']],
+      ['.github/workflows/webrtc-interop.yml', 'WebRTC live interop', ['Hosted peer and cross-engine network paths']],
     ]
     const seen = new Set<string>()
 
@@ -219,10 +219,10 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['build:frontend:ios-client']).toBe('node ./scripts/build-ios-client-frontend.mjs')
     expect(packageJson.scripts['build:frontend:ios-thin']).toBe('pnpm build:frontend:ios-client')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
-    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:thin:apk')
-    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:thin:apk')
-    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:thin:aab')
-    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:thin:aab')
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk')
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:apk')
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:aab')
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:aab')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(androidWorkflow).not.toContain('https://gateway.example.invalid')
@@ -269,12 +269,12 @@ describe('Tauri CI native evidence contract', () => {
     )
     expect(iosBaselineWorkflow).toContain('runs-on: macos-latest')
     expect(iosBaselineWorkflow).toContain('CODE_SIGNING_ALLOWED: "NO"')
-    expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:build:thin:simulator')
+    expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:build:client:simulator')
     expect(iosBaselineWorkflow).not.toContain('AURORA_TAURI_IOS_ALLOWED_REMOTE_ORIGINS')
     expect(iosBaselineWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(iosBaselineWorkflow).not.toContain('https://gateway.example.invalid')
     expect(repoText('apps/aurora-tauri/scripts/build-ios-client-bundle.mjs')).toContain('ios-client-simulator-build-provenance.json')
-    expect(iosBaselineWorkflow).toContain('ios-thin-simulator-build-provenance.json')
+    expect(iosBaselineWorkflow).toContain('ios-client-simulator-build-provenance.json')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:smoke:simulator')
     expect(iosBaselineWorkflow).toContain('ios-simulator-smoke.json')
     expect(iosBaselineWorkflow).toContain('Set up Python interop peer')
@@ -362,7 +362,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(localPythonInstall).toContain('python3-dev')
   })
 
-  it('packages every thin WebRTC surface with its required runtime and permission contract', () => {
+  it('packages every client WebRTC surface with its required runtime and permission contract', () => {
     const cargo = repoText('apps/aurora-tauri/src-tauri/Cargo.toml')
     const thinCapability = repoText(
       'apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json',
@@ -477,12 +477,12 @@ describe('Tauri CI native evidence contract', () => {
     )
 
     expect(desktopWorkflow).toContain(
-      'Desktop thin package (${{ matrix.platform }})',
+      'Desktop client package (${{ matrix.platform }})',
     )
     expect(desktopWorkflow).toContain('os: macos-latest')
     expect(desktopWorkflow).toContain('os: windows-latest')
     expect(desktopWorkflow).toContain(
-      'pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin',
+      'pnpm --filter @aurora/tauri-ui build:bundle:desktop-client',
     )
     expect(desktopWorkflow).toContain(
       'apps/aurora-tauri/src-tauri/target/release/bundle/**',
@@ -543,10 +543,10 @@ describe('Tauri CI native evidence contract', () => {
     expect(clientConfig).not.toContain('binaries/aurora-sidecar')
     expect(clientConfig).not.toContain('config_defaults.json')
     expect(workflow).toContain('Desktop Tauri bundle (${{ matrix.bundle_mode }})')
-    expect(workflow).toContain('desktop-thin')
+    expect(workflow).toContain('desktop-client')
     expect(workflow).toContain('desktop-local')
     expect(workflow).toContain('pnpm --filter @aurora/tauri-ui build:bundle:${{ matrix.bundle_mode }}')
-    expect(workflow).toContain('pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin')
+    expect(workflow).toContain('pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client')
     expect(workflow).not.toContain('AURORA_TAURI_ALLOWED_REMOTE_ORIGINS')
     expect(workflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: webrtc-only')
     expect(workflow).not.toContain('https://gateway.example.invalid')

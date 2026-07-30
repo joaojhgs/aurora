@@ -24,8 +24,8 @@ jobs:
             upload_suffix: local
             needs_python: true
             smoke_local: true
-          - bundle_mode: desktop-thin
-            upload_suffix: thin
+          - bundle_mode: desktop-client
+            upload_suffix: client
             needs_python: false
             smoke_local: false
 
@@ -89,20 +89,20 @@ jobs:
       - name: Test Tauri frontend runtime wrapper
         run: pnpm --filter @aurora/tauri-ui test
 
-      - name: Prepare Python-free desktop thin overlay
-        if: matrix.bundle_mode == 'desktop-thin'
+      - name: Prepare Python-free desktop client overlay
+        if: matrix.bundle_mode == 'desktop-client'
         run: |
-          pnpm --filter @aurora/tauri-ui prepare:bundle:desktop-thin
-          pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin -- --allow-missing-bundle
+          pnpm --filter @aurora/tauri-ui prepare:bundle:desktop-client
+          pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client -- --allow-missing-bundle
 
-      - name: Upload desktop thin prepare proof
-        if: matrix.bundle_mode == 'desktop-thin'
+      - name: Upload desktop client prepare proof
+        if: matrix.bundle_mode == 'desktop-client'
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-desktop-thin-prepare-proof
+          name: tauri-desktop-client-prepare-proof
           path: |
-            apps/aurora-tauri/reports/desktop-thin-bundle-prepare.json
-            apps/aurora-tauri/reports/desktop-thin-bundle-proof.json
+            apps/aurora-tauri/reports/desktop-client-bundle-prepare.json
+            apps/aurora-tauri/reports/desktop-client-bundle-proof.json
           if-no-files-found: error
 
       - name: Prepare bundled desktop sidecar automatically
@@ -136,16 +136,16 @@ jobs:
       - name: Build Linux Tauri bundle
         run: pnpm --filter @aurora/tauri-ui build:bundle:${{ matrix.bundle_mode }}
 
-      - name: Verify Python-free desktop thin artifact contents
-        if: matrix.bundle_mode == 'desktop-thin'
-        run: pnpm --filter @aurora/tauri-ui verify:bundle:desktop-thin
+      - name: Verify Python-free desktop client artifact contents
+        if: matrix.bundle_mode == 'desktop-client'
+        run: pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client
 
-      - name: Upload desktop thin artifact proof
-        if: matrix.bundle_mode == 'desktop-thin'
+      - name: Upload desktop client artifact proof
+        if: matrix.bundle_mode == 'desktop-client'
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-desktop-thin-artifact-proof
-          path: apps/aurora-tauri/reports/desktop-thin-bundle-proof.json
+          name: tauri-desktop-client-artifact-proof
+          path: apps/aurora-tauri/reports/desktop-client-bundle-proof.json
           if-no-files-found: error
 
       - name: Smoke launch Tauri shell
@@ -173,8 +173,8 @@ jobs:
           path: apps/aurora-tauri/reports/eventstream-smoke.json
           if-no-files-found: warn
 
-  desktop-thin-native-packages:
-    name: Desktop thin package (${{ matrix.platform }})
+  desktop-client-native-packages:
+    name: Desktop client package (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -220,13 +220,13 @@ jobs:
         run: cargo check
         working-directory: apps/aurora-tauri/src-tauri
 
-      - name: Build Python-free desktop thin package
-        run: pnpm --filter @aurora/tauri-ui build:bundle:desktop-thin
+      - name: Build Python-free desktop client package
+        run: pnpm --filter @aurora/tauri-ui build:bundle:desktop-client
 
-      - name: Upload desktop thin package
+      - name: Upload desktop client package
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-desktop-thin-${{ matrix.artifact_suffix }}
+          name: tauri-desktop-client-${{ matrix.artifact_suffix }}
           path: apps/aurora-tauri/src-tauri/target/release/bundle/**
           if-no-files-found: error
 

@@ -16,7 +16,8 @@
     "dev:python": "pnpm dev:python-service",
     "dev:python-service": "AURORA_ARCHITECTURE_MODE=threads AURORA_UI_ACTIVATE=false PYTHONUNBUFFERED=1 uv run python main.py",
     "test:web-persistence": "node scripts/run_browser_storage_gate.mjs",
-    "test:web-thin:live": "scripts/hosted_thin_shell_e2e.sh",
+    "test:hosted-peer:live": "scripts/hosted_peer_e2e.sh",
+    "test:web-thin:live": "pnpm test:hosted-peer:live",
     "test:webrtc:interop": "scripts/webrtc_interop_local.sh direct",
     "test:webrtc:turn": "scripts/webrtc_interop_local.sh turn",
     "test:webrtc:browsers": "scripts/webrtc_interop_browser_matrix.sh"

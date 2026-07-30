@@ -50,12 +50,12 @@ type PersistedMeshPeer = {
   connection_status?: string
 }
 
-const baseUrl = process.env.AURORA_HOSTED_THIN_BASE_URL ?? ''
-const gatewayUrl = process.env.AURORA_HOSTED_THIN_GATEWAY_URL ?? ''
-const gatewayApiKey = process.env.AURORA_HOSTED_THIN_GATEWAY_API_KEY ?? ''
-const brokerUrl = process.env.AURORA_HOSTED_THIN_BROKER_URL ?? ''
+const baseUrl = process.env.AURORA_HOSTED_PEER_BASE_URL ?? ''
+const gatewayUrl = process.env.AURORA_HOSTED_PEER_GATEWAY_URL ?? ''
+const gatewayApiKey = process.env.AURORA_HOSTED_PEER_GATEWAY_API_KEY ?? ''
+const brokerUrl = process.env.AURORA_HOSTED_PEER_BROKER_URL ?? ''
 const expectedNodeName =
-  process.env.AURORA_HOSTED_THIN_EXPECTED_NODE ?? 'Hosted Thin E2E Python'
+  process.env.AURORA_HOSTED_PEER_EXPECTED_NODE ?? 'Hosted Peer E2E Python'
 const configured = Boolean(baseUrl && gatewayUrl && gatewayApiKey && brokerUrl)
 
 const permissions = [
@@ -79,10 +79,10 @@ const permissions = [
 
 test.skip(
   !configured,
-  'run through scripts/hosted_thin_shell_e2e.sh so the full Python service and hosted UI are available',
+  'run through scripts/hosted_peer_e2e.sh so the full Python service and hosted UI are available',
 )
 
-test('hosted thin UI pairs bilaterally and stays WebRTC-only across navigation, blur, and reload', async ({
+test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, blur, and reload', async ({
   page,
   request,
 }, testInfo) => {
@@ -123,7 +123,7 @@ test('hosted thin UI pairs bilaterally and stays WebRTC-only across navigation, 
 
   const invite = buildInvite(ready, inviteConfig)
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
-  await page.getByLabel('Node name').fill('E2E Hosted Web Thin')
+  await page.getByLabel('Node name').fill('E2E Hosted Peer')
   await page.getByLabel('Paste mesh invite').fill(JSON.stringify(invite))
   await page.getByRole('button', { name: 'Save invite and continue' }).click()
   await page.waitForURL(/\/mesh/, { timeout: 30_000 })
@@ -209,7 +209,7 @@ test('hosted thin UI pairs bilaterally and stays WebRTC-only across navigation, 
     'persisted bilateral peer approval',
   )
   expect(connectedPeer.connection_status).toBe('connected')
-  expect(connectedPeer.node_name).toBe('E2E Hosted Web Thin')
+  expect(connectedPeer.node_name).toBe('E2E Hosted Peer')
 
   const meshRoot = page.locator('[data-thin-peer-status]').first()
   await expect(meshRoot).toHaveAttribute('data-thin-peer-status', 'authorized')
@@ -364,7 +364,7 @@ async function confirmedAdminPost(
     action_id: draft.action_id,
     nonce: draft.nonce,
     digest: draft.digest,
-    reason: 'Automated hosted thin-shell WebRTC verification',
+    reason: 'Automated hosted peer WebRTC verification',
     reauth_confirmed: true,
     phrase: draft.required_phrase,
   })
