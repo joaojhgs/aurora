@@ -108,6 +108,7 @@ public final class AuroraNativePlugin: Plugin {
     [
       "platform": "ios",
       "id": "stopAuroraSpeechAppIntent",
+      "publicActionId": "app-intent.stop-speech",
       "label": "Stop Aurora speech",
       "support": "supported-path",
       "capability": "ios.appIntents",

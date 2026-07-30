@@ -3829,10 +3829,10 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.processSpawn".to_string(), false);
     permissions.insert("aurora.ios.appIntents".to_string(), ios_platform);
     permissions.insert("aurora.ios.shortcuts".to_string(), ios_platform);
-    permissions.insert("aurora.ios.shareExtension".to_string(), ios_platform);
+    permissions.insert("aurora.ios.shareExtension".to_string(), false);
     permissions.insert("aurora.ios.deepLinks".to_string(), ios_platform);
-    permissions.insert("aurora.ios.widgets".to_string(), ios_platform);
-    permissions.insert("aurora.ios.fileAssociations".to_string(), ios_platform);
+    permissions.insert("aurora.ios.widgets".to_string(), false);
+    permissions.insert("aurora.ios.fileAssociations".to_string(), false);
     permissions.insert("aurora.ios.entrypointPayload".to_string(), ios_platform);
     permissions.insert("aurora.iosLocalLightInference".to_string(), false);
 
@@ -3871,10 +3871,10 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("ios.appOwnedInvocation".to_string(), ios_platform);
     capabilities.insert("ios.appIntents".to_string(), ios_platform);
     capabilities.insert("ios.shortcuts".to_string(), ios_platform);
-    capabilities.insert("ios.shareExtension".to_string(), ios_platform);
+    capabilities.insert("ios.shareExtension".to_string(), false);
     capabilities.insert("ios.deepLinks".to_string(), ios_platform);
-    capabilities.insert("ios.widgets".to_string(), ios_platform);
-    capabilities.insert("ios.fileAssociations".to_string(), ios_platform);
+    capabilities.insert("ios.widgets".to_string(), false);
+    capabilities.insert("ios.fileAssociations".to_string(), false);
     capabilities.insert("ios.entrypointPayload".to_string(), ios_platform);
     capabilities.insert("ios.localLightInference.provider".to_string(), ios_platform);
     capabilities.insert("ios.localLightInference.modelRuntime".to_string(), false);
@@ -3894,7 +3894,24 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         "android.fallbackEntrypoints".to_string(),
         cfg!(target_os = "android"),
     );
+    let pending_native_target_state = if ios_platform {
+        "pending_native_target"
+    } else {
+        "needs_native_permission"
+    };
     let mut permission_states = ios_state_map("aurora.ios.", ios_platform);
+    permission_states.insert(
+        "aurora.ios.shareExtension".to_string(),
+        pending_native_target_state.to_string(),
+    );
+    permission_states.insert(
+        "aurora.ios.widgets".to_string(),
+        pending_native_target_state.to_string(),
+    );
+    permission_states.insert(
+        "aurora.ios.fileAssociations".to_string(),
+        pending_native_target_state.to_string(),
+    );
     permission_states.insert(
         "aurora.iosMicrophoneCapture".to_string(),
         "needs_native_permission".to_string(),
@@ -3913,6 +3930,18 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
         .to_string(),
     );
     let mut capability_states = ios_state_map("ios.", ios_platform);
+    capability_states.insert(
+        "ios.shareExtension".to_string(),
+        pending_native_target_state.to_string(),
+    );
+    capability_states.insert(
+        "ios.widgets".to_string(),
+        pending_native_target_state.to_string(),
+    );
+    capability_states.insert(
+        "ios.fileAssociations".to_string(),
+        pending_native_target_state.to_string(),
+    );
     capability_states.insert(
         "ios.voiceForegroundCapture".to_string(),
         "needs_native_permission".to_string(),
@@ -4005,6 +4034,7 @@ fn ios_mobile_integrations(available: bool) -> Vec<NativeMobileIntegration> {
     } else {
         "planned"
     };
+    let pending_native_target = if available { "pending" } else { "planned" };
     vec![
         NativeMobileIntegration {
             platform: "ios".to_string(),
@@ -4034,12 +4064,12 @@ fn ios_mobile_integrations(available: bool) -> Vec<NativeMobileIntegration> {
             platform: "ios".to_string(),
             id: "shareExtension".to_string(),
             label: "iOS share extension intake".to_string(),
-            support: supported_path.to_string(),
+            support: pending_native_target.to_string(),
             capability: "ios.shareExtension".to_string(),
             permission: Some("aurora.ios.shareExtension".to_string()),
             privacy_class: "personal".to_string(),
             evidence_source: "IOS-004-native-manifest".to_string(),
-            user_copy: "The share extension accepts user-selected text, URLs, and files, then hands redacted metadata to Aurora backend context ingestion.".to_string(),
+            user_copy: "Share extension intake will stay unavailable until Aurora verifies the iOS app target.".to_string(),
             verifier: "Xcode share-extension target smoke plus simulator/device share sheet invocation".to_string(),
         },
         NativeMobileIntegration {
@@ -4058,24 +4088,24 @@ fn ios_mobile_integrations(available: bool) -> Vec<NativeMobileIntegration> {
             platform: "ios".to_string(),
             id: "widgets".to_string(),
             label: "iOS widgets".to_string(),
-            support: supported_path.to_string(),
+            support: pending_native_target.to_string(),
             capability: "ios.widgets".to_string(),
             permission: Some("aurora.ios.widgets".to_string()),
             privacy_class: "personal".to_string(),
             evidence_source: "IOS-004-native-manifest".to_string(),
-            user_copy: "Widget actions open Aurora through app-owned entrypoints and do not execute assistant work in the extension process.".to_string(),
+            user_copy: "Widget actions will stay unavailable until Aurora verifies the iOS widget target.".to_string(),
             verifier: "Xcode widget extension build plus simulator widget tap smoke".to_string(),
         },
         NativeMobileIntegration {
             platform: "ios".to_string(),
             id: "fileAssociations".to_string(),
             label: "iOS file associations".to_string(),
-            support: "supported-path".to_string(),
+            support: pending_native_target.to_string(),
             capability: "ios.fileAssociations".to_string(),
             permission: Some("aurora.ios.fileAssociations".to_string()),
             privacy_class: "personal".to_string(),
             evidence_source: "IOS-004-tauri-file-associations".to_string(),
-            user_copy: "Tauri iOS file associations declare Aurora as a viewer for selected text, markdown, JSON, and Aurora exports.".to_string(),
+            user_copy: "File-open intake will stay unavailable until Aurora verifies iOS file association handling.".to_string(),
             verifier: "Tauri mobile file association metadata plus simulator document-open smoke".to_string(),
         },
         NativeMobileIntegration {
@@ -4139,22 +4169,23 @@ fn ios_invocation_status(available: bool) -> IosInvocationStatus {
         platform: "ios".to_string(),
         app_intents_available: available,
         shortcuts_available: available,
-        share_extension_available: available,
+        share_extension_available: false,
         deep_links_available: available,
-        widgets_available: available,
-        file_associations_available: available,
+        widgets_available: false,
+        file_associations_available: false,
         siri_replacement: false,
         backend_handoff_required: true,
         privacy_labels: vec!["personal".to_string(), "sensitive".to_string()],
         state: if available {
-            "available".to_string()
+            "degraded"
         } else {
-            "needs_native_permission".to_string()
-        },
+            "needs_native_permission"
+        }
+        .to_string(),
         reason: if available {
-            "iOS invocation targets are present; backend evidence still decides whether intake was processed.".to_string()
+            "Deep links can open Aurora now. Share, widget, and file-open options stay unavailable until mobile app setup is complete.".to_string()
         } else {
-            "iOS invocation requires macOS/Xcode-generated targets and simulator/device proof before it can be claimed available.".to_string()
+            "This iOS feature is unavailable until mobile app setup is complete.".to_string()
         },
         evidence_source: "IOS-004-native-manifest".to_string(),
         secrets_redacted: true,
@@ -4162,7 +4193,12 @@ fn ios_invocation_status(available: bool) -> IosInvocationStatus {
 }
 
 fn ios_native_entrypoints(available: bool) -> Vec<IosNativeEntrypoint> {
-    let state = if available {
+    let pending_native_target = if available {
+        "pending_native_target".to_string()
+    } else {
+        "needs_native_permission".to_string()
+    };
+    let deep_link_state = if available {
         "available".to_string()
     } else {
         "needs_native_permission".to_string()
@@ -4172,8 +4208,8 @@ fn ios_native_entrypoints(available: bool) -> Vec<IosNativeEntrypoint> {
             id: "ios_share_extension".to_string(),
             platform: "ios".to_string(),
             label: "iOS share extension".to_string(),
-            state: state.clone(),
-            available,
+            state: pending_native_target.clone(),
+            available: false,
             capability: "ios.shareExtension".to_string(),
             permission: Some("aurora.ios.shareExtension".to_string()),
             intake_type: "share_extension".to_string(),
@@ -4184,13 +4220,13 @@ fn ios_native_entrypoints(available: bool) -> Vec<IosNativeEntrypoint> {
             backend_required: true,
             payload_command: "iosEntrypointPayload".to_string(),
             privacy_class: "personal".to_string(),
-            reason: "Share extension target must hand redacted payload metadata to backend attachment/context ingestion.".to_string(),
+            reason: "This iOS feature is unavailable until mobile app setup is complete.".to_string(),
         },
         IosNativeEntrypoint {
             id: "ios_deep_link".to_string(),
             platform: "ios".to_string(),
             label: "iOS deep link".to_string(),
-            state: state.clone(),
+            state: deep_link_state,
             available,
             capability: "ios.deepLinks".to_string(),
             permission: Some("aurora.ios.deepLinks".to_string()),
@@ -4208,8 +4244,8 @@ fn ios_native_entrypoints(available: bool) -> Vec<IosNativeEntrypoint> {
             id: "ios_widget".to_string(),
             platform: "ios".to_string(),
             label: "iOS widget".to_string(),
-            state: state.clone(),
-            available,
+            state: pending_native_target.clone(),
+            available: false,
             capability: "ios.widgets".to_string(),
             permission: Some("aurora.ios.widgets".to_string()),
             intake_type: "widget".to_string(),
@@ -4220,14 +4256,14 @@ fn ios_native_entrypoints(available: bool) -> Vec<IosNativeEntrypoint> {
             backend_required: true,
             payload_command: "iosEntrypointPayload".to_string(),
             privacy_class: "personal".to_string(),
-            reason: "Widgets can open Aurora entrypoints but must not run orchestrator logic in the extension.".to_string(),
+            reason: "This iOS feature is unavailable until mobile app setup is complete.".to_string(),
         },
         IosNativeEntrypoint {
             id: "ios_file_association".to_string(),
             platform: "ios".to_string(),
             label: "iOS file association".to_string(),
-            state,
-            available,
+            state: pending_native_target,
+            available: false,
             capability: "ios.fileAssociations".to_string(),
             permission: Some("aurora.ios.fileAssociations".to_string()),
             intake_type: "file_association".to_string(),
@@ -4243,7 +4279,7 @@ fn ios_native_entrypoints(available: bool) -> Vec<IosNativeEntrypoint> {
             backend_required: true,
             payload_command: "iosEntrypointPayload".to_string(),
             privacy_class: "personal".to_string(),
-            reason: "File open events pass file URL metadata to the app; backend ingestion owns storage and redaction decisions.".to_string(),
+            reason: "This iOS feature is unavailable until mobile app setup is complete.".to_string(),
         },
     ]
 }
@@ -7490,18 +7526,23 @@ mod tests {
         assert!(manifest.mobile_integrations.iter().any(|integration| {
             integration.id == "shareExtension"
                 && integration.capability == "ios.shareExtension"
-                && integration.user_copy.contains("backend context ingestion")
+                && integration.support == "planned"
+                && integration
+                    .user_copy
+                    .contains("unavailable until Aurora verifies")
         }));
         assert!(manifest.mobile_integrations.iter().any(|integration| {
             integration.id == "deepLinks" && integration.capability == "ios.deepLinks"
         }));
         assert!(manifest.mobile_integrations.iter().any(|integration| {
-            integration.id == "widgets" && integration.capability == "ios.widgets"
+            integration.id == "widgets"
+                && integration.capability == "ios.widgets"
+                && integration.support == "planned"
         }));
         assert!(manifest.mobile_integrations.iter().any(|integration| {
             integration.id == "fileAssociations"
                 && integration.capability == "ios.fileAssociations"
-                && integration.support == "supported-path"
+                && integration.support == "planned"
         }));
         assert_eq!(
             manifest.capabilities.get("ios.siriReplacement"),
@@ -7783,8 +7824,13 @@ mod tests {
         assert!(swift_plugin.contains("iosSecureStorageStatus"));
         assert!(swift_plugin.contains("iosBiometricStatus"));
         assert!(swift_plugin.contains("iosAdminUnlock"));
-        assert!(swift_plugin.contains("\"ios.shareExtension\": true"));
-        assert!(swift_plugin.contains("\"ios.fileAssociations\": true"));
+        assert!(swift_plugin.contains("\"ios.shareExtension\": false"));
+        assert!(swift_plugin.contains("\"ios.deepLinks\": true"));
+        assert!(swift_plugin.contains("\"ios.widgets\": false"));
+        assert!(swift_plugin.contains("\"ios.fileAssociations\": false"));
+        assert!(swift_plugin.contains("\"ios.shareExtension\": \"pending_native_target\""));
+        assert!(swift_plugin.contains("\"ios.widgets\": \"pending_native_target\""));
+        assert!(swift_plugin.contains("\"ios.fileAssociations\": \"pending_native_target\""));
         assert!(swift_plugin.contains("\"ios.localLightInference.provider\": true"));
         assert!(swift_plugin.contains("\"ios.localLightInference.modelRuntime\": false"));
         assert!(swift_plugin.contains("\"ios.keychain.secureCredentialStorage\": true"));

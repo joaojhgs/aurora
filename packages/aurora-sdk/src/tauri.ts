@@ -165,6 +165,7 @@ export interface TauriAndroidBaselineStatus {
 
 export type IosAuroraActionId =
   | 'app-intent.open-assistant'
+  | 'app-intent.stop-speech'
   | 'shortcut.open-assistant'
   | 'share.import-context'
   | 'deeplink.open'

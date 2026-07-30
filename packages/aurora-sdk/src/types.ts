@@ -2546,8 +2546,8 @@ export interface NativeCapabilityManifest {
   platform: 'tauri-desktop' | 'android' | 'ios' | string
   permissions: Record<string, boolean>
   capabilities: Record<string, boolean>
-  permissionStates?: Record<string, AndroidNativeState>
-  capabilityStates?: Record<string, AndroidNativeState>
+  permissionStates?: Record<string, NativeCapabilityManifestState>
+  capabilityStates?: Record<string, NativeCapabilityManifestState>
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
   iosInvocation?: IOSInvocationStatus | null
@@ -2625,7 +2625,7 @@ export interface AndroidSecureStorageStatus {
   secretsRedacted: boolean
 }
 
-export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'unsupported' | 'blocked'
+export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'pending' | 'unsupported' | 'blocked'
 
 export interface NativeMobileIntegration {
   platform: 'android' | 'ios' | string
@@ -2640,8 +2640,10 @@ export interface NativeMobileIntegration {
   requiresConfirmation?: boolean
   siriReplacement?: false
   evidenceSource: string
+  reason?: string
   userCopy: string
   verifier: string
+  publicActionId?: string
 }
 
 export interface NativePlatformLimitation {
@@ -2653,12 +2655,15 @@ export interface NativePlatformLimitation {
   evidenceSource: string
 }
 
-export type AndroidNativeState =
+export type NativeCapabilityManifestState =
   | 'available'
   | 'needs_native_permission'
   | 'unsupported_platform'
   | 'degraded'
+  | 'pending_native_target'
   | 'fallback'
+
+export type AndroidNativeState = NativeCapabilityManifestState
 
 export interface AndroidAssistantRoleStatus {
   platform: 'android' | string

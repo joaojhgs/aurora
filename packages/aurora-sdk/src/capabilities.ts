@@ -18,8 +18,8 @@ import type {
   GetServicesResponse,
   MethodDescriptor,
   NativeCapabilityManifest,
-  NativeIntegrationSupport,
   NativeCapabilityState,
+  NativeIntegrationSupport,
   PrivacyClass,
   ServiceInfo
 } from './types.js'
@@ -457,6 +457,7 @@ function availabilityForNativeState(
 ): AvailabilityState {
   if (state === 'available') return missingPermissions.length > 0 ? 'privacy-blocked' : 'available-local'
   if (state === 'needs_native_permission') return 'privacy-blocked'
+  if (state === 'pending_native_target') return 'pending'
   if (state === 'degraded' || state === 'fallback') return 'degraded'
   if (state === 'unsupported_platform') return 'unsupported'
   return enabled
@@ -476,6 +477,7 @@ function disabledReasonsForNativeState(
       ? missingPermissions.map((permission) => `native permission missing: ${permission}`)
       : ['native permission missing']
   }
+  if (state === 'pending_native_target') return ['native target pending']
   if (state === 'degraded') return ['native capability degraded']
   if (state === 'fallback') return ['native fallback path only']
   if (state === 'unsupported_platform') return ['native platform unsupported']
@@ -491,6 +493,7 @@ function requiredActionForNativeState(
   if (state === 'needs_native_permission' || availability === 'privacy-blocked') {
     return 'grant required native permission'
   }
+  if (state === 'pending_native_target') return 'complete native app target setup'
   if (state === 'degraded') return 'use the supported subset or complete native integration'
   if (state === 'fallback') return 'use fallback entrypoint until primary native role is available'
   if (state === 'unsupported_platform' || availability === 'unsupported') {
@@ -502,7 +505,7 @@ function requiredActionForNativeState(
 function availabilityForNativeIntegration(support: NativeIntegrationSupport): AvailabilityState {
   if (support === 'supported') return 'available-local'
   if (support === 'supported-path') return 'degraded'
-  if (support === 'planned') return 'pending'
+  if (support === 'planned' || support === 'pending') return 'pending'
   if (support === 'blocked') return 'privacy-blocked'
   return 'unsupported'
 }
@@ -511,6 +514,7 @@ function requiredActionForNativeIntegration(support: NativeIntegrationSupport): 
   if (support === 'supported') return null
   if (support === 'supported-path') return 'verify platform path in macOS/Xcode simulator or device'
   if (support === 'planned') return 'implement scoped iOS plugin, App Intent, or extension task'
+  if (support === 'pending') return 'complete native app target setup'
   if (support === 'blocked') return 'satisfy platform entitlement, consent, or permission requirement'
   return 'do not claim this platform capability'
 }

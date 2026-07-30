@@ -641,6 +641,7 @@ describe('AuroraClient', () => {
         expect.objectContaining({
           platform: 'ios',
           id: 'askAuroraAppIntent',
+          publicActionId: 'app-intent.open-assistant',
           invocation: 'app-intent',
           backendMethod: 'Orchestrator.ExternalUserInput',
           support: 'supported-path',
@@ -649,6 +650,7 @@ describe('AuroraClient', () => {
         expect.objectContaining({
           platform: 'ios',
           id: 'summarizeSharedContentShortcut',
+          publicActionId: 'share.import-context',
           invocation: 'shortcut',
           backendMethod: 'Orchestrator.IngestContext',
           privacyClass: 'sensitive',
@@ -657,28 +659,41 @@ describe('AuroraClient', () => {
         }),
         expect.objectContaining({
           platform: 'ios',
+          id: 'stopAuroraSpeechAppIntent',
+          publicActionId: 'app-intent.stop-speech',
+          invocation: 'app-intent',
+          backendMethod: 'TTS.Stop',
+          support: 'supported-path',
+          siriReplacement: false
+        }),
+        expect.objectContaining({
+          platform: 'ios',
           id: 'shareExtension',
           capability: 'ios.shareExtension',
-          support: 'supported-path',
+          support: 'pending',
+          reason: 'This iOS feature is unavailable until mobile app setup is complete.',
           privacyClass: 'sensitive'
         }),
         expect.objectContaining({
           platform: 'ios',
           id: 'deepLinks',
           capability: 'ios.deepLinks',
+          publicActionId: 'deeplink.open',
           support: 'supported-path'
         }),
         expect.objectContaining({
           platform: 'ios',
           id: 'widgets',
           capability: 'ios.widgets',
-          support: 'supported-path'
+          support: 'pending',
+          reason: 'This iOS feature is unavailable until mobile app setup is complete.'
         }),
         expect.objectContaining({
           platform: 'ios',
           id: 'fileAssociations',
           capability: 'ios.fileAssociations',
-          support: 'supported-path'
+          support: 'pending',
+          reason: 'This iOS feature is unavailable until mobile app setup is complete.'
         }),
         expect.objectContaining({
           platform: 'ios',
@@ -695,6 +710,34 @@ describe('AuroraClient', () => {
           userCopy: expect.stringContaining('does not allow third-party default assistant ownership')
         })
       ])
+    )
+    expect(iosNativeCapabilityManifestFixture.iosInvocation).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        appIntentsAvailable: true,
+        shortcutsAvailable: true,
+        shareExtensionAvailable: false,
+        deepLinksAvailable: true,
+        widgetsAvailable: false,
+        fileAssociationsAvailable: false,
+        reason: 'Deep links can open Aurora now. Share, widget, and file-open options stay unavailable until mobile app setup is complete.'
+      })
+    )
+    expect(iosNativeCapabilityManifestFixture.permissions).toEqual(
+      expect.objectContaining({
+        'aurora.ios.shareExtension': false,
+        'aurora.ios.widgets': false,
+        'aurora.ios.fileAssociations': false,
+        'aurora.ios.deepLinks': true
+      })
+    )
+    expect(iosNativeCapabilityManifestFixture.capabilityStates).toEqual(
+      expect.objectContaining({
+        'ios.shareExtension': 'pending_native_target',
+        'ios.widgets': 'pending_native_target',
+        'ios.fileAssociations': 'pending_native_target',
+        'ios.deepLinks': 'available'
+      })
     )
     expect(iosNativeCapabilityManifestFixture.platformLimitations).toEqual(
       expect.arrayContaining([
@@ -753,16 +796,16 @@ describe('AuroraClient', () => {
     )
     expect(graph.explain('native:ios:shareExtension')).toEqual(
       expect.objectContaining({
-        state: 'degraded',
+        state: 'pending',
         routeable: false,
-        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+        nextRepairAction: 'complete native app target setup'
       })
     )
     expect(graph.explain('native:ios:fileAssociations')).toEqual(
       expect.objectContaining({
-        state: 'degraded',
+        state: 'pending',
         routeable: false,
-        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+        nextRepairAction: 'complete native app target setup'
       })
     )
     expect(graph.explain('native:ios:siriReplacement')).toEqual(
@@ -4274,6 +4317,7 @@ describe('AuroraClient', () => {
     const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
     const publicSupportedActions: IosAuroraActionId[] = [
       'app-intent.open-assistant',
+      'app-intent.stop-speech',
       'shortcut.open-assistant',
       'share.import-context',
       'deeplink.open'

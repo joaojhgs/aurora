@@ -63,6 +63,7 @@ const supportedIosPublicActionMappings = [
   ['askAuroraAppIntent', 'app-intent.open-assistant'],
   ['askAuroraShortcut', 'shortcut.open-assistant'],
   ['summarizeSharedContentShortcut', 'share.import-context'],
+  ['stopAuroraSpeechAppIntent', 'app-intent.stop-speech'],
   ['deepLinks', 'deeplink.open'],
 ] as const
 
