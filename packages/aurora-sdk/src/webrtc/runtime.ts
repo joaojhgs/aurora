@@ -107,7 +107,7 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   localProtocolCapabilities?: readonly string[] | undefined
   peerHost?: WebRtcPeerHost | undefined
   peerAuthorityResolver?: PeerAuthorityResolver | undefined
-  peerPairingIssuer?: PeerPairingIssuer | undefined
+  peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue'> | undefined
   appLayerE2eeAllowed?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
   pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
@@ -572,7 +572,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     randomId?: (() => string) | undefined
     pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
     peerAuthorityResolver?: PeerAuthorityResolver | undefined
-    peerPairingIssuer?: PeerPairingIssuer | undefined
+    peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue'> | undefined
   }) {
     this.pairingConnectPoll = { ...DEFAULT_PAIRING_CONNECT_POLL, ...options.pairingConnectPoll }
   }
