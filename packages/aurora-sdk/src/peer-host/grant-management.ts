@@ -66,6 +66,7 @@ export class PeerGrantManager {
   private readonly repository: PeerGrantRepository
   private readonly now: () => number
   private readonly randomId: () => string
+  private readonly usesDefaultRandomId: boolean
   private readonly maxFutureExpiryMs: number
   private writeQueue: Promise<void> = Promise.resolve()
 
@@ -73,6 +74,7 @@ export class PeerGrantManager {
     this.repository = options.repository
     this.now = options.now ?? Date.now
     this.randomId = options.randomId ?? defaultGrantId
+    this.usesDefaultRandomId = options.randomId === undefined
     this.maxFutureExpiryMs = options.maxFutureExpiryMs ?? DEFAULT_MAX_EXPIRY_WINDOW_MS
   }
 
@@ -95,6 +97,7 @@ export class PeerGrantManager {
       const parsedSelector = validateSelector(selector)
       const nowMs = this.currentTime()
       const normalized = normalizeSelection(selection, nowMs, this.maxFutureExpiryMs)
+      const defaultGrantIdForCreate = this.usesDefaultRandomId ? validateGrantId(this.randomId()) : undefined
       let existing: readonly LocalPeerGrantV1[]
       try {
         existing = await this.repository.listRecipientGrants(parsedSelector, nowMs)
@@ -116,7 +119,7 @@ export class PeerGrantManager {
       const grant: LocalPeerGrantV1 = {
         version: 1,
         ...parsedSelector,
-        grantId: activeExisting[0]?.grantId ?? validateGrantId(this.randomId()),
+        grantId: activeExisting[0]?.grantId ?? defaultGrantIdForCreate ?? validateGrantId(this.randomId()),
         allowedMethodIds: normalized.allowedMethodIds,
         allowedToolContractIds: normalized.allowedToolContractIds,
         capabilityPackIds: normalized.capabilityPackIds,

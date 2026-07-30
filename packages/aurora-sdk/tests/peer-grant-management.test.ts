@@ -182,6 +182,7 @@ describe('PeerGrantManager', () => {
     })
     expect(repository.upsertCalls).toBe(0)
     expect(repository.revokeCalls).toBe(0)
+    expect(repository.listCalls).toBe(0)
   })
 
   it('uses getRandomValues for default grant IDs when randomUUID is unavailable', async () => {
@@ -289,6 +290,7 @@ class FailingUpsertRepository implements PeerGrantRepository {
 }
 
 class CountingRepository implements PeerGrantRepository {
+  listCalls = 0
   upsertCalls = 0
   revokeCalls = 0
 
@@ -301,6 +303,7 @@ class CountingRepository implements PeerGrantRepository {
   }
 
   async listRecipientGrants(_selectorValue: PeerRelationshipSelector, _nowMs: number): Promise<readonly LocalPeerGrantV1[]> {
+    this.listCalls += 1
     return []
   }
 
