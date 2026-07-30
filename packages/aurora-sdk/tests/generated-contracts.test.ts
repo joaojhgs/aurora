@@ -109,6 +109,7 @@ const resolveLocalRef = (root: unknown, ref: string): unknown => {
 
 const auroraMetadataKeys = [
   'x-aurora-extra-behavior',
+  'x-aurora-projection-identity',
   'x-aurora-projection-page-termination',
   'x-aurora-string-non-blank',
   'x-aurora-string-trimmed',
@@ -194,6 +195,7 @@ const normalizeJsonSchema = (schema: unknown, root: unknown = schema, seenRefs =
         'title',
         'description',
         'x-aurora-extra-behavior',
+        'x-aurora-projection-identity',
         'x-aurora-projection-page-termination',
         'x-aurora-string-non-blank',
         'x-aurora-string-trimmed',

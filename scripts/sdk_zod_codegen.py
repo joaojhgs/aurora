@@ -35,6 +35,7 @@ JSON_VALUE_MARKER = "x-aurora-json-value"
 STRING_TRIMMED_MARKER = "x-aurora-string-trimmed"
 STRING_NON_BLANK_MARKER = "x-aurora-string-non-blank"
 PROJECTION_PAGE_TERMINATION_MARKER = "x-aurora-projection-page-termination"
+PROJECTION_IDENTITY_MARKER = "x-aurora-projection-identity"
 UNIQUE_STRING_ARRAY_NORMALIZE_MARKER = "x-aurora-unique-string-array-normalize"
 METADATA_KEYS = {
     "$schema",
@@ -46,6 +47,7 @@ METADATA_KEYS = {
     STRING_TRIMMED_MARKER,
     STRING_NON_BLANK_MARKER,
     PROJECTION_PAGE_TERMINATION_MARKER,
+    PROJECTION_IDENTITY_MARKER,
     UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
     "x-aurora-extra-behavior",
 }
@@ -390,6 +392,26 @@ class ZodCompiler:
                 raise ctx.at(PROJECTION_PAGE_TERMINATION_MARKER).unsupported(
                     f"{PROJECTION_PAGE_TERMINATION_MARKER} only applies to export page objects"
                 )
+        if PROJECTION_IDENTITY_MARKER in schema:
+            if schema.get(PROJECTION_IDENTITY_MARKER) is not True:
+                raise ctx.at(PROJECTION_IDENTITY_MARKER).unsupported(
+                    f"{PROJECTION_IDENTITY_MARKER} must be literal true"
+                )
+            properties = schema.get("properties")
+            required_fields = {
+                "blocked_tools",
+                "provider_peer_id",
+                "service_instance_id",
+                "tools",
+            }
+            if (
+                schema.get("type") != "object"
+                or not isinstance(properties, dict)
+                or not required_fields.issubset(properties)
+            ):
+                raise ctx.at(PROJECTION_IDENTITY_MARKER).unsupported(
+                    f"{PROJECTION_IDENTITY_MARKER} only applies to export page objects"
+                )
 
     def _apply_default(self, expression: str, schema: dict[str, Any], ctx: CompileContext) -> str:
         if "default" in schema:
@@ -407,6 +429,7 @@ class ZodCompiler:
                 STRING_TRIMMED_MARKER,
                 STRING_NON_BLANK_MARKER,
                 PROJECTION_PAGE_TERMINATION_MARKER,
+                PROJECTION_IDENTITY_MARKER,
                 UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
                 "x-aurora-extra-behavior",
             )
@@ -557,6 +580,40 @@ class ZodCompiler:
                 " if (value.final_checksum !== null && value.final_checksum !== undefined) { invalid = true; ctx.addIssue({ code: 'custom', path: ['final_checksum'], message: 'partial pages cannot carry final_checksum' }); }"
                 " }"
                 " if (invalid) ctx.addIssue({ code: 'custom', message: 'projection page termination invalid' });"
+                "})"
+            )
+        if schema.get(PROJECTION_IDENTITY_MARKER) is True:
+            expression = (
+                f"{expression}.superRefine((value, ctx) => {{"
+                " const isRecord = (candidate: unknown): candidate is Record<string, unknown> => Boolean(candidate) && typeof candidate === 'object' && !Array.isArray(candidate);"
+                " const hasControl = (text: string): boolean => /[\\u0000-\\u001F\\u007F]/u.test(text);"
+                " const hasSurrogate = (text: string): boolean => /[\\uD800-\\uDFFF]/u.test(text);"
+                " const encodePart = (text: string): string => encodeURIComponent(text).replace(/[!'()*]/g, (character: string) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);"
+                " const failIdentity = (issue: Parameters<typeof ctx.addIssue>[0]) => { ctx.addIssue(issue); ctx.addIssue({ code: 'custom', message: 'projection identity invalid' }); };"
+                " const peerId = value.provider_peer_id;"
+                " const serviceId = value.service_instance_id;"
+                " if (typeof peerId !== 'string' || peerId !== peerId.trim() || hasControl(peerId) || hasSurrogate(peerId)) { failIdentity({ code: 'custom', path: ['provider_peer_id'], message: 'projection provider_peer_id invalid' }); return; }"
+                " const expectedServices = new Set([`local:${encodePart(peerId)}:Tooling`, `remote:${peerId}:Tooling`]);"
+                " if (typeof serviceId !== 'string' || !expectedServices.has(serviceId)) { failIdentity({ code: 'custom', path: ['service_instance_id'], message: 'projection service_instance_id invalid' }); return; }"
+                " const checkTool = (tool: unknown, path: Array<string | number>) => {"
+                " if (!isRecord(tool)) { failIdentity({ code: 'custom', path, message: 'projection tool identity invalid' }); return; }"
+                " const contractId = tool.tool_contract_id;"
+                " if (typeof contractId !== 'string' || contractId.length === 0 || contractId !== contractId.trim() || [...contractId].length > 160 || hasControl(contractId) || hasSurrogate(contractId)) { failIdentity({ code: 'custom', path: [...path, 'tool_contract_id'], message: 'projection tool_contract_id invalid' }); return; }"
+                " const globalId = tool.global_tool_id;"
+                " if (typeof globalId !== 'string' || globalId.length === 0 || [...globalId].length > 1024) { failIdentity({ code: 'custom', path: [...path, 'global_tool_id'], message: 'projection global_tool_id invalid' }); return; }"
+                " if (tool.tool_id_scheme !== 'aurora-tool' || tool.tool_id_version !== 1) { failIdentity({ code: 'custom', path, message: 'projection tool identity scheme invalid' }); return; }"
+                " if (tool.provider_peer_id !== peerId) { failIdentity({ code: 'custom', path: [...path, 'provider_peer_id'], message: 'projection tool provider peer mismatch' }); return; }"
+                " if (tool.provider_service_instance_id !== serviceId) { failIdentity({ code: 'custom', path: [...path, 'provider_service_instance_id'], message: 'projection tool service mismatch' }); return; }"
+                " const provenance = tool.provenance;"
+                " if (!isRecord(provenance) || provenance.provider_peer_id !== peerId) { failIdentity({ code: 'custom', path: [...path, 'provenance', 'provider_peer_id'], message: 'projection provenance peer mismatch' }); return; }"
+                " if (provenance.provider_service_instance_id !== serviceId) { failIdentity({ code: 'custom', path: [...path, 'provenance', 'provider_service_instance_id'], message: 'projection provenance service mismatch' }); return; }"
+                " const expectedGlobalId = `aurora-tool:v1:${encodePart(peerId)}:Tooling:${encodePart(contractId)}`;"
+                " if (globalId !== expectedGlobalId) { failIdentity({ code: 'custom', path: [...path, 'global_tool_id'], message: 'projection global_tool_id mismatch' }); }"
+                " };"
+                " const tools: unknown[] = Array.isArray(value.tools) ? value.tools : [];"
+                " const blockedTools: unknown[] = Array.isArray(value.blocked_tools) ? value.blocked_tools : [];"
+                " tools.forEach((tool: unknown, index: number) => checkTool(tool, ['tools', index]));"
+                " blockedTools.forEach((blocked: unknown, index: number) => { if (!isRecord(blocked)) { failIdentity({ code: 'custom', path: ['blocked_tools', index], message: 'projection blocked tool identity invalid' }); return; } checkTool(blocked.tool, ['blocked_tools', index, 'tool']); });"
                 "})"
             )
         return expression

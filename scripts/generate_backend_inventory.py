@@ -36,6 +36,7 @@ try:
     from scripts.sdk_zod_codegen import (
         GENERATOR_FORMAT_VERSION,
         JSON_VALUE_MARKER,
+        PROJECTION_IDENTITY_MARKER,
         PROJECTION_PAGE_TERMINATION_MARKER,
         STRING_NON_BLANK_MARKER,
         STRING_TRIMMED_MARKER,
@@ -50,6 +51,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
     from sdk_zod_codegen import (
         GENERATOR_FORMAT_VERSION,
         JSON_VALUE_MARKER,
+        PROJECTION_IDENTITY_MARKER,
         PROJECTION_PAGE_TERMINATION_MARKER,
         STRING_NON_BLANK_MARKER,
         STRING_TRIMMED_MARKER,
@@ -367,6 +369,15 @@ def _assert_projection_page_termination(entry: ValidatorDiscovery, schema: dict[
         raise ValueError(f"{entry.error_context()}: missing {PROJECTION_PAGE_TERMINATION_MARKER}")
 
 
+def _assert_projection_identity(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+    if (
+        not isinstance(model_schema, dict)
+        or model_schema.get(PROJECTION_IDENTITY_MARKER) is not True
+    ):
+        raise ValueError(f"{entry.error_context()}: missing {PROJECTION_IDENTITY_MARKER}")
+
+
 VALIDATOR_EXTENSION_VERIFIERS = {
     ("MeshAddressSelector", "_non_blank"): _assert_mesh_non_blank,
     ("ToolingToolInfo", "_bounded_unique_legacy_ids"): _assert_tooling_legacy_ids,
@@ -377,6 +388,9 @@ VALIDATOR_EXTENSION_VERIFIERS = {
     ),
     ("ToolingGetExportCatalogResponse", "_validate_page_termination"): (
         _assert_projection_page_termination
+    ),
+    ("ToolingGetExportCatalogResponse", "_validate_projection_identity"): (
+        _assert_projection_identity
     ),
 }
 
@@ -1055,6 +1069,23 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                         "next_cursor": None,
                         "total_count": None,
                         "final_checksum": None,
+                    },
+                    {
+                        **base,
+                        "provider_peer_id": f" {TOOLING_PROVIDER_PEER_ID} ",
+                    },
+                    {
+                        **base,
+                        "service_instance_id": "remote:other-peer:Tooling",
+                    },
+                    {
+                        **base,
+                        "tools": [
+                            {
+                                **base["tools"][0],
+                                "global_tool_id": "not-canonical",
+                            }
+                        ],
                     },
                 ]
             )
