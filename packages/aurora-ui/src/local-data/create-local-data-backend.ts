@@ -139,7 +139,8 @@ async function commitSelectedBackendPointer(
 function isTerminalSqliteOpenError(error: unknown): boolean {
   if (!(error instanceof LocalDataError)) return false
   if (error.code === 'identity_mismatch') return true
-  if (error.code !== 'migration_integrity' && error.code !== 'invalid_record') return false
+  if (error.code === 'migration_integrity' || error.code === 'migration_order') return true
+  if (error.code !== 'invalid_record') return false
   const reason = error.metadata?.reason
   return reason === 'local_node_owner_mismatch'
     || reason === 'local_node_owner_ambiguous'

@@ -114,6 +114,30 @@ describe('createLocalDataBackend pointer selection', () => {
     expect(pointerStore.writes).toBe(0)
     await expect(pointerStore.read('profile-1', 'node-1')).resolves.toMatchObject({ selectedBackend: 'sqlite-wasm-opfs' })
   })
+
+  it.each([
+    ['migration_integrity', 'migration_sql_checksum'],
+    ['migration_integrity', 'ledger_user_version_mismatch'],
+    ['migration_order', 'migration_sequence_gap']
+  ])('fails closed on uncommitted SQLite %s:%s without opening IndexedDB or writing a pointer', async (code, reason) => {
+    installBrowserStorageProbe()
+    const pointerStore = new CountingPointerStore(null)
+    const indexedDbBackend = new KindOverrideBackend('indexeddb')
+
+    await expect(createLocalDataBackend('profile-1', 'node-1', {
+      pointerStore,
+      indexedDbBackend,
+      lock: new GrantedLock(),
+      createWorker: () => new ErrorOpenWorker(code, reason),
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
+    })).rejects.toMatchObject({
+      code,
+      metadata: { reason }
+    })
+    expect(indexedDbBackend.openCount).toBe(0)
+    expect(pointerStore.writes).toBe(0)
+    await expect(pointerStore.read('profile-1', 'node-1')).resolves.toBeNull()
+  })
 })
 
 class KindOverrideBackend implements LocalDataBackend {
