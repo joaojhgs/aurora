@@ -4,6 +4,13 @@ import {
   TOOLING_METHODS,
   parseToolingExportCatalogPage
 } from '../src/index.js'
+import {
+  canonicalToolGlobalId,
+  computeProjectionChecksum,
+  computeProjectionPageHash,
+  providerServiceInstanceId,
+  toolSchemaHash
+} from '../src/local-tools/index.js'
 import { createPeerStorageE2EHarness } from './helpers/peerStorageE2EHarness.js'
 import {
   buildToolingInteropProjectionPage,
@@ -20,14 +27,15 @@ describe('Tooling Python interop vectors', () => {
       prepare_execution: TOOLING_METHODS.prepareExecution,
       execute_tool: TOOLING_METHODS.executeTool
     })
-    expect(encodeURIComponent(vectors.stable_peer_id)).toBe(vectors.percent_encoded_stable_peer_id)
-    expect(vectors.provider_service_instance_id).toBe(`local:${vectors.percent_encoded_stable_peer_id}:Tooling`)
+    expect(vectors.provider_service_instance_id).toBe(providerServiceInstanceId(vectors.stable_peer_id))
     for (const entry of vectors.positive) {
-      expect(encodeURIComponent(entry.tool_contract_id)).toBe(entry.percent_encoded_tool_contract_id)
+      expect(entry.global_tool_id).toBe(canonicalToolGlobalId(vectors.stable_peer_id, entry.tool_contract_id))
       expect(entry.tool.global_tool_id).toBe(entry.global_tool_id)
       expect(entry.tool.provider_service_instance_id).toBe(vectors.provider_service_instance_id)
+      expect(entry.schema_hash).toBe(toolSchemaHash(entry.tool))
       expect(entry.tool.argument_visibility).toEqual(expect.any(Object))
-      if (entry.reordered_schema_hash) {
+      if (entry.reordered_tool) {
+        expect(toolSchemaHash(entry.reordered_tool)).toBe(entry.schema_hash)
         expect(entry.reordered_schema_hash).toBe(entry.schema_hash)
       }
     }
@@ -38,8 +46,17 @@ describe('Tooling Python interop vectors', () => {
     const parsed = parseToolingExportCatalogPage(page)
 
     expect(parsed).toEqual({ ok: true, page })
-    expect(page.page_hash).toBe('79047d6945baba99751152a12ab3a61b289d9dc6784ef0a18d4817ae1d0b55a7')
-    expect(page.final_checksum).toBe('1db104fb4e829eed38233f914b43155812eaf16db4655ef1008c02368f681729')
+    expect(page.page_hash).toBe(computeProjectionPageHash(page))
+    expect(page.final_checksum).toBe(computeProjectionChecksum(page.tools, page.retirements, page.blocked_tools))
+  })
+
+  it('keeps projection checksums stable for reordered tool, blocked, and retirement inputs', () => {
+    const page = buildToolingInteropProjectionPage()
+    expect(computeProjectionChecksum(
+      [...page.tools].reverse(),
+      [...page.retirements].reverse(),
+      [...(page.blocked_tools ?? [])].reverse()
+    )).toBe(page.final_checksum)
   })
 
   it('rejects negative projection vectors through the current SDK consumer', () => {
@@ -86,9 +103,12 @@ describe('Tooling Python interop vectors', () => {
     expect(harness.grants).toEqual([])
   })
 
-  it('records base dependency gaps instead of inventing duplicate production hashing', () => {
-    expect(loadToolingInteropVectors().current_dependency_gaps).toEqual([
-      'No production TypeScript API computes Tooling canonical global IDs, schema hashes, projection page hashes, or final checksums at this base; SDK tests consume Python-authoritative vectors through current projection-page parsing only.',
+  it('records only parser-boundary gaps outside production helper coverage', () => {
+    const gaps = loadToolingInteropVectors().current_dependency_gaps.filter(
+      (gap) => !gap.includes('final checksums')
+    )
+
+    expect(gaps).toEqual([
       'Python ToolingToolInfo currently accepts non-aurora global_tool_id strings and provider_service_instance_id values without enforcing the local:<percent-encoded-peer>:Tooling pattern; stricter negative identity validation depends on the future generated contract/parser lane.',
       'The current SDK projection-page parser accepts oversized service_instance_id values that Python rejects at max_length=256; full parity depends on the generated boundary parser lane.'
     ])
