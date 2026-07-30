@@ -509,6 +509,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.remoteProtocol = null
     this.manifest = null
+    this.incomingManifestGeneration += 1
+    this.incomingManifestAck = null
     this.authenticatedPeerContext = undefined
     this.startedAuthorityEpochKeys.clear()
     this.remoteAvailability = 'unknown'
@@ -898,7 +900,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     if (!this.isFreshRemoteLeaseFrame(frame)) return
     this.remoteLeaseCursor = leaseCursor(frame)
     if (frame.available === false || frame.type === 'provider_unavailable') {
-      this.clearRemoteAvailability()
+      this.clearRemoteAvailability({ settleWaiters: !this.incomingManifestAck })
       return
     }
     this.remoteLease = frame
@@ -964,11 +966,12 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     })
   }
 
-  private clearRemoteAvailability(): void {
+  private clearRemoteAvailability(options: { settleWaiters?: boolean } = {}): void {
     this.clearRemoteLease()
     this.remoteAvailability = 'unavailable'
     this.manifest = null
     this.remoteLeaseFloor = this.remoteLeaseCursor
+    if (options.settleWaiters === false) return
     for (const pending of this.pendingManifests.values()) {
       this.clearTimer(pending.timer)
       pending.resolve(null)

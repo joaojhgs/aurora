@@ -458,6 +458,93 @@ describe('WebRtcMeshPeerBridge', () => {
     await expect(second).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer B' })
   })
 
+  it('does not promote a delayed manifest ACK after an epoch reset and fresh auth', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
+    const ackRelease: { current: (() => void) | null } = { current: null }
+    session.sendFrameGate = (frame) => {
+      if ((frame as any).type !== 'manifest_ack') return
+      return new Promise<void>((resolve) => {
+        ackRelease.current = resolve
+      })
+    }
+
+    const stale = bridge.getManifest('peer-a')
+    await flush()
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Stale Peer',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await flush()
+    expect(await isSettled(stale)).toBe(false)
+
+    session.setSnapshot({ state: 'reconnecting', authorized: false })
+    await expect(stale).rejects.toThrow('epoch reset')
+
+    const releaseAck = ackRelease.current
+    if (!releaseAck) throw new Error('manifest ACK send was not held')
+    releaseAck()
+    await flush()
+
+    session.sendFrameGate = null
+    session.setSnapshot({ state: 'authorized', authorized: true })
+    session.emit(hello())
+    const fresh = bridge.getManifest('peer-a')
+    await flush()
+    expect(session.sent.filter((frame) => JSON.stringify(frame) === JSON.stringify({ type: 'manifest_request' }))).toHaveLength(2)
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Fresh Peer',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await expect(fresh).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Fresh Peer' })
+  })
+
+  it('defers provider-unavailable manifest waiter settlement until the matching manifest ACK completes', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
+    session.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
+    const first = bridge.getManifest('peer-a')
+    await flush()
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer A',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 1, issued_at_ms: 1000, expires_at_ms: 61_000, available: true })
+    await expect(first).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer A' })
+
+    const ackRelease: { current: (() => void) | null } = { current: null }
+    session.sendFrameGate = (frame) => {
+      if ((frame as any).type !== 'manifest_ack') return
+      return new Promise<void>((resolve) => {
+        ackRelease.current = resolve
+      })
+    }
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer B',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await flush()
+
+    const unavailable = bridge.getManifest('peer-a')
+    session.emit({ type: 'provider_unavailable', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 2, issued_at_ms: 2000, expires_at_ms: 2000, available: false })
+    await flush()
+    expect(await isSettled(unavailable)).toBe(false)
+
+    const releaseAck = ackRelease.current
+    if (!releaseAck) throw new Error('manifest ACK send was not held')
+    releaseAck()
+    await expect(unavailable).resolves.toBeNull()
+    await expect(bridge.getManifest('peer-a')).resolves.toBeNull()
+  })
+
   it('preserves consumer-only 405 and dispatches authorized hybrid inbound calls through peer host', async () => {
     const consumerSession = new FakeSession()
     const consumerBridge = new WebRtcMeshPeerBridge({ session: consumerSession, remotePeerId: 'peer-a' })
