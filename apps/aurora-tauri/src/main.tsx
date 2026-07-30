@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { getAuroraSurfaceProfile } from '@aurora/ui'
 import '@aurora/ui/styles.css'
 import './styles.css'
+import { installDesktopLiveE2eHook } from './desktop-live-e2e'
 import { AuroraOverlayApp } from './overlay-app'
 import { AuroraTauriApp } from './tauri-app'
 
@@ -16,6 +17,7 @@ const surfaceProfile = getAuroraSurfaceProfile({
 
 document.documentElement.dataset.auroraPlatform = surfaceProfile.kind
 document.body.dataset.auroraPlatform = surfaceProfile.kind
+installDesktopLiveE2eHook()
 
 if (isOverlaySurface) {
   document.documentElement.classList.add('aurora-overlay-surface')
