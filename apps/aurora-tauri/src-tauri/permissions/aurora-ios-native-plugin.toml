@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "aurora-ios-native-plugin"
-description = "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability."
+description = "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability."
 commands.allow = [
   "aurora_ios_native_plugin_manifest",
   "aurora_ios_invocation_status",
@@ -9,5 +9,8 @@ commands.allow = [
   "aurora_ios_invoke_action",
   "aurora_ios_secure_storage_status",
   "aurora_ios_biometric_status",
-  "aurora_ios_admin_unlock"
+  "aurora_ios_admin_unlock",
+  "aurora_inbound_verifier_get",
+  "aurora_inbound_verifier_set",
+  "aurora_inbound_verifier_delete"
 ]

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "aurora-ios-thin",
-  "description": "iOS thin WebView capability. Grants only nonsecret thin profile storage, opaque Keychain reconnect-proof commands, bounded iOS native status, mobile mesh/deep-link, and core UI primitives; no sidecar, generic secure storage, local files, audio bridge, shell/process, or raw credential getter.",
+  "description": "iOS thin WebView capability. Grants only nonsecret thin profile storage, opaque Keychain reconnect-proof commands, dedicated inbound verifier storage, bounded iOS native status, mobile mesh/deep-link, and core UI primitives; no sidecar, generic secure storage, local files, audio bridge, shell/process, or raw credential getter.",
   "windows": [
     "main"
   ],

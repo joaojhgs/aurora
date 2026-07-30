@@ -285,6 +285,7 @@ public final class AuroraNativePlugin: Plugin {
         "native.permissionsManifest": true,
         "native.deviceStatus": true,
         "aurora.iosKeychain": true,
+        "aurora.inboundVerifierStorage": true,
         "aurora.iosThinPeerProof": true,
         "aurora.iosThinProfile": true,
         "aurora.iosBiometricUnlock": true,
@@ -313,6 +314,7 @@ public final class AuroraNativePlugin: Plugin {
         "native.permissionsManifest": true,
         "native.deviceStatus": true,
         "ios.keychain.secureCredentialStorage": true,
+        "native.inboundVerifierStorage": true,
         "ios.thinPeerProof": true,
         "ios.thinProfile": true,
         "ios.biometric.adminUnlock": true,
@@ -340,6 +342,7 @@ public final class AuroraNativePlugin: Plugin {
         "native.permissionsManifest": "available",
         "native.deviceStatus": "available",
         "aurora.iosKeychain": "available",
+        "aurora.inboundVerifierStorage": "available",
         "aurora.iosThinPeerProof": "available",
         "aurora.iosThinProfile": "available",
         "aurora.iosBiometricUnlock": "available",
@@ -364,6 +367,7 @@ public final class AuroraNativePlugin: Plugin {
         "native.permissionsManifest": "available",
         "native.deviceStatus": "available",
         "ios.keychain.secureCredentialStorage": "available",
+        "native.inboundVerifierStorage": "available",
         "ios.thinPeerProof": "available",
         "ios.thinProfile": "available",
         "ios.biometric.adminUnlock": "available",
@@ -775,6 +779,48 @@ public final class AuroraNativePlugin: Plugin {
         AuroraThinStorageError.redactedCode(
           for: error,
           fallback: "thin_room_secret_get_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func inboundVerifierGet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraInboundVerifierGetArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.inboundVerifierGet(args.request))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "inbound_verifier_get_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func inboundVerifierSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraInboundVerifierSetArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.inboundVerifierSet(args.request))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "inbound_verifier_set_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func inboundVerifierDelete(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraInboundVerifierDeleteArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.inboundVerifierDelete(args.request))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "inbound_verifier_delete_failed"
         )
       )
     }
