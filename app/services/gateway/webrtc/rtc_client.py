@@ -988,7 +988,7 @@ class RTCClient:
             asyncio.create_task(self._handle_provider_lease_frame(peer, obj))
         elif msg_type == "manifest_request":
             stable_peer_id = self._stable_peer_id_for_session(peer)
-            asyncio.create_task(self._send_manifest(stable_peer_id))
+            asyncio.create_task(self._send_manifest(stable_peer_id, force_send=True))
         elif msg_type == "manifest_ack":
             asyncio.create_task(self._on_manifest_ack(self._stable_peer_id_for_session(peer), obj))
         elif msg_type == "capacity_update":
@@ -3294,6 +3294,7 @@ class RTCClient:
         *,
         mesh_config: MeshConfig | None = None,
         live_policy_snapshot: Any = None,
+        force_send: bool = False,
     ) -> bool:
         """Send our local manifest to a peer after authentication.
 
@@ -3313,13 +3314,6 @@ class RTCClient:
 
         session_peer_id = self._session_for_peer_id(peer_id)
         stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
-        pending_ack = self._manifest_ack_expectations.get(stable_peer_id)
-        if (
-            pending_ack is not None
-            and pending_ack.session_peer_id == session_peer_id
-            and self.peer_supports_capability(session_peer_id, CAP_PROVIDER_LEASE_V1)
-        ):
-            return True
         projection = self._current_provider_export_projection(
             stable_peer_id,
             mesh_config=mesh_config,
@@ -3335,6 +3329,16 @@ class RTCClient:
         msg = manifest_to_dict(manifest)
         projection_size = sum(len(service.methods) for service in manifest.shared_services)
         advertised_services = tuple(sorted(service.module for service in manifest.shared_services))
+        pending_ack = self._manifest_ack_expectations.get(stable_peer_id)
+        pending_matches_projection = self._manifest_expectation_matches_projection(
+            stable_peer_id,
+            session_peer_id,
+            pending_ack,
+            manifest,
+            advertised_services,
+        )
+        if pending_matches_projection and not force_send:
+            return True
         await self._audit(
             "mesh.manifest_projection.generated",
             details={
@@ -3344,10 +3348,13 @@ class RTCClient:
                 "secrets_redacted": True,
             },
         )
-        self._reset_local_provider_readiness(stable_peer_id, session_peer_id=session_peer_id)
+        if not pending_matches_projection:
+            self._reset_local_provider_readiness(stable_peer_id, session_peer_id=session_peer_id)
         evidence = manifest.recipient_projection_evidence
         expected_ack: _ManifestAckExpectation | None = None
-        if evidence is not None:
+        if pending_matches_projection:
+            expected_ack = pending_ack
+        elif evidence is not None:
             expected_ack = _ManifestAckExpectation(
                 session_peer_id=session_peer_id,
                 connection_epoch=uuid.uuid4().hex,
@@ -3389,7 +3396,8 @@ class RTCClient:
         )
         if not sent:
             if (
-                expected_ack is not None
+                not pending_matches_projection
+                and expected_ack is not None
                 and self._manifest_ack_expectations.get(stable_peer_id) == expected_ack
             ):
                 self._manifest_ack_expectations.pop(stable_peer_id, None)
@@ -3629,6 +3637,37 @@ class RTCClient:
             and ack.projection_digest == expected.projection_digest
         )
 
+    def _manifest_expectation_matches_projection(
+        self,
+        stable_peer_id: str,
+        session_peer_id: str,
+        expected: _ManifestAckExpectation | None,
+        manifest: Any,
+        advertised_services: tuple[str, ...],
+    ) -> bool:
+        if expected is None:
+            return False
+        if expected.session_peer_id != session_peer_id:
+            return False
+        if self._stable_peer_sessions.get(stable_peer_id) != session_peer_id:
+            return False
+        if not self.peer_supports_capability(session_peer_id, CAP_PROVIDER_LEASE_V1):
+            return False
+        evidence = getattr(manifest, "recipient_projection_evidence", None)
+        if evidence is None:
+            return False
+        return (
+            expected.projection_digest == evidence.projection_digest
+            and expected.active_protocol == str(getattr(manifest, "active_protocol", "") or "")
+            and expected.active_version == str(getattr(manifest, "active_version", "") or "")
+            and expected.active_tier == str(getattr(manifest, "active_tier", "") or "")
+            and expected.protocol_revision == str(getattr(manifest, "active_version", "") or "")
+            and expected.registry_revision == evidence.registry_revision
+            and expected.export_policy_revision == evidence.policy_revision
+            and expected.auth_grant_revision == evidence.auth_grant_revision
+            and expected.advertised_services == advertised_services
+        )
+
     def _send_pong(self, peer_id: str, ping_data: dict) -> None:
         """Send a pong response to a peer's ping.
 
@@ -3818,6 +3857,7 @@ class RTCClient:
             stable_peer_id,
             mesh_config=mesh_config,
             live_policy_snapshot=live_policy_snapshot,
+            force_send=True,
         )
         if sent:
             self._cancel_manifest_reannounce_retries(stable_peer_id)
