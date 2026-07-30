@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserPersistentPeerCredentialStore, createBrowserNativeCapabilityPack, type AuroraRuntimeProfileV2 } from '@aurora/ui'
 import { MemoryLocalDataBackend, type EncryptedDataEnvelopeV1, type EnvelopeCryptoPort, type LocalDataBackend, type LocalDataBackendStatus, type LocalDataKeyPurpose, type LocalDataSession } from '@aurora/client/local-data'
+import type { LocalToolExportDecisionPort } from '@aurora/client/local-tools'
 import {
   BrowserMeshNodeCompositionError,
   createBrowserMeshNodeServices,
@@ -19,7 +20,7 @@ describe('browser mesh-node service composition', () => {
       credentialStore: store,
       rolloutFlags: rolloutFlags(),
       localStablePeerId: 'browser-peer',
-      localDataBackendFactory: async () => new PersistentMemoryLocalDataBackend(),
+      localDataBackendFactory: async () => localDataAuthority(new PersistentMemoryLocalDataBackend()),
       envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
       nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
         ...options,
@@ -49,7 +50,7 @@ describe('browser mesh-node service composition', () => {
       rolloutFlags: rolloutFlags(),
       localStablePeerId: 'browser-peer',
       origin: 'https://app.example',
-      localDataBackendFactory: async () => backend,
+      localDataBackendFactory: async () => localDataAuthority(backend),
       envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
       nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
         ...options,
@@ -67,6 +68,15 @@ describe('browser mesh-node service composition', () => {
     expect(services.grantStorePersistent).toBe(true)
     expect(services.storageBackendKind).toBe('indexeddb')
     expect(services.registeredToolIds).toEqual(['aurora.local.native.get_device_status.v1'])
+    expect(services.session).toBe(backend.session)
+    expect(services.backend).toBe(backend)
+    expect(services.crypto).toBeInstanceOf(RecordingEnvelopeCrypto)
+    expect(services.provider.enabled).toBe(true)
+    expect(services.localToolRegistry).toBe(services.provider.localToolRegistry)
+    expect(services.compositionStatus).toMatchObject({
+      state: 'ready',
+      productMessage: 'This device is available for sharing.',
+    })
 
     expect(services.peerHost).toBeDefined()
     await expect(services.peerHost!.startEpoch('remote-peer')).resolves.toMatchObject({
@@ -76,7 +86,140 @@ describe('browser mesh-node service composition', () => {
     await expect(backend.session?.localAudit.listAudit()).resolves.toEqual([])
     await services.close()
   })
+
+  it('defaults local tool export to deny-all until an explicit decision port opts in', async () => {
+    const store = durableCredentialStore()
+    const backend = new PersistentMemoryLocalDataBackend()
+    const services = await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore: store,
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => localDataAuthority(backend),
+      envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: () => 'id-1',
+      randomBytes: fixedBytes,
+    })
+
+    const catalog = await dispatchExportCatalog(services)
+
+    expect(catalog).toMatchObject({ tools: [] })
+    await services.close()
+  })
+
+  it('uses explicit export decisions and records local tool audit directly into durable local data', async () => {
+    const store = durableCredentialStore()
+    const backend = new PersistentMemoryLocalDataBackend()
+    const exportDecision: LocalToolExportDecisionPort = {
+      isShared: (tool) => tool.tool_contract_id === 'aurora.local.native.get_device_status.v1',
+    }
+    const services = await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore: store,
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => localDataAuthority(backend),
+      envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      exportDecision,
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: vi.fn()
+        .mockReturnValueOnce('audit-1')
+        .mockReturnValue('epoch-1'),
+      randomBytes: fixedBytes,
+    })
+
+    const catalog = await dispatchExportCatalog(services)
+    expect(catalog).toMatchObject({
+      tools: [
+        expect.objectContaining({
+          tool_contract_id: 'aurora.local.native.get_device_status.v1',
+        }),
+      ],
+    })
+    const execute = services.provider.peerHostRegistry.get('Tooling.ExecuteTool')
+    expect(execute).toBeDefined()
+    if (!execute) throw new Error('execute method missing')
+    await services.provider.peerHostRegistry.dispatch(execute, {
+      tool_name: 'aurora.local.native.get_device_status.v1',
+      arguments: {},
+    }, peerHostContext())
+
+    await expect(services.session.localAudit.listAudit()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'epoch-1',
+        profileId: 'profile-1',
+        localNodeId: 'browser-peer',
+        peerId: 'remote-peer',
+        action: 'local-tool.execute',
+        decision: 'rejected',
+        resultStatus: 'denied',
+        methodId: 'Tooling.ExecuteTool',
+        toolContractId: 'aurora.local.native.get_device_status.v1',
+        redactedDetailJson: expect.objectContaining({
+          redacted: true,
+          secretsRedacted: true,
+        }),
+      }),
+    ])
+    await services.close()
+  })
 })
+
+async function localDataAuthority(backend: PersistentMemoryLocalDataBackend) {
+  return {
+    backend,
+    session: await backend.open('profile-1', 'browser-peer'),
+  }
+}
+
+function durableCredentialStore(): BrowserPersistentPeerCredentialStore {
+  return new BrowserPersistentPeerCredentialStore({
+    storage: new MemoryVaultStorage(),
+    metadataStorage: memoryStorage(),
+    crypto: globalThis.crypto,
+    now: () => 1_000,
+  })
+}
+
+async function dispatchExportCatalog(services: Awaited<ReturnType<typeof createBrowserMeshNodeServices>>): Promise<unknown> {
+  const method = services.provider.peerHostRegistry.get('Tooling.GetExportCatalog')
+  expect(method).toBeDefined()
+  if (!method) throw new Error('export catalog method missing')
+  return await services.provider.peerHostRegistry.dispatch(method, {}, peerHostContext('Tooling.GetExportCatalog'))
+}
+
+function peerHostContext(methodId = 'Tooling.ExecuteTool') {
+  return {
+    id: 'call-1',
+    methodId,
+    remotePeerId: 'remote-peer',
+    identity: {
+      callerPeerId: 'remote-peer',
+      principalId: 'principal-a',
+      effectivePermissions: [
+        'Tooling.GetTools',
+        'Tooling.ExecuteTool',
+        'Native.GetDeviceStatus',
+      ],
+      authGrantRevision: 1,
+      manifestRevision: 1,
+    },
+    signal: new AbortController().signal,
+    receivedAtMs: 1_000,
+    deadlineAtMs: 31_000,
+  }
+}
 
 function meshProfile(): AuroraRuntimeProfileV2 {
   return {

@@ -32,7 +32,9 @@ import {
 } from '@aurora/ui'
 import {
   BrowserMeshNodeCompositionError,
+  browserMeshNodeCompositionStatusFromError,
   createBrowserMeshNodeServices,
+  type BrowserMeshNodeCompositionStatus,
   type BrowserMeshNodeServices,
 } from './browser-mesh-node-services'
 
@@ -45,6 +47,16 @@ type BrowserRuntimeCache = {
 
 let browserRuntimeCache: BrowserRuntimeCache | null = null
 let browserCredentialStore: BrowserPersistentPeerCredentialStore | null = null
+let browserMeshNodeCompositionInflight: {
+  baseKey: string
+  promise: Promise<BrowserMeshNodeServices | null>
+} | null = null
+let browserMeshNodeCompositionStatus: BrowserMeshNodeCompositionStatus = {
+  state: 'disabled',
+  reasonCode: 'not_mesh_node',
+  message: 'Device sharing services disabled: not_mesh_node',
+  productMessage: 'This device is not set up for sharing.',
+}
 
 class MissingGatewayTransport implements AuroraTransport {
   readonly kind = 'http'
@@ -94,25 +106,52 @@ export async function createAuroraBrowserRuntimeAsync(): Promise<BrowserWebThinR
   const runtimeProfile = activeRuntimeProfile(profileDocument)
   const rolloutFlags = browserWebRtcRolloutFlags()
   const localStablePeerId = runtimeProfile?.localNode.stablePeerId || credentialStore.getOrCreateLocalStablePeerId()
-  let meshNodeServices: BrowserMeshNodeServices | null = null
-  try {
-    meshNodeServices = await createBrowserMeshNodeServices({
-      runtimeProfile,
-      credentialStore,
-      rolloutFlags,
-      localStablePeerId,
-      origin: typeof window === 'undefined' ? undefined : window.location.origin,
-      navigator: typeof navigator === 'undefined' ? null : navigator,
-      window: typeof window === 'undefined' ? null : window,
-      notification: browserNotificationPort(),
-      filePicker: browserFilePickerPort(),
-      crypto: typeof crypto === 'undefined' ? null : crypto,
-      indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
-    })
-  } catch (error) {
-    if (!(error instanceof BrowserMeshNodeCompositionError)) throw error
-  }
+  const baseKey = browserClientCacheKey(null)
+  const meshNodeServices = await resolveBrowserMeshNodeServices(baseKey, () => createBrowserMeshNodeServices({
+    runtimeProfile,
+    credentialStore,
+    rolloutFlags,
+    localStablePeerId,
+    origin: typeof window === 'undefined' ? undefined : window.location.origin,
+    navigator: typeof navigator === 'undefined' ? null : navigator,
+    window: typeof window === 'undefined' ? null : window,
+    notification: browserNotificationPort(),
+    filePicker: browserFilePickerPort(),
+    crypto: typeof crypto === 'undefined' ? null : crypto,
+    indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
+  }))
   return createAuroraBrowserRuntimeFromStore(meshNodeServices)
+}
+
+async function resolveBrowserMeshNodeServices(
+  baseKey: string,
+  createServices: () => Promise<BrowserMeshNodeServices>,
+): Promise<BrowserMeshNodeServices | null> {
+  const existing = browserMeshNodeCompositionInflight
+  if (existing?.baseKey === baseKey) return await existing.promise
+  if (existing) {
+    void existing.promise
+      .then((services) => services?.close())
+      .catch(() => undefined)
+  }
+  const promise = (async () => {
+    try {
+      const services = await createServices()
+      browserMeshNodeCompositionStatus = services.compositionStatus
+      return services
+    } catch (error) {
+      if (!(error instanceof BrowserMeshNodeCompositionError)) throw error
+      browserMeshNodeCompositionStatus = browserMeshNodeCompositionStatusFromError(error)
+      return null
+    }
+  })()
+  browserMeshNodeCompositionInflight = { baseKey, promise }
+  const services = await promise
+  if (browserMeshNodeCompositionInflight?.baseKey !== baseKey) {
+    await services?.close().catch(() => undefined)
+    return null
+  }
+  return services
 }
 
 function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeServices | null): BrowserWebThinRuntime {
@@ -175,10 +214,12 @@ export function createAuroraBrowserClient(): AuroraClient {
 }
 
 export function resetAuroraBrowserClientForTests(): void {
-  void browserRuntimeCache?.runtime.close().catch(() => undefined)
-  void browserRuntimeCache?.meshNodeServices?.close().catch(() => undefined)
-  browserRuntimeCache = null
+  void closeBrowserRuntimeCache().catch(() => undefined)
   browserCredentialStore = null
+}
+
+export function auroraBrowserMeshNodeCompositionStatus(): BrowserMeshNodeCompositionStatus {
+  return browserMeshNodeCompositionStatus
 }
 
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
@@ -240,10 +281,8 @@ export async function saveAuroraBrowserThinProfile(
   if (sanitized.webrtcProfile) {
     store.saveConnectionProfile(sanitized.webrtcProfile)
   }
-  const runtime = browserRuntimeCache?.runtime
-  browserRuntimeCache = null
+  await closeBrowserRuntimeCache()
   browserCredentialStore = null
-  await runtime?.close()
 }
 
 export async function saveAuroraBrowserOnboardingProfile(
@@ -338,10 +377,8 @@ export async function saveAuroraBrowserRuntimeProfile(
   if (sanitized.localNode.meshMembership?.webrtcProfile) {
     store.saveConnectionProfile(sanitized.localNode.meshMembership.webrtcProfile)
   }
-  const runtime = browserRuntimeCache?.runtime
-  browserRuntimeCache = null
+  await closeBrowserRuntimeCache()
   browserCredentialStore = null
-  await runtime?.close()
 }
 
 export async function selectAuroraBrowserThinProfile(
@@ -358,10 +395,8 @@ export async function selectAuroraBrowserThinProfile(
     ...current,
     activeProfileId: profileId,
   })
-  const runtime = browserRuntimeCache?.runtime
-  browserRuntimeCache = null
+  await closeBrowserRuntimeCache()
   browserCredentialStore = null
-  await runtime?.close()
 }
 
 export function isAuroraWebDemoMode(): boolean {
@@ -393,6 +428,20 @@ function browserClientCacheKey(meshNodeServices: BrowserMeshNodeServices | null 
       }
       : null,
   })
+}
+
+async function closeBrowserRuntimeCache(): Promise<void> {
+  const cached = browserRuntimeCache
+  const inflight = browserMeshNodeCompositionInflight
+  browserRuntimeCache = null
+  browserMeshNodeCompositionInflight = null
+  await Promise.all([
+    cached?.runtime.close().catch(() => undefined),
+    cached?.meshNodeServices?.close().catch(() => undefined),
+    inflight?.promise
+      .then((services) => services?.close())
+      .catch(() => undefined),
+  ])
 }
 
 function thinProfileFromRuntimeProfile(

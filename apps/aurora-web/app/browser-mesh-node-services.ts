@@ -2,17 +2,18 @@ import type { AuroraRuntimeProfileV2, AuroraWebRtcRolloutFlags, BrowserPersisten
 import type { BrowserNativeCapabilityPack } from '@aurora/ui'
 import type {
   BrowserEnvelopeCryptoPortOptions,
-} from '@aurora/ui/local-data'
-import type { EnvelopeCryptoPort, LocalDataBackend } from '@aurora/client/local-data'
-import type { LocalToolAuditRecord } from '../../../packages/aurora-sdk/src/local-tools/index.js'
+} from '../../../packages/aurora-ui/src/local-data/browser-envelope-crypto'
+import type { EnvelopeCryptoPort, LocalDataBackend, LocalDataSession } from '@aurora/client/local-data'
 import type {
-  WebRtcPeerHost,
-  PeerAuthorityResolver,
+  LocalToolAuditRecord,
+  LocalToolExportDecisionPort,
+  MeshNodeLocalToolProviderComposition,
+} from '@aurora/client/local-tools'
+import type {
   PeerPairingIssuer,
   PeerGrantManager,
   PeerRevocationController,
-  PeerRelationshipSelector,
-} from '../../../packages/aurora-sdk/src/peer-host/index.js'
+} from '@aurora/client/webrtc'
 
 export interface BrowserMeshNodeServices {
   readonly enabled: boolean
@@ -21,6 +22,12 @@ export interface BrowserMeshNodeServices {
   readonly peerPairingIssuer: import('@aurora/ui').BrowserThinRuntimeConfig['peerPairingIssuer']
   readonly peerGrantManager: PeerGrantManager
   readonly peerRevocationController: PeerRevocationController
+  readonly session: LocalDataSession
+  readonly backend: LocalDataBackend
+  readonly crypto: EnvelopeCryptoPort
+  readonly provider: MeshNodeLocalToolProviderComposition
+  readonly localToolRegistry: MeshNodeLocalToolProviderComposition['localToolRegistry']
+  readonly compositionStatus: BrowserMeshNodeCompositionStatus
   readonly registeredToolIds: readonly string[]
   readonly storageBackendKind: LocalDataBackend['kind']
   readonly grantStorePersistent: true
@@ -42,16 +49,22 @@ export interface BrowserMeshNodeServicesOptions {
   readonly localDataBackendFactory?: BrowserLocalDataBackendFactory | undefined
   readonly envelopeCryptoFactory?: BrowserEnvelopeCryptoFactory | undefined
   readonly nativeCapabilityPackFactory?: BrowserNativeCapabilityPackFactory | undefined
+  readonly exportDecision?: LocalToolExportDecisionPort | undefined
   readonly cursorSecret?: Uint8Array | string | undefined
   readonly nowMs?: (() => number) | undefined
   readonly randomId?: (() => string) | undefined
   readonly randomBytes?: ((length: number) => Uint8Array) | undefined
 }
 
+export interface BrowserLocalDataAuthority {
+  readonly backend: LocalDataBackend
+  readonly session: LocalDataSession
+}
+
 export type BrowserLocalDataBackendFactory = (
   profileId: string,
   localNodeId: string,
-) => Promise<LocalDataBackend> | LocalDataBackend
+) => Promise<BrowserLocalDataAuthority> | BrowserLocalDataAuthority
 
 export type BrowserEnvelopeCryptoFactory = (
   options: BrowserEnvelopeCryptoPortOptions,
@@ -74,19 +87,36 @@ export type BrowserMeshNodeCompositionFailureCode =
   | 'native_pack_empty'
   | 'composition_failed'
 
+export type BrowserMeshNodeCompositionState = 'ready' | 'disabled' | 'failed'
+
+export interface BrowserMeshNodeCompositionStatus {
+  readonly state: BrowserMeshNodeCompositionState
+  readonly reasonCode?: BrowserMeshNodeCompositionFailureCode | undefined
+  readonly message: string
+  readonly productMessage: string
+}
+
 export class BrowserMeshNodeCompositionError extends Error {
   readonly code: BrowserMeshNodeCompositionFailureCode
+  readonly productMessage: string
 
-  constructor(code: BrowserMeshNodeCompositionFailureCode, message = 'Browser mesh node services are unavailable') {
+  constructor(
+    code: BrowserMeshNodeCompositionFailureCode,
+    message = 'Browser mesh node services are unavailable',
+    productMessage = 'This device is not available for sharing right now.',
+  ) {
     super(message)
     this.name = 'BrowserMeshNodeCompositionError'
     this.code = code
+    this.productMessage = productMessage
   }
 }
 
 const DEFAULT_CAPABILITY_PACK_IDS: ReadonlySet<string> = new Set(['local-tools', 'native-actions'])
 const DEFAULT_CURSOR_SECRET_BYTES = 32
-const PEER_SNAPSHOT_AUDIT_ACTION = `${'mani'}${'fest'}.snapshot` as 'manifest.snapshot'
+const DENY_ALL_EXPORT_DECISION: LocalToolExportDecisionPort = Object.freeze({
+  isShared: () => false,
+})
 
 export async function createBrowserMeshNodeServices(
   options: BrowserMeshNodeServicesOptions,
@@ -97,21 +127,21 @@ export async function createBrowserMeshNodeServices(
 
   const localNodeId = parseIdentity(options.localStablePeerId, 'local node')
   const profileId = parseIdentity(profile.id, 'profile')
-  const enabledCapabilityPacks = new Set<string>(profile.localNode.enabledCapabilityPacks)
-  const [{ createLocalDataBackend, createBrowserEnvelopeCryptoPort }, peerHost, localTools] = await Promise.all([
-    import('@aurora/ui/local-data'),
-    import('../../../packages/aurora-sdk/src/peer-host/index.js'),
-    import('../../../packages/aurora-sdk/src/local-tools/index.js'),
+  const [{ createBrowserEnvelopeCryptoPort }, peerHost, localTools] = await Promise.all([
+    import('../../../packages/aurora-ui/src/local-data/browser-envelope-crypto'),
+    import('@aurora/client/webrtc'),
+    import('@aurora/client/local-tools'),
   ])
 
   let backend: LocalDataBackend | null = null
   let crypto: (EnvelopeCryptoPort & { close?: () => Promise<void> }) | null = null
   try {
-    backend = await (options.localDataBackendFactory ?? createLocalDataBackend)(profileId, localNodeId)
-    const session = await backend.open(profileId, localNodeId)
+    const authority = await (options.localDataBackendFactory ?? createDefaultBrowserLocalDataAuthority)(profileId, localNodeId)
+    backend = authority.backend
+    const session = authority.session
     const status = await backend.status()
     if (!backend.persistent || !status.persistent || backend.kind === 'memory') {
-      throw new BrowserMeshNodeCompositionError('local_data_memory_only')
+      throw failedCompositionError('local_data_memory_only')
     }
 
     crypto = (options.envelopeCryptoFactory ?? createBrowserEnvelopeCryptoPort)({
@@ -179,7 +209,7 @@ export async function createBrowserMeshNodeServices(
       randomId: options.randomId,
     })
     if (pack.registeredToolIds.length === 0) {
-      throw new BrowserMeshNodeCompositionError('native_pack_empty')
+      throw failedCompositionError('native_pack_empty')
     }
 
     const provider = localTools.createMeshNodeLocalToolProvider({
@@ -188,26 +218,9 @@ export async function createBrowserMeshNodeServices(
       nodeName: profile.localNode.nodeName,
       registry: pack.registry as unknown as Parameters<typeof localTools.createMeshNodeLocalToolProvider>[0]['registry'],
       authorityResolver: resolver,
-      exportDecision: {
-        isShared: (tool) => {
-          if (![...DEFAULT_CAPABILITY_PACK_IDS].some((id) => enabledCapabilityPacks.has(id))) return false
-          return pack.registeredToolIds.includes(tool.tool_contract_id as never)
-        },
-      },
+      exportDecision: options.exportDecision ?? DENY_ALL_EXPORT_DECISION,
       audit: async (record: LocalToolAuditRecord) => {
-        await auditSink.record({
-          action: record.action === 'execute' ? 'grant.check' : PEER_SNAPSHOT_AUDIT_ACTION,
-          selector: auditSelector(record, localNodeId),
-          decision: record.result === 'denied' || record.result === 'failure' || record.result === 'not_found' ? 'rejected' : 'accepted',
-          reasonCode: record.reason_code ?? record.result,
-          methodId: record.method_id,
-          toolContractId: record.local_tool_name ?? undefined,
-          correlationId: record.correlation_id ?? undefined,
-          connectionEpoch: record.connection_epoch ?? undefined,
-          createdAtMs: options.nowMs?.() ?? Date.now(),
-          redacted: true,
-          redactedFields: ['arguments', 'resultData', 'sensitivePeerAuthorityMaterial'],
-        })
+        await recordLocalToolAudit(session, record, profileId, localNodeId, options.nowMs?.() ?? Date.now(), options.randomId)
       },
       cursorSecret: options.cursorSecret ?? randomSecret(options.crypto ?? safeGlobalCrypto()),
       providerEnabled: true,
@@ -215,7 +228,7 @@ export async function createBrowserMeshNodeServices(
       randomId: options.randomId,
     })
     if (!provider.enabled || provider.registeredToolIds.length === 0) {
-      throw new BrowserMeshNodeCompositionError('composition_failed')
+      throw failedCompositionError('composition_failed')
     }
 
     return {
@@ -225,6 +238,12 @@ export async function createBrowserMeshNodeServices(
       peerPairingIssuer: pairingIssuer as unknown as import('@aurora/ui').BrowserThinRuntimeConfig['peerPairingIssuer'],
       peerGrantManager: grantManager,
       peerRevocationController: revocationController,
+      session,
+      backend,
+      crypto,
+      provider,
+      localToolRegistry: provider.localToolRegistry,
+      compositionStatus: readyCompositionStatus(),
       registeredToolIds: provider.registeredToolIds,
       storageBackendKind: backend.kind,
       grantStorePersistent: true,
@@ -237,7 +256,7 @@ export async function createBrowserMeshNodeServices(
     await crypto?.close?.().catch(() => undefined)
     await backend?.close().catch(() => undefined)
     if (error instanceof BrowserMeshNodeCompositionError) throw error
-    throw new BrowserMeshNodeCompositionError('composition_failed')
+    throw failedCompositionError('composition_failed')
   }
 }
 
@@ -245,20 +264,20 @@ function assertProfileEligible(
   profile: AuroraRuntimeProfileV2 | undefined,
   rolloutFlags: AuroraWebRtcRolloutFlags,
 ): asserts profile is AuroraRuntimeProfileV2 {
-  if (!profile || profile.nodeMode !== 'mesh-node') throw new BrowserMeshNodeCompositionError('not_mesh_node')
-  if (profile.runtimeTier !== 'lightweight-ts') throw new BrowserMeshNodeCompositionError('not_lightweight_ts')
+  if (!profile || profile.nodeMode !== 'mesh-node') throw disabledCompositionError('not_mesh_node')
+  if (profile.runtimeTier !== 'lightweight-ts') throw disabledCompositionError('not_lightweight_ts')
   if (!rolloutFlags.mesh_node_runtime_v1 || !rolloutFlags.local_tool_provider_v1) {
-    throw new BrowserMeshNodeCompositionError('rollout_disabled')
+    throw disabledCompositionError('rollout_disabled')
   }
   if (!profile.localNode.enabledCapabilityPacks.some((id) => DEFAULT_CAPABILITY_PACK_IDS.has(id))) {
-    throw new BrowserMeshNodeCompositionError('capability_pack_disabled')
+    throw disabledCompositionError('capability_pack_disabled')
   }
 }
 
 function assertCredentialStoreDurable(store: BrowserPersistentPeerCredentialStore): void {
   const persistence = store.persistenceStatus()
-  if (!persistence.secretsPersisted) throw new BrowserMeshNodeCompositionError('credential_store_memory_only')
-  if (!persistence.profilePersisted) throw new BrowserMeshNodeCompositionError('profile_metadata_unavailable')
+  if (!persistence.secretsPersisted) throw failedCompositionError('credential_store_memory_only')
+  if (!persistence.profilePersisted) throw failedCompositionError('profile_metadata_unavailable')
 }
 
 function parseIdentity(value: string, field: string): string {
@@ -269,16 +288,108 @@ function parseIdentity(value: string, field: string): string {
   return normalized
 }
 
-function auditSelector(
-  record: LocalToolAuditRecord,
-  localNodeId: string,
-): PeerRelationshipSelector {
-  return {
-    tokenId: record.policy_decision_id ?? 'local-audit',
-    claimantPeerId: record.caller_peer_id || 'unknown-peer',
-    verifierPeerId: localNodeId,
-    roomName: 'unknown-room',
+export function browserMeshNodeCompositionStatusFromError(error: unknown): BrowserMeshNodeCompositionStatus {
+  if (error instanceof BrowserMeshNodeCompositionError) {
+    return {
+      state: isDisabledCompositionCode(error.code) ? 'disabled' : 'failed',
+      reasonCode: error.code,
+      message: error.message,
+      productMessage: error.productMessage,
+    }
   }
+  return failedCompositionStatus('composition_failed')
+}
+
+function readyCompositionStatus(): BrowserMeshNodeCompositionStatus {
+  return {
+    state: 'ready',
+    message: 'Device sharing services are ready',
+    productMessage: 'This device is available for sharing.',
+  }
+}
+
+function disabledCompositionError(code: BrowserMeshNodeCompositionFailureCode): BrowserMeshNodeCompositionError {
+  const status = disabledCompositionStatus(code)
+  return new BrowserMeshNodeCompositionError(code, status.message, status.productMessage)
+}
+
+function failedCompositionError(code: BrowserMeshNodeCompositionFailureCode): BrowserMeshNodeCompositionError {
+  const status = failedCompositionStatus(code)
+  return new BrowserMeshNodeCompositionError(code, status.message, status.productMessage)
+}
+
+function disabledCompositionStatus(code: BrowserMeshNodeCompositionFailureCode): BrowserMeshNodeCompositionStatus {
+  return {
+    state: 'disabled',
+    reasonCode: code,
+    message: `Device sharing services disabled: ${code}`,
+    productMessage: 'This device is not set up for sharing.',
+  }
+}
+
+function failedCompositionStatus(code: BrowserMeshNodeCompositionFailureCode): BrowserMeshNodeCompositionStatus {
+  return {
+    state: 'failed',
+    reasonCode: code,
+    message: `Device sharing services failed: ${code}`,
+    productMessage: 'This device is not available for sharing right now.',
+  }
+}
+
+function isDisabledCompositionCode(code: BrowserMeshNodeCompositionFailureCode): boolean {
+  return code === 'not_mesh_node'
+    || code === 'not_lightweight_ts'
+    || code === 'rollout_disabled'
+    || code === 'capability_pack_disabled'
+}
+
+async function createDefaultBrowserLocalDataAuthority(
+  profileId: string,
+  localNodeId: string,
+): Promise<BrowserLocalDataAuthority> {
+  const { BrowserIndexedDbLocalDataBackend } = await import('../../../packages/aurora-ui/src/local-data/browser-indexeddb')
+  const backend = new BrowserIndexedDbLocalDataBackend()
+  const session = await backend.open(profileId, localNodeId)
+  return { backend, session }
+}
+
+async function recordLocalToolAudit(
+  session: LocalDataSession,
+  record: LocalToolAuditRecord,
+  profileId: string,
+  localNodeId: string,
+  createdAtMs: number,
+  randomId: (() => string) | undefined,
+): Promise<void> {
+  await session.localAudit.appendAudit({
+    id: parseIdentity(randomId?.() ?? randomAuditId(safeGlobalCrypto()), 'audit'),
+    profileId,
+    localNodeId,
+    peerId: record.caller_peer_id || null,
+    action: record.action === 'execute' ? 'local-tool.execute' : 'local-tool.prepare',
+    decision: localToolAuditDecision(record),
+    resultStatus: record.result,
+    connectionEpoch: record.connection_epoch ?? null,
+    methodId: record.method_id,
+    toolContractId: record.local_tool_name ?? null,
+    correlationId: record.correlation_id ?? null,
+    redactedDetailJson: {
+      redacted: true,
+      secretsRedacted: true,
+      result: record.result,
+      reasonCode: record.reason_code ?? null,
+      serviceInstanceId: record.provider_service_instance_id,
+      globalToolId: record.global_tool_id ?? null,
+      argsHash: record.args_hash ?? null,
+    },
+    createdAtMs,
+  })
+}
+
+function localToolAuditDecision(record: LocalToolAuditRecord): string {
+  return record.result === 'denied' || record.result === 'failure' || record.result === 'not_found'
+    ? 'rejected'
+    : 'accepted'
 }
 
 function randomSecret(cryptoImpl: Crypto | null | undefined): Uint8Array {
