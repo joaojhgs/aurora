@@ -98,6 +98,25 @@ describe('Tooling projection-v1 SDK protocol', () => {
     })
   })
 
+  it('rejects pages whose Tooling DTOs miss generated required fields', () => {
+    const validTool = projectionTool('weather.lookup')
+    const validPage = projectionPage({
+      complete: true,
+      next_cursor: null,
+      total_count: 1,
+      final_checksum: checksum,
+      tools: [validTool],
+    })
+    const incompleteTool = { ...validTool }
+    delete (incompleteTool as Record<string, unknown>).display_name
+
+    expect(parseToolingExportCatalogPage(validPage)).toEqual({ ok: true, page: validPage })
+    expect(parseToolingExportCatalogPage({ ...validPage, tools: [incompleteTool] })).toMatchObject({
+      ok: false,
+      reasonCode: 'invalid_projection_page',
+    })
+  })
+
   it('fails closed when protocol tier evidence is missing or legacy', () => {
     for (const selected_protocol_tier of [undefined, null, 'legacy_unsupported', 'projection_v2']) {
       const raw = projectionPage({
@@ -276,6 +295,30 @@ function emptyRemoteProjectionPage(providerPeerId: string): ToolingGetExportCata
     total_count: 0,
     final_checksum: checksum,
   } as unknown as ToolingGetExportCatalogResponse
+}
+
+function projectionTool(toolContractId: string) {
+  const providerPeerId = 'peer-stable-1'
+  const serviceInstanceId = `local:${providerPeerId}:Tooling`
+  return {
+    display_name: 'Weather lookup',
+    global_tool_id: `aurora-tool:v1:${providerPeerId}:Tooling:${toolContractId}`,
+    local_name: toolContractId,
+    name: toolContractId,
+    namespace: 'weather',
+    provenance: {
+      advertised_name: toolContractId,
+      provider_kind: 'local',
+      provider_peer_id: providerPeerId,
+      provider_service_instance_id: serviceInstanceId,
+      source: 'core',
+    },
+    provider_peer_id: providerPeerId,
+    provider_service_instance_id: serviceInstanceId,
+    tool_contract_id: toolContractId,
+    tool_id_scheme: 'aurora-tool',
+    tool_id_version: 1,
+  }
 }
 
 function remoteHeader(protocolTier: unknown) {
