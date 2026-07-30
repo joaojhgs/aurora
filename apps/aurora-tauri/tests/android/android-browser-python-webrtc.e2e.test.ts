@@ -64,6 +64,7 @@ const repoRoot = resolve(
 )
 const appRoot = resolve(repoRoot, 'apps/aurora-tauri')
 const serviceScript = resolve(repoRoot, 'scripts/webrtc_interop_services.sh')
+process.env.COMPOSE_PROJECT_NAME ||= 'aurora-android-mobile-webrtc-e2e'
 const gatewayScript = resolve(repoRoot, 'scripts/webrtc_interop_gateway.py')
 const scannerScript = resolve(repoRoot, 'scripts/webrtc_interop_scan.py')
 const browserEntry = resolve(

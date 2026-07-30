@@ -19,6 +19,15 @@ def default_compose_project(source: str) -> str:
     return match.group("name")
 
 
+def node_default_compose_project(source: str) -> str:
+    match = re.search(
+        r"process\.env\.COMPOSE_PROJECT_NAME \|\|= '(?P<name>[^']+)'",
+        source,
+    )
+    assert match is not None
+    return match.group("name")
+
+
 def assert_compose_project_name_is_valid(name: str) -> None:
     assert re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name)
 
@@ -32,7 +41,7 @@ def test_webrtc_services_uses_explicit_stable_compose_project() -> None:
 
 
 def test_live_harnesses_have_distinct_valid_default_compose_projects() -> None:
-    script_paths = [
+    shell_script_paths = [
         "scripts/desktop_live_e2e.sh",
         "scripts/hosted_peer_e2e.sh",
         "scripts/hosted_mesh_node_e2e.sh",
@@ -40,10 +49,18 @@ def test_live_harnesses_have_distinct_valid_default_compose_projects() -> None:
         "scripts/webrtc_interop_local.sh",
         "scripts/webrtc_interop_browser_matrix.sh",
     ]
+    node_caller_paths = [
+        "tests/e2e/desktop_live/desktop-live-e2e.mjs",
+        "apps/aurora-tauri/tests/android/android-python-webrtc.e2e.test.ts",
+        "apps/aurora-tauri/tests/android/android-browser-python-webrtc.e2e.test.ts",
+    ]
 
     defaults = {
         script_path: default_compose_project(read_repo(script_path))
-        for script_path in script_paths
+        for script_path in shell_script_paths
+    } | {
+        caller_path: node_default_compose_project(read_repo(caller_path))
+        for caller_path in node_caller_paths
     }
 
     assert defaults == {
@@ -53,9 +70,35 @@ def test_live_harnesses_have_distinct_valid_default_compose_projects() -> None:
         "scripts/hosted_thin_shell_e2e.sh": "aurora-hosted-thin-e2e",
         "scripts/webrtc_interop_local.sh": "aurora-webrtc-interop-local",
         "scripts/webrtc_interop_browser_matrix.sh": "aurora-webrtc-browser-matrix",
+        "tests/e2e/desktop_live/desktop-live-e2e.mjs": "aurora-desktop-live-e2e",
+        "apps/aurora-tauri/tests/android/android-python-webrtc.e2e.test.ts": (
+            "aurora-android-webview-webrtc-e2e"
+        ),
+        "apps/aurora-tauri/tests/android/android-browser-python-webrtc.e2e.test.ts": (
+            "aurora-android-mobile-webrtc-e2e"
+        ),
     }
-    assert len(set(defaults.values())) == len(defaults)
-    for name in defaults.values():
+    lifecycle_defaults = {
+        "desktop-live": defaults["scripts/desktop_live_e2e.sh"],
+        "hosted-peer": defaults["scripts/hosted_peer_e2e.sh"],
+        "hosted-mesh-node": defaults["scripts/hosted_mesh_node_e2e.sh"],
+        "hosted-thin": defaults["scripts/hosted_thin_shell_e2e.sh"],
+        "webrtc-local": defaults["scripts/webrtc_interop_local.sh"],
+        "webrtc-browser-matrix": defaults["scripts/webrtc_interop_browser_matrix.sh"],
+        "android-webview": defaults[
+            "apps/aurora-tauri/tests/android/android-python-webrtc.e2e.test.ts"
+        ],
+        "android-mobile": defaults[
+            "apps/aurora-tauri/tests/android/android-browser-python-webrtc.e2e.test.ts"
+        ],
+    }
+
+    assert (
+        defaults["tests/e2e/desktop_live/desktop-live-e2e.mjs"]
+        == lifecycle_defaults["desktop-live"]
+    )
+    assert len(set(lifecycle_defaults.values())) == len(lifecycle_defaults)
+    for name in lifecycle_defaults.values():
         assert_compose_project_name_is_valid(name)
 
 
@@ -76,4 +119,22 @@ def test_callers_preserve_existing_compose_project_override() -> None:
 def test_desktop_node_harness_sets_same_default_when_run_directly() -> None:
     source = read_repo("tests/e2e/desktop_live/desktop-live-e2e.mjs")
 
-    assert "process.env.COMPOSE_PROJECT_NAME ??= 'aurora-desktop-live-e2e'" in source
+    assert "process.env.COMPOSE_PROJECT_NAME ||= 'aurora-desktop-live-e2e'" in source
+
+
+def test_android_node_harnesses_set_caller_specific_defaults() -> None:
+    android_webview = read_repo(
+        "apps/aurora-tauri/tests/android/android-python-webrtc.e2e.test.ts"
+    )
+    android_mobile = read_repo(
+        "apps/aurora-tauri/tests/android/android-browser-python-webrtc.e2e.test.ts"
+    )
+
+    assert (
+        "process.env.COMPOSE_PROJECT_NAME ||= 'aurora-android-webview-webrtc-e2e'"
+        in android_webview
+    )
+    assert (
+        "process.env.COMPOSE_PROJECT_NAME ||= 'aurora-android-mobile-webrtc-e2e'"
+        in android_mobile
+    )
