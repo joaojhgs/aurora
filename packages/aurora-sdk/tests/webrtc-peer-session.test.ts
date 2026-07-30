@@ -6,6 +6,7 @@ import {
   categorizeIceCandidate,
   type DataChannelLike,
   type PeerConnectionLike,
+  type PeerSessionAuthContext,
   type PeerSessionSignalingPort,
   type SignalingMessage
 } from '../src/webrtc/peer-session.js'
@@ -638,6 +639,44 @@ describe('WebRtcPeerSession', () => {
     expect(auth.handleFrame).toHaveBeenCalledTimes(2)
     expect(handled).toEqual([{ type: 'challenge', id: 'c1' }, { type: 'pairing_commit', id: 'p1' }])
     expect(channel.sent).toContain(JSON.stringify({ type: 'proof', id: 'c1' }))
+  })
+
+  it('fails closed without unhandled rejection when auth startup send races channel closure', async () => {
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection()
+    let channel: FakeDataChannel | undefined
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => { unhandled.push(reason) }
+    process.on('unhandledRejection', onUnhandled)
+    const auth = {
+      tryReconnect: vi.fn(async () => undefined),
+      startPairing: vi.fn(async (context: PeerSessionAuthContext) => {
+        channel?.close()
+        await context.sendControlFrame({ type: 'pairing_v2_commit', sequence: 1 })
+      }),
+      handleFrame: vi.fn(async () => undefined)
+    }
+    const session = new WebRtcPeerSession({ localSignalingId: 'z', signaling, createPeerConnection: () => pc, codec, timers: new FakeTimers(), auth })
+
+    try {
+      await session.start()
+      signaling.emit({ channel: 'offer', from: 'a', envelope: { type: 'offer', sdp: 'offer' } })
+      await flush()
+      channel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+      pc.remoteChannel(channel)
+      channel.open()
+      await flush()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(session.getSnapshot()).toMatchObject({
+        state: 'failed',
+        authorized: false,
+        lastError: 'Aurora WebRTC control channel is not open'
+      })
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
   })
 
   it('processes encrypted inbound frames in ordered DataChannel sequence', async () => {

@@ -653,21 +653,27 @@ export class WebRtcPeerSession {
   }
 
   private async onChannelOpen(): Promise<void> {
-    if (this.isTerminal()) return
-    this.clearTimerKind('negotiation')
-    this.transition('channel-open')
-    this.armTimeout('auth', this.timeouts.authMs, () => this.fail('auth timeout', false))
-    const auth = this.requiredAuth()
-    if (auth === undefined) return
-    const context = this.authContext()
-    if (auth.tryReconnect !== undefined) {
-      this.transition('reconnect-authenticating')
-      await this.applyReconnectResult(await auth.tryReconnect(context))
-      if (this.state === 'authorized' || this.state === 'failed') return
+    try {
+      if (this.isTerminal()) return
+      this.clearTimerKind('negotiation')
+      this.transition('channel-open')
+      this.armTimeout('auth', this.timeouts.authMs, () => this.fail('auth timeout', false))
+      const auth = this.requiredAuth()
+      if (auth === undefined) return
+      const context = this.authContext()
+      if (auth.tryReconnect !== undefined) {
+        this.transition('reconnect-authenticating')
+        await this.applyReconnectResult(await auth.tryReconnect(context))
+        if (this.state === 'authorized' || this.state === 'failed') return
+      }
+      this.transition('pairing-required')
+      await auth.startPairing?.(context)
+      if (this.state === 'pairing-required') this.transition('awaiting-sas-confirmation')
+    } catch (error) {
+      if (this.isTerminal() || this.closedExplicitly) return
+      this.terminalNoReconnect = true
+      this.fail(error, false)
     }
-    this.transition('pairing-required')
-    await auth.startPairing?.(context)
-    this.transition('awaiting-sas-confirmation')
   }
 
   private async decodeChannelFrame(
