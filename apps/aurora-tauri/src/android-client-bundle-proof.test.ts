@@ -400,6 +400,9 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     expect(cargoToml).toContain(
       'tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }',
     )
+    expect(cargoToml).toContain(
+      'aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }',
+    )
     const barcodeScannerSource = readFileSync(vendorBarcodeScannerSource, 'utf8')
     expect(barcodeScannerSource).toContain('val pendingScan = savedInvoke')
     expect(barcodeScannerSource).toContain('pendingScan?.reject("cancelled")')
