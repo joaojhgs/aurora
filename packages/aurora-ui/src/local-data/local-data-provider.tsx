@@ -16,7 +16,6 @@ import {
   type LocalDataSession
 } from '@aurora/client/local-data'
 
-import { createLocalDataBackend } from './create-local-data-backend'
 import {
   LocalDataContext,
   localDataErrorCode,
@@ -145,7 +144,9 @@ interface ProviderSnapshot {
 }
 
 async function defaultLocalDataBackendFactory(profileId: string, localNodeId: string): Promise<LocalDataBackend> {
-  return await createLocalDataBackend(profileId, localNodeId)
+  void profileId
+  void localNodeId
+  throw new Error('Local data needs an available device store.')
 }
 
 function openingSnapshot(profileId: string, localNodeId: string, ownerAvailable: boolean): ProviderSnapshot {
