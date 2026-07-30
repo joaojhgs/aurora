@@ -41,9 +41,16 @@ export interface LocalFeatureSharingSnapshot {
 export interface LocalFeatureSharingPort {
   load(): Promise<LocalFeatureSharingSnapshot>
   subscribe?(listener: (snapshot: LocalFeatureSharingSnapshot) => void): () => void
+  subscribeStatus?(listener: (status: LocalFeatureSharingStatus) => void): () => void
   setFeatureEnabled(featureId: string, enabled: boolean): Promise<void>
   replacePeerSharing(peerId: string, featureIds: readonly string[], expiresAtMs: number | null): Promise<void>
   revokePeerSharing(peerId: string): Promise<void>
+}
+
+export interface LocalFeatureSharingStatus {
+  readonly ok: boolean
+  readonly code: 'ready' | 'sharing_unavailable'
+  readonly message: string
 }
 
 export interface PeerPairingIssuerLike {
@@ -126,12 +133,14 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
   private readonly roomName: string
   private readonly now: () => number
   private readonly listeners = new Set<(snapshot: LocalFeatureSharingSnapshot) => void>()
+  private readonly statusListeners = new Set<(status: LocalFeatureSharingStatus) => void>()
   private readonly trustedRelationships = new Map<string, TrustedRelationship[]>()
   private readonly toolStates = new Map<string, ToolState>()
   private readonly activeSharing = new Map<string, ActiveSharing>()
   private loaded = false
   private writeQueue: Promise<void> = Promise.resolve()
   private lastSnapshot: LocalFeatureSharingSnapshot | null = null
+  private lastStatus: LocalFeatureSharingStatus = readyStatus()
 
   constructor(options: DurableFeatureSharingControllerOptions) {
     this.registry = options.registry
@@ -162,6 +171,17 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
     }
   }
 
+  subscribeStatus(listener: (status: LocalFeatureSharingStatus) => void): () => void {
+    this.statusListeners.add(listener)
+    listener(cloneStatus(this.lastStatus))
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      this.statusListeners.delete(listener)
+    }
+  }
+
   registerTrustedRelationship(selector: PeerRelationshipSelector, peerLabel?: string | null): void {
     const parsed = normalizeSelector(selector)
     const peerId = parsed.claimantPeerId
@@ -171,7 +191,15 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
       selector: parsed,
       peerLabel: sanitizeLabel(peerLabel) ?? peerId
     }])
-    if (this.loaded) void this.refreshActiveSharing().then(() => this.publishSnapshot(), () => undefined)
+    if (this.loaded) {
+      void this.refreshActiveSharing()
+        .then(() => {
+          this.publishStatus(readyStatus())
+          this.publishSnapshot()
+        }, (error) => {
+          this.publishStatus(statusFromError(error))
+        })
+    }
   }
 
   async load(): Promise<LocalFeatureSharingSnapshot> {
@@ -187,6 +215,7 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
     await this.rehydrateTrustedRelationships()
     await this.refreshActiveSharing()
     this.loaded = true
+    this.publishStatus(readyStatus())
     return this.publishSnapshot()
   }
 
@@ -281,13 +310,15 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
   }
 
   private async refreshActiveSharing(): Promise<void> {
-    this.activeSharing.clear()
+    const next = new Map<string, ActiveSharing>()
     for (const [peerId, relationships] of this.trustedRelationships) {
       if (relationships.length !== 1) continue
       const grants = await this.activeGrants(relationships[0]!.selector)
       const active = grants[0]
-      this.activeSharing.set(peerId, active ? activeSharingFromSummary(active) : { featureIds: [], expiresAtMs: null })
+      next.set(peerId, active ? activeSharingFromSummary(active) : { featureIds: [], expiresAtMs: null })
     }
+    this.activeSharing.clear()
+    for (const [peerId, sharing] of next) this.activeSharing.set(peerId, sharing)
   }
 
   private async activeGrants(selector: PeerRelationshipSelector): Promise<readonly PeerGrantSummary[]> {
@@ -335,6 +366,11 @@ export class DurableFeatureSharingController implements LocalFeatureSharingPort,
     this.lastSnapshot = snapshot
     for (const listener of [...this.listeners]) listener(cloneSnapshot(snapshot))
     return cloneSnapshot(snapshot)
+  }
+
+  private publishStatus(status: LocalFeatureSharingStatus): void {
+    this.lastStatus = cloneStatus(status)
+    publishToStatusListeners(this.statusListeners, status)
   }
 
   private snapshot(): LocalFeatureSharingSnapshot {
@@ -488,6 +524,28 @@ function sanitizeLabel(value: string | null | undefined): string | null {
 
 function cloneSnapshot(snapshot: LocalFeatureSharingSnapshot): LocalFeatureSharingSnapshot {
   return structuredClone(snapshot)
+}
+
+function cloneStatus(status: LocalFeatureSharingStatus): LocalFeatureSharingStatus {
+  return { ...status }
+}
+
+function readyStatus(): LocalFeatureSharingStatus {
+  return { ok: true, code: 'ready', message: 'Sharing choices are ready' }
+}
+
+function statusFromError(error: unknown): LocalFeatureSharingStatus {
+  if (error instanceof DurableFeatureSharingError && error.code === 'sharing_unavailable') {
+    return { ok: false, code: 'sharing_unavailable', message: error.message }
+  }
+  return { ok: false, code: 'sharing_unavailable', message: safeMessage('sharing_unavailable') }
+}
+
+function publishToStatusListeners(
+  listeners: Set<(status: LocalFeatureSharingStatus) => void>,
+  status: LocalFeatureSharingStatus
+): void {
+  for (const listener of [...listeners]) listener(cloneStatus(status))
 }
 
 function safeMessage(code: DurableFeatureSharingError['code']): string {

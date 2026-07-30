@@ -290,18 +290,36 @@ describe('durable local feature sharing controller', () => {
     expect(loadListener).not.toHaveBeenCalled()
     expect(loadingController.isShared(publicTool(fixture.registry, descriptor.toolContractId), projectionContext())).toBe(false)
 
-    const working = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, fixture.grantManager))
-    await working.load()
+    const workingFixture = await controllerFixture()
+    await workingFixture.controller.load()
+    workingFixture.controller.registerTrustedRelationship(selector, 'Phone')
+    await workingFixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    await workingFixture.controller.replacePeerSharing(selector.claimantPeerId, [descriptor.toolContractId], null)
+    const beforeFailure = await workingFixture.controller.load()
+    expect(beforeFailure.approvedDevices).toEqual([
+      { peerId: selector.claimantPeerId, peerLabel: 'Phone', featureIds: [descriptor.toolContractId], expiresAtMs: null }
+    ])
+    expect(workingFixture.controller.isShared(publicTool(workingFixture.registry, descriptor.toolContractId), projectionContext())).toBe(true)
+
     const refreshListener = vi.fn()
-    working.subscribe(refreshListener)
-    ;(fixture.grantManager as unknown as { listActiveGrants: typeof fixture.grantManager.listActiveGrants }).listActiveGrants = async () => {
+    const statusListener = vi.fn()
+    workingFixture.controller.subscribe(refreshListener)
+    workingFixture.controller.subscribeStatus(statusListener)
+    ;(workingFixture.grantManager as unknown as { listActiveGrants: typeof workingFixture.grantManager.listActiveGrants }).listActiveGrants = async () => {
       throw new Error('grant store unavailable')
     }
-    working.registerTrustedRelationship({ ...selector, claimantPeerId: 'peer-refresh', tokenId: 'token-refresh' }, 'Tablet')
-    await Promise.resolve()
+    workingFixture.controller.registerTrustedRelationship({ ...selector, claimantPeerId: 'peer-refresh', tokenId: 'token-refresh' }, 'Tablet')
+    await nextTick()
 
     expect(refreshListener).toHaveBeenCalledTimes(1)
-    expect(refreshListener.mock.calls[0]?.[0]).toMatchObject({ approvedDevices: [] })
+    expect(refreshListener.mock.calls[0]?.[0]).toEqual(beforeFailure)
+    expect(statusListener).toHaveBeenLastCalledWith({
+      ok: false,
+      code: 'sharing_unavailable',
+      message: 'Sharing choices are unavailable'
+    })
+    expect(workingFixture.controller.isShared(publicTool(workingFixture.registry, descriptor.toolContractId), projectionContext())).toBe(true)
+    expect(JSON.stringify(statusListener.mock.calls)).not.toMatch(/token|room-a|provider|verifier/u)
   })
 
   it('accepts non-safe room names while keeping peer and token IDs safe', async () => {
@@ -366,6 +384,10 @@ function publicTool(registry: LocalToolRegistry, id: string) {
   const item = registry.publicTools().find((tool) => tool.tool_contract_id === id)
   if (!item) throw new Error(`missing public tool ${id}`)
   return item
+}
+
+async function nextTick(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
 async function controllerFixture() {
