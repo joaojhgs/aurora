@@ -172,7 +172,7 @@ type MeshInteropContractReport = Record<string, unknown> & {
 
 type DesktopLiveNodeRole = "remote-console" | "mesh-node";
 
-class DesktopLiveE2eCredentialStore extends MemoryPeerCredentialStore {
+export class DesktopLiveE2eCredentialStore extends MemoryPeerCredentialStore {
   private readonly roomSecrets = new Map<string, Uint8Array>();
 
   setRoomSecret(ref: string, value: string): void {
@@ -186,6 +186,12 @@ class DesktopLiveE2eCredentialStore extends MemoryPeerCredentialStore {
   }
 
   override async close(): Promise<void> {
+    // Each role runtime borrows this store. The outer live-E2E run owns its
+    // lifetime so a role switch cannot erase the next role's room secret or
+    // durable peer credential.
+  }
+
+  async destroy(): Promise<void> {
     for (const value of this.roomSecrets.values()) value.fill(0);
     this.roomSecrets.clear();
     await super.close();
@@ -383,7 +389,7 @@ export async function runDesktopLiveE2e(
   } finally {
     await meshRuntime?.close().catch(() => undefined);
     await remoteRuntime?.close().catch(() => undefined);
-    await credentialStore.close().catch(() => undefined);
+    await credentialStore.destroy().catch(() => undefined);
   }
 }
 

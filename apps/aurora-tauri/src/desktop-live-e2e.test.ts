@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  DesktopLiveE2eCredentialStore,
   desktopLiveSignalingId,
   drainRemoteConsoleManifestHandshake,
   installDesktopLiveE2eHook,
@@ -52,6 +53,19 @@ describe("desktop live E2E WebView hook", () => {
     expect(remoteConsoleId).toBe(baseSignalingId);
     expect(meshNodeId).toBe(`${baseSignalingId}-mesh`);
     expect(meshNodeId).not.toBe(remoteConsoleId);
+  });
+
+  it("keeps shared credentials alive until both role runtimes are finished", async () => {
+    const store = new DesktopLiveE2eCredentialStore();
+    const roomSecret = "abcdefghijklmnopqrstuvwxyz012345";
+    store.setRoomSecret("desktop-live.room", roomSecret);
+
+    await store.close();
+    const borrowedSecret = await store.getRoomSecret("desktop-live.room");
+    expect(new TextDecoder().decode(borrowedSecret ?? new Uint8Array())).toBe(roomSecret);
+
+    await store.destroy();
+    await expect(store.getRoomSecret("desktop-live.room")).resolves.toBeNull();
   });
 
   it("does not install outside the gated environment", () => {
