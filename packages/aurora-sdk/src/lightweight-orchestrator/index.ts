@@ -28,12 +28,16 @@ export {
 export {
   createLightweightToolClientAdapter,
   createOnDeviceLightweightToolPolicy,
+  loadLightweightRemoteProjectionCatalog,
   mergeLightweightAssistantTools,
   onDeviceAssistantPermissions
 } from './tool-client-adapter.js'
 export type {
   LightweightToolClientAdapterOptions,
   LightweightToolClientDelegate,
+  LightweightRemoteProjectionCatalogClient,
+  LightweightRemoteProjectionCatalogOptions,
+  LightweightRemoteProjectionCatalogSnapshot,
   OnDeviceLightweightToolPolicyOptions
 } from './tool-client-adapter.js'
 export type {

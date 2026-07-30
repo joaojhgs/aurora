@@ -1,5 +1,8 @@
 import type { ToolApprovalConfirmRequest, ToolApprovalConfirmResponse, ToolApprovalRequestResponse } from '../admin.js'
+import { ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema } from '../generated/index.js'
 import {
+  computeProjectionChecksum,
+  computeProjectionPageHash,
   LocalToolExecutionPolicy,
   type LocalToolAuditPort,
   type LocalToolExportDecisionPort,
@@ -7,11 +10,24 @@ import {
 } from '../local-tools/index.js'
 import { createLocalToolingProviderHandlers } from '../local-tools/index.js'
 import type { PeerHostCallContext } from '../peer-host/types.js'
-import type { JsonObject, ToolingPrepareExecutionRequest, ToolingPrepareExecutionResponse, ToolingProjectionToolInfo } from '../types.js'
+import { parseToolingExportCatalogPage } from '../tools.js'
+import type {
+  JsonObject,
+  ToolingGetExportCatalogRequest,
+  ToolingGetExportCatalogResponse,
+  ToolingPrepareExecutionRequest,
+  ToolingPrepareExecutionResponse,
+  ToolingProjectionAuthorityRevision,
+  ToolingProjectionBlockedTool,
+  ToolingProjectionRetirement,
+  ToolingProjectionToolInfo
+} from '../types.js'
+import { parseBoundary } from '../validation/index.js'
 import { LightweightOrchestratorError } from './limits.js'
 import type { LightweightToolClientPort, LightweightToolExecutionResponse } from './types.js'
 
 export interface LightweightToolClientDelegate {
+  getExportCatalog?(payload: ToolingGetExportCatalogRequest): Promise<unknown>
   prepareExecution(payload: ToolingPrepareExecutionRequest): Promise<ToolingPrepareExecutionResponse>
   requestApproval(payload: ToolingPrepareExecutionRequest): Promise<ToolApprovalRequestResponse>
   confirmExecution(payload: ToolApprovalConfirmRequest): Promise<ToolApprovalConfirmResponse>
@@ -41,6 +57,26 @@ export interface OnDeviceLightweightToolPolicyOptions {
   readonly serviceInstanceId?: string | undefined
   readonly nowMs?: () => number
   readonly randomToken?: () => string
+}
+
+export interface LightweightRemoteProjectionCatalogClient {
+  getExportCatalog(payload: ToolingGetExportCatalogRequest): Promise<unknown>
+}
+
+export interface LightweightRemoteProjectionCatalogOptions {
+  readonly pageSize?: number | undefined
+  readonly maxPages?: number | undefined
+  readonly lastProjectionRevision?: string | null | undefined
+  readonly lastProjectionDigest?: string | null | undefined
+}
+
+export interface LightweightRemoteProjectionCatalogSnapshot {
+  readonly providerPeerId: string
+  readonly serviceInstanceId: string
+  readonly authorityRevision: ToolingProjectionAuthorityRevision
+  readonly projectionRevision: string
+  readonly projectionDigest: string
+  readonly tools: readonly ToolingProjectionToolInfo[]
 }
 
 interface PendingLocalApproval {
@@ -105,6 +141,60 @@ export function onDeviceAssistantPermissions(localTools: readonly ToolingProject
     'Tooling.ExecuteTool',
     ...localTools.flatMap((tool) => tool.required_permissions)
   ])].sort()
+}
+
+export async function loadLightweightRemoteProjectionCatalog(
+  client: LightweightRemoteProjectionCatalogClient,
+  options: LightweightRemoteProjectionCatalogOptions = {}
+): Promise<LightweightRemoteProjectionCatalogSnapshot> {
+  const pageSize = options.pageSize ?? 100
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 256) {
+    throw new LightweightOrchestratorError('invalid_projection_page_size')
+  }
+  const maxPages = options.maxPages ?? 32
+  if (!Number.isSafeInteger(maxPages) || maxPages < 1) {
+    throw new LightweightOrchestratorError('invalid_projection_page_limit')
+  }
+
+  const tools: ToolingProjectionToolInfo[] = []
+  const blockedTools: ToolingProjectionBlockedTool[] = []
+  const retirements: ToolingProjectionRetirement[] = []
+  let cursor: string | null | undefined = null
+  let firstPage: ToolingGetExportCatalogResponse | null = null
+
+  for (let index = 0; index < maxPages; index += 1) {
+    const page = validateProjectionPage(await client.getExportCatalog({
+      protocol_tier: 'projection_v1',
+      page_size: pageSize,
+      cursor,
+      last_projection_revision: options.lastProjectionRevision ?? null,
+      last_projection_digest: options.lastProjectionDigest ?? null
+    }))
+    firstPage ??= page
+    validateProjectionPageSequence(firstPage, page, index, pageSize)
+    tools.push(...page.tools)
+    blockedTools.push(...(page.blocked_tools ?? []))
+    retirements.push(...page.retirements)
+    if (page.complete) {
+      const finalChecksum = computeProjectionChecksum(tools, retirements, blockedTools)
+      if (page.final_checksum !== finalChecksum || page.projection_digest !== finalChecksum) {
+        throw new LightweightOrchestratorError('projection_final_checksum_mismatch')
+      }
+      if (page.total_count !== tools.length + blockedTools.length) {
+        throw new LightweightOrchestratorError('projection_total_count_mismatch')
+      }
+      return {
+        providerPeerId: page.provider_peer_id,
+        serviceInstanceId: page.service_instance_id,
+        authorityRevision: page.authority_revision,
+        projectionRevision: page.projection_revision,
+        projectionDigest: page.projection_digest,
+        tools: mergeLightweightAssistantTools([], tools)
+      }
+    }
+    cursor = page.next_cursor
+  }
+  throw new LightweightOrchestratorError('projection_page_limit_exceeded')
 }
 
 export function createLightweightToolClientAdapter(options: LightweightToolClientAdapterOptions): LightweightToolClientPort {
@@ -201,13 +291,14 @@ function confirmLocalApproval(
 
 function routeForPayload(payload: ToolingPrepareExecutionRequest, options: LightweightToolClientAdapterOptions): 'local' | 'remote' {
   const requested = requestedExecutionLocation(payload)
-  const matches = matchingTools(payload.tool_name, options)
-  const hasLocalRegistryMatch = options.localRegistry.resolveForDispatch(payload.tool_name) !== undefined
-  const localMatches = matches.filter((tool) => tool.execution_location === 'local')
+  const localRegistryMatches = options.localRegistry.publicTools().filter((tool) => toolMatchesPayload(tool, payload))
+  const matches = matchingTools(payload, options)
+  const hasLocalRegistryMatch = localRegistryMatches.length > 0
+  const localMatches = uniqueTools([
+    ...matches.filter((tool) => tool.execution_location === 'local'),
+    ...localRegistryMatches
+  ])
   const remoteMatches = matches.filter((tool) => tool.execution_location === 'remote')
-  if (hasLocalRegistryMatch && !localMatches.some((tool) => options.localRegistry.resolveForDispatch(tool.global_tool_id))) {
-    localMatches.push(...options.localRegistry.publicTools().filter((tool) => toolMatches(tool, payload.tool_name)))
-  }
 
   if (requested === 'local') {
     if (localMatches.length !== 1 || hasRemoteMatch(remoteMatches, payload.tool_name)) throw new LightweightOrchestratorError('ambiguous_tool_route')
@@ -222,9 +313,13 @@ function routeForPayload(payload: ToolingPrepareExecutionRequest, options: Light
   throw new LightweightOrchestratorError(matches.length === 0 && !hasLocalRegistryMatch ? 'unknown_tool_id' : 'ambiguous_tool_route')
 }
 
-function matchingTools(payloadToolName: string, options: LightweightToolClientAdapterOptions): ToolingProjectionToolInfo[] {
+function matchingTools(payload: ToolingPrepareExecutionRequest, options: LightweightToolClientAdapterOptions): ToolingProjectionToolInfo[] {
   const tools = options.availableTools ?? options.localRegistry.publicTools()
-  return tools.filter((tool) => toolMatches(tool, payloadToolName))
+  return tools.filter((tool) => toolMatchesPayload(tool, payload))
+}
+
+function toolMatchesPayload(tool: ToolingProjectionToolInfo, payload: ToolingPrepareExecutionRequest): boolean {
+  return toolMatches(tool, payload.tool_name) && selectorMatchesTool(tool, payload)
 }
 
 function toolMatches(tool: ToolingProjectionToolInfo, id: string): boolean {
@@ -247,9 +342,100 @@ function readExecutionLocation(value: JsonObject | null | undefined): 'local' | 
   return raw === 'local' || raw === 'remote' ? raw : null
 }
 
+interface ToolRouteSelector {
+  readonly executionLocation: 'local' | 'remote' | null
+  readonly providerPeerId: string | null
+  readonly serviceInstanceId: string | null
+  readonly globalToolId: string | null
+}
+
+function selectorMatchesTool(tool: ToolingProjectionToolInfo, payload: ToolingPrepareExecutionRequest): boolean {
+  const selector = readToolRouteSelector(payload)
+  if (selector.executionLocation && tool.execution_location !== selector.executionLocation) return false
+  if (selector.providerPeerId && tool.provider_peer_id !== selector.providerPeerId) return false
+  if (selector.serviceInstanceId && tool.provider_service_instance_id !== selector.serviceInstanceId) return false
+  if (selector.globalToolId && tool.global_tool_id !== selector.globalToolId) return false
+  return true
+}
+
+function readToolRouteSelector(payload: ToolingPrepareExecutionRequest): ToolRouteSelector {
+  const resource = payload.resource_selector
+  const mesh = payload.mesh_selector
+  return {
+    executionLocation: mergeSelectorValue(readExecutionLocation(resource), readExecutionLocation(mesh)),
+    providerPeerId: mergeSelectorValue(readStringSelector(resource, 'provider_peer_id'), readStringSelector(mesh, 'provider_peer_id')),
+    serviceInstanceId: mergeSelectorValue(readStringSelector(resource, 'provider_service_instance_id'), readStringSelector(mesh, 'provider_service_instance_id')),
+    globalToolId: mergeSelectorValue(readStringSelector(resource, 'global_tool_id'), readStringSelector(mesh, 'global_tool_id'))
+  }
+}
+
+function mergeSelectorValue<T extends string>(left: T | null, right: T | null): T | null {
+  if (left && right && left !== right) throw new LightweightOrchestratorError('ambiguous_tool_route')
+  return left ?? right
+}
+
+function readStringSelector(value: JsonObject | null | undefined, key: string): string | null {
+  const raw = value?.[key]
+  return typeof raw === 'string' && raw.length > 0 ? raw : null
+}
+
+function uniqueTools(tools: readonly ToolingProjectionToolInfo[]): ToolingProjectionToolInfo[] {
+  return [...new Map(tools.map((tool) => [tool.global_tool_id, tool])).values()]
+}
+
 function remote(options: LightweightToolClientAdapterOptions): LightweightToolClientDelegate {
   if (!options.remote) throw new LightweightOrchestratorError('remote_tool_delegate_unavailable')
   return options.remote
+}
+
+function validateProjectionPage(raw: unknown): ToolingGetExportCatalogResponse {
+  const parsed = parseToolingExportCatalogPage(raw)
+  if (!parsed.ok) throw new LightweightOrchestratorError(parsed.reasonCode)
+  parseBoundary(
+    'Tooling.GetExportCatalog.output.ToolingGetExportCatalogResponse',
+    ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema,
+    parsed.page,
+    { boundary: 'webrtc-frame' }
+  )
+  const page = parsed.page
+  if (page.page_hash !== computeProjectionPageHash(page)) throw new LightweightOrchestratorError('projection_page_hash_mismatch')
+  validateProjectionToolIdentities(page)
+  return page
+}
+
+function validateProjectionPageSequence(
+  firstPage: ToolingGetExportCatalogResponse,
+  page: ToolingGetExportCatalogResponse,
+  expectedPageIndex: number,
+  expectedPageSize: number
+): void {
+  if (
+    page.provider_peer_id !== firstPage.provider_peer_id
+    || page.service_instance_id !== firstPage.service_instance_id
+    || page.projection_revision !== firstPage.projection_revision
+    || page.projection_digest !== firstPage.projection_digest
+    || JSON.stringify(page.authority_revision) !== JSON.stringify(firstPage.authority_revision)
+    || page.page_index !== expectedPageIndex
+    || page.page_size !== expectedPageSize
+  ) {
+    throw new LightweightOrchestratorError('projection_page_sequence_mismatch')
+  }
+}
+
+function validateProjectionToolIdentities(page: ToolingGetExportCatalogResponse): void {
+  for (const tool of page.tools) validateProjectionToolIdentity(page, tool)
+  for (const blocked of page.blocked_tools ?? []) validateProjectionToolIdentity(page, blocked.tool)
+}
+
+function validateProjectionToolIdentity(page: ToolingGetExportCatalogResponse, tool: ToolingProjectionToolInfo): void {
+  if (
+    tool.provider_peer_id !== page.provider_peer_id
+    || tool.provider_service_instance_id !== page.service_instance_id
+    || tool.provenance.provider_peer_id !== page.provider_peer_id
+    || tool.provenance.provider_service_instance_id !== page.service_instance_id
+  ) {
+    throw new LightweightOrchestratorError('projection_tool_identity_mismatch')
+  }
 }
 
 function contextFor(options: LightweightToolClientAdapterOptions, methodId: string, receivedAtMs: number): PeerHostCallContext {

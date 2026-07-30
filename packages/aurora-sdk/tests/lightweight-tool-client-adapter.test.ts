@@ -8,9 +8,19 @@ import {
 import {
   createLightweightToolClientAdapter,
   createOnDeviceLightweightToolPolicy,
+  loadLightweightRemoteProjectionCatalog,
   type LightweightToolClientDelegate
 } from '../src/lightweight-orchestrator/index.js'
-import type { JsonObject, ToolingPrepareExecutionRequest, ToolingProjectionToolInfo } from '../src/types.js'
+import {
+  computeProjectionChecksum,
+  computeProjectionPageHash
+} from '../src/local-tools/index.js'
+import type {
+  JsonObject,
+  ToolingGetExportCatalogResponse,
+  ToolingPrepareExecutionRequest,
+  ToolingProjectionToolInfo
+} from '../src/types.js'
 
 const safeDescriptor: LocalToolDescriptorV1 = {
   version: 1,
@@ -131,6 +141,25 @@ describe('lightweight tool-client adapter', () => {
     ])
   })
 
+  it('uses provider selectors to route remote tools without rewriting execution payloads', async () => {
+    const remote = remoteDelegate()
+    const remoteTool = remoteToolInfo('echo')
+    const { adapter } = fixture({ remote, availableTools: [remoteTool] })
+    const payload = request('echo', { text: 'remote' }, null, 'remote', {
+      provider_peer_id: 'remote-peer',
+      provider_service_instance_id: 'remote-service',
+      global_tool_id: remoteTool.global_tool_id
+    })
+
+    await adapter.prepareExecution(payload)
+    await adapter.execute(payload)
+
+    expect(remote.calls).toEqual([
+      ['prepare', payload],
+      ['execute', payload]
+    ])
+  })
+
   it('fails closed for ambiguous local and remote tool IDs', async () => {
     const { registry } = fixture()
     const local = registry.publicTools()[0]!
@@ -141,7 +170,10 @@ describe('lightweight tool-client adapter', () => {
       availableTools: [local, remote]
     })
 
-    await expect(adapter.prepareExecution(request('echo', { text: 'hi' }))).rejects.toMatchObject({
+    await expect(adapter.prepareExecution({
+      ...request('echo', { text: 'hi' }),
+      resource_selector: null
+    })).rejects.toMatchObject({
       reasonCode: 'ambiguous_tool_route'
     })
   })
@@ -152,6 +184,65 @@ describe('lightweight tool-client adapter', () => {
     const result = await adapter.execute(request('echo', { text: 'hi' }))
     expect(result).toMatchObject({ ok: false, status: 'failed', error: 'Tool execution failed', error_code: 'handler_failed' })
     expect(JSON.stringify(result)).not.toContain('secret stack token')
+  })
+
+  it('loads paginated projection-v1 remote catalogs with page and checksum validation', async () => {
+    const callable = remoteToolInfo('remote.search')
+    const unavailable = { ...remoteToolInfo('remote.offline'), provider_available: false }
+    const unexportable = { ...remoteToolInfo('remote.private'), exportable: false }
+    const localProjection = { ...remoteToolInfo('local.echo'), execution_location: 'local' as const }
+    const pages = projectionPages([[callable], [unavailable, unexportable, localProjection]])
+    const calls: unknown[] = []
+
+    const snapshot = await loadLightweightRemoteProjectionCatalog({
+      async getExportCatalog(payload) {
+        calls.push(payload)
+        return pages[calls.length - 1]
+      }
+    }, { pageSize: 1, maxPages: 4 })
+
+    expect(calls).toEqual([
+      { protocol_tier: 'projection_v1', page_size: 1, cursor: null, last_projection_revision: null, last_projection_digest: null },
+      { protocol_tier: 'projection_v1', page_size: 1, cursor: 'cursor-1', last_projection_revision: null, last_projection_digest: null }
+    ])
+    expect(snapshot).toMatchObject({
+      providerPeerId: 'remote-peer',
+      serviceInstanceId: 'remote-service',
+      tools: [expect.objectContaining({ global_tool_id: callable.global_tool_id })]
+    })
+  })
+
+  it('fails closed for malformed projection catalog pages and digest mismatches', async () => {
+    const [valid] = projectionPages([[remoteToolInfo('remote.search')]])
+    const badHash = { ...valid, page_hash: '0'.repeat(64) }
+    const badChecksumBase = { ...valid, final_checksum: '1'.repeat(64), projection_digest: '1'.repeat(64) }
+    const badChecksum = { ...badChecksumBase, page_hash: computeProjectionPageHash(badChecksumBase as ToolingGetExportCatalogResponse) }
+
+    await expect(loadLightweightRemoteProjectionCatalog({ async getExportCatalog() { return { ...valid, selected_protocol_tier: undefined } } }, { pageSize: 1 })).rejects.toMatchObject({
+      reasonCode: 'legacy_unverifiable'
+    })
+    await expect(loadLightweightRemoteProjectionCatalog({ async getExportCatalog() { return badHash } }, { pageSize: 1 })).rejects.toMatchObject({
+      reasonCode: 'projection_page_hash_mismatch'
+    })
+    await expect(loadLightweightRemoteProjectionCatalog({ async getExportCatalog() { return badChecksum } }, { pageSize: 1 })).rejects.toMatchObject({
+      reasonCode: 'projection_final_checksum_mismatch'
+    })
+  })
+
+  it('fails closed when projection tool identity contradicts the page provider', async () => {
+    const wrongProvider = {
+      ...remoteToolInfo('remote.search'),
+      provider_peer_id: 'other-peer',
+      provenance: {
+        ...remoteToolInfo('remote.search').provenance,
+        provider_peer_id: 'other-peer'
+      }
+    }
+    const [page] = projectionPages([[wrongProvider]])
+
+    await expect(loadLightweightRemoteProjectionCatalog({ async getExportCatalog() { return page } }, { pageSize: 1 })).rejects.toMatchObject({
+      reasonCode: 'projection_tool_identity_mismatch'
+    })
   })
 })
 
@@ -203,13 +294,14 @@ function request(
   toolName: string,
   args: JsonObject,
   expectedHash: string | null = null,
-  executionLocation: 'local' | 'remote' = 'local'
+  executionLocation: 'local' | 'remote' = 'local',
+  selector: JsonObject = {}
 ): ToolingPrepareExecutionRequest {
   return {
     tool_name: toolName,
     arguments: args,
     expected_args_schema_hash: expectedHash,
-    resource_selector: { execution_location: executionLocation },
+    resource_selector: { execution_location: executionLocation, ...selector },
     mesh_selector: null,
     correlation_id: `corr-${toolName}`
   }
@@ -298,11 +390,11 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
     source: 'mesh_peer',
     source_id: 'remote',
     trust_tier: 'trusted',
-    capability_class: 'utility',
+    capability_class: 'read',
     resource_scope: [],
     execution_location: 'remote',
-    safety_class: 'safe',
-    risk_class: 'safe',
+    safety_class: 'standard',
+    risk_class: 'standard',
     data_egress: false,
     mutating: false,
     external: false,
@@ -315,10 +407,44 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
       provider_peer_id: 'remote-peer',
       provider_service_instance_id: 'remote-service',
       provider_kind: 'mesh_peer',
-      source: 'mesh_peer',
+      source: 'unknown',
       advertised_name: name
     }
   }
+}
+
+function projectionPages(toolPages: ToolingProjectionToolInfo[][]): ToolingGetExportCatalogResponse[] {
+  const tools = toolPages.flat()
+  const digest = computeProjectionChecksum(tools, [], [])
+  return toolPages.map((pageTools, index): ToolingGetExportCatalogResponse => {
+    const complete = index === toolPages.length - 1
+    const page = {
+      ok: true,
+      provider_peer_id: 'remote-peer',
+      service_instance_id: 'remote-service',
+      selected_protocol_tier: 'projection_v1' as const,
+      authority_revision: {
+        catalog_revision: 1,
+        export_policy_revision: 2,
+        auth_grant_revision: 3,
+        manifest_revision: 4,
+        switch_revision: 5,
+        protocol_revision: 1
+      },
+      projection_revision: 'projection-1',
+      projection_digest: digest,
+      page_index: index,
+      page_size: 1,
+      page_hash: '0'.repeat(64),
+      tools: pageTools,
+      blocked_tools: [],
+      retirements: [],
+      ...(complete
+        ? { complete: true as const, next_cursor: null, total_count: tools.length, final_checksum: digest }
+        : { complete: false as const, next_cursor: `cursor-${index + 1}` })
+    }
+    return { ...page, page_hash: computeProjectionPageHash(page) } as ToolingGetExportCatalogResponse
+  })
 }
 
 function idSequence(...ids: string[]) {
