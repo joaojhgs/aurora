@@ -44,6 +44,7 @@ const vendorBarcodeScannerSourcePath = join(
   vendorBarcodeScannerDir,
   'android/src/main/java/BarcodeScannerPlugin.kt'
 )
+const vendorBarcodeScannerBuildScriptPath = join(vendorBarcodeScannerDir, 'build.rs')
 const pluginParity = androidNativePluginParity()
 const resourceParity = androidNativeResourceParity()
 const manifestIntegration = androidNativeManifestIntegration()
@@ -430,9 +431,8 @@ function androidNativeManifestIntegration() {
 
 function androidBarcodeScannerCancellationIntegration() {
   if (
-    !generatedTauriSettingsPath ||
     !existsSync(vendorBarcodeScannerSourcePath) ||
-    !existsSync(generatedTauriSettingsPath)
+    !existsSync(vendorBarcodeScannerBuildScriptPath)
   ) {
     return {
       matched: false,
@@ -449,7 +449,6 @@ function androidBarcodeScannerCancellationIntegration() {
   }
 
   const source = readFileSync(vendorBarcodeScannerSourcePath, 'utf8')
-  const settings = readFileSync(generatedTauriSettingsPath, 'utf8')
   const requiredSource = [
     'val pendingScan = savedInvoke',
     'destroy()',
@@ -461,21 +460,37 @@ function androidBarcodeScannerCancellationIntegration() {
   const dependencyUsesVendor = cargoToml.includes(
     'tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }'
   )
-  const settingsUseVendor = settings.includes(
-    resolve(vendorBarcodeScannerDir, 'android')
+  const buildScriptUsesAndroidPath = readFileSync(
+    vendorBarcodeScannerBuildScriptPath,
+    'utf8'
+  ).includes('.android_path("android")')
+  const settingsExists = Boolean(
+    generatedTauriSettingsPath && existsSync(generatedTauriSettingsPath)
   )
-  const matched = missing.length === 0 && dependencyUsesVendor && settingsUseVendor
+  const settingsUseVendor = settingsExists
+    ? readFileSync(generatedTauriSettingsPath, 'utf8').includes(
+        resolve(vendorBarcodeScannerDir, 'android')
+      )
+    : null
+  const matched = missing.length === 0
+    && dependencyUsesVendor
+    && buildScriptUsesAndroidPath
+    && (settingsUseVendor ?? true)
   return {
     matched,
     detail: matched
-      ? 'generated Android build uses the cancellation-safe vendored barcode scanner source'
-      : `Android barcode cancellation integration is stale: missing=${missing.join(', ') || 'none'}; dependencyUsesVendor=${dependencyUsesVendor}; settingsUseVendor=${settingsUseVendor}`,
+      ? settingsExists
+        ? 'generated Android build uses the cancellation-safe vendored barcode scanner source'
+        : 'Tauri mobile build will generate Android Gradle plugin bindings from the cancellation-safe vendored barcode scanner source'
+      : `Android barcode cancellation integration is stale: missing=${missing.join(', ') || 'none'}; dependencyUsesVendor=${dependencyUsesVendor}; buildScriptUsesAndroidPath=${buildScriptUsesAndroidPath}; settingsUseVendor=${settingsUseVendor ?? 'pending-tauri-build'}`,
     report: {
       checked: true,
       source: relative(vendorBarcodeScannerSourcePath),
-      settings: relative(generatedTauriSettingsPath),
+      buildScript: relative(vendorBarcodeScannerBuildScriptPath),
+      settings: settingsExists ? relative(generatedTauriSettingsPath) : null,
       missing,
       dependencyUsesVendor,
+      buildScriptUsesAndroidPath,
       settingsUseVendor,
       matched
     }

@@ -389,9 +389,9 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     expect(syncSource).toContain('aurora_native_strings.xml')
     expect(syncSource).toContain('repairGeneratedBaseStrings')
     expect(syncSource).toContain('Synced canonical Aurora launcher icons')
-    expect(syncSource).toContain('configureVendorBarcodeScanner')
+    expect(syncSource).toContain('verifyVendorBarcodeScannerSource')
     expect(syncSource).toContain(
-      'Configured the generated Android project to use Aurora’s cancellation-safe barcode scanner vendor.',
+      'Verified Android barcode scanner uses Aurora’s cancellation-safe vendored source through the Tauri mobile build output.',
     )
     const cargoToml = readFileSync(
       join(packageRoot, 'src-tauri', 'Cargo.toml'),
@@ -437,6 +437,81 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
       expect(existsSync(join(canonicalPluginResources, resource))).toBe(true)
     }
     expect(readFileSync(buildClient, 'utf8')).toContain('cleanAndroidBuildOutputs')
+  })
+
+  it('syncs init-time Android projects before Tauri writes mobile Gradle plugin files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'aurora-android-init-sync-'))
+    const manifestPath = join(root, 'app', 'src', 'main', 'AndroidManifest.xml')
+    const reportPath = join(root, 'android-preflight.json')
+    mkdirSync(dirname(manifestPath), { recursive: true })
+    writeFileSync(
+      manifestPath,
+      [
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+        '<uses-permission android:name="android.permission.INTERNET" />',
+        '<application android:usesCleartextTraffic="false">',
+        '<activity android:name=".MainActivity"></activity>',
+        '</application>',
+        '</manifest>',
+      ].join(''),
+    )
+
+    const syncResult = spawnSync(process.execPath, [syncNativePlugin], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+      },
+    })
+
+    expect(syncResult.status, syncResult.stderr).toBe(0)
+    expect(syncResult.stdout).toContain(
+      'Verified Android barcode scanner uses Aurora’s cancellation-safe vendored source',
+    )
+    expect(existsSync(join(root, 'tauri.settings.gradle'))).toBe(false)
+    expect(existsSync(join(root, 'app', 'tauri.build.gradle.kts'))).toBe(false)
+    expect(
+      existsSync(
+        join(
+          root,
+          'app',
+          'src',
+          'main',
+          'java',
+          'dev',
+          'aurora',
+          'tauri',
+          'nativeplugin',
+          'AuroraNativePlugin.kt',
+        ),
+      ),
+    ).toBe(true)
+
+    const preflightResult = spawnSync(
+      process.execPath,
+      [androidPreflight, '--require-android-project'],
+      {
+        cwd: packageRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+          AURORA_ANDROID_PREFLIGHT_REPORT: reportPath,
+        },
+      },
+    )
+
+    expect(preflightResult.status, preflightResult.stderr).toBe(0)
+    const report = JSON.parse(readFileSync(reportPath, 'utf8'))
+    expect(report.barcodeScannerCancellation).toMatchObject({
+      checked: true,
+      settings: null,
+      settingsUseVendor: null,
+      dependencyUsesVendor: true,
+      buildScriptUsesAndroidPath: true,
+      matched: true,
+    })
   })
 
   it('fails Android preflight when generated native plugin source differs from canonical source', () => {

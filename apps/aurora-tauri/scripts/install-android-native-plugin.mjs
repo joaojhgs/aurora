@@ -1,11 +1,19 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-const genAndroidDir = resolve('src-tauri/gen/android')
+const genAndroidDir = process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR
+  ? resolve(process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR)
+  : resolve('src-tauri/gen/android')
 const appManifestPath = resolve(genAndroidDir, 'app/src/main/AndroidManifest.xml')
-const tauriSettingsPath = resolve(genAndroidDir, 'tauri.settings.gradle')
+const cargoTomlPath = resolve('src-tauri/Cargo.toml')
 const vendorBarcodeScannerAndroidDir = resolve(
   'src-tauri/vendor/tauri-plugin-barcode-scanner/android',
+)
+const vendorBarcodeScannerDir = resolve('src-tauri/vendor/tauri-plugin-barcode-scanner')
+const vendorBarcodeScannerBuildScriptPath = resolve(vendorBarcodeScannerDir, 'build.rs')
+const vendorBarcodeScannerSourcePath = resolve(
+  vendorBarcodeScannerAndroidDir,
+  'src/main/java/BarcodeScannerPlugin.kt',
 )
 const pluginSourceDir = resolve('src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin')
 const generatedPluginSourceDir = resolve(genAndroidDir, 'app/src/main/java/dev/aurora/tauri/nativeplugin')
@@ -22,7 +30,7 @@ mkdirSync(generatedPluginSourceDir, { recursive: true })
 cpSync(pluginSourceDir, generatedPluginSourceDir, { recursive: true })
 syncAuroraAndroidNativeResources()
 syncCanonicalAndroidLauncherIcons()
-configureVendorBarcodeScanner()
+verifyVendorBarcodeScannerSource()
 
 patchFile(appManifestPath, (content) => mergePluginManifest(content))
 
@@ -116,29 +124,40 @@ function syncCanonicalAndroidLauncherIcons() {
   console.log('Synced canonical Aurora launcher icons into the generated Android project.')
 }
 
-function configureVendorBarcodeScanner() {
-  if (!existsSync(tauriSettingsPath)) {
-    throw new Error(`Generated Tauri settings are missing: ${tauriSettingsPath}`)
-  }
+function verifyVendorBarcodeScannerSource() {
   if (!existsSync(vendorBarcodeScannerAndroidDir)) {
     throw new Error(
       `Vendored Tauri barcode scanner Android project is missing: ${vendorBarcodeScannerAndroidDir}`,
     )
   }
-  const projectPattern =
-    /project\(':tauri-plugin-barcode-scanner'\)\.projectDir = new File\("[^"]+"\)/
-  patchFile(tauriSettingsPath, (content) => {
-    if (!projectPattern.test(content)) {
+
+  const cargoToml = readFileSync(cargoTomlPath, 'utf8')
+  if (!cargoToml.includes('tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }')) {
+    throw new Error('Cargo.toml must depend on the vendored Android barcode scanner source.')
+  }
+
+  const buildScript = readFileSync(vendorBarcodeScannerBuildScriptPath, 'utf8')
+  if (!buildScript.includes('.android_path("android")')) {
+    throw new Error('Vendored barcode scanner build script must expose its Android project to Tauri.')
+  }
+
+  const source = readFileSync(vendorBarcodeScannerSourcePath, 'utf8')
+  for (const required of [
+    'val pendingScan = savedInvoke',
+    'destroy()',
+    'pendingScan?.reject("cancelled")',
+    'invoke.resolve()',
+  ]) {
+    if (!source.includes(required)) {
       throw new Error(
-        'Generated Tauri settings do not declare tauri-plugin-barcode-scanner.',
+        `Vendored barcode scanner source is missing cancellation-safe marker: ${required}`,
       )
     }
-    return content.replace(
-      projectPattern,
-      `project(':tauri-plugin-barcode-scanner').projectDir = new File(${JSON.stringify(vendorBarcodeScannerAndroidDir)})`,
-    )
-  })
-  console.log('Configured the generated Android project to use Aurora’s cancellation-safe barcode scanner vendor.')
+  }
+
+  console.log(
+    'Verified Android barcode scanner uses Aurora’s cancellation-safe vendored source through the Tauri mobile build output.',
+  )
 }
 
 function patchFile(path, patch) {
