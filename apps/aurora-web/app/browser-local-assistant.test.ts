@@ -20,7 +20,7 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
     await expect(createAuroraBrowserLocalAssistantConfig(fakeRuntime())).resolves.toBeNull()
   })
 
-  it('omits the browser assistant when remote projection tools fail to load', async () => {
+  it('keeps the local-tool-only assistant when remote projection tools fail to load', async () => {
     const fetch = vi.fn(async () => jsonResponse({ enabled: true }))
     vi.stubGlobal('fetch', fetch)
     const runtime = fakeRuntime({
@@ -29,19 +29,24 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
       }),
     })
 
-    await expect(createAuroraBrowserLocalAssistantConfig(runtime)).resolves.toBeNull()
+    await expect(createAuroraBrowserLocalAssistantConfig(runtime)).resolves.toMatchObject({ remoteTools: [] })
     expect(fetch).toHaveBeenCalledWith('/api/assistant/completion', expect.objectContaining({ method: 'GET' }))
   })
 
-  it('builds a same-origin provider and remote tools without exposing a raw provider key', async () => {
+  it('builds a same-origin provider and filters parsed available remote tools without exposing a raw provider key', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ enabled: true }))
       .mockResolvedValueOnce(jsonResponse({ type: 'message', content: 'Ready.' }))
     vi.stubGlobal('fetch', fetch)
     const remoteTool = projectionTool('remote.weather', 'remote')
+    const unavailableRemoteTool = {
+      ...projectionTool('remote.unavailable', 'remote'),
+      provider_available: false,
+    }
+    const localProjectionTool = projectionTool('local.status', 'local')
     const runtime = fakeRuntime({
-      getExportCatalog: vi.fn(async () => completeProjectionPage([remoteTool])),
+      getExportCatalog: vi.fn(async () => completeProjectionPage([remoteTool, unavailableRemoteTool, localProjectionTool])),
     })
 
     const config = await createAuroraBrowserLocalAssistantConfig(runtime)
@@ -63,10 +68,45 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
     expect(browserSource).not.toMatch(/AURORA_LIGHTWEIGHT_ASSISTANT_API_KEY|apiKey|authorization/i)
     expect(JSON.stringify(fetch.mock.calls)).not.toContain('provider-secret')
   })
+
+  it('returns local-tool-only when projection identity changes across pages', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ enabled: true })))
+    const firstPage = partialProjectionPage([projectionTool('remote.weather', 'remote')], 'next-page')
+    const secondPage = {
+      ...completeProjectionPage([projectionTool('remote.files', 'remote')]),
+      provider_peer_id: 'different-peer',
+      page_index: 1,
+    }
+    const getExportCatalog = vi
+      .fn()
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce(secondPage)
+
+    const config = await createAuroraBrowserLocalAssistantConfig(fakeRuntime({ getExportCatalog }))
+
+    expect(config?.remoteTools).toEqual([])
+    expect(getExportCatalog).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      cursor: 'next-page',
+      last_projection_revision: firstPage.projection_revision,
+      last_projection_digest: firstPage.projection_digest,
+    }))
+  })
+
+  it('returns local-tool-only when projection pages do not pass the SDK parser', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ enabled: true })))
+    const getExportCatalog = vi.fn(async () => ({
+      ok: true,
+      tools: [projectionTool('legacy.weather', 'remote')],
+    }))
+
+    const config = await createAuroraBrowserLocalAssistantConfig(fakeRuntime({ getExportCatalog }))
+
+    expect(config?.remoteTools).toEqual([])
+  })
 })
 
 function fakeRuntime(overrides: {
-  getExportCatalog?: () => Promise<ToolingGetExportCatalogResponse>
+  getExportCatalog?: () => Promise<unknown>
 } = {}): AuroraBrowserRuntime {
   return {
     features: {
@@ -121,6 +161,20 @@ function completeProjectionPage(tools: readonly ToolingProjectionToolInfo[]): To
     complete: true,
     total_count: tools.length,
     final_checksum: 'c'.repeat(64),
+  }
+}
+
+function partialProjectionPage(
+  tools: readonly ToolingProjectionToolInfo[],
+  nextCursor: string,
+): ToolingGetExportCatalogResponse {
+  const page = completeProjectionPage(tools)
+  return {
+    ...page,
+    complete: false,
+    next_cursor: nextCursor,
+    total_count: undefined as never,
+    final_checksum: undefined as never,
   }
 }
 

@@ -63,10 +63,7 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
         if (!active) return
         const localAssistant = await createAuroraBrowserLocalAssistantConfig(nextRuntime)
         if (!active) return
-        if (localAssistant) {
-          Object.assign(nextRuntime, { localAssistant })
-        }
-        setRuntime(nextRuntime)
+        setRuntime(localAssistant ? runtimeWithLocalAssistant(nextRuntime, localAssistant) : nextRuntime)
       },
       () => {
         if (active) setStartFailed(true)
@@ -96,6 +93,21 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
       {children}
     </ReadyPathAwareShell>
   )
+}
+
+function runtimeWithLocalAssistant(
+  runtime: AuroraBrowserRuntime,
+  localAssistant: NonNullable<AuroraBrowserRuntime['localAssistant']>,
+): AuroraBrowserRuntime {
+  return Object.create(Object.getPrototypeOf(runtime), {
+    ...Object.getOwnPropertyDescriptors(runtime),
+    localAssistant: {
+      value: localAssistant,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    },
+  }) as AuroraBrowserRuntime
 }
 
 function ReadyPathAwareShell({

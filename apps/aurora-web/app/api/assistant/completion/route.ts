@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import {
+  DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS,
+  LightweightOrchestratorError,
+  assertSerializedBound,
+  assertTextBound,
   createOpenAICompatibleToolProvider,
   type LightweightProviderMessage,
 } from '@aurora/client/lightweight-orchestrator'
@@ -10,33 +14,53 @@ import {
 } from '../../../assistant-completion-config'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 
-export function GET() {
+export function GET(request: NextRequest) {
+  if (!sameOriginRequest(request)) return unavailableResponse(404)
   const config = assistantCompletionPublicConfig()
   if (!config.enabled) {
-    return NextResponse.json({ enabled: false }, { status: 404 })
+    return unavailableResponse(404, { enabled: false })
   }
-  return NextResponse.json(config)
+  return jsonResponse(config)
 }
 
 export async function POST(request: NextRequest) {
+  if (!sameOriginRequest(request)) return unavailableResponse(404)
   const config = assistantCompletionServerConfig()
   if (!config) {
-    return NextResponse.json({ ok: false, error: 'assistant_unavailable' }, { status: 404 })
+    return unavailableResponse(404)
   }
   let body: unknown
   try {
-    body = await request.json()
+    const raw = await request.text()
+    assertTextBound(raw, DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS.maxProviderRequestBytes, 'provider_request_too_large')
+    body = JSON.parse(raw) as unknown
   } catch {
-    return NextResponse.json({ ok: false, error: 'assistant_unavailable' }, { status: 400 })
+    return unavailableResponse(400)
   }
-  const providerRequest = normalizeProviderRequest(body, request.signal)
+  let providerRequest: ReturnType<typeof normalizeProviderRequest>
+  try {
+    providerRequest = normalizeProviderRequest(body, request.signal)
+  } catch {
+    return unavailableResponse(400)
+  }
   if (!providerRequest) {
-    return NextResponse.json({ ok: false, error: 'assistant_unavailable' }, { status: 400 })
+    return unavailableResponse(400)
   }
-  const provider = createOpenAICompatibleToolProvider(config)
-  const response = await provider.complete(providerRequest)
-  return NextResponse.json(response)
+  try {
+    assertSerializedBound(providerRequest, DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS.maxProviderRequestBytes, 'provider_request_too_large')
+    const provider = createOpenAICompatibleToolProvider(config)
+    const response = await provider.complete(providerRequest)
+    return jsonResponse(response)
+  } catch (error) {
+    const status = error instanceof LightweightOrchestratorError && error.reasonCode.includes('too_large')
+      ? 400
+      : 502
+    return unavailableResponse(status)
+  }
 }
 
 function normalizeProviderRequest(body: unknown, signal: AbortSignal) {
@@ -47,12 +71,20 @@ function normalizeProviderRequest(body: unknown, signal: AbortSignal) {
     maxToolCalls?: unknown
   }
   if (!Array.isArray(value.messages) || !Array.isArray(value.tools)) return null
+  if (
+    value.messages.length > DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS.maxHistoryMessages
+    || value.tools.length > DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS.maxToolSchemas
+  ) return null
   const maxToolCalls = typeof value.maxToolCalls === 'number' && Number.isFinite(value.maxToolCalls)
     ? Math.max(0, Math.floor(value.maxToolCalls))
     : 0
+  if (maxToolCalls > DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS.maxTotalTools) return null
+  const messages = value.messages.filter(isProviderMessage)
+  const tools = value.tools.filter(isProjectionTool)
+  if (messages.length !== value.messages.length || tools.length !== value.tools.length) return null
   return {
-    messages: value.messages.filter(isProviderMessage),
-    tools: value.tools.filter(isProjectionTool),
+    messages,
+    tools,
     maxToolCalls,
     signal,
   }
@@ -97,4 +129,40 @@ function isProjectionTool(value: unknown): value is ToolingProjectionToolInfo {
     && typeof candidate.args_schema === 'object'
     && !Array.isArray(candidate.args_schema)
   )
+}
+
+function sameOriginRequest(request: NextRequest): boolean {
+  const origin = request.headers.get('origin')
+  if (origin && origin !== request.nextUrl.origin) return false
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') return false
+  const referer = request.headers.get('referer')
+  if (!origin && referer) {
+    try {
+      if (new URL(referer).origin !== request.nextUrl.origin) return false
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
+function jsonResponse(body: unknown, status = 200): NextResponse {
+  return NextResponse.json(body, {
+    status,
+    headers: noStoreHeaders(),
+  })
+}
+
+function unavailableResponse(
+  status: number,
+  body: unknown = { ok: false, error: 'assistant_unavailable' },
+): NextResponse {
+  return jsonResponse(body, status)
+}
+
+function noStoreHeaders(): HeadersInit {
+  return {
+    'cache-control': 'no-store, max-age=0',
+  }
 }
