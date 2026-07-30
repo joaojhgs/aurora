@@ -42,7 +42,7 @@ export const PRODUCT_COPY = {
     },
     invite: {
       title: 'Add your invite',
-      deviceName: 'Device name',
+      deviceName: 'This device name',
       scan: 'Scan invite',
       openFile: 'Open invite file',
       paste: 'Paste invite',

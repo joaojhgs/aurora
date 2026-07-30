@@ -173,7 +173,7 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
   }
   await makeAvailableChoice.click()
   await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByLabel('Device name').fill(browserPeerName)
+  await page.getByRole('textbox', { name: 'This device name', exact: true }).fill(browserPeerName)
   await page.getByLabel('Paste invite').fill(JSON.stringify(buildInvite(ready, inviteConfig)))
   await page.getByRole('button', { name: 'Save invite and continue' }).click()
   await page.waitForURL(/\/mesh/, { timeout: 30_000 })

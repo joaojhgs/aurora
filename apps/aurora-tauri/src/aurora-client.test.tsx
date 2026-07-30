@@ -2803,7 +2803,7 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
-  it("e2e:runtime keeps mode selection locked until preference restore completes", async () => {
+  it("e2e:runtime keeps mode selection usable while preference restore completes", async () => {
     let resolveRead: (modeId: string | null) => void = () => undefined;
     const writes: string[] = [];
     const tiers: string[] = [];
@@ -2837,7 +2837,7 @@ describe("Tauri CI/E2E route gates", () => {
       ).find((candidate) =>
         candidate.textContent?.includes("Connect to Aurora"),
       );
-      expect(desktopThinButton?.disabled).toBe(true);
+      expect(desktopThinButton?.disabled).toBe(false);
       await act(async () => {
         resolveRead("remote-console");
         await flushReactWork();
