@@ -256,6 +256,22 @@ export async function createBrowserMeshNodeServices(
     if (!provider.enabled || provider.registeredToolIds.length === 0) {
       throw failedCompositionError('composition_failed')
     }
+    let providerRefreshClosed = false
+    let providerRefreshQueue = Promise.resolve()
+    const scheduleProviderRefresh = () => {
+      providerRefreshQueue = providerRefreshQueue.then(async () => {
+        if (providerRefreshClosed) return
+        await provider.peerHost.resumeLocalProvider().catch(() => undefined)
+      })
+    }
+    let initialFeatureSnapshotSeen = false
+    const unsubscribeFeatureSharing = localFeatureSharing.subscribe(() => {
+      if (!initialFeatureSnapshotSeen) {
+        initialFeatureSnapshotSeen = true
+        return
+      }
+      scheduleProviderRefresh()
+    })
 
     return {
       enabled: true,
@@ -275,6 +291,9 @@ export async function createBrowserMeshNodeServices(
       storageBackendKind: backend.kind,
       grantStorePersistent: true,
       async close() {
+        providerRefreshClosed = true
+        unsubscribeFeatureSharing()
+        await providerRefreshQueue
         await crypto?.close?.().catch(() => undefined)
         await backend?.close().catch(() => undefined)
       },

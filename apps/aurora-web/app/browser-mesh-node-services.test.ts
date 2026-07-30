@@ -90,7 +90,8 @@ describe('browser mesh-node service composition', () => {
     expect(services.peerHost).toBeDefined()
     await expect(services.peerHost!.startEpoch('remote-peer')).resolves.toMatchObject({
       shared_services: [],
-      active_protocol: 'projection-v1',
+      active_protocol: 'legacy-unfiltered-v0',
+      projection_active: false,
     })
     await expect(backend.session?.localAudit.listAudit()).resolves.toEqual([])
     await services.close()
@@ -181,6 +182,60 @@ describe('browser mesh-node service composition', () => {
         }),
       }),
     ])
+    await services.close()
+  })
+
+  it('serializes provider manifest refreshes after durable feature-sharing changes', async () => {
+    const store = durableCredentialStore()
+    const backend = new PersistentMemoryLocalDataBackend()
+    const services = await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore: store,
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => localDataAuthority(backend),
+      envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: () => 'id-1',
+      randomBytes: fixedBytes,
+    })
+    let releaseFirstResume: (() => void) | undefined
+    const firstResume = new Promise<void>((resolve) => {
+      releaseFirstResume = resolve
+    })
+    let activeResumes = 0
+    let maxActiveResumes = 0
+    const resume = vi
+      .spyOn(services.provider.peerHost, 'resumeLocalProvider')
+      .mockImplementation(async () => {
+        activeResumes += 1
+        maxActiveResumes = Math.max(maxActiveResumes, activeResumes)
+        try {
+          if (resume.mock.calls.length === 1) await firstResume
+        } finally {
+          activeResumes -= 1
+        }
+      })
+
+    await services.localFeatureSharing.setFeatureEnabled(
+      'aurora.local.native.get_device_status.v1',
+      true,
+    )
+    await vi.waitFor(() => expect(resume).toHaveBeenCalledOnce())
+    await services.localFeatureSharing.setFeatureEnabled(
+      'aurora.local.native.get_device_status.v1',
+      false,
+    )
+
+    expect(resume).toHaveBeenCalledOnce()
+    releaseFirstResume?.()
+    await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(2))
+    expect(maxActiveResumes).toBe(1)
     await services.close()
   })
 })
