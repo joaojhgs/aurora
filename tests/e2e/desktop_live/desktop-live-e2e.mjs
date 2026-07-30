@@ -283,6 +283,7 @@ function desktopClientLaunchContract() {
       VITE_AURORA_RUNTIME_MODE: 'desktop-thin',
       VITE_AURORA_CONNECTION_MODE: 'webrtc-only',
       VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
+      VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: '1',
     },
     forbiddenDescendants: ['python', 'python3', 'uv', 'main.py', 'aurora-sidecar'],
   }
@@ -449,6 +450,21 @@ function validateDriverReport(report, { sessionNonce }) {
     String(report.desktopResult?.pidBinding?.observedPid),
     String(report.tauriPid),
     'desktop WebView PID binding must match the wrapper-recorded application PID',
+  )
+  assert.equal(
+    report.desktopResult?.nativeWebRtcFallback?.used,
+    true,
+    'desktop driver report must prove the Rust native WebRTC fallback was used',
+  )
+  assert.equal(
+    report.desktopResult?.nativeWebRtcFallback?.primitive,
+    'tauri-native-webrtc',
+    'desktop driver report must name the native WebRTC primitive',
+  )
+  assert.equal(
+    report.desktopResult?.nativeWebRtcFallback?.forcedByLiveGate,
+    true,
+    'desktop driver report must bind native WebRTC use to the live gate',
   )
   for (const [label, snapshot] of Object.entries({
     beforeHook: report.processTree?.beforeHook,
@@ -747,6 +763,11 @@ async function runSelfTest() {
       pidBinding: {
         actualOsPidVerified: true,
         observedPid: '123',
+      },
+      nativeWebRtcFallback: {
+        used: true,
+        primitive: 'tauri-native-webrtc',
+        forcedByLiveGate: true,
       },
     },
     processTree: {

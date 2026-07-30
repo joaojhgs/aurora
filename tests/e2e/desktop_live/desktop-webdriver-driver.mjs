@@ -255,6 +255,9 @@ function validatePassedHookResult(result, { sessionNonce, tauriPid }) {
   assert.equal(result.noHttpFetchTransportUsed, true)
   assert.equal(result.browserResult?.noHttpFetchTransportUsed, true)
   assert.deepEqual(result.browserResult?.httpFetchCalls, [])
+  assert.equal(result.desktopResult?.nativeWebRtcFallback?.used, true)
+  assert.equal(result.desktopResult?.nativeWebRtcFallback?.primitive, 'tauri-native-webrtc')
+  assert.equal(result.desktopResult?.nativeWebRtcFallback?.forcedByLiveGate, true)
   assertRoleSwitchEvidence(result.roleSwitchEvidence, 'hook result')
   assert.ok(
     result.browserResult || result.desktopResult,
@@ -434,7 +437,7 @@ function runSelfTest() {
         noHttpFetchTransportUsed: true,
         httpFetchCalls: [],
       },
-      desktopResult: { approved: true },
+      desktopResult: { approved: true, nativeWebRtcFallback: nativeWebRtcFallbackEvidence() },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
   )
@@ -449,7 +452,7 @@ function runSelfTest() {
         noHttpFetchTransportUsed: false,
         httpFetchCalls: ['https://unexpected.example/'],
       },
-      desktopResult: { approved: true },
+      desktopResult: { approved: true, nativeWebRtcFallback: nativeWebRtcFallbackEvidence() },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
   )
@@ -459,7 +462,7 @@ function runSelfTest() {
       sessionNonce: 'wrong',
       tauriPid: '123',
       roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
-      desktopResult: { approved: true },
+      desktopResult: { approved: true, nativeWebRtcFallback: nativeWebRtcFallbackEvidence() },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
   )
@@ -478,7 +481,7 @@ function runSelfTest() {
       sessionNonce: 'nonce',
       tauriPid: '123',
       roleSwitchEvidence: { passed: false, from: 'remote-console', to: 'mesh-node' },
-      desktopResult: { approved: true },
+      desktopResult: { approved: true, nativeWebRtcFallback: nativeWebRtcFallbackEvidence() },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
   )
@@ -488,9 +491,17 @@ function runSelfTest() {
       sessionNonce: 'nonce',
       tauriPid: '123',
       roleSwitchEvidence: { passed: true, from: 'mesh-node', to: 'remote-console' },
-      desktopResult: { approved: true },
+      desktopResult: { approved: true, nativeWebRtcFallback: nativeWebRtcFallbackEvidence() },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
   )
   console.log('desktop-webdriver-driver self-test passed')
+}
+
+function nativeWebRtcFallbackEvidence() {
+  return {
+    used: true,
+    primitive: 'tauri-native-webrtc',
+    forcedByLiveGate: true,
+  }
 }

@@ -105,6 +105,7 @@ test('maintained desktop live scripts are valid and bind tauri-driver to the wra
   const runnerSource = await fs.readFile(liveRunner, 'utf8')
   const wrapperSource = await fs.readFile(applicationWrapper, 'utf8')
   assert.match(runnerSource, /VITE_AURORA_DESKTOP_LIVE_E2E=1/)
+  assert.match(runnerSource, /VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC=1/)
   assert.match(runnerSource, /tauri-driver/)
   assert.match(runnerSource, /src-tauri\/tauri\.client\.conf\.json/)
   assert.match(runnerSource, /AURORA_DESKTOP_LIVE_E2E_APPLICATION/)

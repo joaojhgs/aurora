@@ -46,6 +46,7 @@ if [[ "${AURORA_DESKTOP_LIVE_E2E_SKIP_BUILD:-0}" != "1" ]]; then
   VITE_AURORA_RUNTIME_MODE=desktop-thin \
   VITE_AURORA_CONNECTION_MODE=webrtc-only \
   VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \
+  VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC=1 \
     pnpm --filter @aurora/tauri-ui tauri build \
       --debug \
       --no-bundle \
@@ -67,6 +68,7 @@ desktop_webdriver_url="http://127.0.0.1:$desktop_driver_port"
 
 export AURORA_DESKTOP_LIVE_E2E=1
 export AURORA_TAURI_DEV_AUTOSIDECAR=0
+export VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC=1
 export AURORA_DESKTOP_LIVE_E2E_APPLICATION="$desktop_application_wrapper"
 export AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN="$desktop_application_bin"
 export AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE="$desktop_app_pid_file"

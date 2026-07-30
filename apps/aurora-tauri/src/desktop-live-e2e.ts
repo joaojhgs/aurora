@@ -41,6 +41,7 @@ const HOOK_PAYLOAD_SCHEMA = "aurora.desktop_live_e2e.hook_payload.v1";
 const REPORT_SCHEMA = "aurora.desktop_live_e2e.desktop_report.v1";
 const AC18_BROWSER_TOOL_CONTRACT_ID = "interop.browser.echo";
 const AC18_BROWSER_TOOL_LOCAL_NAME = "interop.browser.echo";
+const FORCE_NATIVE_WEBRTC_ENV = "VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC";
 
 type DesktopLiveE2eWindow = Window & {
   __AURORA_DESKTOP_LIVE_E2E__?: (payload: unknown) => Promise<DesktopLiveE2eReport>;
@@ -187,6 +188,21 @@ export function isDesktopLiveE2eHookEnabled(
   );
 }
 
+export function isDesktopLiveNativeWebRtcForced(
+  env: Record<string, unknown> = import.meta.env,
+): boolean {
+  return env[FORCE_NATIVE_WEBRTC_ENV] === "1";
+}
+
+export function resolveDesktopLivePeerConnectionPrimitive(
+  env: Record<string, unknown> = import.meta.env,
+  hasBrowserRtcPeerConnection = typeof globalThis.RTCPeerConnection === "function",
+): "tauri-native-webrtc" | "browser-rtcpeerconnection" {
+  return isDesktopLiveNativeWebRtcForced(env) || !hasBrowserRtcPeerConnection
+    ? "tauri-native-webrtc"
+    : "browser-rtcpeerconnection";
+}
+
 export function installDesktopLiveE2eHook(
   options: HookInstallOptions = {},
 ): boolean {
@@ -254,6 +270,7 @@ export async function runDesktopLiveE2e(
   const snapshots: Snapshot[] = [];
   let remoteRuntime: DesktopLiveRuntime | null = null;
   let meshRuntime: DesktopLiveRuntime | null = null;
+  const peerConnectionPrimitive = resolveDesktopLivePeerConnectionPrimitive();
   try {
     remoteRuntime = createInteropRuntime({
       ready,
@@ -325,6 +342,11 @@ export async function runDesktopLiveE2e(
           actualOsPidVerified: false,
           requiredSharedChange:
             "Provide a maintained tauri-driver application wrapper or a test-only Rust command before claiming WebView-observed OS PID proof.",
+        },
+        nativeWebRtcFallback: {
+          used: peerConnectionPrimitive === "tauri-native-webrtc",
+          primitive: peerConnectionPrimitive,
+          forcedByLiveGate: isDesktopLiveNativeWebRtcForced(),
         },
         tauriWebView: typeof window !== "undefined" && Boolean((window as DesktopLiveE2eWindow).__TAURI__ || (window as DesktopLiveE2eWindow).__TAURI_INTERNALS__),
         secretsRedacted: true,
@@ -1024,7 +1046,7 @@ function makePeerConnectionFactory(
     const next: RTCConfiguration = { ...configuration };
     if (iceServers !== undefined) next.iceServers = iceServers;
     if (forceRelay) next.iceTransportPolicy = "relay";
-    if (typeof globalThis.RTCPeerConnection !== "function") {
+    if (resolveDesktopLivePeerConnectionPrimitive() === "tauri-native-webrtc") {
       return createTauriNativePeerConnection(next);
     }
     const pc = new RTCPeerConnection(next);

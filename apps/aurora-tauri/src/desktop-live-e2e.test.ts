@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   installDesktopLiveE2eHook,
   isDesktopLiveE2eHookEnabled,
+  isDesktopLiveNativeWebRtcForced,
+  resolveDesktopLivePeerConnectionPrimitive,
   validateDesktopLiveE2ePayload,
   type DesktopLiveE2ePayload,
   type DesktopLiveE2eReport,
@@ -24,6 +26,20 @@ describe("desktop live E2E WebView hook", () => {
     expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, VITE_AURORA_RUNTIME_MODE: "desktop-local" })).toBe(false);
     expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, VITE_AURORA_CONNECTION_MODE: "http-only" })).toBe(false);
     expect(isDesktopLiveE2eHookEnabled({ ...liveEnv, VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: "0" })).toBe(false);
+  });
+
+  it("can force the Linux native WebRTC primitive for the live desktop gate", () => {
+    expect(isDesktopLiveNativeWebRtcForced(liveEnv)).toBe(false);
+    expect(isDesktopLiveNativeWebRtcForced({
+      ...liveEnv,
+      VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
+    })).toBe(true);
+    expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, true)).toBe("browser-rtcpeerconnection");
+    expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, false)).toBe("tauri-native-webrtc");
+    expect(resolveDesktopLivePeerConnectionPrimitive({
+      ...liveEnv,
+      VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
+    }, true)).toBe("tauri-native-webrtc");
   });
 
   it("does not install outside the gated environment", () => {
