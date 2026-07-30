@@ -66,6 +66,14 @@ const supportedIosPublicActionMappings = [
   ['deepLinks', 'deeplink.open'],
 ] as const
 
+const forbiddenIosUserFacingReadinessTerms = [
+  /\bproof\b/i,
+  /\bmacOS\b/i,
+  /\bXcode\b/i,
+  /\bsimulator\b/i,
+  /\bdevice invocation\b/i,
+] as const
+
 describe('Tauri CI native evidence contract', () => {
   it('keeps the Linux Tauri smoke script from being only jsdom/web route tests', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
@@ -406,6 +414,43 @@ describe('Tauri CI native evidence contract', () => {
     expect(swiftPlugin).toContain('"deepLinksAvailable": true')
     expect(swiftPlugin).toContain('"ios.deepLinks": "available"')
     expect(swiftPlugin).toContain('.filter { ($0["support"] as? String) == "supported-path" }')
+  })
+
+  it('keeps user-facing pending iOS readiness copy free of verifier wording', () => {
+    const swiftPlugin = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',
+    )
+    const swiftEntrypoints = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift',
+    )
+    const pendingReasonConstant =
+      swiftPlugin.match(/private static let pendingNativeTargetReason = "([^"]+)"/)?.[1] ?? ''
+    const entrypointPendingReasonConstant =
+      swiftEntrypoints.match(/private static let pendingNativeTargetReason = "([^"]+)"/)?.[1] ?? ''
+    const aggregateInvocationReason =
+      swiftPlugin.match(/\?\s+"([^"]+)"\s+:\s+NSNull\(\)/)?.[1] ?? ''
+    const iosInvocationManifestReason =
+      swiftPlugin.match(/"iosInvocation": \[[\s\S]*?"reason": "([^"]+)"/)?.[1] ?? ''
+
+    expect(pendingReasonConstant).toBe('This iOS feature is unavailable until mobile app setup is complete.')
+    expect(entrypointPendingReasonConstant).toBe(pendingReasonConstant)
+    for (const value of [
+      pendingReasonConstant,
+      entrypointPendingReasonConstant,
+      aggregateInvocationReason,
+      iosInvocationManifestReason,
+    ]) {
+      assertNoForbiddenIosReadinessCopy(value)
+    }
+
+    for (const claim of pendingIosNativeTargetClaims) {
+      const manifestBlock = swiftPlugin.match(
+        new RegExp(`"id": "${claim.id}"[\\s\\S]*?"verifier": "[^"]+"`),
+      )?.[0] ?? ''
+      expect(manifestBlock, claim.id).toContain('"reason": AuroraNativePlugin.pendingNativeTargetReason')
+      const userCopy = manifestBlock.match(/"userCopy": "([^"]+)"/)?.[1] ?? ''
+      assertNoForbiddenIosReadinessCopy(userCopy)
+    }
   })
 
   it('uploads failing route screenshots, traces, and logs from CI gates', () => {
@@ -757,3 +802,10 @@ describe('Tauri CI native evidence contract', () => {
   })
 
 })
+
+function assertNoForbiddenIosReadinessCopy(value: string) {
+  expect(value).not.toBe('')
+  for (const pattern of forbiddenIosUserFacingReadinessTerms) {
+    expect(value, `${value} should keep verifier wording out of user-facing iOS readiness copy`).not.toMatch(pattern)
+  }
+}

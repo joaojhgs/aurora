@@ -38,7 +38,7 @@ public struct AuroraEntrypointDescriptor: Codable {
 }
 
 public enum AuroraEntrypointFactory {
-  private static let pendingNativeTargetReason = "iOS native target proof is pending; this source is described but must not be reported available until a macOS/Xcode build and simulator or device invocation proves it."
+  private static let pendingNativeTargetReason = "This iOS feature is unavailable until mobile app setup is complete."
 
   public static func descriptors() -> [AuroraEntrypointDescriptor] {
     [

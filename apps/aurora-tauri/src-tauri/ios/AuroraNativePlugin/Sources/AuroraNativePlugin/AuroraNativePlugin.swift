@@ -44,7 +44,7 @@ public final class AuroraNativePlugin: Plugin {
   private static let maxTitleLength = 120
   private static let maxNotificationBodyLength = 512
   private static let maxUrlLength = 2048
-  private static let pendingNativeTargetReason = "iOS native target proof is pending; this source is described but must not be reported available until a macOS/Xcode build and simulator or device invocation proves it."
+  private static let pendingNativeTargetReason = "This iOS feature is unavailable until mobile app setup is complete."
   private static let allowedOutgoingLinkSchemes: Set<String> = [
     "https",
     "mailto",
@@ -398,7 +398,7 @@ public final class AuroraNativePlugin: Plugin {
         "backendHandoffRequired": true,
         "privacyLabels": ["personal", "sensitive"],
         "state": "degraded",
-        "reason": "Deep-link and app-owned source wiring is present, but share extension, widget, and file association targets remain pending until macOS/Xcode build and simulator or device invocation proof exists.",
+        "reason": "Deep links can open Aurora now. Share, widget, and file-open options stay unavailable until mobile app setup is complete.",
         "evidenceSource": "src-tauri/ios/preflight.json",
         "secretsRedacted": true
       ],
@@ -439,7 +439,7 @@ public final class AuroraNativePlugin: Plugin {
     }
     let invocationState = hasPendingNativeTargets ? "degraded" : "available"
     let reason: Any = hasPendingNativeTargets
-      ? "Some iOS extension, widget, or file association targets remain pending until macOS/Xcode build and simulator or device invocation proof exists."
+      ? "Some iOS options are unavailable until mobile app setup is complete."
       : NSNull()
     invoke.resolve([
       "available": true,
