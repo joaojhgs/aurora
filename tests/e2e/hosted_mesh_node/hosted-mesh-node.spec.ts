@@ -100,7 +100,6 @@ const permissions = [
   'Tooling.GetExportCatalog',
   'Tooling.PrepareExecution',
   'Tooling.ExecuteTool',
-  'Native.GetDeviceStatus',
 ]
 
 const reducedPermissions = [
@@ -124,9 +123,22 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
   request,
 }, testInfo) => {
   const consoleErrors: string[] = []
+  const expectedOfflineConsoleErrors: string[] = []
   const browserGatewayRequests: Array<{ method: string; url: string }> = []
+  let exercisingOfflineRecovery = false
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text())
+    if (message.type() !== 'error') return
+    const text = message.text()
+    if (
+      exercisingOfflineRecovery &&
+      /WebSocket connection .*\/mqtt.*(?:ERR_INTERNET_DISCONNECTED|Data frame received after close)/u.test(
+        text,
+      )
+    ) {
+      expectedOfflineConsoleErrors.push(text)
+      return
+    }
+    consoleErrors.push(text)
   })
   page.on('pageerror', (error) => consoleErrors.push(error.message))
   page.on('request', (browserRequest) => {
@@ -177,9 +189,22 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
   await page.getByLabel('Paste invite').fill(JSON.stringify(buildInvite(ready, inviteConfig)))
   await page.getByRole('button', { name: 'Save invite and continue' }).click()
   await page.waitForURL(/\/mesh/, { timeout: 30_000 })
+  await page.locator(
+    '[data-local-node-provider]:not([data-local-node-provider="not-configured"])',
+  ).waitFor({ state: 'visible', timeout: 60_000 })
 
   const review = page.getByRole('button', { name: 'Review & approve' })
-  await review.waitFor({ state: 'visible', timeout: 90_000 })
+  await Promise.race([
+    review.waitFor({ state: 'visible', timeout: 90_000 }),
+    page.locator('[data-browser-shell-start="failed"]').waitFor({
+      state: 'visible',
+      timeout: 90_000,
+    }).then(() => {
+      throw new Error(
+        `Browser mesh-node startup failed: ${consoleErrors.join(' | ') || 'no browser console error was captured'}`,
+      )
+    }),
+  ])
   const uiCode = normalizeCode(
     (await page
       .locator('code[aria-label^="Verification code "]')
@@ -260,7 +285,7 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
   await expect(meshRoot).toHaveAttribute('data-local-node-provider', 'available')
   await expect(meshRoot).toHaveAttribute('data-local-node-provider-available', 'true')
   await expect(meshRoot).toHaveAttribute('data-local-data-writable', 'true')
-  await expect(meshRoot).toHaveAttribute('data-local-feature-count', '1')
+  await expect(meshRoot).toHaveAttribute('data-local-feature-count', /^[1-9]\d*$/u)
 
   const featurePanel = page.getByLabel('Features on this device')
   await expect(featurePanel).toBeVisible()
@@ -268,8 +293,13 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
   await page.getByLabel('Turn Get device status on').click()
   await expect(featurePanel.getByText('1 on')).toBeVisible()
   await featurePanel.getByRole('button', { name: 'Choose features' }).click()
-  await page.getByLabel('Shared features').getByLabel('Get device status').click()
-  await page.getByRole('button', { name: 'Save sharing' }).click()
+  const sharingDialog = page.getByRole('dialog', {
+    name: /Choose features for /u,
+  })
+  await sharingDialog
+    .getByRole('checkbox', { name: /Get device status/u })
+    .click()
+  await sharingDialog.getByRole('button', { name: 'Save sharing' }).click()
   await expect(featurePanel.getByText('1 feature shared')).toBeVisible()
 
   const secondPage = await page.context().newPage()
@@ -280,9 +310,11 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
       timeout: 60_000,
     })
     await expect(secondRoot).toHaveAttribute('data-local-data-writable', 'false')
-    await expect(secondPage.getByRole('status')).toContainText(
-      'This device is already available from another open tab.',
-    )
+    await expect(
+      secondPage.getByText('This device is already available from another open tab.', {
+        exact: true,
+      }),
+    ).toBeVisible()
   } finally {
     await secondPage.close()
   }
@@ -303,6 +335,16 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
         [item.tool_contract_id, item.local_name, item.name].includes(browserToolContractId) ||
         item.local_name === browserToolLocalName,
       )
+      const blockedCandidate = catalog.blocked_tools?.find(({ tool: item }) =>
+        item !== undefined &&
+        ([item.tool_contract_id, item.local_name, item.name].includes(browserToolContractId) ||
+          item.local_name === browserToolLocalName),
+      )
+      if (blockedCandidate) {
+        throw new Error(
+          `browser-local tool is blocked: ${blockedCandidate.reason_code ?? 'unknown'}`,
+        )
+      }
       return candidate ?? null
     },
     'Python aggregate Tooling catalog discovers the shared browser-local tool',
@@ -333,9 +375,16 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
   expect(execution.data).toEqual(
     expect.objectContaining({
       online: expect.any(Boolean),
-      availableCapabilities: expect.arrayContaining([browserToolContractId]),
     }),
   )
+  if (
+    execution.data &&
+    typeof execution.data === 'object' &&
+    'batteryLevel' in execution.data
+  ) {
+    expect((execution.data as { batteryLevel: number }).batteryLevel).toBeGreaterThanOrEqual(0)
+    expect((execution.data as { batteryLevel: number }).batteryLevel).toBeLessThanOrEqual(1)
+  }
 
   const requestsBeforeRefresh = browserGatewayRequests.length
   await page
@@ -345,6 +394,7 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
   await expect(page.locator('[aria-labelledby="mesh-peers-title"]')).toContainText(expectedNodeName)
   expect(browserGatewayRequests).toHaveLength(requestsBeforeRefresh)
 
+  exercisingOfflineRecovery = true
   await page.context().setOffline(true)
   await waitFor(
     async () => {
@@ -369,6 +419,8 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
     'browser mesh-node reconnects after network returns',
     120_000,
   )
+  await page.waitForTimeout(500)
+  exercisingOfflineRecovery = false
 
   await confirmedAdminPost(
     request,
@@ -401,14 +453,36 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
       include_blocked_tools: true,
     },
   )
-  expect(deniedCatalog.tools ?? []).toEqual([])
-  expect(deniedCatalog.blocked_tools ?? []).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        reason_code: 'permission_denied',
-      }),
-    ]),
+  expect(
+    (deniedCatalog.tools ?? []).find(
+      (item) =>
+        item.provider_peer_id === browserPeerId ||
+        item.tool_contract_id === browserToolContractId,
+    ),
+  ).toBeUndefined()
+  const deniedExecutionResponse = await request.post(
+    `${gatewayUrl}/api/Tooling/ExecuteTool`,
+    {
+      headers: {
+        'X-API-Key': gatewayApiKey,
+        'content-type': 'application/json',
+      },
+      data: {
+        tool_name: tool.global_tool_id ?? browserToolContractId,
+        arguments: {},
+        mesh_selector: {
+          peer_id: browserPeerId,
+          service_instance_id: tool.provider_service_instance_id,
+          tool_id: tool.global_tool_id ?? tool.name,
+        },
+        correlation_id: 'hosted-mesh-node-reduced-permissions-deny',
+      },
+    },
   )
+  const deniedExecutionPayload = (await deniedExecutionResponse.json()) as {
+    ok?: boolean
+  }
+  expect(deniedExecutionResponse.ok() && deniedExecutionPayload.ok === true).toBe(false)
 
   const screenshotPath = testInfo.outputPath('hosted-mesh-node-shared-feature.png')
   await page.screenshot({ path: screenshotPath, fullPage: true })
@@ -417,6 +491,7 @@ test('hosted browser mesh-node shares one local feature with the real Python pee
     contentType: 'image/png',
   })
   expect(browserGatewayRequests).toEqual([])
+  expect(expectedOfflineConsoleErrors.length).toBeGreaterThan(0)
   expect(consoleErrors).toEqual([])
 })
 

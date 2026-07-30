@@ -60,6 +60,22 @@ WEB_PID=""
 
 mkdir -p "$ARTIFACT_DIR" "$DATA_DIR"
 
+pnpm --filter @aurora/client build
+
+wait_for_tcp() {
+  local host="$1"
+  local port="$2"
+  local label="$3"
+  for _ in $(seq 1 120); do
+    if (exec 3<>"/dev/tcp/$host/$port") 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "Timed out waiting for $label at $host:$port" >&2
+  return 1
+}
+
 cleanup() {
   local status=$?
   if [[ -n "$WEB_PID" ]]; then
@@ -72,6 +88,10 @@ cleanup() {
   fi
   if [[ "$START_LOCAL_BROKER" == "1" ]]; then
     scripts/webrtc_interop_services.sh down >/dev/null 2>&1 || true
+  fi
+  if [[ "${AURORA_HOSTED_MESH_NODE_PRESERVE_RUNTIME:-0}" == "1" ]]; then
+    echo "Preserved hosted mesh-node runtime at $RUNTIME_DIR" >&2
+    exit "$status"
   fi
   python - "$RUNTIME_DIR" <<'PY'
 import shutil
@@ -108,7 +128,9 @@ services["tooling"]["mesh_sharing"] = {
 services["tooling"]["mesh_routing"] = {
     "prefer": "local",
     "fallback": "error",
-    "require_explicit_selector": True,
+    # The aggregate catalog is a local fan-out method and has no selector field.
+    # Individual remote executions below still provide an explicit mesh selector.
+    "require_explicit_selector": False,
 }
 services["scheduler"]["enabled"] = False
 gateway = services["gateway"]
@@ -137,6 +159,15 @@ PY
 
 if [[ "$START_LOCAL_BROKER" == "1" ]]; then
   scripts/webrtc_interop_services.sh up
+  read -r BROKER_HOST BROKER_PORT < <(python - "$BROKER_URL" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+parsed = urlparse(sys.argv[1])
+print(parsed.hostname or "127.0.0.1", parsed.port or 9001)
+PY
+)
+  wait_for_tcp "$BROKER_HOST" "$BROKER_PORT" "local MQTT broker"
 fi
 
 setsid env \
