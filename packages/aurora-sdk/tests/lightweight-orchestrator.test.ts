@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { MemoryLocalDataBackend, type LocalDataSession } from '../src/local-data/index.js'
+import { searchLocalData } from '../src/local-data/search.js'
+import {
+  MemoryLocalDataBackend,
+  type EncryptedDataEnvelopeV1,
+  type EnvelopeCryptoPort,
+  type LocalDataKeyPurpose,
+  type LocalDataSession
+} from '../src/local-data/index.js'
 import { LightweightOrchestratorError } from '../src/lightweight-orchestrator/limits.js'
 import { buildOpenAIToolAliases, createOpenAICompatibleToolProvider, parseOpenAICompatibleResponse } from '../src/lightweight-orchestrator/provider.js'
 import { createLightweightOrchestrator } from '../src/lightweight-orchestrator/react-loop.js'
@@ -82,6 +89,85 @@ describe('lightweight orchestrator', () => {
       'prepare:remote.search:remote',
       'execute:remote.search:remote:no-token'
     ])
+  })
+
+  it('persists prompt, assistant, and tool content as recoverable encrypted local messages', async () => {
+    const crypto = new RecordingEnvelopeCryptoPort()
+    const session = await dataSession()
+    const orchestrator = createLightweightOrchestrator({
+      provider: sequenceProvider([
+        { type: 'tool_calls', toolCalls: [{ id: 'call-1', toolName: 'local.echo', arguments: { text: 'needle prompt' }, route: 'local' }] },
+        { type: 'message', content: 'needle assistant answer' }
+      ]),
+      tools: toolPort({
+        execute: async (request) => ({
+          ok: true,
+          data: { value: 'needle tool result', echoed: request.arguments },
+          error: null,
+          error_code: null,
+          status: 'success',
+          correlation_id: request.correlation_id ?? null,
+          provider_peer_id: 'node-1',
+          global_tool_id: request.tool_name
+        })
+      }),
+      localData: session,
+      localDataCrypto: crypto,
+      scope,
+      availableTools: [tool('local.echo', 'local')],
+      ids: idSequence('conv', 'user', 'corr', 'tool', 'assistant')
+    })
+
+    const result = await orchestrator.runTurn({ text: 'needle prompt' })
+
+    expect(result).toMatchObject({ status: 'completed', assistantText: 'needle assistant answer' })
+    const messages = await session.conversations.listMessages(result.conversationId)
+    expect(messages.map((message) => [message.role, message.status, message.contentEnvelope !== null, message.toolEnvelope !== null])).toEqual([
+      ['user', 'complete', true, false],
+      ['tool', 'complete', false, true],
+      ['assistant', 'complete', true, false]
+    ])
+    expect(messages.flatMap((message) => [message.contentEnvelope?.keyId, message.toolEnvelope?.keyId]).filter(Boolean)).toEqual([
+      'test-key-1',
+      'test-key-2',
+      'test-key-3'
+    ])
+    expect(crypto.encrypted.map((entry) => JSON.parse(new TextDecoder().decode(entry.aad)))).toMatchObject([
+      { table: 'aurora_messages', recordId: 'lw-msg-user', field: 'content_envelope_json', profileId: 'profile-1', localNodeId: 'node-1' },
+      { table: 'aurora_messages', recordId: 'lw-msg-tool', field: 'tool_envelope_json', profileId: 'profile-1', localNodeId: 'node-1' },
+      { table: 'aurora_messages', recordId: 'lw-msg-assistant', field: 'content_envelope_json', profileId: 'profile-1', localNodeId: 'node-1' }
+    ])
+
+    await expect(searchLocalData(session, {
+      scope,
+      query: 'needle',
+      nowMs: 2000,
+      domains: ['messages']
+    })).resolves.toMatchObject({
+      summary: { contentSearchAuthorized: false, decryptedRecords: 0 },
+      results: []
+    })
+    const search = await searchLocalData(session, {
+      scope,
+      query: 'needle',
+      nowMs: 2000,
+      domains: ['messages'],
+      decrypt: { crypto, authorized: true }
+    })
+    const previews = search.results.map((item) => [item.id, item.matchField, item.matchedTextPreview])
+    expect(previews).toEqual([
+      ['lw-msg-user', 'decrypted_content', 'needle prompt'],
+      ['lw-msg-tool', 'decrypted_content', expect.any(String)],
+      ['lw-msg-assistant', 'decrypted_content', 'needle assistant answer']
+    ])
+    expect(String(previews[1]?.[2])).toContain('needle tool')
+    expect(search.summary).toMatchObject({ contentSearchAuthorized: true, decryptedRecords: 3 })
+
+    const exported = JSON.stringify(await session.exportV1())
+    expect(exported).toContain('ciphertextAndTagB64Url')
+    expect(exported).not.toContain('needle prompt')
+    expect(exported).not.toContain('needle assistant answer')
+    expect(exported).not.toContain('needle tool result')
   })
 
   it('emits confirmation, denies without execute, and rejects token replay', async () => {
@@ -639,4 +725,42 @@ function idSequence(...values: string[]): () => string {
   const queue = [...values]
   let index = 0
   return () => queue.shift() ?? `generated-${index++}`
+}
+
+class RecordingEnvelopeCryptoPort implements EnvelopeCryptoPort {
+  readonly encrypted: Array<{ keyPurpose: LocalDataKeyPurpose; aad: Uint8Array; plaintext: string }> = []
+  private readonly plaintextByKeyId = new Map<string, string>()
+
+  async encrypt(
+    keyPurpose: LocalDataKeyPurpose,
+    plaintext: Uint8Array,
+    aad: Uint8Array,
+  ): Promise<EncryptedDataEnvelopeV1> {
+    const keyId = `test-key-${this.encrypted.length + 1}`
+    const text = new TextDecoder().decode(plaintext)
+    this.encrypted.push({ keyPurpose, aad: new Uint8Array(aad), plaintext: text })
+    this.plaintextByKeyId.set(keyId, text)
+    return {
+      version: 1,
+      algorithm: 'AES-GCM-256',
+      keyId,
+      nonceB64Url: 'AAAAAAAAAAAAAAAA',
+      ciphertextAndTagB64Url: base64Url(new TextEncoder().encode(`ciphertext-${keyId}`)),
+      createdAtMs: 1000
+    }
+  }
+
+  async decrypt(envelope: EncryptedDataEnvelopeV1, _aad: Uint8Array): Promise<Uint8Array> {
+    return new TextEncoder().encode(this.plaintextByKeyId.get(envelope.keyId) ?? '')
+  }
+
+  async rotateKey(_keyPurpose: LocalDataKeyPurpose): Promise<{ previousKeyId: string; newKeyId: string }> {
+    return { previousKeyId: 'old', newKeyId: 'new' }
+  }
+}
+
+function base64Url(value: Uint8Array): string {
+  let binary = ''
+  for (const byte of value) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/u, '')
 }

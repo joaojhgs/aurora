@@ -1,4 +1,4 @@
-import type { ConversationMessageRecord, ConversationRecord, LocalDataScope } from '../local-data/index.js'
+import { buildEnvelopeAad, type ConversationMessageRecord, type ConversationRecord, type EncryptedDataEnvelopeV1, type LocalDataScope } from '../local-data/index.js'
 import {
   assertSerializedBound,
   assertTextBound,
@@ -63,7 +63,7 @@ export class LightweightOrchestrator {
       const messages = await this.options.localData.conversations.listMessages(conversation.id)
       const pending = messages.filter((message) => message.status === 'pending')
       for (const message of pending) {
-        await this.options.localData.conversations.appendMessage(this.messageRecord(conversation.id, nextSequence(messages) + cancelledMessages, 'system', 'cancelled'))
+        await this.options.localData.conversations.appendMessage(await this.messageRecord(conversation.id, nextSequence(messages) + cancelledMessages, 'system', 'cancelled', {}))
         cancelledMessages += 1
         conversationIds.add(message.conversationId)
       }
@@ -79,7 +79,7 @@ export class LightweightOrchestrator {
       assertTextBound(input.text, this.limits.maxPromptBytes, 'prompt_too_large')
       await this.ensureConversation(conversationId)
       conversationReady = true
-      await this.appendState(conversationId, 'user', 'complete')
+      await this.appendState(conversationId, 'user', 'complete', { content: input.text })
       let messages: LightweightProviderMessage[] = [{ role: 'user', content: input.text }]
       let assistantText = ''
       let totalTools = 0
@@ -88,7 +88,7 @@ export class LightweightOrchestrator {
         const providerResponse = await this.callProvider(messages, controller.signal)
         if (providerResponse.type === 'message') {
           assertTextBound(providerResponse.content, this.limits.maxProviderResponseBytes, 'provider_response_too_large')
-          await this.appendState(conversationId, 'assistant', 'complete')
+          await this.appendState(conversationId, 'assistant', 'complete', { content: providerResponse.content })
           return { status: 'completed', conversationId, assistantText: providerResponse.content }
         }
         totalTools += providerResponse.toolCalls.length
@@ -132,7 +132,7 @@ export class LightweightOrchestrator {
     this.timers.clearTimeout(pending.timeoutHandle)
     if (input.decision === 'deny') {
       pending.controller.abort()
-      await this.appendState(pending.conversationId, 'tool', 'cancelled')
+      await this.appendState(pending.conversationId, 'tool', 'cancelled', { tool: { type: 'tool_cancelled', toolCall: persistedToolCall(pending.toolCall), secretsRedacted: true } })
       return {
         status: 'cancelled',
         conversationId: pending.conversationId,
@@ -149,8 +149,8 @@ export class LightweightOrchestrator {
       if (providerResponse.type !== 'message') {
         throw new LightweightOrchestratorError('provider_nested_confirmation_not_supported')
       }
-      await this.appendState(pending.conversationId, 'tool', result.ok ? 'complete' : 'failed')
-      await this.appendState(pending.conversationId, 'assistant', 'complete')
+      await this.appendState(pending.conversationId, 'tool', result.ok ? 'complete' : 'failed', { tool: persistedToolResult(pending.toolCall, result) })
+      await this.appendState(pending.conversationId, 'assistant', 'complete', { content: providerResponse.content })
       return {
         status: 'completed',
         conversationId: pending.conversationId,
@@ -158,10 +158,10 @@ export class LightweightOrchestrator {
       }
     } catch (error) {
       if (isAbortError(error)) {
-        await this.appendState(pending.conversationId, 'tool', 'cancelled')
+        await this.appendState(pending.conversationId, 'tool', 'cancelled', { tool: { type: 'tool_cancelled', toolCall: persistedToolCall(pending.toolCall), secretsRedacted: true } })
         return { status: 'cancelled', conversationId: pending.conversationId, assistantText: '', diagnostics: redactedDiagnostic('turn_cancelled') }
       }
-      await this.appendState(pending.conversationId, 'tool', 'failed')
+      await this.appendState(pending.conversationId, 'tool', 'failed', { tool: { type: 'tool_failed', toolCall: persistedToolCall(pending.toolCall), secretsRedacted: true } })
       throw error
     } finally {
       controller.abort()
@@ -221,7 +221,14 @@ export class LightweightOrchestrator {
           used: false
         }
         this.pending.set(token, pending)
-        await this.appendState(conversationId, 'tool', 'pending')
+        await this.appendState(conversationId, 'tool', 'pending', {
+          tool: {
+            type: 'tool_call',
+            assistantContent: providerResponse.content ?? null,
+            toolCall: persistedToolCall(toolCall),
+            secretsRedacted: true
+          }
+        })
         return {
           confirmation: {
             token,
@@ -238,7 +245,7 @@ export class LightweightOrchestrator {
       }
       const result = await this.executePreparedTool(toolCall, prepared, controller.signal)
       nextMessages.push(toolResultMessage(toolCall, result))
-      await this.appendState(conversationId, 'tool', result.ok ? 'complete' : 'failed')
+      await this.appendState(conversationId, 'tool', result.ok ? 'complete' : 'failed', { tool: persistedToolResult(toolCall, result) })
     }
     return { messages: nextMessages }
   }
@@ -323,7 +330,7 @@ export class LightweightOrchestrator {
     this.pending.delete(token)
     this.expiredTokens.add(token)
     this.timers.clearTimeout(pending.timeoutHandle)
-    await this.appendState(pending.conversationId, 'tool', 'cancelled')
+    await this.appendState(pending.conversationId, 'tool', 'cancelled', { tool: { type: 'tool_cancelled', toolCall: persistedToolCall(pending.toolCall), secretsRedacted: true } })
   }
 
   private async callProvider(messages: LightweightProviderMessage[], parentSignal: AbortSignal): Promise<LightweightProviderResponse> {
@@ -381,27 +388,55 @@ export class LightweightOrchestrator {
     await this.options.localData.conversations.upsertConversation(record)
   }
 
-  private async appendState(conversationId: string, role: ConversationMessageRecord['role'], status: ConversationMessageRecord['status']): Promise<void> {
+  private async appendState(
+    conversationId: string,
+    role: ConversationMessageRecord['role'],
+    status: ConversationMessageRecord['status'],
+    persisted: { readonly content?: string | null; readonly tool?: unknown } = {}
+  ): Promise<void> {
     const messages = await this.options.localData.conversations.listMessages(conversationId)
-    await this.options.localData.conversations.appendMessage(this.messageRecord(conversationId, nextSequence(messages), role, status))
+    await this.options.localData.conversations.appendMessage(await this.messageRecord(conversationId, nextSequence(messages), role, status, persisted))
   }
 
-  private messageRecord(
+  private async messageRecord(
     conversationId: string,
     sequence: number,
     role: ConversationMessageRecord['role'],
-    status: ConversationMessageRecord['status']
-  ): ConversationMessageRecord {
+    status: ConversationMessageRecord['status'],
+    persisted: { readonly content?: string | null; readonly tool?: unknown }
+  ): Promise<ConversationMessageRecord> {
+    const id = `lw-msg-${this.ids()}`
     return {
-      id: `lw-msg-${this.ids()}`,
+      id,
       conversationId,
       sequence,
       role,
-      contentEnvelope: null,
-      toolEnvelope: null,
+      contentEnvelope: await this.encryptMessageField(id, 'content_envelope_json', persisted.content ?? null),
+      toolEnvelope: await this.encryptMessageField(id, 'tool_envelope_json', persisted.tool === undefined ? null : stableJson(persisted.tool)),
       status,
       createdAtMs: this.nowMs()
     }
+  }
+
+  private async encryptMessageField(
+    messageId: string,
+    field: 'content_envelope_json' | 'tool_envelope_json',
+    plaintext: string | null
+  ): Promise<EncryptedDataEnvelopeV1 | null> {
+    if (plaintext === null) return null
+    const crypto = this.options.localDataCrypto
+    if (crypto === undefined) return null
+    return await crypto.encrypt(
+      'local-structured-data',
+      new TextEncoder().encode(plaintext),
+      buildEnvelopeAad({
+        table: 'aurora_messages',
+        recordId: messageId,
+        field,
+        profileId: this.options.scope.profileId,
+        localNodeId: this.options.scope.localNodeId
+      })
+    )
   }
 
   private turnController(signal: AbortSignal | undefined): AbortController {
@@ -504,6 +539,37 @@ function toolResultMessage(toolCall: LightweightToolCall, result: LightweightToo
       secretsRedacted: true
     })
   }
+}
+
+function persistedToolCall(toolCall: LightweightToolCall): Record<string, unknown> {
+  return {
+    id: toolCall.id,
+    toolName: toolCall.toolName,
+    providerToolName: toolCall.providerToolName ?? null,
+    route: toolCall.route,
+    arguments: toolCall.arguments,
+    resourceSelector: toolCall.resourceSelector ?? null,
+    meshSelector: toolCall.meshSelector ?? null
+  }
+}
+
+function persistedToolResult(toolCall: LightweightToolCall, result: LightweightToolExecutionResponse): Record<string, unknown> {
+  return {
+    type: 'tool_result',
+    toolCall: persistedToolCall(toolCall),
+    ok: result.ok,
+    status: result.status ?? null,
+    data: result.ok ? result.data ?? null : null,
+    errorCode: result.ok ? null : result.error_code ?? 'tool_failed',
+    correlationId: result.correlation_id ?? null,
+    providerPeerId: result.provider_peer_id ?? null,
+    globalToolId: result.global_tool_id ?? null,
+    secretsRedacted: true
+  }
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(value) ?? 'null'
 }
 
 function nextSequence(messages: readonly ConversationMessageRecord[]): number {

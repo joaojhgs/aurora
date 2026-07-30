@@ -1,4 +1,4 @@
-import type { LocalDataSession, LocalDataScope } from '../local-data/index.js'
+import type { EnvelopeCryptoPort, LocalDataSession, LocalDataScope } from '../local-data/index.js'
 import type {
   JsonObject,
   JsonValue,
@@ -77,6 +77,7 @@ export interface LightweightOrchestratorOptions {
   readonly provider: LightweightAssistantProvider
   readonly tools: LightweightToolClientPort
   readonly localData: LocalDataSession
+  readonly localDataCrypto?: EnvelopeCryptoPort
   readonly scope: LocalDataScope
   readonly availableTools: readonly ToolingProjectionToolInfo[]
   readonly approvalPrincipalId?: string | null
