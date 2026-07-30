@@ -16,6 +16,7 @@ import { PrivacyBadge, presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
 import { PageHeader } from './state-surface'
 import { Button, Card, MetaGrid } from './primitives'
+import { LocalDataMemoryPanel } from './local-data/storage-health-view.js'
 import { Input } from '#components/ui/input'
 import { Badge } from '#components/ui/badge'
 import { cn } from '#lib/utils'
@@ -198,12 +199,14 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
       <PageHeader
         eyebrow="Memory"
         title="Memory & Knowledge"
-        description="Conversation history, knowledge collections, and retention. See where each memory is saved."
+        description="Conversation history, knowledge collections, and retention. See what is saved on this device and what comes from a connected Aurora device."
         id="memory-title"
       />
 
+      <LocalDataMemoryPanel />
+
       <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Collections</h2>
+        <h2 className="text-sm font-semibold">Collections from Connected Aurora device</h2>
         {model.namespaces.length === 0 ? (
           <Card ariaLabel="Memory collections">
             <div className="flex flex-col gap-1 py-1 text-sm">
