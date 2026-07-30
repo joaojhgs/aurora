@@ -144,6 +144,20 @@ class _ManifestAckExpectation:
     compatible_services: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _ReconnectChallengeRecord:
+    pc: RTCPeerConnection
+    challenge: str
+    channel_binding: str
+    claimant_peer_id: str
+    verifier_peer_id: str
+    claimant_signaling_peer_id: str
+    verifier_signaling_peer_id: str
+    room_name: str
+    issued_at_ms: int
+    expires_at_ms: int
+
+
 _DIAGNOSTIC_REDACTED = "[REDACTED]"
 _DIAGNOSTIC_WEBRTC_REDACTED = "[REDACTED_WEBRTC_PAYLOAD]"
 _DIAGNOSTIC_MAX_INPUT_CHARS = 4096
@@ -269,6 +283,7 @@ class _PairingDeniedError(RuntimeError):
 
 _MESH_AUTH_CHALLENGE_TYPE = "mesh_auth_challenge_v1"
 _MESH_AUTH_PROOF_TYPE = "mesh_auth_proof_v1"
+_MESH_AUTH_CHALLENGE_TTL_MS = 20_000
 _PROVIDER_EXPORT_DIAGNOSTIC_LIMIT = 50
 _PROVIDER_EXPORT_DIAGNOSTIC_FIELDS = frozenset(
     {
@@ -379,7 +394,8 @@ class RTCClient:
         self._saved_auth_tokens: dict[str, Any] = {}
         # Fresh verifier nonce per exact peer connection.  A proof is accepted
         # only for this challenge and the SDP-derived channel binding.
-        self._peer_auth_challenges: dict[str, tuple[RTCPeerConnection, str]] = {}
+        self._peer_auth_challenges: dict[str, _ReconnectChallengeRecord] = {}
+        self._used_peer_auth_challenges: dict[str, int] = {}
         # Callback invoked with (token_str) when pairing succeeds
         self._on_token_saved: Any = None
         # Pending outbound RPC calls (for pairing flow)
@@ -1297,7 +1313,7 @@ class RTCClient:
             self._pairing_bootstrapped.discard(peer)
 
         challenge_entry = self._peer_auth_challenges.get(peer)
-        if challenge_entry is not None and (pc is None or challenge_entry[0] is pc):
+        if challenge_entry is not None and (pc is None or challenge_entry.pc is pc):
             self._peer_auth_challenges.pop(peer, None)
 
         self._peer_pairing_directions.pop(peer, None)
@@ -1579,6 +1595,7 @@ class RTCClient:
         self._peer_claimed_stable_ids.clear()
         self._peer_claimed_names.clear()
         self._peer_auth_challenges.clear()
+        self._used_peer_auth_challenges.clear()
         self._reconnect_suppressed_pcs.clear()
         self._invalidate_provider_export_all()
         self._provider_export_cache.trusted_reset_all_authority()
@@ -2517,6 +2534,7 @@ class RTCClient:
             floor,
             self._provider_export_authority_absent.get(stable_peer_id, 0),
         )
+        self._drop_reconnect_challenges_for_stable_peer(stable_peer_id)
         self._invalidate_provider_export_peer(stable_peer_id)
         self._sync_peer_authority_acl(stable_peer_id, None)
         self._set_provider_export_diagnostic(
@@ -2543,6 +2561,8 @@ class RTCClient:
         self._provider_export_authority[evidence.peer_id] = evidence
         self._provider_export_authority_pending.discard(evidence.peer_id)
         self._provider_export_authority_absent.pop(evidence.peer_id, None)
+        if evidence.state != "active":
+            self._drop_reconnect_challenges_for_stable_peer(evidence.peer_id)
         self._invalidate_provider_export_peer(evidence.peer_id)
         self._sync_peer_authority_acl(evidence.peer_id, evidence)
 
@@ -4006,6 +4026,53 @@ class RTCClient:
             )
         return stable_peer_id, str(transport.get("remote_node_name") or "")
 
+    def _cleanup_reconnect_challenge_cache(self, now_ms: int | None = None) -> None:
+        now = self._provider_lease_clock_ms() if now_ms is None else now_ms
+        for challenge, expires_at_ms in list(self._used_peer_auth_challenges.items()):
+            if expires_at_ms <= now:
+                self._used_peer_auth_challenges.pop(challenge, None)
+
+    def _reconnect_authority_rejects(self, stable_peer_id: str) -> bool:
+        if not self._mesh_enabled:
+            return False
+        evidence = self._provider_export_recipient_evidence(stable_peer_id)
+        return evidence.state != "active" or evidence.grants is None
+
+    def _drop_reconnect_challenges_for_stable_peer(self, stable_peer_id: str) -> None:
+        for peer, record in list(self._peer_auth_challenges.items()):
+            if record.claimant_peer_id == stable_peer_id or record.verifier_peer_id == stable_peer_id:
+                self._peer_auth_challenges.pop(peer, None)
+
+    def _issue_reconnect_challenge_value(self, now_ms: int) -> str:
+        self._cleanup_reconnect_challenge_cache(now_ms)
+        active = {record.challenge for record in self._peer_auth_challenges.values()}
+        for _ in range(8):
+            challenge = secrets.token_hex(32)
+            if (
+                challenge not in active
+                and self._used_peer_auth_challenges.get(challenge, 0) <= now_ms
+            ):
+                return challenge
+        raise PairingProtocolError("Reconnect challenge generation collided")
+
+    def _reconnect_record_matches(
+        self,
+        *,
+        record: _ReconnectChallengeRecord,
+        pc: RTCPeerConnection,
+        message: dict[str, Any],
+    ) -> bool:
+        return (
+            record.pc is pc
+            and message.get("challenge") == record.challenge
+            and message.get("channel_binding") == record.channel_binding
+            and message.get("claimant_peer_id") == record.claimant_peer_id
+            and message.get("verifier_peer_id") == record.verifier_peer_id
+            and message.get("claimant_signaling_peer_id") == record.claimant_signaling_peer_id
+            and message.get("verifier_signaling_peer_id") == record.verifier_signaling_peer_id
+            and message.get("room_name") == record.room_name
+        )
+
     def _send_reconnect_challenge(
         self,
         peer: str,
@@ -4014,21 +4081,34 @@ class RTCClient:
     ) -> None:
         """Challenge the remote to prove a locally issued credential."""
         remote_stable_peer_id, _ = self._transport_identity_for_peer(peer, pc)
-        challenge = secrets.token_hex(32)
+        now_ms = self._provider_lease_clock_ms()
+        challenge = self._issue_reconnect_challenge_value(now_ms)
         channel_binding = self._channel_binding_for_peer(peer, pc)
-        self._peer_auth_challenges[peer] = (pc, challenge)
+        record = _ReconnectChallengeRecord(
+            pc=pc,
+            challenge=challenge,
+            channel_binding=channel_binding,
+            claimant_peer_id=remote_stable_peer_id,
+            verifier_peer_id=self._local_mesh_peer_id(),
+            claimant_signaling_peer_id=peer,
+            verifier_signaling_peer_id=self._peer_id,
+            room_name=str(self._settings.webrtc.room),
+            issued_at_ms=now_ms,
+            expires_at_ms=now_ms + _MESH_AUTH_CHALLENGE_TTL_MS,
+        )
+        self._peer_auth_challenges[peer] = record
         self._send_channel_text(
             chan,
             json.dumps(
                 {
                     "type": _MESH_AUTH_CHALLENGE_TYPE,
-                    "challenge": challenge,
-                    "channel_binding": channel_binding,
-                    "claimant_peer_id": remote_stable_peer_id,
-                    "verifier_peer_id": self._local_mesh_peer_id(),
-                    "claimant_signaling_peer_id": peer,
-                    "verifier_signaling_peer_id": self._peer_id,
-                    "room_name": str(self._settings.webrtc.room),
+                    "challenge": record.challenge,
+                    "channel_binding": record.channel_binding,
+                    "claimant_peer_id": record.claimant_peer_id,
+                    "verifier_peer_id": record.verifier_peer_id,
+                    "claimant_signaling_peer_id": record.claimant_signaling_peer_id,
+                    "verifier_signaling_peer_id": record.verifier_signaling_peer_id,
+                    "room_name": record.room_name,
                 }
             ),
         )
@@ -4173,28 +4253,38 @@ class RTCClient:
         message: dict[str, Any],
     ) -> None:
         """Validate a one-time proof through Auth and promote the stable identity."""
+        now_ms = self._provider_lease_clock_ms()
+        self._cleanup_reconnect_challenge_cache(now_ms)
+        challenge = str(message.get("challenge") or "")
+        if self._used_peer_auth_challenges.get(challenge, 0) > now_ms:
+            raise PairingProtocolError("Reconnect proof replayed an already used challenge")
         challenge_entry = self._peer_auth_challenges.get(peer)
         remote_stable_peer_id, remote_node_name = self._transport_identity_for_peer(peer, pc)
         channel_binding = self._channel_binding_for_peer(peer, pc)
-        identity_matches = (
-            challenge_entry is not None
-            and challenge_entry[0] is pc
-            and message.get("challenge") == challenge_entry[1]
-            and message.get("channel_binding") == channel_binding
-            and message.get("claimant_peer_id") == remote_stable_peer_id
-            and message.get("verifier_peer_id") == self._local_mesh_peer_id()
-            and message.get("claimant_signaling_peer_id") == peer
-            and message.get("verifier_signaling_peer_id") == self._peer_id
-            and message.get("room_name") == str(self._settings.webrtc.room)
-        )
-        if not identity_matches:
+        if (
+            challenge_entry is None
+            or not self._reconnect_record_matches(
+                record=challenge_entry,
+                pc=pc,
+                message=message,
+            )
+        ):
             raise PairingProtocolError("Reconnect proof does not match the active challenge")
+        if channel_binding != challenge_entry.channel_binding:
+            raise PairingProtocolError("Reconnect proof does not match the active transport")
+        if challenge_entry.expires_at_ms <= now_ms:
+            self._peer_auth_challenges.pop(peer, None)
+            raise PairingProtocolError("Reconnect proof challenge expired")
+        if self._reconnect_authority_rejects(remote_stable_peer_id):
+            self._peer_auth_challenges.pop(peer, None)
+            raise PairingProtocolError("Reconnect proof authority is not trusted")
 
         self._peer_auth_challenges.pop(peer, None)
+        self._used_peer_auth_challenges[challenge_entry.challenge] = challenge_entry.expires_at_ms
         try:
             token = await self._auth_service.verify_mesh_reconnect_proof(
                 token_id=str(message.get("token_id") or ""),
-                challenge=str(message.get("challenge") or ""),
+                challenge=challenge_entry.challenge,
                 proof=str(message.get("proof") or ""),
                 channel_binding=channel_binding,
                 claimant_peer_id=remote_stable_peer_id,

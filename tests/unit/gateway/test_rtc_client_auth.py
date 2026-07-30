@@ -17,6 +17,7 @@ from app.services.gateway.utils.crypto import aead_seal
 from app.services.gateway.webrtc.pairing_sas import (
     PAIRING_COMMIT_TYPE,
     PAIRING_TERMINAL_TYPE,
+    PairingProtocolError,
     PairingSAS,
 )
 from app.services.gateway.webrtc.peer_protocol import (
@@ -28,6 +29,7 @@ from app.services.gateway.webrtc.rtc_client import (
     RTCClient,
     _ManifestAckExpectation,
     _PairingDeniedError,
+    _ReconnectChallengeRecord,
 )
 from app.shared.contracts.models.auth import build_mesh_reconnect_proof_message
 from app.shared.contracts.models.gateway import MethodInfo
@@ -134,6 +136,52 @@ def reconnect_challenge_for(
         "claimant_signaling_peer_id": client._peer_id,
         "verifier_signaling_peer_id": peer,
         "room_name": str(client._settings.webrtc.room),
+    }
+
+
+def install_reconnect_challenge(
+    client: RTCClient,
+    peer: str,
+    pc: Any,
+    *,
+    challenge: str = "56" * 32,
+    issued_at_ms: int | None = None,
+) -> _ReconnectChallengeRecord:
+    transport = client._pairing_transports[peer]
+    issued_ms = client._provider_lease_clock_ms() if issued_at_ms is None else issued_at_ms
+    record = _ReconnectChallengeRecord(
+        pc=pc,
+        challenge=challenge,
+        channel_binding=client._channel_binding_for_peer(peer, pc),
+        claimant_peer_id=str(transport["remote_stable_peer_id"]),
+        verifier_peer_id=client._local_mesh_peer_id(),
+        claimant_signaling_peer_id=peer,
+        verifier_signaling_peer_id=client._peer_id,
+        room_name=str(client._settings.webrtc.room),
+        issued_at_ms=issued_ms,
+        expires_at_ms=issued_ms + 20_000,
+    )
+    client._peer_auth_challenges[peer] = record
+    return record
+
+
+def reconnect_proof_for(
+    record: _ReconnectChallengeRecord,
+    *,
+    token_id: str = "token-id-123",
+    proof: str = "ef" * 32,
+) -> dict[str, str]:
+    return {
+        "type": "mesh_auth_proof_v1",
+        "token_id": token_id,
+        "challenge": record.challenge,
+        "proof": proof,
+        "channel_binding": record.channel_binding,
+        "claimant_peer_id": record.claimant_peer_id,
+        "verifier_peer_id": record.verifier_peer_id,
+        "claimant_signaling_peer_id": record.claimant_signaling_peer_id,
+        "verifier_signaling_peer_id": record.verifier_signaling_peer_id,
+        "room_name": record.room_name,
     }
 
 
@@ -258,6 +306,129 @@ async def test_matching_channel_bound_challenge_sends_hmac_proof_not_token(mock_
     assert hmac.compare_digest(proof["proof"], expected)
 
 
+def test_reconnect_challenge_records_ttl_and_preserves_wire_shape(mock_deps):
+    """Verifier keeps expiry locally while sending the stable v1 challenge frame."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    client._provider_lease_clock_ms = lambda: 44_000
+    peer = "remote-session"
+    pc = MagicMock()
+    channel = MockDataChannel()
+    install_pairing_transport(client, peer, pc)
+
+    with patch("app.services.gateway.webrtc.rtc_client.secrets.token_hex", return_value="9a" * 32):
+        client._send_reconnect_challenge(peer, pc, channel)
+
+    sent = json.loads(channel.sent_messages[0])
+    assert sent == {
+        "type": "mesh_auth_challenge_v1",
+        "challenge": "9a" * 32,
+        "channel_binding": client._channel_binding_for_peer(peer, pc),
+        "claimant_peer_id": "stable-remote-peer",
+        "verifier_peer_id": "stable-local-peer",
+        "claimant_signaling_peer_id": peer,
+        "verifier_signaling_peer_id": "local-session",
+        "room_name": "test-room",
+    }
+    assert "token_id" not in sent
+    assert "issued_at_ms" not in sent
+    assert "expires_at_ms" not in sent
+    record = client._peer_auth_challenges[peer]
+    assert record.issued_at_ms == 44_000
+    assert record.expires_at_ms == 64_000
+
+
+@pytest.mark.asyncio
+async def test_reconnect_proof_replay_rejects_before_auth(mock_deps):
+    """A consumed challenge cannot invoke Auth again before its original expiry."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    client._provider_lease_clock_ms = lambda: 1_000
+    client._run_bilateral_pairing = AsyncMock()
+    peer = "remote-session"
+    pc = MagicMock()
+    channel = MockDataChannel()
+    install_pairing_transport(client, peer, pc)
+    record = install_reconnect_challenge(client, peer, pc, challenge="aa" * 32)
+    auth_service.verify_mesh_reconnect_proof.return_value = None
+
+    await client._handle_reconnect_proof(peer, pc, channel, reconnect_proof_for(record))
+    await asyncio.sleep(0)
+    client._clear_pairing_state(peer, pc)
+    assert client._used_peer_auth_challenges[record.challenge] == record.expires_at_ms
+    with pytest.raises(PairingProtocolError, match="replayed"):
+        await client._handle_reconnect_proof(peer, pc, channel, reconnect_proof_for(record))
+
+    auth_service.verify_mesh_reconnect_proof.assert_awaited_once()
+    client._run_bilateral_pairing.assert_awaited_once_with(peer, channel, pc)
+    assert client._used_peer_auth_challenges[record.challenge] == record.expires_at_ms
+    await client.close()
+    assert not client._peer_auth_challenges
+    assert not client._used_peer_auth_challenges
+
+
+@pytest.mark.asyncio
+async def test_reconnect_proof_expiry_rejects_before_auth(mock_deps):
+    """Expired challenges are dropped locally instead of reaching Auth."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    client._provider_lease_clock_ms = lambda: 21_000
+    peer = "remote-session"
+    pc = MagicMock()
+    channel = MockDataChannel()
+    install_pairing_transport(client, peer, pc)
+    record = install_reconnect_challenge(
+        client,
+        peer,
+        pc,
+        challenge="bb" * 32,
+        issued_at_ms=1_000,
+    )
+
+    with pytest.raises(PairingProtocolError, match="expired"):
+        await client._handle_reconnect_proof(peer, pc, channel, reconnect_proof_for(record))
+
+    auth_service.verify_mesh_reconnect_proof.assert_not_awaited()
+    assert peer not in client._peer_auth_challenges
+
+
+@pytest.mark.asyncio
+async def test_reconnect_proof_wrong_pc_does_not_consume_challenge(mock_deps):
+    """A stale connection cannot burn the active PC's challenge."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    client._run_bilateral_pairing = AsyncMock()
+    peer = "remote-session"
+    pc = MagicMock()
+    wrong_pc = MagicMock()
+    channel = MockDataChannel()
+    install_pairing_transport(client, peer, pc)
+    record = install_reconnect_challenge(client, peer, pc, challenge="cc" * 32)
+
+    install_pairing_transport(client, peer, wrong_pc)
+    with pytest.raises(PairingProtocolError, match="active challenge"):
+        await client._handle_reconnect_proof(peer, wrong_pc, channel, reconnect_proof_for(record))
+
+    auth_service.verify_mesh_reconnect_proof.assert_not_awaited()
+    assert client._peer_auth_challenges[peer] is record
+    assert record.challenge not in client._used_peer_auth_challenges
+
+    install_pairing_transport(client, peer, pc)
+    auth_service.verify_mesh_reconnect_proof.return_value = None
+    await client._handle_reconnect_proof(peer, pc, channel, reconnect_proof_for(record))
+    await asyncio.sleep(0)
+    auth_service.verify_mesh_reconnect_proof.assert_awaited_once()
+    client._run_bilateral_pairing.assert_awaited_once_with(peer, channel, pc)
+
+
 @pytest.mark.asyncio
 async def test_valid_reconnect_proof_authenticates_and_promotes_stable_identity(mock_deps):
     """A verified proof promotes only the identity bound into the transport."""
@@ -277,7 +448,7 @@ async def test_valid_reconnect_proof_authenticates_and_promotes_stable_identity(
         remote_node_name="Remote Aurora",
     )
     challenge = "cd" * 32
-    client._peer_auth_challenges[peer] = (pc, challenge)
+    record = install_reconnect_challenge(client, peer, pc, challenge=challenge)
     token = Token(
         id="token-id-123",
         token_hash="hash",
@@ -301,18 +472,7 @@ async def test_valid_reconnect_proof_authenticates_and_promotes_stable_identity(
         peer,
         pc,
         channel,
-        {
-            "type": "mesh_auth_proof_v1",
-            "token_id": "token-id-123",
-            "challenge": challenge,
-            "proof": "ef" * 32,
-            "channel_binding": channel_binding,
-            "claimant_peer_id": "stable-remote-peer",
-            "verifier_peer_id": "stable-local-peer",
-            "claimant_signaling_peer_id": peer,
-            "verifier_signaling_peer_id": "local-session",
-            "room_name": "test-room",
-        },
+        reconnect_proof_for(record),
     )
 
     auth_service.verify_mesh_reconnect_proof.assert_awaited_once_with(
@@ -341,27 +501,16 @@ async def test_invalid_reconnect_proof_starts_bilateral_pairing(mock_deps):
     peer = "remote-session"
     mock_pc = MagicMock()
     channel = MockDataChannel()
-    channel_binding = install_pairing_transport(client, peer, mock_pc)
+    install_pairing_transport(client, peer, mock_pc)
     challenge = "12" * 32
-    client._peer_auth_challenges[peer] = (mock_pc, challenge)
+    record = install_reconnect_challenge(client, peer, mock_pc, challenge=challenge)
     auth_service.verify_mesh_reconnect_proof.return_value = None
 
     await client._handle_reconnect_proof(
         peer,
         mock_pc,
         channel,
-        {
-            "type": "mesh_auth_proof_v1",
-            "token_id": "stale-token-id",
-            "challenge": challenge,
-            "proof": "34" * 32,
-            "channel_binding": channel_binding,
-            "claimant_peer_id": "stable-remote-peer",
-            "verifier_peer_id": "stable-local-peer",
-            "claimant_signaling_peer_id": peer,
-            "verifier_signaling_peer_id": "local-session",
-            "room_name": "test-room",
-        },
+        reconnect_proof_for(record, token_id="stale-token-id", proof="34" * 32),
     )
     await asyncio.sleep(0)
 
@@ -379,27 +528,16 @@ async def test_reconnect_proof_outage_marks_exact_connection_for_retry(mock_deps
     peer = "remote-session"
     pc = MagicMock()
     channel = MockDataChannel()
-    channel_binding = install_pairing_transport(client, peer, pc)
+    install_pairing_transport(client, peer, pc)
     challenge = "78" * 32
-    client._peer_auth_challenges[peer] = (pc, challenge)
+    record = install_reconnect_challenge(client, peer, pc, challenge=challenge)
     auth_service.verify_mesh_reconnect_proof.side_effect = RuntimeError("Auth unavailable")
 
     await client._handle_reconnect_proof(
         peer,
         pc,
         channel,
-        {
-            "type": "mesh_auth_proof_v1",
-            "token_id": "token-id-123",
-            "challenge": challenge,
-            "proof": "90" * 32,
-            "channel_binding": channel_binding,
-            "claimant_peer_id": "stable-remote-peer",
-            "verifier_peer_id": "stable-local-peer",
-            "claimant_signaling_peer_id": peer,
-            "verifier_signaling_peer_id": "local-session",
-            "room_name": "test-room",
-        },
+        reconnect_proof_for(record, proof="90" * 32),
     )
 
     assert pc in client._negotiation_retry_pcs

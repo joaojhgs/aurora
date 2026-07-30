@@ -23,6 +23,7 @@ from app.services.gateway.service import (
     _mesh_connection_status,
     _MeshStartOutcome,
 )
+from app.services.gateway.webrtc.pairing_sas import PairingProtocolError
 from app.services.gateway.webrtc.peer_protocol import (
     CAP_PROVIDER_LEASE_V1,
     build_protocol_hello,
@@ -33,6 +34,7 @@ from app.services.gateway.webrtc.rtc_client import (
     PeerAuthorityApplyResult,
     PeerAuthorityApplyStatus,
     RTCClient,
+    _ReconnectChallengeRecord,
 )
 from app.shared.contracts.mesh_surface import (
     feature_contracts_for_module,
@@ -155,6 +157,52 @@ def _event(
         effective_permissions=perms,
         reason="approved",
     )
+
+
+def _install_reconnect_transport(client: RTCClient, peer: str, pc: object) -> str:
+    client._pairing_transports[peer] = {
+        "pc": pc,
+        "offerer_signaling_id": client._peer_id,
+        "answerer_signaling_id": peer,
+        "offer_sdp": "v=0\r\na=fingerprint:sha-256 11:22\r\n",
+        "answer_sdp": "v=0\r\na=fingerprint:sha-256 33:44\r\n",
+        "remote_stable_peer_id": "peer-a",
+        "remote_node_name": "peer",
+    }
+    return client._channel_binding_for_peer(peer, pc)
+
+
+def _install_reconnect_record(client: RTCClient, peer: str, pc: object) -> _ReconnectChallengeRecord:
+    channel_binding = _install_reconnect_transport(client, peer, pc)
+    record = _ReconnectChallengeRecord(
+        pc=pc,
+        challenge="ab" * 32,
+        channel_binding=channel_binding,
+        claimant_peer_id="peer-a",
+        verifier_peer_id=client._local_mesh_peer_id(),
+        claimant_signaling_peer_id=peer,
+        verifier_signaling_peer_id=client._peer_id,
+        room_name=str(client._settings.webrtc.room),
+        issued_at_ms=1_000,
+        expires_at_ms=21_000,
+    )
+    client._peer_auth_challenges[peer] = record
+    return record
+
+
+def _reconnect_proof(record: _ReconnectChallengeRecord) -> dict[str, str]:
+    return {
+        "type": "mesh_auth_proof_v1",
+        "token_id": "token-1",
+        "challenge": record.challenge,
+        "proof": "cd" * 32,
+        "channel_binding": record.channel_binding,
+        "claimant_peer_id": record.claimant_peer_id,
+        "verifier_peer_id": record.verifier_peer_id,
+        "claimant_signaling_peer_id": record.claimant_signaling_peer_id,
+        "verifier_signaling_peer_id": record.verifier_signaling_peer_id,
+        "room_name": record.room_name,
+    }
 
 
 class _FakeBus:
@@ -400,6 +448,55 @@ def test_revoked_removed_and_revision_zero_clear_aliases_and_token_scopes() -> N
     )
     assert zero.status is PeerAuthorityApplyStatus.ABSENT
     assert client._peer_acl["peer-a"].effective_perms == frozenset()
+
+
+@pytest.mark.asyncio
+async def test_reconnect_challenge_revoked_removed_and_trusted_absence_reject_before_auth() -> None:
+    client = _client()
+    client._peer_id = "local-session"
+    client._provider_lease_clock_ms = lambda: 2_000
+    client._auth_service.verify_mesh_reconnect_proof = AsyncMock()
+    pc = client._pcs["session-a"]
+    record = _install_reconnect_record(client, "session-a", pc)
+
+    assert client.apply_peer_authority_changed(_event(revision=1))
+    revoked = MeshPeerAuthorityChangedEvent(
+        peer_id="peer-a",
+        auth_grant_revision=2,
+        disposition="removed",
+        state="revoked",
+        effective_permissions=(),
+        reason="removed",
+    )
+    assert client.apply_peer_authority_changed_detailed(revoked).status is (
+        PeerAuthorityApplyStatus.APPLIED
+    )
+    assert "session-a" not in client._peer_auth_challenges
+
+    with pytest.raises(PairingProtocolError, match="active challenge"):
+        await client._handle_reconnect_proof(
+            "session-a",
+            pc,
+            FakeDataChannel(),
+            _reconnect_proof(record),
+        )
+    client._auth_service.verify_mesh_reconnect_proof.assert_not_awaited()
+
+    assert client.apply_peer_authority_changed(_event(revision=3))
+    record = _install_reconnect_record(client, "session-a", pc)
+    assert client.apply_trusted_peer_authority_absence("peer-a").status is (
+        PeerAuthorityApplyStatus.ABSENT
+    )
+    assert "session-a" not in client._peer_auth_challenges
+
+    with pytest.raises(PairingProtocolError, match="active challenge"):
+        await client._handle_reconnect_proof(
+            "session-a",
+            pc,
+            FakeDataChannel(),
+            _reconnect_proof(record),
+        )
+    client._auth_service.verify_mesh_reconnect_proof.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
