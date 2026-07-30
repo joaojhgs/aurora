@@ -131,9 +131,15 @@ const METHOD_MAX = 256
 const TOPIC_RE = /^[A-Za-z0-9_.:/-]+$/
 const HEX_64_RE = /^[0-9a-f]{64}$/
 const BASE64URL_RE = /^[A-Za-z0-9_-]+$/
+const UTF8_ENCODER = new TextEncoder()
+
+function utf8ByteLength(value: string): number {
+  return UTF8_ENCODER.encode(value).byteLength
+}
 
 export function parseWebRtcJsonFrame(json: string, limits: Partial<ParserLimits> = {}): AuroraProtocolFrame {
-  if (typeof json !== 'string' || json.length > DEFAULT_PARSER_LIMITS.maxStringLength) {
+  const merged = { ...DEFAULT_PARSER_LIMITS, ...limits }
+  if (typeof json !== 'string' || utf8ByteLength(json) > merged.maxStringLength) {
     throw new WebRtcProtocolParseError('frame JSON must be a bounded string')
   }
   let decoded: unknown
@@ -142,7 +148,7 @@ export function parseWebRtcJsonFrame(json: string, limits: Partial<ParserLimits>
   } catch {
     throw new WebRtcProtocolParseError('frame JSON is invalid')
   }
-  return parseWebRtcFrame(decoded, limits)
+  return parseWebRtcFrame(decoded, merged)
 }
 
 export function parseWebRtcFrame(frame: unknown, limits: Partial<ParserLimits> = {}): AuroraProtocolFrame {
@@ -511,7 +517,7 @@ function validateJsonTree(value: unknown, limits: ParserLimits, depth = 0): void
     return
   }
   if (typeof value === 'string') {
-    if (value.length > limits.maxStringLength) throw new WebRtcProtocolParseError('frame contains oversized string')
+    if (utf8ByteLength(value) > limits.maxStringLength) throw new WebRtcProtocolParseError('frame contains oversized string')
     return
   }
   if (Array.isArray(value)) {
@@ -526,7 +532,7 @@ function validateJsonTree(value: unknown, limits: ParserLimits, depth = 0): void
 }
 
 function requireString(value: unknown, field: string, maxLength: number): string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) throw new WebRtcProtocolParseError(`${field} must be a bounded string`)
+  if (typeof value !== 'string' || value.length === 0 || utf8ByteLength(value) > maxLength) throw new WebRtcProtocolParseError(`${field} must be a bounded string`)
   return value
 }
 

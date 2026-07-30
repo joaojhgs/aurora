@@ -11,7 +11,13 @@ from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
 from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.policy_store import MeshPolicyStore
-from app.services.gateway.webrtc.rpc import RPCHandler
+from app.services.gateway.webrtc.rpc import (
+    RPCHandler,
+    WebRTCFrameParseError,
+    WebRTCParserLimits,
+    parse_webrtc_frame,
+    parse_webrtc_json_frame,
+)
 from app.services.orchestrator.service import OrchestratorService
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo, ServiceAnnouncement
@@ -982,6 +988,115 @@ async def test_cancel_frame_cancels_active_non_stream_bus_request(
     assert cancelled.is_set()
     assert completed is False
     assert handler._active_rpc_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_duplicate_active_call_id_rejected_without_overwriting_active_task(
+    mock_registry,
+    mock_send_fn,
+):
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+    bus = AsyncMock()
+
+    async def request(*args, **kwargs):
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    bus.request.side_effect = request
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[MethodInfo(name="Slow", bus_topic="Svc.Slow", exposure="external")],
+    )
+    handler = RPCHandler(bus, mock_registry, mock_send_fn, _make_acl_with_perms("Svc.Slow"))
+
+    active = asyncio.create_task(
+        handler.on_message(json.dumps({"type": "call", "id": "slow-1", "method": "Svc.Slow"}))
+    )
+    await started.wait()
+    tracked_task = handler._active_rpc_tasks["slow-1"]  # noqa: SLF001
+
+    await handler.on_message(json.dumps({"type": "call", "id": "slow-1", "method": "Svc.Slow"}))
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response == {
+        "type": "error",
+        "id": "slow-1",
+        "correlation_id": "slow-1",
+        "error": {"code": 409, "message": "Duplicate active request id"},
+    }
+    assert bus.request.await_count == 1
+    assert handler._active_rpc_tasks["slow-1"] is tracked_task  # noqa: SLF001
+
+    await handler.on_message(json.dumps({"type": "cancel", "id": "slow-1"}))
+    with contextlib.suppress(asyncio.CancelledError):
+        await active
+    assert cancelled.is_set()
+    assert handler._active_rpc_tasks == {}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_call_id_reuse_after_active_task_cleanup_allowed(
+    mock_registry,
+    mock_send_fn,
+):
+    bus = AsyncMock()
+    bus.request.return_value = QueryResult(ok=True, data={"ok": True})
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc",
+        version="1.0",
+        methods=[MethodInfo(name="Fast", bus_topic="Svc.Fast", exposure="external")],
+    )
+    handler = RPCHandler(bus, mock_registry, mock_send_fn, _make_acl_with_perms("Svc.Fast"))
+
+    frame = json.dumps({"type": "call", "id": "reuse-1", "method": "Svc.Fast"})
+    await handler.on_message(frame)
+    await handler.on_message(frame)
+
+    assert bus.request.await_count == 2
+    responses = [json.loads(call.args[0]) for call in mock_send_fn.call_args_list]
+    assert responses == [
+        {"type": "result", "id": "reuse-1", "result": {"ok": True}},
+        {"type": "result", "id": "reuse-1", "result": {"ok": True}},
+    ]
+    assert handler._active_rpc_tasks == {}  # noqa: SLF001
+
+
+def test_parser_limits_frame_json_by_utf8_bytes():
+    json_text = json.dumps(
+        {"type": "result", "id": "emoji", "result": {"value": "🙂"}},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    byte_length = len(json_text.encode("utf-8"))
+
+    assert (
+        parse_webrtc_json_frame(
+            json_text,
+            limits=WebRTCParserLimits(max_string_length=byte_length),
+        )["id"]
+        == "emoji"
+    )
+    with pytest.raises(WebRTCFrameParseError, match="bounded string"):
+        parse_webrtc_json_frame(
+            json_text,
+            limits=WebRTCParserLimits(max_string_length=byte_length - 1),
+        )
+
+
+def test_parser_limits_nested_strings_by_utf8_bytes():
+    frame = {"type": "result", "id": "emoji", "result": {"value": "🙂🙂"}}
+
+    assert (
+        parse_webrtc_frame(frame, limits=WebRTCParserLimits(max_string_length=8))["id"] == "emoji"
+    )
+    with pytest.raises(WebRTCFrameParseError, match="oversized string"):
+        parse_webrtc_frame(frame, limits=WebRTCParserLimits(max_string_length=7))
 
 
 @pytest.mark.asyncio

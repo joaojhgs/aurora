@@ -82,7 +82,9 @@ async def _start_blocked_rtc_rpc(
     client: RTCClient,
     peer_id: str,
     stable_peer_id: str | None = None,
-) -> tuple[asyncio.Task[None], asyncio.Event, asyncio.Event, dict[str, bool]]:
+) -> tuple[
+    asyncio.Task[None], asyncio.Event, asyncio.Event, dict[str, bool], RPCHandler, MagicMock
+]:
     started = asyncio.Event()
     cancelled = asyncio.Event()
     state = {"completed": False}
@@ -109,7 +111,8 @@ async def _start_blocked_rtc_rpc(
     client._peer_acl[peer_id] = identity  # noqa: SLF001
     if stable_peer_id is not None:
         client._peer_acl[stable_peer_id] = identity  # noqa: SLF001
-    handler = RPCHandler(bus, registry, MagicMock(), lambda: client._peer_acl[peer_id])  # noqa: SLF001
+    send = MagicMock()
+    handler = RPCHandler(bus, registry, send, lambda: client._peer_acl[peer_id])  # noqa: SLF001
     client._rpc_handlers[peer_id] = handler  # noqa: SLF001
     if stable_peer_id is not None:
         client._rpc_handlers[stable_peer_id] = handler  # noqa: SLF001
@@ -117,7 +120,7 @@ async def _start_blocked_rtc_rpc(
         handler.on_message(json.dumps({"type": "call", "id": "slow-1", "method": "Svc.Slow"}))
     )
     await started.wait()
-    return task, started, cancelled, state
+    return task, started, cancelled, state, handler, send
 
 
 # ── get_connected_peers ──────────────────────────────────────────────────
@@ -329,7 +332,14 @@ async def test_disconnect_peer_cancels_active_inbound_rpc_work(client):
     client._pcs["peer-a"] = pc
     client._peer_data_channels["peer-a"] = MagicMock(readyState="open")
     client._audit = AsyncMock()
-    active, _started, cancelled, state = await _start_blocked_rtc_rpc(client, "peer-a")
+    active, _started, cancelled, state, handler, send = await _start_blocked_rtc_rpc(
+        client, "peer-a"
+    )
+
+    await handler.on_message(json.dumps({"type": "call", "id": "slow-1", "method": "Svc.Slow"}))
+    duplicate_response = json.loads(send.call_args.args[0])
+    assert duplicate_response["type"] == "error"
+    assert duplicate_response["error"]["code"] == 409
 
     assert await client.disconnect_peer("peer-a", by_principal_id="admin") is True
 
@@ -352,11 +362,16 @@ async def test_authority_revocation_cancels_active_inbound_rpc_work(client):
     client._pcs["peer-a"] = pc
     client._peer_data_channels["peer-a"] = MagicMock(readyState="open")
     client._remember_stable_peer_id("peer-a", "stable-peer-a", "remote")
-    active, _started, cancelled, state = await _start_blocked_rtc_rpc(
+    active, _started, cancelled, state, handler, send = await _start_blocked_rtc_rpc(
         client,
         "peer-a",
         stable_peer_id="stable-peer-a",
     )
+
+    await handler.on_message(json.dumps({"type": "call", "id": "slow-1", "method": "Svc.Slow"}))
+    duplicate_response = json.loads(send.call_args.args[0])
+    assert duplicate_response["type"] == "error"
+    assert duplicate_response["error"]["code"] == 409
 
     assert client._sync_peer_authority_acl("stable-peer-a", None) is True  # noqa: SLF001
 

@@ -34,6 +34,8 @@ function fixture(): Fixture {
   return JSON.parse(readFileSync(resolve(process.cwd(), '../../tests/fixtures/webrtc_web_thin_protocol_vectors.json'), 'utf8'))
 }
 
+const utf8Bytes = (value: string): number => new TextEncoder().encode(value).byteLength
+
 class FakeChannel implements DataChannelLike {
   readyState = 'open'
   bufferedAmount = 0
@@ -87,6 +89,29 @@ describe('WebRTC actual-G002 protocol parsers', () => {
     expect(() => parseWebRtcFrame({ ...fixture().peer_protocol.subscriptions.subscribed.frame, expires_at: 'never' })).toThrow(/ttl_seconds/)
     expect(() => parseWebRtcFrame({ type: 'subscribed', id: 's', subscription_id: 's', accepted: true, accepted_topics: ['A.B'], rejected_topics: [], correlation_ids: [], ttl_seconds: true, reason: null, idempotent: false })).toThrow(/ttl_seconds/)
     expect(() => parseWebRtcFrame({ type: 'call', id: 'x', method: 'm'.repeat(300) })).toThrow(/method/)
+  })
+
+  it('enforces top-level frame size by UTF-8 bytes', () => {
+    const json = JSON.stringify({ type: 'result', id: 'emoji', result: { value: '🙂' } })
+    const byteLength = utf8Bytes(json)
+
+    expect(parseWebRtcJsonFrame(json, { maxStringLength: byteLength })).toMatchObject({
+      type: 'result',
+      id: 'emoji',
+      result: { value: '🙂' }
+    })
+    expect(() => parseWebRtcJsonFrame(json, { maxStringLength: byteLength - 1 })).toThrow(/bounded string/)
+  })
+
+  it('enforces nested string size by UTF-8 bytes', () => {
+    const frame = { type: 'result', id: 'emoji', result: { value: '🙂🙂' } }
+
+    expect(parseWebRtcFrame(frame, { maxStringLength: 8 })).toMatchObject({
+      type: 'result',
+      id: 'emoji',
+      result: { value: '🙂🙂' }
+    })
+    expect(() => parseWebRtcFrame(frame, { maxStringLength: 7 })).toThrow(/oversized string/)
   })
 
   it('accepts generated registry permission enums while retaining a bounded array ceiling', () => {

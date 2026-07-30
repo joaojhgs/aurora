@@ -101,6 +101,10 @@ _PAIRING_V2_TYPES = frozenset(
 )
 
 
+def _utf8_byte_length(value: str) -> int:
+    return len(value.encode("utf-8"))
+
+
 def parse_webrtc_json_frame(
     text: str,
     *,
@@ -108,7 +112,7 @@ def parse_webrtc_json_frame(
 ) -> dict[str, Any]:
     """Parse one inbound WebRTC JSON frame with SDK-equivalent structural limits."""
 
-    if not isinstance(text, str) or len(text.encode("utf-8")) > limits.max_string_length:
+    if not isinstance(text, str) or _utf8_byte_length(text) > limits.max_string_length:
         raise WebRTCFrameParseError("frame JSON must be a bounded string")
     try:
         decoded = json.loads(text)
@@ -265,9 +269,7 @@ def _parse_subscribed(obj: dict[str, Any], limits: WebRTCParserLimits) -> dict[s
     }
 
 
-def _parse_subscribe_rejected(
-    obj: dict[str, Any], limits: WebRTCParserLimits
-) -> dict[str, Any]:
+def _parse_subscribe_rejected(obj: dict[str, Any], limits: WebRTCParserLimits) -> dict[str, Any]:
     out: dict[str, Any] = {
         "type": "subscribe_rejected",
         "id": _require_id(obj.get("id")),
@@ -325,9 +327,7 @@ def _parse_mesh_auth_bindings(obj: dict[str, Any], frame_type: str) -> dict[str,
     }
 
 
-def _parse_rejected_topics(
-    value: Any, limits: WebRTCParserLimits
-) -> list[str | dict[str, str]]:
+def _parse_rejected_topics(value: Any, limits: WebRTCParserLimits) -> list[str | dict[str, str]]:
     if not isinstance(value, list) or len(value) > limits.max_topics:
         raise WebRTCFrameParseError("rejected_topics must be a bounded array")
     out: list[str | dict[str, str]] = []
@@ -353,7 +353,7 @@ def _validate_json_tree(value: Any, limits: WebRTCParserLimits, depth: int = 0) 
             raise WebRTCFrameParseError("frame contains non-finite number")
         return
     if isinstance(value, str):
-        if len(value) > limits.max_string_length:
+        if _utf8_byte_length(value) > limits.max_string_length:
             raise WebRTCFrameParseError("frame contains oversized string")
         return
     if isinstance(value, list):
@@ -370,7 +370,7 @@ def _validate_json_tree(value: Any, limits: WebRTCParserLimits, depth: int = 0) 
 
 
 def _require_string(value: Any, field: str, max_length: int) -> str:
-    if not isinstance(value, str) or not value or len(value) > max_length:
+    if not isinstance(value, str) or not value or _utf8_byte_length(value) > max_length:
         raise WebRTCFrameParseError(f"{field} must be a bounded string")
     return value
 
@@ -688,6 +688,17 @@ class RPCHandler:
         msg_type = msg.get("type")
         if msg_type == "call":
             req_id = str(msg.get("id") or "")
+            existing_task = self._active_rpc_tasks.get(req_id) if req_id else None
+            if existing_task is not None:
+                if not existing_task.done():
+                    self._send_error(
+                        req_id,
+                        409,
+                        "Duplicate active request id",
+                        correlation_id=str(msg.get("correlation_id") or req_id),
+                    )
+                    return
+                self._active_rpc_tasks.pop(req_id, None)
             task = asyncio.create_task(self._handle_call(msg))
             if req_id:
                 self._active_rpc_tasks[req_id] = task
