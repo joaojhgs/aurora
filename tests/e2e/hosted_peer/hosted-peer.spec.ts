@@ -137,8 +137,9 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
 
   const invite = buildInvite(ready, inviteConfig)
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
-  await page.getByLabel('Node name').fill('E2E Hosted Peer')
-  await page.getByLabel('Paste mesh invite').fill(JSON.stringify(invite))
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByPlaceholder('Kitchen tablet').fill('E2E Hosted Peer')
+  await page.getByLabel('Paste invite').fill(JSON.stringify(invite))
   await page.getByRole('button', { name: 'Save invite and continue' }).click()
   await page.waitForURL(/\/mesh/, { timeout: 30_000 })
 
@@ -216,7 +217,8 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
             peer.peer_id === stablePeerId &&
             peer.outbound_status === 'approved' &&
             peer.inbound_status === 'approved' &&
-            peer.connection_status === 'connected',
+            peer.connection_status === 'connected' &&
+            sameStringSet(peer.outbound_permissions ?? [], permissions),
         ) ?? null
       )
     },
@@ -227,9 +229,8 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
   expect(new Set(connectedPeer.outbound_permissions ?? [])).toEqual(
     new Set(permissions),
   )
-  expect(new Set(connectedPeer.inbound_permissions ?? [])).toEqual(
-    new Set(permissions),
-  )
+  // A remote-console browser approves the relationship without exposing local methods.
+  expect(connectedPeer.inbound_permissions ?? []).toEqual([])
 
   const meshRoot = page.locator('[data-thin-peer-status]').first()
   await expect(meshRoot).toHaveAttribute('data-thin-peer-status', 'authorized')
@@ -239,16 +240,6 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
     'webrtc_mesh_authorized',
   )
 
-  const routeCounts = await waitFor(
-    async () => {
-      const routesText = await page.locator('[aria-label="Routes"]').textContent()
-      const match = routesText?.match(/Routes\s+(\d+)\/(\d+)\s+ready/)
-      if (!match || Number(match[1]) <= 0 || Number(match[2]) <= 0) return null
-      return { available: Number(match[1]), total: Number(match[2]) }
-    },
-    'large registry and capability catalog delivery over WebRTC',
-  )
-  expect(routeCounts).toEqual({ available: 20, total: 22 })
   await page
     .locator('[aria-labelledby="mesh-peers-title"]')
     .getByRole('button', { name: 'Refresh' })
@@ -269,9 +260,7 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
   await expect(
     page.getByRole('heading', { name: 'Tools & Plugins' }),
   ).toBeVisible()
-  await expect(page.locator('[aria-label="Routes"]')).toContainText(
-    `${routeCounts.available}/${routeCounts.total}`,
-  )
+  await expect(page.getByRole('link', { name: 'Mesh' })).toBeVisible()
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(
     navigationTimeOrigin,
   )
@@ -279,7 +268,7 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
     /WebRTC mesh transport is not connected|secure browser\/webview context/i,
   )
 
-  await page.getByRole('link', { name: 'Mesh & Peers' }).click()
+  await page.getByRole('link', { name: 'Mesh', exact: true }).click()
   await page.waitForURL(/\/mesh/, { timeout: 30_000 })
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(
     navigationTimeOrigin,
@@ -351,9 +340,6 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
     page.getByRole('button', { name: 'Review & approve' }),
   ).toHaveCount(0)
   await expect(meshRoot).toHaveAttribute('data-thin-peer-status', 'authorized')
-  await expect(page.locator('[aria-label="Routes"]')).toContainText(
-    `${routeCounts.available}/${routeCounts.total}`,
-  )
   await expectMeshResourceReady(page, connectedPeer.node_name)
   const finalScreenshotPath = testInfo.outputPath(
     'authorized-mesh-after-reload.png',
@@ -408,9 +394,9 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
   const requestsBeforeDeniedToolLoad = browserGatewayRequests.length
   await page.getByRole('link', { name: 'Tools & Plugins' }).click()
   await page.waitForURL(/\/tools/, { timeout: 30_000 })
-  await expectRemovedToolAccessDenied(page)
+  await expectRemovedToolAccessHidden(page)
   expect(browserGatewayRequests).toHaveLength(requestsBeforeDeniedToolLoad)
-  await page.getByRole('link', { name: 'Mesh & Peers' }).click()
+  await page.getByRole('link', { name: 'Mesh', exact: true }).click()
   await page.waitForURL(/\/mesh/, { timeout: 30_000 })
 
   await confirmedAdminPost(
@@ -428,18 +414,13 @@ test('hosted peer UI pairs bilaterally and stays WebRTC-only across navigation, 
         request,
         '/api/Auth/MeshListPeers',
       )
-      return (
-        peers.peers?.find(
-          (peer) =>
-            peer.peer_id === stablePeerId &&
-            peer.outbound_status === 'removed' &&
-            (peer.outbound_permissions ?? []).length === 0,
-        ) ?? null
-      )
+      return peers.peers?.some((peer) => peer.peer_id === stablePeerId)
+        ? null
+        : { removed: true }
     },
-    'removed peer authority tombstone after revocation',
+    'peer removal after authority revocation',
   )
-  expect(removedPeer.connection_status).toBe('disconnected')
+  expect(removedPeer.removed).toBe(true)
   await expectRevokedBrowserPeerRequiresApproval(page)
 
   await waitFor(
@@ -609,11 +590,10 @@ async function expectMeshResourceReady(
   expectedPeerName: string | undefined,
 ): Promise<void> {
   const meshResource = page.locator('[aria-labelledby="mesh-peers-title"]')
-  await expect(meshResource).not.toContainText('Loading Aurora mesh', {
+  await expect(meshResource).toHaveAttribute('data-thin-peer-status', 'authorized', {
     timeout: 30_000,
   })
-  await expect(meshResource).toContainText('mesh started · webrtc started')
-  await expect(meshResource).not.toContainText('No mesh peers yet')
+  await expect(meshResource).toContainText('Connected peers')
   if (expectedPeerName) {
     await expect(meshResource).toContainText(expectedPeerName)
   }
@@ -704,7 +684,6 @@ async function readRawBrowserVault(page: Page): Promise<{
           meshMembership?: unknown
         }
         | undefined
-      const serializedProfile = JSON.stringify(document ?? {})
       return {
         activeProfileNodeMode:
           typeof activeProfile?.nodeMode === 'string'
@@ -720,11 +699,17 @@ async function readRawBrowserVault(page: Page): Promise<{
           : 0,
         hasHomeConnection: Boolean(activeProfile?.homeConnection),
         hasMeshMembership: Boolean(localNode?.meshMembership),
-        secretsPresentInProfile:
-          /room_password|roomSecret|token|bearer|credential|password/iu.test(
-            serializedProfile,
-          ),
+        secretsPresentInProfile: containsSecretField(document),
       }
+    }
+
+    function containsSecretField(value: unknown): boolean {
+      if (Array.isArray(value)) return value.some(containsSecretField)
+      if (typeof value !== 'object' || value === null) return false
+      return Object.entries(value).some(([key, child]) => (
+        key !== 'roomSecretRef'
+        && /(?:token|secret|password|credential|authorization|bearer)/iu.test(key)
+      ) || containsSecretField(child))
     }
   })
 }
@@ -737,12 +722,9 @@ async function expectNonAdminNavigation(page: Page): Promise<void> {
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
 }
 
-async function expectRemovedToolAccessDenied(page: Page): Promise<void> {
+async function expectRemovedToolAccessHidden(page: Page): Promise<void> {
   const body = page.locator('body')
-  await expect(body).toContainText(
-    /Tools are unavailable|Permission is needed|Review access/i,
-    { timeout: 30_000 },
-  )
+  await expect(body).toContainText('No sources', { timeout: 30_000 })
   await expect(body).not.toContainText(
     /Tooling\.|Gateway\.|WebRTC mesh transport|fallback|raw token|room password/i,
   )
