@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { inboundVerifierSecretKey } from '@aurora/client/webrtc'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const kotlinPath =
@@ -83,5 +84,44 @@ describe('Android inbound verifier native storage', () => {
     expect(kotlin).toContain('if (value.length != 64 || !value.all { it in \'0\'..\'9\' || it in \'a\'..\'f\' })')
     expect(kotlin).not.toMatch(/Log\.[a-z]\([^)]*(tokenHashHex|rawBearerToken|verifierKey|proof)/u)
     expect(inboundSetBody).not.toContain('securePrefs().edit().putString(args.key')
+  })
+
+  it('matches SDK key escaping for non-ASCII room names using byte-range checks', () => {
+    const kotlin = repoText(kotlinPath)
+    const encodeBody = kotlin.slice(
+      kotlin.indexOf('private fun encodeSdkKeyPart(value: String)'),
+      kotlin.indexOf('private fun hexValue(char: Char)'),
+    )
+    const key = inboundVerifierSecretKey({
+      tokenId: 'token.1',
+      claimantPeerId: 'claimant-peer',
+      verifierPeerId: 'android.peer',
+      roomName: 'café/</room',
+    })
+
+    expect(key).toBe(
+      'aurora.peer-host.inbound-verifier.v1:android%2Epeer:claimant-peer:caf%C3%A9%2F%3C%2Froom:token%2E1',
+    )
+    expect(kotlin).toContain('(byte in \'A\'.code..\'Z\'.code)')
+    expect(kotlin).toContain('(byte in \'a\'.code..\'z\'.code)')
+    expect(kotlin).toContain('(byte in \'0\'.code..\'9\'.code)')
+    expect(kotlin).toContain('append(byte.toChar())')
+    expect(encodeBody).not.toContain('isLetterOrDigit')
+  })
+
+  it('keeps delete key-only so corrupt or selector-mismatched stored bytes are removable', () => {
+    const kotlin = repoText(kotlinPath)
+    const deleteBody = kotlin.slice(
+      kotlin.indexOf('fun inboundVerifierDelete(invoke: Invoke)'),
+      kotlin.indexOf('@Command', kotlin.indexOf('fun thinProfileGet(invoke: Invoke)')),
+    )
+
+    expect(deleteBody).toContain('validateInboundVerifierSecretKey(args.key)')
+    expect(deleteBody).toContain('val account = inboundVerifierStorageAccountFromValidKey(args.key)')
+    expect(deleteBody).toContain('securePrefs().edit().remove(account).apply()')
+    expect(deleteBody).not.toContain('decryptSecureValue')
+    expect(deleteBody).not.toContain('parseInboundVerifierSecretValue')
+    expect(deleteBody).not.toContain('inboundVerifierSelectorMatchesRecord')
+    expect(deleteBody).not.toContain('getString(account')
   })
 })

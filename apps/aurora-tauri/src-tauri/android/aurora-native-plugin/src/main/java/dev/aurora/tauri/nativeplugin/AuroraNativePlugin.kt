@@ -819,16 +819,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun inboundVerifierDelete(invoke: Invoke) {
         val args = inboundVerifierArgs(invoke.parseArgs(InboundVerifierSecretArgs::class.java))
         try {
-            val selector = parseInboundVerifierSecretKey(args.key)
+            validateInboundVerifierSecretKey(args.key)
             val account = inboundVerifierStorageAccountFromValidKey(args.key)
-            val stored = securePrefs().getString(account, null)
-            if (stored != null) {
-                val record = parseInboundVerifierSecretValue(decryptSecureValue(stored))
-                if (!inboundVerifierSelectorMatchesRecord(selector, record)) {
-                    throw IllegalArgumentException("inbound verifier value does not match key selector")
-                }
-                securePrefs().edit().remove(account).apply()
-            }
+            securePrefs().edit().remove(account).apply()
             invoke.resolve(inboundVerifierWriteResponse(true))
         } catch (error: Exception) {
             invoke.reject(error.message ?: "inbound_verifier_delete_failed")
@@ -1940,25 +1933,27 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun encodeSdkKeyPart(value: String): String = buildString(value.length) {
         value.toByteArray(Charsets.UTF_8).forEach { rawByte ->
             val byte = rawByte.toInt() and 0xff
-            val char = byte.toChar()
-            if (
-                char.isLetterOrDigit() ||
-                byte == '-'.code ||
-                byte == '_'.code ||
-                byte == '!'.code ||
-                byte == '~'.code ||
-                byte == '*'.code ||
-                byte == '\''.code ||
-                byte == '('.code ||
-                byte == ')'.code
-            ) {
-                append(char)
+            if (isSdkKeyUnescapedByte(byte)) {
+                append(byte.toChar())
             } else {
                 append('%')
                 append(byte.toString(16).uppercase().padStart(2, '0'))
             }
         }
     }
+
+    private fun isSdkKeyUnescapedByte(byte: Int): Boolean =
+        (byte in 'A'.code..'Z'.code) ||
+            (byte in 'a'.code..'z'.code) ||
+            (byte in '0'.code..'9'.code) ||
+            byte == '-'.code ||
+            byte == '_'.code ||
+            byte == '!'.code ||
+            byte == '~'.code ||
+            byte == '*'.code ||
+            byte == '\''.code ||
+            byte == '('.code ||
+            byte == ')'.code
 
     private fun hexValue(char: Char): Int? =
         when (char) {
