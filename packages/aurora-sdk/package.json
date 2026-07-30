@@ -39,6 +39,11 @@
       "import": "./dist/local-tools/index.js",
       "default": "./dist/local-tools/index.js"
     },
+    "./lightweight-orchestrator": {
+      "types": "./dist/lightweight-orchestrator/index.d.ts",
+      "import": "./dist/lightweight-orchestrator/index.js",
+      "default": "./dist/lightweight-orchestrator/index.js"
+    },
     "./generated": {
       "types": "./dist/generated/index.d.ts",
       "import": "./dist/generated/index.js",
