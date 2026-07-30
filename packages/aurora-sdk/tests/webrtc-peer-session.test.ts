@@ -245,6 +245,29 @@ describe('WebRtcPeerSession', () => {
     expect(snapshots.some((snapshot) => snapshot.authenticatedPeerContext?.selector.tokenId === 'token-1')).toBe(true)
   })
 
+  it('fails closed when an authorized auth frame is handled but terminally denied', async () => {
+    const { session, channel } = await authorizedAnswerer({
+      auth: {
+        tryReconnect: async () => true,
+        handleFrame: async (frame: unknown) => {
+          if (typeof frame === 'object' && frame !== null && (frame as { type?: unknown }).type === 'mesh_auth_proof_v1') {
+            return { handled: true, denied: true, terminal: true }
+          }
+          return undefined
+        }
+      }
+    })
+
+    channel.onmessage?.({ data: JSON.stringify({ type: 'mesh_auth_proof_v1', replay: true }) })
+    await flush()
+
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'failed',
+      authorized: false,
+      lastError: 'authorized auth frame denied'
+    })
+  })
+
   it('preserves selected prflx evidence even when a configured STUN server gathered srflx', async () => {
     const { session, pc } = await authorizedAnswerer({
       iceServers: [{ urls: ['stun:127.0.0.1:3478'] }]

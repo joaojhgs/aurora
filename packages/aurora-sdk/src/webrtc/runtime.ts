@@ -579,7 +579,16 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
 
   async tryReconnect(context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
     if (this.options.peerAuthorityResolver !== undefined) {
-      const issued = await this.issueVerifierReconnectChallenge(context)
+      let issued = false
+      try {
+        issued = await this.issueVerifierReconnectChallenge(context)
+      } catch {
+        this.options.onDiagnostic(
+          'webrtc_reconnect_challenge_unavailable',
+          'Reconnect verification is unavailable; pairing was not attempted.'
+        )
+        return { denied: true, terminal: true }
+      }
       if (issued) {
         this.resolveReconnectWait(undefined)
         return await new Promise<PeerSessionAuthFrameResult>((resolve) => {

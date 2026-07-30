@@ -473,6 +473,49 @@ describe('WebRtcMeshPeerBridge', () => {
     bridge.close()
   })
 
+  it('retries authority-context provider epoch start after send failure and deduplicates success', async () => {
+    const session = new FakeSession()
+    session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })
+    const peerHost = {
+      attach: vi.fn(),
+      startEpoch: vi.fn(async () => ({
+        type: 'manifest',
+        peer_id: 'local-peer',
+        node_name: 'Local',
+        shared_services: []
+      })),
+      handleDisconnect: vi.fn(),
+      buildManifest: vi.fn(),
+      handleCall: vi.fn(),
+      handleSubscribe: vi.fn(),
+      markManifestAcknowledged: vi.fn()
+    }
+    new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      localPeerRole: 'hybrid',
+      peerHost: peerHost as any,
+      localProtocolHello: buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] })
+    })
+
+    session.sendFailure = new Error('first manifest send fails')
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    expect(peerHost.startEpoch).toHaveBeenCalledTimes(1)
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(0)
+
+    session.sendFailure = null
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    expect(peerHost.startEpoch).toHaveBeenCalledTimes(2)
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(1)
+
+    session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
+    await flush()
+    expect(peerHost.startEpoch).toHaveBeenCalledTimes(2)
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(1)
+  })
+
   it('closes provider epoch and clears stale authority when authenticated snapshot assertion fails', async () => {
     const session = new FakeSession()
     session.setSnapshot({ authenticatedPeerContext: authenticatedContext() })

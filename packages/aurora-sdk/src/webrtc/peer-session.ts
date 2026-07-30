@@ -706,16 +706,16 @@ export class WebRtcPeerSession {
     const result = await auth.handleFrame(frame, this.authContext())
     if (result === true) return true
     if (typeof result === 'object' && result !== null) {
-      if (result.authenticated === true) {
-        this.updateAuthenticatedContext(result.authenticatedPeerContext)
-        return true
-      }
-      if (result.handled === true) return true
       if (result.denied === true || result.terminal === true) {
         this.terminalNoReconnect = true
         this.fail('authorized auth frame denied', false)
         return true
       }
+      if (result.authenticated === true) {
+        this.updateAuthenticatedContext(result.authenticatedPeerContext)
+        return true
+      }
+      if (result.handled === true) return true
     }
     return false
   }
@@ -817,7 +817,7 @@ export class WebRtcPeerSession {
     }
     if (typeof result === 'object' && result !== null && (result.denied === true || result.terminal === true)) {
       this.terminalNoReconnect = true
-      this.fail('reconnect proof denied', false)
+      this.fail('reconnect denied', false)
     }
   }
 

@@ -631,7 +631,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.startedAuthorityEpochKeys.add(key)
     void this.peerHost.startEpoch(this.remotePeerId, this.authenticatedPeerContext)
       .then((frame) => this.sendLogicalFrame(frame))
-      .catch(() => undefined)
+      .catch(() => {
+        this.startedAuthorityEpochKeys.delete(key)
+      })
   }
 
   private resolvePending(id: string, value: unknown): void {
