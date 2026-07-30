@@ -39,6 +39,7 @@ export type {
   PeerAuthorityResolverOptions,
   PeerGrantRepository,
   PeerGrantResolutionRequest,
+  PeerRelationshipIdentity,
   PeerPairingIssuerOptions,
   PeerRelationshipSelector,
   PeerRevocationBroadcaster,
@@ -49,6 +50,7 @@ export type {
   ReconnectChallengeRecord,
   ReconnectChallengeStore,
   ReconnectTransportAttestation,
+  IssueReconnectChallengeRequest,
   VerifyReconnectProofRequest,
   VerifyReconnectProofResult
 } from './authority.js'

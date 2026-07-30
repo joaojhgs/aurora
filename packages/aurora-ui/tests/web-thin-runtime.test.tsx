@@ -251,7 +251,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     await demo.close()
   })
 
-  it('forwards durable peer authority resolver while keeping remote-console consumer-only defaults', async () => {
+  it('forwards durable peer authority services while keeping remote-console consumer-only defaults', async () => {
     vi.resetModules()
     const runtimeOptions: BrowserWebRtcRuntimeOptions<AuroraClient>[] = []
     const createBrowserWebRtcAuroraRuntime = vi.fn((options: BrowserWebRtcRuntimeOptions<AuroraClient>) => {
@@ -295,6 +295,9 @@ describe('browser WebRTC thin-shell runtime', () => {
       const peerAuthorityResolver = {
         verifyReconnectProof: vi.fn(async () => ({ ok: false, reason: 'missing' })),
       } as unknown as NonNullable<BrowserWebRtcRuntimeOptions<AuroraClient>['peerAuthorityResolver']>
+      const peerPairingIssuer = {
+        issue: vi.fn(async () => ({ tokenId: 'token-id', bearerToken: 'bearer-token' })),
+      } as unknown as NonNullable<BrowserWebRtcRuntimeOptions<AuroraClient>['peerPairingIssuer']>
 
       const meshNode = createIsolatedBrowserWebThinRuntime({
         createClient,
@@ -303,6 +306,7 @@ describe('browser WebRTC thin-shell runtime', () => {
         inviteText: inviteText(),
         nodeRole: 'mesh-node',
         peerAuthorityResolver,
+        peerPairingIssuer,
         windowLocation: { protocol: 'https:', hostname: 'app.example' },
       })
       const remoteConsole = createIsolatedBrowserWebThinRuntime({
@@ -317,8 +321,10 @@ describe('browser WebRTC thin-shell runtime', () => {
       expect(runtimeOptions).toHaveLength(2)
       expect(runtimeOptions[0]?.nodeRole).toBe('mesh-node')
       expect(runtimeOptions[0]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
+      expect(runtimeOptions[0]?.peerPairingIssuer).toBe(peerPairingIssuer)
       expect(runtimeOptions[1]?.nodeRole).toBe('remote-console')
       expect(runtimeOptions[1]).not.toHaveProperty('peerAuthorityResolver')
+      expect(runtimeOptions[1]).not.toHaveProperty('peerPairingIssuer')
       expect(runtimeOptions[1]?.localProtocolCapabilities).toContain(CAP_CONSUMER_ONLY_V1)
 
       await meshNode.close()
