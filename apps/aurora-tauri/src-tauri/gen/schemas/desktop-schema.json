@@ -219,6 +219,24 @@
           "markdownDescription": "Enables the aurora_command command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_inbound_verifier_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-inbound-verifier-delete",
+          "markdownDescription": "Enables the aurora_inbound_verifier_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_inbound_verifier_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-inbound-verifier-get",
+          "markdownDescription": "Enables the aurora_inbound_verifier_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_inbound_verifier_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-inbound-verifier-set",
+          "markdownDescription": "Enables the aurora_inbound_verifier_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_ios_invocation_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-ios-invocation-status",
@@ -501,6 +519,12 @@
           "markdownDescription": "Allow dialog capability status checks without granting native open/save dialogs by default."
         },
         {
+          "description": "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access.",
+          "type": "string",
+          "const": "aurora-inbound-verifier-storage",
+          "markdownDescription": "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access."
+        },
+        {
           "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability.",
           "type": "string",
           "const": "aurora-ios-native-plugin",
@@ -685,6 +709,24 @@
           "type": "string",
           "const": "deny-aurora-command",
           "markdownDescription": "Denies the aurora_command command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_inbound_verifier_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-inbound-verifier-delete",
+          "markdownDescription": "Denies the aurora_inbound_verifier_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_inbound_verifier_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-inbound-verifier-get",
+          "markdownDescription": "Denies the aurora_inbound_verifier_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_inbound_verifier_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-inbound-verifier-set",
+          "markdownDescription": "Denies the aurora_inbound_verifier_set command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_ios_invocation_status command without any pre-configured scope.",

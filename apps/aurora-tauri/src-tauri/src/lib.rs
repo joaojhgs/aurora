@@ -48,6 +48,9 @@ const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
 const SIDECAR_HEALTH_PATH: &str = "/api/health";
 const SECURE_STORAGE_SERVICE: &str = "dev.aurora.desktop.secure-storage";
+#[cfg(desktop)]
+const INBOUND_VERIFIER_STORAGE_SERVICE: &str = "dev.aurora.desktop.inbound-verifier";
+const INBOUND_VERIFIER_KEY_PREFIX: &str = "aurora.peer-host.inbound-verifier.v1";
 const LOCAL_DATA_ENVELOPE_KEY_SERVICE: &str = "dev.aurora.desktop.local-data-envelope";
 const LOCAL_DATA_ENVELOPE_ALGORITHM: &str = "AES-GCM-256";
 const LOCAL_DATA_ENVELOPE_KEY_PURPOSE: &str = "local-structured-data";
@@ -253,6 +256,46 @@ struct ThinRoomSecretSetRequest {
 struct ThinRoomSecretGetRequest {
     #[serde(rename = "ref")]
     ref_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InboundVerifierSecretGetRequest {
+    key: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InboundVerifierSecretSetRequest {
+    key: String,
+    value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InboundVerifierSecretDeleteRequest {
+    key: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InboundVerifierSecretGetResponse {
+    found: bool,
+    value: Option<String>,
+    backend: String,
+    persisted: bool,
+    secrets_redacted: bool,
+    redacted_fields: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InboundVerifierSecretWriteResponse {
+    ok: bool,
+    backend: String,
+    persisted: bool,
+    secrets_redacted: bool,
+    redacted_fields: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -2617,6 +2660,64 @@ async fn aurora_thin_room_secret_get(
 }
 
 #[tauri::command]
+async fn aurora_inbound_verifier_get(
+    request: InboundVerifierSecretGetRequest,
+) -> Result<Value, AuroraCommandError> {
+    validate_inbound_verifier_secret_key(&request.key)?;
+    #[cfg(desktop)]
+    {
+        let backend = DesktopInboundVerifierStorageBackend;
+        let value = inbound_verifier_storage_get(&backend, &request.key)?;
+        serde_json::to_value(inbound_verifier_get_response(value))
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = request;
+        Err(inbound_verifier_unsupported())
+    }
+}
+
+#[tauri::command]
+async fn aurora_inbound_verifier_set(
+    request: InboundVerifierSecretSetRequest,
+) -> Result<Value, AuroraCommandError> {
+    validate_inbound_verifier_secret_key(&request.key)?;
+    validate_inbound_verifier_secret_value(&request.value)?;
+    #[cfg(desktop)]
+    {
+        let backend = DesktopInboundVerifierStorageBackend;
+        inbound_verifier_storage_set(&backend, &request.key, &request.value)?;
+        serde_json::to_value(inbound_verifier_write_response(true))
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = request;
+        Err(inbound_verifier_unsupported())
+    }
+}
+
+#[tauri::command]
+async fn aurora_inbound_verifier_delete(
+    request: InboundVerifierSecretDeleteRequest,
+) -> Result<Value, AuroraCommandError> {
+    validate_inbound_verifier_secret_key(&request.key)?;
+    #[cfg(desktop)]
+    {
+        let backend = DesktopInboundVerifierStorageBackend;
+        inbound_verifier_storage_delete(&backend, &request.key)?;
+        serde_json::to_value(inbound_verifier_write_response(true))
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = request;
+        Err(inbound_verifier_unsupported())
+    }
+}
+
+#[tauri::command]
 async fn aurora_secure_storage_get(
     key: String,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
@@ -3454,6 +3555,10 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     permissions.insert("aurora.logTail".to_string(), true);
     permissions.insert("aurora.updater".to_string(), false);
     permissions.insert("aurora.secureStorage".to_string(), desktop_platform);
+    permissions.insert(
+        "aurora.inboundVerifierStorage".to_string(),
+        desktop_platform,
+    );
     permissions.insert("aurora.iosKeychain".to_string(), ios_platform);
     permissions.insert("aurora.iosBiometricUnlock".to_string(), ios_platform);
     permissions.insert("aurora.nativePermissionStatus".to_string(), true);
@@ -3504,6 +3609,10 @@ fn native_capability_manifest() -> NativeCapabilityManifest {
     capabilities.insert("desktop.globalHotkey".to_string(), desktop_platform);
     capabilities.insert(
         "native.secureCredentialStorage".to_string(),
+        desktop_platform,
+    );
+    capabilities.insert(
+        "native.inboundVerifierStorage".to_string(),
         desktop_platform,
     );
     capabilities.insert("native.permissionsManifest".to_string(), true);
@@ -4094,6 +4203,79 @@ fn peer_credential_storage_entry(key: &str) -> Result<keyring::Entry, AuroraComm
     raw_secure_storage_entry(key)
 }
 
+#[cfg(any(desktop, test))]
+trait InboundVerifierStorageBackend {
+    fn get_secret(&self, account: &str) -> Result<Option<String>, AuroraCommandError>;
+    fn set_secret(&self, account: &str, value: &str) -> Result<(), AuroraCommandError>;
+    fn delete_secret(&self, account: &str) -> Result<(), AuroraCommandError>;
+}
+
+#[cfg(desktop)]
+struct DesktopInboundVerifierStorageBackend;
+
+#[cfg(desktop)]
+impl InboundVerifierStorageBackend for DesktopInboundVerifierStorageBackend {
+    fn get_secret(&self, account: &str) -> Result<Option<String>, AuroraCommandError> {
+        match inbound_verifier_storage_entry(account)?.get_password() {
+            Ok(value) => Ok(Some(value)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+        }
+    }
+
+    fn set_secret(&self, account: &str, value: &str) -> Result<(), AuroraCommandError> {
+        inbound_verifier_storage_entry(account)?
+            .set_password(value)
+            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+    }
+
+    fn delete_secret(&self, account: &str) -> Result<(), AuroraCommandError> {
+        match inbound_verifier_storage_entry(account)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+        }
+    }
+}
+
+#[cfg(desktop)]
+fn inbound_verifier_storage_entry(account: &str) -> Result<keyring::Entry, AuroraCommandError> {
+    validate_inbound_verifier_storage_account(account)?;
+    keyring::Entry::new(INBOUND_VERIFIER_STORAGE_SERVICE, account)
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+}
+
+#[cfg(any(desktop, test))]
+fn inbound_verifier_storage_get<B: InboundVerifierStorageBackend>(
+    backend: &B,
+    key: &str,
+) -> Result<Option<String>, AuroraCommandError> {
+    validate_inbound_verifier_secret_key(key)?;
+    let account = inbound_verifier_storage_account(key)?;
+    backend.get_secret(&account)
+}
+
+#[cfg(any(desktop, test))]
+fn inbound_verifier_storage_set<B: InboundVerifierStorageBackend>(
+    backend: &B,
+    key: &str,
+    value: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_inbound_verifier_secret_key(key)?;
+    validate_inbound_verifier_secret_value(value)?;
+    let account = inbound_verifier_storage_account(key)?;
+    backend.set_secret(&account, value)
+}
+
+#[cfg(any(desktop, test))]
+fn inbound_verifier_storage_delete<B: InboundVerifierStorageBackend>(
+    backend: &B,
+    key: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_inbound_verifier_secret_key(key)?;
+    let account = inbound_verifier_storage_account(key)?;
+    backend.delete_secret(&account)
+}
+
 #[cfg(desktop)]
 fn raw_secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
     keyring::Entry::new(SECURE_STORAGE_SERVICE, key)
@@ -4430,6 +4612,11 @@ fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
             "peer reconnect credential namespace is opaque-only".to_string(),
         ));
     }
+    if is_inbound_verifier_storage_key(key) {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier namespace is opaque-only".to_string(),
+        ));
+    }
     if key.is_empty() || key.len() > 128 {
         return Err(AuroraCommandError::SecureStorageKeyInvalid(
             "key length must be 1..128 bytes".to_string(),
@@ -4458,6 +4645,320 @@ fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
     } else {
         Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()))
     }
+}
+
+fn validate_inbound_verifier_secret_key(key: &str) -> Result<(), AuroraCommandError> {
+    if key.is_empty() || key.len() > 4096 {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier key length must be 1..4096 bytes".to_string(),
+        ));
+    }
+    let prefix = format!("{INBOUND_VERIFIER_KEY_PREFIX}:");
+    let Some(rest) = key.strip_prefix(&prefix) else {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier key must use the SDK peer-host namespace".to_string(),
+        ));
+    };
+    let parts: Vec<&str> = rest.split(':').collect();
+    if parts.len() != 4 || parts.iter().any(|part| part.is_empty()) {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier key selector is invalid".to_string(),
+        ));
+    }
+    let verifier_peer_id = decode_sdk_key_part(parts[0], "verifierPeerId")?;
+    let claimant_peer_id = decode_sdk_key_part(parts[1], "claimantPeerId")?;
+    let room_name = decode_sdk_key_part(parts[2], "roomName")?;
+    let token_id = decode_sdk_key_part(parts[3], "tokenId")?;
+    if encode_sdk_key_part(&verifier_peer_id) != parts[0]
+        || encode_sdk_key_part(&claimant_peer_id) != parts[1]
+        || encode_sdk_key_part(&room_name) != parts[2]
+        || encode_sdk_key_part(&token_id) != parts[3]
+    {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier key must be canonical".to_string(),
+        ));
+    }
+    validate_safe_peer_authority_id("verifierPeerId", &verifier_peer_id, 256)?;
+    validate_safe_peer_authority_id("claimantPeerId", &claimant_peer_id, 256)?;
+    validate_non_empty_field("roomName", &room_name, 512)?;
+    validate_safe_peer_authority_id("tokenId", &token_id, 256)
+}
+
+fn inbound_verifier_storage_account(key: &str) -> Result<String, AuroraCommandError> {
+    validate_inbound_verifier_secret_key(key)?;
+    Ok(format!(
+        "aurora.mesh.inbound-verifier.{}",
+        sha256_hex(key.as_bytes())
+    ))
+}
+
+fn validate_inbound_verifier_storage_account(account: &str) -> Result<(), AuroraCommandError> {
+    let Some(suffix) = account.strip_prefix("aurora.mesh.inbound-verifier.") else {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier storage account is invalid".to_string(),
+        ));
+    };
+    if suffix.len() != 64 || !suffix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier storage account is invalid".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_inbound_verifier_secret_value(value: &str) -> Result<(), AuroraCommandError> {
+    if value.is_empty() || value.len() > 8192 {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier value length must be 1..8192 bytes".to_string(),
+        ));
+    }
+    let record: Value = serde_json::from_str(value).map_err(|_| {
+        AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier value must be canonical JSON".to_string(),
+        )
+    })?;
+    let Some(object) = record.as_object() else {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier value must be a JSON object".to_string(),
+        ));
+    };
+    for key in object.keys() {
+        if !matches!(
+            key.as_str(),
+            "version"
+                | "tokenId"
+                | "claimantPeerId"
+                | "verifierPeerId"
+                | "roomName"
+                | "tokenHashHex"
+                | "createdAtMs"
+                | "expiresAtMs"
+                | "revokedAtMs"
+                | "credentialRevision"
+        ) || is_forbidden_inbound_verifier_field(key)
+        {
+            return Err(AuroraCommandError::SecureStorageKeyInvalid(
+                "inbound verifier value contains unsupported secret material".to_string(),
+            ));
+        }
+    }
+    if object.get("version").and_then(Value::as_u64) != Some(1) {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier version is unsupported".to_string(),
+        ));
+    }
+    validate_json_safe_id(object, "tokenId", 256)?;
+    validate_json_safe_id(object, "claimantPeerId", 256)?;
+    validate_json_safe_id(object, "verifierPeerId", 256)?;
+    validate_json_string(object, "roomName", 512)?;
+    validate_json_hex64(object, "tokenHashHex")?;
+    validate_json_epoch(object, "createdAtMs")?;
+    validate_json_epoch(object, "credentialRevision")?;
+    validate_optional_json_epoch(object, "expiresAtMs")?;
+    validate_optional_json_epoch(object, "revokedAtMs")?;
+    let canonical =
+        serde_json::to_string(&record).map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+    if redact_sensitive_text(&canonical).contains("rawBearerToken") {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "inbound verifier value contains raw credential material".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_forbidden_inbound_verifier_field(field: &str) -> bool {
+    let normalized = field
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    matches!(
+        normalized.as_str(),
+        "bearer"
+            | "rawbearertoken"
+            | "rawtoken"
+            | "proof"
+            | "proofhex"
+            | "verifierkey"
+            | "password"
+            | "secret"
+            | "authorization"
+    )
+}
+
+fn validate_json_safe_id(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+    max_len: usize,
+) -> Result<(), AuroraCommandError> {
+    let value = object.get(field).and_then(Value::as_str).ok_or_else(|| {
+        AuroraCommandError::SecureStorageKeyInvalid(format!("{field} is required"))
+    })?;
+    validate_safe_peer_authority_id(field, value, max_len)
+}
+
+fn validate_json_string(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+    max_len: usize,
+) -> Result<(), AuroraCommandError> {
+    let value = object.get(field).and_then(Value::as_str).ok_or_else(|| {
+        AuroraCommandError::SecureStorageKeyInvalid(format!("{field} is required"))
+    })?;
+    validate_non_empty_field(field, value, max_len)
+}
+
+fn validate_json_hex64(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<(), AuroraCommandError> {
+    let value = object.get(field).and_then(Value::as_str).ok_or_else(|| {
+        AuroraCommandError::SecureStorageKeyInvalid(format!("{field} is required"))
+    })?;
+    validate_hex64(field, value)
+}
+
+fn validate_json_epoch(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<(), AuroraCommandError> {
+    let Some(value) = object.get(field).and_then(Value::as_u64) else {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
+            "{field} is required"
+        )));
+    };
+    if value > 9_007_199_254_740_991 {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
+            "{field} is outside the safe integer range"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_optional_json_epoch(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<(), AuroraCommandError> {
+    if object.contains_key(field) {
+        validate_json_epoch(object, field)?;
+    }
+    Ok(())
+}
+
+fn validate_safe_peer_authority_id(
+    field: &str,
+    value: &str,
+    max_len: usize,
+) -> Result<(), AuroraCommandError> {
+    validate_non_empty_field(field, value, max_len)?;
+    if !value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | ':' | '@' | '/' | '-'))
+    {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
+            "{field} contains unsupported characters"
+        )));
+    }
+    Ok(())
+}
+
+fn decode_sdk_key_part(value: &str, field: &str) -> Result<String, AuroraCommandError> {
+    let bytes = value.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' => {
+                if index + 2 >= bytes.len() {
+                    return Err(AuroraCommandError::SecureStorageKeyInvalid(format!(
+                        "{field} has invalid percent encoding"
+                    )));
+                }
+                let high = hex_value(bytes[index + 1]).ok_or_else(|| {
+                    AuroraCommandError::SecureStorageKeyInvalid(format!(
+                        "{field} has invalid percent encoding"
+                    ))
+                })?;
+                let low = hex_value(bytes[index + 2]).ok_or_else(|| {
+                    AuroraCommandError::SecureStorageKeyInvalid(format!(
+                        "{field} has invalid percent encoding"
+                    ))
+                })?;
+                output.push((high << 4) | low);
+                index += 3;
+            }
+            byte => {
+                output.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8(output).map_err(|_| {
+        AuroraCommandError::SecureStorageKeyInvalid(format!("{field} is not valid UTF-8"))
+    })
+}
+
+fn encode_sdk_key_part(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    for byte in value.as_bytes() {
+        if byte.is_ascii_alphanumeric()
+            || matches!(
+                *byte,
+                b'-' | b'_' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')'
+            )
+        {
+            output.push(*byte as char);
+        } else {
+            output.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    output
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn inbound_verifier_get_response(value: Option<String>) -> InboundVerifierSecretGetResponse {
+    InboundVerifierSecretGetResponse {
+        found: value.is_some(),
+        value,
+        backend: "platform-keychain".to_string(),
+        persisted: true,
+        secrets_redacted: true,
+        redacted_fields: inbound_verifier_redacted_fields(),
+    }
+}
+
+fn inbound_verifier_write_response(ok: bool) -> InboundVerifierSecretWriteResponse {
+    InboundVerifierSecretWriteResponse {
+        ok,
+        backend: "platform-keychain".to_string(),
+        persisted: true,
+        secrets_redacted: true,
+        redacted_fields: inbound_verifier_redacted_fields(),
+    }
+}
+
+fn inbound_verifier_redacted_fields() -> Vec<String> {
+    vec![
+        "tokenHashHex".to_string(),
+        "rawBearerToken".to_string(),
+        "proof".to_string(),
+        "verifierKey".to_string(),
+    ]
+}
+
+#[cfg(not(desktop))]
+fn inbound_verifier_unsupported() -> AuroraCommandError {
+    AuroraCommandError::UnsupportedFeature(
+        "inbound verifier storage is only available on desktop keychain targets".to_string(),
+    )
 }
 
 fn validate_peer_storage_id(peer_id: &str) -> Result<(), AuroraCommandError> {
@@ -4622,6 +5123,11 @@ fn delete_thin_peer_credential_record(peer_id: &str) -> Result<(), AuroraCommand
 
 fn is_peer_proof_storage_key(key: &str) -> bool {
     key.starts_with("aurora.mesh.peer-proof.")
+}
+
+fn is_inbound_verifier_storage_key(key: &str) -> bool {
+    key.starts_with("aurora.mesh.inbound-verifier.")
+        || key.starts_with(&format!("{INBOUND_VERIFIER_KEY_PREFIX}:"))
 }
 
 fn thin_peer_credential_metadata(
@@ -5835,6 +6341,9 @@ pub fn run() {
             aurora_thin_profile_set,
             aurora_thin_room_secret_set,
             aurora_thin_room_secret_get,
+            aurora_inbound_verifier_get,
+            aurora_inbound_verifier_set,
+            aurora_inbound_verifier_delete,
             aurora_secure_storage_get,
             aurora_secure_storage_set,
             aurora_secure_storage_delete,
@@ -6542,6 +7051,189 @@ mod tests {
         assert!(thin_peer_credential_key("").is_err());
     }
 
+    #[derive(Default)]
+    struct MemoryInboundVerifierStorageBackend {
+        records: Mutex<HashMap<String, String>>,
+        fail: Mutex<Option<String>>,
+    }
+
+    impl InboundVerifierStorageBackend for MemoryInboundVerifierStorageBackend {
+        fn get_secret(&self, account: &str) -> Result<Option<String>, AuroraCommandError> {
+            if let Some(message) = self.fail.lock().unwrap().clone() {
+                return Err(AuroraCommandError::SecureStorage(message));
+            }
+            Ok(self.records.lock().unwrap().get(account).cloned())
+        }
+
+        fn set_secret(&self, account: &str, value: &str) -> Result<(), AuroraCommandError> {
+            if let Some(message) = self.fail.lock().unwrap().clone() {
+                return Err(AuroraCommandError::SecureStorage(message));
+            }
+            self.records
+                .lock()
+                .unwrap()
+                .insert(account.to_string(), value.to_string());
+            Ok(())
+        }
+
+        fn delete_secret(&self, account: &str) -> Result<(), AuroraCommandError> {
+            if let Some(message) = self.fail.lock().unwrap().clone() {
+                return Err(AuroraCommandError::SecureStorage(message));
+            }
+            self.records.lock().unwrap().remove(account);
+            Ok(())
+        }
+    }
+
+    fn inbound_verifier_key_fixture() -> String {
+        "aurora.peer-host.inbound-verifier.v1:desktop-peer:claimant-peer:mesh-room:token-1"
+            .to_string()
+    }
+
+    fn inbound_verifier_value_fixture() -> String {
+        json!({
+            "version": 1,
+            "tokenId": "token-1",
+            "claimantPeerId": "claimant-peer",
+            "verifierPeerId": "desktop-peer",
+            "roomName": "mesh-room",
+            "tokenHashHex": "a".repeat(64),
+            "createdAtMs": 1,
+            "credentialRevision": 1
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn inbound_verifier_keys_accept_only_exact_sdk_namespace_and_hash_accounts() {
+        let key = inbound_verifier_key_fixture();
+        assert!(validate_inbound_verifier_secret_key(&key).is_ok());
+        let account = inbound_verifier_storage_account(&key).unwrap();
+        assert!(account.starts_with("aurora.mesh.inbound-verifier."));
+        assert_eq!(account.len(), "aurora.mesh.inbound-verifier.".len() + 64);
+        assert!(!account.contains("desktop-peer"));
+        assert!(!account.contains("claimant-peer"));
+        assert!(validate_inbound_verifier_storage_account(&account).is_ok());
+        assert!(validate_secure_storage_key(&account).is_err());
+        assert!(validate_secure_storage_key(&key).is_err());
+
+        let encoded = "aurora.peer-host.inbound-verifier.v1:peer%2Ewith%2Edot:claimant%2Fpeer:room%20one:token%40one";
+        assert!(validate_inbound_verifier_secret_key(encoded).is_ok());
+        for invalid in [
+            "",
+            "aurora.mesh.inbound-verifier.v1:desktop-peer:claimant-peer:mesh-room:token-1",
+            "aurora.peer-host.inbound-verifier.v1:desktop-peer:claimant-peer:mesh-room",
+            "aurora.peer-host.inbound-verifier.v1:desktop.peer:claimant-peer:mesh-room:token-1",
+            "aurora.peer-host.inbound-verifier.v1:desktop%2epeer:claimant-peer:mesh-room:token-1",
+            "aurora.peer-host.inbound-verifier.v1:desktop%ZZpeer:claimant-peer:mesh-room:token-1",
+        ] {
+            assert!(
+                validate_inbound_verifier_secret_key(invalid).is_err(),
+                "{invalid}"
+            );
+        }
+        assert!(validate_inbound_verifier_secret_key(&format!(
+            "aurora.peer-host.inbound-verifier.v1:{}:claimant-peer:mesh-room:token-1",
+            "a".repeat(257)
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn inbound_verifier_values_reject_oversize_and_raw_credential_shapes() {
+        let valid = inbound_verifier_value_fixture();
+        assert!(validate_inbound_verifier_secret_value(&valid).is_ok());
+
+        for invalid in [
+            "",
+            "not-json",
+            "{\"version\":2}",
+            &json!({
+                "version": 1,
+                "tokenId": "token-1",
+                "claimantPeerId": "claimant-peer",
+                "verifierPeerId": "desktop-peer",
+                "roomName": "mesh-room",
+                "tokenHashHex": "not-hex",
+                "createdAtMs": 1,
+                "credentialRevision": 1
+            })
+            .to_string(),
+            &json!({
+                "version": 1,
+                "tokenId": "token-1",
+                "claimantPeerId": "claimant-peer",
+                "verifierPeerId": "desktop-peer",
+                "roomName": "mesh-room",
+                "tokenHashHex": "a".repeat(64),
+                "createdAtMs": 1,
+                "credentialRevision": 1,
+                "rawBearerToken": "synthetic-reconnect-token"
+            })
+            .to_string(),
+            &json!({
+                "version": 1,
+                "tokenId": "token-1",
+                "claimantPeerId": "claimant-peer",
+                "verifierPeerId": "desktop-peer",
+                "roomName": "mesh-room",
+                "tokenHashHex": "a".repeat(64),
+                "createdAtMs": 1,
+                "credentialRevision": 1,
+                "proofHex": "b".repeat(64)
+            })
+            .to_string(),
+        ] {
+            assert!(validate_inbound_verifier_secret_value(invalid).is_err());
+        }
+        assert!(validate_inbound_verifier_secret_value(&"x".repeat(8193)).is_err());
+    }
+
+    #[test]
+    fn inbound_verifier_storage_roundtrip_uses_testable_seam_and_idempotent_delete() {
+        let backend = MemoryInboundVerifierStorageBackend::default();
+        let key = inbound_verifier_key_fixture();
+        let value = inbound_verifier_value_fixture();
+        let account = inbound_verifier_storage_account(&key).unwrap();
+
+        assert!(inbound_verifier_storage_get(&backend, &key)
+            .unwrap()
+            .is_none());
+        inbound_verifier_storage_set(&backend, &key, &value).unwrap();
+        assert_eq!(
+            inbound_verifier_storage_get(&backend, &key).unwrap(),
+            Some(value.clone())
+        );
+        assert!(backend.records.lock().unwrap().contains_key(&account));
+        inbound_verifier_storage_delete(&backend, &key).unwrap();
+        inbound_verifier_storage_delete(&backend, &key).unwrap();
+        assert!(inbound_verifier_storage_get(&backend, &key)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn inbound_verifier_storage_propagates_backend_failures_without_secret_diagnostics() {
+        let backend = MemoryInboundVerifierStorageBackend::default();
+        *backend.fail.lock().unwrap() = Some("backend_unavailable".to_string());
+        let err = inbound_verifier_storage_set(
+            &backend,
+            &inbound_verifier_key_fixture(),
+            &inbound_verifier_value_fixture(),
+        )
+        .unwrap_err();
+        let serialized = serde_json::to_string(&err).unwrap();
+        assert!(serialized.contains("backend_unavailable"));
+        assert!(serialized.contains("secrets_redacted"));
+        assert!(!serialized.contains("synthetic-reconnect-token"));
+
+        let response = inbound_verifier_write_response(true);
+        let response_text = serde_json::to_string(&response).unwrap();
+        assert!(response_text.contains("tokenHashHex"));
+        assert!(response_text.contains("secretsRedacted"));
+        assert!(!response_text.contains(&"a".repeat(64)));
+    }
+
     #[test]
     fn thin_peer_credential_status_response_redacts_raw_bearer_token() {
         let record = ThinPeerCredentialRecord {
@@ -6838,6 +7530,8 @@ mod tests {
     fn thin_peer_credential_commands_are_permissioned_in_main_capability_and_build_manifest() {
         let capability = include_str!("../capabilities/aurora-main.json");
         let permission = include_str!("../permissions/aurora-thin-peer-credentials.toml");
+        let inbound_verifier_permission =
+            include_str!("../permissions/aurora-inbound-verifier-storage.toml");
         let build_manifest = include_str!("../build.rs");
         assert!(capability.contains("aurora-thin-peer-credentials"));
         for command in [
@@ -6858,6 +7552,16 @@ mod tests {
         }
         assert!(!profile_permission.contains("aurora_secure_storage_get"));
         assert!(!profile_permission.contains("aurora_secure_storage_set"));
+        assert!(capability.contains("aurora-inbound-verifier-storage"));
+        for command in [
+            "aurora_inbound_verifier_get",
+            "aurora_inbound_verifier_set",
+            "aurora_inbound_verifier_delete",
+        ] {
+            assert!(inbound_verifier_permission.contains(command), "{command}");
+            assert!(build_manifest.contains(command), "{command}");
+        }
+        assert!(!permission.contains("aurora_inbound_verifier_get"));
     }
 
     #[test]
@@ -6900,6 +7604,7 @@ mod tests {
         let android_capability = include_str!("../capabilities/aurora-android-thin.json");
         assert!(capability.contains("aurora-thin-profile"));
         assert!(capability.contains("aurora-thin-peer-credentials"));
+        assert!(capability.contains("aurora-inbound-verifier-storage"));
         assert!(!capability.contains("aurora-secure-storage"));
         assert!(!capability.contains("aurora_secure_storage_get"));
         assert!(!capability.contains("aurora_secure_storage_set"));
@@ -6909,6 +7614,7 @@ mod tests {
         assert!(android_capability.contains("aurora-thin-profile"));
         assert!(android_capability.contains("aurora-thin-peer-credentials"));
         assert!(android_capability.contains("aurora-android-native-plugin"));
+        assert!(!android_capability.contains("aurora-inbound-verifier-storage"));
         assert!(!android_capability.contains("aurora-secure-storage"));
         assert!(!android_capability.contains("aurora-sidecar-start"));
         assert!(!android_capability.contains("aurora-audio-bridge"));
@@ -7129,6 +7835,7 @@ mod tests {
             "aurora-main",
             "aurora-overlay",
             "aurora-secure-storage",
+            "aurora-inbound-verifier-storage",
             "aurora_secure_storage_get",
             "aurora-sidecar-start",
             "aurora-sidecar-session",
@@ -7199,6 +7906,7 @@ mod tests {
             "aurora-main",
             "aurora-overlay",
             "aurora-secure-storage",
+            "aurora-inbound-verifier-storage",
             "aurora_secure_storage_get",
             "aurora-sidecar-start",
             "aurora-sidecar-session",

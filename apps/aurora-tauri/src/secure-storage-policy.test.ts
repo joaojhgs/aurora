@@ -91,6 +91,35 @@ describe('Tauri secure storage policy', () => {
     expect(runtimeSource).toContain('aurora_thin_profile_set')
   })
 
+  it('grants inbound verifier storage only through a dedicated desktop permission', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const mainCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-main.json'), 'utf8')
+    const thinCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json'), 'utf8')
+    const androidCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'), 'utf8')
+    const iosCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-ios-thin.json'), 'utf8')
+    const permission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-inbound-verifier-storage.toml'), 'utf8')
+    const genericPermission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-secure-storage.toml'), 'utf8')
+    const adapterSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/tauri-inbound-verifier-storage.ts'), 'utf8')
+
+    for (const command of [
+      'aurora_inbound_verifier_get',
+      'aurora_inbound_verifier_set',
+      'aurora_inbound_verifier_delete',
+    ]) {
+      expect(permission).toContain(command)
+      expect(adapterSource).toContain(command)
+      expect(genericPermission).not.toContain(command)
+    }
+    expect(mainCapability).toContain('aurora-inbound-verifier-storage')
+    expect(thinCapability).toContain('aurora-inbound-verifier-storage')
+    expect(androidCapability).not.toContain('aurora-inbound-verifier-storage')
+    expect(iosCapability).not.toContain('aurora-inbound-verifier-storage')
+    expect(adapterSource).toContain('InboundVerifierSecretStoragePort')
+    expect(adapterSource).not.toContain('secureStorageGet')
+    expect(adapterSource).not.toContain('secureStorageSet')
+    expect(adapterSource).not.toContain('secureStorageDelete')
+  })
+
   it('persists WebRTC room secrets in a narrow platform vault before saving reconnect metadata', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')

@@ -14,6 +14,7 @@
     "aurora-native-permissions",
     "aurora-thin-profile",
     "aurora-thin-peer-credentials",
+    "aurora-inbound-verifier-storage",
     "aurora-local-data-storage",
     "aurora-local-data-envelope-crypto",
     "aurora-native-webrtc",

@@ -24,6 +24,7 @@
     "aurora-local-data-storage",
     "aurora-local-data-envelope-crypto",
     "aurora-thin-peer-credentials",
+    "aurora-inbound-verifier-storage",
     "aurora-native-permissions",
     "aurora-tray",
     "aurora-notifications",
