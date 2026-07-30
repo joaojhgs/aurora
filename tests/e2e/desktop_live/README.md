@@ -51,10 +51,12 @@ contract, and return a report object with:
 - `status: "passed"`
 - matching `sessionNonce` and `tauriPid`
 - `secretsRedacted: true`
+- `roleSwitchEvidence: { passed: true, from: "remote-console", to: "mesh-node" }`
 - `browserResult` or `desktopResult` evidence
 
 The fixture writes `desktop-client-report.json` and `desktop-done.json` only for
 a passed hook result. It fails closed when the hook is absent, throws, returns no
-report, omits required evidence, or echoes the wrong nonce/PID. The minimal
-shared follow-up is a workflow/package script that starts `tauri-driver` and a
-Tauri bootstrap test hook implementing this contract.
+report, omits required evidence, reports missing/false/reversed role-switch
+evidence, or echoes the wrong nonce/PID. The minimal shared follow-up is a
+workflow/package script that starts `tauri-driver` and a Tauri bootstrap test
+hook implementing this contract.

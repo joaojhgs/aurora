@@ -83,6 +83,9 @@ test('webdriver fixture source invokes the narrow desktop live WebView hook', as
   assert.match(source, /__AURORA_DESKTOP_LIVE_E2E__/)
   assert.match(source, /buildHookPayload/)
   assert.match(source, /validatePassedHookResult/)
+  assert.match(source, /roleSwitchEvidence/)
+  assert.match(source, /remote-console/)
+  assert.match(source, /mesh-node/)
   assert.match(source, /desktop-webview-hook-incomplete/)
 })
 

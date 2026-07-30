@@ -188,6 +188,11 @@ function validatePassedHookResult(result, { sessionNonce, tauriPid }) {
   assert.equal(result.sessionNonce, sessionNonce)
   assert.equal(String(result.tauriPid), String(tauriPid))
   assert.equal(result.secretsRedacted, true)
+  assert.deepEqual(result.roleSwitchEvidence, {
+    passed: true,
+    from: 'remote-console',
+    to: 'mesh-node',
+  })
   assert.ok(
     result.browserResult || result.desktopResult,
     'hook result must include browserResult or desktopResult evidence',
@@ -257,6 +262,7 @@ function runSelfTest() {
       status: 'passed',
       sessionNonce: 'nonce',
       tauriPid: '123',
+      roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
       desktopResult: { approved: true },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
@@ -266,6 +272,36 @@ function runSelfTest() {
       status: 'passed',
       sessionNonce: 'wrong',
       tauriPid: '123',
+      roleSwitchEvidence: { passed: true, from: 'remote-console', to: 'mesh-node' },
+      desktopResult: { approved: true },
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
+  assert.throws(() =>
+    validatePassedHookResult({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      desktopResult: { approved: true },
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
+  assert.throws(() =>
+    validatePassedHookResult({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      roleSwitchEvidence: { passed: false, from: 'remote-console', to: 'mesh-node' },
+      desktopResult: { approved: true },
+      secretsRedacted: true,
+    }, { sessionNonce: 'nonce', tauriPid: '123' }),
+  )
+  assert.throws(() =>
+    validatePassedHookResult({
+      status: 'passed',
+      sessionNonce: 'nonce',
+      tauriPid: '123',
+      roleSwitchEvidence: { passed: true, from: 'mesh-node', to: 'remote-console' },
       desktopResult: { approved: true },
       secretsRedacted: true,
     }, { sessionNonce: 'nonce', tauriPid: '123' }),
