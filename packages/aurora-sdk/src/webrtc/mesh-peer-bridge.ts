@@ -111,6 +111,7 @@ type IncomingManifestAck = {
   generation: number
   manifest: MeshPeerManifest
   leaseCursorBeforeAck: RemoteLeaseCursor | null
+  remoteAvailabilityBeforeAck: 'unknown' | 'active' | 'unavailable'
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -839,7 +840,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       incoming = {
         generation,
         manifest,
-        leaseCursorBeforeAck: this.remoteLeaseCursor
+        leaseCursorBeforeAck: this.remoteLeaseCursor,
+        remoteAvailabilityBeforeAck: this.remoteAvailability
       }
       this.incomingManifestAck = incoming
       await this.sendLogicalFrame(buildManifestAck(manifest))
@@ -855,7 +857,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.pendingManifests.clear()
       } else {
         const leaseChangedDuringAck = !sameLeaseCursor(incoming.leaseCursorBeforeAck, this.remoteLeaseCursor)
-        if (this.remoteAvailability === 'unavailable' && leaseChangedDuringAck && this.remoteLease === null) {
+        const availabilityClearedDuringAck = incoming.remoteAvailabilityBeforeAck !== 'unavailable' && this.remoteAvailability === 'unavailable'
+        if (this.remoteAvailability === 'unavailable' && this.remoteLease === null && (leaseChangedDuringAck || availabilityClearedDuringAck)) {
           for (const pending of this.pendingManifests.values()) {
             this.clearTimer(pending.timer)
             pending.resolve(null)
@@ -962,7 +965,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     if (this.remoteLeaseTimer !== null) this.clearTimer(this.remoteLeaseTimer)
     this.remoteLeaseTimer = this.armTimer(Math.max(1, expiresAtMs - Date.now()), () => {
       this.remoteLeaseTimer = null
-      this.clearRemoteAvailability()
+      this.clearRemoteAvailability({ settleWaiters: !this.incomingManifestAck })
     })
   }
 

@@ -545,6 +545,54 @@ describe('WebRtcMeshPeerBridge', () => {
     await expect(bridge.getManifest('peer-a')).resolves.toBeNull()
   })
 
+  it('defers provider lease TTL manifest waiter settlement until the matching manifest ACK completes', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1000)
+      const session = new FakeSession()
+      const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 5000 })
+      session.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
+      const first = bridge.getManifest('peer-a')
+      await flush()
+      session.emit({
+        type: 'manifest',
+        peer_id: 'peer-a',
+        node_name: 'Peer A',
+        shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+      })
+      session.emit({ type: 'provider_lease', peer_id: 'peer-a', connection_epoch: 'epoch-1', availability_revision: 1, issued_at_ms: 1000, expires_at_ms: 2000, available: true })
+      await expect(first).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer A' })
+
+      const ackRelease: { current: (() => void) | null } = { current: null }
+      session.sendFrameGate = (frame) => {
+        if ((frame as any).type !== 'manifest_ack') return
+        return new Promise<void>((resolve) => {
+          ackRelease.current = resolve
+        })
+      }
+      session.emit({
+        type: 'manifest',
+        peer_id: 'peer-a',
+        node_name: 'Peer B',
+        shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+      })
+      await flush()
+
+      const expired = bridge.getManifest('peer-a')
+      vi.advanceTimersByTime(1000)
+      await flush()
+      expect(await isSettled(expired)).toBe(false)
+
+      const releaseAck = ackRelease.current
+      if (!releaseAck) throw new Error('manifest ACK send was not held')
+      releaseAck()
+      await expect(expired).resolves.toBeNull()
+      await expect(bridge.getManifest('peer-a')).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves consumer-only 405 and dispatches authorized hybrid inbound calls through peer host', async () => {
     const consumerSession = new FakeSession()
     const consumerBridge = new WebRtcMeshPeerBridge({ session: consumerSession, remotePeerId: 'peer-a' })
