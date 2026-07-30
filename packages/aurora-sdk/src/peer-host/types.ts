@@ -94,6 +94,7 @@ export interface PeerHostAuthorizationDecision {
 export interface PeerHostManifestAuthoritySnapshot {
   readonly recipientPeerId?: string
   readonly grantedMethodIds: readonly string[]
+  readonly grantedPermissions?: readonly string[]
   readonly authGrantRevision: number
   readonly authGrantState: 'unknown' | 'pending' | 'active' | 'revoked'
 }

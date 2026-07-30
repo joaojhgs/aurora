@@ -120,9 +120,14 @@ export class PeerAuthorityHostAuthorizationStore implements PeerHostAuthorizatio
       })
       .sort((left, right) => right.grantRevision - left.grantRevision || right.createdAtMs - left.createdAtMs || left.grantId.localeCompare(right.grantId))
     const grantedMethodIds = sortedUnique(active.flatMap((grant) => grant.allowedMethodIds))
+    const permissionsForGrant = this.options.grantedPermissionsForGrant
+    const grantedPermissions = permissionsForGrant === undefined
+      ? []
+      : sortedUnique(active.flatMap((grant) => permissionsForGrant(grant)))
     return {
       recipientPeerId: context.selector.claimantPeerId,
       grantedMethodIds,
+      grantedPermissions,
       authGrantRevision: active.reduce((revision, grant) => Math.max(revision, grant.grantRevision), 0),
       authGrantState: grantedMethodIds.length > 0 ? 'active' : 'unknown'
     }

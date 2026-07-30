@@ -206,7 +206,35 @@ export class WebRtcPeerHost {
       .filter((method) => grantedMethodIds.has(method.methodId))
       .map((method) => manifestMethod(method))
       .sort((left, right) => String(left.bus_topic).localeCompare(String(right.bus_topic)))
-    const effectivePermissions = effectivePermissionsForMethods(registryMethods.filter((method) => grantedMethodIds.has(method.methodId)))
+    const projectionReady = authority.authGrantState === 'active'
+      && authority.authGrantRevision >= 1
+      && typeof authority.recipientPeerId === 'string'
+      && authority.recipientPeerId.length > 0
+      && methods.length > 0
+    if (!projectionReady) {
+      this.pendingManifest = null
+      return {
+        type: 'manifest',
+        peer_id: this.options.localPeerId,
+        node_name: this.options.nodeName,
+        aurora_version: '',
+        shared_services: [],
+        granted_permissions: null,
+        active_protocol: LEGACY_MANIFEST_PROTOCOL,
+        active_version: 'v0',
+        active_tier: 'legacy',
+        supported_protocols: [LEGACY_MANIFEST_PROTOCOL, ACTIVE_MANIFEST_PROTOCOL],
+        projection_supported: true,
+        projection_active: false,
+        timestamp: new Date(nowMs).toISOString()
+      }
+    }
+    const effectivePermissions = sortedUnique([
+      ...effectivePermissionsForMethods(
+        registryMethods.filter((method) => grantedMethodIds.has(method.methodId))
+      ),
+      ...(authority.grantedPermissions ?? [])
+    ])
     const service = methods.length > 0 ? manifestService(methods) : null
     const sharedServices = service ? [service] : []
     const projectionDigest = digest({

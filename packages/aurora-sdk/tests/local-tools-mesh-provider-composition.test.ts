@@ -110,7 +110,9 @@ describe('mesh-node local Tooling provider composition', () => {
       policy_decision: { reason: 'method_not_granted' }
     })
     await expect(composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)).resolves.toMatchObject({
-      shared_services: []
+      shared_services: [],
+      active_protocol: 'legacy-unfiltered-v0',
+      projection_active: false
     })
   })
 
@@ -203,6 +205,11 @@ describe('mesh-node local Tooling provider composition', () => {
     ])
     const manifest = await composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)
     expect(JSON.stringify(manifest)).toContain('Tooling.ExecuteTool')
+    expect(
+      (manifest.recipient_projection_evidence as Record<string, unknown>).grants,
+    ).toEqual(expect.arrayContaining([
+      { permission: 'Echo.Use', source: 'effective' },
+    ]))
 
     const provider = composition.peerHostRegistry.get('Tooling.ExecuteTool')
     expect(provider).toBeDefined()
