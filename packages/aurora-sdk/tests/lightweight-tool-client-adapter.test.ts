@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { ToolApprovalConfirmRequest } from '../src/admin.js'
 import {
-  LocalToolExecutionPolicy,
   LocalToolRegistry,
   type LocalToolDescriptorV1
 } from '../src/local-tools/index.js'
 import {
   createLightweightToolClientAdapter,
+  createOnDeviceLightweightToolPolicy,
   type LightweightToolClientDelegate
 } from '../src/lightweight-orchestrator/index.js'
 import type { JsonObject, ToolingPrepareExecutionRequest, ToolingProjectionToolInfo } from '../src/types.js'
@@ -103,6 +103,15 @@ describe('lightweight tool-client adapter', () => {
     })
   })
 
+  it('limits on-device self-authority to registered capabilities and resources', async () => {
+    const { adapter } = fixture()
+
+    await expect(adapter.execute(request('echo', { text: 'hi' }))).resolves.toMatchObject({
+      ok: true,
+      status: 'success'
+    })
+  })
+
   it('delegates remote methods without rewriting payloads', async () => {
     const remote = remoteDelegate()
     const remoteTool = remoteToolInfo('remote.search')
@@ -173,17 +182,12 @@ function fixture(options: {
 function baseOptions(registry: LocalToolRegistry) {
   return {
     localRegistry: registry,
-    localPolicy: new LocalToolExecutionPolicy({
+    localPolicy: createOnDeviceLightweightToolPolicy({
+      localRegistry: registry,
       providerPeerId: 'provider',
-      providerServiceInstanceId: 'local:provider:Tooling',
+      serviceInstanceId: 'local:provider:Tooling',
       randomToken: () => 'token',
-      nowMs: () => 1_000,
-      ports: {
-        hasMethodGrant: () => true,
-        hasToolGrant: () => true,
-        hasCapabilityGrant: () => true,
-        hasResourceGrant: () => true
-      }
+      nowMs: () => 1_000
     }),
     providerPeerId: 'provider',
     serviceInstanceId: 'local:provider:Tooling',

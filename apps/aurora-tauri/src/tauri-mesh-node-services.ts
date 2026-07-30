@@ -95,6 +95,7 @@ export interface EnabledTauriMeshNodeServices {
   readonly localPeerId: string;
   readonly nodeName: string;
   readonly localDataSession: LocalDataSession;
+  readonly envelopeCrypto: EnvelopeCryptoPort;
   readonly verifierStore: SecureInboundCredentialVerifierStore;
   readonly grantRepository: PeerGrantRepository;
   readonly auditSink: LocalDataPeerAuditSink;
@@ -294,6 +295,7 @@ export async function createTauriMeshNodeServices(
       localPeerId,
       nodeName,
       localDataSession: session,
+      envelopeCrypto: crypto,
       verifierStore,
       grantRepository,
       auditSink,

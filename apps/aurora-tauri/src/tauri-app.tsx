@@ -59,7 +59,14 @@ import {
 } from "@aurora/ui/local-data";
 import owlSrc from "./assets/aurora-owl.png";
 import { GATEWAY_METHODS } from "@aurora/client";
-import { createLightweightToolClientAdapter } from "@aurora/client/lightweight-orchestrator";
+import {
+  createLightweightToolClientAdapter,
+  createOnDeviceLightweightToolPolicy,
+  mergeLightweightAssistantTools,
+  onDeviceAssistantPermissions,
+  type LightweightToolClientDelegate,
+  type LightweightToolExecutionResponse,
+} from "@aurora/client/lightweight-orchestrator";
 import type {
   AdminOverviewManifest,
   AndroidLocalLightInferenceStatus,
@@ -70,6 +77,11 @@ import type {
   TauriNativeFeatureStatus,
   TauriNativePermissionStatus,
   TauriSidecarStatus,
+  ToolApprovalConfirmRequest,
+  ToolApprovalConfirmResponse,
+  ToolApprovalRequestResponse,
+  ToolingPrepareExecutionRequest,
+  ToolingPrepareExecutionResponse,
 } from "@aurora/client";
 import type {
   LocalDataBackend,
@@ -178,7 +190,7 @@ export const tauriRouteRegistry = {
           }}
         />
       }
-      localAssistant={tauriLocalAssistant(nativeContext)}
+      localAssistant={tauriLocalAssistant(nativeContext, client)}
     />
   ),
   memory: ({ route, nativeContext, client }) => (
@@ -684,10 +696,12 @@ export function AuroraTauriApp({
     surfaceProfile,
     thinConnectionMode: runtime.thinConnectionMode,
     thinPeer: runtime.thinPeer,
+    thinFeatures: runtime.thinFeatures,
     nodeMode: runtime.nodeMode,
     localNodeProviderStatus: runtime.localNodeProviderStatus,
     localFeatureSharing: runtime.localFeatureSharing,
     localToolProvider: runtime.localToolProvider,
+    localAssistant: runtime.localAssistant,
     localData: runtime.localData,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
@@ -1059,10 +1073,12 @@ interface NativeContext {
     typeof createAuroraTauriRuntime
   >["thinConnectionMode"];
   thinPeer?: ReturnType<typeof createAuroraTauriRuntime>["thinPeer"];
+  thinFeatures?: AuroraTauriRuntime["thinFeatures"];
   nodeMode?: AuroraTauriRuntime["nodeMode"];
   localNodeProviderStatus?: AuroraTauriRuntime["localNodeProviderStatus"];
   localFeatureSharing?: AuroraTauriRuntime["localFeatureSharing"];
   localToolProvider?: AuroraTauriRuntime["localToolProvider"];
+  localAssistant?: AuroraTauriRuntime["localAssistant"];
   localData?: AuroraTauriRuntime["localData"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
@@ -1082,30 +1098,75 @@ interface NativeContext {
 
 function tauriLocalAssistant(
   nativeContext: NativeContext,
+  client: AuroraClient,
 ): LightweightAssistantProps | null {
   const localData = nativeContext.localData;
   const localToolProvider = nativeContext.localToolProvider;
-  if (!localData || !localData.ownerAvailable || !localToolProvider) {
+  const localAssistant = nativeContext.localAssistant;
+  if (
+    nativeContext.thinFeatures?.lightweightOrchestratorEnabled !== true
+    || !localData
+    || !localData.ownerAvailable
+    || !localToolProvider
+    || !localAssistant
+  ) {
     return null;
   }
-  const availableTools = localToolProvider.localToolRegistry.publicTools();
+  const localTools = localToolProvider.localToolRegistry.publicTools();
+  const availableTools = mergeLightweightAssistantTools(
+    localTools,
+    localAssistant.remoteTools ?? [],
+  );
+  const localPolicy = createOnDeviceLightweightToolPolicy({
+    localRegistry: localToolProvider.localToolRegistry,
+    providerPeerId: localToolProvider.providerPeerId,
+    serviceInstanceId: localToolProvider.serviceInstanceId,
+  });
   return {
+    provider: localAssistant.provider,
     tools: createLightweightToolClientAdapter({
       localRegistry: localToolProvider.localToolRegistry,
-      localPolicy: localToolProvider.policy,
+      localPolicy,
+      remote: tauriRemoteToolDelegate(client),
       availableTools,
       providerPeerId: localToolProvider.providerPeerId,
       serviceInstanceId: localToolProvider.serviceInstanceId,
       callerPeerId: localData.localNodeId,
       callerPrincipalId: localData.profileId,
-      callerPermissions: ["Tooling.ExecuteTool"],
+      callerPermissions: onDeviceAssistantPermissions(localTools),
     }),
     localData: localData.session,
+    envelopeCrypto: localData.crypto,
     scope: {
       profileId: localData.session.profileId,
       localNodeId: localData.session.localNodeId,
     },
     availableTools,
+  };
+}
+
+function tauriRemoteToolDelegate(client: AuroraClient): LightweightToolClientDelegate {
+  return {
+    prepareExecution: (payload) =>
+      client.tools.prepareExecution<
+        ToolingPrepareExecutionResponse,
+        ToolingPrepareExecutionRequest
+      >(payload),
+    requestApproval: (payload) =>
+      client.tools.requestApproval<
+        ToolApprovalRequestResponse,
+        ToolingPrepareExecutionRequest
+      >(payload),
+    confirmExecution: (payload) =>
+      client.tools.confirmExecution<
+        ToolApprovalConfirmResponse,
+        ToolApprovalConfirmRequest
+      >(payload),
+    execute: (payload) =>
+      client.tools.execute<
+        LightweightToolExecutionResponse,
+        ToolingPrepareExecutionRequest
+      >(payload),
   };
 }
 

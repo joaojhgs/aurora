@@ -9,6 +9,7 @@ import {
   type TauriNativeFeatureStatus,
   type TauriNativePermissionStatus,
   type TauriSidecarStatus,
+  type ToolingProjectionToolInfo,
 } from "@aurora/client";
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -55,7 +56,8 @@ import {
   type WebRtcPeerCredentialStore,
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
-import type { LocalDataSession } from "@aurora/client/local-data";
+import type { EnvelopeCryptoPort, LocalDataSession } from "@aurora/client/local-data";
+import type { LightweightAssistantProvider } from "@aurora/client/lightweight-orchestrator";
 import type { LocalFeatureSharingPort } from "@aurora/client/local-tools";
 import { createTauriNativePeerConnection } from "./native-webrtc";
 import {
@@ -81,6 +83,7 @@ export interface AuroraTauriRuntime {
   localNodeProviderStatus?: AuroraLocalNodeProviderStatus | undefined;
   localFeatureSharing?: LocalFeatureSharingPort | undefined;
   localToolProvider?: EnabledTauriMeshNodeServices["localToolProvider"] | undefined;
+  localAssistant?: AuroraTauriLightweightAssistantConfig | undefined;
   localData?: AuroraTauriLocalDataRuntime | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
@@ -138,7 +141,13 @@ export interface AuroraTauriLocalDataRuntime {
   readonly profileId: string;
   readonly localNodeId: string;
   readonly session: LocalDataSession;
+  readonly crypto: EnvelopeCryptoPort;
   readonly ownerAvailable: boolean;
+}
+
+export interface AuroraTauriLightweightAssistantConfig {
+  readonly provider: LightweightAssistantProvider;
+  readonly remoteTools?: readonly ToolingProjectionToolInfo[] | undefined;
 }
 
 export type TauriMeshNodeServicesFactory = (
@@ -292,6 +301,7 @@ export async function bootstrapAuroraTauriRuntime(
   profileStore?: AuroraRuntimeProfileStore | AuroraThinProfileStore,
   packageCapabilities = resolveTauriPackageCapabilities(),
   meshNodeServicesFactory: TauriMeshNodeServicesFactory = createTauriMeshNodeServices,
+  localAssistant: AuroraTauriLightweightAssistantConfig | null = null,
 ): Promise<AuroraTauriRuntime> {
   if (!requiresAsyncAuroraTauriBootstrap()) return createAuroraTauriRuntime();
   const thinInviteText = consumeFragmentInviteFromRuntime();
@@ -319,6 +329,7 @@ export async function bootstrapAuroraTauriRuntime(
     runtimeProfileDocument: document,
     packageCapabilities,
     meshNodeServices,
+    localAssistant,
     thinInviteText,
     consumeThinInvite: false,
   });
@@ -342,6 +353,7 @@ export function createAuroraTauriRuntime({
   runtimeProfileDocument,
   packageCapabilities = resolveTauriPackageCapabilities(),
   meshNodeServices,
+  localAssistant = null,
   thinInviteText: explicitThinInviteText,
   consumeThinInvite = true,
 }: {
@@ -351,6 +363,7 @@ export function createAuroraTauriRuntime({
   runtimeProfileDocument?: AuroraRuntimeProfileDocument;
   packageCapabilities?: AuroraTauriPackageCapabilities;
   meshNodeServices?: TauriMeshNodeServices | null | undefined;
+  localAssistant?: AuroraTauriLightweightAssistantConfig | null | undefined;
   thinInviteText?: string | null;
   consumeThinInvite?: boolean;
 } = {}): AuroraTauriRuntime {
@@ -438,6 +451,11 @@ export function createAuroraTauriRuntime({
             : undefined,
           localToolProvider: meshNodeServices?.enabled
             ? meshNodeServices.localToolProvider
+            : undefined,
+          localAssistant: thinRuntime.features.lightweightOrchestratorEnabled
+            && meshNodeServices?.enabled
+            && localAssistant
+            ? localAssistant
             : undefined,
           localData: localDataRuntime(meshNodeServices),
           thinProfileConfigured: runtimeProfileConfigured,
@@ -570,6 +588,11 @@ export function createAuroraTauriRuntime({
           : undefined,
         localToolProvider: meshNodeServices?.enabled
           ? meshNodeServices.localToolProvider
+          : undefined,
+        localAssistant: thinRuntime.features.lightweightOrchestratorEnabled
+          && meshNodeServices?.enabled
+          && localAssistant
+          ? localAssistant
           : undefined,
         localData: localDataRuntime(meshNodeServices),
         thinProfileConfigured: runtimeProfileConfigured,
@@ -760,6 +783,7 @@ function localDataRuntime(
     profileId: services.profileId,
     localNodeId: services.localNodeId,
     session: services.localDataSession,
+    crypto: services.envelopeCrypto,
     ownerAvailable: true,
   };
 }

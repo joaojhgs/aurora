@@ -34,6 +34,8 @@ import {
   type ConversationMessageRecord,
   type ConversationRecord,
   type EncryptedDataEnvelopeV1,
+  type EnvelopeCryptoPort,
+  type LocalDataKeyPurpose,
   type LightweightMemoryRecord,
   type LocalDataSession,
 } from "@aurora/client/local-data";
@@ -776,6 +778,7 @@ async function tauriMeshNodeMemoryRuntime({
       profileId: "profile-1",
       localNodeId: "node-1",
       session,
+      crypto: new TestEnvelopeCryptoPort(),
       ownerAvailable,
     },
     dispose: async () => backend.close(),
@@ -822,6 +825,29 @@ const encryptedEnvelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
   ciphertextAndTagB64Url: "AAAAAAAAAAAAAAAAAAAAAA",
   createdAtMs: 1,
 });
+
+class TestEnvelopeCryptoPort implements EnvelopeCryptoPort {
+  async encrypt(
+    _keyPurpose: LocalDataKeyPurpose,
+    _plaintext: Uint8Array,
+    _aad: Uint8Array,
+  ): Promise<EncryptedDataEnvelopeV1> {
+    return encryptedEnvelopeFixture;
+  }
+
+  async decrypt(
+    _envelope: EncryptedDataEnvelopeV1,
+    _aad: Uint8Array,
+  ): Promise<Uint8Array> {
+    return new TextEncoder().encode("decrypted");
+  }
+
+  async rotateKey(
+    _keyPurpose: LocalDataKeyPurpose,
+  ): Promise<{ previousKeyId: string; newKeyId: string }> {
+    return { previousKeyId: "key-1", newKeyId: "key-2" };
+  }
+}
 
 function conversationFixture(
   overrides: Partial<ConversationRecord> = {},

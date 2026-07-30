@@ -381,6 +381,8 @@ describe('createAuroraBrowserClient', () => {
       crypto: services.crypto,
     })
     expect(runtime.localFeatureSharing).toBe(services.localFeatureSharing)
+    expect(runtime.localToolProvider).toBe(services.provider)
+    expect(runtime.localAssistant).toBeUndefined()
     expect(runtime.localNodeProviderStatus).toEqual({
       available: true,
       state: 'available',
@@ -391,6 +393,25 @@ describe('createAuroraBrowserClient', () => {
     expect(auroraBrowserMeshNodeCompositionStatus()).toMatchObject({ state: 'ready' })
     await runtime.close()
     expect(closeServices).toHaveBeenCalledTimes(1)
+  })
+
+  it('attaches an explicitly injected on-device provider only while the rollout is enabled', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-assistant-ready')
+    const services = fakeMeshNodeServices(vi.fn(async () => undefined))
+    setAuroraBrowserMeshNodeServicesFactoryForTests(vi.fn(async () => services))
+    const provider = {
+      complete: vi.fn(async () => ({ type: 'message' as const, content: 'Ready here.' })),
+    }
+
+    const runtime = await createAuroraBrowserRuntimeAsync({
+      localAssistant: { provider, remoteTools: [] },
+    })
+
+    expect(runtime.features.lightweightOrchestratorEnabled).toBe(true)
+    expect(runtime.localAssistant).toEqual({ provider, remoteTools: [] })
+    await runtime.close()
   })
 
   it('coalesces async mesh composition and closes cached services exactly once', async () => {

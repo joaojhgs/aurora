@@ -26,11 +26,15 @@ export {
   createLightweightOrchestrator
 } from './react-loop.js'
 export {
-  createLightweightToolClientAdapter
+  createLightweightToolClientAdapter,
+  createOnDeviceLightweightToolPolicy,
+  mergeLightweightAssistantTools,
+  onDeviceAssistantPermissions
 } from './tool-client-adapter.js'
 export type {
   LightweightToolClientAdapterOptions,
-  LightweightToolClientDelegate
+  LightweightToolClientDelegate,
+  OnDeviceLightweightToolPolicyOptions
 } from './tool-client-adapter.js'
 export type {
   LightweightAssistantProvider,

@@ -6,7 +6,9 @@ import {
   type AuroraTransport,
   type AuroraTransportRequest,
   type AuroraTransportResponse,
+  type ToolingProjectionToolInfo,
 } from '@aurora/client'
+import type { LightweightAssistantProvider } from '@aurora/client/lightweight-orchestrator'
 import type {
   EnvelopeCryptoPort,
   LocalDataBackend,
@@ -52,6 +54,7 @@ import {
 type BrowserRuntimeCache = {
   baseKey: string
   key: string
+  localAssistant: AuroraBrowserLightweightAssistantConfig | null
   runtime: AuroraBrowserRuntime
   meshNodeServices: BrowserMeshNodeServices | null
 }
@@ -78,7 +81,13 @@ export interface AuroraBrowserRuntime extends BrowserWebThinRuntime {
   readonly localData?: AuroraBrowserLocalDataContext | undefined
   readonly localFeatureSharing?: LocalFeatureSharingPort | undefined
   readonly localToolProvider?: BrowserMeshNodeServices['provider'] | undefined
+  readonly localAssistant?: AuroraBrowserLightweightAssistantConfig | undefined
   readonly localNodeProviderStatus: AuroraBrowserLocalNodeProviderStatus
+}
+
+export interface AuroraBrowserLightweightAssistantConfig {
+  readonly provider: LightweightAssistantProvider
+  readonly remoteTools?: readonly ToolingProjectionToolInfo[] | undefined
 }
 
 let browserRuntimeCache: BrowserRuntimeCache | null = null
@@ -140,7 +149,11 @@ export function createAuroraBrowserRuntime(): AuroraBrowserRuntime {
   return createAuroraBrowserRuntimeFromStore(null)
 }
 
-export async function createAuroraBrowserRuntimeAsync(): Promise<AuroraBrowserRuntime> {
+export async function createAuroraBrowserRuntimeAsync({
+  localAssistant = null,
+}: {
+  readonly localAssistant?: AuroraBrowserLightweightAssistantConfig | null | undefined
+} = {}): Promise<AuroraBrowserRuntime> {
   const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
   browserCredentialStore = credentialStore
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
@@ -171,7 +184,7 @@ export async function createAuroraBrowserRuntimeAsync(): Promise<AuroraBrowserRu
     },
     envelopeCryptoFactory: (options) => new BrowserEnvelopeCryptoPort(options),
   }))
-  return createAuroraBrowserRuntimeFromStore(meshNodeServices)
+  return createAuroraBrowserRuntimeFromStore(meshNodeServices, localAssistant)
 }
 
 async function resolveBrowserMeshNodeServices(
@@ -206,7 +219,10 @@ async function resolveBrowserMeshNodeServices(
   return services
 }
 
-function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeServices | null): AuroraBrowserRuntime {
+function createAuroraBrowserRuntimeFromStore(
+  meshNodeServices: BrowserMeshNodeServices | null,
+  localAssistant: AuroraBrowserLightweightAssistantConfig | null = null,
+): AuroraBrowserRuntime {
   const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
   browserCredentialStore = credentialStore
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
@@ -215,8 +231,13 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
   const baseKey = browserClientCacheKey(null)
   const key = browserClientCacheKey(meshNodeServices)
   const cached = browserRuntimeCache
-  if (cached?.key === key) return cached.runtime
-  if (meshNodeServices === null && cached?.meshNodeServices && cached.baseKey === baseKey) {
+  if (cached?.key === key && cached.localAssistant === localAssistant) return cached.runtime
+  if (
+    meshNodeServices === null
+    && cached?.meshNodeServices
+    && cached.baseKey === baseKey
+    && cached.localAssistant === localAssistant
+  ) {
     return cached.runtime
   }
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
@@ -261,6 +282,9 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
           },
           localFeatureSharing: effectiveMeshNodeServices.localFeatureSharing,
           localToolProvider: effectiveMeshNodeServices.provider,
+          ...(runtime.features.lightweightOrchestratorEnabled && localAssistant
+            ? { localAssistant }
+            : {}),
         }
       : {}),
     localNodeProviderStatus: localNodeProviderStatus(
@@ -291,6 +315,7 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
   browserRuntimeCache = {
     baseKey,
     key,
+    localAssistant,
     runtime: runtimeWithLocalServices,
     meshNodeServices: effectiveMeshNodeServices,
   }

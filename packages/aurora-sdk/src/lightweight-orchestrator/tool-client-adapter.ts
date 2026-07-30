@@ -1,9 +1,9 @@
 import type { ToolApprovalConfirmRequest, ToolApprovalConfirmResponse, ToolApprovalRequestResponse } from '../admin.js'
-import type {
-  LocalToolAuditPort,
+import {
   LocalToolExecutionPolicy,
-  LocalToolExportDecisionPort,
-  LocalToolRegistry
+  type LocalToolAuditPort,
+  type LocalToolExportDecisionPort,
+  type LocalToolRegistry
 } from '../local-tools/index.js'
 import { createLocalToolingProviderHandlers } from '../local-tools/index.js'
 import type { PeerHostCallContext } from '../peer-host/types.js'
@@ -35,6 +35,14 @@ export interface LightweightToolClientAdapterOptions {
   readonly ids?: () => string
 }
 
+export interface OnDeviceLightweightToolPolicyOptions {
+  readonly localRegistry: LocalToolRegistry
+  readonly providerPeerId?: string | undefined
+  readonly serviceInstanceId?: string | undefined
+  readonly nowMs?: () => number
+  readonly randomToken?: () => string
+}
+
 interface PendingLocalApproval {
   readonly request: ToolingPrepareExecutionRequest
   readonly prepared: ToolingPrepareExecutionResponse
@@ -44,6 +52,60 @@ interface PendingLocalApproval {
 }
 
 const LOCAL_APPROVAL_PREFIX = 'local-lw-approval'
+
+/**
+ * Build the narrow self-authority used by the on-device assistant.
+ *
+ * Registry membership is the capability boundary: only tools whose browser or
+ * native pack was actually registered can pass tool, capability, and resource
+ * checks. The execution policy still enforces caller permissions, argument
+ * schemas, confirmation tokens, expiry, and replay protection.
+ */
+export function createOnDeviceLightweightToolPolicy(
+  options: OnDeviceLightweightToolPolicyOptions
+): LocalToolExecutionPolicy {
+  const entries = options.localRegistry.list()
+  const publicTools = options.localRegistry.publicTools()
+  const providerPeerId = options.providerPeerId ?? publicTools[0]?.provider_peer_id ?? 'local-peer'
+  const serviceInstanceId = options.serviceInstanceId
+    ?? publicTools[0]?.provider_service_instance_id
+    ?? `local:${providerPeerId}:Tooling`
+  const toolContractIds = new Set(entries.map((entry) => entry.descriptor.toolContractId))
+  const capabilityIds = new Set(entries.flatMap((entry) => entry.descriptor.nativeRequirements.capabilityIds))
+  const resourceScopes = new Set(entries.flatMap((entry) => entry.descriptor.resourceScopes))
+
+  return new LocalToolExecutionPolicy({
+    providerPeerId,
+    providerServiceInstanceId: serviceInstanceId,
+    ...(options.nowMs ? { nowMs: options.nowMs } : {}),
+    ...(options.randomToken ? { randomToken: options.randomToken } : {}),
+    ports: {
+      hasMethodGrant: (methodId) => methodId === 'Tooling.ExecuteTool',
+      hasToolGrant: (toolContractId) => toolContractIds.has(toolContractId),
+      hasCapabilityGrant: (capabilityId) => capabilityIds.has(capabilityId),
+      hasResourceGrant: (resourceScope) => resourceScopes.has(resourceScope)
+    }
+  })
+}
+
+export function mergeLightweightAssistantTools(
+  localTools: readonly ToolingProjectionToolInfo[],
+  remoteTools: readonly ToolingProjectionToolInfo[]
+): ToolingProjectionToolInfo[] {
+  const tools = new Map(localTools.map((tool) => [tool.global_tool_id, tool]))
+  for (const tool of remoteTools) {
+    if (tool.execution_location !== 'remote' || tool.exportable !== true || tool.provider_available === false) continue
+    if (!tools.has(tool.global_tool_id)) tools.set(tool.global_tool_id, tool)
+  }
+  return [...tools.values()]
+}
+
+export function onDeviceAssistantPermissions(localTools: readonly ToolingProjectionToolInfo[]): string[] {
+  return [...new Set([
+    'Tooling.ExecuteTool',
+    ...localTools.flatMap((tool) => tool.required_permissions)
+  ])].sort()
+}
 
 export function createLightweightToolClientAdapter(options: LightweightToolClientAdapterOptions): LightweightToolClientPort {
   const localTools = options.localRegistry.publicTools()
