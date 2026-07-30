@@ -22,6 +22,11 @@
       "import": "./src/local-data/index.ts",
       "default": "./src/local-data/index.ts"
     },
+    "./local-data/browser": {
+      "types": "./src/local-data/browser.ts",
+      "import": "./src/local-data/browser.ts",
+      "default": "./src/local-data/browser.ts"
+    },
     "./styles.css": "./src/styles.css",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/shadcn-lib/*.ts",
