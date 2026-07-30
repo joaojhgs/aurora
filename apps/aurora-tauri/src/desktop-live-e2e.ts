@@ -1,5 +1,5 @@
 import {
-  AuroraClient,
+  type AuroraClient,
   type JsonObject,
 } from "@aurora/client";
 import {
@@ -137,6 +137,19 @@ type MeshTransportPort = {
 };
 type DesktopLiveRuntime = WebRtcAuroraRuntime<AuroraClient> & {
   meshTransport?: MeshTransportPort | undefined;
+};
+type RemoteConsoleManifestDrainRuntime = {
+  meshTransport?: Pick<MeshTransportPort, "getManifest"> | undefined;
+  client: {
+    registry: {
+      getRegistry(): Promise<unknown>;
+    };
+  };
+  peer: {
+    snapshot(): {
+      pendingCallCount?: number | undefined;
+    };
+  };
 };
 
 type Ac18BrowserLocalToolProbe = {
@@ -281,6 +294,7 @@ export async function runDesktopLiveE2e(
       snapshots,
     });
     const remoteAuthorized = await connectAndAuthorize(remoteRuntime, homeProfile, ready.timeoutMs);
+    await drainRemoteConsoleManifestHandshake(remoteRuntime, ready);
     await remoteRuntime.peer.disconnect("desktop live role switch to mesh-node");
     await remoteRuntime.close();
     remoteRuntime = null;
@@ -377,7 +391,7 @@ function createInteropRuntime({
   snapshots: Snapshot[];
   peerHost?: WebRtcPeerHost | undefined;
 }): DesktopLiveRuntime {
-  const runtime = createBrowserWebRtcAuroraRuntime<AuroraClient>({
+  const runtime = createBrowserWebRtcAuroraRuntime({
     mode: "webrtc-only",
     profile,
     localStablePeerId: ready.localStablePeerId,
@@ -403,7 +417,6 @@ function createInteropRuntime({
       maxDelayMs: 500,
       rpcTimeoutMs: 5000,
     },
-    createClient: (transport) => new AuroraClient({ transport }),
   });
   runtime.peer.subscribe((snapshot) => {
     snapshots.push(snapshot);
@@ -421,6 +434,26 @@ async function connectAndAuthorize(
   await runtime.peer.connect(profile);
   await waitFor(() => runtime.peer.snapshot().state === "authorized", "authorized desktop WebRTC DataChannel", timeoutMs);
   return runtime.peer.snapshot().state === "authorized";
+}
+
+export async function drainRemoteConsoleManifestHandshake(
+  runtime: RemoteConsoleManifestDrainRuntime,
+  ready: Pick<DesktopLiveReadyPayload, "expectedStablePeerId" | "timeoutMs">,
+): Promise<void> {
+  const meshTransport = runtime.meshTransport;
+  if (!meshTransport) {
+    throw new Error("Authorized remote-console runtime did not expose its mesh transport");
+  }
+  const manifest = await meshTransport.getManifest(ready.expectedStablePeerId);
+  if (!manifest) {
+    throw new Error("Python peer did not return a remote-console manifest before role switch");
+  }
+  await runtime.client.registry.getRegistry();
+  await waitFor(
+    () => Number(runtime.peer.snapshot().pendingCallCount ?? 0) === 0,
+    "remote-console manifest ACK drain before role switch",
+    Math.min(5000, ready.timeoutMs),
+  );
 }
 
 async function runMeshInteropContract({

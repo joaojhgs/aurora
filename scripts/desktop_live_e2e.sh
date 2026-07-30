@@ -10,12 +10,17 @@ desktop_application_bin="${AURORA_DESKTOP_LIVE_E2E_APPLICATION_BIN:-$desktop_rep
 desktop_application_wrapper="$desktop_repo_root/scripts/desktop_live_application.sh"
 desktop_app_pid_file="${AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE:-$desktop_artifact_dir/desktop-application.pid}"
 desktop_driver_log="$desktop_artifact_dir/tauri-driver.log"
+desktop_frontend_dist="$desktop_repo_root/apps/aurora-tauri/dist"
 desktop_driver_pid=""
 
 cleanup_desktop_driver() {
   if [[ -n "$desktop_driver_pid" ]] && kill -0 "$desktop_driver_pid" 2>/dev/null; then
     kill "$desktop_driver_pid" 2>/dev/null || true
     wait "$desktop_driver_pid" 2>/dev/null || true
+  fi
+  if [[ "${AURORA_DESKTOP_LIVE_E2E_KEEP_DIST:-0}" != "1" && -d "$desktop_frontend_dist" ]]; then
+    find "$desktop_frontend_dist" -type f -delete 2>/dev/null || true
+    find "$desktop_frontend_dist" -depth -type d -empty -delete 2>/dev/null || true
   fi
 }
 trap cleanup_desktop_driver EXIT INT TERM

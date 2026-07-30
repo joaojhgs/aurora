@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  drainRemoteConsoleManifestHandshake,
   installDesktopLiveE2eHook,
   isDesktopLiveE2eHookEnabled,
   isDesktopLiveNativeWebRtcForced,
@@ -112,6 +113,40 @@ describe("desktop live E2E WebView hook", () => {
         },
       }),
     ).toThrow(/room secret/u);
+  });
+
+  it("drains the remote-console manifest ACK path before role switching", async () => {
+    const calls: string[] = [];
+    let pendingCallCount = 1;
+    const runtime = {
+      meshTransport: {
+        getManifest: vi.fn(async (peerId: string) => {
+          calls.push(`manifest:${peerId}`);
+          return { peerId, services: [] };
+        }),
+      },
+      client: {
+        registry: {
+          getRegistry: vi.fn(async () => {
+            calls.push("registry");
+            pendingCallCount = 0;
+            return { modules: [] };
+          }),
+        },
+      },
+      peer: {
+        snapshot: vi.fn(() => ({ pendingCallCount })),
+      },
+    };
+
+    await drainRemoteConsoleManifestHandshake(runtime, {
+      expectedStablePeerId: "python-gateway-g009",
+      timeoutMs: 30_000,
+    });
+
+    expect(calls).toEqual(["manifest:python-gateway-g009", "registry"]);
+    expect(runtime.meshTransport.getManifest).toHaveBeenCalledOnce();
+    expect(runtime.client.registry.getRegistry).toHaveBeenCalledOnce();
   });
 
   it("keeps hook implementation out of the shared Tauri app route module", async () => {
