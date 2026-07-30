@@ -786,6 +786,70 @@ describe('WebRtcPeerHost', () => {
     expect(sent.filter((frame) => (frame as any).id === 'active-stream' && (frame as any).type === 'error')).toHaveLength(1)
   })
 
+  it('closes subscription handles returned after a matching revocation wins the open race', async () => {
+    let releaseOpen!: () => void
+    let sawAbort = false
+    const close = vi.fn()
+    const registry = new PeerHostContractRegistry().register({
+      methodId: 'Tooling.GetTools',
+      methodType: 'unary',
+      inputSchemaId: 'Tooling.GetTools.input',
+      outputSchemaId: 'Tooling.GetTools.output',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      requiredPermissions: ['Tooling.GetTools'],
+      handler: async () => ({ count: 0, tools: [] })
+    }).registerEvent({
+      topic: 'Tooling.ProjectionInvalidated',
+      outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+      outputSchema: z.object({ provider_peer_id: z.string() }),
+      requiredPermissions: ['Tooling.ProjectionInvalidated'],
+      handler: async (context) => {
+        context.signal.addEventListener('abort', () => { sawAbort = true }, { once: true })
+        await new Promise<void>((resolve) => { releaseOpen = resolve })
+        return { close }
+      }
+    })
+    const grants = new MemoryPeerGrantRepository()
+    await grants.upsertGrant(authorityGrant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] }))
+    const broadcaster = new MemoryPeerRevocationBroadcaster()
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: new PeerAuthorityHostAuthorizationStore(new PeerAuthorityResolver({
+        verifierStore: new DenyAllInboundCredentialVerifierStore(),
+        grantRepository: grants,
+        challengeStore: new NoopReconnectChallengeStore()
+      })),
+      revocationBroadcaster: broadcaster,
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    const manifest = await peerHost.startEpoch('peer-a', authenticatedContext())
+    peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+
+    const pending = peerHost.handleSubscribe({ type: 'subscribe', id: 'suspended-sub', topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 60 }, 'peer-a', authenticatedContext())
+    await flush()
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+
+    await broadcaster.publish(revocationEvent())
+    await flush()
+    expect(sawAbort).toBe(true)
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+
+    releaseOpen()
+    await pending
+    expect(close).toHaveBeenCalledWith('peer_authority_revoked')
+    expect(sent.some((frame) => (frame as any).type === 'subscribed' && (frame as any).id === 'suspended-sub')).toBe(false)
+    expect(sent).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'unsubscribed', id: 'suspended-sub', subscription_id: 'suspended-sub', removed: true })
+    ]))
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+  })
+
   it('cleans revocation listeners on disconnect and swallows revocation terminal send failures', async () => {
     const unhandled: unknown[] = []
     const onUnhandled = (reason: unknown) => { unhandled.push(reason) }

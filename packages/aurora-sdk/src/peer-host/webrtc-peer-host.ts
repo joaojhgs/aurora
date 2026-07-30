@@ -373,6 +373,13 @@ export class WebRtcPeerHost {
         return
       }
     }
+    for (const event of events as PeerHostEventDescriptor[]) {
+      const ttlSeconds = frame.ttl_seconds ?? 60
+      if (event.maxTtlSeconds !== undefined && ttlSeconds > event.maxTtlSeconds) {
+        await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'ttl_too_large', rejected_topics: frame.topics })
+        return
+      }
+    }
     const abort = new AbortController()
     const timer = setTimeout(() => this.handleCancel(frame.id), Math.max(1, frame.ttl_seconds ?? 60) * 1000)
     const handles: Array<{ close(reason?: string): void | Promise<void> }> = []
@@ -385,13 +392,10 @@ export class WebRtcPeerHost {
         for (const handle of handles) void handle.close(reason)
       }
     }
+    this.active.set(frame.id, active)
     try {
       for (const event of events as PeerHostEventDescriptor[]) {
         const ttlSeconds = frame.ttl_seconds ?? 60
-        if (event.maxTtlSeconds !== undefined && ttlSeconds > event.maxTtlSeconds) {
-          await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'ttl_too_large', rejected_topics: frame.topics })
-          return
-        }
         const subscribeContext = {
           id: frame.id,
           remotePeerId,
@@ -403,14 +407,18 @@ export class WebRtcPeerHost {
         }
         if (epochContext !== undefined) Object.assign(subscribeContext, { authenticatedPeerContext: epochContext })
         const handle = await this.options.registry.openSubscription(event, subscribeContext)
+        if (abort.signal.aborted || active.settled || this.active.get(frame.id) !== active) {
+          if (handle) void handle.close('peer_authority_revoked')
+          return
+        }
         if (handle) handles.push(handle)
       }
     } catch {
-      for (const handle of handles) void handle.close('subscription_rejected')
+      if (!this.finishActive(frame.id, active, 'subscription_rejected')) return
       await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'handler_failed', rejected_topics: frame.topics })
       return
     }
-    this.active.set(frame.id, active)
+    if (abort.signal.aborted || active.settled || this.active.get(frame.id) !== active) return
     await sender.sendFrame({
       type: 'subscribed',
       id: frame.id,
