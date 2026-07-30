@@ -1526,6 +1526,102 @@ async def test_targeted_manifest_reannounce_retransmits_pending_projection_and_a
 
 
 @pytest.mark.asyncio
+async def test_bulk_manifest_reannounce_retransmits_pending_projection_and_ack_opens_readiness(
+    monkeypatch,
+) -> None:
+    client = _client()
+    identity = _identity({"TTS.Synthesize", "Scheduler.ListJobs"})
+    client._peer_acl["session-a"] = identity
+    client._peer_acl["peer-a"] = identity
+    client._registry = None
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-a"] = protocol
+    client._peer_protocols["peer-a"] = protocol
+    assert client.apply_peer_authority_changed(
+        MeshPeerAuthorityChangedEvent(
+            peer_id="peer-a",
+            auth_grant_revision=1,
+            disposition="present",
+            state="active",
+            effective_permissions=("*",),
+            reason="approved",
+        )
+    )
+    monkeypatch.setattr(
+        "app.shared.contracts.registry.list_modules",
+        lambda: {
+            "TTS": _mesh_module(
+                "TTS",
+                "TTS.Synthesize",
+                feature_id="speech_synthesis",
+                permission="TTS.Synthesize",
+                method_name="Synthesize",
+            ),
+            "Scheduler": _mesh_module(
+                "Scheduler",
+                "Scheduler.ListJobs",
+                feature_id="job_discovery",
+                permission="Scheduler.ListJobs",
+                method_name="ListJobs",
+            ),
+        },
+    )
+    monkeypatch.setattr("app.shared.contracts.registry._get_package_version", lambda: "1.0.0")
+    mesh_config = MeshConfig(
+        enabled=True,
+        services={
+            "TTS": mesh_policy(share=True),
+            "Scheduler": mesh_policy(share=True),
+        },
+    )
+    client._peer_registry = MagicMock()
+    client._peer_registry.get_negotiated_peers.return_value = [SimpleNamespace(peer_id="peer-a")]
+    client._peer_registry.update_manifest_ack = AsyncMock()
+    client._current_mesh_policy_pair = MagicMock(return_value=(mesh_config, None))
+    client._schedule_provider_export_shadow = MagicMock()
+    client.retry_tooling_projection_invalidation = MagicMock(return_value=True)
+    consumer_mesh_config = MeshConfig(
+        enabled=True,
+        services={"TTS": mesh_policy(prefer="network")},
+    )
+    frames: list[dict[str, object]] = []
+
+    async def send_then_ack_on_bulk_reannounce(_peer_id: str, text: str) -> bool:
+        payload = json.loads(text)
+        frames.append(payload)
+        if len(frames) == 2:
+            manifest = parse_manifest_with_evidence(payload).manifest
+            assert manifest is not None
+            ack = generate_manifest_ack(manifest, consumer_mesh_config)
+            assert ack.compatible_services == ["TTS"]
+            assert ack.unused_services == ["Scheduler"]
+            await client._on_manifest_ack("session-a", manifest_ack_to_dict(ack))
+        return True
+
+    client.send_to_peer_async = AsyncMock(side_effect=send_then_ack_on_bulk_reannounce)  # type: ignore[method-assign]
+
+    assert await client._send_manifest("peer-a", mesh_config=mesh_config)
+    first_expectation = client._manifest_ack_expectations["peer-a"]
+    assert await client.reannounce_manifest()
+
+    assert client.send_to_peer_async.await_count == 3
+    manifest_frames = [frame for frame in frames if frame.get("type") == "manifest"]
+    assert len(manifest_frames) == 2
+    first_manifest = dict(manifest_frames[0])
+    second_manifest = dict(manifest_frames[1])
+    first_manifest.pop("timestamp", None)
+    second_manifest.pop("timestamp", None)
+    assert first_manifest == second_manifest
+    assert client._manifest_ack_expectations.get("peer-a") is None
+    assert client._is_local_provider_ready_for_session("session-a", "TTS") is True
+    assert client._is_local_provider_ready_for_session("session-a", "Scheduler") is False
+    lease_frame = frames[-1]
+    assert lease_frame["type"] == "provider_lease"
+    assert lease_frame["connection_epoch"] == first_expectation.connection_epoch
+
+
+@pytest.mark.asyncio
 async def test_changed_manifest_projection_does_not_reuse_stale_pending_ack(
     monkeypatch,
 ) -> None:

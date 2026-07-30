@@ -3782,6 +3782,7 @@ class RTCClient:
                 peer.peer_id,
                 mesh_config=mesh_config,
                 live_policy_snapshot=live_policy_snapshot,
+                force_send=True,
             )
             all_sent = all_sent and sent
 
