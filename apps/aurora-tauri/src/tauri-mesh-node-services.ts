@@ -118,7 +118,6 @@ const REQUIRED_ROLLOUT_FLAGS: readonly (keyof AuroraWebRtcRolloutFlags)[] = [
   "webrtc_app_layer_e2ee",
   "mesh_node_runtime_v1",
   "local_tool_provider_v1",
-  "lightweight_orchestrator_v1",
 ];
 
 const NATIVE_CAPABILITY_PACK_ID = "native-actions";
@@ -236,7 +235,7 @@ export async function createTauriMeshNodeServices(
       nodeName,
       registry,
       authorityResolver,
-      exportDecision: options.exportDecision ?? SHARE_ALL_LOCAL_TOOLS,
+      exportDecision: options.exportDecision ?? DENY_ALL_LOCAL_TOOLS,
       audit: localToolAudit,
       cursorSecret: randomBytes(32),
       providerEnabled: true,
@@ -337,8 +336,8 @@ function secureRandomBytes(length: number): Uint8Array {
   return bytes;
 }
 
-const SHARE_ALL_LOCAL_TOOLS: LocalToolExportDecisionPort = Object.freeze({
-  isShared: () => true,
+const DENY_ALL_LOCAL_TOOLS: LocalToolExportDecisionPort = Object.freeze({
+  isShared: () => false,
 });
 
 class LocalToolAuditUnavailableError extends Error {

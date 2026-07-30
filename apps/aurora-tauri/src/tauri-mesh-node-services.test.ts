@@ -27,7 +27,7 @@ import type {
   InboundVerifierSecretStoragePort,
   PeerRelationshipSelector,
 } from "@aurora/client/webrtc";
-import { AURORA_NATIVE_TOOL_IDS } from "@aurora/client/local-tools";
+import { AURORA_NATIVE_TOOL_IDS, type LocalToolExportDecisionPort } from "@aurora/client/local-tools";
 import type {
   AuroraCapabilityPack,
   AuroraRuntimeProfileV2,
@@ -91,6 +91,56 @@ describe("Tauri mesh node services", () => {
 
     await services.close();
     expect(backend.closed).toBe(true);
+  });
+
+  it("keeps native tools hidden by default until an explicit export policy shares them", async () => {
+    const defaultServices = await createEnabledServices();
+    const defaultVisibility = await toolingVisibility(defaultServices);
+
+    expect(defaultVisibility.tools).toMatchObject({ count: 0, tools: [] });
+    expect(defaultVisibility.catalog).toMatchObject({
+      ok: true,
+      tools: [],
+      blocked_tools: [],
+      total_count: 0,
+    });
+    await defaultServices.close();
+
+    const explicitServices = await createEnabledServices(() => 1_000, {
+      exportDecision: shareOnlyDeviceStatus(),
+    });
+    const explicitVisibility = await toolingVisibility(explicitServices);
+
+    expect(explicitVisibility.tools).toMatchObject({
+      count: 1,
+      tools: [expect.objectContaining({ local_name: "native.get_device_status" })],
+    });
+    expect(explicitVisibility.catalog).toMatchObject({
+      ok: true,
+      tools: [expect.objectContaining({ local_name: "native.get_device_status" })],
+      blocked_tools: [],
+      total_count: 1,
+    });
+    await explicitServices.close();
+  });
+
+  it("enables the local tool provider when the lightweight orchestrator rollout is disabled", async () => {
+    const services = await createTauriMeshNodeServices({
+      profile: profile(),
+      rolloutFlags: { ...rolloutFlags, lightweight_orchestrator_v1: false },
+      nativeTransport: nativeTransport({ manifest: readyDesktopShareManifest() }),
+      backend: new FakeLocalDataBackend(),
+      crypto: new FakeEnvelopeCrypto(),
+      verifierSecretStorage: new MemorySecretStorage(),
+      randomBytes: randomBytes(11),
+      randomId: sequentialIds("id"),
+      now: () => 1_000,
+    });
+
+    expect(services.enabled).toBe(true);
+    if (!services.enabled) throw new Error("expected enabled services");
+    expect(services.registeredToolIds).toContain(AURORA_NATIVE_TOOL_IDS.getDeviceStatus);
+    await services.close();
   });
 
   it("does not claim enabled when native evidence yields no tools", async () => {
@@ -307,7 +357,10 @@ async function disabledReason(
   return services.reason;
 }
 
-async function createEnabledServices(now: () => number = () => 1_000) {
+async function createEnabledServices(
+  now: () => number = () => 1_000,
+  patch: Partial<Parameters<typeof createTauriMeshNodeServices>[0]> = {},
+) {
   const services = await createTauriMeshNodeServices({
     profile: profile(),
     rolloutFlags,
@@ -318,11 +371,36 @@ async function createEnabledServices(now: () => number = () => 1_000) {
     randomBytes: randomBytes(3),
     randomId: sequentialIds("id"),
     now,
+    ...patch,
   });
   if (!services.enabled) {
     throw new Error(`expected enabled services, got ${"reason" in services ? services.reason : "unknown"}`);
   }
   return services;
+}
+
+async function toolingVisibility(services: Awaited<ReturnType<typeof createEnabledServices>>) {
+  const getTools = services.localToolProvider.peerHostRegistry.get("Tooling.GetTools");
+  const getExportCatalog = services.localToolProvider.peerHostRegistry.get(TOOLING_METHODS.getExportCatalog);
+  if (!getTools || !getExportCatalog) throw new Error("expected tooling visibility handlers");
+  return {
+    tools: await services.localToolProvider.peerHostRegistry.dispatch(
+      getTools,
+      {},
+      peerHostCallContext("Tooling.GetTools", 1_000),
+    ),
+    catalog: await services.localToolProvider.peerHostRegistry.dispatch(
+      getExportCatalog,
+      { protocol_tier: "projection_v1", page_size: 100 },
+      peerHostCallContext(TOOLING_METHODS.getExportCatalog, 1_000),
+    ),
+  };
+}
+
+function shareOnlyDeviceStatus(): LocalToolExportDecisionPort {
+  return {
+    isShared: (tool) => tool.global_tool_id.includes(AURORA_NATIVE_TOOL_IDS.getDeviceStatus),
+  };
 }
 
 function profile(patch: {
@@ -605,7 +683,7 @@ function peerHostCallContext(methodId: string, receivedAtMs: number): PeerHostCa
     identity: {
       callerPeerId: "peer-recipient",
       principalId: "principal-1",
-      effectivePermissions: [TOOLING_METHODS.executeTool, "Native.GetDeviceStatus"],
+      effectivePermissions: ["Tooling.GetTools", TOOLING_METHODS.executeTool, "Native.GetDeviceStatus"],
       authGrantRevision: 1,
       manifestRevision: 1,
     },
