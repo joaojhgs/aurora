@@ -403,6 +403,101 @@ describe('browser WebRTC thin-shell runtime', () => {
     }
   })
 
+  it('creates one authorized WebRTC runtime when home peer and mesh membership share one relationship', async () => {
+    vi.resetModules()
+    const peerConnect = vi.fn(async () => undefined)
+    const peerDisconnect = vi.fn(async () => undefined)
+    const runtimeClose = vi.fn(async () => undefined)
+    const runtimeOptions: BrowserWebRtcRuntimeOptions<AuroraClient>[] = []
+    const createBrowserWebRtcAuroraRuntime = vi.fn((options: BrowserWebRtcRuntimeOptions<AuroraClient>) => {
+      runtimeOptions.push(options)
+      const transport = new MockAuroraTransport()
+      const peer = {
+        snapshot: () => ({
+          state: 'authorized',
+          status: 'authorized',
+          authorized: true,
+          connectionMode: options.mode,
+          expectedStablePeerId: options.profile?.expectedStablePeerId,
+          connectedStablePeerId: options.profile?.expectedStablePeerId,
+          protocolCapabilities: options.localProtocolCapabilities ?? [],
+          secureContext: true,
+          visible: true,
+          focused: true,
+          hasHttpFallback: false,
+          secretsPersisted: false,
+        }),
+        connect: peerConnect,
+        disconnect: peerDisconnect,
+        subscribe: vi.fn((listener: (snapshot: PeerConnectionSnapshot) => void) => {
+          listener(peer.snapshot() as PeerConnectionSnapshot)
+          return () => undefined
+        }),
+        getSelectedCandidatePairEvidence: vi.fn(async () => ({
+          selected: true,
+          category: 'host',
+          statsSource: 'mock',
+          rawAddressRedacted: true,
+        })),
+      }
+
+      return {
+        client: new AuroraClient({ transport }),
+        peer,
+        transport,
+        close: runtimeClose,
+      }
+    })
+    vi.doMock('@aurora/client/webrtc', async () => ({
+      ...await vi.importActual<typeof import('@aurora/client/webrtc')>('@aurora/client/webrtc'),
+      createBrowserWebRtcAuroraRuntime,
+    }))
+
+    try {
+      const { createBrowserWebThinRuntime: createIsolatedBrowserWebThinRuntime } = await import('../src/web-thin-runtime')
+      const peerHost = {
+        resumeLocalProvider: vi.fn(),
+        renewLocalProvider: vi.fn(),
+        suspendLocalProvider: vi.fn(),
+      }
+      const runtime = createIsolatedBrowserWebThinRuntime({
+        createClient,
+        createDemoClient,
+        mode: 'webrtc-only',
+        inviteText: inviteText(),
+        nodeRole: 'mesh-node',
+        localStablePeerId: 'browser-peer',
+        peerHost: peerHost as never,
+        windowLocation: { protocol: 'https:', hostname: 'app.example' },
+      })
+
+      await runtime.peer.connect()
+
+      expect(createBrowserWebRtcAuroraRuntime).toHaveBeenCalledOnce()
+      expect(runtimeOptions).toHaveLength(1)
+      expect(runtimeOptions[0]).toMatchObject({
+        mode: 'webrtc-only',
+        nodeRole: 'mesh-node',
+        localStablePeerId: 'browser-peer',
+      })
+      expect(runtimeOptions[0]?.profile?.expectedStablePeerId).toBe('peer-host')
+      expect(runtimeOptions[0]?.peerHost).toBe(peerHost)
+      expect(peerConnect).toHaveBeenCalledOnce()
+      expect(runtime.peer.snapshot()).toMatchObject({
+        status: 'authorized',
+        expectedStablePeerId: 'peer-host',
+        connectedStablePeerId: 'peer-host',
+      })
+
+      await runtime.close()
+      expect(peerDisconnect).toHaveBeenCalledOnce()
+      expect(runtimeClose).toHaveBeenCalledOnce()
+    } finally {
+      vi.doUnmock('@aurora/client/webrtc')
+      vi.resetModules()
+    }
+  })
+
   it('keeps WebRTC remote-console runtime consumer-only with no local provider capabilities', async () => {
     expect(normalizeAuroraWebRtcRolloutFlags(undefined)).toMatchObject({
       mesh_node_runtime_v1: true,
