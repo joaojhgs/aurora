@@ -216,6 +216,7 @@ export async function deleteBrowserStorageLeaseRecord(
   if (!indexedDB) throw new LocalDataError('unsupported_backend', 'Browser local data ownership is unavailable', { reason: 'lease_store_unavailable' })
   const databaseName = options.databaseName ?? BROWSER_STORAGE_LOCK_DATABASE_NAME
   const storeName = options.storeName ?? BROWSER_STORAGE_LOCK_STORE_NAME
+  if (!await indexedDbDatabaseExists(indexedDB, databaseName)) return
   const database = await openStorageLockDatabase(indexedDB, databaseName, storeName)
   try {
     await new Promise<void>((resolve, reject) => {
@@ -228,6 +229,20 @@ export async function deleteBrowserStorageLeaseRecord(
   } finally {
     database.close()
   }
+}
+
+async function indexedDbDatabaseExists(indexedDB: IDBFactory, databaseName: string): Promise<boolean> {
+  const databasesMember = (indexedDB as unknown as { databases?: unknown }).databases
+  if (typeof databasesMember === 'function') {
+    const databases = await databasesMember.call(indexedDB) as Array<{ name?: string }>
+    return databases.some((database) => database.name === databaseName)
+  }
+  if (isDatabaseNameMap(databasesMember)) return databasesMember.has(databaseName)
+  throw new LocalDataError('unsupported_backend', 'Browser local data ownership cleanup is unavailable', { reason: 'lease_store_unavailable' })
+}
+
+function isDatabaseNameMap(value: unknown): value is { has(name: string): boolean } {
+  return typeof value === 'object' && value !== null && typeof (value as { has?: unknown }).has === 'function'
 }
 
 async function openStorageLockDatabase(indexedDB: IDBFactory, databaseName: string, storeName: string): Promise<IDBDatabase> {

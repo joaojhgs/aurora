@@ -1,4 +1,4 @@
-import type { LocalDataBackend } from '@aurora/client/local-data'
+import { localDataIdSchema, type LocalDataBackend } from '@aurora/client/local-data'
 
 import {
   BROWSER_PEER_VAULT_DATABASE_NAME,
@@ -18,6 +18,7 @@ import {
 } from './browser-storage-lock'
 
 export type BrowserClearDeviceDataStepName =
+  | 'invalid-scope'
   | 'active-handles'
   | 'peer-vault'
   | 'peer-profile'
@@ -27,12 +28,27 @@ export type BrowserClearDeviceDataStepName =
   | 'storage-lock'
   | 'envelope-key-vault'
 
+export type BrowserClearDeviceDataFailureReason =
+  | 'invalid_scope'
+  | 'active_handle_close_failed'
+  | 'peer_profile_cleanup_failed'
+  | 'backend_pointer_unavailable'
+  | 'backend_pointer_cleanup_failed'
+  | 'indexeddb_unavailable'
+  | 'storage_lock_unavailable'
+  | 'storage_lock_cleanup_failed'
+  | 'storage_delete_failed'
+  | 'storage_delete_blocked'
+  | 'opfs_unavailable'
+  | 'opfs_cleanup_failed'
+  | 'unknown_failure'
+
 export interface BrowserClearDeviceDataStepResult {
   readonly step: BrowserClearDeviceDataStepName
   readonly ok: boolean
   readonly target: string
   readonly skipped?: boolean
-  readonly reason?: string
+  readonly reason?: BrowserClearDeviceDataFailureReason
 }
 
 export interface BrowserClearDeviceDataResult {
@@ -66,16 +82,16 @@ interface BrowserClearDirectoryHandle {
 }
 
 export async function clearBrowserDeviceData(options: BrowserClearDeviceDataOptions): Promise<BrowserClearDeviceDataResult> {
-  const profileId = options.profileId
-  const localNodeId = options.localNodeId
-  const origin = canonicalOrigin(options.origin)
+  const scope = deriveClearScope(options)
+  if (!scope.ok) return scope.result
+  const { profileId, localNodeId, origin, targets } = scope
   const indexedDB = options.indexedDB ?? globalThis.indexedDB
   const pointerStore = options.pointerStore === undefined
     ? defaultPointerStore(options.metadataStorage)
     : options.pointerStore
   const steps: BrowserClearDeviceDataStepResult[] = []
 
-  await recordStep(steps, 'active-handles', `${profileId}/${localNodeId}`, async () => {
+  await recordStep(steps, 'active-handles', targets.activeHandles, 'active_handle_close_failed', async () => {
     if (options.peerStore !== null && options.peerStore !== undefined) {
       await options.peerStore.clear()
       await options.peerStore.close()
@@ -84,40 +100,40 @@ export async function clearBrowserDeviceData(options: BrowserClearDeviceDataOpti
     for (const closeable of options.closeables ?? []) await closeable.close()
   })
 
-  await recordStep(steps, 'peer-profile', 'browser-peer-profile-metadata', async () => {
+  await recordStep(steps, 'peer-profile', targets.peerProfile, 'peer_profile_cleanup_failed', async () => {
     clearBrowserPeerProfileMetadata({
       origin,
       ...(options.metadataStorage === undefined ? {} : { metadataStorage: options.metadataStorage }),
     })
   })
 
-  await recordStep(steps, 'backend-pointer', `${profileId}/${localNodeId}`, async () => {
-    if (pointerStore === null) throw new Error('backend pointer store unavailable')
-    if (typeof pointerStore.delete !== 'function') throw new Error('backend pointer cleanup unavailable')
+  await recordStep(steps, 'backend-pointer', targets.backendPointer, 'backend_pointer_cleanup_failed', async () => {
+    if (pointerStore === null) throw new ClearDeviceDataFailure('backend_pointer_unavailable')
+    if (typeof pointerStore.delete !== 'function') throw new ClearDeviceDataFailure('backend_pointer_cleanup_failed')
     await pointerStore.delete(profileId, localNodeId)
   })
 
-  await recordStep(steps, 'storage-lock', deriveBrowserStorageOwnerKey(origin, localNodeId), async () => {
+  await recordStep(steps, 'storage-lock', targets.storageLock, 'storage_lock_cleanup_failed', async () => {
     requireIndexedDb(indexedDB)
-    await deleteBrowserStorageLeaseRecord(deriveBrowserStorageOwnerKey(origin, localNodeId), { indexedDB })
+    await deleteBrowserStorageLeaseRecord(targets.storageLock, { indexedDB })
   })
 
-  await recordStep(steps, 'envelope-key-vault', deriveBrowserEnvelopeCryptoDatabaseName(origin, localNodeId), async () => {
+  await recordStep(steps, 'envelope-key-vault', targets.envelopeKeyVault, 'storage_delete_failed', async () => {
     requireIndexedDb(indexedDB)
-    await deleteIndexedDbDatabase(indexedDB, deriveBrowserEnvelopeCryptoDatabaseName(origin, localNodeId))
+    await deleteIndexedDbDatabase(indexedDB, targets.envelopeKeyVault)
   })
 
-  await recordStep(steps, 'local-data-indexeddb', deriveBrowserLocalDataDatabaseName(origin, localNodeId), async () => {
+  await recordStep(steps, 'local-data-indexeddb', targets.localDataIndexedDb, 'storage_delete_failed', async () => {
     requireIndexedDb(indexedDB)
-    await deleteIndexedDbDatabase(indexedDB, deriveBrowserLocalDataDatabaseName(origin, localNodeId))
+    await deleteIndexedDbDatabase(indexedDB, targets.localDataIndexedDb)
   })
 
-  await recordStep(steps, 'peer-vault', BROWSER_PEER_VAULT_DATABASE_NAME, async () => {
+  await recordStep(steps, 'peer-vault', targets.peerVault, 'storage_delete_failed', async () => {
     requireIndexedDb(indexedDB)
-    await deleteIndexedDbDatabase(indexedDB, BROWSER_PEER_VAULT_DATABASE_NAME)
+    await deleteIndexedDbDatabase(indexedDB, targets.peerVault)
   })
 
-  await recordStep(steps, 'local-data-opfs', deriveBrowserSqliteStorageIdentity(localNodeId).sahPoolDirectory, async () => {
+  await recordStep(steps, 'local-data-opfs', targets.localDataOpfs, 'opfs_cleanup_failed', async () => {
     await removeBrowserSqliteOpfsNodeDirectory(localNodeId, options.storageManager)
   })
 
@@ -135,6 +151,7 @@ async function recordStep(
   steps: BrowserClearDeviceDataStepResult[],
   step: BrowserClearDeviceDataStepName,
   target: string,
+  defaultReason: BrowserClearDeviceDataFailureReason,
   work: () => Promise<void> | void,
 ): Promise<void> {
   try {
@@ -145,7 +162,7 @@ async function recordStep(
       step,
       ok: false,
       target,
-      reason: errorReason(error),
+      reason: reasonCode(error, defaultReason),
     })
   }
 }
@@ -154,8 +171,8 @@ async function deleteIndexedDbDatabase(indexedDB: IDBFactory, databaseName: stri
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.deleteDatabase(databaseName)
     request.onsuccess = () => resolve()
-    request.onerror = () => reject(request.error ?? new Error(`IndexedDB delete failed: ${databaseName}`))
-    request.onblocked = () => reject(new Error(`IndexedDB delete blocked: ${databaseName}`))
+    request.onerror = () => reject(new ClearDeviceDataFailure('storage_delete_failed'))
+    request.onblocked = () => reject(new ClearDeviceDataFailure('storage_delete_blocked'))
   })
 }
 
@@ -206,23 +223,100 @@ function browserLocalStorage(): (Pick<Storage, 'getItem' | 'setItem' | 'removeIt
 }
 
 function requireIndexedDb(indexedDB: IDBFactory | undefined): asserts indexedDB is IDBFactory {
-  if (indexedDB === undefined) throw new Error('IndexedDB unavailable')
+  if (indexedDB === undefined) throw new ClearDeviceDataFailure('indexeddb_unavailable')
+}
+
+type ClearScopeResult =
+  | {
+    ok: true
+    profileId: string
+    localNodeId: string
+    origin: string
+    targets: ClearDeviceDataTargets
+  }
+  | { ok: false; result: BrowserClearDeviceDataResult }
+
+interface ClearDeviceDataTargets {
+  readonly activeHandles: string
+  readonly peerProfile: string
+  readonly backendPointer: string
+  readonly storageLock: string
+  readonly envelopeKeyVault: string
+  readonly localDataIndexedDb: string
+  readonly peerVault: string
+  readonly localDataOpfs: string
+}
+
+function deriveClearScope(options: BrowserClearDeviceDataOptions): ClearScopeResult {
+  try {
+    const profileId = canonicalLocalDataId(options.profileId)
+    const localNodeId = canonicalLocalDataId(options.localNodeId)
+    const origin = canonicalOrigin(options.origin)
+    const sqliteIdentity = deriveBrowserSqliteStorageIdentity(localNodeId)
+    return {
+      ok: true,
+      profileId,
+      localNodeId,
+      origin,
+      targets: {
+        activeHandles: 'browser-clear-device-active-handles',
+        peerProfile: 'browser-peer-profile-metadata',
+        backendPointer: 'browser-local-data-backend-pointer',
+        storageLock: deriveBrowserStorageOwnerKey(origin, localNodeId),
+        envelopeKeyVault: deriveBrowserEnvelopeCryptoDatabaseName(origin, localNodeId),
+        localDataIndexedDb: deriveBrowserLocalDataDatabaseName(origin, localNodeId),
+        peerVault: BROWSER_PEER_VAULT_DATABASE_NAME,
+        localDataOpfs: sqliteIdentity.sahPoolDirectory,
+      },
+    }
+  } catch {
+    return invalidScopeResult(options.profileId, options.localNodeId)
+  }
+}
+
+function invalidScopeResult(profileId: string, localNodeId: string): ClearScopeResult {
+  const failure: BrowserClearDeviceDataStepResult = {
+    step: 'invalid-scope',
+    ok: false,
+    target: 'browser-clear-device-scope',
+    reason: 'invalid_scope',
+  }
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      profileId,
+      localNodeId,
+      steps: [failure],
+      failures: [failure],
+    },
+  }
+}
+
+function canonicalLocalDataId(value: string): string {
+  const parsed = localDataIdSchema.safeParse(value)
+  if (!parsed.success) throw new ClearDeviceDataFailure('invalid_scope')
+  return parsed.data
 }
 
 function canonicalOrigin(origin: string | undefined): string {
-  const candidate = origin ?? globalThis.location?.origin ?? 'browser://unknown'
-  try {
-    return new URL(candidate).origin
-  } catch {
-    return candidate
-  }
+  const candidate = origin ?? globalThis.location?.origin
+  if (candidate === undefined || candidate.trim().length === 0) throw new ClearDeviceDataFailure('invalid_scope')
+  const parsed = new URL(candidate)
+  return parsed.origin
 }
 
 function isNotFoundError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'NotFoundError'
 }
 
-function errorReason(error: unknown): string {
-  if (error instanceof Error && error.message.length > 0) return error.message
-  return String(error)
+class ClearDeviceDataFailure extends Error {
+  constructor(readonly reason: BrowserClearDeviceDataFailureReason) {
+    super(reason)
+  }
+}
+
+function reasonCode(error: unknown, fallback: BrowserClearDeviceDataFailureReason): BrowserClearDeviceDataFailureReason {
+  if (error instanceof ClearDeviceDataFailure) return error.reason
+  return fallback
 }

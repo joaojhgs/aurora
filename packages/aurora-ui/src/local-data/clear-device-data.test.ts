@@ -18,6 +18,7 @@ import {
 } from './browser-indexeddb'
 import { deriveBrowserSqliteStorageIdentity } from './browser-sqlite-opfs'
 import {
+  BROWSER_STORAGE_LOCK_DATABASE_NAME,
   IndexedDbBrowserStorageLeaseStore,
   deriveBrowserStorageOwnerKey,
 } from './browser-storage-lock'
@@ -132,51 +133,115 @@ describe('clearBrowserDeviceData', () => {
       expect.objectContaining({
         step: 'backend-pointer',
         ok: false,
-        reason: 'backend pointer store unavailable',
+        reason: 'backend_pointer_unavailable',
       }),
       expect.objectContaining({
         step: 'envelope-key-vault',
         ok: false,
         target: envelopeDatabaseName,
-        reason: 'delete denied',
+        reason: 'storage_delete_failed',
       }),
     ])
     expect(indexedDB.databases.has(envelopeDatabaseName)).toBe(true)
   })
 
-  it('returns structured failures when default browser metadata storage is unavailable', async () => {
+  it('redacts secret-bearing thrown errors to stable reason codes', async () => {
     const indexedDB = new MemoryIndexedDbFactory()
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      get: () => {
-        throw new DOMException('storage blocked', 'SecurityError')
+    const metadataStorage = new MapStorage()
+    await seedEnvelopeKey(indexedDB)
+    const envelopeDatabaseName = deriveBrowserEnvelopeCryptoDatabaseName(canonicalOrigin, localNodeId)
+    indexedDB.failDeleteDatabaseNames.set(envelopeDatabaseName, new Error('secret-token-delete-denied'))
+
+    const result = await clearBrowserDeviceData({
+      profileId,
+      localNodeId,
+      origin,
+      indexedDB: indexedDB as unknown as IDBFactory,
+      metadataStorage,
+      storageManager: new FakeOpfsRoot().storageManager,
+      pointerStore: {
+        read: async () => null,
+        write: async () => {},
+        delete: async () => { throw new Error('secret-pointer-value') },
       },
     })
-    try {
-      const result = await clearBrowserDeviceData({
-        profileId,
-        localNodeId,
-        origin,
-        indexedDB: indexedDB as unknown as IDBFactory,
-        storageManager: new FakeOpfsRoot().storageManager,
-      })
 
-      expect(result.ok).toBe(false)
-      expect(result.failures).toEqual([
-        expect.objectContaining({
-          step: 'backend-pointer',
-          ok: false,
-          reason: 'backend pointer store unavailable',
-        }),
-      ])
-    } finally {
-      if (descriptor === undefined) {
-        Reflect.deleteProperty(globalThis, 'localStorage')
-      } else {
-        Object.defineProperty(globalThis, 'localStorage', descriptor)
-      }
-    }
+    expect(result.ok).toBe(false)
+    expect(result.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ step: 'backend-pointer', reason: 'backend_pointer_cleanup_failed' }),
+      expect.objectContaining({ step: 'envelope-key-vault', reason: 'storage_delete_failed' }),
+    ]))
+    expect(JSON.stringify(result)).not.toContain('secret-pointer-value')
+    expect(JSON.stringify(result)).not.toContain('secret-token-delete-denied')
+  })
+
+  it('rejects invalid scope before closing handles or deleting any storage', async () => {
+    const indexedDB = new MemoryIndexedDbFactory()
+    const metadataStorage = new MapStorage()
+    const opfs = new FakeOpfsRoot()
+    await seedPeerVault(indexedDB)
+    await createUnrelatedDatabase(indexedDB)
+    metadataStorage.setItem('aurora.webThin.profile.v1', '{"mode":"webrtc-only"}')
+    const peerState = { cleared: false, closed: false }
+    const peerStore = {
+      clear: async () => { peerState.cleared = true },
+      close: async () => { peerState.closed = true },
+    } as unknown as BrowserWebRtcCredentialStore
+
+    const result = await clearBrowserDeviceData({
+      profileId,
+      localNodeId,
+      origin: 'not a url',
+      indexedDB: indexedDB as unknown as IDBFactory,
+      metadataStorage,
+      storageManager: opfs.storageManager,
+      peerStore,
+      pointerStore: new LocalStorageBrowserLocalDataBackendPointerStore({ storage: metadataStorage }),
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      profileId,
+      localNodeId,
+      steps: [{
+        step: 'invalid-scope',
+        ok: false,
+        target: 'browser-clear-device-scope',
+        reason: 'invalid_scope',
+      }],
+      failures: [{
+        step: 'invalid-scope',
+        ok: false,
+        target: 'browser-clear-device-scope',
+        reason: 'invalid_scope',
+      }],
+    })
+    expect(peerState.cleared).toBe(false)
+    expect(peerState.closed).toBe(false)
+    expect(indexedDB.databases.has(BROWSER_PEER_VAULT_DATABASE_NAME)).toBe(true)
+    expect(indexedDB.databases.has('third-party-owned-db')).toBe(true)
+    expect(metadataStorage.getItem('aurora.webThin.profile.v1')).toBe('{"mode":"webrtc-only"}')
+    expect(opfs.removedPaths).toEqual([])
+  })
+
+  it('does not create the storage-lock database when no lease database exists', async () => {
+    const indexedDB = new MemoryIndexedDbFactory()
+    const metadataStorage = new MapStorage()
+    const pointerStore = new LocalStorageBrowserLocalDataBackendPointerStore({ storage: metadataStorage })
+    const opfs = new FakeOpfsRoot()
+
+    const result = await clearBrowserDeviceData({
+      profileId,
+      localNodeId,
+      origin,
+      indexedDB: indexedDB as unknown as IDBFactory,
+      metadataStorage,
+      storageManager: opfs.storageManager,
+      pointerStore,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(indexedDB.databases.has(BROWSER_STORAGE_LOCK_DATABASE_NAME)).toBe(false)
   })
 })
 
