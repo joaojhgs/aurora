@@ -8,7 +8,11 @@ import {
   type AuroraTransportResponse,
   type ToolingProjectionToolInfo,
 } from '@aurora/client'
-import type { LightweightAssistantProvider } from '@aurora/client/lightweight-orchestrator'
+import type {
+  LightweightAssistantProvider,
+  LightweightProviderRequest,
+  LightweightProviderResponse,
+} from '@aurora/client/lightweight-orchestrator'
 import type {
   EnvelopeCryptoPort,
   LocalDataBackend,
@@ -58,6 +62,8 @@ type BrowserRuntimeCache = {
   runtime: AuroraBrowserRuntime
   meshNodeServices: BrowserMeshNodeServices | null
 }
+
+const ASSISTANT_COMPLETION_ROUTE = '/api/assistant/completion'
 
 export interface AuroraBrowserLocalDataContext {
   readonly session: LocalDataSession
@@ -146,6 +152,39 @@ export function createAuroraWebClient(): AuroraClient {
     return new AuroraClient({ transport: new MockAuroraTransport() })
   }
   return new AuroraClient({ transport: new MissingGatewayTransport() })
+}
+
+export async function loadAuroraBrowserAssistantAvailability(): Promise<boolean> {
+  try {
+    const response = await fetch(ASSISTANT_COMPLETION_ROUTE, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const body = await response.json() as { enabled?: unknown }
+    return body.enabled === true
+  } catch {
+    return false
+  }
+}
+
+export function createAuroraBrowserAssistantProvider(): LightweightAssistantProvider {
+  return {
+    async complete(request: LightweightProviderRequest): Promise<LightweightProviderResponse> {
+      const response = await fetch(ASSISTANT_COMPLETION_ROUTE, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          messages: request.messages,
+          tools: request.tools,
+          maxToolCalls: request.maxToolCalls,
+        }),
+        signal: request.signal,
+      })
+      if (!response.ok) throw new Error('assistant_unavailable')
+      return await response.json() as LightweightProviderResponse
+    },
+  }
 }
 
 export function createAuroraBrowserRuntime(): AuroraBrowserRuntime {
