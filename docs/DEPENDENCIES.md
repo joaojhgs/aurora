@@ -88,7 +88,7 @@ Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/p
 
 | Profile | Intent | Typical command |
 | --- | --- | --- |
-| `desktop-client` | Python-free remote-console/mesh-node desktop client. It does not call `prepare-sidecar`, compiles no operator endpoint, and stores HTTP/WebRTC role configuration at runtime. | `pnpm --filter @aurora/tauri-ui build:bundle:desktop-client` |
+| `desktop-client` | Python-free remote-console/mesh-node desktop client. It does not call `prepare-sidecar`, compiles no operator endpoint, and stores HTTP/WebRTC role configuration at runtime. Linux package/live proof uses the native peer primitive only when WebKitGTK lacks `RTCPeerConnection`; macOS/Windows live proof remains platform-runner evidence. | `pnpm --filter @aurora/tauri-ui build:bundle:desktop-client`; `pnpm test:desktop-client:live` |
 | `desktop-local-minimal` | Default local desktop Python sidecar package. Gateway/config/auth/db/tooling/orchestrator only. Internally this maps to the Python builder's legacy `thin` dependency profile, but the package still contains and supervises Python. | `pnpm --filter @aurora/tauri-ui build:bundle:desktop-local-minimal` |
 | `local-cpu` | Local assistant bundle for CPU-only machines. | `pnpm --filter @aurora/tauri-ui build:bundle:local-cpu` |
 | `local-cuda` | NVIDIA CUDA local assistant bundle. | `pnpm --filter @aurora/tauri-ui build:bundle:local-cuda` |
@@ -99,6 +99,13 @@ Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/p
 | `full` | Full local dependency profile; use intentionally because it can be large. | `pnpm --filter @aurora/tauri-ui build:bundle:full` |
 
 Legacy `*:thin` package scripts remain compatibility aliases for the neutral `*:client` scripts. Do not use the Python builder's internal `thin` dependency profile as evidence that a package is Python-free; Python-free client artifacts are the `desktop-client`, Android client, and iOS client bundle lanes.
+
+Android client artifact proof is package-content evidence, not device-runtime
+evidence. Current-main x86_64 debug APK and universal four-ABI debug AAB scans
+pass with no Python/sidecar/endpoint/secrets; emulator/device WebRTC proof
+still requires usable KVM access or an authorized physical device. iOS client
+source, policy, frontend, and overlay gates are Linux-safe, but simulator,
+Swift runtime, signing, and App Store proof require macOS/Xcode.
 
 See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) for sidecar build mechanics and signing boundaries.
 

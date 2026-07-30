@@ -46,9 +46,9 @@ retired.
 
 As of 2026-07-30, the shared TypeScript/WebView WebRTC direction is implemented as runtime-role work rather than only roadmap work. The runtime supports hosted web, desktop Tauri client, Android client, and the iOS source path with `http-only`, `webrtc-only`, and `webrtc-preferred` modes. Runtime profiles select remote-console or mesh-node behavior independently from physical surface; Python remains the full authoritative service runtime, while TypeScript/native mesh-node capability packs are deliberately bounded.
 
-Direct, configured-STUN, and forced-TURN live interop with the Python Gateway passes in Chromium, Firefox, and Playwright WebKit while the Python HTTP API is disabled. The hosted Chromium product-flow gate also passes against a real Python peer and proves invite-first onboarding, bilateral approval, scoped WebRTC route/Mesh reads, zero browser Gateway HTTP fallback, encrypted browser persistence, and reload reconnect. Desktop Linux now substitutes a package-local Rust peer primitive only when WebKitGTK lacks `RTCPeerConnection`; all Aurora protocol and security behavior stays in the shared TypeScript implementation. Desktop, Android, and iOS client packaging uses runtime-configurable HTTP/HTTPS/WS/WSS endpoint profiles instead of compiling operator Gateway/signaling URLs into artifacts.
+Direct, configured-STUN, and forced-TURN live interop with the Python Gateway passes in Chromium, Firefox, and Playwright WebKit while the Python HTTP API is disabled. The hosted Chromium product-flow gate, hosted mesh-node gate, and web persistence gate also pass against a real Python peer and prove invite-first onboarding, bilateral approval, scoped WebRTC route/Mesh reads, zero browser Gateway HTTP fallback, encrypted browser persistence, and reload reconnect. Desktop Linux now substitutes a package-local Rust peer primitive only when WebKitGTK lacks `RTCPeerConnection`; all Aurora protocol and security behavior stays in the shared TypeScript implementation. The packaged Linux desktop live E2E passes with runtime invite, bilateral matching SAS, scoped non-admin authorization, native Rust fallback, distinct role-switch sessions, restart/reconnect, revocation fail-closed, no Python child process or sidecar, and zero forbidden compiled endpoints/secrets. Desktop, Android, and iOS client packaging uses runtime-configurable HTTP/HTTPS/WS/WSS endpoint profiles instead of compiling operator Gateway/signaling URLs into artifacts.
 
-Remaining release-readiness proof is platform-bound. Desktop client source, package, and native assistant-provider composition are implemented, but packaged desktop live E2E still needs the final `pnpm test:desktop-client:live` rerun. Android client static/build-applicable gates pass, but local emulator/device runtime E2E is blocked in this workspace by unavailable KVM/device access after x86 KVM, permission-change, and ARM64/software-device recovery attempts. iOS policy/source checks pass on Linux, but simulator build/runtime and MobileSafari/packaged WKWebView Python-peer E2E require macOS with Xcode. Durable mobile background wakeword, broader packaged-WebView network certification, release signing, and physical-device direct/STUN/TURN proof remain unclaimed. See [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
+Remaining release-readiness proof is platform-bound. Packaged Linux desktop live E2E is proven, but packaged macOS and Windows live proof remains external platform evidence. Android client source, build, preflight, debug APK, and universal debug AAB artifact gates pass, but emulator/device runtime E2E is blocked in this workspace because adb and Mobile MCP have no device, the x86_64 AVD cannot use `/dev/kvm`, ARM64 software emulation is unsupported on x86_64 QEMU2, and no Waydroid/binder route is available; the exact prerequisite is usable KVM access or an authorized physical device. iOS policy/source/frontend/overlay checks pass on Linux, but simulator, MobileSafari, packaged WKWebView, Swift runtime smoke, signing, and App Store evidence require macOS with Xcode plus the needed simulator/runtime/toolchain prerequisites. Durable mobile background wakeword, broader packaged-WebView network certification, release signing, and physical-device direct/STUN/TURN proof remain unclaimed. See [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
 
 ## Client catalog
 
@@ -195,10 +195,11 @@ claims.
 - Ship no-sidecar artifacts distinct from all local Python bundle profiles and verify AppImage/deb contents.
 - Preserve desktop-local selection and wakeword ownership without transport-specific checks scattered through UI screens.
 
-**Current exit:** desktop client profiles and Python-free AppImage/deb artifact
-proof pass with endpoint-agnostic HTTP/HTTPS/WS/WSS policy; desktop-local
-remains separate. Live desktop WebView WebRTC smoke is still separate from the
-shared browser-engine harness.
+**Current exit:** desktop client profiles, Python-free AppImage/deb artifact
+proof, and packaged Linux native-fallback live E2E pass with
+endpoint-agnostic HTTP/HTTPS/WS/WSS policy; desktop-local remains separate.
+Packaged macOS and Windows WebView network proof remains external platform
+evidence.
 
 ### R5 — Android and iOS foreground clients
 
@@ -214,7 +215,18 @@ shared browser-engine harness.
 - Run physical Android and iOS device tests that pair each mobile client with
   an external Python peer across direct, STUN, and TURN-relayed paths.
 
-**Current exit:** Android client source, native-policy, bundle, and preflight proof exist, and the KVM-backed API 35 CI lane owns both packaged-WebView and no-CDP Android-browser Python-peer WebRTC interop. This workspace cannot complete Android runtime E2E because KVM/device access is unavailable after the attempted x86 KVM, permission-change, and ARM64/software-device recovery paths. iOS client source/permission/Keychain/profile wiring plus a runtime-configurable simulator build/runtime lane exist, and the same macOS job owns MobileSafari and packaged-Tauri-WKWebView external-Python direct interop. Android KVM/physical-device reports, macOS reports, physical-device, STUN, and TURN proof are still pending.
+**Current exit:** Android client source, native-policy, bundle, generated-project
+sync, preflight, debug APK, and universal debug AAB proof exist, and the
+KVM-backed API 35 CI lane owns both packaged-WebView and no-CDP
+Android-browser Python-peer WebRTC interop. This workspace cannot complete
+Android runtime E2E because adb and Mobile MCP have no device, the x86_64 AVD
+cannot use `/dev/kvm`, ARM64 software emulation is unsupported on x86_64
+QEMU2, and no Waydroid/binder route is available. iOS client
+source/permission/Keychain/profile wiring plus Linux-safe frontend, policy, and
+overlay gates pass, and the same macOS job owns MobileSafari and
+packaged-Tauri-WKWebView external-Python direct interop. Android
+KVM/physical-device reports, macOS simulator/runtime reports, physical-device,
+STUN, and TURN proof are still pending.
 
 ### R6 — Native-enhanced mobile capabilities
 

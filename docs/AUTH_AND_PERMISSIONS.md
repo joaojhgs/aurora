@@ -58,7 +58,7 @@ HTTP/SSE/WebRTC request
 
 ## WebRTC client auth evidence
 
-WebView client peers use the same public production Auth/Gateway permission boundary as Python peers. The current Chromium/Firefox/Playwright-WebKit direct, STUN, and forced-TURN reports prove the following with the Python HTTP API disabled and Aurora traffic on the DataChannel:
+WebView client peers use the same public production Auth/Gateway permission boundary as Python peers. The current Chromium/Firefox/Playwright-WebKit direct, STUN, and forced-TURN reports, hosted Chromium peer flow, hosted mesh-node flow, and packaged Linux desktop live E2E prove the following with the Python HTTP API disabled and Aurora traffic on the DataChannel:
 
 - bilateral SAS pairing is required before authorized service calls;
 - canonical reconnect HMAC proof can re-authorize a returning peer without another SAS prompt;
@@ -67,7 +67,7 @@ WebView client peers use the same public production Auth/Gateway permission boun
 - event delivery is subscription/correlation scoped; and
 - lane reports pass redacted secret scans.
 
-Reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,stun,firefox-stun,webkit-stun,turn,firefox-turn,webkit-turn}/report.json`; each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane proof. Packaged WebViews and physical mobile runtime behavior are not claimed by those reports.
+Reports live under `reports/webrtc-interop/{direct,firefox-direct,webkit-direct,stun,firefox-stun,webkit-stun,turn,firefox-turn,webkit-turn}/report.json`; each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane proof. The current hosted peer, hosted mesh-node, and packaged Linux desktop reports are local verification artifacts under `/tmp/aurora-hosted-peer-final.OEeCaO`, `/tmp/aurora-hosted-mesh-node-final-third.hnTfjI`, and `/tmp/aurora-desktop-live-final-revoke.me2Yrz`. Packaged macOS/Windows WebViews and physical mobile runtime behavior are not claimed by those reports.
 
 ## Mesh and peer trust
 
