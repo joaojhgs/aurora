@@ -229,7 +229,7 @@ describe('createAuroraBrowserClient', () => {
     const runtime = createAuroraBrowserRuntime()
 
     expect(runtime.features).toEqual({
-      requestedNodeRole: 'mesh-node',
+      requestedNodeRole: 'remote-console',
       activeNodeRole: 'remote-console',
       meshNodeRuntimeEnabled: false,
       localToolProviderEnabled: false,

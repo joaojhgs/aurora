@@ -30,10 +30,17 @@ import {
   type AuroraWebRtcRolloutFlags,
   type BrowserWebThinRuntime,
 } from '@aurora/ui'
+import {
+  BrowserMeshNodeCompositionError,
+  createBrowserMeshNodeServices,
+  type BrowserMeshNodeServices,
+} from './browser-mesh-node-services'
 
 type BrowserRuntimeCache = {
+  baseKey: string
   key: string
   runtime: BrowserWebThinRuntime
+  meshNodeServices: BrowserMeshNodeServices | null
 }
 
 let browserRuntimeCache: BrowserRuntimeCache | null = null
@@ -77,15 +84,52 @@ export function createAuroraWebClient(): AuroraClient {
 }
 
 export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
+  return createAuroraBrowserRuntimeFromStore(null)
+}
+
+export async function createAuroraBrowserRuntimeAsync(): Promise<BrowserWebThinRuntime> {
+  const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
+  browserCredentialStore = credentialStore
+  const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  const runtimeProfile = activeRuntimeProfile(profileDocument)
+  const rolloutFlags = browserWebRtcRolloutFlags()
+  const localStablePeerId = runtimeProfile?.localNode.stablePeerId || credentialStore.getOrCreateLocalStablePeerId()
+  let meshNodeServices: BrowserMeshNodeServices | null = null
+  try {
+    meshNodeServices = await createBrowserMeshNodeServices({
+      runtimeProfile,
+      credentialStore,
+      rolloutFlags,
+      localStablePeerId,
+      origin: typeof window === 'undefined' ? undefined : window.location.origin,
+      navigator: typeof navigator === 'undefined' ? null : navigator,
+      window: typeof window === 'undefined' ? null : window,
+      notification: browserNotificationPort(),
+      filePicker: browserFilePickerPort(),
+      crypto: typeof crypto === 'undefined' ? null : crypto,
+      indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
+    })
+  } catch (error) {
+    if (!(error instanceof BrowserMeshNodeCompositionError)) throw error
+  }
+  return createAuroraBrowserRuntimeFromStore(meshNodeServices)
+}
+
+function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeServices | null): BrowserWebThinRuntime {
   const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
   browserCredentialStore = credentialStore
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   const runtimeProfile = activeRuntimeProfile(profileDocument)
   const thinProfile = thinRuntimeProfileFromRuntimeProfile(runtimeProfile)
-  const key = browserClientCacheKey()
+  const baseKey = browserClientCacheKey(null)
+  const key = browserClientCacheKey(meshNodeServices)
   const cached = browserRuntimeCache
   if (cached?.key === key) return cached.runtime
+  if (meshNodeServices === null && cached?.meshNodeServices && cached.baseKey === baseKey) {
+    return cached.runtime
+  }
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
+  void browserRuntimeCache?.meshNodeServices?.close().catch(() => undefined)
   const mode = thinProfile?.mode ?? 'http-only'
   const rolloutFlags = browserWebRtcRolloutFlags()
   const gatewayUrl = thinProfile?.gatewayUrl
@@ -93,9 +137,10 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
     ? thinProfile.webrtcProfile
     : credentialStore.loadConnectionProfile() ?? undefined
   const localStablePeerId = thinProfile?.localStablePeerId || credentialStore.getOrCreateLocalStablePeerId()
+  const effectiveMeshNodeServices = runtimeProfile?.nodeMode === 'mesh-node' ? meshNodeServices : null
   const runtime = createBrowserWebThinRuntime({
     mode,
-    nodeRole: runtimeProfile?.nodeMode === 'mesh-node' ? 'mesh-node' : 'remote-console',
+    nodeRole: effectiveMeshNodeServices?.enabled ? 'mesh-node' : 'remote-console',
     gatewayUrl,
     bearerToken: () => runtime.client.auth.bearerToken(),
     signalingUrl: thinProfile?.signalingUrl,
@@ -106,6 +151,9 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
     allowInsecureLoopbackSignaling: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
     nodeName: thinProfile?.nodeName ?? 'Aurora Web thin client',
     credentialStore,
+    ...(effectiveMeshNodeServices?.peerHost ? { peerHost: effectiveMeshNodeServices.peerHost } : {}),
+    ...(effectiveMeshNodeServices?.peerAuthorityResolver ? { peerAuthorityResolver: effectiveMeshNodeServices.peerAuthorityResolver } : {}),
+    ...(effectiveMeshNodeServices?.peerPairingIssuer ? { peerPairingIssuer: effectiveMeshNodeServices.peerPairingIssuer } : {}),
     ...(persistedProfile ? { profile: persistedProfile } : {}),
     ...(localStablePeerId ? { localStablePeerId } : {}),
     visibilityDocument: typeof document === 'undefined' ? undefined : document,
@@ -118,7 +166,7 @@ export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
       void runtime.peer.connect(persistedProfile).catch(() => undefined)
     })
   }
-  browserRuntimeCache = { key, runtime }
+  browserRuntimeCache = { baseKey, key, runtime, meshNodeServices: effectiveMeshNodeServices }
   return runtime
 }
 
@@ -128,6 +176,7 @@ export function createAuroraBrowserClient(): AuroraClient {
 
 export function resetAuroraBrowserClientForTests(): void {
   void browserRuntimeCache?.runtime.close().catch(() => undefined)
+  void browserRuntimeCache?.meshNodeServices?.close().catch(() => undefined)
   browserRuntimeCache = null
   browserCredentialStore = null
 }
@@ -330,12 +379,19 @@ export function auroraBrowserRuntimeDiagnostics(): string[] {
   })
 }
 
-function browserClientCacheKey(): string {
+function browserClientCacheKey(meshNodeServices: BrowserMeshNodeServices | null = null): string {
   const document = browserCredentialStore?.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   return JSON.stringify({
     document,
     demoMode: isBrowserDemoMode(),
     rolloutFlags: browserWebRtcRolloutFlags(),
+    meshNodeServices: meshNodeServices
+      ? {
+        enabled: meshNodeServices.enabled,
+        storageBackendKind: meshNodeServices.storageBackendKind,
+        registeredToolIds: meshNodeServices.registeredToolIds,
+      }
+      : null,
   })
 }
 
@@ -418,4 +474,20 @@ function truthy(value: string | undefined): boolean {
 
 function enabledUnlessExplicitlyFalse(value: string | undefined): boolean {
   return !['0', 'false', 'no', 'off'].includes(value?.trim().toLowerCase() ?? '')
+}
+
+function browserNotificationPort(): import('@aurora/ui').BrowserNotificationPort | null {
+  if (typeof Notification === 'undefined') return null
+  return {
+    permission: Notification.permission,
+    show(title, options) {
+      return new Notification(title, options)
+    },
+  }
+}
+
+function browserFilePickerPort(): import('@aurora/ui').BrowserFilePickerPort | null {
+  if (typeof window === 'undefined') return null
+  const candidate = window as unknown as import('@aurora/ui').BrowserFilePickerPort
+  return typeof candidate.showOpenFilePicker === 'function' ? candidate : null
 }
