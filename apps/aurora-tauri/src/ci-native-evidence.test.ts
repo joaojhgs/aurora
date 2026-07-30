@@ -59,6 +59,13 @@ const pendingIosNativeTargetClaims = [
   },
 ] as const
 
+const supportedIosPublicActionMappings = [
+  ['askAuroraAppIntent', 'app-intent.open-assistant'],
+  ['askAuroraShortcut', 'shortcut.open-assistant'],
+  ['summarizeSharedContentShortcut', 'share.import-context'],
+  ['deepLinks', 'deeplink.open'],
+] as const
+
 describe('Tauri CI native evidence contract', () => {
   it('keeps the Linux Tauri smoke script from being only jsdom/web route tests', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
@@ -346,6 +353,16 @@ describe('Tauri CI native evidence contract', () => {
     expect(swiftPlugin).toContain('let hasPendingNativeTargets = mobileIntegrations.contains')
     expect(swiftPlugin).toContain('let invocationState = hasPendingNativeTargets ? "degraded" : "available"')
     expect(swiftPlugin).toContain('"state": invocationState')
+    expect(swiftPlugin).toContain('.map { $0["publicActionId"] as? String ?? "" }')
+    expect(swiftPlugin).toContain('($0["publicActionId"] as? String) == request.action && ($0["support"] as? String) == "supported-path"')
+
+    for (const [internalId, publicActionId] of supportedIosPublicActionMappings) {
+      const manifestBlock = swiftPlugin.match(
+        new RegExp(`"id": "${internalId}"[\\s\\S]*?"verifier": "[^"]+"`),
+      )?.[0] ?? ''
+      expect(manifestBlock, internalId).toContain(`"publicActionId": "${publicActionId}"`)
+      expect(manifestBlock, internalId).toContain('"support": "supported-path"')
+    }
 
     for (const claim of pendingIosNativeTargetClaims) {
       const integration = preflight.integrations.find(({ id }) => id === claim.integrationId)
@@ -362,6 +379,7 @@ describe('Tauri CI native evidence contract', () => {
       )?.[0] ?? ''
       expect(manifestBlock, claim.id).toContain('"support": "pending"')
       expect(manifestBlock, claim.id).toContain('"reason": AuroraNativePlugin.pendingNativeTargetReason')
+      expect(manifestBlock, claim.id).not.toContain('"publicActionId"')
       expect(manifestBlock, claim.id).not.toContain('"support": "supported-path"')
 
       const descriptorBlock = swiftEntrypoints.match(

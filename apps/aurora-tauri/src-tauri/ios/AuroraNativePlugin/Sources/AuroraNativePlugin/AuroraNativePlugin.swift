@@ -57,6 +57,7 @@ public final class AuroraNativePlugin: Plugin {
     [
       "platform": "ios",
       "id": "askAuroraAppIntent",
+      "publicActionId": "app-intent.open-assistant",
       "label": "Ask Aurora",
       "support": "supported-path",
       "capability": "ios.appIntents",
@@ -73,6 +74,7 @@ public final class AuroraNativePlugin: Plugin {
     [
       "platform": "ios",
       "id": "askAuroraShortcut",
+      "publicActionId": "shortcut.open-assistant",
       "label": "Ask Aurora Shortcut",
       "support": "supported-path",
       "capability": "ios.shortcuts",
@@ -89,6 +91,7 @@ public final class AuroraNativePlugin: Plugin {
     [
       "platform": "ios",
       "id": "summarizeSharedContentShortcut",
+      "publicActionId": "share.import-context",
       "label": "Summarize shared content",
       "support": "supported-path",
       "capability": "ios.shortcuts",
@@ -152,6 +155,7 @@ public final class AuroraNativePlugin: Plugin {
     [
       "platform": "ios",
       "id": "deepLinks",
+      "publicActionId": "deeplink.open",
       "label": "iOS deep links",
       "support": "supported-path",
       "capability": "ios.deepLinks",
@@ -428,7 +432,7 @@ public final class AuroraNativePlugin: Plugin {
   @objc public func invocationStatus(_ invoke: Invoke) throws {
     let executableActions = mobileIntegrations
       .filter { ($0["support"] as? String) == "supported-path" }
-      .map { $0["id"] as? String ?? "" }
+      .map { $0["publicActionId"] as? String ?? "" }
       .filter { !$0.isEmpty }
     let hasPendingNativeTargets = mobileIntegrations.contains {
       ($0["support"] as? String) == "pending"
@@ -909,7 +913,7 @@ public final class AuroraNativePlugin: Plugin {
   @objc public func invokeAuroraAction(_ invoke: Invoke) throws {
     let request = try invoke.parseArgs(AuroraInvocationRequest.self)
     guard let action = mobileIntegrations.first(where: {
-      ($0["id"] as? String) == request.action && ($0["support"] as? String) != "unsupported"
+      ($0["publicActionId"] as? String) == request.action && ($0["support"] as? String) == "supported-path"
     }) else {
       invoke.resolve([
         "accepted": false,

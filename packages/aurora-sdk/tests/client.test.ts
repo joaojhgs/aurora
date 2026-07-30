@@ -51,6 +51,7 @@ import {
   toolingMcpStatusFixture,
   toolingSharingPolicyFixture,
   uiMockReferenceFixtureSummary,
+  type IosAuroraActionId,
   type ToolOnboardingValidationResult,
   wildcardIntersection,
   type ModelRuntimeCatalogRequest,
@@ -4271,6 +4272,12 @@ describe('AuroraClient', () => {
 
   it('exposes iOS Swift native plugin manifest, status, and action invocation through the Tauri transport', async () => {
     const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const publicSupportedActions: IosAuroraActionId[] = [
+      'app-intent.open-assistant',
+      'shortcut.open-assistant',
+      'share.import-context',
+      'deeplink.open'
+    ]
     const iosManifest = {
       platform: 'ios',
       permissions: {
@@ -4302,12 +4309,7 @@ describe('AuroraClient', () => {
               available: true,
               state: 'degraded',
               surface: 'Siri/Shortcuts/App Intents integration',
-              supportedActions: [
-                'app-intent.open-assistant',
-                'shortcut.open-assistant',
-                'share.import-context',
-                'deeplink.open'
-              ],
+              supportedActions: publicSupportedActions,
               siriReplacement: false,
               requiresBackendEvidence: true,
               secretsRedacted: true
@@ -4346,7 +4348,7 @@ describe('AuroraClient', () => {
         available: true,
         state: 'degraded',
         surface: 'Siri/Shortcuts/App Intents integration',
-        supportedActions: expect.arrayContaining(['app-intent.open-assistant', 'share.import-context']),
+        supportedActions: publicSupportedActions,
         siriReplacement: false,
         requiresBackendEvidence: true,
         secretsRedacted: true
