@@ -214,7 +214,12 @@ enum LocalDataRepositoryOperation {
     #[serde(rename = "memory.deleteMemoryItem")]
     MemoryDeleteMemoryItem { memory_item_id: String },
     #[serde(rename = "memory.deleteExpiredMemoryItems")]
-    MemoryDeleteExpiredMemoryItems { now_ms: i64, limit: i64 },
+    MemoryDeleteExpiredMemoryItems {
+        profile_id: String,
+        local_node_id: String,
+        now_ms: i64,
+        limit: i64,
+    },
     #[serde(rename = "memory.listMemoryItems")]
     MemoryListMemoryItems {
         profile_id: String,
@@ -903,7 +908,18 @@ fn run_repository_operation(
             )?;
             Ok(json!({ "deleted": true }))
         }
-        LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems { now_ms, limit } => {
+        LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            now_ms,
+            limit,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
             validate_delete_now_ms(now_ms)?;
             let normalized_limit = validate_delete_limit(limit)?;
             conn.execute(
@@ -2866,12 +2882,21 @@ mod tests {
 
         match serde_json::from_value::<LocalDataRepositoryOperation>(json!({
             "kind": "memory.deleteExpiredMemoryItems",
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
             "nowMs": 1000,
             "limit": 2
         }))
         .unwrap()
         {
-            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems { now_ms, limit } => {
+            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                profile_id,
+                local_node_id,
+                now_ms,
+                limit,
+            } => {
+                assert_eq!(profile_id, "profile-1");
+                assert_eq!(local_node_id, "node-1");
                 assert_eq!(now_ms, 1000);
                 assert_eq!(limit, 2);
             }
@@ -3033,12 +3058,26 @@ mod tests {
             .unwrap(),
             json!({ "deleted": false })
         );
+        assert!(run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                profile_id: "profile-2".to_string(),
+                local_node_id: "node-1".to_string(),
+                now_ms: 1000,
+                limit: 2,
+            },
+        )
+        .is_err());
         assert_eq!(
             run_repository_operation(
                 &conn,
                 "profile-1",
                 "node-1",
                 LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                    profile_id: "profile-1".to_string(),
+                    local_node_id: "node-1".to_string(),
                     now_ms: 1000,
                     limit: 2,
                 },
@@ -3079,26 +3118,49 @@ mod tests {
         for malformed in [
             json!({
                 "kind": "memory.deleteExpiredMemoryItems",
+                "profileId": "profile-1",
+                "localNodeId": "node-1",
                 "nowMs": 1.5,
                 "limit": 1
             }),
             json!({
                 "kind": "memory.deleteExpiredMemoryItems",
+                "profileId": "profile-1",
+                "localNodeId": "node-1",
                 "nowMs": 1000,
                 "limit": "2"
             }),
             json!({
                 "kind": "memory.deleteExpiredMemoryItems",
+                "profileId": "profile-1",
+                "localNodeId": "node-1",
                 "nowMs": 1000,
                 "limit": null
             }),
             json!({
                 "kind": "memory.deleteExpiredMemoryItems",
+                "profileId": "profile-1",
+                "localNodeId": "node-1",
                 "now_ms": 1000,
                 "limit": 1
             }),
             json!({
                 "kind": "memory.deleteExpiredMemoryItems",
+                "profile_id": "profile-1",
+                "localNodeId": "node-1",
+                "nowMs": 1000,
+                "limit": 1
+            }),
+            json!({
+                "kind": "memory.deleteExpiredMemoryItems",
+                "profileId": "profile-1",
+                "nowMs": 1000,
+                "limit": 1
+            }),
+            json!({
+                "kind": "memory.deleteExpiredMemoryItems",
+                "profileId": "profile-1",
+                "localNodeId": "node-1",
                 "nowMs": 1000,
                 "limit": 1,
                 "rawSql": "DELETE FROM aurora_memory_items"
@@ -3113,18 +3175,26 @@ mod tests {
 
         for operation in [
             LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                profile_id: "profile-1".to_string(),
+                local_node_id: "node-1".to_string(),
                 now_ms: -1,
                 limit: 1,
             },
             LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                profile_id: "profile-1".to_string(),
+                local_node_id: "node-1".to_string(),
                 now_ms: MAX_SAFE_INTEGER + 1,
                 limit: 1,
             },
             LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                profile_id: "profile-1".to_string(),
+                local_node_id: "node-1".to_string(),
                 now_ms: 1000,
                 limit: 0,
             },
             LocalDataRepositoryOperation::MemoryDeleteExpiredMemoryItems {
+                profile_id: "profile-1".to_string(),
+                local_node_id: "node-1".to_string(),
                 now_ms: 1000,
                 limit: MAX_SAFE_INTEGER + 1,
             },

@@ -19,6 +19,7 @@ import {
   type LocalDataExportV1,
   type LocalDataImportResult,
   type LocalDataRepositories,
+  type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
   type PeerGrantMetadataRecord
@@ -37,7 +38,7 @@ type RepositoryOperation =
   | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
-  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly nowMs: number; readonly limit: number }
+  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly limit: number }
   | { readonly kind: 'memory.listMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly namespace?: string }
   | { readonly kind: 'localTools.upsertLocalToolState'; readonly record: LocalToolStateRecord }
   | { readonly kind: 'localTools.listLocalToolStates'; readonly profileId: string; readonly localNodeId: string }
@@ -242,8 +243,14 @@ class TauriMemoryRepository {
   async deleteMemoryItem(memoryItemId: string): Promise<DeleteRecordResult> {
     return await this.session.repositoryOperation<DeleteRecordResult>({ kind: 'memory.deleteMemoryItem', memoryItemId })
   }
-  async deleteExpiredMemoryItems(nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
-    return await this.session.repositoryOperation<DeleteExpiredMemoryItemsResult>({ kind: 'memory.deleteExpiredMemoryItems', nowMs, limit })
+  async deleteExpiredMemoryItems(scope: LocalDataScope, nowMs: number, limit: number): Promise<DeleteExpiredMemoryItemsResult> {
+    return await this.session.repositoryOperation<DeleteExpiredMemoryItemsResult>({
+      kind: 'memory.deleteExpiredMemoryItems',
+      profileId: scope.profileId,
+      localNodeId: scope.localNodeId,
+      nowMs,
+      limit
+    })
   }
   async listMemoryItems(namespace?: string): Promise<LightweightMemoryRecord[]> {
     return (await this.session.repositoryOperation<LightweightMemoryRecord[]>(namespace === undefined

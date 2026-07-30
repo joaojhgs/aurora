@@ -25,7 +25,7 @@ type RepositoryOperation =
   | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
-  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly nowMs: number; readonly limit: number }
+  | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly limit: number }
   | { readonly kind: 'memory.listMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly namespace?: string }
   | { readonly kind: 'localTools.upsertLocalToolState'; readonly record: LocalToolStateRecord }
   | { readonly kind: 'localTools.listLocalToolStates'; readonly profileId: string; readonly localNodeId: string }
@@ -126,7 +126,9 @@ describe('Tauri local data adapter', () => {
 
     await expect(session.memory.deleteMemoryItem('memory-foreign')).resolves.toEqual({ deleted: false })
     await expect(session.memory.deleteMemoryItem('memory-live')).resolves.toEqual({ deleted: true })
-    await expect(session.memory.deleteExpiredMemoryItems(1000, 2)).resolves.toEqual({ deleted: 2 })
+    await expect(session.memory.deleteExpiredMemoryItems({ profileId: 'profile-2', localNodeId: 'node-1' }, 1000, 2)).rejects.toMatchObject({ code: 'identity_mismatch' })
+    await expect(session.memory.deleteExpiredMemoryItems({ profileId: 'profile-1', localNodeId: 'node-2' }, 1000, 2)).rejects.toMatchObject({ code: 'identity_mismatch' })
+    await expect(session.memory.deleteExpiredMemoryItems({ profileId: 'profile-1', localNodeId: 'node-1' }, 1000, 2)).resolves.toEqual({ deleted: 2 })
     await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-later', expiresAtMs: 900 })])
     expect(bridge.deletedMemoryIds).toEqual(['memory-live', 'memory-a', 'memory-b'])
     expect(bridge.foreignRecords().memory).toEqual([memoryFixture({ id: 'memory-foreign', profileId: 'profile-2', expiresAtMs: 1 })])
@@ -146,7 +148,7 @@ describe('Tauri local data adapter', () => {
       [1000, 0],
       [1000, Number.MAX_SAFE_INTEGER + 1]
     ] as const) {
-      await expect(session.memory.deleteExpiredMemoryItems(nowMs, limit)).rejects.toMatchObject({ code: 'invalid_record' })
+      await expect(session.memory.deleteExpiredMemoryItems({ profileId: 'profile-1', localNodeId: 'node-1' }, nowMs, limit)).rejects.toMatchObject({ code: 'invalid_record' })
       await expect(session.memory.listMemoryItems()).resolves.toEqual(before)
     }
   })
@@ -388,6 +390,7 @@ class FakeTauriLocalDataBridge {
         return { deleted: this.memory.length !== before }
       }
       case 'memory.deleteExpiredMemoryItems': {
+        this.assertScope(operation)
         const cutoffMs = requireDeleteNowMs(operation.nowMs)
         const limit = requireDeleteLimit(operation.limit)
         const expiredIds = this.memory
