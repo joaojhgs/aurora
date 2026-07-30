@@ -42,6 +42,8 @@ describe('local Tooling package boundary', () => {
       expect(mod.LocalToolRegistry).toBeTypeOf('function')
       expect(mod.LocalToolExecutionPolicy).toBeTypeOf('function')
       expect(mod.createLocalToolingProviderHandlers).toBeTypeOf('function')
+      expect(mod.DurableFeatureSharingController).toBeTypeOf('function')
+      expect(mod.TrackingPeerPairingIssuer).toBeTypeOf('function')
     } finally {
       if (oldWindow !== undefined) (globalThis as Record<string, unknown>).window = oldWindow
       if (oldCrypto !== undefined) (globalThis as Record<string, unknown>).crypto = oldCrypto

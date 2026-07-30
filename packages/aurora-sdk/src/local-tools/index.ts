@@ -80,6 +80,20 @@ export type {
   RegisterNativeCapabilityToolsOptions
 } from './native-capability-pack.js'
 export {
+  DurableFeatureSharingController,
+  DurableFeatureSharingError,
+  TrackingPeerPairingIssuer
+} from './durable-feature-sharing.js'
+export type {
+  DurableFeatureSharingControllerOptions,
+  LocalDeviceFeature,
+  LocalFeaturePeerSharing,
+  LocalFeatureSharingPort,
+  LocalFeatureSharingSnapshot,
+  PeerPairingIssuerLike,
+  TrustedPeerRelationshipRegistry
+} from './durable-feature-sharing.js'
+export {
   LocalToolJsonSchemaError,
   assertSupportedJsonSchema,
   validateJsonAgainstSchema
