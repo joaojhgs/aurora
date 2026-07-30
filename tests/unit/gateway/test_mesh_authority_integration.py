@@ -1375,6 +1375,57 @@ async def test_send_manifest_wire_path_uses_ready_projection_filtered_to_recipie
 
 
 @pytest.mark.asyncio
+async def test_pending_provider_manifest_ack_coalesces_duplicate_manifest_send(
+    monkeypatch,
+) -> None:
+    client = _client()
+    identity = _identity({"TTS.Synthesize"})
+    client._peer_acl["session-a"] = identity
+    client._peer_acl["peer-a"] = identity
+    client._registry = None
+    hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
+    protocol = negotiate_protocol(hello, hello)
+    client._peer_protocols["session-a"] = protocol
+    client._peer_protocols["peer-a"] = protocol
+    assert client.apply_peer_authority_changed(
+        MeshPeerAuthorityChangedEvent(
+            peer_id="peer-a",
+            auth_grant_revision=1,
+            disposition="present",
+            state="active",
+            effective_permissions=("TTS.Synthesize",),
+            reason="approved",
+        )
+    )
+    monkeypatch.setattr(
+        "app.shared.contracts.registry.list_modules",
+        lambda: {
+            "TTS": _mesh_module(
+                "TTS",
+                "TTS.Synthesize",
+                feature_id="speech_synthesis",
+                permission="TTS.Synthesize",
+                method_name="Synthesize",
+            ),
+        },
+    )
+    monkeypatch.setattr("app.shared.contracts.registry._get_package_version", lambda: "1.0.0")
+    client._schedule_provider_export_shadow = MagicMock()
+    client.retry_tooling_projection_invalidation = MagicMock(return_value=True)
+    client.send_to_peer_async = AsyncMock(return_value=True)  # type: ignore[method-assign]
+    mesh_config = MeshConfig(enabled=True, services={"TTS": mesh_policy(share=True)})
+
+    assert await client._send_manifest("peer-a", mesh_config=mesh_config)
+    first_expectation = client._manifest_ack_expectations["peer-a"]
+    assert await client._send_manifest("peer-a", mesh_config=mesh_config)
+
+    client.send_to_peer_async.assert_awaited_once()
+    assert client._manifest_ack_expectations["peer-a"] == first_expectation
+    client._schedule_provider_export_shadow.assert_called_once()
+    client.retry_tooling_projection_invalidation.assert_called_once_with("peer-a")
+
+
+@pytest.mark.asyncio
 async def test_partial_manifest_ack_opens_only_compatible_provider_rpc(monkeypatch) -> None:
     client = _client()
     identity = _identity({"TTS.Synthesize", "Scheduler.ListJobs"})

@@ -3313,6 +3313,13 @@ class RTCClient:
 
         session_peer_id = self._session_for_peer_id(peer_id)
         stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
+        pending_ack = self._manifest_ack_expectations.get(stable_peer_id)
+        if (
+            pending_ack is not None
+            and pending_ack.session_peer_id == session_peer_id
+            and self.peer_supports_capability(session_peer_id, CAP_PROVIDER_LEASE_V1)
+        ):
+            return True
         projection = self._current_provider_export_projection(
             stable_peer_id,
             mesh_config=mesh_config,
