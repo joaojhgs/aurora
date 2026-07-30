@@ -27,6 +27,11 @@
       "import": "./src/local-data/browser.ts",
       "default": "./src/local-data/browser.ts"
     },
+    "./local-assistant": {
+      "types": "./src/local-assistant/index.ts",
+      "import": "./src/local-assistant/index.ts",
+      "default": "./src/local-assistant/index.ts"
+    },
     "./styles.css": "./src/styles.css",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/shadcn-lib/*.ts",
