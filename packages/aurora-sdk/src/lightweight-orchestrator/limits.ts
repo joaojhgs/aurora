@@ -11,9 +11,11 @@ export const DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS = Object.freeze({
   maxResultBytes: 32 * 1024,
   maxHistoryMessages: 40,
   maxPromptBytes: 64 * 1024,
+  maxProviderRequestBytes: 128 * 1024,
   maxProviderResponseBytes: 256 * 1024,
   turnTimeoutMs: 60_000,
-  providerCallTimeoutMs: 20_000
+  providerCallTimeoutMs: 20_000,
+  confirmationTokenTimeoutMs: 300_000
 })
 
 export type LightweightOrchestratorLimits = typeof DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS

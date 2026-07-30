@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { MemoryLocalDataBackend, type LocalDataSession } from '../src/local-data/index.js'
 import { LightweightOrchestratorError } from '../src/lightweight-orchestrator/limits.js'
-import { createOpenAICompatibleToolProvider, parseOpenAICompatibleResponse } from '../src/lightweight-orchestrator/provider.js'
+import { buildOpenAIToolAliases, createOpenAICompatibleToolProvider, parseOpenAICompatibleResponse } from '../src/lightweight-orchestrator/provider.js'
 import { createLightweightOrchestrator } from '../src/lightweight-orchestrator/react-loop.js'
 import type {
   LightweightAssistantProvider,
@@ -52,7 +52,7 @@ describe('lightweight orchestrator', () => {
       status: 'completed',
       assistantText: 'remote result'
     })
-    expect(calls).toEqual(['prepare:remote.search:remote', 'execute:remote.search:remote'])
+    expect(calls).toEqual(['prepare:remote.search:remote', 'execute:remote.search:remote:no-token'])
   })
 
   it('runs mixed local and remote tool turns through the Tooling API port', async () => {
@@ -78,9 +78,9 @@ describe('lightweight orchestrator', () => {
     await expect(orchestrator.runTurn({ text: 'both' })).resolves.toMatchObject({ status: 'completed', assistantText: 'mixed' })
     expect(calls).toEqual([
       'prepare:local.echo:local',
-      'execute:local.echo:local',
+      'execute:local.echo:local:no-token',
       'prepare:remote.search:remote',
-      'execute:remote.search:remote'
+      'execute:remote.search:remote:no-token'
     ])
   })
 
@@ -105,7 +105,7 @@ describe('lightweight orchestrator', () => {
     await expect(orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'deny' })).resolves.toMatchObject({
       status: 'cancelled'
     })
-    expect(calls).toEqual(['prepare:local.delete:local'])
+    expect(calls).toEqual(['prepare:local.delete:local', 'request:local.delete:local'])
     await expect(orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'approve' })).rejects.toMatchObject({
       reasonCode: 'confirmation_token_replayed'
     })
@@ -131,7 +131,88 @@ describe('lightweight orchestrator', () => {
       status: 'completed',
       assistantText: 'deleted'
     })
-    expect(calls).toEqual(['prepare:local.delete:local', 'execute:local.delete:local'])
+    expect(calls).toEqual([
+      'prepare:local.delete:local',
+      'request:local.delete:local',
+      'confirm:approval-local.delete',
+      'execute:local.delete:local:backend-token-local.delete'
+    ])
+  })
+
+  it('treats backend approval-required prepare denial as a confirmation request and never executes with a decision id', async () => {
+    const calls: string[] = []
+    const session = await dataSession()
+    const orchestrator = createLightweightOrchestrator({
+      provider: sequenceProvider([
+        { type: 'tool_calls', toolCalls: [{ id: 'danger', toolName: 'local.delete', arguments: { id: '1' }, route: 'local' }] },
+        { type: 'message', content: 'deleted' }
+      ]),
+      tools: toolPort({
+        calls,
+        approvalRequired: true,
+        execute: async (request) => {
+          expect(request.approval_token).toBe('backend-token-local.delete')
+          expect(request.approval_token).not.toBe('decision-local.delete')
+          return {
+            ok: true,
+            data: { deleted: true },
+            status: 'success',
+            correlation_id: request.correlation_id ?? null,
+            provider_peer_id: 'node-1',
+            global_tool_id: request.tool_name
+          }
+        }
+      }),
+      localData: session,
+      scope,
+      availableTools: [tool('local.delete', 'local', { confirmation_required: true })],
+      ids: idSequence('1', '2', '3', '4', '5', '6')
+    })
+
+    const pending = await orchestrator.runTurn({ text: 'delete' })
+    await expect(orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'approve' })).resolves.toMatchObject({
+      status: 'completed',
+      assistantText: 'deleted'
+    })
+    expect(calls).toEqual([
+      'prepare:local.delete:local',
+      'request:local.delete:local',
+      'confirm:approval-local.delete',
+      'execute:local.delete:local:backend-token-local.delete'
+    ])
+  })
+
+  it('expires pending confirmations with the backend TTL and persists cancellation', async () => {
+    vi.useFakeTimers()
+    try {
+      let now = 1_000
+      const calls: string[] = []
+      const session = await dataSession()
+      const orchestrator = createLightweightOrchestrator({
+        provider: sequenceProvider([
+          { type: 'tool_calls', toolCalls: [{ id: 'danger', toolName: 'local.delete', arguments: { id: '1' }, route: 'local' }] }
+        ]),
+        tools: toolPort({ calls, approvalRequired: true, approvalExpiresAt: 1.01 }),
+        localData: session,
+        scope,
+        availableTools: [tool('local.delete', 'local', { confirmation_required: true })],
+        ids: idSequence('1', '2', '3', '4'),
+        nowMs: () => now
+      })
+
+      const pending = await orchestrator.runTurn({ text: 'delete' })
+      now = 1_011
+      await vi.advanceTimersByTimeAsync(11)
+      await expect(orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'approve' })).rejects.toMatchObject({
+        reasonCode: 'confirmation_token_expired'
+      })
+      expect(calls).toEqual(['prepare:local.delete:local', 'request:local.delete:local'])
+      await expect(session.conversations.listMessages(pending.conversationId)).resolves.toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: 'tool', status: 'cancelled' })
+      ]))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('fails closed for each configured limit class', async () => {
@@ -197,6 +278,9 @@ describe('lightweight orchestrator', () => {
     })).toThrow(LightweightOrchestratorError)
 
     expect(() => parseOpenAICompatibleResponse({ choices: [{ message: { tool_calls: [{ id: 'x', function: { name: 't', arguments: '[]' } }] } }] }))
+      .toThrow(LightweightOrchestratorError)
+
+    expect(() => parseOpenAICompatibleResponse({ choices: [{ message: { tool_calls: [{ id: 'x', function: { name: 't', arguments: '{' } }] } }] }))
       .toThrow(LightweightOrchestratorError)
   })
 
@@ -290,6 +374,9 @@ describe('lightweight orchestrator', () => {
   it('builds an OpenAI-compatible fetch provider without adding SDK dependencies', async () => {
     const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       expect(init?.headers).toMatchObject({ 'content-type': 'application/json' })
+      const body = JSON.parse(String(init?.body)) as { tools: Array<{ function: { name: string } }> }
+      expect(body.tools[0]?.function.name).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
+      expect(body.tools[0]?.function.name).not.toContain(':')
       return new Response(JSON.stringify({
         choices: [{ message: { content: 'hello' } }]
       }), { status: 200 })
@@ -300,10 +387,63 @@ describe('lightweight orchestrator', () => {
       fetch: fetchMock as typeof fetch
     })
 
-    await expect(provider.complete({ messages: [], tools: [], maxToolCalls: 1, signal: new AbortController().signal })).resolves.toEqual({
+    await expect(provider.complete({ messages: [], tools: [tool('local.echo', 'local')], maxToolCalls: 1, signal: new AbortController().signal })).resolves.toEqual({
       type: 'message',
       content: 'hello'
     })
+  })
+
+  it('maps OpenAI-compatible function aliases back to canonical tool identities and routes', async () => {
+    const aliases = buildOpenAIToolAliases([tool('local.echo', 'local')])
+    const alias = aliases.byGlobalToolId.get('aurora-tool:v1:local:local.echo')!.alias
+
+    expect(parseOpenAICompatibleResponse({
+      choices: [{
+        message: {
+          tool_calls: [{
+            id: 'call-1',
+            function: { name: alias, arguments: '{"text":"hi"}' }
+          }]
+        }
+      }]
+    }, aliases.byAlias)).toEqual({
+      type: 'tool_calls',
+      content: '',
+      toolCalls: [{
+        id: 'call-1',
+        toolName: 'aurora-tool:v1:local:local.echo',
+        providerToolName: alias,
+        arguments: { text: 'hi' },
+        route: 'local'
+      }]
+    })
+  })
+
+  it('bounds OpenAI provider requests separately from responses and redacts malformed JSON failures', async () => {
+    const provider = createOpenAICompatibleToolProvider({
+      endpoint: 'https://example.invalid/v1/chat/completions',
+      model: 'model',
+      fetch: (async () => new Response('{', { status: 200 })) as typeof fetch,
+      limits: { maxProviderRequestBytes: 32 * 1024 }
+    })
+    await expect(provider.complete({
+      messages: [],
+      tools: [tool('local.echo', 'local', { args_schema: { type: 'object', description: 'x'.repeat(33 * 1024) } })],
+      maxToolCalls: 1,
+      signal: new AbortController().signal
+    })).rejects.toMatchObject({ reasonCode: 'provider_request_too_large' })
+
+    const malformedProvider = createOpenAICompatibleToolProvider({
+      endpoint: 'https://example.invalid/v1/chat/completions',
+      model: 'model',
+      fetch: (async () => new Response('{', { status: 200 })) as typeof fetch
+    })
+    await expect(malformedProvider.complete({
+      messages: [],
+      tools: [],
+      maxToolCalls: 1,
+      signal: new AbortController().signal
+    })).rejects.toMatchObject({ reasonCode: 'provider_response_malformed' })
   })
 })
 
@@ -344,6 +484,7 @@ function sequenceProvider(responses: Awaited<ReturnType<LightweightAssistantProv
 function toolPort(options: {
   calls?: string[]
   approvalRequired?: boolean
+  approvalExpiresAt?: number | null
   execute?: (payload: ToolingPrepareExecutionRequest) => Promise<LightweightToolExecutionResponse>
 } = {}): LightweightToolClientPort {
   return {
@@ -352,9 +493,40 @@ function toolPort(options: {
       options.calls?.push(`prepare:${request.tool_name}:${selectorLocation(request.resource_selector)}`)
       return prepareResponse(request, options.approvalRequired === true)
     },
+    async requestApproval(payload) {
+      const request = payload as ToolingPrepareExecutionRequest
+      options.calls?.push(`request:${request.tool_name}:${selectorLocation(request.resource_selector)}`)
+      return {
+        ok: true,
+        approval_request_id: `approval-${request.tool_name}`,
+        policy_decision: {
+          decision_id: `decision-${request.tool_name}`,
+          allowed: false,
+          approval_required: true,
+          approval_mode: 'ask_each_time',
+          token_ttl_seconds: 300,
+          reason: 'approval_token_required'
+        },
+        expires_at: options.approvalExpiresAt ?? 1_900_000_000,
+        correlation_id: request.correlation_id ?? `corr-${request.tool_name}`,
+        error: null
+      }
+    },
+    async confirmExecution(payload) {
+      options.calls?.push(`confirm:${payload.approval_request_id}`)
+      const toolName = payload.approval_request_id.replace(/^approval-/, '')
+      return {
+        ok: payload.approve !== false,
+        approval_token: payload.approve === false ? null : `backend-token-${toolName}`,
+        expires_at: 1_900_000_000,
+        policy_decision_id: `decision-${toolName}`,
+        correlation_id: payload.correlation_id ?? null,
+        error: payload.approve === false ? 'approval_denied' : null
+      }
+    },
     async execute(payload) {
       const request = payload as ToolingPrepareExecutionRequest
-      options.calls?.push(`execute:${request.tool_name}:${selectorLocation(request.resource_selector)}`)
+      options.calls?.push(`execute:${request.tool_name}:${selectorLocation(request.resource_selector)}:${request.approval_token ?? 'no-token'}`)
       if (options.execute) return await options.execute(request)
       return {
         ok: true,
@@ -372,14 +544,14 @@ function toolPort(options: {
 
 function prepareResponse(request: ToolingPrepareExecutionRequest, approvalRequired: boolean): ToolingPrepareExecutionResponse {
   return {
-    ok: true,
+    ok: !approvalRequired,
     policy_decision: {
-      allowed: true,
+      allowed: !approvalRequired,
       share: true,
       approval_required: approvalRequired,
       approval_mode: approvalRequired ? 'ask_each_time' : 'approve_all_local_safe',
       decision_id: `decision-${request.tool_name}`,
-      reason: null,
+      reason: approvalRequired ? 'approval_token_required' : null,
       token_ttl_seconds: 300
     },
     args_hash: `args-${request.tool_name}`,

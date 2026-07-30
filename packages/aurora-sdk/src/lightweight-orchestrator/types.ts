@@ -6,6 +6,7 @@ import type {
   ToolingPrepareExecutionResponse,
   ToolingProjectionToolInfo
 } from '../types.js'
+import type { ToolApprovalConfirmRequest, ToolApprovalConfirmResponse, ToolApprovalRequestResponse } from '../admin.js'
 import type { LightweightOrchestratorLimits } from './limits.js'
 
 export type LightweightToolRoute = 'local' | 'remote'
@@ -13,6 +14,7 @@ export type LightweightToolRoute = 'local' | 'remote'
 export interface LightweightToolCall {
   readonly id: string
   readonly toolName: string
+  readonly providerToolName?: string | null
   readonly arguments: JsonObject
   readonly route: LightweightToolRoute
   readonly resourceSelector?: JsonObject | null
@@ -50,6 +52,8 @@ export interface LightweightAssistantProvider {
 
 export interface LightweightToolClientPort {
   prepareExecution(payload: ToolingPrepareExecutionRequest): Promise<ToolingPrepareExecutionResponse>
+  requestApproval(payload: ToolingPrepareExecutionRequest): Promise<ToolApprovalRequestResponse>
+  confirmExecution(payload: ToolApprovalConfirmRequest): Promise<ToolApprovalConfirmResponse>
   execute(payload: ToolingPrepareExecutionRequest): Promise<LightweightToolExecutionResponse>
 }
 
@@ -75,6 +79,7 @@ export interface LightweightOrchestratorOptions {
   readonly localData: LocalDataSession
   readonly scope: LocalDataScope
   readonly availableTools: readonly ToolingProjectionToolInfo[]
+  readonly approvalPrincipalId?: string | null
   readonly nowMs?: () => number
   readonly ids?: () => string
   readonly timers?: LightweightTimerPort

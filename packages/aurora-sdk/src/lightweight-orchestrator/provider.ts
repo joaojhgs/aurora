@@ -12,6 +12,9 @@ import type {
   LightweightProviderResponse,
   LightweightToolCall
 } from './types.js'
+import type { ToolingProjectionToolInfo } from '../types.js'
+
+const OPENAI_FUNCTION_NAME = /^[A-Za-z0-9_-]{1,64}$/
 
 export interface OpenAICompatibleProviderOptions {
   readonly endpoint: string
@@ -30,6 +33,7 @@ export function createOpenAICompatibleToolProvider(options: OpenAICompatibleProv
   const limits = { ...DEFAULT_LIGHTWEIGHT_ORCHESTRATOR_LIMITS, ...options.limits }
   return {
     async complete(request: LightweightProviderRequest): Promise<LightweightProviderResponse> {
+      const aliases = buildOpenAIToolAliases(request.tools)
       const body = {
         model: options.model,
         messages: request.messages.map((message) => ({
@@ -41,13 +45,13 @@ export function createOpenAICompatibleToolProvider(options: OpenAICompatibleProv
         tools: request.tools.map((tool) => ({
           type: 'function',
           function: {
-            name: tool.local_name || tool.name,
+            name: aliases.byGlobalToolId.get(tool.global_tool_id)?.alias ?? tool.global_tool_id,
             description: tool.description,
             parameters: tool.args_schema
           }
         }))
       }
-      assertSerializedBound(body, limits.maxProviderResponseBytes, 'provider_request_too_large')
+      assertSerializedBound(body, limits.maxProviderRequestBytes, 'provider_request_too_large')
       const response = await fetchImpl(options.endpoint, {
         method: 'POST',
         headers: {
@@ -66,12 +70,21 @@ export function createOpenAICompatibleToolProvider(options: OpenAICompatibleProv
       }
       const raw = await response.text()
       assertTextBound(raw, limits.maxProviderResponseBytes, 'provider_response_too_large')
-      return parseOpenAICompatibleResponse(JSON.parse(raw))
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        throw new LightweightOrchestratorError('provider_response_malformed')
+      }
+      return parseOpenAICompatibleResponse(parsed, aliases.byAlias)
     }
   }
 }
 
-export function parseOpenAICompatibleResponse(raw: unknown): LightweightProviderResponse {
+export function parseOpenAICompatibleResponse(
+  raw: unknown,
+  aliases: ReadonlyMap<string, OpenAIToolAlias> = new Map()
+): LightweightProviderResponse {
   if (raw === null || typeof raw !== 'object') {
     throw new LightweightOrchestratorError('provider_response_malformed')
   }
@@ -97,11 +110,60 @@ export function parseOpenAICompatibleResponse(raw: unknown): LightweightProvider
   return {
     type: 'tool_calls',
     content,
-    toolCalls: toolCalls.map(parseOpenAIToolCall)
+    toolCalls: toolCalls.map((toolCall) => parseOpenAIToolCall(toolCall, aliases))
   }
 }
 
-function parseOpenAIToolCall(raw: unknown): LightweightToolCall {
+export interface OpenAIToolAlias {
+  readonly alias: string
+  readonly globalToolId: string
+  readonly executionLocation: 'local' | 'remote'
+}
+
+export interface OpenAIToolAliasMap {
+  readonly byAlias: ReadonlyMap<string, OpenAIToolAlias>
+  readonly byGlobalToolId: ReadonlyMap<string, OpenAIToolAlias>
+}
+
+export function buildOpenAIToolAliases(tools: readonly ToolingProjectionToolInfo[]): OpenAIToolAliasMap {
+  const byAlias = new Map<string, OpenAIToolAlias>()
+  const byGlobalToolId = new Map<string, OpenAIToolAlias>()
+  for (const tool of tools) {
+    const alias = openAIToolAlias(tool.global_tool_id)
+    const mapped: OpenAIToolAlias = {
+      alias,
+      globalToolId: tool.global_tool_id,
+      executionLocation: tool.execution_location
+    }
+    const existing = byAlias.get(alias)
+    if (existing && existing.globalToolId !== mapped.globalToolId) {
+      throw new LightweightOrchestratorError('tool_alias_collision')
+    }
+    byAlias.set(alias, mapped)
+    byGlobalToolId.set(tool.global_tool_id, mapped)
+  }
+  return { byAlias, byGlobalToolId }
+}
+
+function openAIToolAlias(globalToolId: string): string {
+  const suffix = stableHash(globalToolId)
+  const rawBase = globalToolId.replace(/[^A-Za-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '')
+  const base = rawBase.length > 0 ? rawBase : 'tool'
+  const alias = `${base.slice(0, 55)}_${suffix}`
+  if (!OPENAI_FUNCTION_NAME.test(alias)) throw new LightweightOrchestratorError('unsafe_tool_alias')
+  return alias
+}
+
+function stableHash(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(16).padStart(8, '0')
+}
+
+function parseOpenAIToolCall(raw: unknown, aliases: ReadonlyMap<string, OpenAIToolAlias>): LightweightToolCall {
   if (raw === null || typeof raw !== 'object') {
     throw new LightweightOrchestratorError('provider_response_malformed')
   }
@@ -115,15 +177,22 @@ function parseOpenAIToolCall(raw: unknown): LightweightToolCall {
   if (!toolName || argsText === null) {
     throw new LightweightOrchestratorError('provider_response_malformed')
   }
-  const parsedArgs = JSON.parse(argsText) as unknown
+  let parsedArgs: unknown
+  try {
+    parsedArgs = JSON.parse(argsText) as unknown
+  } catch {
+    throw new LightweightOrchestratorError('provider_response_malformed')
+  }
   if (parsedArgs === null || typeof parsedArgs !== 'object' || Array.isArray(parsedArgs)) {
     throw new LightweightOrchestratorError('provider_response_malformed')
   }
+  const alias = aliases.get(toolName)
   return {
     id,
-    toolName,
+    toolName: alias?.globalToolId ?? toolName,
+    providerToolName: alias?.alias ?? toolName,
     arguments: parsedArgs as JsonObject,
-    route: 'remote'
+    route: alias?.executionLocation ?? 'remote'
   }
 }
 

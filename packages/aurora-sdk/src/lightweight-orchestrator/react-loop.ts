@@ -6,6 +6,7 @@ import {
   resolveLightweightOrchestratorLimits,
   LightweightOrchestratorError
 } from './limits.js'
+import { buildOpenAIToolAliases } from './provider.js'
 import type {
   LightweightConfirmationInput,
   LightweightOrchestratorOptions,
@@ -17,7 +18,7 @@ import type {
   LightweightTurnInput,
   LightweightTurnResult
 } from './types.js'
-import type { ToolingPrepareExecutionResponse } from '../types.js'
+import type { ToolingPrepareExecutionResponse, ToolingProjectionToolInfo } from '../types.js'
 
 interface PendingConfirmation {
   readonly token: string
@@ -25,7 +26,10 @@ interface PendingConfirmation {
   readonly messages: LightweightProviderMessage[]
   readonly toolCall: LightweightToolCall
   readonly prepared: ToolingPrepareExecutionResponse
+  readonly approvalRequestId: string
   readonly controller: AbortController
+  readonly timeoutHandle: unknown
+  readonly expiresAtMs: number
   readonly startedAtMs: number
   used: boolean
 }
@@ -38,6 +42,7 @@ export class LightweightOrchestrator {
   private readonly ids: () => string
   private readonly timers
   private readonly pending = new Map<string, PendingConfirmation>()
+  private readonly expiredTokens = new Set<string>()
 
   constructor(private readonly options: LightweightOrchestratorOptions) {
     this.limits = resolveLightweightOrchestratorLimits(options.limits)
@@ -46,6 +51,7 @@ export class LightweightOrchestrator {
     this.timers = options.timers ?? globalTimerPort()
     validateScope(options.scope)
     validateTools(options.availableTools, this.limits)
+    buildOpenAIToolAliases(options.availableTools)
   }
 
   async recoverStalePending(): Promise<LightweightRecoveryResult> {
@@ -115,10 +121,15 @@ export class LightweightOrchestrator {
   async resumeConfirmation(input: LightweightConfirmationInput): Promise<LightweightTurnResult> {
     const pending = this.pending.get(input.token)
     if (!pending || pending.used) {
-      throw new LightweightOrchestratorError('confirmation_token_replayed')
+      throw new LightweightOrchestratorError(this.expiredTokens.has(input.token) ? 'confirmation_token_expired' : 'confirmation_token_replayed')
+    }
+    if (pending.expiresAtMs <= this.nowMs()) {
+      await this.expirePending(input.token)
+      throw new LightweightOrchestratorError('confirmation_token_expired')
     }
     pending.used = true
     this.pending.delete(input.token)
+    this.timers.clearTimeout(pending.timeoutHandle)
     if (input.decision === 'deny') {
       pending.controller.abort()
       await this.appendState(pending.conversationId, 'tool', 'cancelled')
@@ -131,7 +142,8 @@ export class LightweightOrchestrator {
     }
     const controller = this.turnController(input.signal)
     try {
-      const result = await this.executePreparedTool(pending.toolCall, pending.prepared, controller.signal)
+      const approval = await this.confirmApproval(pending, controller.signal)
+      const result = await this.executePreparedTool(pending.toolCall, pending.prepared, controller.signal, approval.approval_token)
       const messages = [...pending.messages, toolResultMessage(pending.toolCall, result)]
       const providerResponse = await this.callProvider(messages, controller.signal)
       if (providerResponse.type !== 'message') {
@@ -158,11 +170,16 @@ export class LightweightOrchestrator {
 
   cancel(token?: string): void {
     if (token !== undefined) {
-      this.pending.get(token)?.controller.abort()
+      const pending = this.pending.get(token)
+      pending?.controller.abort()
+      if (pending) this.timers.clearTimeout(pending.timeoutHandle)
       this.pending.delete(token)
       return
     }
-    for (const pending of this.pending.values()) pending.controller.abort()
+    for (const pending of this.pending.values()) {
+      pending.controller.abort()
+      this.timers.clearTimeout(pending.timeoutHandle)
+    }
     this.pending.clear()
   }
 
@@ -180,19 +197,26 @@ export class LightweightOrchestrator {
     for (const toolCall of providerResponse.toolCalls) {
       this.validateToolCall(toolCall, seen)
       const prepared = await this.prepareTool(toolCall)
-      if (!prepared.ok || prepared.policy_decision.allowed !== true) {
-        nextMessages.push(toolResultMessage(toolCall, { ok: false, error_code: prepared.policy_decision.reason ?? 'policy_denied', status: 'denied' }))
-        continue
-      }
-      if (prepared.policy_decision.approval_required === true || this.toolInfo(toolCall).confirmation_required === true) {
+      if (requiresApproval(prepared, this.toolInfo(toolCall))) {
+        const approval = await this.requestApproval(toolCall, prepared)
+        if (!approval.ok || !approval.approval_request_id) {
+          nextMessages.push(toolResultMessage(toolCall, { ok: false, error_code: approval.error ?? 'approval_request_failed', status: 'denied' }))
+          continue
+        }
         const token = `lw-confirm-${this.ids()}`
+        const expiresAtMs = this.confirmationExpiresAtMs(prepared, approval.expires_at)
         const pending: PendingConfirmation = {
           token,
           conversationId,
           messages: nextMessages,
           toolCall,
           prepared,
+          approvalRequestId: approval.approval_request_id,
           controller,
+          timeoutHandle: this.timers.setTimeout(() => {
+            void this.expirePending(token)
+          }, Math.max(0, expiresAtMs - this.nowMs())),
+          expiresAtMs,
           startedAtMs: this.nowMs(),
           used: false
         }
@@ -207,6 +231,10 @@ export class LightweightOrchestrator {
             secretsRedacted: true
           }
         }
+      }
+      if (!prepared.ok || prepared.policy_decision.allowed !== true) {
+        nextMessages.push(toolResultMessage(toolCall, { ok: false, error_code: prepared.policy_decision.reason ?? 'policy_denied', status: 'denied' }))
+        continue
       }
       const result = await this.executePreparedTool(toolCall, prepared, controller.signal)
       nextMessages.push(toolResultMessage(toolCall, result))
@@ -229,7 +257,8 @@ export class LightweightOrchestrator {
   private async executePreparedTool(
     toolCall: LightweightToolCall,
     prepared: ToolingPrepareExecutionResponse,
-    signal: AbortSignal
+    signal: AbortSignal,
+    approvalToken: string | null = null
   ): Promise<LightweightToolExecutionResponse> {
     throwIfAborted(signal)
     const result = await this.options.tools.execute({
@@ -238,11 +267,63 @@ export class LightweightOrchestrator {
       expected_args_schema_hash: prepared.args_schema_hash ?? null,
       resource_selector: toolCall.resourceSelector ?? routeSelector(toolCall),
       mesh_selector: toolCall.meshSelector ?? null,
-      approval_token: prepared.policy_decision.approval_required ? prepared.policy_decision.decision_id : null,
+      ...(approvalToken ? { confirmed: true } : {}),
+      approval_token: approvalToken,
       correlation_id: prepared.correlation_id
     })
     assertSerializedBound((result as LightweightToolExecutionResponse).data ?? null, this.limits.maxResultBytes, 'tool_result_too_large')
     return result as LightweightToolExecutionResponse
+  }
+
+  private async requestApproval(toolCall: LightweightToolCall, prepared: ToolingPrepareExecutionResponse) {
+    return await this.options.tools.requestApproval({
+      tool_name: prepared.global_tool_id || toolCall.toolName,
+      arguments: toolCall.arguments,
+      expected_args_schema_hash: prepared.args_schema_hash ?? null,
+      resource_selector: toolCall.resourceSelector ?? routeSelector(toolCall),
+      mesh_selector: toolCall.meshSelector ?? null,
+      correlation_id: prepared.correlation_id,
+      caller_principal_id: this.options.approvalPrincipalId ?? this.options.scope.profileId
+    })
+  }
+
+  private async confirmApproval(pending: PendingConfirmation, signal: AbortSignal) {
+    throwIfAborted(signal)
+    const response = await this.options.tools.confirmExecution({
+      approval_request_id: pending.approvalRequestId,
+      approver_principal_id: this.options.approvalPrincipalId ?? this.options.scope.profileId,
+      approve: true,
+      grant_scope: 'once',
+      reason: 'lightweight_assistant_confirmation',
+      correlation_id: pending.prepared.correlation_id
+    })
+    if (!response.ok || !response.approval_token) {
+      throw new LightweightOrchestratorError(response.error ?? 'approval_token_required')
+    }
+    return response
+  }
+
+  private confirmationExpiresAtMs(prepared: ToolingPrepareExecutionResponse, backendExpiresAtSeconds: number | null): number {
+    const localMaxExpiresAt = this.nowMs() + this.limits.confirmationTokenTimeoutMs
+    const backendExpiresAt = typeof backendExpiresAtSeconds === 'number' && Number.isFinite(backendExpiresAtSeconds)
+      ? backendExpiresAtSeconds * 1000
+      : null
+    const ttlSeconds = prepared.policy_decision.token_ttl_seconds
+    const policyExpiresAt = typeof ttlSeconds === 'number' && Number.isFinite(ttlSeconds)
+      ? this.nowMs() + Math.max(0, ttlSeconds * 1000)
+      : null
+    return Math.min(localMaxExpiresAt, backendExpiresAt ?? localMaxExpiresAt, policyExpiresAt ?? localMaxExpiresAt)
+  }
+
+  private async expirePending(token: string): Promise<void> {
+    const pending = this.pending.get(token)
+    if (!pending || pending.used) return
+    pending.used = true
+    pending.controller.abort()
+    this.pending.delete(token)
+    this.expiredTokens.add(token)
+    this.timers.clearTimeout(pending.timeoutHandle)
+    await this.appendState(pending.conversationId, 'tool', 'cancelled')
   }
 
   private async callProvider(messages: LightweightProviderMessage[], parentSignal: AbortSignal): Promise<LightweightProviderResponse> {
@@ -400,11 +481,21 @@ function routeSelector(toolCall: LightweightToolCall) {
     : { execution_location: 'remote' as const }
 }
 
+function requiresApproval(prepared: ToolingPrepareExecutionResponse, tool: ToolingProjectionToolInfo): boolean {
+  if (prepared.policy_decision.share === false) return false
+  if (prepared.policy_decision.approval_required === true) {
+    return prepared.policy_decision.reason === null
+      || prepared.policy_decision.reason === undefined
+      || prepared.policy_decision.reason === 'approval_token_required'
+  }
+  return tool.confirmation_required === true
+}
+
 function toolResultMessage(toolCall: LightweightToolCall, result: LightweightToolExecutionResponse): LightweightProviderMessage {
   return {
     role: 'tool',
     toolCallId: toolCall.id,
-    name: toolCall.toolName,
+    name: toolCall.providerToolName ?? toolCall.toolName,
     content: JSON.stringify({
       ok: result.ok,
       status: result.status ?? null,
