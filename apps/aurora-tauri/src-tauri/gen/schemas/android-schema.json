@@ -219,6 +219,24 @@
           "markdownDescription": "Enables the aurora_command command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_inbound_verifier_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-inbound-verifier-delete",
+          "markdownDescription": "Enables the aurora_inbound_verifier_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_inbound_verifier_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-inbound-verifier-get",
+          "markdownDescription": "Enables the aurora_inbound_verifier_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_inbound_verifier_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-inbound-verifier-set",
+          "markdownDescription": "Enables the aurora_inbound_verifier_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_ios_invocation_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-ios-invocation-status",
@@ -237,22 +255,10 @@
           "markdownDescription": "Enables the aurora_ios_native_plugin_manifest command without any pre-configured scope."
         },
         {
-          "description": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned.",
+          "description": "Enables the aurora_local_data_close command without any pre-configured scope.",
           "type": "string",
-          "const": "aurora-local-data-envelope-crypto",
-          "markdownDescription": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned."
-        },
-        {
-          "description": "Enables the aurora_local_data_envelope_encrypt command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-envelope-encrypt",
-          "markdownDescription": "Enables the aurora_local_data_envelope_encrypt command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_envelope_encrypt command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-envelope-encrypt",
-          "markdownDescription": "Denies the aurora_local_data_envelope_encrypt command without any pre-configured scope."
+          "const": "allow-aurora-local-data-close",
+          "markdownDescription": "Enables the aurora_local_data_close command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_local_data_envelope_decrypt command without any pre-configured scope.",
@@ -261,10 +267,10 @@
           "markdownDescription": "Enables the aurora_local_data_envelope_decrypt command without any pre-configured scope."
         },
         {
-          "description": "Denies the aurora_local_data_envelope_decrypt command without any pre-configured scope.",
+          "description": "Enables the aurora_local_data_envelope_encrypt command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-aurora-local-data-envelope-decrypt",
-          "markdownDescription": "Denies the aurora_local_data_envelope_decrypt command without any pre-configured scope."
+          "const": "allow-aurora-local-data-envelope-encrypt",
+          "markdownDescription": "Enables the aurora_local_data_envelope_encrypt command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_local_data_envelope_rotate command without any pre-configured scope.",
@@ -273,112 +279,10 @@
           "markdownDescription": "Enables the aurora_local_data_envelope_rotate command without any pre-configured scope."
         },
         {
-          "description": "Denies the aurora_local_data_envelope_rotate command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-envelope-rotate",
-          "markdownDescription": "Denies the aurora_local_data_envelope_rotate command without any pre-configured scope."
-        },
-        {
-          "description": "Allow the private local-data adapter to open Aurora-owned structured storage and run typed repository, transaction, export, and import commands. Raw SQL strings are never accepted from the WebView.",
-          "type": "string",
-          "const": "aurora-local-data-storage",
-          "markdownDescription": "Allow the private local-data adapter to open Aurora-owned structured storage and run typed repository, transaction, export, and import commands. Raw SQL strings are never accepted from the WebView."
-        },
-        {
-          "description": "Enables the aurora_local_data_open command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-open",
-          "markdownDescription": "Enables the aurora_local_data_open command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_open command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-open",
-          "markdownDescription": "Denies the aurora_local_data_open command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_local_data_status command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-status",
-          "markdownDescription": "Enables the aurora_local_data_status command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_status command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-status",
-          "markdownDescription": "Denies the aurora_local_data_status command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_local_data_close command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-close",
-          "markdownDescription": "Enables the aurora_local_data_close command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_close command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-close",
-          "markdownDescription": "Denies the aurora_local_data_close command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_local_data_transaction_begin command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-transaction-begin",
-          "markdownDescription": "Enables the aurora_local_data_transaction_begin command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_transaction_begin command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-transaction-begin",
-          "markdownDescription": "Denies the aurora_local_data_transaction_begin command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_local_data_transaction_commit command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-transaction-commit",
-          "markdownDescription": "Enables the aurora_local_data_transaction_commit command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_transaction_commit command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-transaction-commit",
-          "markdownDescription": "Denies the aurora_local_data_transaction_commit command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_local_data_transaction_rollback command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-transaction-rollback",
-          "markdownDescription": "Enables the aurora_local_data_transaction_rollback command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_transaction_rollback command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-transaction-rollback",
-          "markdownDescription": "Denies the aurora_local_data_transaction_rollback command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_local_data_repository_operation command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-local-data-repository-operation",
-          "markdownDescription": "Enables the aurora_local_data_repository_operation command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_repository_operation command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-repository-operation",
-          "markdownDescription": "Denies the aurora_local_data_repository_operation command without any pre-configured scope."
-        },
-        {
           "description": "Enables the aurora_local_data_export_v1 command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-local-data-export-v1",
           "markdownDescription": "Enables the aurora_local_data_export_v1 command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_local_data_export_v1 command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-local-data-export-v1",
-          "markdownDescription": "Denies the aurora_local_data_export_v1 command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_local_data_import_v1 command without any pre-configured scope.",
@@ -387,10 +291,40 @@
           "markdownDescription": "Enables the aurora_local_data_import_v1 command without any pre-configured scope."
         },
         {
-          "description": "Denies the aurora_local_data_import_v1 command without any pre-configured scope.",
+          "description": "Enables the aurora_local_data_open command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-aurora-local-data-import-v1",
-          "markdownDescription": "Denies the aurora_local_data_import_v1 command without any pre-configured scope."
+          "const": "allow-aurora-local-data-open",
+          "markdownDescription": "Enables the aurora_local_data_open command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_repository_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-repository-operation",
+          "markdownDescription": "Enables the aurora_local_data_repository_operation command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-status",
+          "markdownDescription": "Enables the aurora_local_data_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_transaction_begin command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-transaction-begin",
+          "markdownDescription": "Enables the aurora_local_data_transaction_begin command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_transaction_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-transaction-commit",
+          "markdownDescription": "Enables the aurora_local_data_transaction_commit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_data_transaction_rollback command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-data-transaction-rollback",
+          "markdownDescription": "Enables the aurora_local_data_transaction_rollback command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_local_file_pick command without any pre-configured scope.",
@@ -561,10 +495,10 @@
           "markdownDescription": "Enables the native_capabilities command without any pre-configured scope."
         },
         {
-          "description": "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability.",
+          "description": "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately.",
           "type": "string",
           "const": "aurora-android-native-plugin",
-          "markdownDescription": "Allow Android client/mobile runtime to read bounded native status. Outgoing user actions are granted separately through the mobile-only capability."
+          "markdownDescription": "Allow Android client/mobile runtime to read bounded native status and use narrow Android Keystore-backed inbound verifier storage. Outgoing user actions and generic secure storage are granted separately."
         },
         {
           "description": "Allow audio bridge status checks for raw-audio permission UX without granting microphone capture, live streaming, or playback control.",
@@ -585,16 +519,34 @@
           "markdownDescription": "Allow dialog capability status checks without granting native open/save dialogs by default."
         },
         {
-          "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability.",
+          "description": "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access.",
+          "type": "string",
+          "const": "aurora-inbound-verifier-storage",
+          "markdownDescription": "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access."
+        },
+        {
+          "description": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability.",
           "type": "string",
           "const": "aurora-ios-native-plugin",
-          "markdownDescription": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods. Outgoing user actions are granted separately through the mobile-only capability."
+          "markdownDescription": "Allow the frontend SDK adapter to invoke bounded Aurora iOS Swift native plugin capability and status methods, plus dedicated iOS Keychain inbound verifier storage commands. Outgoing user actions are granted separately through the mobile-only capability."
         },
         {
           "description": "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or system assistant ownership.",
           "type": "string",
           "const": "aurora-ios-voice",
           "markdownDescription": "Allow iOS voice, invocation, and background-limit status checks without granting microphone capture, background listening, or system assistant ownership."
+        },
+        {
+          "description": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned.",
+          "type": "string",
+          "const": "aurora-local-data-envelope-crypto",
+          "markdownDescription": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned."
+        },
+        {
+          "description": "Allow the private local-data adapter to open Aurora-owned structured storage and run typed repository, transaction, export, and import commands. Raw SQL strings are never accepted from the WebView.",
+          "type": "string",
+          "const": "aurora-local-data-storage",
+          "markdownDescription": "Allow the private local-data adapter to open Aurora-owned structured storage and run typed repository, transaction, export, and import commands. Raw SQL strings are never accepted from the WebView."
         },
         {
           "description": "Allow local-file helper commands to return structured native-permission-missing responses without granting broad filesystem access.",
@@ -625,6 +577,12 @@
           "type": "string",
           "const": "aurora-native-permissions",
           "markdownDescription": "Allow the frontend SDK adapter to read the Aurora desktop native permission and capability status without granting denied OS surfaces."
+        },
+        {
+          "description": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime.",
+          "type": "string",
+          "const": "aurora-native-webrtc",
+          "markdownDescription": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
         },
         {
           "description": "Allow notification status checks and structured denied send responses without granting notification delivery by default.",
@@ -753,6 +711,24 @@
           "markdownDescription": "Denies the aurora_command command without any pre-configured scope."
         },
         {
+          "description": "Denies the aurora_inbound_verifier_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-inbound-verifier-delete",
+          "markdownDescription": "Denies the aurora_inbound_verifier_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_inbound_verifier_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-inbound-verifier-get",
+          "markdownDescription": "Denies the aurora_inbound_verifier_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_inbound_verifier_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-inbound-verifier-set",
+          "markdownDescription": "Denies the aurora_inbound_verifier_set command without any pre-configured scope."
+        },
+        {
           "description": "Denies the aurora_ios_invocation_status command without any pre-configured scope.",
           "type": "string",
           "const": "deny-aurora-ios-invocation-status",
@@ -769,6 +745,78 @@
           "type": "string",
           "const": "deny-aurora-ios-native-plugin-manifest",
           "markdownDescription": "Denies the aurora_ios_native_plugin_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-close",
+          "markdownDescription": "Denies the aurora_local_data_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_envelope_decrypt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-envelope-decrypt",
+          "markdownDescription": "Denies the aurora_local_data_envelope_decrypt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_envelope_encrypt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-envelope-encrypt",
+          "markdownDescription": "Denies the aurora_local_data_envelope_encrypt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_envelope_rotate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-envelope-rotate",
+          "markdownDescription": "Denies the aurora_local_data_envelope_rotate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_export_v1 command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-export-v1",
+          "markdownDescription": "Denies the aurora_local_data_export_v1 command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_import_v1 command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-import-v1",
+          "markdownDescription": "Denies the aurora_local_data_import_v1 command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-open",
+          "markdownDescription": "Denies the aurora_local_data_open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_repository_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-repository-operation",
+          "markdownDescription": "Denies the aurora_local_data_repository_operation command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-status",
+          "markdownDescription": "Denies the aurora_local_data_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_transaction_begin command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-transaction-begin",
+          "markdownDescription": "Denies the aurora_local_data_transaction_begin command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_transaction_commit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-transaction-commit",
+          "markdownDescription": "Denies the aurora_local_data_transaction_commit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_data_transaction_rollback command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-data-transaction-rollback",
+          "markdownDescription": "Denies the aurora_local_data_transaction_rollback command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_local_file_pick command without any pre-configured scope.",
@@ -3085,6 +3133,60 @@
           "type": "string",
           "const": "deep-link:deny-unregister",
           "markdownDescription": "Denies the unregister command without any pre-configured scope."
+        },
+        {
+          "description": "### Default Permissions\n\nThis permission set configures what kind of\ndatabase operations are available from the sql plugin.\n\n### Granted Permissions\n\nAll reading related operations are enabled.\nAlso allows to load or close a connection.\n\n\n#### This default permission set includes:\n\n- `allow-close`\n- `allow-load`\n- `allow-select`",
+          "type": "string",
+          "const": "sql:default",
+          "markdownDescription": "### Default Permissions\n\nThis permission set configures what kind of\ndatabase operations are available from the sql plugin.\n\n### Granted Permissions\n\nAll reading related operations are enabled.\nAlso allows to load or close a connection.\n\n\n#### This default permission set includes:\n\n- `allow-close`\n- `allow-load`\n- `allow-select`"
+        },
+        {
+          "description": "Enables the close command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:allow-close",
+          "markdownDescription": "Enables the close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the execute command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:allow-execute",
+          "markdownDescription": "Enables the execute command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the load command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:allow-load",
+          "markdownDescription": "Enables the load command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the select command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:allow-select",
+          "markdownDescription": "Enables the select command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the close command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:deny-close",
+          "markdownDescription": "Denies the close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the execute command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:deny-execute",
+          "markdownDescription": "Denies the execute command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the load command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:deny-load",
+          "markdownDescription": "Denies the load command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the select command without any pre-configured scope.",
+          "type": "string",
+          "const": "sql:deny-select",
+          "markdownDescription": "Denies the select command without any pre-configured scope."
         },
         {
           "description": "This permission set configures which kind of\nupdater functions are exposed to the frontend.\n\n#### Granted Permissions\n\nThe full workflow from checking for updates to installing them\nis enabled.\n\n\n#### This default permission set includes:\n\n- `allow-check`\n- `allow-download`\n- `allow-install`\n- `allow-download-and-install`",
