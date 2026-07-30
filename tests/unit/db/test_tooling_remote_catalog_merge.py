@@ -62,6 +62,8 @@ ACTIVATION_COMPONENTS = DBToolingMeshActivationComponentVersions(
     conditional_legacy_retirement=1,
     startup_downgrade_guard=1,
 )
+PROVIDER_PEER_ID = "peer-a"
+PROVIDER_SERVICE_INSTANCE_ID = "local:peer-a:Tooling"
 
 
 async def _manager(tmp_path: Path, name: str = "projection.db") -> DatabaseManager:
@@ -71,8 +73,8 @@ async def _manager(tmp_path: Path, name: str = "projection.db") -> DatabaseManag
 
 
 def _tool(name: str, *, schema_version: int = 1) -> ToolingToolInfo:
-    peer = "peer-a"
-    service = "svc-a"
+    peer = PROVIDER_PEER_ID
+    service = PROVIDER_SERVICE_INSTANCE_ID
     return ToolingToolInfo(
         name=name,
         local_name=name,
@@ -116,8 +118,8 @@ def _page(
     retirements = retirements or []
     checksum = compute_projection_checksum(tools, retirements, blocked_tools)
     page = ToolingGetExportCatalogResponse(
-        provider_peer_id="peer-a",
-        service_instance_id="svc-a",
+        provider_peer_id=PROVIDER_PEER_ID,
+        service_instance_id=PROVIDER_SERVICE_INSTANCE_ID,
         authority_revision=AUTHORITY,
         projection_revision=revision,
         projection_digest=checksum,
@@ -141,9 +143,9 @@ async def _begin(
     return await manager.begin_tooling_remote_catalog_sync(
         DBBeginToolingRemoteCatalogSyncRequest(
             sync_id=sync_id,
-            peer_id="peer-a",
+            peer_id=PROVIDER_PEER_ID,
             provider_id="provider-a",
-            service_instance_id="svc-a",
+            service_instance_id=PROVIDER_SERVICE_INSTANCE_ID,
             projection_revision=page.projection_revision,
             projection_digest=page.projection_digest,
             authority_revision=AUTHORITY,
@@ -564,8 +566,8 @@ async def test_staged_pages_require_exact_cursor_chain_hash(tmp_path: Path) -> N
     checksum = compute_projection_checksum([alpha, beta], [])
     cursor = "opaque-cursor-from-provider"
     first = ToolingGetExportCatalogResponse(
-        provider_peer_id="peer-a",
-        service_instance_id="svc-a",
+        provider_peer_id=PROVIDER_PEER_ID,
+        service_instance_id=PROVIDER_SERVICE_INSTANCE_ID,
         authority_revision=AUTHORITY,
         projection_revision="cursor-revision",
         projection_digest=checksum,
@@ -577,8 +579,8 @@ async def test_staged_pages_require_exact_cursor_chain_hash(tmp_path: Path) -> N
     )
     first = first.model_copy(update={"page_hash": compute_projection_page_hash(first)})
     second = ToolingGetExportCatalogResponse(
-        provider_peer_id="peer-a",
-        service_instance_id="svc-a",
+        provider_peer_id=PROVIDER_PEER_ID,
+        service_instance_id=PROVIDER_SERVICE_INSTANCE_ID,
         authority_revision=AUTHORITY,
         projection_revision="cursor-revision",
         projection_digest=checksum,

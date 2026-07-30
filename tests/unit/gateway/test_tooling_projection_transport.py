@@ -568,15 +568,17 @@ async def test_gateway_page_proxy_accepts_only_canonical_local_provider_identity
     assert accepted.page is not None
     assert accepted.page.service_instance_id == canonical
 
+    mismatched_page = projection_page(canonical).model_dump(mode="json")
+    mismatched_page["service_instance_id"] = "local:different-peer:Tooling"
     gateway._mesh_peer_bridge.call = AsyncMock(
         return_value=QueryResult(
             ok=True,
-            data=projection_page("local:different-peer:Tooling").model_dump(mode="json"),
+            data=mismatched_page,
         )
     )
     rejected = await gateway._fetch_tooling_export_catalog_page(request)
     assert rejected.ok is False
-    assert rejected.reason_code == "projection_provider_mismatch"
+    assert rejected.reason_code == "projection_response_invalid"
 
 
 @pytest.mark.asyncio

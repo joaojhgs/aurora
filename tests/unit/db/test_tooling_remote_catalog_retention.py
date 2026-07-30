@@ -21,7 +21,13 @@ from app.shared.contracts.models.db import (
     DBSetToolingRemoteProviderAvailabilityRequest,
 )
 from app.shared.contracts.models.tooling import ToolingProjectionRetirement
-from tests.unit.db.test_tooling_remote_catalog_merge import _begin, _manager, _page, _tool
+from tests.unit.db.test_tooling_remote_catalog_merge import (
+    PROVIDER_SERVICE_INSTANCE_ID,
+    _begin,
+    _manager,
+    _page,
+    _tool,
+)
 
 
 async def _commit(
@@ -275,8 +281,12 @@ async def test_alias_rekey_is_provider_scoped_and_durable(tmp_path: Path) -> Non
             """INSERT INTO tooling_approval_grants (
                    grant_id, grant_scope, grant_type, active, provider_peer_id,
                    provider_service_instance_id, global_tool_id, created_at, metadata_json
-               ) VALUES ('grant-a', 'always', 'allow', 1, 'peer-a', 'svc-a', ?, 1, ?)""",
-            (old.global_tool_id, json.dumps({"reviewed_global_tool_ids": [old.global_tool_id]})),
+               ) VALUES ('grant-a', 'always', 'allow', 1, 'peer-a', ?, ?, 1, ?)""",
+            (
+                PROVIDER_SERVICE_INSTANCE_ID,
+                old.global_tool_id,
+                json.dumps({"reviewed_global_tool_ids": [old.global_tool_id]}),
+            ),
         )
         await db.execute(
             """INSERT INTO tooling_approval_grants (
@@ -293,7 +303,7 @@ async def test_alias_rekey_is_provider_scoped_and_durable(tmp_path: Path) -> Non
             (old.global_tool_id, json.dumps({"reviewed_global_tool_ids": [old.global_tool_id]})),
         )
         for suffix, peer, provider, service in (
-            ("a", "peer-a", "provider-a", "svc-a"),
+            ("a", "peer-a", "provider-a", PROVIDER_SERVICE_INSTANCE_ID),
             ("b", "peer-b", "provider-b", "svc-b"),
             ("c", "peer-a", "provider-a", "svc-other"),
         ):
