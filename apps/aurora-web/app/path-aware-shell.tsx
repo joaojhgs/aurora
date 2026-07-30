@@ -19,8 +19,9 @@ import {
   auroraBrowserRequiresOnboarding,
   auroraBrowserRuntimeProfile,
   auroraBrowserRuntimeProfileDocument,
-  createAuroraBrowserRuntime,
+  createAuroraBrowserRuntimeAsync,
   saveAuroraBrowserOnboardingProfile,
+  type AuroraBrowserRuntime,
 } from './aurora-client'
 import { BrowserShellRuntimeProvider } from './browser-shell-runtime'
 
@@ -48,12 +49,62 @@ export function PathAwareShell({ children, snapshot }: PathAwareShellProps) {
 }
 
 function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [runtime, setRuntime] = useState<AuroraBrowserRuntime | null>(null)
+  const [startFailed, setStartFailed] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    setRuntime(null)
+    setStartFailed(false)
+    void createAuroraBrowserRuntimeAsync().then(
+      (nextRuntime) => {
+        if (!active) return
+        setRuntime(nextRuntime)
+      },
+      () => {
+        if (active) setStartFailed(true)
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [refreshKey])
+
+  if (startFailed) {
+    return (
+      <BrowserShellStartError
+        onRetry={() => setRefreshKey((value) => value + 1)}
+      />
+    )
+  }
+  if (!runtime) return <BrowserShellBootScreen />
+
+  return (
+    <ReadyPathAwareShell
+      key={refreshKey}
+      runtime={runtime}
+      snapshot={snapshot}
+      onRefreshRuntime={() => setRefreshKey((value) => value + 1)}
+    >
+      {children}
+    </ReadyPathAwareShell>
+  )
+}
+
+function ReadyPathAwareShell({
+  children,
+  runtime,
+  snapshot,
+  onRefreshRuntime,
+}: PathAwareShellProps & {
+  runtime: AuroraBrowserRuntime
+  onRefreshRuntime: () => void
+}) {
   const pathname = usePathname()
   const router = useRouter()
-  const [refreshKey, setRefreshKey] = useState(0)
   const [thinPeerReadyRevision, setThinPeerReadyRevision] = useState(0)
   const [initialInvite] = useState(() => initialInviteFromHash())
-  const runtime = useMemo(() => createAuroraBrowserRuntime(), [refreshKey])
   const requiresOnboarding = auroraBrowserRequiresOnboarding()
   const configuredRuntimeProfile = requiresOnboarding ? undefined : auroraBrowserRuntimeProfile()
   const initialRuntimeProfile = requiresOnboarding
@@ -120,7 +171,6 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
         modePreferenceStore={modePreferenceStore}
         thinConnectionPanel={
           <WebThinConnectionPanel
-            key={refreshKey}
             peer={runtime.peer}
             mode={runtime.mode}
             transportKind={runtime.client.transport.kind}
@@ -132,7 +182,7 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
             onSaveProfile={async (nextProfile, roomSecret) => {
               await saveAuroraBrowserOnboardingProfile(nextProfile, runtimeNodeMode, roomSecret)
               setActiveSnapshot(browserLoadingSnapshot(runtime.client.transport.kind))
-              setRefreshKey((value) => value + 1)
+              onRefreshRuntime()
               router.replace('/mesh')
             }}
           />
@@ -141,7 +191,11 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
     )
   }
   return (
-    <BrowserShellRuntimeProvider snapshot={activeSnapshot} runtimeProfile={configuredRuntimeProfile}>
+    <BrowserShellRuntimeProvider
+      runtime={runtime}
+      snapshot={activeSnapshot}
+      runtimeProfile={configuredRuntimeProfile}
+    >
       <AppShell
         snapshot={activeSnapshot}
         currentPath={pathname ?? '/'}
@@ -208,6 +262,29 @@ function BrowserShellBootScreen() {
           className="size-8 animate-pulse rounded-xl bg-primary/20"
         />
         <p className="text-sm font-medium">Loading Aurora…</p>
+      </div>
+    </main>
+  )
+}
+
+function BrowserShellStartError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <main
+      className="grid min-h-dvh place-items-center bg-background px-6 text-foreground"
+      data-browser-shell-start="failed"
+    >
+      <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+        <p className="text-sm font-medium">Aurora could not start on this device.</p>
+        <p className="text-xs text-muted-foreground">
+          Your saved connection is safe. Try opening Aurora again.
+        </p>
+        <button
+          type="button"
+          className="rounded-lg border border-border px-3 py-2 text-sm"
+          onClick={onRetry}
+        >
+          Try again
+        </button>
       </div>
     </main>
   )

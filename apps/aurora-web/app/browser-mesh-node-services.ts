@@ -1,7 +1,13 @@
 import type { AuroraRuntimeProfileV2, AuroraWebRtcRolloutFlags, BrowserPersistentPeerCredentialStore } from '@aurora/ui'
 import type { BrowserNativeCapabilityPack } from '@aurora/ui'
-import type { EnvelopeCryptoPort, LocalDataBackend, LocalDataSession } from '@aurora/client/local-data'
+import {
+  LocalDataError,
+  type EnvelopeCryptoPort,
+  type LocalDataBackend,
+  type LocalDataSession,
+} from '@aurora/client/local-data'
 import type {
+  LocalFeatureSharingPort,
   LocalToolAuditRecord,
   LocalToolExportDecisionPort,
   MeshNodeLocalToolProviderComposition,
@@ -23,6 +29,7 @@ export interface BrowserMeshNodeServices {
   readonly backend: LocalDataBackend
   readonly crypto: EnvelopeCryptoPort
   readonly provider: MeshNodeLocalToolProviderComposition
+  readonly localFeatureSharing: LocalFeatureSharingPort
   readonly localToolRegistry: MeshNodeLocalToolProviderComposition['localToolRegistry']
   readonly compositionStatus: BrowserMeshNodeCompositionStatus
   readonly registeredToolIds: readonly string[]
@@ -88,6 +95,7 @@ export type BrowserMeshNodeCompositionFailureCode =
   | 'credential_store_memory_only'
   | 'profile_metadata_unavailable'
   | 'local_data_unavailable'
+  | 'local_data_owned_elsewhere'
   | 'local_data_memory_only'
   | 'envelope_crypto_unavailable'
   | 'native_pack_empty'
@@ -120,10 +128,6 @@ export class BrowserMeshNodeCompositionError extends Error {
 
 const DEFAULT_CAPABILITY_PACK_IDS: ReadonlySet<string> = new Set(['local-tools', 'native-actions'])
 const DEFAULT_CURSOR_SECRET_BYTES = 32
-const DENY_ALL_EXPORT_DECISION: LocalToolExportDecisionPort = Object.freeze({
-  isShared: () => false,
-})
-
 export async function createBrowserMeshNodeServices(
   options: BrowserMeshNodeServicesOptions,
 ): Promise<BrowserMeshNodeServices> {
@@ -218,6 +222,21 @@ export async function createBrowserMeshNodeServices(
     if (pack.registeredToolIds.length === 0) {
       throw failedCompositionError('native_pack_empty')
     }
+    const roomName = profile.localNode.meshMembership?.webrtcProfile.room
+    if (!roomName) throw failedCompositionError('profile_metadata_unavailable')
+    const localFeatureSharing = new localTools.DurableFeatureSharingController({
+      registry: pack.registry,
+      session,
+      grantManager,
+      localVerifierPeerId: localNodeId,
+      roomName,
+      now: options.nowMs ?? Date.now,
+    })
+    await localFeatureSharing.load()
+    const trackedPairingIssuer = new localTools.TrackingPeerPairingIssuer({
+      delegate: pairingIssuer,
+      registry: localFeatureSharing,
+    })
 
     const provider = localTools.createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
@@ -225,7 +244,7 @@ export async function createBrowserMeshNodeServices(
       nodeName: profile.localNode.nodeName,
       registry: pack.registry as unknown as Parameters<typeof localTools.createMeshNodeLocalToolProvider>[0]['registry'],
       authorityResolver: resolver,
-      exportDecision: options.exportDecision ?? DENY_ALL_EXPORT_DECISION,
+      exportDecision: options.exportDecision ?? localFeatureSharing,
       audit: async (record: LocalToolAuditRecord) => {
         await recordLocalToolAudit(session, record, profileId, localNodeId, options.nowMs?.() ?? Date.now(), options.randomId)
       },
@@ -242,13 +261,14 @@ export async function createBrowserMeshNodeServices(
       enabled: true,
       peerHost: provider.peerHost as unknown as import('@aurora/ui').BrowserThinRuntimeConfig['peerHost'],
       peerAuthorityResolver: resolver as unknown as import('@aurora/ui').BrowserThinRuntimeConfig['peerAuthorityResolver'],
-      peerPairingIssuer: pairingIssuer as unknown as import('@aurora/ui').BrowserThinRuntimeConfig['peerPairingIssuer'],
+      peerPairingIssuer: trackedPairingIssuer,
       peerGrantManager: grantManager,
       peerRevocationController: revocationController,
       session,
       backend,
       crypto,
       provider,
+      localFeatureSharing,
       localToolRegistry: provider.localToolRegistry,
       compositionStatus: readyCompositionStatus(),
       registeredToolIds: provider.registeredToolIds,
@@ -263,6 +283,12 @@ export async function createBrowserMeshNodeServices(
     await crypto?.close?.().catch(() => undefined)
     await backend?.close().catch(() => undefined)
     if (error instanceof BrowserMeshNodeCompositionError) throw error
+    if (
+      error instanceof LocalDataError &&
+      error.metadata?.reason === 'owner_exists'
+    ) {
+      throw failedCompositionError('local_data_owned_elsewhere')
+    }
     throw failedCompositionError('composition_failed')
   }
 }
@@ -335,6 +361,14 @@ function disabledCompositionStatus(code: BrowserMeshNodeCompositionFailureCode):
 }
 
 function failedCompositionStatus(code: BrowserMeshNodeCompositionFailureCode): BrowserMeshNodeCompositionStatus {
+  if (code === 'local_data_owned_elsewhere') {
+    return {
+      state: 'failed',
+      reasonCode: code,
+      message: 'Device sharing is already owned by another tab',
+      productMessage: 'This device is already available from another open tab.',
+    }
+  }
   return {
     state: 'failed',
     reasonCode: code,

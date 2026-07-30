@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from 'react'
+import { StrictMode, act } from 'react'
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +18,7 @@ const mockedBrowserRuntime = vi.hoisted(() => ({
     client: AuroraClient
     peer: unknown
     mode: 'http-only'
+    close(): Promise<void>
   },
   profile: undefined as undefined,
   document: {
@@ -56,7 +57,7 @@ vi.mock('./aurora-client', () => ({
       (profile) => profile.id === mockedBrowserRuntime.runtimeDocument.activeProfileId,
     ),
   auroraBrowserRuntimeProfileDocument: () => mockedBrowserRuntime.runtimeDocument,
-  createAuroraBrowserRuntime: () => {
+  createAuroraBrowserRuntimeAsync: async () => {
     mockedBrowserRuntime.createRuntime()
     return mockedBrowserRuntime.runtime
   },
@@ -91,16 +92,19 @@ describe('hosted web thin first-run shell', () => {
       client: new AuroraClient({ transport }),
       peer: fakePeer(),
       mode: 'http-only',
+      close: vi.fn(async () => undefined),
     }
     const element = (
-      <PathAwareShell
-        snapshot={{
-          ...loadingShellSnapshot,
-          loadState: 'ready',
-        }}
-      >
-        <p>configured shell content</p>
-      </PathAwareShell>
+      <StrictMode>
+        <PathAwareShell
+          snapshot={{
+            ...loadingShellSnapshot,
+            loadState: 'ready',
+          }}
+        >
+          <p>configured shell content</p>
+        </PathAwareShell>
+      </StrictMode>
     )
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -119,6 +123,7 @@ describe('hosted web thin first-run shell', () => {
       if (root) roots.push(root)
       expect(container.textContent).toContain('Connect to Aurora')
       expect(mockedBrowserRuntime.createRuntime).toHaveBeenCalled()
+      expect(mockedBrowserRuntime.runtime.close).not.toHaveBeenCalled()
       expect(
         consoleError.mock.calls.some((call) =>
           call.some((value) => String(value).includes('Hydration failed')),
@@ -159,6 +164,7 @@ describe('hosted web thin first-run shell', () => {
       client: new AuroraClient({ transport }),
       peer: fakePeer(parsedInvite!.profile),
       mode: 'http-only',
+      close: vi.fn(async () => undefined),
     }
     window.history.replaceState(
       {},
@@ -244,6 +250,7 @@ describe('hosted web thin first-run shell', () => {
       client: new AuroraClient({ transport }),
       peer: fakePeer(),
       mode: 'http-only',
+      close: vi.fn(async () => undefined),
     }
     mockedBrowserRuntime.runtimeDocument = {
       version: 2,
@@ -319,6 +326,7 @@ describe('hosted web thin first-run shell', () => {
       client: new AuroraClient({ transport }),
       peer: fakePeer(),
       mode: 'http-only',
+      close: vi.fn(async () => undefined),
     }
     const container = document.createElement('div')
     document.body.appendChild(container)

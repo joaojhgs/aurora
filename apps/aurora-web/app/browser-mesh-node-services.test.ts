@@ -73,6 +73,15 @@ describe('browser mesh-node service composition', () => {
     expect(services.crypto).toBeInstanceOf(RecordingEnvelopeCrypto)
     expect(services.provider.enabled).toBe(true)
     expect(services.localToolRegistry).toBe(services.provider.localToolRegistry)
+    await expect(services.localFeatureSharing.load()).resolves.toMatchObject({
+      features: [
+        expect.objectContaining({
+          id: 'aurora.local.native.get_device_status.v1',
+          enabled: false,
+        }),
+      ],
+      approvedDevices: [],
+    })
     expect(services.compositionStatus).toMatchObject({
       state: 'ready',
       productMessage: 'This device is available for sharing.',

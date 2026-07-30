@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { MeshPeersResource, RoutePolicyResource, type RouteAvailability } from '@aurora/ui'
-import { createAuroraBrowserRuntime } from '../aurora-client'
-import { useBrowserRoute } from '../browser-shell-runtime'
+import {
+  useBrowserRoute,
+  useBrowserShellRuntime,
+} from '../browser-shell-runtime'
 
 export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
   const [incomingInvite, setIncomingInvite] = useState<string | null>(null)
-  const runtime = createAuroraBrowserRuntime()
+  const runtime = useBrowserShellRuntime()
   const client = runtime.client
   const activeRoute = useBrowserRoute(route)
+  const providerStatus = runtime.localNodeProviderStatus
 
   useEffect(() => {
     const invite = consumeFragmentInviteFromUrl(window.location.href, (nextUrl) => {
@@ -19,16 +22,28 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
   }, [])
 
   return (
-    <>
+    <div
+      data-local-node-provider={providerStatus.state}
+      data-local-node-provider-available={String(providerStatus.available)}
+      data-local-data-writable={String(providerStatus.localDataWritable)}
+      data-local-feature-count={String(providerStatus.registeredFeatureCount)}
+    >
+      {providerStatus.state === 'open-in-another-tab'
+      || providerStatus.state === 'needs-attention' ? (
+        <p className="mb-4 text-sm text-muted-foreground" role="status">
+          {providerStatus.productMessage}
+        </p>
+      ) : null}
       <MeshPeersResource
         client={client}
         route={activeRoute}
         surfaceProfile={runtime.surface}
         thinPeer={runtime.peer}
         initialInviteText={incomingInvite}
+        localFeatureSharing={runtime.localFeatureSharing}
       />
       <RoutePolicyResource client={client} route={activeRoute} />
-    </>
+    </div>
   )
 }
 

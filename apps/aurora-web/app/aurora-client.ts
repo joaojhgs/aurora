@@ -7,6 +7,12 @@ import {
   type AuroraTransportRequest,
   type AuroraTransportResponse,
 } from '@aurora/client'
+import type {
+  EnvelopeCryptoPort,
+  LocalDataBackend,
+  LocalDataSession,
+} from '@aurora/client/local-data'
+import type { LocalFeatureSharingPort } from '@aurora/client/local-tools'
 import {
   BrowserPersistentPeerCredentialStore,
   activeRuntimeProfile,
@@ -31,6 +37,10 @@ import {
   type BrowserWebThinRuntime,
 } from '@aurora/ui'
 import {
+  BrowserEnvelopeCryptoPort,
+  BrowserIndexedDbLocalDataBackend,
+} from '@aurora/ui/local-data/browser'
+import {
   BrowserMeshNodeCompositionError,
   browserMeshNodeCompositionStatusFromError,
   createBrowserMeshNodeServices,
@@ -42,8 +52,32 @@ import {
 type BrowserRuntimeCache = {
   baseKey: string
   key: string
-  runtime: BrowserWebThinRuntime
+  runtime: AuroraBrowserRuntime
   meshNodeServices: BrowserMeshNodeServices | null
+}
+
+export interface AuroraBrowserLocalDataContext {
+  readonly session: LocalDataSession
+  readonly backend: LocalDataBackend
+  readonly crypto: EnvelopeCryptoPort
+}
+
+export interface AuroraBrowserLocalNodeProviderStatus {
+  readonly available: boolean
+  readonly state:
+    | 'available'
+    | 'not-configured'
+    | 'needs-attention'
+    | 'open-in-another-tab'
+  readonly productMessage: string
+  readonly registeredFeatureCount: number
+  readonly localDataWritable: boolean
+}
+
+export interface AuroraBrowserRuntime extends BrowserWebThinRuntime {
+  readonly localData?: AuroraBrowserLocalDataContext | undefined
+  readonly localFeatureSharing?: LocalFeatureSharingPort | undefined
+  readonly localNodeProviderStatus: AuroraBrowserLocalNodeProviderStatus
 }
 
 let browserRuntimeCache: BrowserRuntimeCache | null = null
@@ -101,11 +135,11 @@ export function createAuroraWebClient(): AuroraClient {
   return new AuroraClient({ transport: new MissingGatewayTransport() })
 }
 
-export function createAuroraBrowserRuntime(): BrowserWebThinRuntime {
+export function createAuroraBrowserRuntime(): AuroraBrowserRuntime {
   return createAuroraBrowserRuntimeFromStore(null)
 }
 
-export async function createAuroraBrowserRuntimeAsync(): Promise<BrowserWebThinRuntime> {
+export async function createAuroraBrowserRuntimeAsync(): Promise<AuroraBrowserRuntime> {
   const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
   browserCredentialStore = credentialStore
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
@@ -126,6 +160,15 @@ export async function createAuroraBrowserRuntimeAsync(): Promise<BrowserWebThinR
     filePicker: browserFilePickerPort(),
     crypto: typeof crypto === 'undefined' ? null : crypto,
     indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
+    localDataBackendFactory: async (profileId, localNodeId) => {
+      const backend = new BrowserIndexedDbLocalDataBackend({
+        origin: typeof window === 'undefined' ? undefined : window.location.origin,
+        indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
+      })
+      const session = await backend.open(profileId, localNodeId)
+      return { backend, session }
+    },
+    envelopeCryptoFactory: (options) => new BrowserEnvelopeCryptoPort(options),
   }))
   return createAuroraBrowserRuntimeFromStore(meshNodeServices)
 }
@@ -162,7 +205,7 @@ async function resolveBrowserMeshNodeServices(
   return services
 }
 
-function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeServices | null): BrowserWebThinRuntime {
+function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeServices | null): AuroraBrowserRuntime {
   const credentialStore = browserCredentialStore ?? new BrowserPersistentPeerCredentialStore()
   browserCredentialStore = credentialStore
   const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
@@ -207,6 +250,23 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
     createClient: (transport) => new AuroraClient({ transport }),
     createDemoClient: () => new AuroraClient({ transport: new MockAuroraTransport() }),
   })
+  const runtimeWithLocalServices = Object.assign(runtime, {
+    ...(effectiveMeshNodeServices
+      ? {
+          localData: {
+            session: effectiveMeshNodeServices.session,
+            backend: effectiveMeshNodeServices.backend,
+            crypto: effectiveMeshNodeServices.crypto,
+          },
+          localFeatureSharing: effectiveMeshNodeServices.localFeatureSharing,
+        }
+      : {}),
+    localNodeProviderStatus: localNodeProviderStatus(
+      effectiveMeshNodeServices,
+      browserMeshNodeCompositionStatus,
+      runtimeProfile?.nodeMode === 'mesh-node',
+    ),
+  }) as AuroraBrowserRuntime
   const closeRuntime = runtime.close.bind(runtime)
   let closed = false
   runtime.close = async () => {
@@ -226,8 +286,13 @@ function createAuroraBrowserRuntimeFromStore(meshNodeServices: BrowserMeshNodeSe
       void runtime.peer.connect(persistedProfile).catch(() => undefined)
     })
   }
-  browserRuntimeCache = { baseKey, key, runtime, meshNodeServices: effectiveMeshNodeServices }
-  return runtime
+  browserRuntimeCache = {
+    baseKey,
+    key,
+    runtime: runtimeWithLocalServices,
+    meshNodeServices: effectiveMeshNodeServices,
+  }
+  return runtimeWithLocalServices
 }
 
 export function createAuroraBrowserClient(): AuroraClient {
@@ -242,6 +307,41 @@ export function resetAuroraBrowserClientForTests(): void {
 
 export function auroraBrowserMeshNodeCompositionStatus(): BrowserMeshNodeCompositionStatus {
   return browserMeshNodeCompositionStatus
+}
+
+function localNodeProviderStatus(
+  services: BrowserMeshNodeServices | null,
+  status: BrowserMeshNodeCompositionStatus,
+  requested: boolean,
+): AuroraBrowserLocalNodeProviderStatus {
+  if (services?.enabled) {
+    return {
+      available: true,
+      state: 'available',
+      productMessage: status.productMessage,
+      registeredFeatureCount: services.registeredToolIds.length,
+      localDataWritable: true,
+    }
+  }
+  if (!requested || status.state === 'disabled') {
+    return {
+      available: false,
+      state: 'not-configured',
+      productMessage: status.productMessage,
+      registeredFeatureCount: 0,
+      localDataWritable: false,
+    }
+  }
+  return {
+    available: false,
+    state:
+      status.reasonCode === 'local_data_owned_elsewhere'
+        ? 'open-in-another-tab'
+        : 'needs-attention',
+    productMessage: status.productMessage,
+    registeredFeatureCount: 0,
+    localDataWritable: false,
+  }
 }
 
 export function setAuroraBrowserMeshNodeServicesFactoryForTests(

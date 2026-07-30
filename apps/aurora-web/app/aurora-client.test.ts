@@ -3,7 +3,10 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuroraError } from '@aurora/client'
-import type { BrowserMeshNodeServices } from './browser-mesh-node-services'
+import {
+  BrowserMeshNodeCompositionError,
+  type BrowserMeshNodeServices,
+} from './browser-mesh-node-services'
 import {
   auroraBrowserMeshNodeCompositionStatus,
   auroraBrowserRequiresOnboarding,
@@ -372,6 +375,19 @@ describe('createAuroraBrowserClient', () => {
       localToolProviderEnabled: true,
       lightweightOrchestratorEnabled: true,
     })
+    expect(runtime.localData).toEqual({
+      session: services.session,
+      backend: services.backend,
+      crypto: services.crypto,
+    })
+    expect(runtime.localFeatureSharing).toBe(services.localFeatureSharing)
+    expect(runtime.localNodeProviderStatus).toEqual({
+      available: true,
+      state: 'available',
+      productMessage: 'This device is available for sharing.',
+      registeredFeatureCount: 1,
+      localDataWritable: true,
+    })
     expect(auroraBrowserMeshNodeCompositionStatus()).toMatchObject({ state: 'ready' })
     await runtime.close()
     expect(closeServices).toHaveBeenCalledTimes(1)
@@ -406,6 +422,39 @@ describe('createAuroraBrowserClient', () => {
     expect(nextRuntime).not.toBe(firstRuntime)
     expect(factory).toHaveBeenCalledTimes(2)
     await nextRuntime.close()
+  })
+
+  it('keeps a second tab out of provider mode when another tab owns local data', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    installBrowserStorage()
+    await saveMeshOnboardingProfile('mesh-owned-elsewhere')
+    setAuroraBrowserMeshNodeServicesFactoryForTests(
+      vi.fn(async () => {
+        throw new BrowserMeshNodeCompositionError(
+          'local_data_owned_elsewhere',
+          'Device sharing is already owned by another tab',
+          'This device is already available from another open tab.',
+        )
+      }),
+    )
+
+    const runtime = await createAuroraBrowserRuntimeAsync()
+
+    expect(runtime.features).toMatchObject({
+      requestedNodeRole: 'remote-console',
+      activeNodeRole: 'remote-console',
+      localToolProviderEnabled: false,
+    })
+    expect(runtime.localData).toBeUndefined()
+    expect(runtime.localFeatureSharing).toBeUndefined()
+    expect(runtime.localNodeProviderStatus).toEqual({
+      available: false,
+      state: 'open-in-another-tab',
+      productMessage: 'This device is already available from another open tab.',
+      registeredFeatureCount: 0,
+      localDataWritable: false,
+    })
+    await runtime.close()
   })
 
   it('returns an empty v1 compatibility document for a valid mesh-only v2 profile', () => {
@@ -578,6 +627,7 @@ function fakeMeshNodeServices(close: () => Promise<void>): BrowserMeshNodeServic
     backend: { kind: 'indexeddb', persistent: true, sqlite: false } as BrowserMeshNodeServices['backend'],
     crypto: {} as BrowserMeshNodeServices['crypto'],
     provider: { enabled: true } as BrowserMeshNodeServices['provider'],
+    localFeatureSharing: {} as BrowserMeshNodeServices['localFeatureSharing'],
     localToolRegistry: {} as BrowserMeshNodeServices['localToolRegistry'],
     compositionStatus: {
       state: 'ready',
