@@ -76,6 +76,39 @@ describe('LocalFeatureSharingPanel', () => {
     root.unmount()
   })
 
+  it('keeps sharing choices open when a revoke cannot be saved', async () => {
+    const current = snapshot({
+      features: [feature({ enabled: true })],
+      approvedDevices: [{
+        peerId: 'peer-authority-2',
+        peerLabel: 'Hallway display',
+        featureIds: ['documents'],
+        expiresAtMs: null,
+      }],
+    })
+    const controller = port(current)
+    controller.revokePeerSharing = vi.fn().mockRejectedValue(new Error('raw authority failure'))
+    const { container, root } = mountedRoot()
+
+    await act(async () => {
+      root.render(<LocalFeatureSharingPanel port={controller} />)
+      await flush()
+    })
+    await act(async () => {
+      buttonByText(container, 'Choose features').click()
+    })
+    await act(async () => {
+      buttonByText(document.body, 'Stop sharing').click()
+      await flush()
+    })
+
+    expect(controller.revokePeerSharing).toHaveBeenCalledWith('peer-authority-2')
+    expect(document.body.textContent).toContain('Choose features for Hallway display')
+    expect(container.textContent).toContain('Aurora could not save this change. Try again.')
+    expect(container.textContent).not.toContain('raw authority failure')
+    root.unmount()
+  })
+
   it('never renders hostile feature, peer, or error details', async () => {
     const poisoned = snapshot({
       features: [feature({
