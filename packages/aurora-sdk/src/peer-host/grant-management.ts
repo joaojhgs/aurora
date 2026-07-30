@@ -10,7 +10,8 @@ const MAX_SELECTION_ITEMS = 128
 const DEFAULT_MAX_EXPIRY_WINDOW_MS = 366 * 24 * 60 * 60 * 1000
 const SAFE_ID_RE = /^[A-Za-z0-9_.:@/-]+$/u
 const FORBIDDEN_SECRET_RE = /bearer|proof|token|tokenhash|verifier|credential|password|secret|private[-_]?key/iu
-const FORBIDDEN_EXECUTION_RE = /\b(sql|sqlite|select|insert|update|delete|drop|alter|pragma|shell|process|spawn|exec|chmod|chown|sudo|bash|sh|powershell|cmd)\b/iu
+const FORBIDDEN_EXECUTION_IDENTIFIER_RE = /(?:^|[.:@/-])(?:shell[.:@/-]+exec|process[.:@/-]+spawn|exec|spawn|sudo|bash|sh|powershell|cmd)(?:$|[.:@/-])/iu
+const FORBIDDEN_RESOURCE_SCOPE_RE = /^(?:sql|sqlite|shell|process)(?::|$)|\b(?:select|insert|drop|alter|pragma|chmod|chown|sudo|bash|powershell|cmd)\b/iu
 
 export type PeerGrantManagementErrorCode =
   | 'invalid_selector'
@@ -206,7 +207,7 @@ function normalizeResourceScopes(values: readonly string[]): readonly string[] {
   if (!Array.isArray(values) || values.length > MAX_SELECTION_ITEMS) {
     throw new PeerGrantManagementError('invalid_selection', 'Too many resource selections')
   }
-  const normalized = values.map((value) => normalizeIdentifier(value, 'resource', MAX_RESOURCE_SCOPE_LENGTH))
+  const normalized = values.map((value) => normalizeResourceScope(value))
   return [...new Set(normalized)].sort()
 }
 
@@ -218,8 +219,16 @@ function normalizeIdentifier(value: string, field: string, maxLength: number): s
     throw new PeerGrantManagementError('invalid_selection', `Invalid ${field} selection`)
   }
   if (!SAFE_ID_RE.test(normalized)) throw new PeerGrantManagementError('invalid_selection', `Invalid ${field} selection`)
-  if (FORBIDDEN_SECRET_RE.test(normalized) || FORBIDDEN_EXECUTION_RE.test(normalized)) {
+  if (FORBIDDEN_SECRET_RE.test(normalized) || FORBIDDEN_EXECUTION_IDENTIFIER_RE.test(normalized)) {
     throw new PeerGrantManagementError('invalid_selection', `Invalid ${field} selection`)
+  }
+  return normalized
+}
+
+function normalizeResourceScope(value: string): string {
+  const normalized = normalizeIdentifier(value, 'resource', MAX_RESOURCE_SCOPE_LENGTH)
+  if (FORBIDDEN_RESOURCE_SCOPE_RE.test(normalized)) {
+    throw new PeerGrantManagementError('invalid_selection', 'Invalid resource selection')
   }
   return normalized
 }

@@ -153,6 +153,28 @@ describe('PeerGrantManager', () => {
     await expect(manager.listActiveGrants(selector)).resolves.toEqual([])
   })
 
+  it('accepts registered action IDs without allowing raw execution scopes', async () => {
+    const manager = new PeerGrantManager({
+      repository: new MemoryPeerGrantRepository(),
+      now: () => 4500,
+      randomId: () => 'grant-action-ids'
+    })
+
+    await expect(manager.replaceGrant(selector, {
+      allowedMethodIds: ['Memory.DeleteConversation', 'Memory.UpdateConversation'],
+      allowedToolContractIds: ['aurora.local.memory.delete_conversation.v1', 'aurora.local.memory.update_conversation.v1'],
+      capabilityPackIds: ['memory.local-delete']
+    })).resolves.toMatchObject({
+      allowedMethodIds: ['Memory.DeleteConversation', 'Memory.UpdateConversation'],
+      allowedToolContractIds: ['aurora.local.memory.delete_conversation.v1', 'aurora.local.memory.update_conversation.v1'],
+      capabilityPackIds: ['memory.local-delete']
+    })
+
+    await expect(manager.replaceGrant(selector, { resourceScopes: ['shell:run-command'] })).rejects.toBeInstanceOf(PeerGrantManagementError)
+    await expect(manager.replaceGrant(selector, { resourceScopes: ['sqlite:main'] })).rejects.toBeInstanceOf(PeerGrantManagementError)
+    await expect(manager.replaceGrant(selector, { resourceScopes: ['documents:select drafts'] })).rejects.toBeInstanceOf(PeerGrantManagementError)
+  })
+
   it('uses injected clock and ID dependencies deterministically', async () => {
     const repository = new MemoryPeerGrantRepository()
     const manager = new PeerGrantManager({
