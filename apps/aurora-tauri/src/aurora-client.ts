@@ -368,7 +368,7 @@ async function resolveTauriProductionLocalAssistant(
 ): Promise<AuroraTauriLightweightAssistantConfig | null> {
   if (explicit) return explicit;
   if (!isTauriRuntime()) return null;
-  const client = createTauriAssistantProviderClient({ invoke });
+  const client = createTauriAssistantProviderClient({ commandAdapter: invoke });
   const status = await client.status().catch(() => null);
   if (!status?.enabled) return null;
   return {

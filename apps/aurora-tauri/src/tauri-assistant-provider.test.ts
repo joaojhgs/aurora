@@ -32,7 +32,7 @@ describe("Tauri assistant provider boundary", () => {
         redactedFields: ["apiKey"],
       };
     });
-    const client = createTauriAssistantProviderClient({ invoke });
+    const client = createTauriAssistantProviderClient({ commandAdapter: invoke });
 
     await expect(client.configure({
       provider: "openai-compatible",
@@ -65,7 +65,7 @@ describe("Tauri assistant provider boundary", () => {
       });
       return { type: "message", content: "hello from native provider" };
     });
-    const client = createTauriAssistantProviderClient({ invoke });
+    const client = createTauriAssistantProviderClient({ commandAdapter: invoke });
 
     await expect(client.provider.complete({
       messages: [{ role: "user", content: "hello" }],
@@ -87,7 +87,7 @@ describe("Tauri assistant provider boundary", () => {
         route: "local",
       }],
     }));
-    const client = createTauriAssistantProviderClient({ invoke });
+    const client = createTauriAssistantProviderClient({ commandAdapter: invoke });
 
     await expect(client.provider.complete({
       messages: [{ role: "user", content: "status" }],
@@ -106,7 +106,7 @@ describe("Tauri assistant provider boundary", () => {
 
   it("rejects provider status from any backend other than the platform keychain", async () => {
     const client = createTauriAssistantProviderClient({
-      invoke: async () => ({
+      commandAdapter: async () => ({
         configured: true,
         enabled: true,
         provider: "openai-compatible",

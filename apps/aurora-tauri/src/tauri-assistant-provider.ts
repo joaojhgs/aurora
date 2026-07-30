@@ -6,7 +6,7 @@ import {
   type LightweightToolCall,
 } from "@aurora/client/lightweight-orchestrator";
 
-export interface TauriAssistantProviderInvoke {
+export interface TauriAssistantProviderCommandAdapter {
   (command: string, args?: Record<string, unknown>): Promise<unknown>;
 }
 
@@ -38,7 +38,7 @@ export interface TauriAssistantProviderClient {
 }
 
 export interface TauriAssistantProviderOptions {
-  readonly invoke: TauriAssistantProviderInvoke;
+  readonly commandAdapter: TauriAssistantProviderCommandAdapter;
 }
 
 export function createTauriAssistantProviderClient(
@@ -46,34 +46,34 @@ export function createTauriAssistantProviderClient(
 ): TauriAssistantProviderClient {
   return {
     provider: {
-      complete: (request) => completeWithTauriProvider(options.invoke, request),
+      complete: (request) => completeWithTauriProvider(options.commandAdapter, request),
     },
-    status: () => readProviderStatus(options.invoke),
-    configure: (request) => configureProvider(options.invoke, request),
+    status: () => readProviderStatus(options.commandAdapter),
+    configure: (request) => configureProvider(options.commandAdapter, request),
   };
 }
 
 async function readProviderStatus(
-  invoke: TauriAssistantProviderInvoke,
+  commandAdapter: TauriAssistantProviderCommandAdapter,
 ): Promise<TauriAssistantProviderStatus> {
-  return parseStatus(await invoke("aurora_assistant_provider_status"));
+  return parseStatus(await commandAdapter("aurora_assistant_provider_status"));
 }
 
 async function configureProvider(
-  invoke: TauriAssistantProviderInvoke,
+  commandAdapter: TauriAssistantProviderCommandAdapter,
   request: TauriAssistantProviderConfigureRequest,
 ): Promise<TauriAssistantProviderStatus> {
-  return parseStatus(await invoke("aurora_assistant_provider_configure", { request }));
+  return parseStatus(await commandAdapter("aurora_assistant_provider_configure", { request }));
 }
 
 async function completeWithTauriProvider(
-  invoke: TauriAssistantProviderInvoke,
+  commandAdapter: TauriAssistantProviderCommandAdapter,
   request: LightweightProviderRequest,
 ): Promise<LightweightProviderResponse> {
   if (request.signal.aborted) {
     throw new LightweightOrchestratorError("provider_call_cancelled");
   }
-  const response = await invoke("aurora_assistant_provider_complete", {
+  const response = await commandAdapter("aurora_assistant_provider_complete", {
     request: {
       messages: request.messages,
       tools: request.tools,
