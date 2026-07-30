@@ -226,6 +226,7 @@ class _FakeBus:
     [
         ("authenticated", "connected"),
         ("negotiated", "connected"),
+        ("provider_unavailable", "connected"),
         ("disconnected", "disconnected"),
         ("stale", "disconnected"),
         ("failed", "disconnected"),
@@ -1140,7 +1141,7 @@ async def test_startup_success_snapshot_precedes_configure_credentials_presence(
     unavailable_update = bus.request.await_args.args[1]
     assert bus.request.await_args.args[0] == AuthMethods.MESH_UPDATE_PEER_CONNECTION
     assert unavailable_update.peer_id == "browser-peer"
-    assert unavailable_update.connection_status == "disconnected"
+    assert unavailable_update.connection_status == "connected"
     topic, refresh = bus.publish.await_args.args[:2]
     assert topic == TOOLING_PROJECTION_SYNC_REQUESTED_TOPIC
     assert isinstance(refresh, ToolingProjectionSyncRequested)

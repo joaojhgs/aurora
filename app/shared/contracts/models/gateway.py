@@ -98,6 +98,7 @@ class GatewayFetchToolingExportCatalogPageResponse(IOModel):
     ok: bool = True
     reason_code: str | None = Field(default=None, max_length=128)
     page: ToolingGetExportCatalogResponse | None = None
+    granted_permissions: list[str] = Field(default_factory=list, max_length=1024)
 
 
 class MethodInfo(IOModel):

@@ -748,7 +748,10 @@ async def test_readiness_report_requires_normalized_schema_and_durable_legacy_gu
         "tooling_remote_catalog_stage_retirements",
         "tooling_mesh_activation_state",
     ]
-    tooling_service._stable_peer_id = "provider-ready"
+    tooling_service._stable_peer_id = None
+    tooling_service._load_stable_tooling_peer_id = AsyncMock(
+        side_effect=lambda: setattr(tooling_service, "_stable_peer_id", "provider-ready")
+    )
     tooling_service._db_sql = AsyncMock(return_value=[{"name": name} for name in table_names])
 
     async def readiness_request(topic, _payload, **_kwargs):
@@ -774,6 +777,7 @@ async def test_readiness_report_requires_normalized_schema_and_durable_legacy_gu
 
     report = await tooling_service._on_get_mesh_projection_readiness(SimpleNamespace())
 
+    tooling_service._load_stable_tooling_peer_id.assert_awaited_once()
     assert report.ready is True
     assert report.normalized_catalog is True
     assert report.legacy_guard_active is True
@@ -863,6 +867,65 @@ def _sync_page(
         tools=tools or [],
         total_count=len(tools or []) if complete else None,
         final_checksum=("d" * 64) if complete else None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_projection_sync_stages_the_validated_page_service_identity(tooling_service):
+    provider = "peer-race"
+    local_service_instance_id = f"local:{provider}:Tooling"
+    tooling_service._sharing_policy = ToolingSharingPolicy()
+    tooling_service._tool_export_snapshot = AsyncMock(
+        return_value=SimpleNamespace(
+            mesh_switches=ToolingMeshKillSwitches(consumer_mesh_tooling_enabled=True)
+        )
+    )
+    tooling_service._audit_tooling_event = AsyncMock()
+    begin_requests = []
+
+    async def request_bus(method, payload, **_kwargs):
+        if method == DBMethods.GET_TOOLING_REMOTE_CATALOG:
+            return QueryResult(ok=True, data={"headers": []})
+        if method == "Gateway.FetchToolingExportCatalogPage":
+            page = _sync_page(revision="local-provider", complete=True).model_copy(
+                update={"service_instance_id": local_service_instance_id}
+            )
+            return QueryResult(
+                ok=True,
+                data=GatewayFetchToolingExportCatalogPageResponse(
+                    page=page,
+                    granted_permissions=[
+                        "Native.GetDeviceStatus",
+                        "Tooling.GetExportCatalog",
+                    ],
+                ).model_dump(),
+            )
+        if method == DBMethods.BEGIN_TOOLING_REMOTE_CATALOG_SYNC:
+            begin_requests.append(payload)
+            return QueryResult(ok=True, data={})
+        if method == DBMethods.APPEND_TOOLING_REMOTE_CATALOG_PAGE:
+            return QueryResult(ok=True, data={})
+        if method == DBMethods.COMMIT_TOOLING_REMOTE_CATALOG_SYNC:
+            return QueryResult(ok=True, data={"ok": True})
+        raise AssertionError(method)
+
+    tooling_service.bus.request = AsyncMock(side_effect=request_bus)
+    await tooling_service._on_projection_sync_requested(
+        ToolingProjectionSyncRequested(
+            provider_peer_id=provider,
+            service_instance_id=f"remote:{provider}:Tooling",
+            reason_code="provider_lease_available",
+            force_full_snapshot=True,
+        )
+    )
+
+    assert len(begin_requests) == 1
+    assert begin_requests[0].service_instance_id == local_service_instance_id
+    assert tooling_service._remote_provider_states[
+        (provider, local_service_instance_id)
+    ] == (
+        ["Native.GetDeviceStatus", "Tooling.GetExportCatalog"],
+        True,
     )
 
 

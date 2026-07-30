@@ -10,6 +10,7 @@ Resolves bus topics to either local or remote targets based on:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import unquote
 
 from app.helpers.aurora_logger import log_debug
 from app.messaging.audio_messages import AudioTopics
@@ -39,10 +40,12 @@ class RoutingTable:
         peer_registry: PeerRegistry,
         *,
         policy_provider: MeshPolicyProvider | None = None,
+        local_peer_id: str | None = None,
     ) -> None:
         self._config = mesh_config
         self._registry = peer_registry
         self._policy_provider = policy_provider
+        self._local_peer_id = local_peer_id
 
     def _snapshot_config(self) -> MeshConfig:
         if self._policy_provider is not None:
@@ -220,7 +223,10 @@ class RoutingTable:
                 message=f"{module} selector does not name a peer/provider/service instance",
             )
 
-        if provider_kind == "local":
+        if peer_id == "local" or (
+            provider_kind == "local"
+            and (self._local_peer_id is None or peer_id == self._local_peer_id)
+        ):
             return RouteDecision(target="local", module=module, selector=selector)
 
         peer = self._registry.get_peer(peer_id)
@@ -465,6 +471,10 @@ def _parse_selector_target(
     parts = value.split(":")
     if len(parts) >= 3 and parts[0] in {"local", "remote", "mesh"}:
         provider_kind, peer_id, service_module = parts[:3]
+        try:
+            peer_id = unquote(peer_id, errors="strict")
+        except UnicodeDecodeError:
+            return None, f"{field_name} '{value}' has an invalid encoded peer id", None
         if provider_kind == "mesh":
             provider_kind = "remote"
     else:

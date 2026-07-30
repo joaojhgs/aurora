@@ -17,6 +17,7 @@ from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.stt import TranscriptionMethods, WakeWordMethods
+from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
 from tests.unit.gateway.verified_manifest_helpers import verified_peer_manifest
@@ -70,6 +71,7 @@ def _make_negotiated_peer(peer_id, modules, latency_ms=50.0, *, max_concurrent=1
         "Transcription": TranscriptionMethods.PROCESS_AUDIO,
         "WakeWord": WakeWordMethods.PROCESS_AUDIO,
         "Orchestrator": OrchestratorMethods.INFER_CHAT,
+        "Tooling": ToolingMethods.EXECUTE_TOOL,
     }
     topic_sets = {
         "TTS": [TTSMethods.SYNTHESIZE, TTSMethods.REQUEST],
@@ -307,6 +309,79 @@ class TestRoutingTableResolve:
         assert route.target == "remote"
         assert route.peer_id == "peer-1"
         assert route.selector.resource_namespace == "journal"
+
+    @pytest.mark.asyncio
+    async def test_remote_canonical_local_service_id_routes_to_owning_peer(
+        self, mesh_config, peer_registry
+    ):
+        """A provider-local identity is remote when its owning peer is remote."""
+
+        routing_table = RoutingTable(
+            mesh_config,
+            peer_registry,
+            local_peer_id="python-peer",
+        )
+        peer = _make_negotiated_peer("browser-peer", ["Tooling"])
+        await peer_registry.register_peer("browser-peer")
+        await peer_registry.update_manifest("browser-peer", peer.manifest)
+
+        route = routing_table.resolve(
+            ToolingMethods.EXECUTE_TOOL,
+            selector=MeshAddressSelector(
+                peer_id="browser-peer",
+                service_instance_id="local:browser-peer:Tooling",
+                tool_id="aurora-tool:v1:browser-peer:Tooling:native.get_device_status",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "browser-peer"
+
+    @pytest.mark.asyncio
+    async def test_remote_percent_encoded_local_service_id_routes_to_raw_peer(
+        self, mesh_config, peer_registry
+    ):
+        """Canonical service IDs decode their RFC3986 peer component for routing."""
+
+        remote_peer_id = "browser peer/☃"
+        routing_table = RoutingTable(
+            mesh_config,
+            peer_registry,
+            local_peer_id="python-peer",
+        )
+        peer = _make_negotiated_peer(remote_peer_id, ["Tooling"])
+        await peer_registry.register_peer(remote_peer_id)
+        await peer_registry.update_manifest(remote_peer_id, peer.manifest)
+
+        route = routing_table.resolve(
+            ToolingMethods.EXECUTE_TOOL,
+            selector=MeshAddressSelector(
+                peer_id=remote_peer_id,
+                service_instance_id="local:browser%20peer%2F%E2%98%83:Tooling",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == remote_peer_id
+
+    def test_canonical_local_service_id_stays_on_current_peer(
+        self, mesh_config, peer_registry
+    ):
+        routing_table = RoutingTable(
+            mesh_config,
+            peer_registry,
+            local_peer_id="python-peer",
+        )
+
+        route = routing_table.resolve(
+            ToolingMethods.EXECUTE_TOOL,
+            selector=MeshAddressSelector(
+                peer_id="python-peer",
+                service_instance_id="local:python-peer:Tooling",
+            ),
+        )
+
+        assert route.target == "local"
 
     @pytest.mark.asyncio
     async def test_explicit_missing_peer_returns_actionable_error(self, routing_table):

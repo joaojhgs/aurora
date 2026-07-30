@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging.audio_messages import AudioTopics
@@ -198,7 +198,22 @@ class _MeshStartOutcome(Enum):
 
 def _mesh_connection_status(registry_status: str) -> str:
     """Translate internal peer-registry states to the persisted connection contract."""
-    return "connected" if registry_status in {"authenticated", "negotiated"} else "disconnected"
+    return (
+        "connected"
+        if registry_status in {"authenticated", "negotiated", "provider_unavailable"}
+        else "disconnected"
+    )
+
+
+def _tooling_service_instance_ids(stable_peer_id: str) -> frozenset[str]:
+    """Return the exact service identities one authenticated Tooling peer may claim."""
+
+    return frozenset(
+        {
+            f"remote:{stable_peer_id}:Tooling",
+            f"local:{quote(stable_peer_id, safe='-._~')}:Tooling",
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -2799,7 +2814,10 @@ class GatewayService(BaseService):
                 reason_code="mesh_transport_unavailable",
             )
         revisions = rtc_client.remote_tooling_authority_revisions(request.provider_peer_id)
-        if revisions is None:
+        granted_permissions = rtc_client.remote_tooling_authority_grants(
+            request.provider_peer_id
+        )
+        if revisions is None or granted_permissions is None:
             return GatewayFetchToolingExportCatalogPageResponse(
                 ok=False,
                 reason_code="authenticated_provider_unavailable",
@@ -2819,6 +2837,9 @@ class GatewayService(BaseService):
             manifest_revision=manifest_revision,
         )
         if not result.ok or result.data is None:
+            log_warning(
+                f"Tooling projection page fetch failed for {request.provider_peer_id}"
+            )
             return GatewayFetchToolingExportCatalogPageResponse(
                 ok=False,
                 reason_code="projection_fetch_failed",
@@ -2836,14 +2857,18 @@ class GatewayService(BaseService):
             )
         if (
             page.provider_peer_id != request.provider_peer_id
-            or page.service_instance_id != f"remote:{request.provider_peer_id}:Tooling"
+            or page.service_instance_id
+            not in _tooling_service_instance_ids(request.provider_peer_id)
             or page.selected_protocol_tier != "projection_v1"
         ):
             return GatewayFetchToolingExportCatalogPageResponse(
                 ok=False,
                 reason_code="projection_provider_mismatch",
             )
-        return GatewayFetchToolingExportCatalogPageResponse(page=page)
+        return GatewayFetchToolingExportCatalogPageResponse(
+            page=page,
+            granted_permissions=list(granted_permissions),
+        )
 
     async def _get_registry_export(self) -> GetRegistryResponse:
         """Return registry export, or an empty typed response when unavailable."""
@@ -4006,6 +4031,7 @@ class GatewayService(BaseService):
                 mesh_config,
                 self._mesh_peer_registry,
                 policy_provider=self._mesh_policy_provider,
+                local_peer_id=peer_id,
             )
             self._mesh_peer_bridge = PeerBridge(
                 self._rtc_client,

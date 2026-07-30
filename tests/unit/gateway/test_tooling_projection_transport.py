@@ -460,15 +460,28 @@ async def test_local_projection_invalidation_intersects_affected_peers_with_rtc_
 
 
 @pytest.mark.asyncio
-async def test_gateway_page_proxy_addresses_stable_peer_and_stamps_authority_revisions() -> None:
+@pytest.mark.parametrize(
+    "service_instance_id",
+    [
+        "remote:stable-provider:Tooling",
+        "local:stable-provider:Tooling",
+    ],
+)
+async def test_gateway_page_proxy_addresses_stable_peer_and_stamps_authority_revisions(
+    service_instance_id: str,
+) -> None:
     gateway = GatewayService()
     gateway._mesh_peer_id = "stable-local"
     gateway._rtc_client = MagicMock()
     gateway._rtc_client.remote_tooling_authority_revisions.return_value = (17, 23)
+    gateway._rtc_client.remote_tooling_authority_grants.return_value = (
+        "Native.GetDeviceStatus",
+        "Tooling.GetExportCatalog",
+    )
     gateway._mesh_peer_bridge = MagicMock()
     page = ToolingGetExportCatalogResponse(
         provider_peer_id="stable-provider",
-        service_instance_id="remote:stable-provider:Tooling",
+        service_instance_id=service_instance_id,
         authority_revision=ToolingProjectionAuthorityRevision(
             catalog_revision=1,
             export_policy_revision=2,
@@ -497,12 +510,77 @@ async def test_gateway_page_proxy_addresses_stable_peer_and_stamps_authority_rev
 
     assert response.ok is True
     assert response.page == page
+    assert response.granted_permissions == [
+        "Native.GetDeviceStatus",
+        "Tooling.GetExportCatalog",
+    ]
     call = gateway._mesh_peer_bridge.call.await_args
     assert call.args[:2] == ("stable-provider", ToolingMethods.GET_EXPORT_CATALOG)
     assert call.kwargs["caller_peer_id"] == "stable-local"
     assert call.kwargs["auth_grant_revision"] == 17
     assert call.kwargs["manifest_revision"] == 23
     assert "provider_peer_id" not in call.args[2].model_dump()
+
+
+@pytest.mark.asyncio
+async def test_gateway_page_proxy_accepts_only_canonical_local_provider_identity() -> None:
+    gateway = GatewayService()
+    gateway._mesh_peer_id = "stable-local"
+    gateway._rtc_client = MagicMock()
+    gateway._rtc_client.remote_tooling_authority_revisions.return_value = (17, 23)
+    gateway._rtc_client.remote_tooling_authority_grants.return_value = (
+        "Tooling.GetExportCatalog",
+    )
+    gateway._mesh_peer_bridge = MagicMock()
+    request = GatewayFetchToolingExportCatalogPageRequest(
+        provider_peer_id="peer:台北/room 42?x=1#node",
+        request=ToolingGetExportCatalogRequest(page_size=100),
+    )
+
+    def projection_page(service_instance_id: str) -> ToolingGetExportCatalogResponse:
+        return ToolingGetExportCatalogResponse(
+            provider_peer_id=request.provider_peer_id,
+            service_instance_id=service_instance_id,
+            authority_revision=ToolingProjectionAuthorityRevision(
+                catalog_revision=1,
+                export_policy_revision=2,
+                auth_grant_revision=17,
+                manifest_revision=23,
+                switch_revision=1,
+            ),
+            projection_revision="projection-1",
+            projection_digest="1" * 64,
+            page_index=0,
+            page_size=100,
+            page_hash="2" * 64,
+            complete=True,
+            total_count=0,
+            final_checksum="3" * 64,
+        )
+
+    canonical = (
+        "local:peer%3A%E5%8F%B0%E5%8C%97%2Froom%2042%3Fx%3D1%23node:Tooling"
+    )
+    gateway._mesh_peer_bridge.call = AsyncMock(
+        return_value=QueryResult(
+            ok=True,
+            data=projection_page(canonical).model_dump(mode="json"),
+        )
+    )
+    accepted = await gateway._fetch_tooling_export_catalog_page(request)
+    assert accepted.ok is True
+    assert accepted.page is not None
+    assert accepted.page.service_instance_id == canonical
+
+    gateway._mesh_peer_bridge.call = AsyncMock(
+        return_value=QueryResult(
+            ok=True,
+            data=projection_page("local:different-peer:Tooling").model_dump(mode="json"),
+        )
+    )
+    rejected = await gateway._fetch_tooling_export_catalog_page(request)
+    assert rejected.ok is False
+    assert rejected.reason_code == "projection_provider_mismatch"
 
 
 @pytest.mark.asyncio

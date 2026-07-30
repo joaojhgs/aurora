@@ -458,6 +458,8 @@ class RTCClient:
         self._rpc_send_tasks: set[asyncio.Task[bool]] = set()
         self._tooling_projection_refresh_tasks: dict[str, asyncio.Task[None]] = {}
         self._tooling_remote_authority_revisions: dict[str, tuple[int, int]] = {}
+        self._tooling_remote_authority_grants: dict[str, tuple[str, ...]] = {}
+        self._tooling_projection_sync_after_lease: set[str] = set()
         self._tooling_outbound_manifest_revisions: dict[str, int] = {}
         self._latest_tooling_projection_invalidation: Any | None = None
         self._latest_tooling_projection_invalidations_by_peer: OrderedDict[str, Any] = OrderedDict()
@@ -598,6 +600,7 @@ class RTCClient:
         controller = self._flow_controllers.pop(session_peer_id, None)
         if controller is not None:
             controller.cleanup()
+        self._tooling_projection_sync_after_lease.discard(stable)
         self._cancel_peer_send_lane(session_peer_id)
         self._peer_send_locks.pop(session_peer_id, None)
 
@@ -959,6 +962,12 @@ class RTCClient:
                 lease.availability_revision,
                 lease.expires_at_ms,
             )
+            if stable_peer_id in self._tooling_projection_sync_after_lease:
+                self._tooling_projection_sync_after_lease.discard(stable_peer_id)
+                await self._request_tooling_projection_sync(
+                    stable_peer_id,
+                    reason="provider_lease_available",
+                )
         else:
             self._cancel_provider_lease_task(stable_peer_id, session_peer_id=session_peer_id)
 
@@ -1605,6 +1614,8 @@ class RTCClient:
         self._provider_export_peer_generations.clear()
         self._provider_export_diagnostics.clear()
         self._tooling_remote_authority_revisions.clear()
+        self._tooling_remote_authority_grants.clear()
+        self._tooling_projection_sync_after_lease.clear()
         self._tooling_outbound_manifest_revisions.clear()
         self._latest_tooling_projection_invalidation = None
         self._latest_tooling_projection_invalidations_by_peer.clear()
@@ -3253,6 +3264,13 @@ class RTCClient:
             return None
         return self._tooling_remote_authority_revisions.get(stable_peer_id)
 
+    def remote_tooling_authority_grants(self, stable_peer_id: str) -> tuple[str, ...] | None:
+        """Return permissions learned from the same verified manifest authority."""
+
+        if not self._has_authenticated_stable_peer(stable_peer_id):
+            return None
+        return self._tooling_remote_authority_grants.get(stable_peer_id)
+
     def _provider_tooling_authority_revisions(
         self,
         session_peer_id: str,
@@ -3411,13 +3429,19 @@ class RTCClient:
         )
         manifest = parse_result.manifest
         if not parse_result.usable or not manifest:
+            self._tooling_projection_sync_after_lease.discard(stable_peer_id)
+            self._tooling_remote_authority_revisions.pop(stable_peer_id, None)
+            self._tooling_remote_authority_grants.pop(stable_peer_id, None)
             if self._peer_registry and stable_peer_id != peer_id:
                 await self._peer_registry.register_peer(stable_peer_id, "")
                 await self._peer_registry.update_manifest(
                     stable_peer_id,
                     self._non_routable_manifest_for(stable_peer_id, manifest),
                 )
-            log_warning(f"RTCClient: Invalid manifest from peer {peer_id}")
+            log_warning(
+                f"RTCClient: Invalid manifest from peer {peer_id}: "
+                f"{parse_result.reason_code}"
+            )
             return
         mesh_config = self._current_mesh_config()
         if stable_peer_id == peer_id or manifest.peer_id != stable_peer_id:
@@ -3451,8 +3475,12 @@ class RTCClient:
                 int(evidence.auth_grant_revision) if evidence is not None else 0,
                 previous_manifest_revision + 1,
             )
+            self._tooling_remote_authority_grants[stable_peer_id] = tuple(
+                sorted(self._verified_manifest_grants(manifest, parse_result.status))
+            )
         else:
             self._tooling_remote_authority_revisions.pop(stable_peer_id, None)
+            self._tooling_remote_authority_grants.pop(stable_peer_id, None)
 
         # Update peer registry
         needs_initial_latency = True
@@ -3483,13 +3511,20 @@ class RTCClient:
 
         protocol = select_tooling_protocol(manifest, manifest_status=parse_result.status)
         if self._manifest_shares_tooling(manifest) and self._local_shares_tooling(mesh_config):
-            await self._request_tooling_projection_sync(
-                stable_peer_id,
-                reason=(
-                    "peer_manifest_projection_ready" if protocol.supported else protocol.status
-                ),
-                mesh_config=mesh_config,
-            )
+            if self.peer_supports_capability(peer_id, CAP_PROVIDER_LEASE_V1):
+                # Lease-aware providers open inbound calls only after this ACK
+                # is accepted and an active provider lease is announced.
+                self._tooling_projection_sync_after_lease.add(stable_peer_id)
+            else:
+                await self._request_tooling_projection_sync(
+                    stable_peer_id,
+                    reason=(
+                        "peer_manifest_projection_ready" if protocol.supported else protocol.status
+                    ),
+                    mesh_config=mesh_config,
+                )
+        else:
+            self._tooling_projection_sync_after_lease.discard(stable_peer_id)
 
     async def _on_manifest_ack(self, peer_id: str, data: dict) -> None:
         """Process an incoming manifest ACK from a peer.

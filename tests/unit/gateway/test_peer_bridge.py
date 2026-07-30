@@ -160,6 +160,51 @@ class TestPeerBridgeCall:
         assert sent["params"]["inference_model_id"] == "model-1"
 
     @pytest.mark.asyncio
+    async def test_call_uses_selected_tool_identity_for_remote_tooling_dispatch(
+        self, bridge, mock_rtc_client
+    ):
+        """Bindable consumer aliases become the provider's canonical tool id."""
+
+        from app.shared.contracts.models.mesh import MeshAddressSelector
+        from app.shared.contracts.models.tooling import (
+            ToolingExecuteToolRequest,
+            ToolingMethods,
+        )
+
+        canonical_tool_id = "aurora-tool:v1:browser-peer:Tooling:native.get_device_status"
+
+        async def simulate_response():
+            await asyncio.sleep(0.05)
+            bridge.on_response(
+                "browser-peer",
+                {"type": "result", "id": "trace-tool", "result": {"ok": True}},
+            )
+
+        task = asyncio.create_task(simulate_response())
+        result = await bridge.call(
+            "browser-peer",
+            ToolingMethods.EXECUTE_TOOL,
+            ToolingExecuteToolRequest(
+                tool_name="browser_device_status",
+                arguments={},
+                mesh_selector=MeshAddressSelector(
+                    peer_id="browser-peer",
+                    service_instance_id="local:browser-peer:Tooling",
+                    tool_id=canonical_tool_id,
+                ),
+            ),
+            timeout=5.0,
+            correlation_id="trace-tool",
+        )
+        await task
+
+        sent = json.loads(mock_rtc_client.send_to_peer.call_args.args[1])
+        assert result.ok is True
+        assert sent["method"] == ToolingMethods.EXECUTE_TOOL
+        assert sent["params"]["tool_name"] == canonical_tool_id
+        assert "mesh_selector" not in sent["params"]
+
+    @pytest.mark.asyncio
     async def test_stream_call_strips_top_level_mesh_selectors_but_preserves_nested_business_data(
         self, bridge, mock_rtc_client
     ):

@@ -377,6 +377,32 @@ async def test_provider_lease_schedules_exact_expiry_and_tombstone_cancels() -> 
 
 
 @pytest.mark.asyncio
+async def test_active_provider_lease_releases_one_pending_projection_sync() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+    _negotiate_provider_lease(client)
+    client._schedule_provider_lease_expiry = MagicMock()  # type: ignore[method-assign]  # noqa: SLF001
+    client._request_tooling_projection_sync = AsyncMock()  # type: ignore[method-assign]  # noqa: SLF001
+    client._tooling_projection_sync_after_lease.add("stable-peer")  # noqa: SLF001
+
+    await client._handle_provider_lease_frame(  # noqa: SLF001
+        "session-peer",
+        _provider_lease_frame(),
+    )
+    await client._handle_provider_lease_frame(  # noqa: SLF001
+        "session-peer",
+        _provider_lease_frame(revision=2, issued_at_ms=2000, expires_at_ms=62000),
+    )
+
+    client._request_tooling_projection_sync.assert_awaited_once_with(  # type: ignore[attr-defined]  # noqa: SLF001
+        "stable-peer",
+        reason="provider_lease_available",
+    )
+    assert "stable-peer" not in client._tooling_projection_sync_after_lease  # noqa: SLF001
+
+
+@pytest.mark.asyncio
 async def test_stale_expiry_finalizer_does_not_remove_new_epoch_timer() -> None:
     client = _client()
     registry = FakePeerRegistry()

@@ -1316,6 +1316,43 @@ async def test_rtc_client_manifest_with_shared_tooling_requests_catalog_sync(moc
 
 
 @pytest.mark.asyncio
+async def test_lease_aware_tooling_manifest_waits_for_provider_lease_before_sync(mock_deps):
+    settings, bus, registry, auth_service = mock_deps
+    bus.publish = AsyncMock()
+    client = RTCClient(settings, bus, registry, auth_service)
+    client._mesh_config = MeshConfig(  # noqa: SLF001
+        enabled=True,
+        services={"Tooling": mesh_policy(share=True)},
+    )
+    client._peer_registry = MagicMock()  # noqa: SLF001
+    client._peer_registry.get_peer.return_value = None  # noqa: SLF001
+    client._peer_registry.register_peer = AsyncMock()  # noqa: SLF001
+    client._peer_registry.require_provider_lease = AsyncMock()  # noqa: SLF001
+    client._peer_registry.update_manifest = AsyncMock()  # noqa: SLF001
+    client._peer_send_fns["session-peer"] = MagicMock()  # noqa: SLF001
+    client._remember_stable_peer_id(  # noqa: SLF001
+        "session-peer",
+        "stable-remote-peer",
+        "remote-node",
+    )
+    client.peer_supports_capability = MagicMock(return_value=True)  # type: ignore[method-assign]
+    manifest = verified_peer_manifest(
+        "stable-remote-peer",
+        [_verified_tooling_service()],
+        node_name="remote-node",
+        recipient_peer_id=client._local_mesh_peer_id(),  # noqa: SLF001
+    )
+
+    await client._on_peer_manifest(  # noqa: SLF001
+        "session-peer",
+        {"type": "manifest", **manifest.model_dump(mode="json")},
+    )
+
+    bus.publish.assert_not_awaited()
+    assert client._tooling_projection_sync_after_lease == {"stable-remote-peer"}  # noqa: SLF001
+
+
+@pytest.mark.asyncio
 async def test_rtc_policy_update_does_not_toggle_operational_mesh_state(mock_deps):
     settings, bus, registry, auth_service = mock_deps
     client = RTCClient(settings, bus, registry, auth_service)

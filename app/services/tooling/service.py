@@ -525,6 +525,8 @@ class ToolingService(BaseService):
     async def _on_get_mesh_projection_readiness(
         self, _request: EmptyInput
     ) -> ToolingMeshProjectionReadiness:
+        if not self._stable_peer_id:
+            await self._load_stable_tooling_peer_id()
         contracts = all_contracts()
         projection_transport = ToolingMethods.GET_EXPORT_CATALOG in contracts and callable(
             getattr(self, "_on_get_export_catalog", None)
@@ -2670,6 +2672,8 @@ class ToolingService(BaseService):
         sync_id = uuid.uuid4().hex
         self._projection_sync_ids[request.provider_peer_id] = sync_id
         begun = False
+        verified_granted_permissions: tuple[str, ...] | None = None
+        verified_service_instance_id: str | None = None
         try:
             existing = await self.bus.request(
                 DBMethods.GET_TOOLING_REMOTE_CATALOG,
@@ -2700,13 +2704,37 @@ class ToolingService(BaseService):
                     timeout=10.0,
                 )
                 if not fetched.ok:
-                    raise RuntimeError("projection_fetch_failed")
+                    fetched_data = (
+                        fetched.data.model_dump(mode="python")
+                        if hasattr(fetched.data, "model_dump")
+                        else fetched.data
+                    )
+                    proxy_reason = (
+                        fetched_data.get("reason_code")
+                        if isinstance(fetched_data, dict)
+                        else None
+                    )
+                    log_warning(
+                        "Tooling projection proxy request failed for "
+                        f"{request.provider_peer_id}: "
+                        f"{proxy_reason or 'projection_fetch_failed'}"
+                    )
+                    raise RuntimeError(proxy_reason or "projection_fetch_failed")
                 proxy = GatewayFetchToolingExportCatalogPageResponse.model_validate(fetched.data)
                 if not proxy.ok or proxy.page is None:
                     raise RuntimeError(proxy.reason_code or "projection_fetch_failed")
                 page = proxy.page
                 if page.provider_peer_id != request.provider_peer_id:
                     raise RuntimeError("projection_provider_mismatch")
+                page_granted_permissions = tuple(sorted(set(proxy.granted_permissions)))
+                if verified_granted_permissions is None:
+                    verified_granted_permissions = page_granted_permissions
+                    verified_service_instance_id = page.service_instance_id
+                elif (
+                    page_granted_permissions != verified_granted_permissions
+                    or page.service_instance_id != verified_service_instance_id
+                ):
+                    raise RuntimeError("projection_authority_changed")
                 if not begun:
                     result = await self.bus.request(
                         DBMethods.BEGIN_TOOLING_REMOTE_CATALOG_SYNC,
@@ -2714,7 +2742,7 @@ class ToolingService(BaseService):
                             sync_id=sync_id,
                             peer_id=request.provider_peer_id,
                             provider_id=request.provider_peer_id,
-                            service_instance_id=request.service_instance_id,
+                            service_instance_id=page.service_instance_id,
                             projection_revision=page.projection_revision,
                             projection_digest=page.projection_digest,
                             authority_revision=page.authority_revision,
@@ -2769,6 +2797,17 @@ class ToolingService(BaseService):
             if isinstance(committed_data, dict) and committed_data.get("ok") is False:
                 raise RuntimeError(str(committed_data.get("error") or "projection_commit_failed"))
             begun = False
+            if (
+                verified_granted_permissions is None
+                or verified_service_instance_id is None
+            ):
+                raise RuntimeError("projection_authority_missing")
+            self._update_remote_provider_state(
+                peer_id=request.provider_peer_id,
+                service_instance_id=verified_service_instance_id,
+                granted_permissions=list(verified_granted_permissions),
+                available=True,
+            )
             if not requires_policy_reconciliation:
                 self._catalog_cache.clear()
                 await self._audit_tooling_event(

@@ -19,7 +19,7 @@ import asyncio
 import inspect
 import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -28,11 +28,18 @@ from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import QueryResult
 from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
 
 _STREAM_QUEUE_MAXSIZE = 128
 _SCOPED_ONLY_EVENT_TOPICS = frozenset({OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK})
 _SENSITIVE_EVENT_TOPICS = _SCOPED_ONLY_EVENT_TOPICS
+_TOOL_ID_DISPATCH_TOPICS = frozenset(
+    {
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.EXECUTE_TOOL,
+    }
+)
 
 if TYPE_CHECKING:
     from app.services.gateway.mesh.latency import LatencyMonitor
@@ -40,7 +47,11 @@ if TYPE_CHECKING:
     from app.services.gateway.webrtc.rtc_client import RTCClient
 
 
-def _rpc_params_without_mesh_selectors(payload: BaseModel | dict) -> dict[str, Any]:
+def _rpc_params_without_mesh_selectors(
+    payload: BaseModel | dict,
+    *,
+    topic: str,
+) -> dict[str, Any]:
     """Serialize RPC params without consumed top-level mesh selectors.
 
     ``dispatch_selector``/``mesh_selector``/``selector`` are local routing controls
@@ -57,6 +68,14 @@ def _rpc_params_without_mesh_selectors(payload: BaseModel | dict) -> dict[str, A
         params = dict(payload)
     else:
         return {}
+
+    mesh_selector = params.get("mesh_selector")
+    if topic in _TOOL_ID_DISPATCH_TOPICS and isinstance(mesh_selector, Mapping):
+        selected_tool_id = mesh_selector.get("tool_id")
+        if isinstance(selected_tool_id, str) and selected_tool_id.strip():
+            # Aggregate discovery names are consumer-side bindable aliases.
+            # The selected provider resolves its canonical global/local tool id.
+            params["tool_name"] = selected_tool_id
 
     params.pop("dispatch_selector", None)
     params.pop("mesh_selector", None)
@@ -240,7 +259,7 @@ class PeerBridge:
         # receiving peer or its MeshBus may re-route instead of executing the
         # local service. Only strip top-level routing metadata so nested
         # business payloads remain unchanged.
-        params = _rpc_params_without_mesh_selectors(payload)
+        params = _rpc_params_without_mesh_selectors(payload, topic=topic)
 
         msg = _rpc_call_message(
             req_id=req_id,
@@ -313,7 +332,7 @@ class PeerBridge:
         if self._peer_role(peer_id) == "consumer":
             raise PermissionError(f"Peer {peer_id} is consumer-only")
         req_id = correlation_id or uuid.uuid4().hex[:12]
-        params = _rpc_params_without_mesh_selectors(payload)
+        params = _rpc_params_without_mesh_selectors(payload, topic=topic)
 
         msg = _rpc_call_message(
             req_id=req_id,
