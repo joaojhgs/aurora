@@ -9,18 +9,18 @@ const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
 const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
   assistant: ['Text chat'],
   memory: ['Memory & Knowledge', 'Collections', 'Search conversations'],
-  tools: ['Tools & Plugins', 'Sources', 'Selected source tool inventory'],
-  mesh: ['Mesh & Peers', 'Mesh networking', 'Pending requests', 'Network'],
+  tools: ['Tools & Plugins', 'Review tool sources', 'Execution approval'],
+  mesh: ['Mesh & Peers', 'Peer trust, pairing and permissions', 'Pending pairing requests', 'Network'],
   admin: ['Admin overview', 'Diagnostics'],
-  services: ['Services', 'Backend service health and restart control'],
+  services: ['Services', 'Service health and restart controls'],
   access: ['Access & RBAC', 'Roles define permission sets', 'Principals'],
   tokens: ['Tokens', 'API tokens issued to principals'],
-  backups: ['Backups & Restore'],
+  backups: ['Backups', 'Snapshots, verification and restore'],
   scheduler: ['Scheduler'],
   audit: ['Audit log'],
-  models: ['Models & Runtime', 'Providers', 'Compare at a glance'],
+  models: ['Models & Sources', 'Compare at a glance'],
   onboarding: ['Welcome to Aurora', 'Start guided setup'],
-  settings: ['General permissions, schema-backed configuration', 'Data policy and retention'],
+  settings: ['Settings', 'Connection choices'],
 }
 
 const screenshotDir = join(process.cwd(), 'reports', 'playwright-routes', 'screenshots')
@@ -227,7 +227,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     await expect(page.locator('.aui-sidebar a').first()).toBeFocused()
     await expectFocusedWithVisibleOutline(page, 'desktop primary nav')
 
-    await page.getByRole('link', { name: /Mesh & Peers/i }).focus()
+    await page.getByRole('link', { name: /^Mesh$/i }).focus()
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/mesh$/)
     await expect(page.getByRole('heading', { name: /Mesh/i }).first()).toBeVisible()
@@ -254,7 +254,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
 
   test('production-crawls all primary routes without console, HTTP, placeholder, or landmark regressions', async ({ page }) => {
     const failures: string[] = []
-    expect(primaryNavItems).toHaveLength(14)
+    expect(primaryNavItems).toHaveLength(13)
 
     for (const route of primaryNavItems) {
       const routeFailures = await collectPageFailures(page, async () => {
@@ -327,7 +327,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
       join(screenshotDir, 'all-routes-summary.json'),
       `${JSON.stringify({
         command: 'pnpm --filter @aurora/tauri-ui test:e2e:routes:playwright',
-        assertion: 'all 14 primary routes captured at desktop and mobile viewports with production route oracle landmarks and controls',
+        assertion: 'all primary routes captured at desktop and mobile viewports with production route oracle landmarks and controls',
         routeCount: primaryNavItems.length,
         viewportCount: cockpitScreenshotViewports.length,
         screenshotCount: screenshotStatus.length,

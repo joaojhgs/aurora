@@ -148,7 +148,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'admin-services',
     label: 'Admin services',
     navItemIds: ['services'],
-    routeOracles: [routeOracle('services', ['Services'], ['Services table with health'])],
+    routeOracles: [routeOracle('services', ['Services'], ['Service health and restart controls'])],
     mockReferenceFiles: ['components/aurora/admin/services-view.tsx'],
     mockUxAnchors: ['Services', 'Service health', 'Restart control is not available for this service.'],
     componentFiles: ['admin-services-view.tsx'],
@@ -230,7 +230,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['plugins', 'tools'],
     routeOracles: [
       routeOracle('plugins', ['Plugins, MCP, and tools'], ['Reload catalog']),
-      routeOracle('tools', ['Tool registry and Approval cards'], ['Tool search', 'Tool detail drawer', 'Tool parameters', 'MCP server status', 'Open scheduler'])
+      routeOracle('tools', ['Tools & Plugins', 'Review tool sources'], ['Tool search', 'Tool detail drawer', 'Tool parameters', 'MCP server status', 'Open scheduler'])
     ],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
     mockUxAnchors: ['Tools &amp; Plugins', 'grouped by source', 'Add MCP source', 'Policy:'],
@@ -356,7 +356,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     id: 'models-runtime',
     label: 'Models and performance',
     navItemIds: ['models'],
-    routeOracles: [routeOracle('models', ['Models and sources'], ['Source policy'])],
+    routeOracles: [routeOracle('models', ['Models & Sources'], ['Compare at a glance'])],
     mockReferenceFiles: ['components/aurora/models/models-view.tsx'],
     mockUxAnchors: ['Models & Sources', 'Local, cloud, and connected model sources', 'External sources remain policy-gated by Aurora.', 'Usage & Benchmarks'],
     componentFiles: ['models-view.tsx'],
@@ -378,7 +378,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Mesh peers and pairing lifecycle',
     navItemIds: ['mesh', 'pairing'],
     routeOracles: [
-      routeOracle('mesh', ['Mesh peers'], ['Pair new peer']),
+      routeOracle('mesh', ['Mesh & Peers', 'Peer trust, pairing and permissions'], ['Pairing queue controls']),
       routeOracle('pairing', ['Pairing queue'], ['Pairing queue controls'])
     ],
     mockReferenceFiles: ['components/aurora/mesh/mesh-view.tsx'],
