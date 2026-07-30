@@ -4,7 +4,7 @@ import { AuroraValidationError } from '../validation/index.js'
 import { bytesToHex, canonicalJson } from '../webrtc/encoding.js'
 import type { CallFrame, SubscribeFrame } from '../webrtc/protocol.js'
 import { ProviderLeaseController } from './provider-lease.js'
-import type { AuthenticatedPeerContext } from './authority.js'
+import type { AuthenticatedPeerContext, PeerRevocationEvent, PeerRelationshipSelector } from './authority.js'
 import type {
   PeerHostCallContext,
   PeerHostAuthorizationDecision,
@@ -18,7 +18,7 @@ import type {
   PeerHostProjectionMethodType
 } from './types.js'
 
-type ActiveWork = { abort: AbortController; cleanup(): void; settled: boolean; kind: 'call' | 'stream' | 'subscription' }
+type ActiveWork = { abort: AbortController; cleanup(reason: string): void; settled: boolean; kind: 'call' | 'stream' | 'subscription' }
 type ManifestEvidence = {
   projectionDigest: string
   registryRevision: string
@@ -46,6 +46,9 @@ export class WebRtcPeerHost {
   private pendingManifest: ManifestEvidence = null
   private lastRecipientPeerId: string | undefined
   private lastAuthenticatedPeerContext: AuthenticatedPeerContext | undefined
+  private activeAuthoritySelector: PeerRelationshipSelector | null = null
+  private authorityRevoked = false
+  private unsubscribeRevocation: (() => void) | null = null
   private timeoutSendFailureCount = 0
   private lastTimeoutFailureReason: 'timeout_send_failed' | null = null
 
@@ -72,9 +75,12 @@ export class WebRtcPeerHost {
     this.connectionEpoch = this.lease.startEpoch()
     this.availabilityRevision = 0
     this.pendingManifest = null
+    this.authorityRevoked = false
     if (remotePeerId !== undefined) this.lastRecipientPeerId = remotePeerId
     if (authenticatedPeerContext !== undefined) this.lastAuthenticatedPeerContext = authenticatedPeerContext
-    return await this.buildManifest(remotePeerId, authenticatedPeerContext)
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext ?? this.lastAuthenticatedPeerContext)
+    this.bindRevocation(epochContext)
+    return await this.buildManifest(remotePeerId, epochContext)
   }
 
   markManifestAcknowledged(ack: Record<string, unknown>): boolean {
@@ -267,6 +273,10 @@ export class WebRtcPeerHost {
       await sender.sendFrame(errorFrame(frame.id, 404, 'method not found', 'method_not_found'))
       return
     }
+    if (this.authorityRevoked) {
+      await sender.sendFrame(errorFrame(frame.id, 403, 'peer authority revoked', 'peer_authority_revoked'))
+      return
+    }
     if (!this.acceptingInbound || !this.lease.isActive()) {
       await sender.sendFrame(errorFrame(frame.id, 425, 'provider is not ready', 'provider_not_ready'))
       return
@@ -323,6 +333,15 @@ export class WebRtcPeerHost {
   async handleSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.requireSender()
     const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
+    if (this.authorityRevoked) {
+      await sender.sendFrame({
+        type: 'subscribe_rejected',
+        id: frame.id,
+        reason: 'peer_authority_revoked',
+        rejected_topics: frame.topics
+      })
+      return
+    }
     if (!this.acceptingInbound || !this.lease.isActive()) {
       await sender.sendFrame({
         type: 'subscribe_rejected',
@@ -361,9 +380,9 @@ export class WebRtcPeerHost {
       abort,
       kind: 'subscription',
       settled: false,
-      cleanup: () => {
+      cleanup: (reason: string) => {
         clearTimeout(timer)
-        for (const handle of handles) void handle.close('subscription_closed')
+        for (const handle of handles) void handle.close(reason)
       }
     }
     try {
@@ -416,6 +435,7 @@ export class WebRtcPeerHost {
   handleDisconnect(reason = 'disconnect'): void {
     this.acceptingInbound = false
     this.cancelAll(reason)
+    this.unbindRevocation()
   }
 
   getActiveWorkCount(): number {
@@ -511,6 +531,26 @@ export class WebRtcPeerHost {
     }
   }
 
+  private cancelRevokedAuthority(event: PeerRevocationEvent): void {
+    if (!this.selectorMatchesActiveAuthority(event.selector)) return
+    this.authorityRevoked = true
+    this.acceptingInbound = false
+    const terminal = revocationTerminalError(event)
+    for (const [id, active] of [...this.active]) {
+      active.abort.abort('peer_authority_revoked')
+      if (!this.finishActive(id, active, 'peer_authority_revoked')) continue
+      void this.sendRevocationTerminal(id, active.kind, terminal).catch(() => undefined)
+    }
+  }
+
+  private async sendRevocationTerminal(id: string, kind: ActiveWork['kind'], error: PeerHostErrorBody): Promise<void> {
+    if (kind === 'subscription') {
+      await this.sender?.sendFrame({ type: 'unsubscribed', id, subscription_id: id, removed: true })
+      return
+    }
+    await this.sender?.sendFrame({ type: 'error', id, correlation_id: id, error })
+  }
+
   private async timeoutWork(id: string, active: ActiveWork): Promise<void> {
     if (!this.finishActive(id, active)) return
     active.abort.abort('deadline')
@@ -527,12 +567,39 @@ export class WebRtcPeerHost {
     }
   }
 
-  private finishActive(id: string, active: ActiveWork): boolean {
+  private finishActive(id: string, active: ActiveWork, reason = 'work_finished'): boolean {
     if (active.settled || this.active.get(id) !== active) return false
     active.settled = true
-    active.cleanup()
+    active.cleanup(reason)
     this.active.delete(id)
     return true
+  }
+
+  private bindRevocation(context: AuthenticatedPeerContext | undefined): void {
+    this.unbindRevocation()
+    if (context === undefined || this.options.revocationBroadcaster === undefined) {
+      this.activeAuthoritySelector = null
+      return
+    }
+    this.activeAuthoritySelector = { ...context.selector }
+    this.unsubscribeRevocation = this.options.revocationBroadcaster.subscribe((event) => {
+      this.cancelRevokedAuthority(event)
+    })
+  }
+
+  private unbindRevocation(): void {
+    this.unsubscribeRevocation?.()
+    this.unsubscribeRevocation = null
+    this.activeAuthoritySelector = null
+  }
+
+  private selectorMatchesActiveAuthority(selector: PeerRelationshipSelector): boolean {
+    const active = this.activeAuthoritySelector
+    return active !== null &&
+      active.tokenId === selector.tokenId &&
+      active.claimantPeerId === selector.claimantPeerId &&
+      active.verifierPeerId === selector.verifierPeerId &&
+      active.roomName === selector.roomName
   }
 
   private requireSender(): PeerHostFrameSender {
@@ -665,6 +732,15 @@ function redactError(error: unknown, randomId: () => string): PeerHostErrorBody 
 
 function errorFrame(id: string, code: number, message: string, reasonCode: string): Record<string, unknown> {
   return { type: 'error', id, correlation_id: id, error: { code, message, reason_code: reasonCode } }
+}
+
+function revocationTerminalError(event: PeerRevocationEvent): PeerHostErrorBody {
+  return {
+    code: 403,
+    message: 'peer authority revoked',
+    reason_code: 'peer_authority_revoked',
+    error_ref: String(event.revokedAtMs).slice(0, 64)
+  }
 }
 
 function utf8Bytes(value: string): number {

@@ -4,6 +4,7 @@ import { z } from 'zod/v4'
 import { MemoryLocalDataBackend } from '../src/local-data/index.js'
 import {
   MemoryPeerGrantRepository,
+  MemoryPeerRevocationBroadcaster,
   PeerAuthorityResolver,
   PeerHostContractRegistry,
   SessionPeerHostAuthorizationStore,
@@ -14,7 +15,7 @@ import {
   type PeerHostCallContext
 } from '../src/webrtc/index.js'
 import { PeerAuthorityHostAuthorizationStore } from '../src/peer-host/authorization.js'
-import { DenyAllInboundCredentialVerifierStore, NoopReconnectChallengeStore, type AuthenticatedPeerContext, type LocalPeerGrantV1 as AuthorityGrant } from '../src/peer-host/authority.js'
+import { DenyAllInboundCredentialVerifierStore, NoopReconnectChallengeStore, type AuthenticatedPeerContext, type LocalPeerGrantV1 as AuthorityGrant, type PeerRevocationBroadcaster } from '../src/peer-host/authority.js'
 import { LocalDataPeerAuditSink } from '../src/peer-host/local-data-authority-adapters.js'
 
 function grant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
@@ -140,6 +141,71 @@ function firstSharedService(manifest: Record<string, unknown>): Record<string, u
   expect(service).toBeDefined()
   if (!service) throw new Error('manifest shared service missing')
   return service
+}
+
+function revocationEvent(selector = authenticatedContext().selector, patch: Record<string, unknown> = {}) {
+  return {
+    type: 'peer_authority_revoked_v1' as const,
+    selector,
+    revokedGrantIds: ['authority-grant-1'],
+    credentialRevision: 4,
+    revokedAtMs: 1234,
+    reasonCode: 'operator_revoked',
+    redacted: true as const,
+    ...patch
+  }
+}
+
+async function authorityHost(options: {
+  handler?: (input: unknown, context: PeerHostCallContext) => Promise<unknown> | unknown
+  streamHandler?: (input: unknown, context: PeerHostCallContext) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>
+  subscriptionClose?: (reason?: string) => void | Promise<void>
+  broadcaster?: PeerRevocationBroadcaster
+  sender?: { sendFrame(frame: Record<string, unknown>): Promise<void> }
+  context?: AuthenticatedPeerContext
+} = {}) {
+  const registry = new PeerHostContractRegistry().register({
+    methodId: 'Tooling.GetTools',
+    methodType: options.streamHandler ? 'stream' : 'unary',
+    inputSchemaId: 'Tooling.GetTools.input',
+    outputSchemaId: 'Tooling.GetTools.output',
+    inputSchema: z.any(),
+    outputSchema: z.any(),
+    requiredPermissions: ['Tooling.GetTools'],
+    handler: options.handler ?? (async () => ({ count: 0, tools: [] })),
+    ...(options.streamHandler ? { streamHandler: options.streamHandler } : {})
+  }).registerEvent({
+    topic: 'Tooling.ProjectionInvalidated',
+    outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+    outputSchema: z.object({ provider_peer_id: z.string() }),
+    requiredPermissions: ['Tooling.ProjectionInvalidated'],
+    handler: () => ({ close: options.subscriptionClose ?? (() => undefined) })
+  })
+  registry.parseInput = (_method, value) => value
+  registry.parseOutput = (_method, value) => value
+  const grants = new MemoryPeerGrantRepository()
+  await grants.upsertGrant(authorityGrant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] }))
+  const resolver = new PeerAuthorityResolver({
+    verifierStore: new DenyAllInboundCredentialVerifierStore(),
+    grantRepository: grants,
+    challengeStore: new NoopReconnectChallengeStore()
+  })
+  const broadcaster = options.broadcaster ?? new MemoryPeerRevocationBroadcaster()
+  const peerHost = new WebRtcPeerHost({
+    localPeerId: 'local-peer',
+    nodeName: 'Local',
+    registry,
+    authorizationStore: new PeerAuthorityHostAuthorizationStore(resolver),
+    revocationBroadcaster: broadcaster,
+    clock: () => 1000,
+    randomId: () => 'epoch-1'
+  })
+  const sent: unknown[] = []
+  peerHost.attach(options.sender ?? { sendFrame: async (frame) => { sent.push(frame) } })
+  const context = options.context ?? authenticatedContext()
+  const manifest = await peerHost.startEpoch('peer-a', context)
+  peerHost.markManifestAcknowledged(ackFromManifest(manifest))
+  return { peerHost, sent, broadcaster, context }
 }
 
 async function flush(): Promise<void> {
@@ -649,6 +715,134 @@ describe('WebRtcPeerHost', () => {
 
     expect(handler).toHaveBeenCalledTimes(1)
     expect(sent.at(-1)).toEqual({ type: 'result', id: 'authority-ok', result: { count: 0, tools: [] } })
+  })
+
+  it('terminates active unary work and prevents new calls when the authenticated selector is revoked', async () => {
+    let aborted = false
+    const { peerHost, sent, broadcaster } = await authorityHost({
+      handler: async (_input, context) => {
+        await new Promise<void>((resolve) => context.signal.addEventListener('abort', () => {
+          aborted = true
+          resolve()
+        }, { once: true }))
+        return { count: 0, tools: [] }
+      }
+    })
+
+    const pending = peerHost.handleCall({ type: 'call', id: 'active-call', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a', authenticatedContext())
+    await flush()
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+
+    await broadcaster.publish(revocationEvent({ ...authenticatedContext().selector, claimantPeerId: 'peer-b' }))
+    await flush()
+    expect(peerHost.getActiveWorkCount()).toBe(1)
+    expect(aborted).toBe(false)
+
+    await broadcaster.publish(revocationEvent())
+    await flush()
+    await pending
+    expect(aborted).toBe(true)
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+    expect(sent.filter((frame) => (frame as any).id === 'active-call')).toEqual([
+      expect.objectContaining({ type: 'error', id: 'active-call', error: expect.objectContaining({ code: 403, reason_code: 'peer_authority_revoked' }) })
+    ])
+    expect(JSON.stringify(sent)).not.toMatch(/tokenHash|bearer|proof|room-a|operator_revoked/u)
+
+    await peerHost.handleCall({ type: 'call', id: 'after-revoke', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a', authenticatedContext())
+    expect(sent.at(-1)).toMatchObject({ type: 'error', id: 'after-revoke', error: { code: 403, reason_code: 'peer_authority_revoked' } })
+  })
+
+  it('terminates active streams and subscriptions on matching revocation only', async () => {
+    const closedReasons: Array<string | undefined> = []
+    async function* stream(_input: unknown, context: PeerHostCallContext): AsyncIterable<unknown> {
+      yield { count: 1, tools: [] }
+      await new Promise<void>((resolve) => context.signal.addEventListener('abort', () => resolve(), { once: true }))
+      yield { count: 2, tools: [] }
+    }
+    const { peerHost, sent, broadcaster } = await authorityHost({
+      streamHandler: stream,
+      subscriptionClose: (reason) => { closedReasons.push(reason) }
+    })
+
+    const pendingStream = peerHost.handleCall({ type: 'call', id: 'active-stream', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a', authenticatedContext())
+    await flush()
+    await peerHost.handleSubscribe({ type: 'subscribe', id: 'active-sub', topics: ['Tooling.ProjectionInvalidated'], correlation_ids: [], ttl_seconds: 60 }, 'peer-a', authenticatedContext())
+    expect(peerHost.getActiveWorkCount()).toBe(2)
+
+    await broadcaster.publish(revocationEvent({ ...authenticatedContext().selector, roomName: 'other-room' }))
+    await flush()
+    expect(peerHost.getActiveWorkCount()).toBe(2)
+    expect(closedReasons).toEqual([])
+
+    await broadcaster.publish(revocationEvent())
+    await flush()
+    await pendingStream
+    expect(peerHost.getActiveWorkCount()).toBe(0)
+    expect(closedReasons).toEqual(['peer_authority_revoked'])
+    expect(sent).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'error', id: 'active-stream', error: expect.objectContaining({ code: 403, reason_code: 'peer_authority_revoked' }) }),
+      expect.objectContaining({ type: 'unsubscribed', id: 'active-sub', subscription_id: 'active-sub', removed: true })
+    ]))
+    expect(sent.filter((frame) => (frame as any).id === 'active-stream' && (frame as any).type === 'error')).toHaveLength(1)
+  })
+
+  it('cleans revocation listeners on disconnect and swallows revocation terminal send failures', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      let listener: ((event: ReturnType<typeof revocationEvent>) => void) | null = null
+      let subscribeCount = 0
+      let unsubscribeCount = 0
+      const broadcaster = {
+        async publish(event: ReturnType<typeof revocationEvent>) { listener?.(event) },
+        subscribe(next: (event: ReturnType<typeof revocationEvent>) => void) {
+          subscribeCount += 1
+          listener = next
+          return () => {
+            unsubscribeCount += 1
+            if (listener === next) listener = null
+          }
+        }
+      } satisfies PeerRevocationBroadcaster
+      let release!: () => void
+      const sent: unknown[] = []
+      const { peerHost } = await authorityHost({
+        broadcaster,
+        sender: {
+          sendFrame: async (frame) => {
+            sent.push(frame)
+            if ((frame as any).id === 'send-fails') throw new Error('secret send failed')
+          }
+        },
+        handler: async (_input, context) => {
+          await new Promise<void>((resolve) => {
+            release = resolve
+            context.signal.addEventListener('abort', () => resolve(), { once: true })
+          })
+          return { count: 0, tools: [] }
+        }
+      })
+      const pending = peerHost.handleCall({ type: 'call', id: 'send-fails', method: 'Tooling.GetTools', params: {}, identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] } }, 'peer-a', authenticatedContext())
+      await flush()
+      expect(peerHost.getActiveWorkCount()).toBe(1)
+      await broadcaster.publish(revocationEvent())
+      await flush()
+      release()
+      await pending
+      expect(peerHost.getActiveWorkCount()).toBe(0)
+      expect(unhandled).toEqual([])
+      expect(JSON.stringify(sent)).not.toContain('secret send failed')
+
+      peerHost.handleDisconnect('closed')
+      expect(subscribeCount).toBe(1)
+      expect(unsubscribeCount).toBe(1)
+      await broadcaster.publish(revocationEvent())
+      await flush()
+      expect(sent.filter((frame) => (frame as any).id === 'send-fails')).toHaveLength(1)
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
   })
 
   it('denies authority-backed provider calls without authenticated context or matching selector', async () => {

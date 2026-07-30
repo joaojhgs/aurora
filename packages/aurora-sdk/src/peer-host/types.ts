@@ -1,7 +1,7 @@
 import type { z } from 'zod/v4'
 
 import type { JsonObject } from '../types.js'
-import type { AuthenticatedPeerContext } from './authority.js'
+import type { AuthenticatedPeerContext, PeerRevocationBroadcaster } from './authority.js'
 
 export type PeerHostMethodType = 'unary' | 'stream' | 'event'
 export type PeerHostProjectionMethodType = 'use' | 'manage'
@@ -173,6 +173,7 @@ export interface PeerHostOptions {
   readonly nodeName: string
   readonly registry: import('./contract-registry.js').PeerHostContractRegistry
   readonly authorizationStore: PeerHostAuthorizationStore
+  readonly revocationBroadcaster?: PeerRevocationBroadcaster
   readonly clock?: () => number
   readonly randomId?: () => string
   readonly maxRequestBytes?: number
