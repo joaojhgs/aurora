@@ -24,6 +24,7 @@ import {
   type AuroraBrowserRuntime,
 } from './aurora-client'
 import { BrowserShellRuntimeProvider } from './browser-shell-runtime'
+import { createAuroraBrowserLocalAssistantConfig } from './browser-local-assistant'
 
 type PathAwareShellProps = {
   children: ReactNode
@@ -58,8 +59,13 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
     setRuntime(null)
     setStartFailed(false)
     void createAuroraBrowserRuntimeAsync().then(
-      (nextRuntime) => {
+      async (nextRuntime) => {
         if (!active) return
+        const localAssistant = await createAuroraBrowserLocalAssistantConfig(nextRuntime)
+        if (!active) return
+        if (localAssistant) {
+          Object.assign(nextRuntime, { localAssistant })
+        }
         setRuntime(nextRuntime)
       },
       () => {
