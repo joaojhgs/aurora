@@ -100,6 +100,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   const [busy, setBusy] = useState<string | null>(null)
   const [wizardStep, setWizardStep] = useState<'detect' | 'setup' | 'done'>('detect')
   const [manualAddressVisible, setManualAddressVisible] = useState(false)
+  const allowBrowserDeviceSetup = setupRequired && Boolean(modePreferenceStore && thinConnectionPanel)
 
   const model = useMemo(
     () =>
@@ -109,8 +110,9 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
         selectedModeId,
         endpoint,
         userAgent,
+        allowBrowserDeviceSetup,
       }),
-    [client, snapshot, selectedModeId, endpoint, session, userAgent],
+    [allowBrowserDeviceSetup, client, snapshot, selectedModeId, endpoint, session, userAgent],
   )
 
   useEffect(() => {
@@ -136,7 +138,9 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
       ([modeId, runtimeTier]) => {
         if (cancelled) return
         const productModeId = modeId ? storedModeToProductModeId(modeId, runtimeTier) : null
-        const availableModeId = productModeId ? availableProductModeId(productModeId, client.transport.kind, snapshot, userAgent) : null
+        const availableModeId = productModeId
+          ? availableProductModeId(productModeId, client.transport.kind, snapshot, userAgent, { allowBrowserDeviceSetup })
+          : null
         if (availableModeId && !modeSelectionTouchedRef.current) {
           setSelectedModeId(availableModeId)
           setModePreferenceStatus(`Restored ${modeLabel(availableModeId)}`)
@@ -157,11 +161,12 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     return () => {
       cancelled = true
     }
-  }, [client.transport.kind, modePreferenceStore, snapshot, userAgent])
+  }, [allowBrowserDeviceSetup, client.transport.kind, modePreferenceStore, snapshot, userAgent])
 
   function onSelectMode(modeId: string) {
-    if (!modePreferenceReady || !isSupportedModeId(modeId)) return
+    if (!isSupportedModeId(modeId)) return
     modeSelectionTouchedRef.current = true
+    setModePreferenceReady(true)
     setSelectedModeId(modeId)
     if (!modePreferenceStore) return
     const preference = productModePreference(modeId)
@@ -275,13 +280,13 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    disabled={mode.disabled || !modePreferenceReady}
+                    disabled={mode.disabled}
                     title={mode.label}
                     onClick={() => onSelectMode(mode.id)}
                     className={cn(
                       'flex items-start gap-3 rounded-xl border p-3.5 text-left ring-1 ring-foreground/10 transition-colors',
                       active ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-foreground/30',
-                      (mode.disabled || !modePreferenceReady) && 'cursor-not-allowed opacity-60'
+                      mode.disabled && 'cursor-not-allowed opacity-60'
                     )}
                   >
                     <span className="mt-0.5 shrink-0 text-foreground">
@@ -484,9 +489,23 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
   )
 }
 
-export function buildOnboardingViewModel({ client, snapshot, selectedModeId, endpoint, userAgent }: { client: AuroraClient; snapshot: AuroraShellSnapshot; selectedModeId?: string; endpoint?: string; userAgent?: string }): OnboardingViewModel {
+export function buildOnboardingViewModel({
+  client,
+  snapshot,
+  selectedModeId,
+  endpoint,
+  userAgent,
+  allowBrowserDeviceSetup = false,
+}: {
+  client: AuroraClient
+  snapshot: AuroraShellSnapshot
+  selectedModeId?: string
+  endpoint?: string
+  userAgent?: string
+  allowBrowserDeviceSetup?: boolean
+}): OnboardingViewModel {
   const session = client.auth.refreshClock()
-  const modes = deploymentModes(client.transport.kind, snapshot, userAgent)
+  const modes = deploymentModes(client.transport.kind, snapshot, userAgent, { allowBrowserDeviceSetup })
   const selected = selectedModeId && modes.some((mode) => mode.id === selectedModeId && !mode.disabled) ? selectedModeId : (modes.find((mode) => !mode.disabled)?.id ?? modes[0]?.id ?? 'connect-to-aurora')
   const authState = authAvailability(session)
   const pairingState = pairingAvailability(session, routeById(snapshot, 'mesh'))
@@ -518,16 +537,24 @@ export function buildOnboardingViewModel({ client, snapshot, selectedModeId, end
   }
 }
 
-function deploymentModes(transportKind: string, snapshot: AuroraShellSnapshot, userAgent?: string): DeploymentModeCard[] {
+function deploymentModes(
+  transportKind: string,
+  snapshot: AuroraShellSnapshot,
+  userAgent?: string,
+  options: { allowBrowserDeviceSetup?: boolean } = {},
+): DeploymentModeCard[] {
   const profile = getAuroraSurfaceProfile({
     transportKind,
     nativePlatform: snapshot.nativePlatform,
     userAgent,
   })
   const connectState = desktopThinState(snapshot, transportKind)
-  const makeAvailableState = profile.isMobile
+  const baseMakeAvailableState = profile.isMobile
     ? mobileNativeState(snapshot, transportKind, userAgent)
     : desktopThinState(snapshot, transportKind)
+  const makeAvailableState = options.allowBrowserDeviceSetup && baseMakeAvailableState.state === 'unsupported'
+    ? browserDeviceSetupState()
+    : baseMakeAvailableState
   const desktopNative = desktopLocalState(snapshot, transportKind)
   const modes = [
     mode('connect-to-aurora', PRODUCT_COPY.onboarding.choices.connect.label, PRODUCT_COPY.mesh.connectedDevice, PRODUCT_COPY.onboarding.choices.connect.description, connectState.state, connectState.evidence, connectState.repair),
@@ -537,6 +564,14 @@ function deploymentModes(transportKind: string, snapshot: AuroraShellSnapshot, u
     modes.push(mode('run-aurora-on-this-computer', PRODUCT_COPY.onboarding.choices.runHere.label, PRODUCT_COPY.mesh.localDevice, PRODUCT_COPY.onboarding.choices.runHere.description, desktopNative.state, desktopNative.evidence, desktopNative.repair))
   }
   return modes
+}
+
+function browserDeviceSetupState(): { state: AvailabilityState; evidence: string; repair: string } {
+  return {
+    state: 'pending',
+    evidence: 'Add an invite to make this device available.',
+    repair: 'Use an invite from the Aurora device you want to use.',
+  }
 }
 
 function desktopLocalState(snapshot: AuroraShellSnapshot, transportKind: string): { state: AvailabilityState; evidence: string; repair: string } {
@@ -961,8 +996,14 @@ function productModePreference(modeId: OnboardingProductModeId): { nodeMode: Aur
   return { nodeMode: 'remote-console', runtimeTier: 'none' }
 }
 
-function availableProductModeId(modeId: OnboardingProductModeId, transportKind: string, snapshot: AuroraShellSnapshot, userAgent?: string): OnboardingProductModeId | null {
-  return deploymentModes(transportKind, snapshot, userAgent).some((mode) => mode.id === modeId && !mode.disabled) ? modeId : null
+function availableProductModeId(
+  modeId: OnboardingProductModeId,
+  transportKind: string,
+  snapshot: AuroraShellSnapshot,
+  userAgent?: string,
+  options: { allowBrowserDeviceSetup?: boolean } = {},
+): OnboardingProductModeId | null {
+  return deploymentModes(transportKind, snapshot, userAgent, options).some((mode) => mode.id === modeId && !mode.disabled) ? modeId : null
 }
 
 function canOfferFullLocalMode(transportKind: string, snapshot: AuroraShellSnapshot): boolean {

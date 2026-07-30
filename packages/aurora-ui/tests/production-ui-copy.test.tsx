@@ -101,7 +101,7 @@ describe('production UI copy', () => {
     await act(async () => {
       root.render(
         <OnboardingView
-          client={client('http')}
+          client={client('mesh')}
           snapshot={safeShellSnapshot()}
           setupRequired
           thinConnectionPanel={<div data-testid="home-node-panel">Invite panel</div>}
@@ -129,6 +129,67 @@ describe('production UI copy', () => {
       buttonByText(container, 'Use invite instead').click()
     })
     expect(container.querySelector('#aurora-endpoint')).toBeNull()
+    root.unmount()
+    container.remove()
+  })
+
+  it('keeps hosted device sharing selectable while saved choices load', async () => {
+    const writes: string[] = []
+    const tiers: string[] = []
+    let resolveMode: (modeId: string | null) => void = () => undefined
+    const pendingMode = new Promise<string | null>((resolve) => {
+      resolveMode = resolve
+    })
+    const store: OnboardingModePreferenceStore = {
+      evidence: 'Saved for this device',
+      readSelectedMode: async () => pendingMode,
+      readSelectedRuntimeTier: async () => 'none',
+      writeSelectedMode: async (modeId) => {
+        writes.push(modeId)
+        return true
+      },
+      writeSelectedRuntimeTier: async (runtimeTier) => {
+        tiers.push(runtimeTier)
+        return true
+      },
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <OnboardingView
+          client={client('http')}
+          snapshot={safeShellSnapshot()}
+          modePreferenceStore={store}
+          setupRequired
+          thinConnectionPanel={<div data-testid="home-node-panel">Invite panel</div>}
+        />,
+      )
+    })
+    await flushReactWork()
+
+    const makeAvailable = choiceByText(container, 'Make this device available')
+    expect(makeAvailable.disabled).toBe(false)
+    expect(buttonByText(container, 'Continue').disabled).toBe(true)
+
+    await act(async () => {
+      makeAvailable.click()
+    })
+    expect(writes).toEqual(['mesh-node'])
+    expect(tiers).toEqual(['lightweight-ts'])
+    expect(buttonByText(container, 'Continue').disabled).toBe(false)
+
+    resolveMode('remote-console')
+    await flushReactWork()
+    expect(activeChoiceText(container)).toContain('Make this device available')
+
+    await act(async () => {
+      buttonByText(container, 'Continue').click()
+    })
+    expect(container.querySelector('[data-testid="home-node-panel"]')).not.toBeNull()
+
     root.unmount()
     container.remove()
   })
