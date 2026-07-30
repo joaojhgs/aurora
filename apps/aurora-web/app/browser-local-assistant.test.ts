@@ -6,6 +6,10 @@ import type {
   ToolingGetExportCatalogResponse,
   ToolingProjectionToolInfo,
 } from '@aurora/client'
+import {
+  computeProjectionChecksum,
+  computeProjectionPageHash,
+} from '@aurora/client/local-tools'
 import { createAuroraBrowserLocalAssistantConfig } from './browser-local-assistant'
 import type { AuroraBrowserRuntime } from './aurora-client'
 
@@ -71,11 +75,13 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
 
   it('returns local-tool-only when projection identity changes across pages', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ enabled: true })))
-    const firstPage = partialProjectionPage([projectionTool('remote.weather', 'remote')], 'next-page')
+    const [firstPage, validSecondPage] = projectionPages([
+      [projectionTool('remote.weather', 'remote')],
+      [projectionTool('remote.files', 'remote')],
+    ])
     const secondPage = {
-      ...completeProjectionPage([projectionTool('remote.files', 'remote')]),
+      ...validSecondPage,
       provider_peer_id: 'different-peer',
-      page_index: 1,
     }
     const getExportCatalog = vi
       .fn()
@@ -86,9 +92,9 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
 
     expect(config?.remoteTools).toEqual([])
     expect(getExportCatalog).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      cursor: 'next-page',
-      last_projection_revision: firstPage.projection_revision,
-      last_projection_digest: firstPage.projection_digest,
+      cursor: 'cursor-1',
+      last_projection_revision: null,
+      last_projection_digest: null,
     }))
   })
 
@@ -97,6 +103,19 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
     const getExportCatalog = vi.fn(async () => ({
       ok: true,
       tools: [projectionTool('legacy.weather', 'remote')],
+    }))
+
+    const config = await createAuroraBrowserLocalAssistantConfig(fakeRuntime({ getExportCatalog }))
+
+    expect(config?.remoteTools).toEqual([])
+  })
+
+  it('returns local-tool-only when a projection page hash is invalid', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ enabled: true })))
+    const remoteTool = projectionTool('remote.tampered', 'remote')
+    const getExportCatalog = vi.fn(async () => ({
+      ...completeProjectionPage([remoteTool]),
+      page_hash: '0'.repeat(64),
     }))
 
     const config = await createAuroraBrowserLocalAssistantConfig(fakeRuntime({ getExportCatalog }))
@@ -138,44 +157,54 @@ function fakeRuntime(overrides: {
 }
 
 function completeProjectionPage(tools: readonly ToolingProjectionToolInfo[]): ToolingGetExportCatalogResponse {
-  return {
-    ok: true,
-    provider_peer_id: 'peer-python',
-    service_instance_id: 'python:Tooling',
-    selected_protocol_tier: 'projection_v1',
-    authority_revision: {
-      catalog_revision: 1,
-      export_policy_revision: 1,
-      auth_grant_revision: 1,
-      manifest_revision: 1,
-      switch_revision: 1,
-      protocol_revision: 1,
-    },
-    projection_revision: 'projection-1',
-    projection_digest: 'a'.repeat(64),
-    page_index: 0,
-    page_size: 100,
-    page_hash: 'b'.repeat(64),
-    tools: [...tools],
-    retirements: [],
-    complete: true,
-    total_count: tools.length,
-    final_checksum: 'c'.repeat(64),
-  }
+  return projectionPages([[...tools]])[0]!
 }
 
-function partialProjectionPage(
-  tools: readonly ToolingProjectionToolInfo[],
-  nextCursor: string,
-): ToolingGetExportCatalogResponse {
-  const page = completeProjectionPage(tools)
-  return {
-    ...page,
-    complete: false,
-    next_cursor: nextCursor,
-    total_count: undefined as never,
-    final_checksum: undefined as never,
-  }
+function projectionPages(
+  toolPages: readonly (readonly ToolingProjectionToolInfo[])[],
+): ToolingGetExportCatalogResponse[] {
+  const tools = toolPages.flat()
+  const digest = computeProjectionChecksum(tools, [], [])
+  return toolPages.map((pageTools, index) => {
+    const complete = index === toolPages.length - 1
+    const page = {
+      ok: true,
+      provider_peer_id: 'peer-python',
+      service_instance_id: 'python:Tooling',
+      selected_protocol_tier: 'projection_v1' as const,
+      authority_revision: {
+        catalog_revision: 1,
+        export_policy_revision: 1,
+        auth_grant_revision: 1,
+        manifest_revision: 1,
+        switch_revision: 1,
+        protocol_revision: 1,
+      },
+      projection_revision: 'projection-1',
+      projection_digest: digest,
+      page_index: index,
+      page_size: 100,
+      page_hash: '0'.repeat(64),
+      tools: [...pageTools],
+      blocked_tools: [],
+      retirements: [],
+      ...(complete
+        ? {
+            complete: true as const,
+            next_cursor: null,
+            total_count: tools.length,
+            final_checksum: digest,
+          }
+        : {
+            complete: false as const,
+            next_cursor: `cursor-${index + 1}`,
+          }),
+    }
+    return {
+      ...page,
+      page_hash: computeProjectionPageHash(page as ToolingGetExportCatalogResponse),
+    } as ToolingGetExportCatalogResponse
+  })
 }
 
 function projectionTool(id: string, executionLocation: 'local' | 'remote'): ToolingProjectionToolInfo {
@@ -206,8 +235,8 @@ function projectionTool(id: string, executionLocation: 'local' | 'remote'): Tool
     capability_class: 'read',
     resource_scope: [],
     execution_location: executionLocation,
-    safety_class: 'safe',
-    risk_class: 'low',
+    safety_class: 'standard',
+    risk_class: 'standard',
     data_egress: false,
     mutating: false,
     external: false,
@@ -219,7 +248,7 @@ function projectionTool(id: string, executionLocation: 'local' | 'remote'): Tool
       provider_kind: 'mesh_peer',
       provider_peer_id: 'peer-python',
       provider_service_instance_id: 'python:Tooling',
-      source: 'mesh_peer',
+      source: 'unknown',
       advertised_name: 'Weather',
     },
   }
