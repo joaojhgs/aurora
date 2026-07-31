@@ -272,7 +272,9 @@ def test_parse_datachannel_frame_accepts_reconnect_auth_bindings() -> None:
     assert client._diagnostic_errors[0].code == "datachannel_frame_invalid"  # noqa: SLF001
 
 
-def test_parse_datachannel_frame_accepts_downstream_validated_provider_and_manifest_frames() -> None:
+def test_parse_datachannel_frame_accepts_downstream_validated_provider_and_manifest_frames() -> (
+    None
+):
     client = _client()
 
     provider_lease = client._parse_datachannel_frame(  # noqa: SLF001
