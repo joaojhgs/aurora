@@ -29,6 +29,8 @@ const config = {
     }
   },
   bundle: {
+    externalBin: [],
+    resources: {},
     longDescription:
       'Aurora desktop client packages the official Tauri 2 shell without Python service resources. Gateway and signaling endpoints are configured at runtime during onboarding and are not compiled into the artifact.'
   }

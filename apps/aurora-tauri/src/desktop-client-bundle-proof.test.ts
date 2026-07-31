@@ -103,6 +103,8 @@ describe('desktop client bundle artifact proof', () => {
     expect(config.app.security.csp).toContain("connect-src 'self' http: https: ws: wss:")
     expect(config.app.security.csp).not.toContain('gateway.example.invalid')
     expect(config.app.security.csp).not.toContain('signaling.example.invalid')
+    expect(config.bundle.externalBin).toEqual([])
+    expect(config.bundle.resources).toEqual({})
     expect(report).toMatchObject({
       bundleMode: 'desktop-client',
       connectionMode: 'runtime-configurable',
