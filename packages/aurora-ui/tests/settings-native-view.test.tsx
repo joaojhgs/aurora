@@ -127,6 +127,18 @@ describe('settings/native route separation', () => {
         expect.objectContaining({ id: 'fileAssociations', state: 'pending' })
       ])
     )
+    expect(model.nativePermissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'ios.shareExtension', state: 'pending' }),
+        expect.objectContaining({ id: 'ios.widgets', state: 'pending' }),
+        expect.objectContaining({ id: 'ios.fileAssociations', state: 'pending' })
+      ])
+    )
+    expect(
+      model.nativePermissions
+        .filter((permission) => ['ios.shareExtension', 'ios.widgets', 'ios.fileAssociations'].includes(permission.id))
+        .map((permission) => permission.state)
+    ).not.toContain('privacy-blocked')
 
     expect(markup).toContain('Advanced')
     expect(markup).toContain('Platform')

@@ -946,6 +946,7 @@ function availabilityFromNativeState(
 ): AvailabilityState {
   if (!nativeAvailable || nativeState === 'unsupported_platform') return 'unsupported'
   if (nativeState === 'available') return granted && capabilityEnabled ? 'available-local' : 'privacy-blocked'
+  if (nativeState === 'pending_native_target') return 'pending'
   if (nativeState === 'needs_native_permission') return 'privacy-blocked'
   if (nativeState === 'degraded' || nativeState === 'fallback') return 'degraded'
   return granted && capabilityEnabled ? 'available-local' : 'privacy-blocked'
