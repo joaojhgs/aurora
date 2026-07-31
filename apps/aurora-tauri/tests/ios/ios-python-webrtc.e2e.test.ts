@@ -100,6 +100,11 @@ const cryptoWorkerEntry = resolve(
   repoRoot,
   'packages/aurora-sdk/src/webrtc/crypto-worker.ts',
 )
+const mqttImportMapJson = '{"imports":{"mqtt":"/mqtt-bundle.mjs"}}'
+const mqttImportMapCspHash = `sha256-${crypto
+  .createHash('sha256')
+  .update(mqttImportMapJson)
+  .digest('base64')}`
 const surfaces: IosInteropSurface[] = [
   {
     id: 'mobile-safari',
@@ -176,11 +181,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
       resources.timeoutMs,
     )
     if (!mobileResult.ok || !mobileResult.result) {
-      throw new Error(
-        mobileResult.error?.stack ||
-          mobileResult.error?.message ||
-          `${surface.browserName} reported an unknown interop failure`,
-      )
+      throw new Error(mobileInteropFailure(mobileResult, surface.browserName))
     }
 
     const browserResult = mobileResult.result
@@ -989,7 +990,7 @@ async function buildWkWebViewHarness({
                 "img-src 'self' data: blob:",
                 "media-src 'self' blob: mediastream:",
                 "style-src 'self' 'unsafe-inline'",
-                "script-src 'self'",
+                `script-src 'self' '${mqttImportMapCspHash}'`,
                 "worker-src 'self' blob:",
               ].join('; '),
             },
@@ -1157,6 +1158,7 @@ function wkWebViewHarnessHtml(): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aurora Tauri WKWebView WebRTC Interop</title>
+    <script type="importmap">${mqttImportMapJson}</script>
     <style>
       * { box-sizing: border-box; }
       html { -webkit-text-size-adjust: 100%; background: #fff; color: #111827; }
@@ -1353,6 +1355,7 @@ function mobileHarnessHtml(): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aurora iOS WebRTC Interop</title>
+    <script type="importmap">${mqttImportMapJson}</script>
     <style>
       * { box-sizing: border-box; }
       html { -webkit-text-size-adjust: 100%; background: #fff; color: #111827; }
@@ -1431,6 +1434,22 @@ function mobileHarnessHtml(): string {
     </script>
   </body>
 </html>`
+}
+
+function mobileInteropFailure(
+  result: MobileResult,
+  browserName: string,
+): string {
+  const message = result.error?.message?.trim()
+  const stack = result.error?.stack?.trim()
+  if (message && stack && !stack.includes(message)) {
+    return `${message}\n${stack}`
+  }
+  return (
+    stack ||
+    message ||
+    `${browserName} reported an unknown interop failure`
+  )
 }
 
 function selectSimulatorDevice(

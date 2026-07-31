@@ -257,6 +257,21 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosInteropTest).toContain('-webkit-text-size-adjust: 100%')
     expect(iosInteropTest).toContain('data-aurora-ios-evidence="webrtc"')
     expect(iosInteropTest).toContain(
+      'const mqttImportMapJson = \'{"imports":{"mqtt":"/mqtt-bundle.mjs"}}\'',
+    )
+    expect(
+      iosInteropTest.match(
+        /<script type="importmap">\$\{mqttImportMapJson\}<\/script>/gu,
+      ),
+    ).toHaveLength(2)
+    expect(iosInteropTest).toContain(
+      "const mqttImportMapCspHash = `sha256-${crypto",
+    )
+    expect(iosInteropTest).toContain(
+      "`script-src 'self' '${mqttImportMapCspHash}'`",
+    )
+    expect(iosInteropTest).toContain('function mobileInteropFailure')
+    expect(iosInteropTest).toContain(
       'gatewayHttpApiEnabled: false',
     )
     expect(iosInteropTest).toContain(
