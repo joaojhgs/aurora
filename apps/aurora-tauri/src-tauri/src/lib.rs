@@ -4896,7 +4896,7 @@ fn assistant_provider_openai_body(
         .map(|tool| {
             let alias = aliases
                 .get(&tool.global_tool_id)
-                .ok_or_else(|| AuroraCommandError::InvalidGatewayResponse)?;
+                .ok_or(AuroraCommandError::InvalidGatewayResponse)?;
             Ok(json!({
                 "type": "function",
                 "function": {
