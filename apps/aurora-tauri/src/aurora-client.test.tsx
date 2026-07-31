@@ -1992,7 +1992,7 @@ describe("Tauri CI/E2E route gates", () => {
           "Export, delete, and import data flows",
         );
         expect(dataPolicy.container.textContent).toContain(
-          "Audit trail for policy changes",
+          "Activity history for policy changes",
         );
         expect(dataPolicy.container.textContent).toContain(
           "Confirmation is required before settings can be changed.",
@@ -2965,7 +2965,7 @@ describe("Tauri CI/E2E route gates", () => {
       ["/diagnostics", ["Troubleshooting", "Live checks"]],
       [
         "/memory/policy",
-        ["Data policy and retention", "Audit trail for policy changes"],
+        ["Data policy and retention", "Activity history for policy changes"],
       ],
       ["/settings/native", ["Settings", "Device controls"]],
     ] as const;
