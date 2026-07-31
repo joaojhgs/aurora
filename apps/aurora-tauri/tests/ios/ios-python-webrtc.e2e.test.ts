@@ -25,6 +25,11 @@ import {
   redactInteropSeededText,
   type InteropBrowserResult,
 } from '../../../../tests/e2e/webrtc_interop/assertions.js'
+import {
+  analyzeIosScreenshot,
+  assertIosScreenshotVisible,
+  type IosScreenshotEvidence,
+} from '../../scripts/ios-screenshot-evidence.mjs'
 import { redactIosWebRtcArtifactLog } from '../../src/ios-webrtc-log-redaction'
 
 type BrowserConfig = {
@@ -155,6 +160,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
   cleanup = resources.close
   const started = Date.now()
   let mobileResult: MobileResult | undefined
+  let screenshotEvidence: IosScreenshotEvidence | undefined
   try {
     const ready = await waitForJson<BrowserConfig>(
       resources.readyPath,
@@ -186,7 +192,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
     })
     expect(mobileResult.consoleErrors ?? []).toEqual([])
 
-    await resources.captureSimulatorEvidence()
+    screenshotEvidence = await resources.captureSimulatorEvidence()
     await writeJson(resources.browserReportPath, {
       lane: 'direct',
       browserName: surface.browserName,
@@ -200,6 +206,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
       simulator: resources.simulator,
       surface: resources.surfaceEvidence,
       screenshotPath: `<artifact-dir>/${surface.artifactPrefix}.png`,
+      screenshotEvidence,
       logPath: `<artifact-dir>/${surface.artifactPrefix}.log`,
       reportDigest: crypto
         .createHash('sha256')
@@ -260,7 +267,9 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
       secretsRedacted: true,
     })
   } catch (error) {
-    await resources.captureSimulatorEvidence().catch(() => undefined)
+    screenshotEvidence ??= await resources
+      .captureSimulatorEvidence()
+      .catch(() => undefined)
     const redactedError = resources.redactArtifactValue(
       error instanceof Error ? error.message : String(error),
     )
@@ -273,6 +282,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
       mobileResult,
       simulator: resources.simulator,
       surface: resources.surfaceEvidence,
+      screenshotEvidence,
       secretsRedacted: true,
     })
     resources.assertNoSeededSecrets(failureReport)
@@ -761,31 +771,12 @@ async function createInteropResources(surface: IosInteropSurface) {
           `Timed out waiting for ${surface.browserName} interop result after ${waitMs}ms`,
         )
       },
-      async captureSimulatorEvidence(): Promise<void> {
-        const screenshot = spawnSync(
-          'xcrun',
-          [
-            'simctl',
-            'io',
-            simulator.udid,
-            'screenshot',
-            simulatorScreenshotPath,
-          ],
-          { encoding: 'utf8' },
-        )
-        if (screenshot.status !== 0) {
-          throw new Error(
-            `Could not capture iOS simulator screenshot: ${screenshot.stderr}`,
-          )
-        }
-        if (
-          !existsSync(simulatorScreenshotPath) ||
-          statSync(simulatorScreenshotPath).size === 0
-        ) {
-          throw new Error(
-            `iOS simulator did not create ${surface.browserName} screenshot evidence`,
-          )
-        }
+      async captureSimulatorEvidence(): Promise<IosScreenshotEvidence> {
+        const screenshotEvidence = await captureReadableSimulatorScreenshot({
+          simulator,
+          path: simulatorScreenshotPath,
+          label: `${surface.browserName} screenshot`,
+        })
         const log = capture(
           'xcrun',
           [
@@ -820,6 +811,7 @@ async function createInteropResources(surface: IosInteropSurface) {
             `iOS simulator log contains ${surface.browserName}/WebContent crash evidence`,
           )
         }
+        return screenshotEvidence
       },
       close,
     }
@@ -852,6 +844,62 @@ async function createInteropResources(surface: IosInteropSurface) {
       await close()
     }
     throw new Error(String(redactedError))
+  }
+}
+
+async function captureReadableSimulatorScreenshot({
+  simulator,
+  path,
+  label,
+}: {
+  simulator: SimulatorDevice
+  path: string
+  label: string
+}): Promise<IosScreenshotEvidence> {
+  const timeoutMs = Number(
+    process.env.AURORA_IOS_WEBRTC_SCREENSHOT_TIMEOUT_MS ?? 10_000,
+  )
+  const retryMs = Number(
+    process.env.AURORA_IOS_WEBRTC_SCREENSHOT_RETRY_MS ?? 500,
+  )
+  const deadline = Date.now() + Math.max(0, timeoutMs)
+  let attempts = 0
+  let lastError = new Error(`${label} was not captured`)
+
+  while (true) {
+    attempts += 1
+    try {
+      const screenshot = spawnSync(
+        'xcrun',
+        [
+          'simctl',
+          'io',
+          simulator.udid,
+          'screenshot',
+          path,
+        ],
+        { encoding: 'utf8' },
+      )
+      if (screenshot.status !== 0) {
+        throw new Error(
+          `Could not capture ${label}: ${screenshot.stderr}`,
+        )
+      }
+      if (!existsSync(path) || statSync(path).size === 0) {
+        throw new Error(`iOS simulator did not create ${label}`)
+      }
+      const evidence = {
+        ...analyzeIosScreenshot(path),
+        captureAttempts: attempts,
+      }
+      assertIosScreenshotVisible(evidence, label)
+      return evidence
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) throw lastError
+    await sleep(Math.min(Math.max(1, retryMs), remainingMs))
   }
 }
 
@@ -1110,14 +1158,27 @@ function wkWebViewHarnessHtml(): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aurora Tauri WKWebView WebRTC Interop</title>
     <style>
-      body { font-family: -apple-system, sans-serif; padding: 2rem; }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; background: #fff; color: #111827; }
+      body {
+        min-height: 100svh;
+        margin: 0;
+        padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        overflow-x: hidden;
+      }
+      main { width: 100%; max-width: 560px; margin: 0 auto; }
+      h1 { margin: 0 0 24px; font-size: clamp(28px, 7vw, 40px); line-height: 1.12; overflow-wrap: anywhere; }
+      p { margin: 0; font-size: clamp(17px, 4.5vw, 22px); line-height: 1.4; }
       [data-status="passed"] { color: #087a32; }
       [data-status="failed"] { color: #a00; }
     </style>
   </head>
   <body>
-    <h1>Aurora packaged WKWebView interoperability</h1>
-    <p id="status" data-status="running">Connecting to the Python peer…</p>
+    <main data-aurora-ios-evidence="webrtc">
+      <h1>Aurora packaged WKWebView interoperability</h1>
+      <p id="status" role="status" aria-live="polite" data-status="running">Connecting to the Python peer…</p>
+    </main>
     <script type="module" src="/ios-mobile-browser-bundle.js"></script>
     <script type="module" src="/ios-wkwebview-runner.js"></script>
   </body>
@@ -1293,14 +1354,27 @@ function mobileHarnessHtml(): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aurora iOS WebRTC Interop</title>
     <style>
-      body { font-family: -apple-system, sans-serif; padding: 2rem; }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; background: #fff; color: #111827; }
+      body {
+        min-height: 100svh;
+        margin: 0;
+        padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        overflow-x: hidden;
+      }
+      main { width: 100%; max-width: 560px; margin: 0 auto; }
+      h1 { margin: 0 0 24px; font-size: clamp(28px, 7vw, 40px); line-height: 1.12; overflow-wrap: anywhere; }
+      p { margin: 0; font-size: clamp(17px, 4.5vw, 22px); line-height: 1.4; }
       [data-status="passed"] { color: #087a32; }
       [data-status="failed"] { color: #a00; }
     </style>
   </head>
   <body>
-    <h1>Aurora mobile WebRTC interoperability</h1>
-    <p id="status" data-status="running">Connecting to the Python peer…</p>
+    <main data-aurora-ios-evidence="webrtc">
+      <h1>Aurora mobile WebRTC interoperability</h1>
+      <p id="status" role="status" aria-live="polite" data-status="running">Connecting to the Python peer…</p>
+    </main>
     <script type="module" src="/ios-mobile-browser-bundle.js"></script>
     <script>
       (() => {

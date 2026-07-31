@@ -11,6 +11,10 @@ import {
 } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  analyzeIosScreenshot,
+  assertIosScreenshotVisible,
+} from './ios-screenshot-evidence.mjs'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const reportPath = resolve(
@@ -32,6 +36,7 @@ let launchedPid = null
 let bootedByHarness = false
 let appPath = ''
 let capturedLog = ''
+let screenshotEvidence = null
 
 try {
   appPath = resolveSimulatorApp()
@@ -68,17 +73,7 @@ try {
   launchedPid = parseLaunchPid(launchOutput, bundleId)
   sleep(Number(process.env.AURORA_IOS_SIMULATOR_SETTLE_MS ?? 8_000))
 
-  mkdirSync(dirname(screenshotPath), { recursive: true })
-  run('xcrun', [
-    'simctl',
-    'io',
-    selectedDevice.udid,
-    'screenshot',
-    screenshotPath,
-  ])
-  if (!existsSync(screenshotPath) || statSync(screenshotPath).size === 0) {
-    throw new Error('iOS simulator screenshot was not created')
-  }
+  screenshotEvidence = captureVisibleScreenshot(selectedDevice.udid)
 
   const appContainer = runCapture('xcrun', [
     'simctl',
@@ -128,6 +123,7 @@ try {
     bundleId,
     appStayedAliveThroughSettleWindow: true,
     screenshotPath: redactedPath(screenshotPath),
+    screenshotEvidence,
     logPath: redactedPath(logPath),
     pythonSidecarExpected: false,
     secretsRedacted: true,
@@ -147,6 +143,7 @@ try {
     bundleId: bundleId || null,
     error: error instanceof Error ? error.message : String(error),
     screenshotPath: redactedPath(screenshotPath),
+    screenshotEvidence,
     logPath: redactedPath(logPath),
     secretsRedacted: true,
   })
@@ -167,6 +164,62 @@ try {
   ) {
     runBestEffort('xcrun', ['simctl', 'shutdown', selectedDevice.udid])
   }
+}
+
+function captureVisibleScreenshot(udid) {
+  const timeoutMs = readNonNegativeDuration(
+    'AURORA_IOS_SIMULATOR_RENDER_TIMEOUT_MS',
+    20_000,
+  )
+  const retryMs = readNonNegativeDuration(
+    'AURORA_IOS_SIMULATOR_SCREENSHOT_RETRY_MS',
+    1_000,
+  )
+  const deadline = Date.now() + timeoutMs
+  let attempts = 0
+  let lastError = new Error('iOS simulator screenshot was not captured')
+
+  mkdirSync(dirname(screenshotPath), { recursive: true })
+  while (true) {
+    attempts += 1
+    try {
+      run('xcrun', [
+        'simctl',
+        'io',
+        udid,
+        'screenshot',
+        screenshotPath,
+      ])
+      if (!existsSync(screenshotPath) || statSync(screenshotPath).size === 0) {
+        throw new Error('iOS simulator screenshot was not created')
+      }
+      screenshotEvidence = {
+        ...analyzeIosScreenshot(screenshotPath),
+        captureAttempts: attempts,
+      }
+      assertIosScreenshotVisible(
+        screenshotEvidence,
+        'iOS simulator screenshot',
+      )
+      return screenshotEvidence
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
+
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) throw lastError
+    sleep(Math.min(retryMs || 1, remainingMs))
+  }
+}
+
+function readNonNegativeDuration(name, fallback) {
+  const raw = process.env[name]
+  if (raw == null || raw === '') return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative number`)
+  }
+  return value
 }
 
 function resolveSimulatorApp() {

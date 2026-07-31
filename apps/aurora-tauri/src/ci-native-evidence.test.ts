@@ -180,6 +180,8 @@ describe('Tauri CI native evidence contract', () => {
     const androidClientBuildWrapper = repoText('apps/aurora-tauri/scripts/build-android-client-bundle.mjs')
     const androidInteropRunner = repoText('apps/aurora-tauri/scripts/run-android-webrtc-interop.mjs')
     const iosInteropTest = repoText('apps/aurora-tauri/tests/ios/ios-python-webrtc.e2e.test.ts')
+    const iosSimulatorSmoke = repoText('apps/aurora-tauri/scripts/ios-simulator-smoke.mjs')
+    const iosEvidenceGate = repoText('apps/aurora-tauri/scripts/assert-ios-ci-evidence.mjs')
 
     expect(packageJson.scripts['android:sync-native-plugin']).toBe('node ./scripts/install-android-native-plugin.mjs')
     expect(packageJson.scripts['android:init']).toContain('android:sync-native-plugin')
@@ -250,6 +252,10 @@ describe('Tauri CI native evidence contract', () => {
       'for (const surface of surfaces)',
     )
     expect(iosInteropTest).toContain('assertInteropBrowserResult')
+    expect(iosInteropTest).toContain('assertIosScreenshotVisible')
+    expect(iosInteropTest).toContain('screenshotEvidence')
+    expect(iosInteropTest).toContain('-webkit-text-size-adjust: 100%')
+    expect(iosInteropTest).toContain('data-aurora-ios-evidence="webrtc"')
     expect(iosInteropTest).toContain(
       'gatewayHttpApiEnabled: false',
     )
@@ -323,6 +329,16 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('ios-client-simulator-build-provenance.json')
     expect(iosBaselineWorkflow).toContain('pnpm --filter @aurora/tauri-ui ios:smoke:simulator')
     expect(iosBaselineWorkflow).toContain('ios-simulator-smoke.json')
+    expect(iosBaselineWorkflow).toContain('src/ios-simulator-smoke.test.ts')
+    expect(iosBaselineWorkflow).toContain('src/ios-ci-evidence.test.ts')
+    expect(iosBaselineWorkflow).toContain('src/ci-native-evidence.test.ts')
+    expect(iosBaselineWorkflow).toContain('assert-ios-ci-evidence.mjs')
+    expect(iosBaselineWorkflow).not.toContain('if-no-files-found: warn')
+    expect(iosSimulatorSmoke).toContain('analyzeIosScreenshot')
+    expect(iosSimulatorSmoke).toContain('AURORA_IOS_SIMULATOR_RENDER_TIMEOUT_MS')
+    expect(iosEvidenceGate).toContain("'mobile-safari'")
+    expect(iosEvidenceGate).toContain("'packaged-wkwebview'")
+    expect(iosEvidenceGate).toContain('noHttpFetchTransportUsed === true')
     expect(iosBaselineWorkflow).toContain('Set up Python interop peer')
     expect(iosBaselineWorkflow).toContain('python-version: "3.11"')
     expect(iosBaselineWorkflow).toContain('Install uv for the external Python peer')

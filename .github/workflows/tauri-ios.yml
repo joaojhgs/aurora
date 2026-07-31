@@ -77,6 +77,14 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run iOS CI harness regression tests
+        run: >-
+          pnpm --filter @aurora/tauri-ui exec vitest run --environment node
+          src/ios-simulator-smoke.test.ts
+          src/ios-ci-evidence.test.ts
+          src/ci-native-evidence.test.ts
+          src/ios-webrtc-log-redaction.test.ts
+
       - name: Install Python WebRTC peer dependencies
         run: uv sync --extra gateway
 
@@ -105,6 +113,13 @@ jobs:
           CODE_SIGNING_REQUIRED: "NO"
         run: pnpm --filter @aurora/tauri-ui ios:build:client:simulator
 
+      - name: Upload iOS client build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-client-build-provenance
+          path: apps/aurora-tauri/reports/ios-client-simulator-build-provenance.json
+          if-no-files-found: error
+
       - name: Install, launch, and screenshot the client app in an iOS simulator
         run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
 
@@ -114,6 +129,10 @@ jobs:
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
         run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Require production simulator, MobileSafari, and packaged WKWebView evidence
+        if: always()
+        run: node apps/aurora-tauri/scripts/assert-ios-ci-evidence.mjs
 
       - name: Smoke invoke Aurora App Intent handoff
         run: |
@@ -154,18 +173,22 @@ jobs:
         with:
           name: aurora-ios-app-intent-smoke
           path: /tmp/aurora-ios-app-intent-smoke.json
+          if-no-files-found: error
 
       - name: Upload Aurora IOS-004 entrypoint payload smoke artifact
         uses: actions/upload-artifact@v4
         with:
           name: aurora-ios-entrypoint-payload-smoke
           path: /tmp/aurora-ios-entrypoint-payload-smoke.json
+          if-no-files-found: error
 
-      - name: Upload iOS client build provenance
+      - name: Upload aggregate iOS CI evidence summary
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-ios-client-build-provenance
-          path: apps/aurora-tauri/reports/ios-client-simulator-build-provenance.json
+          name: aurora-ios-ci-evidence-summary
+          path: apps/aurora-tauri/reports/ios-ci-evidence-summary.json
+          if-no-files-found: error
 
       - name: Upload iOS simulator runtime evidence
         if: always()
@@ -176,7 +199,7 @@ jobs:
             apps/aurora-tauri/reports/ios-simulator-smoke.json
             apps/aurora-tauri/reports/ios-simulator-smoke.png
             apps/aurora-tauri/reports/ios-simulator-smoke.log
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload iOS WebView and mobile-browser to Python WebRTC evidence
         if: always()
@@ -186,4 +209,4 @@ jobs:
           path: |
             apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/
             apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview/
-          if-no-files-found: warn
+          if-no-files-found: error
