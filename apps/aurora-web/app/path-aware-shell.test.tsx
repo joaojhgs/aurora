@@ -192,7 +192,7 @@ describe('hosted web thin first-run shell', () => {
 
     expect(container.textContent).toContain('Connect to Aurora')
     expect(container.textContent).toContain('Continue')
-    expect(container.textContent).not.toContain('Device name')
+    expect(container.textContent).not.toContain('This device name')
     expect(container.textContent).not.toContain('Paste invite')
     expect(container.textContent).not.toContain('Open invite file')
     expect(container.textContent).not.toContain('Scan QR invite')
@@ -210,7 +210,7 @@ describe('hosted web thin first-run shell', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Device name')
+    expect(container.textContent).toContain('This device name')
     expect(container.textContent).toContain('Paste invite')
     expect(container.textContent).toContain('Open invite file')
     expect(container.textContent).not.toContain('Scan QR invite')
