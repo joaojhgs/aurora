@@ -741,14 +741,21 @@ describe('Aurora production shell', () => {
     )
     expect(model.nativeIntegrations.find((integration) => integration.id === 'shareExtension')).toEqual(
       expect.objectContaining({
-        state: 'degraded',
+        state: 'pending',
         privacyClass: 'sensitive',
         requiresConfirmation: true
       })
     )
+    expect(model.nativeIntegrations.find((integration) => integration.id === 'widgets')).toEqual(
+      expect.objectContaining({
+        state: 'pending',
+        privacyClass: 'personal',
+        requiresConfirmation: false
+      })
+    )
     expect(model.nativeIntegrations.find((integration) => integration.id === 'fileAssociations')).toEqual(
       expect.objectContaining({
-        state: 'degraded',
+        state: 'pending',
         privacyClass: 'sensitive',
         requiresConfirmation: true
       })
@@ -861,8 +868,9 @@ describe('Aurora production shell', () => {
 
     expect(model.nativeIntegrations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'shareExtension', state: 'degraded' }),
-        expect.objectContaining({ id: 'fileAssociations', state: 'degraded' }),
+        expect.objectContaining({ id: 'shareExtension', state: 'pending' }),
+        expect.objectContaining({ id: 'widgets', state: 'pending' }),
+        expect.objectContaining({ id: 'fileAssociations', state: 'pending' }),
         expect.objectContaining({ id: 'iosLocalLightInference', state: 'degraded' }),
         expect.objectContaining({ id: 'siriReplacement', state: 'unsupported' })
       ])

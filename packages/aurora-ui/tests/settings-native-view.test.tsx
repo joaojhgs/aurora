@@ -120,6 +120,13 @@ describe('settings/native route separation', () => {
     expect(model.nativeIntegrations.map((integration) => integration.id)).toEqual(
       expect.arrayContaining(['askAuroraAppIntent', 'askAuroraShortcut', 'shareExtension', 'deepLinks', 'widgets', 'siriReplacement'])
     )
+    expect(model.nativeIntegrations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'shareExtension', state: 'pending' }),
+        expect.objectContaining({ id: 'widgets', state: 'pending' }),
+        expect.objectContaining({ id: 'fileAssociations', state: 'pending' })
+      ])
+    )
 
     expect(markup).toContain('Advanced')
     expect(markup).toContain('Platform')
@@ -328,6 +335,9 @@ it('builds stable JSON status for desktop local, web fallback, Android preflight
     thinClientUsable: true,
     localPythonRequired: false
   }))
+  expect(status.artifacts.find((artifact) => artifact.id === 'ios-preflight')?.unsupportedAvailableClaims).not.toEqual(
+    expect.arrayContaining(['ios.shareExtension', 'ios.widgets', 'ios.fileAssociations'])
+  )
 })
 
 it('does not expose platform-inapplicable native rows as available capabilities', () => {

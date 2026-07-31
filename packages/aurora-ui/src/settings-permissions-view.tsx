@@ -848,7 +848,7 @@ function nativeNameAppliesToPlatform(name: string, platform: string): boolean {
 function availabilityFromNativeIntegration(support: NativeMobileIntegration['support']): AvailabilityState {
   if (support === 'supported') return 'available-local'
   if (support === 'supported-path') return 'degraded'
-  if (support === 'planned') return 'pending'
+  if (support === 'planned' || support === 'pending') return 'pending'
   if (support === 'blocked') return 'privacy-blocked'
   return 'unsupported'
 }
