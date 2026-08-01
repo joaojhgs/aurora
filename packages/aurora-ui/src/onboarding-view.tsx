@@ -569,7 +569,9 @@ function deploymentModes(
     nativePlatform: snapshot.nativePlatform,
     userAgent,
   })
-  const connectState = desktopThinState(snapshot, transportKind)
+  const connectState = profile.isMobile
+    ? mobileRemoteConnectionState(snapshot, transportKind, userAgent)
+    : desktopThinState(snapshot, transportKind)
   const baseMakeAvailableState = profile.isMobile
     ? mobileNativeState(snapshot, transportKind, userAgent)
     : desktopThinState(snapshot, transportKind)
@@ -585,6 +587,22 @@ function deploymentModes(
     modes.push(mode('run-aurora-on-this-computer', PRODUCT_COPY.onboarding.choices.runHere.label, PRODUCT_COPY.mesh.localDevice, PRODUCT_COPY.onboarding.choices.runHere.description, desktopNative.state, desktopNative.evidence, desktopNative.repair))
   }
   return modes
+}
+
+function mobileRemoteConnectionState(snapshot: AuroraShellSnapshot, transportKind: string, userAgent?: string): { state: AvailabilityState; evidence: string; repair: string } {
+  const profile = getAuroraSurfaceProfile({
+    transportKind,
+    nativePlatform: snapshot.nativePlatform,
+    userAgent,
+  })
+  if (profile.isMobile) {
+    return {
+      state: 'available-remote',
+      evidence: 'This device can connect to an Aurora server.',
+      repair: 'Use an invite or server address to begin pairing.',
+    }
+  }
+  return mobileWebThinState(snapshot, transportKind, userAgent)
 }
 
 function browserDeviceSetupState(): { state: AvailabilityState; evidence: string; repair: string } {

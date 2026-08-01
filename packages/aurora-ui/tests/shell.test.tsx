@@ -1336,6 +1336,19 @@ describe('Aurora production shell', () => {
     expect(iosMode?.repair).not.toContain('Siri replacement')
   })
 
+  it('keeps Connect to Aurora available for native Android thin clients', async () => {
+    const mobileTransport = new MockAuroraTransport()
+    Object.defineProperty(mobileTransport, 'kind', { value: 'tauri-local' })
+    mobileTransport.register('Native.GetCapabilityManifest', () => androidNativeCapabilityManifestFixture)
+    const mobileClient = new Aurora({ transport: mobileTransport })
+    const snapshot = await buildShellSnapshot(mobileClient)
+    const connectMode = buildOnboardingViewModel({ client: mobileClient, snapshot }).modes.find((mode) => mode.id === 'connect-to-aurora')
+
+    expect(snapshot.nativePlatform).toBe('android')
+    expect(connectMode?.state).toBe('available-remote')
+    expect(connectMode?.disabled).toBe(false)
+  })
+
   it('maps assistant attachment drafts to backend context payloads and statuses', () => {
     const item = attachmentToContextItem({
       id: 'context-1',
