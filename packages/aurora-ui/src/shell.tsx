@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -10,6 +10,7 @@ import {
   PanelRight,
   ShieldCheck,
   Sparkles,
+  X,
 } from "lucide-react";
 import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from "./nav";
 import type { AuroraNavItem } from "./nav";
@@ -75,10 +76,19 @@ export function AppShell({
   );
   const handleMobileNavigate = useCallback(
     (href: string) => {
+      setNavigationOpen(false);
       onNavigate?.(href);
     },
     [onNavigate],
   );
+  useEffect(() => {
+    if (!navigationOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavigationOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [navigationOpen]);
   return (
     <div
       className="aui-shell flex h-dvh w-full overflow-hidden bg-background text-foreground"
@@ -154,8 +164,17 @@ export function AppShell({
                 routes={snapshot.routes}
                 sessionIsAdmin={sessionIsAdmin}
                 {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
+                onClose={() => setNavigationOpen(false)}
               />
             </div>
+            {navigationOpen ? (
+              <button
+                type="button"
+                className="aui-mobile-menu-backdrop fixed inset-0 z-30 cursor-default border-0 bg-black/40"
+                aria-label="Close navigation menu"
+                onClick={() => setNavigationOpen(false)}
+              />
+            ) : null}
           </div>
           <div className="aui-status-row flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
             <ModeBadge mode={shellSurfaceLabel(snapshot, runtimeMode)} className="aui-shell-status" />
@@ -226,17 +245,24 @@ function MobileNavigationSheet({
   routes,
   sessionIsAdmin,
   onNavigate,
+  onClose,
 }: {
   snapshot: AuroraShellSnapshot;
   activePath: string;
   routes: RouteAvailability[];
   sessionIsAdmin: boolean;
   onNavigate?: (href: string) => void;
+  onClose: () => void;
 }) {
   const activeRoute = routes.find((route) => route.item.href === activePath);
   return (
     <div className="aui-mobile-sheet-layout flex h-full flex-col" role="dialog" aria-labelledby="aui-mobile-sheet-title">
-      <BrandHeader snapshot={snapshot} />
+      <div className="aui-mobile-sheet-header flex items-center border-b border-border">
+        <BrandHeader snapshot={snapshot} />
+        <Button type="button" variant="ghost" size="icon" aria-label="Close navigation menu" onClick={onClose}>
+          <X size={18} aria-hidden />
+        </Button>
+      </div>
       <div className="aui-mobile-sheet-body flex flex-1 flex-col gap-3 overflow-y-auto p-3">
         <p className="aui-mobile-sheet-title text-sm font-semibold" id="aui-mobile-sheet-title">
           Navigation
@@ -301,8 +327,9 @@ function MobileBottomTabs({
   onNavigate?: (href: string) => void;
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]));
+  const mobileTabOrder = new Set(["assistant", "mesh", "settings"]);
   const tabs = auroraMobileTabs.filter(
-    (tab) => sessionIsAdmin || !tab.adminGated || tab.id === "settings",
+    (tab) => mobileTabOrder.has(tab.id) && (sessionIsAdmin || !tab.adminGated || tab.id === "settings"),
   );
   return (
     <nav className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-10 flex items-center justify-around border-t border-border bg-background py-1.5 md:hidden" aria-label="Mobile navigation">

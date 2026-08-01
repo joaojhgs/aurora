@@ -11563,3 +11563,66 @@ body { font-size:14px;line-height:1.45 }
   /* Chrome 83 ignores the inset shorthand used by Android 11 System WebView. */
   .aui-mobile-tabs { top:auto;right:0;bottom:0;left:0 }
 }
+
+/* Mobile shell: reserve OS chrome, keep every tab readable, and make the drawer dismissible. */
+@media (max-width: 1040px) {
+  .aui-topbar {
+    height: calc(3.5rem + env(safe-area-inset-top));
+    min-height: calc(3.5rem + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+  .aui-main-column,
+  .aui-content {
+    min-height: 0;
+  }
+  .aui-mobile-sheet {
+    top: calc(3.5rem + env(safe-area-inset-top));
+    bottom: 0;
+    max-height: none;
+    width: min(20rem, 86vw);
+  }
+  .aui-mobile-menu-backdrop {
+    display: block;
+  }
+  .aui-mobile-sheet-header .aui-brand {
+    min-width: 0;
+    flex: 1;
+  }
+  .aui-mobile-sheet-header > button {
+    flex: 0 0 auto;
+    margin-right: 0.4rem;
+  }
+  .aui-mobile-tabs {
+    min-height: calc(4.1rem + env(safe-area-inset-bottom));
+    padding: 0.35rem 0.25rem env(safe-area-inset-bottom);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .aui-mobile-tabs a {
+    min-width: 0;
+    min-height: 3.3rem;
+    padding: 0.42rem 0.12rem 0.3rem;
+    gap: 0.22rem;
+    font-size: 0.7rem;
+  }
+  .aui-mobile-tabs a > span:not(.aui-mobile-tab-state) {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .aui-content:not(:has(.aui-assistant)) {
+    padding-bottom: calc(4.8rem + env(safe-area-inset-bottom));
+  }
+  .aui-content:has(.aui-assistant) {
+    overflow-y: auto;
+    padding-bottom: 0;
+  }
+  .aui-content:has(.aui-assistant) .aui-assistant {
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+    padding-bottom: calc(4.8rem + env(safe-area-inset-bottom));
+  }
+}

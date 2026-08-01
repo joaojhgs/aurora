@@ -216,6 +216,10 @@ function item(
 
 function mobileLabelForNavItem(id: string, label: string): string {
   switch (id) {
+    case 'memory':
+      return 'Memory'
+    case 'tools':
+      return 'Tools'
     case 'diagnostics':
       return 'Activity'
     case 'mesh':
