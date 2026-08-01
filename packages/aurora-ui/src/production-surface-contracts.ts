@@ -501,7 +501,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['onboarding', 'pairing'],
     routeOracles: [routeOracle('onboarding', ['Connect Aurora'], ['Validate endpoint'])],
     mockReferenceFiles: ['components/aurora/onboarding/onboarding-view.tsx', 'components/aurora/admin/devices-view.tsx'],
-    mockUxAnchors: ['First-run setup', 'Aurora setup choice', 'Guided setup', 'Pairing queue'],
+    mockUxAnchors: ['Use an invite to connect this device.', 'Aurora setup choice', 'This device', 'Pairing queue'],
     componentFiles: ['onboarding-view.tsx', 'pairing-queue-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'native-permission'],
     truthSources: [

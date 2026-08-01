@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Check, Compass, KeyRound, Monitor, Server, ShieldCheck, Smartphone } from 'lucide-react'
+import { Check, KeyRound, Monitor, Server, ShieldCheck, Smartphone } from 'lucide-react'
 import type { AuroraClient, AuroraError, AuthSessionSnapshot, AvailabilityState } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { presentableSignal } from './status-badges'
@@ -252,15 +252,14 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
     setMessage(onboardingErrorMessage(result.error))
   }
 
-  const completedStepCount = model.setupSteps.filter(isStepComplete).length
-  const allStepsComplete = model.setupSteps.length > 0 && completedStepCount === model.setupSteps.length
   const manualAddressGated = setupRequired && Boolean(thinConnectionPanel)
   const showManualAddress = !manualAddressGated || manualAddressVisible
   const showFirstRunInviteFlow = setupRequired && !thinConnectionPanel
   const showAccountAuthFlow = !setupRequired
 
   return (
-    <section className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-10" aria-labelledby="onboarding-title">
+    <section className="aui-onboarding-scroll-viewport" aria-labelledby="onboarding-title">
+      <div className="mx-auto flex max-w-xl flex-col gap-6 px-6 pt-8 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
       <div className="text-center">
         <h1 id="onboarding-title" className="text-xl font-semibold tracking-tight">
           {PRODUCT_COPY.onboarding.title}
@@ -345,45 +344,6 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
               {PRODUCT_COPY.onboarding.invite.advanced}
             </Button>
           ) : null}
-
-          <section aria-labelledby="guided-setup-title" className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 id="guided-setup-title" className="flex items-center gap-2 text-sm font-semibold">
-                <Compass size={16} aria-hidden />
-                Guided setup
-              </h2>
-              <span className="text-[11.5px] text-muted-foreground">
-                {completedStepCount} of {model.setupSteps.length} steps complete
-              </span>
-            </div>
-            <ol className="flex flex-col gap-2.5">
-              {model.setupSteps.map((step) => {
-                const complete = isStepComplete(step)
-                return (
-                  <li key={step.title} className="flex items-start gap-2.5 rounded-lg border border-border bg-card p-3">
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border',
-                        complete ? 'border-success bg-success/15 text-success' : 'border-border text-transparent'
-                      )}
-                    >
-                      <Check size={12} />
-                    </span>
-                    <div className="flex flex-1 flex-col gap-1">
-                      <strong className="text-[13px] font-medium">{step.title}</strong>
-                      <p className="text-[11.5px] text-muted-foreground">{step.detail.length > 120 ? `${step.detail.slice(0, 117)}…` : step.detail}</p>
-                      {step.progress !== null ? (
-                        <div className="h-1 w-full overflow-hidden rounded-full bg-muted" aria-label={`${step.title} ${step.progress}% complete`}>
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${step.progress}%` }} />
-                        </div>
-                      ) : null}
-                    </div>
-                  </li>
-                )
-              })}
-            </ol>
-          </section>
 
           {showManualAddress ? (
             <section aria-labelledby="gateway-title" className="flex flex-col gap-2.5">
@@ -471,14 +431,11 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
             </>
           ) : null}
 
-          <Button
-            variant="primary"
-            onClick={() => setWizardStep('done')}
-            disabled={!allStepsComplete}
-            disabledReason="Complete every guided-setup step above before finishing."
-          >
-            Finish setup
-          </Button>
+          {!thinConnectionPanel ? (
+            <Button variant="primary" onClick={() => setWizardStep('done')}>
+              Finish setup
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -503,6 +460,7 @@ export function OnboardingView({ client, snapshot, modePreferenceStore, thinConn
           {message}
         </p>
       ) : null}
+      </div>
     </section>
   )
 }
@@ -857,10 +815,6 @@ function resumeSetupTitle(steps: OnboardingSetupStep[]): string {
 function resumeSetupDetail(steps: OnboardingSetupStep[]): string {
   const next = steps.find((step) => step.state === 'pending' || step.state === 'denied' || step.state === 'unsupported' || step.state === 'privacy-blocked')
   return next?.repair ?? 'Setup is complete for this device.'
-}
-
-function isStepComplete(step: OnboardingSetupStep): boolean {
-  return step.state === 'available-local' || step.state === 'available-remote' || step.progress === 100
 }
 
 function androidAssistantRoleEvidence(assistant: NonNullable<AuroraShellSnapshot['nativeAssistantRole']>, fallbackCount: number): string {

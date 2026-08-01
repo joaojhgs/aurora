@@ -55,6 +55,8 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       findButton(container, 'Continue').click()
       await Promise.resolve()
     })
+    expect(container.querySelector('.aui-onboarding-scroll-viewport')).not.toBeNull()
+    expect(container.textContent).not.toContain('Guided setup')
     expect(container.querySelector<HTMLInputElement>('#webthin-profile-node-name')).not.toBeNull()
     expect(findButton(container, 'Scan invite')).not.toBeNull()
     expect(findButton(container, 'Open invite file')).not.toBeNull()
