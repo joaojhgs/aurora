@@ -263,7 +263,13 @@ describe('Tauri CI native evidence contract', () => {
       iosInteropTest.match(
         /<script type="importmap">\$\{mqttImportMapJson\}<\/script>/gu,
       ),
-    ).toHaveLength(2)
+    ).toHaveLength(1)
+    expect(iosInteropTest).toContain(
+      "surface.id === 'tauri-wkwebview'",
+    )
+    expect(iosInteropTest).toContain(
+      "? ['--external:mqtt']",
+    )
     expect(iosInteropTest).toContain(
       "const mqttImportMapCspHash = `sha256-${crypto",
     )

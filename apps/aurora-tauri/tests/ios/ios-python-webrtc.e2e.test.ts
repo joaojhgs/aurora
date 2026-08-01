@@ -397,7 +397,12 @@ async function createInteropResources(surface: IosInteropSurface) {
       `--outfile=${bundlePath}`,
       '--platform=browser',
       '--target=safari17',
-      '--external:mqtt',
+      // MobileSafari has been unreliable resolving the SDK's static MQTT
+      // import through an import map. Keep that surface self-contained while
+      // the packaged WKWebView continues to exercise the externalized path.
+      ...(surface.id === 'tauri-wkwebview'
+        ? ['--external:mqtt']
+        : []),
       '--minify',
       '--log-level=silent',
     ],
@@ -1355,7 +1360,6 @@ function mobileHarnessHtml(): string {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aurora iOS WebRTC Interop</title>
-    <script type="importmap">${mqttImportMapJson}</script>
     <style>
       * { box-sizing: border-box; }
       html { -webkit-text-size-adjust: 100%; background: #fff; color: #111827; }
