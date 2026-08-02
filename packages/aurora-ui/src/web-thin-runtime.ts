@@ -197,6 +197,8 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     transportKind: mode === 'http-only' || rollbackHttp ? 'http' : 'mesh',
     nativePlatform: config.nativePlatform,
     userAgent: config.userAgent ?? browserUserAgent(),
+    nodeMode: activeNodeRole,
+    runtimeTier: activeNodeRole === 'mesh-node' ? 'lightweight-ts' : 'none',
   })
   const securityContext: BrowserRuntimeSecurityContext = {
     ...config,

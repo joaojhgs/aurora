@@ -29,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#
 import { Switch } from '#components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
 import { meshPeerErrorMessage } from './mesh-peers-view'
+import type { LocalFeatureSharingPort, LocalFeatureSharingSnapshot } from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
 import {
   isBrowserWebRtcConfigured,
@@ -144,6 +145,10 @@ export interface ServiceRoutingResourceProps {
   thinPeer?: BrowserWebRtcPeerController
 }
 
+export interface LocalServiceRoutingResourceProps {
+  featureSharing: LocalFeatureSharingPort
+}
+
 export interface ServiceRoutingViewProps {
   snapshot: ServiceRoutingSnapshot
   pendingRowId?: string | null
@@ -151,6 +156,8 @@ export interface ServiceRoutingViewProps {
   onRefresh?: () => void
   onPreviewRow?: (row: ServiceRoutingRow, changes: ServiceRoutingChange[]) => Promise<ServiceRoutingPreviewEvidence>
   onSaveRow?: (row: ServiceRoutingRow, changes: ServiceRoutingChange[], preview: ServiceRoutingPreviewEvidence, confirmation: ServiceRoutingSaveConfirmation) => void
+  /** Reuse the canonical table while hiding outbound controls a local lightweight node does not implement. */
+  sharingOnly?: boolean
 }
 
 export interface ServiceRoutingSaveConfirmation { reauthConfirmed: boolean }
@@ -277,6 +284,179 @@ export function ServiceRoutingResource({
   )
 
   return <ServiceRoutingView snapshot={snapshot} pendingRowId={pendingRowId} mutationError={mutationError} onRefresh={load} onPreviewRow={previewRow} onSaveRow={saveRow} />
+}
+
+export function LocalServiceRoutingResource({
+  featureSharing,
+}: LocalServiceRoutingResourceProps) {
+  const [sharing, setSharing] = useState<LocalFeatureSharingSnapshot | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [pendingRowId, setPendingRowId] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const next = await featureSharing.load()
+      setSharing(next)
+      setLoadError(null)
+    } catch {
+      setLoadError('Service sharing is unavailable right now. Try again.')
+    }
+  }, [featureSharing])
+
+  useEffect(() => {
+    void load()
+    return featureSharing.subscribe?.((next) => {
+      setSharing(next)
+      setLoadError(null)
+    })
+  }, [featureSharing, load])
+
+  const snapshot = useMemo(
+    () => buildLocalServiceRoutingSnapshot(sharing, loadError),
+    [loadError, sharing],
+  )
+
+  const previewRow = useCallback(async (
+    row: ServiceRoutingRow,
+    changes: ServiceRoutingChange[],
+  ): Promise<ServiceRoutingPreviewEvidence> => {
+    const unsupported = changes.filter((change) => change.keyPath !== `${row.sharingPath}.share`)
+    const shareChange = changes.find((change) => change.keyPath === `${row.sharingPath}.share`)
+    return {
+      valid: unsupported.length === 0 && Boolean(shareChange),
+      diffs: shareChange ? [{
+        key_path: shareChange.keyPath,
+        old_value: row.exportPolicy.share,
+        new_value: shareChange.value,
+        changed: shareChange.value !== row.exportPolicy.share,
+        source_layer: 'user',
+        secret: false,
+        reload_required: false,
+        restart_required: false,
+        affected_services: ['Tools'],
+      }] : [],
+      errors: unsupported.length > 0 || !shareChange
+        ? ['This device can only change whether its local tools are shared here.']
+        : [],
+      baseRevision: sharing ? localSharingRevision(sharing) : null,
+      previewToken: sharing ? localSharingPreviewToken(sharing) : null,
+      changedPaths: shareChange ? [shareChange.keyPath] : [],
+      secretsRedacted: true,
+    }
+  }, [sharing])
+
+  const saveRow = useCallback(async (
+    row: ServiceRoutingRow,
+    changes: ServiceRoutingChange[],
+    preview: ServiceRoutingPreviewEvidence,
+    confirmation: ServiceRoutingSaveConfirmation,
+  ) => {
+    if (!confirmation.reauthConfirmed || !preview.valid || !preview.previewToken) return
+    setPendingRowId(row.id)
+    setMutationError(null)
+    try {
+      const current = await featureSharing.load()
+      if (localSharingPreviewToken(current) !== preview.previewToken) {
+        throw new Error('Sharing choices changed. Refresh and review before saving again.')
+      }
+      const share = changes.find((change) => change.keyPath === `${row.sharingPath}.share`)?.value
+      if (typeof share !== 'boolean') throw new Error('This sharing choice is unavailable.')
+      for (const feature of current.features.filter((candidate) => candidate.available)) {
+        if (feature.enabled !== share) await featureSharing.setFeatureEnabled(feature.id, share)
+      }
+      await load()
+    } catch (error) {
+      setMutationError(meshPeerErrorMessage(error))
+    } finally {
+      setPendingRowId(null)
+    }
+  }, [featureSharing, load])
+
+  return (
+    <ServiceRoutingView
+      snapshot={snapshot}
+      pendingRowId={pendingRowId}
+      mutationError={mutationError}
+      onRefresh={load}
+      onPreviewRow={previewRow}
+      onSaveRow={(row, changes, preview, confirmation) => {
+        void saveRow(row, changes, preview, confirmation)
+      }}
+      sharingOnly
+    />
+  )
+}
+
+export function buildLocalServiceRoutingSnapshot(
+  sharing: LocalFeatureSharingSnapshot | null,
+  error: string | null = null,
+): ServiceRoutingSnapshot {
+  if (!sharing) {
+    return {
+      ...loadingSnapshot,
+      loadState: error ? 'unavailable' : 'loading',
+      error,
+      evidenceSource: 'This device',
+    }
+  }
+  const availableFeatures = sharing.features.filter((feature) => feature.available)
+  const rows: ServiceRoutingRow[] = availableFeatures.length === 0 ? [] : [{
+    id: 'tools',
+    label: 'Tools',
+    basePath: 'local.tools',
+    sharingPath: 'local.tools.mesh_sharing',
+    routingPath: 'local.tools.mesh_routing',
+    registryStatus: 'healthy',
+    registryVersion: null,
+    registered: true,
+    exportPolicy: {
+      share: availableFeatures.some((feature) => feature.enabled),
+      maxConcurrent: 1,
+      unsharedFeatureIds: [],
+      unsharedMethodIds: [],
+    },
+    routingPolicy: {
+      prefer: 'local_only',
+      fallback: 'none',
+      allowedProviderPeerIds: [],
+      minVersion: null,
+      requiredProviderFeatureIds: [],
+      requiredProviderCapabilityTags: [],
+      requireExplicitSelector: false,
+    },
+    exportFeatures: [],
+    ungroupedMethods: [],
+    staleMethodIds: [],
+    providerOptions: [],
+    remoteFeatureOptions: [],
+    remoteCapabilityTagOptions: [],
+  }]
+  return {
+    loadState: 'ready',
+    rows,
+    knownPeers: sharing.approvedDevices.map((peer) => ({
+      peerId: peer.peerId,
+      label: peer.peerLabel,
+    })),
+    editable: true,
+    registryMode: 'local',
+    warnings: [],
+    error: null,
+    evidenceSource: 'This device',
+  }
+}
+
+function localSharingRevision(sharing: LocalFeatureSharingSnapshot): number {
+  return sharing.features.reduce((revision, feature, index) => (
+    revision + (feature.enabled ? index + 1 : 0)
+  ), sharing.features.length)
+}
+
+function localSharingPreviewToken(sharing: LocalFeatureSharingSnapshot): string {
+  return JSON.stringify(sharing.features
+    .map((feature) => [feature.id, feature.available, feature.enabled])
+    .sort(([left], [right]) => String(left).localeCompare(String(right))))
 }
 
 export async function previewServiceRoutingChanges(client: AuroraClient, changes: ServiceRoutingChange[]): Promise<ServiceRoutingPreviewEvidence> {

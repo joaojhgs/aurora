@@ -128,12 +128,14 @@ export interface PermissionEditorTableProps {
   roleTemplate: string
   onSelectRoleTemplate: (templateId: string) => void
   onToggle: (permissionId: string) => void
+  showRoleTemplates?: boolean
+  showPermissionIds?: boolean
 }
 
-export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelectRoleTemplate, onToggle }: PermissionEditorTableProps) {
+export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelectRoleTemplate, onToggle, showRoleTemplates = true, showPermissionIds = true }: PermissionEditorTableProps) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Role templates">
+      {showRoleTemplates ? <div className="flex flex-wrap gap-1.5" role="group" aria-label="Role templates">
         {ROLE_TEMPLATES.map((template) => (
           <Badge
             key={template.id}
@@ -144,7 +146,7 @@ export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelect
             {template.name}
           </Badge>
         ))}
-      </div>
+      </div> : null}
       <div className="overflow-hidden rounded-lg border border-border">
         <Table>
           <TableHeader>
@@ -160,7 +162,9 @@ export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelect
                 <TableCell>
                   <div className="flex flex-col">
                     <span>{permission.label}</span>
-                    <span className="font-mono text-[10.5px] text-muted-foreground">{permission.id}</span>
+                    {showPermissionIds ? (
+                      <span className="font-mono text-[10.5px] text-muted-foreground">{permission.id}</span>
+                    ) : null}
                   </div>
                 </TableCell>
                 <TableCell>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import type { PermissionCatalogEntry } from '@aurora/client'
 import { Clock3, Laptop, ShieldCheck } from 'lucide-react'
 
 import { Badge } from '#components/ui/badge'
@@ -34,6 +35,10 @@ export interface LocalDeviceFeature {
   readonly requiresAuroraOpen: boolean
   readonly requiresLocalConfirmation: boolean
   readonly permissionNeeded?: boolean | undefined
+  readonly requiredPermissions?: readonly string[] | undefined
+  readonly nativeCapabilityIds?: readonly string[] | undefined
+  readonly nativePermissionIds?: readonly string[] | undefined
+  readonly resourceScopes?: readonly string[] | undefined
 }
 
 export interface LocalFeaturePeerSharing {
@@ -54,6 +59,81 @@ export interface LocalFeatureSharingPort {
   setFeatureEnabled(featureId: string, enabled: boolean): Promise<void>
   replacePeerSharing(peerId: string, featureIds: readonly string[], expiresAtMs: number | null): Promise<void>
   revokePeerSharing(peerId: string): Promise<void>
+}
+
+export interface LocalShareableServiceScope {
+  readonly id: string
+  readonly permissionId: string
+  readonly label: string
+  readonly description: string
+  readonly featureIds: readonly string[]
+}
+
+/**
+ * Project the local tool provider as the service it actually exposes to peers.
+ * Tool-level choices stay on the Tools page; pairing grants service-level access.
+ */
+export function localShareableServiceScopes(
+  snapshot: LocalFeatureSharingSnapshot,
+): LocalShareableServiceScope[] {
+  const featureIds = snapshot.features
+    .filter((feature) => feature.available)
+    .map((feature) => feature.id)
+  if (featureIds.length === 0) return []
+  return [{
+    id: 'tools',
+    permissionId: 'Tooling.use',
+    label: 'Tools',
+    description: 'Use tools this device makes available.',
+    featureIds,
+  }]
+}
+
+export function selectedLocalServicePermissions(
+  snapshot: LocalFeatureSharingSnapshot,
+  scopes = localShareableServiceScopes(snapshot),
+): string[] {
+  const enabled = new Set(
+    snapshot.features
+      .filter((feature) => feature.available && feature.enabled)
+      .map((feature) => feature.id),
+  )
+  return scopes
+    .filter((scope) => scope.featureIds.some((featureId) => enabled.has(featureId)))
+    .map((scope) => scope.permissionId)
+}
+
+export function localFeatureIdsForServicePermissions(
+  scopes: readonly LocalShareableServiceScope[],
+  permissionIds: readonly string[],
+): string[] {
+  const selected = new Set(permissionIds)
+  return [...new Set(
+    scopes
+      .filter((scope) => selected.has(scope.permissionId))
+      .flatMap((scope) => scope.featureIds),
+  )]
+}
+
+export function localServicePermissionCatalog(
+  scopes: readonly LocalShareableServiceScope[],
+): PermissionCatalogEntry[] {
+  return scopes.map((scope) => ({
+    id: scope.permissionId,
+    label: scope.label,
+    description: scope.description,
+    service: scope.permissionId.split('.', 1)[0] ?? null,
+    action: scope.permissionId.includes('.')
+      ? scope.permissionId.slice(scope.permissionId.indexOf('.') + 1)
+      : null,
+    kind: 'method',
+    methodType: null,
+    exposure: null,
+    busTopic: null,
+    routePath: null,
+    availableOverHttp: false,
+    requiredBy: [],
+  }))
 }
 
 export interface LocalFeatureSharingPanelProps {

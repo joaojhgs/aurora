@@ -31,9 +31,14 @@ import {
 import { presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
 import {
-  LocalFeatureSharingPanel,
   type LocalDeviceFeature,
   type LocalFeatureSharingPort,
+  type LocalFeatureSharingSnapshot,
+  type LocalShareableServiceScope,
+  localFeatureIdsForServicePermissions,
+  localShareableServiceScopes,
+  localServicePermissionCatalog,
+  selectedLocalServicePermissions,
 } from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
 import {
@@ -179,6 +184,13 @@ export interface MeshPeersResourceProps {
   onScanQr?: () => Promise<string | null>
   /** Local authority facade; omitted when this surface cannot safely offer local features. */
   localFeatureSharing?: LocalFeatureSharingPort | undefined
+  /** Stable identity owned by a lightweight mesh node on this surface. */
+  localNode?: LocalMeshNodeIdentity | undefined
+}
+
+export interface LocalMeshNodeIdentity {
+  readonly peerId: string
+  readonly nodeName: string
 }
 
 export interface MeshPeersSnapshotOptions {
@@ -218,6 +230,7 @@ export interface MeshPeersViewProps {
   initialInviteText?: string | null
   /** Local authority facade; omitted when this surface cannot safely offer local features. */
   localFeatureSharing?: LocalFeatureSharingPort | undefined
+  ownsLocalNodeState?: boolean
 }
 
 export interface MeshInviteImportOperation {
@@ -289,6 +302,7 @@ export function MeshPeersResource({
   initialInviteText: initialInviteTextProp = null,
   onScanQr,
   localFeatureSharing,
+  localNode,
 }: MeshPeersResourceProps) {
   const resolvedSurface = useMemo(
     () =>
@@ -325,8 +339,10 @@ export function MeshPeersResource({
   const [thinPeerMutationError, setThinPeerMutationError] =
     useState<string | null>(null)
   const thinPairingApprovals = useRef<Set<string>>(new Set<string>())
+  const localSharingSnapshot = useRef<LocalFeatureSharingSnapshot | null>(null)
   const canManageLocalServiceConfiguration =
     resolvedSurface.canManageLocalServiceConfiguration
+  const ownsLocalNodeState = resolvedSurface.ownsLocalNodeState
 
   const sanitizePermissions = useCallback(
     (value: string) =>
@@ -353,17 +369,49 @@ export function MeshPeersResource({
     }
     return thinPeer.subscribe((nextThinSnapshot) => {
       setThinPeerSnapshot(nextThinSnapshot)
-      setSnapshot((current) =>
-        reconcileMeshPeersWithThinPeer(
-          current,
-          nextThinSnapshot,
-          current,
-        ),
-      )
+      setSnapshot((current) => ownsLocalNodeState
+        ? buildLocalMeshNodeSnapshot({
+            localNode,
+            thinPeer: nextThinSnapshot,
+            featureSharing: localSharingSnapshot.current,
+            sharingAvailable: Boolean(localFeatureSharing),
+          })
+        : reconcileMeshPeersWithThinPeer(current, nextThinSnapshot, current))
     })
-  }, [thinPeer])
+  }, [localFeatureSharing, localNode, ownsLocalNodeState, thinPeer])
+
+  useEffect(() => {
+    if (!ownsLocalNodeState || !localFeatureSharing?.subscribe) return
+    return localFeatureSharing.subscribe((nextSharing) => {
+      localSharingSnapshot.current = nextSharing
+      setSnapshot(buildLocalMeshNodeSnapshot({
+        localNode,
+        thinPeer: thinPeer?.snapshot() ?? null,
+        featureSharing: nextSharing,
+        sharingAvailable: true,
+      }))
+    })
+  }, [localFeatureSharing, localNode, ownsLocalNodeState, thinPeer])
 
   const loadPeers = useCallback(async () => {
+    if (ownsLocalNodeState) {
+      let featureSharing: LocalFeatureSharingSnapshot | null = null
+      if (localFeatureSharing) {
+        try {
+          featureSharing = await localFeatureSharing.load()
+        } catch {
+          featureSharing = null
+        }
+      }
+      localSharingSnapshot.current = featureSharing
+      setSnapshot(buildLocalMeshNodeSnapshot({
+        localNode,
+        thinPeer: thinPeer?.snapshot() ?? null,
+        featureSharing,
+        sharingAvailable: Boolean(localFeatureSharing),
+      }))
+      return
+    }
     const next = await buildMeshPeersSnapshot(client, route, {
       canManageLocalServiceConfiguration,
     })
@@ -374,10 +422,10 @@ export function MeshPeersResource({
         current,
       ),
     )
-  }, [canManageLocalServiceConfiguration, client, route, thinPeer, thinPeerSnapshot])
+  }, [canManageLocalServiceConfiguration, client, localFeatureSharing, localNode, ownsLocalNodeState, route, thinPeer])
 
   useEffect(() => {
-    if (!snapshot.meshEnabled) return
+    if (ownsLocalNodeState || !snapshot.meshEnabled) return
     let cancelled = false
     let pending = false
     const refresh = async () => {
@@ -405,28 +453,18 @@ export function MeshPeersResource({
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [canManageLocalServiceConfiguration, client, route, snapshot.meshEnabled, thinPeer, thinPeerSnapshot])
+  }, [canManageLocalServiceConfiguration, client, ownsLocalNodeState, route, snapshot.meshEnabled, thinPeer, thinPeerSnapshot])
 
   useEffect(() => {
     let cancelled = false
     setSnapshot(loadingSnapshot)
-    void buildMeshPeersSnapshot(client, route, {
-      canManageLocalServiceConfiguration,
-    }).then((next) => {
-      if (!cancelled) {
-        setSnapshot((current) =>
-          reconcileMeshPeersWithThinPeer(
-            next,
-            thinPeer?.snapshot() ?? thinPeerSnapshot,
-            current,
-          ),
-        )
-      }
+    void loadPeers().catch(() => {
+      if (!cancelled) setSnapshot((current) => ({ ...current, loadState: 'error', error: 'Aurora could not load connected devices.' }))
     })
     return () => {
       cancelled = true
     }
-  }, [canManageLocalServiceConfiguration, client, route, thinPeer])
+  }, [loadPeers])
 
   const runAction = useCallback(
     async (peer: MeshPeerRow, kind: 'approve' | 'deny' | 'remove') => {
@@ -625,6 +663,7 @@ export function MeshPeersResource({
       onRemovePeer={(peer) => runAction(peer, 'remove')}
       onSaveScopes={saveScopes}
       canManageLocalServiceConfiguration={canManageLocalServiceConfiguration}
+      ownsLocalNodeState={ownsLocalNodeState}
       thinPeerSnapshot={thinPeerSnapshot}
       thinPeerMutationError={thinPeerMutationError}
       onConfirmThinPairing={confirmThinPairing}
@@ -1061,6 +1100,172 @@ export function reconcileMeshPeersWithThinPeer(
   }
 }
 
+export function buildLocalMeshNodeSnapshot({
+  localNode,
+  thinPeer,
+  featureSharing,
+  sharingAvailable,
+}: {
+  localNode?: LocalMeshNodeIdentity | undefined
+  thinPeer?: BrowserWebRtcSnapshot | null | undefined
+  featureSharing?: LocalFeatureSharingSnapshot | null | undefined
+  sharingAvailable?: boolean
+}): MeshPeersSnapshot {
+  const configured = isBrowserWebRtcConfigured(thinPeer)
+  const connected = isBrowserWebRtcConnected(thinPeer)
+  const expectedPeerId = configured ? thinPeer.expectedStablePeerId ?? null : null
+  const featureById = new Map((featureSharing?.features ?? []).map((feature) => [feature.id, feature]))
+  const approvedDevices = featureSharing?.approvedDevices ?? []
+  const rows = new Map<string, MeshPeerRow>()
+
+  for (const approved of approvedDevices) {
+    const isCurrent = approved.peerId === expectedPeerId
+    const grantedFeatures = approved.featureIds
+      .map((featureId) => featureById.get(featureId))
+      .filter((feature): feature is LocalDeviceFeature => Boolean(feature?.available && feature.enabled))
+    const permissions = uniqueStrings([
+      ...(grantedFeatures.length > 0 ? ['Tooling.use'] : []),
+      ...grantedFeatures.flatMap((feature) => [...(feature.requiredPermissions ?? [])]),
+    ])
+    rows.set(approved.peerId, localMeshPeerRow({
+      peerId: approved.peerId,
+      nodeName: isCurrent ? thinPeer?.nodeName?.trim() || approved.peerLabel : approved.peerLabel,
+      connected: isCurrent && connected,
+      updatedAt: isCurrent ? thinPeer?.updatedAt ?? null : null,
+      permissions,
+      services: grantedFeatures.length > 0 ? ['Tools'] : [],
+    }))
+  }
+
+  if (expectedPeerId && !rows.has(expectedPeerId)) {
+    rows.set(expectedPeerId, localMeshPeerRow({
+      peerId: expectedPeerId,
+      nodeName: thinPeer?.nodeName?.trim() || 'Connected Aurora device',
+      connected,
+      updatedAt: thinPeer?.updatedAt ?? null,
+      permissions: [],
+      services: [],
+    }))
+  }
+
+  const peers = [...rows.values()].sort((left, right) => left.nodeName.localeCompare(right.nodeName) || left.peerId.localeCompare(right.peerId))
+  const localNodeName = localNode?.nodeName.trim() || 'This device'
+  const sharingUnavailable = sharingAvailable === true && featureSharing == null
+  const warnings = sharingUnavailable
+    ? ['Sharing choices are unavailable right now. Try refreshing this page.']
+    : []
+  return {
+    ...loadingSnapshot,
+    loadState: sharingUnavailable || (configured && !connected) ? 'degraded' : peers.length === 0 ? 'empty' : 'ready',
+    generatedAt: new Date().toISOString(),
+    localPeerId: localNode?.peerId ?? null,
+    localNodeName,
+    meshEnabled: configured,
+    meshStarted: configured,
+    webrtcStarted: connected,
+    peers,
+    pendingRequests: [],
+    liveSessions: connected && expectedPeerId ? [localMeshSessionRow(expectedPeerId, thinPeer!)] : [],
+    devices: [],
+    pendingCount: thinPeer?.pairingSessionId ? 1 : 0,
+    approvedCount: peers.filter((peer) => peer.trustState === 'available-local' || peer.trustState === 'available-remote').length,
+    deniedCount: 0,
+    removedCount: 0,
+    runtimePeerCount: peers.length,
+    liveSessionCount: connected ? 1 : 0,
+    deviceCount: peers.length,
+    routeCount: connected ? 1 : 0,
+    compatibilityFailures: [],
+    listState: sharingUnavailable ? 'degraded' : peers.length === 0 ? 'available-local' : connected ? 'available-remote' : 'stale',
+    listReason: sharingUnavailable
+      ? 'Sharing choices are unavailable right now.'
+      : peers.length === 0
+        ? 'No approved devices are saved on this device.'
+        : 'Approved devices saved on this device.',
+    statusState: connected ? 'available-remote' : configured ? 'degraded' : 'available-local',
+    statusReason: connected ? 'A direct device connection is active.' : configured ? 'Aurora is retrying the saved device.' : 'No direct device connection is configured.',
+    mutationState: sharingAvailable ? 'available-local' : 'unsupported',
+    mutationReason: sharingAvailable ? 'Sharing choices are stored on this device.' : 'Sharing choices are unavailable on this device.',
+    config: {
+      fields: [],
+      state: 'unsupported',
+      reason: 'Connection settings are managed in this device profile.',
+      secretsRedacted: true,
+      editable: false,
+      warnings: [],
+    },
+    warnings,
+    error: null,
+    evidenceSource: 'This device and its direct connections',
+    transportKind: 'mesh',
+    fixtureOnly: false,
+  }
+}
+
+function localMeshPeerRow({
+  peerId,
+  nodeName,
+  connected,
+  updatedAt,
+  permissions,
+  services,
+}: {
+  peerId: string
+  nodeName: string
+  connected: boolean
+  updatedAt: string | null
+  permissions: string[]
+  services: string[]
+}): MeshPeerRow {
+  return {
+    peerId,
+    nodeName: nodeName.trim() || 'Approved device',
+    roomName: 'direct device connection',
+    lifecycleState: connected ? 'available-remote' : 'stale',
+    lifecycleLabel: connected ? 'Approved device' : 'Saved device is offline',
+    trustState: connected ? 'available-remote' : 'stale',
+    trustLabel: connected ? 'Approved device' : 'Approved device; currently offline',
+    outboundStatus: 'approved',
+    inboundStatus: permissions.length > 0 ? 'approved' : 'not shared',
+    connectionStatus: connected ? 'connected' : 'offline',
+    fingerprint: peerId,
+    permissions,
+    inboundPermissions: permissions,
+    latencyMs: null,
+    routeQuality: connected ? 'connected' : 'offline',
+    compatibility: connected ? 'compatible' : 'checked again on reconnect',
+    serviceCount: services.length,
+    services,
+    lastSeen: updatedAt,
+    lastEvidenceSource: 'Saved on this device',
+    pendingPairing: null,
+    approveAction: null,
+    denyAction: null,
+    removeAction: null,
+  }
+}
+
+function localMeshSessionRow(peerId: string, thinPeer: BrowserWebRtcSnapshot): MeshLiveSessionRow {
+  return {
+    sessionId: `direct:${peerId}`,
+    stablePeerId: peerId,
+    nodeName: thinPeer.nodeName?.trim() || 'Connected Aurora device',
+    pairingSessionId: thinPeer.pairingSessionId ?? null,
+    verificationCode: thinPeer.pairingVerificationCode ?? null,
+    state: 'available-remote',
+    connectionState: 'connected',
+    iceState: thinPeer.icePathCategory,
+    dataChannelState: 'connected',
+    authState: 'approved',
+    latencyMs: null,
+    identitySource: 'Saved device identity',
+    permissions: 'Approved connection',
+    pairingState: thinPeer.pairingSessionId ? 'Waiting for approval' : 'Complete',
+    linkedPeerState: 'Linked',
+    evidenceSource: 'Direct connection',
+  }
+}
+
 export function MeshPeersView({
   snapshot,
   route,
@@ -1091,6 +1296,7 @@ export function MeshPeersView({
   onRejectThinPairing,
   onReconnectThinPeer,
   localFeatureSharing,
+  ownsLocalNodeState = false,
 }: MeshPeersViewProps) {
   const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
   const [connectOpen, setConnectOpen] = useState<boolean>(() => Boolean(initialInviteText))
@@ -1189,9 +1395,7 @@ export function MeshPeersView({
 
       <MeshSummaryCards snapshot={snapshot} pendingPeers={pendingRequests.length} />
 
-      {localFeatureSharing ? <LocalFeatureSharingPanel port={localFeatureSharing} /> : null}
-
-      <Card>
+      {!ownsLocalNodeState || canManageLocalServiceConfiguration ? <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Network /> Device connections
@@ -1223,7 +1427,7 @@ export function MeshPeersView({
             {configPendingKey ? <p className="text-sm text-muted-foreground">Applying changes…</p> : null}
           </CardContent>
         ) : null}
-      </Card>
+      </Card> : null}
 
       {outgoingPairingLabels.length > 0 ? (
         <Alert role="status">
@@ -1419,8 +1623,8 @@ function ThinPeerPairingDialog({
 }) {
   const sessionId = snapshot?.pairingSessionId ?? null
   const verificationCode = snapshot?.pairingVerificationCode ?? null
-  const [features, setFeatures] = useState<Awaited<ReturnType<LocalFeatureSharingPort['load']>>['features']>([])
-  const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>([])
+  const [serviceScopes, setServiceScopes] = useState<LocalShareableServiceScope[]>([])
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
   const [featuresLoading, setFeaturesLoading] = useState(false)
   const [featureLoadError, setFeatureLoadError] = useState<string | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
@@ -1434,22 +1638,26 @@ function ThinPeerPairingDialog({
     setConfirmError(null)
     setConfirmPending(false)
     if (!localFeatureSharing) {
-      setFeatures([])
-      setSelectedFeatureIds([])
+      setServiceScopes([])
+      setSelectedPermissions([])
       setFeaturesLoading(false)
       return
     }
     setFeaturesLoading(true)
     void localFeatureSharing.load().then((next) => {
       if (!active) return
-      const available = filterPairingFeatures(next.features, surfaceProfile)
-      setFeatures(available)
-      setSelectedFeatureIds(available.filter((feature) => feature.enabled).map((feature) => feature.id))
+      const filtered = {
+        ...next,
+        features: filterPairingFeatures(next.features, surfaceProfile),
+      }
+      const scopes = localShareableServiceScopes(filtered)
+      setServiceScopes(scopes)
+      setSelectedPermissions(selectedLocalServicePermissions(filtered, scopes))
       setFeaturesLoading(false)
     }, () => {
       if (!active) return
-      setFeatures([])
-      setSelectedFeatureIds([])
+      setServiceScopes([])
+      setSelectedPermissions([])
       setFeaturesLoading(false)
       setFeatureLoadError('This device’s sharing options are unavailable right now. Try again.')
     })
@@ -1457,10 +1665,10 @@ function ThinPeerPairingDialog({
       active = false
     }
   }, [localFeatureSharing, open, sessionId])
-  const toggleFeature = (featureId: string, checked: boolean) => {
-    setSelectedFeatureIds((current) => {
-      if (checked) return current.includes(featureId) ? current : [...current, featureId]
-      return current.filter((currentId) => currentId !== featureId)
+  const togglePermission = (permissionId: string) => {
+    setSelectedPermissions((current) => {
+      if (!current.includes(permissionId)) return [...current, permissionId]
+      return current.filter((currentId) => currentId !== permissionId)
     })
   }
   const approve = async () => {
@@ -1470,7 +1678,7 @@ function ThinPeerPairingDialog({
     setConfirmPending(true)
     setConfirmError(null)
     try {
-      const selected = features.filter((feature) => selectedFeatureIds.includes(feature.id)).map((feature) => feature.id)
+      const selected = localFeatureIdsForServicePermissions(serviceScopes, selectedPermissions)
       await onConfirm(sessionId, { sharedFeatureIds: selected })
       if (approvalAttempt.current === attempt) onOpenChange(false)
     } catch {
@@ -1502,29 +1710,22 @@ function ThinPeerPairingDialog({
         <div className="flex flex-col gap-3 rounded-lg border p-3">
           <div className="flex flex-col gap-1">
             <h3 className="text-sm font-medium">Choose what {snapshot?.nodeName || 'this Aurora'} can use from this device</h3>
-            <p className="text-xs text-muted-foreground">Only features available on this device are shown. You can change this later.</p>
+            <p className="text-xs text-muted-foreground">Only services available on this device are shown. You can change this later.</p>
           </div>
           {featuresLoading ? <Skeleton className="h-16 w-full" /> : null}
-          {!featuresLoading && features.length === 0 && !featureLoadError ? (
-            <p className="text-sm text-muted-foreground">No local features are available to share. You can still pair the devices.</p>
+          {!featuresLoading && serviceScopes.length === 0 && !featureLoadError ? (
+            <p className="text-sm text-muted-foreground">No services are available to share. You can still pair the devices.</p>
           ) : null}
-          {!featuresLoading && features.length > 0 ? (
-            <div className="grid gap-2">
-              {features.map((feature) => (
-                <label key={feature.id} className="flex items-start gap-3 rounded-md border px-3 py-2.5">
-                  <Checkbox
-                    aria-label={feature.label}
-                    checked={selectedFeatureIds.includes(feature.id)}
-                    disabled={confirmPending}
-                    onCheckedChange={(checked) => toggleFeature(feature.id, checked === true)}
-                  />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-sm font-medium">{feature.label}</span>
-                    <span className="text-xs text-muted-foreground">{feature.description}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
+          {!featuresLoading && serviceScopes.length > 0 ? (
+            <PermissionEditorTable
+              catalog={localServicePermissionCatalog(serviceScopes)}
+              checked={Object.fromEntries(selectedPermissions.map((permission) => [permission, true]))}
+              roleTemplate="custom"
+              showRoleTemplates={false}
+              showPermissionIds={false}
+              onSelectRoleTemplate={() => undefined}
+              onToggle={togglePermission}
+            />
           ) : null}
         </div>
         {featureLoadError || confirmError ? (

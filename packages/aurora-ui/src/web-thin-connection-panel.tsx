@@ -15,14 +15,21 @@ import { getAuroraSurfaceProfile } from './platform-surface'
 import type { ThinConnectionProfile } from './thin-connection-profile'
 import { scanQrInviteWithBrowserCamera } from './browser-qr-scanner'
 import { PRODUCT_COPY, productStatusCopy, safeErrorCopy } from './product-copy'
-import { type LocalDeviceFeature, type LocalFeatureSharingPort } from './local-feature-sharing'
+import {
+  type LocalFeatureSharingPort,
+  type LocalShareableServiceScope,
+  localFeatureIdsForServicePermissions,
+  localShareableServiceScopes,
+  localServicePermissionCatalog,
+  selectedLocalServicePermissions,
+} from './local-feature-sharing'
+import { PermissionEditorTable } from './shared-components'
 import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Badge } from '#components/ui/badge'
 import { Button } from '#components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '#components/ui/card'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '#components/ui/field'
 import { Input } from '#components/ui/input'
-import { Checkbox } from '#components/ui/checkbox'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
 import { Textarea } from '#components/ui/textarea'
 
@@ -76,8 +83,8 @@ export function HomeNodeConnectionPanel({
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profilePending, setProfilePending] = useState(false)
   const [invitePending, setInvitePending] = useState(false)
-  const [availableSharedFeatures, setAvailableSharedFeatures] = useState<readonly LocalDeviceFeature[]>([])
-  const [sharedFeatureIds, setSharedFeatureIds] = useState<string[]>([])
+  const [availableServiceScopes, setAvailableServiceScopes] = useState<readonly LocalShareableServiceScope[]>([])
+  const [selectedServicePermissions, setSelectedServicePermissions] = useState<string[]>([])
   const [sharedFeatureLoadError, setSharedFeatureLoadError] = useState<string | null>(null)
   const [pairingApprovalPending, setPairingApprovalPending] = useState(false)
   const approvedPairingSessionsRef = useMemo(() => new Map<string, number>(), [])
@@ -128,22 +135,22 @@ export function HomeNodeConnectionPanel({
     let active = true
     const loadFeatures = async () => {
       if (!snapshot.pairingSessionId || !localFeatureSharing) {
-        setAvailableSharedFeatures([])
-        setSharedFeatureIds([])
+        setAvailableServiceScopes([])
+        setSelectedServicePermissions([])
         setSharedFeatureLoadError(null)
         return
       }
       try {
         const next = await localFeatureSharing.load()
         if (!active) return
-        const available = filterPairingFeatures(next.features, surface)
-        setAvailableSharedFeatures(available)
-        setSharedFeatureIds(available.filter((feature) => feature.enabled).map((feature) => feature.id))
+        const scopes = localShareableServiceScopes(next)
+        setAvailableServiceScopes(scopes)
+        setSelectedServicePermissions(selectedLocalServicePermissions(next, scopes))
         setSharedFeatureLoadError(null)
       } catch {
         if (!active) return
-        setAvailableSharedFeatures([])
-        setSharedFeatureIds([])
+        setAvailableServiceScopes([])
+        setSelectedServicePermissions([])
         setSharedFeatureLoadError('This device’s sharing options are unavailable right now. Try again.')
       }
     }
@@ -260,14 +267,16 @@ export function HomeNodeConnectionPanel({
     try {
       let sharedFeatureIdsToShare: string[] = []
       if (localFeatureSharing) {
-        const requested = new Set(sharedFeatureIds.map((featureId) => featureId.trim()).filter(Boolean))
+        const requested = new Set(
+          localFeatureIdsForServicePermissions(availableServiceScopes, selectedServicePermissions),
+        )
         const featureSnapshot = await localFeatureSharing.load()
-        const availableFeatures = filterPairingFeatures(featureSnapshot.features, surface)
+        const availableFeatures = featureSnapshot.features.filter((feature) => feature.available)
         const available = new Map(availableFeatures.map((feature) => [feature.id, feature]))
         for (const featureId of requested) {
           const feature = available.get(featureId)
           if (!feature?.available) {
-            throw new Error('The selected device features are no longer available. Review the selection and try again.')
+            throw new Error('The selected services are no longer available. Review the selection and try again.')
           }
         }
         for (const featureId of requested) {
@@ -290,13 +299,13 @@ export function HomeNodeConnectionPanel({
       if (localFeatureSharing) {
         try {
           const next = await localFeatureSharing.load()
-          const available = filterPairingFeatures(next.features, surface)
-          setAvailableSharedFeatures(available)
-          setSharedFeatureIds(available.filter((feature) => feature.enabled).map((feature) => feature.id))
+          const scopes = localShareableServiceScopes(next)
+          setAvailableServiceScopes(scopes)
+          setSelectedServicePermissions(selectedLocalServicePermissions(next, scopes))
           setSharedFeatureLoadError(null)
         } catch {
-          setAvailableSharedFeatures([])
-          setSharedFeatureIds([])
+          setAvailableServiceScopes([])
+          setSelectedServicePermissions([])
           setSharedFeatureLoadError('This device’s sharing options are unavailable right now. Try again.')
         }
       }
@@ -351,10 +360,10 @@ export function HomeNodeConnectionPanel({
     setDraftProfile(defaultProfileForSurface(surface, suffix))
   }
 
-  const toggleSharedFeature = (featureId: string, checked: boolean) => {
-    setSharedFeatureIds((current) => {
-      if (checked) return current.includes(featureId) ? current : [...current, featureId]
-      return current.filter((currentId) => currentId !== featureId)
+  const toggleServicePermission = (permissionId: string) => {
+    setSelectedServicePermissions((current) => {
+      if (!current.includes(permissionId)) return [...current, permissionId]
+      return current.filter((currentId) => currentId !== permissionId)
     })
   }
 
@@ -728,26 +737,23 @@ export function HomeNodeConnectionPanel({
           <div className="flex w-full flex-col gap-2 rounded-lg border bg-muted/20 p-3">
             <div className="flex flex-col gap-0.5">
               <p className="text-sm font-medium">Choose what {snapshot.nodeName || 'the connected Aurora'} can use from this device</p>
-              <p className="text-xs text-muted-foreground">Only features available on this device are shown. You can change this later.</p>
+              <p className="text-xs text-muted-foreground">Only services available on this device are shown. You can change this later.</p>
             </div>
             {sharedFeatureLoadError ? <p role="alert" className="text-xs text-destructive">{sharedFeatureLoadError}</p> : null}
-            {!sharedFeatureLoadError && availableSharedFeatures.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No local features are available to share. You can still pair the devices.</p>
+            {!sharedFeatureLoadError && availableServiceScopes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No services are available to share. You can still pair the devices.</p>
             ) : null}
-            {availableSharedFeatures.map((feature) => (
-              <label key={feature.id} className="flex items-start gap-3 rounded-md border px-3 py-2.5">
-                <Checkbox
-                  aria-label={feature.label}
-                  checked={sharedFeatureIds.includes(feature.id)}
-                  disabled={pairingApprovalPending}
-                  onCheckedChange={(checked) => toggleSharedFeature(feature.id, Boolean(checked))}
-                />
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-medium">{feature.label}</span>
-                  <span className="text-xs text-muted-foreground">{feature.description}</span>
-                </span>
-              </label>
-            ))}
+            {availableServiceScopes.length > 0 ? (
+              <PermissionEditorTable
+                catalog={localServicePermissionCatalog(availableServiceScopes)}
+                checked={Object.fromEntries(selectedServicePermissions.map((permission) => [permission, true]))}
+                roleTemplate="custom"
+                showRoleTemplates={false}
+                showPermissionIds={false}
+                onSelectRoleTemplate={() => undefined}
+                onToggle={toggleServicePermission}
+              />
+            ) : null}
           </div>
         ) : null}
         {snapshot.pairingSessionId && !snapshot.pairingVerificationCode ? (
@@ -774,16 +780,6 @@ export function HomeNodeConnectionPanel({
 }
 
 export const WebThinConnectionPanel = HomeNodeConnectionPanel
-
-function isGatewayScopedFeature(feature: LocalDeviceFeature): boolean {
-  return /gateway/i.test(feature.id) || /gateway/i.test(feature.label) || /gateway/i.test(feature.description)
-}
-
-function filterPairingFeatures(features: readonly LocalDeviceFeature[], surface: ReturnType<typeof getAuroraSurfaceProfile>): readonly LocalDeviceFeature[] {
-  const next = features.filter((feature) => feature.available)
-  if (!surface.isMobile) return next
-  return next.filter((feature) => !isGatewayScopedFeature(feature))
-}
 
 function defaultProfileForSurface(
   surface: ReturnType<typeof getAuroraSurfaceProfile>,

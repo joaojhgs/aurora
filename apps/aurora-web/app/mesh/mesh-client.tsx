@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react'
 import { MeshPeersResource, RoutePolicyResource, type RouteAvailability } from '@aurora/ui'
 import {
   useBrowserRoute,
+  useBrowserRuntimeProfile,
   useBrowserShellRuntime,
 } from '../browser-shell-runtime'
 
 export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
   const [incomingInvite, setIncomingInvite] = useState<string | null>(null)
   const runtime = useBrowserShellRuntime()
+  const runtimeProfile = useBrowserRuntimeProfile()
   const client = runtime.client
   const activeRoute = useBrowserRoute(route)
   const providerStatus = runtime.localNodeProviderStatus
@@ -41,6 +43,12 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
         thinPeer={runtime.peer}
         initialInviteText={incomingInvite}
         localFeatureSharing={runtime.localFeatureSharing}
+        localNode={runtimeProfile?.nodeMode === 'mesh-node'
+          ? {
+              peerId: runtimeProfile.localNode.stablePeerId,
+              nodeName: runtimeProfile.localNode.nodeName,
+            }
+          : undefined}
       />
       <RoutePolicyResource client={client} route={activeRoute} />
     </div>

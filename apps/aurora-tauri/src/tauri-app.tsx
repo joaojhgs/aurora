@@ -228,6 +228,7 @@ export const tauriRouteRegistry = {
   mesh: ({ route, nativeContext, client }) => {
     const inviteParam = initialThinInviteFromUrl();
     const providerStatus = nativeContext.localNodeProviderStatus;
+    const localNode = localMeshNodeIdentity(nativeContext);
     return (
       <div
         className="ata-page-stack"
@@ -259,6 +260,7 @@ export const tauriRouteRegistry = {
           thinPeer={nativeContext.thinPeer}
           initialInviteText={inviteParam}
           localFeatureSharing={nativeContext.localFeatureSharing}
+          localNode={localNode}
           {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
         />
         {nativeContext.surfaceProfile.canManageLocalServiceConfiguration ? (
@@ -751,6 +753,8 @@ export function AuroraTauriApp({
     runtimeMode: runtime.mode,
     transportKind: snapshot.transportKind,
     nativePlatform: snapshot.nativePlatform,
+    nodeMode: runtime.nodeMode,
+    runtimeTier: runtime.runtimeTier,
     userAgent:
       typeof window === "undefined" ? undefined : window.navigator.userAgent,
   });
@@ -779,6 +783,7 @@ export function AuroraTauriApp({
           remoteTools: assistantRemoteTools,
         }
       : undefined,
+    runtimeProfile: runtime.runtimeProfile,
     localData: runtime.localData,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
@@ -1256,6 +1261,7 @@ interface NativeContext {
   localFeatureSharing?: AuroraTauriRuntime["localFeatureSharing"];
   localToolProvider?: AuroraTauriRuntime["localToolProvider"];
   localAssistant?: AuroraTauriRuntime["localAssistant"];
+  runtimeProfile?: AuroraTauriRuntime["runtimeProfile"];
   localData?: AuroraTauriRuntime["localData"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
@@ -1271,6 +1277,17 @@ interface NativeContext {
   androidBaseline: TauriAndroidBaselineStatus | null;
   androidForeground: AndroidForegroundRuntimeStatus | null;
   androidMediaPolicy: AndroidMediaPolicyStatus | null;
+}
+
+function localMeshNodeIdentity(
+  nativeContext: NativeContext,
+): { peerId: string; nodeName: string } | undefined {
+  if (nativeContext.nodeMode !== "mesh-node") return undefined;
+  const localNode = nativeContext.runtimeProfile?.localNode;
+  const peerId = localNode?.stablePeerId ?? nativeContext.thinProfile?.localStablePeerId;
+  const nodeName = localNode?.nodeName ?? nativeContext.thinProfile?.nodeName;
+  if (!peerId || !nodeName) return undefined;
+  return { peerId, nodeName };
 }
 
 function tauriLocalAssistant(

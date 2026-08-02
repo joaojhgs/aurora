@@ -1,4 +1,4 @@
-import type { AuroraRuntimeTier, AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
+import type { AuroraNodeMode, AuroraRuntimeTier, AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
 export type { AuroraSurfaceKind, LegacyAuroraSurfaceKind } from './runtime-profile'
 
 /**
@@ -22,6 +22,8 @@ export interface AuroraSurfaceProfileInput {
   transportKind?: string | null | undefined
   nativePlatform?: string | null | undefined
   userAgent?: string | null | undefined
+  nodeMode?: AuroraNodeMode | null | undefined
+  runtimeTier?: AuroraRuntimeTier | null | undefined
 }
 
 export interface AuroraSurfaceProfile {
@@ -59,6 +61,14 @@ export interface AuroraSurfaceProfile {
   trustsNativeWebViewOrigin: boolean
   /** Local service configuration is owned by this client, not a remote peer. */
   canManageLocalServiceConfiguration: boolean
+  /** Product role for this surface; independent from its active transport. */
+  nodeMode: AuroraNodeMode
+  /** Local service tier physically available on this surface. */
+  runtimeTier: AuroraRuntimeTier
+  /** Mesh/device pages must project this node rather than the connected authority. */
+  ownsLocalNodeState: boolean
+  /** This surface is managing a connected Aurora authority instead of exposing itself. */
+  isRemoteConsole: boolean
   voiceCapture: AuroraVoiceCapturePolicy
 }
 
@@ -104,6 +114,10 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const explicitWebThin = runtimeMode === 'web' || runtimeMode === 'web-thin' || runtimeMode === 'thin-shell'
   const usesWebRtcTransport = transportKind === 'mesh' || transportKind === 'webrtc' || transportKind === 'webrtc-preferred' || transportKind === 'webrtc-only'
   const usesNativeShell = usesLocalSidecar || isDesktopThin || transportKind.startsWith('tauri') || isMobile
+  const nodeMode: AuroraNodeMode = input.nodeMode
+    ?? (usesLocalSidecar ? 'mesh-node' : 'remote-console')
+  const runtimeTier: AuroraRuntimeTier = input.runtimeTier
+    ?? (usesLocalSidecar ? 'python-full' : 'none')
 
   const legacyKind: LegacyAuroraSurfaceKind = isAndroid
     ? 'android'
@@ -128,6 +142,8 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const prefersWebRtcTransport = usesWebRtcTransport
   const trustsNativeWebViewOrigin = usesNativeShell
   const canManageLocalServiceConfiguration = usesLocalSidecar || legacyKind === 'mock'
+  const ownsLocalNodeState = nodeMode === 'mesh-node' || usesLocalSidecar
+  const isRemoteConsole = !ownsLocalNodeState
   const voiceCapture = getAuroraVoiceCapturePolicy(legacyKind)
   return {
     physicalKind,
@@ -150,6 +166,10 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     prefersWebRtcTransport,
     trustsNativeWebViewOrigin,
     canManageLocalServiceConfiguration,
+    nodeMode,
+    runtimeTier,
+    ownsLocalNodeState,
+    isRemoteConsole,
     voiceCapture,
   }
 }

@@ -9,6 +9,7 @@ import {
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import {
   buildMeshPeersSnapshot,
+  buildLocalMeshNodeSnapshot,
   errorShellSnapshot,
   MeshPeersView,
   OnboardingView,
@@ -35,6 +36,81 @@ afterEach(() => {
 })
 
 describe('Phase 2 onboarding and Mesh baseline behavior', () => {
+  it('projects a lightweight mesh node from its own identity and direct grants only', () => {
+    const thinSnapshot: BrowserWebRtcSnapshot = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-home',
+      nodeName: 'Home Aurora',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-02T00:00:00.000Z',
+      status: 'authorized',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+    }
+    const snapshot = buildLocalMeshNodeSnapshot({
+      localNode: { peerId: 'peer-waydroid', nodeName: 'Waydroid' },
+      thinPeer: thinSnapshot,
+      sharingAvailable: true,
+      featureSharing: {
+        features: [{
+          id: 'aurora.local.native.get_device_status.v1',
+          label: 'Device status',
+          description: 'Read device status.',
+          enabled: true,
+          available: true,
+          requiresAuroraOpen: true,
+          requiresLocalConfirmation: false,
+          requiredPermissions: ['Native.GetDeviceStatus'],
+        }],
+        approvedDevices: [{
+          peerId: 'peer-home',
+          peerLabel: 'Old server label',
+          featureIds: ['aurora.local.native.get_device_status.v1'],
+          expiresAtMs: null,
+        }],
+      },
+    })
+
+    expect(snapshot.localPeerId).toBe('peer-waydroid')
+    expect(snapshot.localNodeName).toBe('Waydroid')
+    expect(snapshot.peers.map((peer) => peer.peerId)).toEqual(['peer-home'])
+    expect(snapshot.peers[0]).toMatchObject({
+      nodeName: 'Home Aurora',
+      services: ['Tools'],
+      connectionStatus: 'connected',
+    })
+    expect(snapshot.peers[0]?.permissions).toEqual(expect.arrayContaining(['Native.GetDeviceStatus', 'Tooling.use']))
+    expect(snapshot.devices).toEqual([])
+    expect(snapshot.liveSessionCount).toBe(1)
+
+    const container = render(
+      <MeshPeersView
+        snapshot={snapshot}
+        route={meshRoute()}
+        ownsLocalNodeState
+        canManageLocalServiceConfiguration={false}
+      />,
+    )
+    expect(container.textContent).toContain('Waydroid')
+    expect(container.textContent).toContain('Home Aurora')
+    expect(container.textContent).not.toContain('Old server label')
+    expect(container.textContent).not.toContain('Features on this device')
+    expect(container.textContent).not.toContain('Device connections')
+  })
+
   it('keeps Android mesh-node setup selectable while native details are still loading', async () => {
     const container = render(
       <OnboardingView
@@ -436,7 +512,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(denyPeer).not.toHaveBeenCalled()
   })
 
-  it('asks mobile mesh nodes which local features to share and never offers a gateway scope', async () => {
+  it('uses the shared service-scope table for lightweight mesh-node pairing', async () => {
     const snapshot = await buildMeshPeersSnapshot(
       new Aurora({ transport: new MockAuroraTransport() }),
       meshRoute(),
@@ -515,18 +591,13 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     })
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog?.textContent).toContain('Choose what Home Aurora can use from this device')
-    expect(dialog?.textContent).toContain('Device status')
-    expect(dialog?.textContent).toContain('Share from this phone')
+    expect(dialog?.textContent).toContain('Tools')
+    expect(dialog?.textContent).not.toContain('Tooling.use')
+    expect(dialog?.textContent).not.toContain('Device status')
+    expect(dialog?.textContent).not.toContain('Share from this phone')
     expect(dialog?.textContent).not.toContain('Gateway')
-
-    const deviceStatusLabel = Array.from(dialog?.querySelectorAll('label') ?? [])
-      .find((label) => label.textContent?.includes('Device status'))
-    const deviceStatusCheckbox = deviceStatusLabel?.querySelector<HTMLElement>('[role="checkbox"]')
-    expect(deviceStatusCheckbox).not.toBeNull()
-    await act(async () => {
-      deviceStatusCheckbox?.click()
-      await Promise.resolve()
-    })
+    expect(dialog?.textContent).not.toContain('Orchestrator')
+    expect(dialog?.querySelector('[aria-label="Role templates"]')).toBeNull()
     await act(async () => {
       findButton(document.body, 'Approve & pair').click()
       await Promise.resolve()

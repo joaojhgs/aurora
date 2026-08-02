@@ -1374,7 +1374,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(peer.connectedProfiles).toHaveLength(2)
   })
 
-  it('asks for locally available feature scopes before mobile pairing approval', async () => {
+  it('asks for locally available service scopes before mobile pairing approval', async () => {
     const peer = new FakeBrowserPeer({
       status: 'pairing',
       pairingSessionId: 'pair-session-mobile',
@@ -1430,14 +1430,12 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
 
     expect(container.textContent).toContain('Choose what Home Aurora can use from this device')
-    expect(container.textContent).toContain('Device status')
-    expect(container.textContent).toContain('Share from this phone')
+    expect(container.textContent).toContain('Tools')
+    expect(container.textContent).not.toContain('Tooling.use')
+    expect(container.textContent).not.toContain('Device status')
+    expect(container.textContent).not.toContain('Share from this phone')
     expect(container.textContent).not.toContain('Gateway')
-
-    await act(async () => {
-      container.querySelector<HTMLElement>('[role="checkbox"][aria-label="Device status"]')?.click()
-      await Promise.resolve()
-    })
+    expect(container.textContent).not.toContain('Orchestrator')
     await act(async () => {
       findButton(container, 'Approve connection').click()
       await Promise.resolve()

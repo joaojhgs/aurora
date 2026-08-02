@@ -6,14 +6,36 @@ describe('Aurora surface profile regression coverage', () => {
     const profile = getAuroraSurfaceProfile({
       runtimeMode: 'web-thin',
       transportKind: 'mesh',
+      nodeMode: 'remote-console',
+      runtimeTier: 'none',
     })
 
     expect(profile.kind).toBe('web')
     expect(profile.isWebThin).toBe(true)
     expect(profile.usesLocalSidecar).toBe(false)
     expect(profile.canManageLocalServiceConfiguration).toBe(false)
+    expect(profile.ownsLocalNodeState).toBe(false)
+    expect(profile.isRemoteConsole).toBe(true)
     expect(profile.supportsWebRtcThin).toBe(true)
     expect(profile.prefersWebRtcTransport).toBe(true)
+  })
+
+  it('keeps Android mesh-node ownership separate from its connected WebRTC authority', () => {
+    const profile = getAuroraSurfaceProfile({
+      runtimeMode: 'mobile-native',
+      transportKind: 'mesh',
+      nativePlatform: 'android',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+    })
+
+    expect(profile.kind).toBe('android')
+    expect(profile.isWebThin).toBe(true)
+    expect(profile.nodeMode).toBe('mesh-node')
+    expect(profile.runtimeTier).toBe('lightweight-ts')
+    expect(profile.ownsLocalNodeState).toBe(true)
+    expect(profile.isRemoteConsole).toBe(false)
+    expect(profile.canManageLocalServiceConfiguration).toBe(false)
   })
 
   it('keeps desktop local service ownership separate from desktop remote-console transport', () => {
@@ -27,9 +49,14 @@ describe('Aurora surface profile regression coverage', () => {
     })
 
     expect(local.kind).toBe('desktop-local')
+    expect(local.nodeMode).toBe('mesh-node')
+    expect(local.runtimeTier).toBe('python-full')
+    expect(local.ownsLocalNodeState).toBe(true)
     expect(local.usesLocalSidecar).toBe(true)
     expect(local.canManageLocalServiceConfiguration).toBe(true)
     expect(remote.kind).toBe('desktop-thin')
+    expect(remote.nodeMode).toBe('remote-console')
+    expect(remote.ownsLocalNodeState).toBe(false)
     expect(remote.usesLocalSidecar).toBe(false)
     expect(remote.canManageLocalServiceConfiguration).toBe(false)
     expect(remote.trustsNativeWebViewOrigin).toBe(true)
