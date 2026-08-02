@@ -1166,9 +1166,7 @@ class AuthService(BaseService):
                         "outbound_permissions": _api_permission_list(
                             row.get("outbound_permissions")
                         ),
-                        "inbound_permissions": _api_permission_list(
-                            row.get("inbound_permissions")
-                        ),
+                        "inbound_permissions": _api_permission_list(row.get("inbound_permissions")),
                     }
                 )
             )

@@ -601,30 +601,42 @@ async def test_bilateral_pairing_connect_and_exchange_reject_wrong_transport_wit
     assert pairing_code is not None
     request = auth_service.pairing_requests[pairing_code]
 
-    assert await auth_service.connect_pairing(
-        pairing_code,
-        pairing_session_id=pairing_session_id,
-        trusted_rate_limit_key="webrtc:signaling-session-b",
-    ) is None
-    assert await auth_service.connect_pairing(
-        pairing_code,
-        pairing_session_id="d" * 64,
-        trusted_rate_limit_key=trusted_source,
-    ) is None
+    assert (
+        await auth_service.connect_pairing(
+            pairing_code,
+            pairing_session_id=pairing_session_id,
+            trusted_rate_limit_key="webrtc:signaling-session-b",
+        )
+        is None
+    )
+    assert (
+        await auth_service.connect_pairing(
+            pairing_code,
+            pairing_session_id="d" * 64,
+            trusted_rate_limit_key=trusted_source,
+        )
+        is None
+    )
     assert auth_service.pairing_requests[pairing_code] is request
     assert request["status"] == "pending"
 
     assert await auth_service.approve_pairing(pairing_code, "admin-id") is True
-    assert await auth_service.exchange_pairing(
-        pairing_code,
-        pairing_session_id=pairing_session_id,
-        trusted_rate_limit_key="webrtc:signaling-session-b",
-    ) is None
-    assert await auth_service.exchange_pairing(
-        pairing_code,
-        pairing_session_id="d" * 64,
-        trusted_rate_limit_key=trusted_source,
-    ) is None
+    assert (
+        await auth_service.exchange_pairing(
+            pairing_code,
+            pairing_session_id=pairing_session_id,
+            trusted_rate_limit_key="webrtc:signaling-session-b",
+        )
+        is None
+    )
+    assert (
+        await auth_service.exchange_pairing(
+            pairing_code,
+            pairing_session_id="d" * 64,
+            trusted_rate_limit_key=trusted_source,
+        )
+        is None
+    )
     assert "exchange_result" not in request
     assert "pending_exchange" not in request
 

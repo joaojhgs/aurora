@@ -2112,10 +2112,15 @@ class GatewayService(BaseService):
 
     async def _capture_gateway_event(self, envelope: Envelope) -> None:
         """Capture bus events into a redacted normalized stream."""
-        if envelope.reply_to is not None or envelope.type in {
-            AuroraMethods.EVENT_STREAM,
-            AudioTopics.STREAM_MICROPHONE,
-        } or envelope.type.startswith("reply."):
+        if (
+            envelope.reply_to is not None
+            or envelope.type
+            in {
+                AuroraMethods.EVENT_STREAM,
+                AudioTopics.STREAM_MICROPHONE,
+            }
+            or envelope.type.startswith("reply.")
+        ):
             return
         payload = _payload_dict(envelope.payload)
         event = _event_from_envelope(envelope)
@@ -4181,9 +4186,7 @@ class GatewayService(BaseService):
                 registry = self._mesh_peer_registry
                 current = registry.get_peer(p_id) if registry is not None else None
                 if current is None or current.status != p_status:
-                    log_debug(
-                        f"Skipping stale peer status callback for {p_id}: {p_status}"
-                    )
+                    log_debug(f"Skipping stale peer status callback for {p_id}: {p_status}")
                     return
                 await bus_for_callbacks.request(
                     AuthMethods.MESH_UPDATE_PEER_CONNECTION,

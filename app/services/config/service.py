@@ -477,9 +477,7 @@ class ConfigService(BaseService):
         # Note: Subscriptions are now handled automatically by BaseService via @method_contract
 
         self._set_started(True)
-        self._mesh_policy_rbac_task = asyncio.create_task(
-            self._run_startup_mesh_policy_tasks()
-        )
+        self._mesh_policy_rbac_task = asyncio.create_task(self._run_startup_mesh_policy_tasks())
         log_info("ConfigService started")
 
     async def _run_startup_mesh_policy_tasks(self) -> None:

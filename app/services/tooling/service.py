@@ -232,6 +232,7 @@ from app.shared.services.base_service import BaseService
 class _ProjectionFetchUnavailableError(RuntimeError):
     """Transient remote projection fetch failure that must remain fail closed."""
 
+
 ToolingDiscoveryRequest = (
     ToolingGetToolsRequest | ToolingGetToolByNameRequest | ToolingExecuteToolRequest
 )
@@ -634,9 +635,7 @@ class ToolingService(BaseService):
         await self._activate_mesh_projection_enforcement()
         return EmptyOutput()
 
-    async def _on_mesh_peer_permissions_updated(
-        self, envelope: Envelope
-    ) -> EmptyOutput:
+    async def _on_mesh_peer_permissions_updated(self, envelope: Envelope) -> EmptyOutput:
         MeshPeerPermissionsUpdatedEvent.model_validate(envelope.payload)
         # The event carries what this Aurora granted the peer.  Do not merge it
         # into ``_remote_provider_states``: that map contains the reciprocal,
@@ -2930,8 +2929,7 @@ class ToolingService(BaseService):
             )
             self._catalog_cache.clear()
             log_warning(
-                "Tooling projection refresh deferred for "
-                f"{request.provider_peer_id}: {exc}"
+                f"Tooling projection refresh deferred for {request.provider_peer_id}: {exc}"
             )
             return EmptyOutput()
         except Exception:
@@ -3727,9 +3725,7 @@ class ToolingService(BaseService):
             if response.peer is None or response.peer.outbound_status != "approved":
                 return []
             return list(
-                dict.fromkeys(
-                    str(permission) for permission in response.peer.outbound_permissions
-                )
+                dict.fromkeys(str(permission) for permission in response.peer.outbound_permissions)
             )
         except Exception as error:
             log_debug(f"Tooling peer authority unavailable for {peer_id}: {error}")

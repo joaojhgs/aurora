@@ -287,9 +287,7 @@ async def test_gateway_start_defers_tooling_activation_while_readiness_hangs() -
         await activation_release.wait()
         return False
 
-    service._coordinate_tooling_mesh_activation = AsyncMock(
-        side_effect=blocked_activation
-    )
+    service._coordinate_tooling_mesh_activation = AsyncMock(side_effect=blocked_activation)
 
     await asyncio.wait_for(service.on_start(), timeout=0.5)
     await asyncio.wait_for(activation_started.wait(), timeout=0.5)

@@ -761,9 +761,7 @@ async def test_retention_releases_writer_between_provider_batches(
     assert result.pruned_audit_count == 4
     assert len(result.providers) == 2
     async with aiosqlite.connect(manager.db_path) as db:
-        probe = await (
-            await db.execute("SELECT value FROM retention_writer_probe")
-        ).fetchall()
+        probe = await (await db.execute("SELECT value FROM retention_writer_probe")).fetchall()
     assert probe == [("between-providers",)]
 
 

@@ -106,8 +106,7 @@ class PeerRegistry:
                 and authority != current
             ):
                 log_warning(
-                    "PeerRegistry: Ignored conflicting local authority revision for "
-                    f"{peer_id}"
+                    f"PeerRegistry: Ignored conflicting local authority revision for {peer_id}"
                 )
                 return False
         self._local_peer_authority[peer_id] = authority

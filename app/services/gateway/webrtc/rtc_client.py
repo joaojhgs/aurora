@@ -6037,23 +6037,16 @@ class RTCClient:
             existing_transport = self._pairing_transports.get(peer)
             existing_offer_sdp = (
                 str(existing_transport.get("offer_sdp") or "")
-                if existing_transport is not None
-                and existing_transport.get("pc") is existing_pc
+                if existing_transport is not None and existing_transport.get("pc") is existing_pc
                 else ""
             )
             active_channel = self._peer_data_channels.get(peer)
-            if (
-                existing_pc is not None
-                and existing_offer_sdp
-                and existing_offer_sdp != offer_sdp
-            ):
+            if existing_pc is not None and existing_offer_sdp and existing_offer_sdp != offer_sdp:
                 if (
                     existing_pc.connectionState == "connected"
                     or getattr(active_channel, "readyState", "") == "open"
                 ):
-                    log_debug(
-                        f"RTCClient: Ignoring a fresh offer for active peer {peer}"
-                    )
+                    log_debug(f"RTCClient: Ignoring a fresh offer for active peer {peer}")
                     return
                 await self._discard_failed_negotiation_pc(peer, existing_pc)
 

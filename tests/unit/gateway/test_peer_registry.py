@@ -762,9 +762,7 @@ class TestProviderQueries:
         assert {candidate.reason_code for candidate in candidates} == {"eligible"}
 
     @pytest.mark.asyncio
-    async def test_local_peer_authority_reduction_blocks_exact_remote_route(
-        self, mesh_config
-    ):
+    async def test_local_peer_authority_reduction_blocks_exact_remote_route(self, mesh_config):
         """A known remote selector cannot outlive the local Auth grant."""
 
         tooling_config = _with_service(
@@ -796,9 +794,7 @@ class TestProviderQueries:
                 effective_permissions=("Tooling.ExecuteTool",),
             )
         )
-        allowed = registry.get_provider_candidates(
-            "Tooling", topic="Tooling.ExecuteTool"
-        )[0]
+        allowed = registry.get_provider_candidates("Tooling", topic="Tooling.ExecuteTool")[0]
 
         registry.apply_local_peer_authority(
             MeshPeerAuthoritySnapshot(
@@ -809,9 +805,7 @@ class TestProviderQueries:
                 effective_permissions=("Gateway.GetMeshStatus",),
             )
         )
-        denied = registry.get_provider_candidates(
-            "Tooling", topic="Tooling.ExecuteTool"
-        )[0]
+        denied = registry.get_provider_candidates("Tooling", topic="Tooling.ExecuteTool")[0]
 
         assert allowed.eligible is True
         assert denied.eligible is False

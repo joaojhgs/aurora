@@ -213,6 +213,5 @@ async def test_identity_requests_outlive_sqlite_lock_wait_budget(tmp_path: Path)
     assert identity_requests
     assert TOOLING_DB_REQUEST_TIMEOUT_SECONDS > SQLITE_CONNECT_TIMEOUT_SECONDS
     assert all(
-        kwargs["timeout"] == TOOLING_DB_REQUEST_TIMEOUT_SECONDS
-        for kwargs in identity_requests
+        kwargs["timeout"] == TOOLING_DB_REQUEST_TIMEOUT_SECONDS for kwargs in identity_requests
     )

@@ -1481,6 +1481,20 @@ def _sdk_zod_version() -> str:
     return zod_version
 
 
+def _major_minor_version(value: str) -> str:
+    match = re.match(r"^(\d+)\.(\d+)", value)
+    if match is None:
+        raise ValueError(f"Expected semantic major.minor version, got {value!r}")
+    return f"{match.group(1)}.{match.group(2)}"
+
+
+def _major_version(value: str) -> str:
+    match = re.match(r"^(\d+)", value)
+    if match is None:
+        raise ValueError(f"Expected semantic major version, got {value!r}")
+    return match.group(1)
+
+
 def build_sdk_manifest(
     *,
     contract_schema: dict[str, Any],
@@ -1502,8 +1516,8 @@ def build_sdk_manifest(
     return {
         "artifact": "aurora-sdk-backend-contracts-manifest",
         "schema_draft": contract_schema["schema_draft"],
-        "python_version": sys.version.split()[0],
-        "pydantic_version": PYDANTIC_VERSION,
+        "python_version": _major_minor_version(sys.version.split()[0]),
+        "pydantic_version": _major_version(PYDANTIC_VERSION),
         "zod_version": _sdk_zod_version(),
         "generator_format_version": GENERATOR_FORMAT_VERSION,
         "generator_source_hash": source_hash,

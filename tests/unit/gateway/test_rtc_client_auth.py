@@ -2305,9 +2305,7 @@ async def test_fresh_offer_replaces_stale_unconnected_answerer_transport(mock_de
     stale_pc.close.assert_awaited_once()
     assert client._pcs[peer] is fresh_pc
     assert client._pairing_transports[peer]["pc"] is fresh_pc
-    assert client._pairing_transports[peer]["offer_sdp"].endswith(
-        "a=ice-ufrag:fresh\r\n"
-    )
+    assert client._pairing_transports[peer]["offer_sdp"].endswith("a=ice-ufrag:fresh\r\n")
     assert client._adapter.send.await_count == 2
 
     fresh_pc.connectionState = "connected"
