@@ -292,6 +292,119 @@ describe('unified Assistant execution controls', () => {
     expect(container.textContent).toContain('Answered by Home Aurora.')
   })
 
+  it('restores dispatched tool activity from the same encrypted on-device chat', async () => {
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Unused local response.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register(ORCHESTRATOR_METHODS.externalUserInput, (request) => assistantResponse(request, 'The connected device is online.'))
+      .stream('assistant', async function* (request) {
+        const payload = request.payload as Record<string, unknown>
+        yield {
+          id: 'remote-tool-running',
+          kind: 'tool.running',
+          payload: {
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+            tool: {
+              tool_call_id: 'remote-device-status',
+              tool_name: 'device_status',
+              display_name: 'Device status',
+              status: 'running',
+              summary: 'Checking the connected device.',
+              target: 'Home Aurora',
+              data_leaves_device: true,
+              redacted_args_preview: {},
+            },
+          },
+          correlation_id: request.correlationId,
+        }
+        yield {
+          id: 'remote-tool-completed',
+          kind: 'tool.completed',
+          payload: {
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+            tool: {
+              tool_call_id: 'remote-device-status',
+              tool_name: 'device_status',
+              display_name: 'Device status',
+              status: 'completed',
+              summary: 'The connected device responded.',
+              target: 'Home Aurora',
+              data_leaves_device: true,
+              redacted_args_preview: {},
+              result_preview: { online: true },
+            },
+          },
+          correlation_id: request.correlationId,
+        }
+        yield {
+          id: 'remote-assistant-completed',
+          kind: 'assistant.completed',
+          payload: {
+            text: 'The connected device is online.',
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+          },
+          correlation_id: request.correlationId,
+        }
+      })
+    const localData = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider, { localData })
+
+    await chooseModelSelectorItem('Executing locally', 'Dispatch to Home Aurora')
+    await enterPrompt(container, 'check the connected device')
+    await waitUntil(() => container.textContent?.includes('The connected device is online.') === true)
+    await waitUntil(async () => {
+      const conversationId = (await localData.conversations.listConversations())[0]?.id
+      if (!conversationId) return false
+      return (await localData.conversations.listMessages(conversationId)).length === 4
+    })
+
+    const conversationId = (await localData.conversations.listConversations())[0]?.id
+    if (!conversationId) throw new Error('missing dispatched conversation')
+    const persisted = await localData.conversations.listMessages(conversationId)
+    expect(persisted.map((message) => [message.role, message.status, message.toolEnvelope !== null])).toEqual([
+      ['user', 'complete', false],
+      ['tool', 'complete', true],
+      ['tool', 'complete', true],
+      ['assistant', 'complete', false],
+    ])
+
+    const newConversation = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes('New conversation'))
+    if (!newConversation) throw new Error('missing new conversation button')
+    await act(async () => {
+      newConversation.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => container.textContent?.includes('The connected device is online.') === false)
+
+    const historyTrigger = container.querySelector<HTMLButtonElement>('[aria-label="Open conversations"]')
+    if (!historyTrigger) throw new Error('missing mobile conversations trigger')
+    await act(async () => {
+      historyTrigger.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+    await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]')?.textContent?.includes('check the connected device') === true)
+    const savedConversation = [...(document.body.querySelector('[data-slot="sheet-content"]')?.querySelectorAll<HTMLButtonElement>('.aui-thread-row-button') ?? [])]
+      .find((button) => button.textContent?.includes('check the connected device'))
+    if (!savedConversation) throw new Error('missing saved dispatched conversation')
+    await act(async () => {
+      savedConversation.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+
+    await waitUntil(() => container.textContent?.includes('The connected device is online.') === true)
+    expect(container.querySelector('.aui-chat-assistant [data-slot="tool-fallback-root"]')).not.toBeNull()
+    expect(container.querySelector('.aui-chat-tool')).toBeNull()
+    expect(container.textContent).toContain('Action finished')
+  })
+
   it('renders a completed on-device action with the shared tool-call component instead of a chat bubble', async () => {
     const responses: LightweightProviderResponse[] = [
       {
@@ -530,9 +643,9 @@ async function enterPrompt(container: HTMLElement, prompt: string): Promise<void
   })
 }
 
-async function waitUntil(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+async function waitUntil(predicate: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() >= deadline) {
       throw new Error(`Timed out waiting for unified Assistant state: ${document.body.textContent ?? ''}`)
     }

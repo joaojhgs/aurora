@@ -472,7 +472,6 @@ export function AssistantView({
   const inferencePolicy = assistantInferencePolicy(selectedModelChoice, route)
   const usesLocalConversationHistory = localHistory !== null
   const supportsPersistedSessions = !usesLocalConversationHistory
-    && selectedExecution.runner !== 'lightweight-local'
     && client.transport.kind !== 'mock'
     && client.transport.kind !== 'mesh'
   const conversationRows = usesLocalConversationHistory
@@ -1158,6 +1157,7 @@ export function AssistantView({
     cancelledPendingIdsRef.current.delete(pendingMessage.id)
     let terminalSeen = false
     let completedRemoteUpdate: AssistantStreamUpdate | null = null
+    let remoteToolEventSequence = 0
     try {
       if (selectedExecution.runner === 'lightweight-local') {
         if (!localOrchestrator) throw new Error('On-device assistant is unavailable.')
@@ -1182,6 +1182,26 @@ export function AssistantView({
           clientTtsPlayback: !surfaceProfile.usesLocalSidecar
         })) {
           applyAssistantStreamUpdate(update, pendingMessage.id)
+          if (update.kind === 'tool' && localHistory) {
+            const toolRecordId = `${requestId}-connected-tool-${remoteToolEventSequence}`
+            remoteToolEventSequence += 1
+            try {
+              await persistConnectedAssistantTurnToLocalHistory(localHistory, {
+                conversationId: turnSessionId,
+                requestId,
+                prompt,
+                response: null,
+                toolEvents: [{
+                  recordId: toolRecordId,
+                  card: assistantToolCallFromUpdate(update),
+                  createdAtMs: Date.now(),
+                }],
+                createdAtMs: Date.parse(now),
+              })
+            } catch {
+              setSessionIndexError('This activity could not be saved on this device.')
+            }
+          }
           if (update.kind === 'completed' || update.kind === 'fallback') {
             completedRemoteUpdate = update
           }
@@ -1201,6 +1221,7 @@ export function AssistantView({
               requestId,
               prompt,
               response: completedRemoteUpdate.text,
+              toolEvents: [],
               createdAtMs: Date.parse(now),
             })
           } catch {
@@ -5205,7 +5226,12 @@ async function persistConnectedAssistantTurnToLocalHistory(
     conversationId: string
     requestId: string
     prompt: string
-    response: string
+    response: string | null
+    toolEvents: Array<{
+      recordId: string
+      card: AssistantToolCallCard
+      createdAtMs: number
+    }>
     createdAtMs: number
   },
 ): Promise<void> {
@@ -5218,10 +5244,26 @@ async function persistConnectedAssistantTurnToLocalHistory(
 
   const userMessageId = `${input.requestId}-local-user`
   const assistantMessageId = `${input.requestId}-connected-assistant`
-  const responseCreatedAtMs = Math.max(input.createdAtMs, Date.now())
-  const [userEnvelope, assistantEnvelope] = await Promise.all([
+  const activityCreatedAtMs = Math.max(
+    input.createdAtMs,
+    ...input.toolEvents.map((event) => event.createdAtMs),
+    input.response === null ? input.createdAtMs : Date.now(),
+  )
+  const [userEnvelope, assistantEnvelope, toolRecords] = await Promise.all([
     encryptLocalAssistantText(history, userMessageId, input.prompt),
-    encryptLocalAssistantText(history, assistantMessageId, input.response),
+    input.response === null
+      ? Promise.resolve(null)
+      : encryptLocalAssistantText(history, assistantMessageId, input.response),
+    Promise.all(input.toolEvents.map(async (event): Promise<ConversationMessageRecord> => ({
+      id: event.recordId,
+      conversationId: input.conversationId,
+      sequence: 0,
+      role: 'tool',
+      contentEnvelope: null,
+      toolEnvelope: await encryptLocalAssistantToolCard(history, event.recordId, event.card),
+      status: event.card.status === 'failed' ? 'failed' : 'complete',
+      createdAtMs: event.createdAtMs,
+    }))),
   ])
 
   await history.localData.transaction(async (repositories) => {
@@ -5240,7 +5282,7 @@ async function persistConnectedAssistantTurnToLocalHistory(
     const conversation: ConversationRecord = existingConversation
       ? {
           ...existingConversation,
-          updatedAtMs: Math.max(existingConversation.updatedAtMs, responseCreatedAtMs),
+          updatedAtMs: Math.max(existingConversation.updatedAtMs, activityCreatedAtMs),
         }
       : {
           id: input.conversationId,
@@ -5248,7 +5290,7 @@ async function persistConnectedAssistantTurnToLocalHistory(
           localNodeId: history.scope.localNodeId,
           titleEnvelope: null,
           createdAtMs: input.createdAtMs,
-          updatedAtMs: responseCreatedAtMs,
+          updatedAtMs: activityCreatedAtMs,
           archivedAtMs: null,
         }
     await repositories.conversations.upsertConversation(conversation)
@@ -5269,16 +5311,17 @@ async function persistConnectedAssistantTurnToLocalHistory(
         status: 'complete',
         createdAtMs: input.createdAtMs,
       },
-      {
+      ...toolRecords,
+      ...(assistantEnvelope === null ? [] : [{
         id: assistantMessageId,
         conversationId: input.conversationId,
-        sequence: nextSequence + 1,
-        role: 'assistant',
+        sequence: 0,
+        role: 'assistant' as const,
         contentEnvelope: assistantEnvelope,
         toolEnvelope: null,
-        status: 'complete',
-        createdAtMs: responseCreatedAtMs,
-      },
+        status: 'complete' as const,
+        createdAtMs: activityCreatedAtMs,
+      }]),
     ]
     const existingIds = new Set(existingMessages.map((message) => message.id))
     for (const record of records) {
@@ -5301,6 +5344,32 @@ async function encryptLocalAssistantText(
       table: 'aurora_messages',
       recordId: messageId,
       field: 'content_envelope_json',
+      profileId: history.scope.profileId,
+      localNodeId: history.scope.localNodeId,
+    }),
+  )
+}
+
+async function encryptLocalAssistantToolCard(
+  history: LocalAssistantHistoryDependencies,
+  messageId: string,
+  card: AssistantToolCallCard,
+): Promise<ConversationMessageRecord['toolEnvelope']> {
+  const persistedCard: AssistantToolCallCard = {
+    ...card,
+    localConfirmationToken: null,
+    resolving: false,
+  }
+  return await history.envelopeCrypto.encrypt(
+    'local-structured-data',
+    new TextEncoder().encode(JSON.stringify({
+      assistantToolCall: persistedCard,
+      secretsRedacted: true,
+    })),
+    buildEnvelopeAad({
+      table: 'aurora_messages',
+      recordId: messageId,
+      field: 'tool_envelope_json',
       profileId: history.scope.profileId,
       localNodeId: history.scope.localNodeId,
     }),
@@ -5428,6 +5497,15 @@ async function localAssistantToolCallCard(
       }
     } catch {
       payload = {}
+    }
+  }
+  const persistedCard = metadataObjectValue(payload, 'assistantToolCall')
+  if (persistedCard && isAssistantToolCallCard(persistedCard)) {
+    return {
+      ...persistedCard,
+      sessionId: record.conversationId,
+      localConfirmationToken: null,
+      resolving: false,
     }
   }
   const toolCall = metadataObjectValue(payload, 'toolCall') ?? {}

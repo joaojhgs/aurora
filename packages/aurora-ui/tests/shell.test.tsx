@@ -1080,7 +1080,10 @@ describe('Aurora production shell', () => {
     const renderStringifyLines = assistantSource
       .split('\n')
       .filter((line) => line.includes('JSON.stringify') && !line.includes('localStorage.setItem'))
-    expect(renderStringifyLines).toEqual([expect.stringContaining('JSON.stringify(value)')])
+    expect(renderStringifyLines).toEqual([
+      expect.stringContaining('new TextEncoder().encode(JSON.stringify({'),
+      expect.stringContaining('JSON.stringify(value)'),
+    ])
     expect(renderStringifyLines.join('\n')).not.toMatch(/tool\.(payloadPreview|errorDetails|resultPreview)/)
   })
 
