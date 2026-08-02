@@ -93,6 +93,9 @@ describe('Tauri CI native evidence contract', () => {
   it('requires desktop-native Tauri evidence outside the web/frontend route crawl', () => {
     const desktopWorkflow = repoText('.github/workflows/tauri-desktop.yml')
     const frontendWorkflow = repoText('.github/workflows/frontend-sdk.yml')
+    const cargoManifest = repoText('apps/aurora-tauri/src-tauri/Cargo.toml')
+    const tauriConfig = repoText('apps/aurora-tauri/src-tauri/tauri.conf.json')
+    const tauriLib = repoText('apps/aurora-tauri/src-tauri/src/lib.rs')
 
     expect(frontendWorkflow).toContain('pnpm --filter @aurora/tauri-ui test:ci-regression-gates')
     expect(desktopWorkflow).toContain('cargo check')
@@ -104,6 +107,9 @@ describe('Tauri CI native evidence contract', () => {
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui sidecar:runtime:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/sidecar-runtime-smoke.json')
     expect(desktopWorkflow).toContain('if-no-files-found: warn')
+    expect(tauriLib).toContain('.transparent(true)')
+    expect(cargoManifest).toContain('"macos-private-api"')
+    expect(tauriConfig).toContain('"macOSPrivateApi": true')
   })
 
   it('boots the packaged sidecar against persistent runtime paths before bundling', () => {
