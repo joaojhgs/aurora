@@ -29,9 +29,11 @@ import {
   PairingQueueView,
   RouteMatrix,
   RoutePolicyResource,
+  LocalServiceRoutingResource,
   ServiceRoutingResource,
   SettingsPermissionsView,
   StateSurface,
+  LightweightToolApprovalPanel,
   ToolApprovalPanel,
   WebThinConnectionPanel,
   getAuroraSurfaceProfile,
@@ -219,12 +221,36 @@ export const tauriRouteRegistry = {
       client={client}
     />
   ),
-  tools: ({ route, client }) => (
-    <div className="ata-page-stack">
-      <p className="text-xs font-medium text-muted-foreground">Sources</p>
-      <ToolApprovalPanel client={client} route={route} />
-    </div>
-  ),
+  tools: ({ route, snapshot, nativeContext, client }) => {
+    const localProvider = nativeContext.localToolProvider;
+    const localSharing = nativeContext.localFeatureSharing;
+    if (
+      nativeContext.surfaceProfile.ownsLocalNodeState &&
+      localProvider &&
+      localSharing
+    ) {
+      return (
+        <LightweightToolApprovalPanel
+          client={client}
+          route={route}
+          localTools={localProvider.localToolRegistry.publicTools()}
+          remoteTools={nativeContext.remoteTools ?? []}
+          featureSharing={localSharing}
+          nativePlatform={snapshot.nativePlatform}
+        />
+      );
+    }
+    return (
+      <div className="ata-page-stack">
+        <p className="text-xs font-medium text-muted-foreground">Sources</p>
+        <ToolApprovalPanel
+          client={client}
+          route={route}
+          nativePlatform={snapshot.nativePlatform}
+        />
+      </div>
+    );
+  },
   mesh: ({ route, nativeContext, client }) => {
     const inviteParam = initialThinInviteFromUrl();
     const providerStatus = nativeContext.localNodeProviderStatus;
@@ -268,6 +294,11 @@ export const tauriRouteRegistry = {
             client={client}
             route={route}
             thinPeer={nativeContext.thinPeer}
+          />
+        ) : nativeContext.surfaceProfile.ownsLocalNodeState &&
+          nativeContext.localFeatureSharing ? (
+          <LocalServiceRoutingResource
+            featureSharing={nativeContext.localFeatureSharing}
           />
         ) : null}
         {!isMobileTauriShell() ? (
@@ -512,7 +543,7 @@ export function AuroraTauriApp({
     };
 
     if (!peer) {
-      if (runtime.localAssistant) void refreshRemoteTools();
+      if (runtime.localAssistant || runtime.localToolProvider) void refreshRemoteTools();
       return () => {
         cancelled = true;
         refreshEpoch += 1;
@@ -526,7 +557,7 @@ export function AuroraTauriApp({
       if (nextReady && !ready) {
         ready = true;
         setThinPeerReadyRevision((revision) => revision + 1);
-        if (runtime.localAssistant) void refreshRemoteTools();
+        if (runtime.localAssistant || runtime.localToolProvider) void refreshRemoteTools();
       } else if (!nextReady && ready) {
         ready = false;
         refreshEpoch += 1;
@@ -783,6 +814,7 @@ export function AuroraTauriApp({
           remoteTools: assistantRemoteTools,
         }
       : undefined,
+    remoteTools: assistantRemoteTools,
     runtimeProfile: runtime.runtimeProfile,
     localData: runtime.localData,
     thinProfile: runtime.thinProfile,
@@ -1261,6 +1293,7 @@ interface NativeContext {
   localFeatureSharing?: AuroraTauriRuntime["localFeatureSharing"];
   localToolProvider?: AuroraTauriRuntime["localToolProvider"];
   localAssistant?: AuroraTauriRuntime["localAssistant"];
+  remoteTools?: readonly ToolingProjectionToolInfo[];
   runtimeProfile?: AuroraTauriRuntime["runtimeProfile"];
   localData?: AuroraTauriRuntime["localData"];
   thinProfile?: AuroraThinConnectionProfile | undefined;

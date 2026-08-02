@@ -1,7 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MeshPeersResource, RoutePolicyResource, type RouteAvailability } from '@aurora/ui'
+import {
+  LocalServiceRoutingResource,
+  MeshPeersResource,
+  RoutePolicyResource,
+  ServiceRoutingResource,
+  type RouteAvailability,
+} from '@aurora/ui'
 import {
   useBrowserRoute,
   useBrowserRuntimeProfile,
@@ -50,7 +56,20 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
             }
           : undefined}
       />
-      <RoutePolicyResource client={client} route={activeRoute} />
+      {runtime.surface.canManageLocalServiceConfiguration ? (
+        <ServiceRoutingResource
+          client={client}
+          route={activeRoute}
+          thinPeer={runtime.peer}
+        />
+      ) : runtime.surface.ownsLocalNodeState && runtime.localFeatureSharing ? (
+        <LocalServiceRoutingResource
+          featureSharing={runtime.localFeatureSharing}
+        />
+      ) : null}
+      {runtime.surface.isRemoteConsole ? (
+        <RoutePolicyResource client={client} route={activeRoute} />
+      ) : null}
     </div>
   )
 }

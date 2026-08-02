@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AuroraClient,
   AuroraResponse,
@@ -22,7 +22,14 @@ import type {
   ToolExportScopeModel,
   ToolingPageViewModel
 } from '@aurora/client'
-import { TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT } from '@aurora/client'
+import {
+  TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT,
+  normalizeToolCatalog,
+  type ToolCatalogEntry,
+  type ToolingProjectionToolInfo,
+} from '@aurora/client'
+import { mergeLightweightAssistantTools } from '@aurora/client/lightweight-orchestrator'
+import type { LocalFeatureSharingPort, LocalFeatureSharingSnapshot } from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
 import { safeErrorCopy } from './product-copy'
 import { buildBuiltinPlugins, ToolingConsole, type BuiltinPluginModel, type ToolSharingMutation } from './tooling'
@@ -52,6 +59,16 @@ export interface ToolApprovalPanelProps {
   initialSchedulerJobs?: NormalizedSchedulerJob[] | undefined
   nativePlatform?: string | undefined
   initialManagementState?: ToolApprovalPanelManagementState | undefined
+  localFeatureSharing?: LocalFeatureSharingPort | undefined
+}
+
+export interface LightweightToolApprovalPanelProps {
+  client: AuroraClient
+  route: RouteAvailability
+  localTools: readonly ToolingProjectionToolInfo[]
+  remoteTools?: readonly ToolingProjectionToolInfo[] | undefined
+  featureSharing: LocalFeatureSharingPort
+  nativePlatform?: string | undefined
 }
 
 export interface ToolApprovalPanelState {
@@ -88,7 +105,41 @@ export interface ToolDenialActionInput {
   reason?: string
 }
 
-export function ToolApprovalPanel({ client, route, initialTools, initialSchedulerJobs, nativePlatform, initialManagementState }: ToolApprovalPanelProps) {
+export function LightweightToolApprovalPanel({
+  client,
+  route,
+  localTools,
+  remoteTools = [],
+  featureSharing,
+  nativePlatform,
+}: LightweightToolApprovalPanelProps) {
+  const tools = useMemo(() => normalizeToolCatalog({
+    tools: mergeLightweightAssistantTools(localTools, remoteTools) as unknown as readonly ToolCatalogEntry[],
+    secrets_redacted: true,
+  }, { transportKind: client.transport.kind }), [client.transport.kind, localTools, remoteTools])
+  const activeRoute = useMemo<RouteAvailability>(() => ({
+    ...route,
+    state: 'available-local',
+    explanation: 'Tools are available from this device and its approved devices.',
+    providerLabel: 'This device',
+    blockers: [],
+    repairActions: [],
+    routeable: true,
+    disabled: false,
+  }), [route])
+  return (
+    <ToolApprovalPanel
+      client={client}
+      route={activeRoute}
+      initialTools={tools}
+      initialSchedulerJobs={[]}
+      nativePlatform={nativePlatform}
+      localFeatureSharing={featureSharing}
+    />
+  )
+}
+
+export function ToolApprovalPanel({ client, route, initialTools, initialSchedulerJobs, nativePlatform, initialManagementState, localFeatureSharing }: ToolApprovalPanelProps) {
   const sharingRequestGeneration = useRef(0)
   const [state, setState] = useState<ToolApprovalPanelState>(() => ({
     tools: initialTools ?? [],
@@ -106,16 +157,26 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     pendingApprovals: initialManagementState?.pendingApprovals ?? [],
     auditEvents: initialManagementState?.auditEvents ?? [],
     builtinPlugins: initialManagementState?.builtinPlugins ?? [],
-    managementLoading: initialManagementState?.managementLoading ?? !initialManagementState,
+    managementLoading: initialManagementState?.managementLoading ?? (!initialManagementState && !localFeatureSharing),
     managementError: initialManagementState?.managementError ?? null,
     sharingPolicy: initialManagementState?.sharingPolicy ?? null,
     sharingPeers: mergeSharingScopes(initialManagementState?.sharingPeers ?? [], initialManagementState?.sharingPolicy ?? null),
     sharingDecisions: initialManagementState?.sharingDecisions ?? {},
-    sharingLoading: initialManagementState?.sharingLoading ?? !initialManagementState,
+    sharingLoading: initialManagementState?.sharingLoading ?? (!initialManagementState && !localFeatureSharing),
     sharingError: initialManagementState?.sharingError ?? null,
     sharingMessage: initialManagementState?.sharingMessage ?? null,
     sharingPendingKey: null
   }))
+
+  useEffect(() => {
+    if (!initialTools) return
+    setState((current) => ({
+      ...current,
+      tools: initialTools,
+      loading: false,
+      error: null,
+    }))
+  }, [initialTools])
 
   useEffect(() => {
     if (initialTools) return
@@ -152,7 +213,7 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
   }, [client, initialSchedulerJobs])
 
   useEffect(() => {
-    if (initialManagementState) return
+    if (initialManagementState || localFeatureSharing) return
     let cancelled = false
     setState((current) => ({ ...current, managementLoading: true, managementError: null }))
     async function loadManagementState() {
@@ -223,12 +284,54 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
     return () => {
       cancelled = true
     }
-  }, [client, initialManagementState])
+  }, [client, initialManagementState, localFeatureSharing])
+
+  useEffect(() => {
+    if (!localFeatureSharing) return
+    let active = true
+    const apply = (snapshot: LocalFeatureSharingSnapshot) => {
+      if (!active) return
+      const management = buildLocalToolSharingManagement(snapshot, initialTools ?? [])
+      setState((current) => ({
+        ...current,
+        ...management,
+        managementLoading: false,
+        managementError: null,
+        sharingLoading: false,
+        sharingError: null,
+      }))
+    }
+    const unsubscribe = localFeatureSharing.subscribe?.(apply)
+    void localFeatureSharing.load().then(apply, () => {
+      if (!active) return
+      setState((current) => ({
+        ...current,
+        managementLoading: false,
+        sharingLoading: false,
+        sharingError: 'Tool sharing is unavailable right now. Try again.',
+      }))
+    })
+    return () => {
+      active = false
+      unsubscribe?.()
+    }
+  }, [initialTools, localFeatureSharing])
 
   async function refreshSharing() {
     const generation = ++sharingRequestGeneration.current
     setState((current) => ({ ...current, sharingLoading: true, sharingError: null }))
     try {
+      if (localFeatureSharing) {
+        const snapshot = await localFeatureSharing.load()
+        if (generation !== sharingRequestGeneration.current) return
+        setState((current) => ({
+          ...current,
+          ...buildLocalToolSharingManagement(snapshot, current.tools),
+          sharingLoading: false,
+          sharingError: null,
+        }))
+        return
+      }
       const policy = await client.tools.getToolExportPolicyModel(
         { peer_id: null, include_rules: true, include_stale: true },
         { label: 'All peers', stale: false }
@@ -257,6 +360,41 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
   }
 
   async function mutateSharing(mutation: ToolSharingMutation) {
+    if (localFeatureSharing) {
+      const pendingKey = `${mutation.scopeType}:${mutation.scopeId}`
+      setState((current) => ({
+        ...current,
+        sharingPendingKey: pendingKey,
+        sharingError: null,
+        sharingMessage: 'Saving tool sharing…',
+      }))
+      try {
+        const snapshot = await localFeatureSharing.load()
+        await applyLocalToolSharingMutation(
+          localFeatureSharing,
+          snapshot,
+          state.tools,
+          mutation,
+        )
+        const next = await localFeatureSharing.load()
+        setState((current) => ({
+          ...current,
+          ...buildLocalToolSharingManagement(next, current.tools),
+          sharingPendingKey: null,
+          sharingMessage: mutation.mode === 'shared'
+            ? 'Tool sharing updated.'
+            : 'Tool is not shared with approved devices.',
+        }))
+      } catch (error) {
+        setState((current) => ({
+          ...current,
+          sharingPendingKey: null,
+          sharingError: productToolErrorCopy(error),
+          sharingMessage: null,
+        }))
+      }
+      return
+    }
     const currentPolicy = state.sharingPolicy
     if (!currentPolicy) {
       setState((current) => ({ ...current, sharingError: 'Sharing policy revision is unavailable; refresh before changing policy.' }))
@@ -634,20 +772,210 @@ export function ToolApprovalPanel({ client, route, initialTools, initialSchedule
       sharingMessage={state.sharingMessage}
       sharingPendingKey={state.sharingPendingKey}
       onMutateSharing={(mutation) => { void mutateSharing(mutation) }}
-      onTogglePlugin={togglePlugin}
-      onSavePluginConfig={savePluginConfig}
-      onSetPolicyMode={setPolicyMode}
-      onUpsertSourcePolicy={upsertSourcePolicy}
-      onUpsertToolOverride={upsertToolOverride}
-      onRevokeGrant={revokeGrant}
-      onTestSource={testSource}
-      onCreateSource={createSource}
+      sourceManagementEnabled={!localFeatureSharing}
+      {...(!localFeatureSharing ? {
+        onTogglePlugin: togglePlugin,
+        onSavePluginConfig: savePluginConfig,
+        onSetPolicyMode: setPolicyMode,
+        onUpsertSourcePolicy: upsertSourcePolicy,
+        onUpsertToolOverride: upsertToolOverride,
+        onRevokeGrant: revokeGrant,
+        onTestSource: testSource,
+        onCreateSource: createSource,
+      } : {})}
       onSelectProvider={selectProvider}
       onApprove={approve}
       onDeny={deny}
       onExecuteSafe={executeSafe}
     />
   )
+}
+
+type LocalToolSharingManagement = Pick<
+  ToolApprovalPanelManagementState,
+  'sharingPolicy' | 'sharingPeers' | 'sharingDecisions'
+>
+
+export function buildLocalToolSharingManagement(
+  snapshot: LocalFeatureSharingSnapshot,
+  tools: readonly ToolApprovalCardModel[],
+): LocalToolSharingManagement {
+  const localTools = exportableLocalTools([...tools])
+  const features = new Map(snapshot.features.map((feature) => [feature.id, feature]))
+  const peers: ToolExportScopeModel[] = snapshot.approvedDevices.map((peer) => ({
+    peerId: peer.peerId,
+    label: peer.peerLabel,
+    stale: false,
+  }))
+  const rules: ToolExportPolicyModel['rules'] = []
+  const decisions: Record<string, ToolExportDecisionModel | null> = {}
+  const toolRules = new Map<string, ToolExportPolicyModel['rules']>()
+  const groupTools = new Map<string, ToolApprovalCardModel[]>()
+  const now = Date.now() / 1000
+
+  for (const tool of localTools) {
+    const featureId = localToolFeatureId(tool)
+    const feature = featureId ? features.get(featureId) : undefined
+    const enabled = feature?.available === true && feature.enabled
+    const sharedPeerIds = enabled && featureId
+      ? snapshot.approvedDevices
+          .filter((peer) => peer.featureIds.includes(featureId))
+          .map((peer) => peer.peerId)
+      : []
+    const allApproved = enabled && (
+      snapshot.approvedDevices.length === 0
+      || sharedPeerIds.length === snapshot.approvedDevices.length
+    )
+    const scopedRules: ToolExportPolicyModel['rules'] = allApproved
+      ? [localSharingRule('tool', tool.id, null, 'shared', now)]
+      : [
+          localSharingRule('tool', tool.id, null, 'unshared', now),
+          ...sharedPeerIds.map((peerId) => localSharingRule('tool', tool.id, peerId, 'shared', now)),
+        ]
+    toolRules.set(tool.id, scopedRules)
+    rules.push(...scopedRules)
+    decisions[tool.id] = {
+      effectiveState: enabled ? 'shared' : 'unshared',
+      inheritedFrom: 'global_tool',
+      inheritedFromLabel: 'Tool setting',
+      matchedRuleId: scopedRules[0]?.id ?? null,
+      peerId: null,
+      globalToolId: tool.id,
+      shareGroupId: tool.shareGroupId ?? '',
+      exportable: true,
+      staleToolId: false,
+      staleGroupId: false,
+      prerequisites: [],
+      policyRevision: localToolSharingRevision(snapshot),
+      reasonCode: enabled ? 'shared' : 'unshared',
+    }
+    if (tool.shareGroupId) {
+      const grouped = groupTools.get(tool.shareGroupId) ?? []
+      grouped.push(tool)
+      groupTools.set(tool.shareGroupId, grouped)
+    }
+  }
+
+  for (const [groupId, grouped] of groupTools) {
+    const signatures = grouped.map((tool) => JSON.stringify(
+      (toolRules.get(tool.id) ?? []).map((rule) => [rule.peerId, rule.state]),
+    ))
+    if (new Set(signatures).size !== 1) continue
+    const template = toolRules.get(grouped[0]!.id) ?? []
+    rules.push(...template.map((rule) => localSharingRule(
+      'group',
+      groupId,
+      rule.peerId,
+      rule.state,
+      now,
+    )))
+  }
+
+  const revision = localToolSharingRevision(snapshot)
+  const allPeers: ToolExportScopeModel = { peerId: null, label: 'All peers', stale: false }
+  return {
+    sharingPolicy: {
+      scope: allPeers,
+      scopes: [allPeers, ...peers],
+      defaultState: 'unshared',
+      revision,
+      initialized: true,
+      migratedFromLegacy: false,
+      updatedAt: now,
+      rules,
+      staleToolIds: [],
+      staleGroupIds: [],
+      protocolTier: 'projection_v1',
+      providerEnabled: true,
+      consumerEnabled: true,
+      enforcementActive: true,
+      switchRevision: revision,
+      secretsRedacted: true,
+    },
+    sharingPeers: peers,
+    sharingDecisions: decisions,
+  }
+}
+
+export async function applyLocalToolSharingMutation(
+  port: LocalFeatureSharingPort,
+  snapshot: LocalFeatureSharingSnapshot,
+  tools: readonly ToolApprovalCardModel[],
+  mutation: ToolSharingMutation,
+): Promise<void> {
+  const localTools = exportableLocalTools([...tools])
+  const selectedTools = mutation.scopeType === 'tool'
+    ? localTools.filter((tool) => tool.id === mutation.scopeId)
+    : localTools.filter((tool) => tool.shareGroupId === mutation.scopeId)
+  const availableFeatureIds = new Set(
+    snapshot.features
+      .filter((feature) => feature.available)
+      .map((feature) => feature.id),
+  )
+  const featureIds = [...new Set(selectedTools
+    .map(localToolFeatureId)
+    .filter((featureId): featureId is string => Boolean(featureId) && availableFeatureIds.has(featureId!)))]
+  if (featureIds.length === 0) throw new Error('This tool is unavailable on this device.')
+
+  const share = mutation.mode === 'shared'
+  for (const featureId of featureIds) {
+    const current = snapshot.features.find((feature) => feature.id === featureId)
+    if (current?.enabled !== share) await port.setFeatureEnabled(featureId, share)
+  }
+
+  const selectedPeers = new Set(mutation.peerIds.filter((peerId): peerId is string => peerId !== null))
+  const allPeers = mutation.peerIds.includes(null)
+  for (const peer of snapshot.approvedDevices) {
+    const next = new Set(peer.featureIds)
+    const include = share && (allPeers || selectedPeers.has(peer.peerId))
+    for (const featureId of featureIds) {
+      if (include) next.add(featureId)
+      else next.delete(featureId)
+    }
+    const nextFeatureIds = [...next].sort()
+    if (sameStringList(nextFeatureIds, [...peer.featureIds].sort())) continue
+    await port.replacePeerSharing(peer.peerId, nextFeatureIds, peer.expiresAtMs)
+  }
+}
+
+function localSharingRule(
+  scopeType: 'group' | 'tool',
+  scopeId: string,
+  peerId: string | null,
+  state: 'shared' | 'unshared',
+  timestamp: number,
+): ToolExportPolicyModel['rules'][number] {
+  return {
+    id: `local:${scopeType}:${scopeId}:${peerId ?? 'all'}`,
+    peerId,
+    scopeType,
+    scopeId,
+    state,
+    actorPrincipalId: 'this-device',
+    reason: 'Saved on this device',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+}
+
+function localToolFeatureId(tool: ToolApprovalCardModel): string | null {
+  return tool.toolContractId?.trim() || null
+}
+
+function localToolSharingRevision(snapshot: LocalFeatureSharingSnapshot): number {
+  let revision = snapshot.features.length + snapshot.approvedDevices.length
+  snapshot.features.forEach((feature, index) => {
+    if (feature.available) revision += index + 1
+    if (feature.enabled) revision += (index + 1) * 17
+  })
+  snapshot.approvedDevices.forEach((peer, index) => {
+    revision += (index + 1) * (peer.featureIds.length + 1)
+  })
+  return revision
+}
+
+function sameStringList(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
 function policyConfirmationText(policyMode: string): string | null {

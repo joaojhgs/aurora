@@ -3393,7 +3393,7 @@ function assistantUiMessageFromPersisted(
     )
   const execution = metadataStringValue(metadata, 'execution')
   const executionPeerName = metadataStringValue(metadata, 'execution_peer_name')
-  return {
+  const uiMessage: AssistantUiMessage = {
     id: typeof message.id === 'string' ? message.id : `persisted-message-${index}`,
     role,
     text: typeof message.content === 'string'
@@ -3408,6 +3408,96 @@ function assistantUiMessageFromPersisted(
     routeLabel: execution === 'local' ? 'Local' : executionPeerName,
     executionPeerId
   }
+  if (role === 'tool') {
+    uiMessage.toolCalls = [assistantToolCallFromPersisted(message, metadata, uiMessage)]
+  }
+  return uiMessage
+}
+
+function assistantToolCallFromPersisted(
+  message: Record<string, unknown>,
+  metadata: Record<string, unknown>,
+  uiMessage: AssistantUiMessage
+): AssistantToolCallCard {
+  const tool = metadataObjectValue(metadata, 'tool')
+    ?? metadataObjectValue(metadata, 'tool_call')
+    ?? metadataObjectValue(metadata, 'toolCall')
+    ?? metadata
+  const status = persistedToolStatus(
+    metadataStringValue(tool, 'status')
+      ?? metadataStringValue(metadata, 'status')
+      ?? metadataStringValue(message, 'status')
+  )
+  const name = metadataStringValue(tool, 'name')
+    ?? metadataStringValue(tool, 'tool_name')
+    ?? metadataStringValue(tool, 'toolName')
+    ?? metadataStringValue(tool, 'global_tool_id')
+    ?? metadataStringValue(metadata, 'global_tool_id')
+    ?? metadataStringValue(message, 'tool_name')
+    ?? 'assistant-action'
+  const route = metadataStringValue(metadata, 'execution') ?? metadataStringValue(tool, 'route')
+  const dataLeavesDevice = metadataBooleanValue(tool, 'data_leaves_device')
+    ?? metadataBooleanValue(tool, 'dataLeavesDevice')
+    ?? route === 'remote'
+  return {
+    id: metadataStringValue(tool, 'id')
+      ?? metadataStringValue(tool, 'tool_call_id')
+      ?? metadataStringValue(tool, 'toolCallId')
+      ?? metadataStringValue(message, 'tool_call_id')
+      ?? uiMessage.id,
+    name,
+    sessionId: metadataStringValue(metadata, 'session_id') ?? metadataStringValue(message, 'session_id'),
+    status,
+    riskClass: metadataStringValue(tool, 'risk_class')
+      ?? metadataStringValue(tool, 'riskClass')
+      ?? metadataStringValue(metadata, 'risk_class')
+      ?? 'reviewed',
+    target: metadataStringValue(tool, 'target')
+      ?? metadataStringValue(metadata, 'execution_peer_name')
+      ?? (dataLeavesDevice ? 'Connected Aurora device' : 'This device'),
+    dataLeavesDevice,
+    summary: metadataStringValue(tool, 'summary')
+      ?? (uiMessage.text.trim() ? uiMessage.text : toolSummaryForStatus(status)),
+    auditId: metadataStringValue(metadata, 'correlation_id')
+      ?? metadataStringValue(metadata, 'correlationId')
+      ?? metadataStringValue(message, 'correlation_id'),
+    payloadPreview: metadataObjectValue(tool, 'payload_preview')
+      ?? metadataObjectValue(tool, 'payloadPreview')
+      ?? metadataObjectValue(tool, 'arguments')
+      ?? metadataObjectValue(metadata, 'payload_preview'),
+    resultPreview: metadataObjectValue(tool, 'result_preview')
+      ?? metadataObjectValue(tool, 'resultPreview')
+      ?? metadataStringValue(tool, 'result_preview')
+      ?? metadataStringValue(tool, 'resultPreview')
+      ?? (status === 'completed' && uiMessage.text.trim() ? 'Result details saved with the conversation.' : null),
+    error: status === 'failed'
+      ? metadataStringValue(tool, 'error') ?? metadataStringValue(metadata, 'error') ?? 'action_incomplete'
+      : null,
+    errorDetails: metadataObjectValue(tool, 'error_details')
+      ?? metadataObjectValue(tool, 'errorDetails')
+      ?? metadataStringValue(tool, 'error_details')
+      ?? metadataStringValue(tool, 'errorDetails'),
+    pendingId: metadataStringValue(tool, 'pending_id')
+      ?? metadataStringValue(tool, 'pendingId')
+      ?? metadataStringValue(metadata, 'pending_id'),
+    approvalRequestId: metadataStringValue(tool, 'approval_request_id')
+      ?? metadataStringValue(tool, 'approvalRequestId')
+      ?? metadataStringValue(metadata, 'approval_request_id'),
+    approvalExpiresAt: metadataNumberValue(tool, 'approval_expires_at')
+      ?? metadataNumberValue(tool, 'approvalExpiresAt')
+      ?? metadataNumberValue(metadata, 'approval_expires_at'),
+    policyDecisionId: metadataStringValue(tool, 'policy_decision_id')
+      ?? metadataStringValue(tool, 'policyDecisionId')
+      ?? metadataStringValue(metadata, 'policy_decision_id')
+  }
+}
+
+function persistedToolStatus(value: string | null): AssistantToolCallCard['status'] {
+  const normalized = value?.toLowerCase().replace(/[\s-]+/gu, '_') ?? ''
+  if (normalized.includes('requires_action') || normalized.includes('approval') || normalized === 'pending') return 'requires_action'
+  if (normalized.includes('running') || normalized.includes('requested')) return 'running'
+  if (normalized.includes('fail') || normalized.includes('error') || normalized === 'cancelled') return 'failed'
+  return 'completed'
 }
 
 function upsertSessionByModification(

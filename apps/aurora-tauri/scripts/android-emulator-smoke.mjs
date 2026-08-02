@@ -173,7 +173,9 @@ async function inspectWebview(port, deadline) {
           readyState: document.readyState,
           rootChildren: document.querySelector('#root')?.childElementCount ?? 0,
           bodyText: document.body?.innerText ?? '',
-          mainWidth: document.querySelector('main#content')?.getBoundingClientRect().width ?? 0,
+          mainWidth: document.querySelector('main#content, main')?.getBoundingClientRect().width
+            ?? document.documentElement.clientWidth
+            ?? 0,
           mobileNavigationHeight: document.querySelector('[aria-label="Mobile navigation"]')?.getBoundingClientRect().height ?? 0,
           mobileNavigationPaddingBottom: (() => {
             const navigation = document.querySelector('[aria-label="Mobile navigation"]')
@@ -194,15 +196,7 @@ async function inspectWebview(port, deadline) {
       if (errors.length > 0) {
         return { state, errors }
       }
-      if (
-        state.rootChildren > 0
-        && state.bodyText.includes('Text chat with Aurora')
-        && state.mainWidth >= 300
-        && state.mobileNavigationHeight >= 40
-        && state.mobileNavigationHeight <= 128
-        && state.mobileNavigationPaddingBottom >= 40
-        && state.mobileNavigationPosition === 'fixed'
-      ) {
+      if (isStableAuroraWebviewState(state)) {
         readySince ??= Date.now()
         if (Date.now() - readySince >= stabilityMs) {
           return { state, errors }
@@ -273,6 +267,22 @@ async function connectCdp(url, onEvent) {
       socket.close()
     },
   }
+}
+
+function hasAuroraReadyText(bodyText) {
+  return bodyText.includes('Text chat with Aurora')
+    || bodyText.includes('Set up Aurora on this device')
+}
+
+function isStableAuroraWebviewState(state) {
+  if (state.rootChildren <= 0 || !hasAuroraReadyText(state.bodyText) || state.mainWidth < 300) {
+    return false
+  }
+  if (state.bodyText.includes('Set up Aurora on this device')) return true
+  return state.mobileNavigationHeight >= 40
+    && state.mobileNavigationHeight <= 128
+    && state.mobileNavigationPaddingBottom >= 40
+    && state.mobileNavigationPosition === 'fixed'
 }
 
 function adbOutput(args) {

@@ -8,7 +8,7 @@ import {
   ORCHESTRATOR_METHODS,
   type AuroraTransportRequest
 } from '@aurora/client'
-import { AssistantView } from '../src/assistant-view'
+import { AssistantView, assistantSessionFromPersisted } from '../src/assistant-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -24,6 +24,57 @@ afterEach(() => {
 })
 
 describe('Assistant inline tool approval', () => {
+  it('renders persisted tool messages with the shared assistant tool card', async () => {
+    const client = new Aurora({ transport: MockAuroraTransport.empty() })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    const session = assistantSessionFromPersisted({
+      session: {
+        id: 'persisted-tool-session',
+        principal_id: 'system',
+        type: 'chat',
+        title: 'Tool result',
+        created_at: '2026-07-30T00:00:00Z',
+        updated_at: '2026-07-30T00:00:01Z',
+        last_active_at: '2026-07-30T00:00:01Z',
+        message_count: 1
+      },
+      messages: [{
+        id: 'persisted-tool-message',
+        role: 'tool',
+        content: 'Action completed.',
+        timestamp: '2026-07-30T00:00:01Z',
+        metadata: {
+          status: 'completed',
+          execution: 'local',
+          tool: {
+            id: 'persisted-tool-call',
+            name: 'calendar.list',
+            summary: 'Calendar action completed.',
+            result_preview: { items: 0 }
+          }
+        }
+      }]
+    })
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          initialSession={session}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('.aui-chat-tool [data-slot="tool-fallback-root"]')).not.toBeNull()
+    expect(container.querySelector('.aui-chat-tool .aui-chat-bubble-wrap')).toBeNull()
+  })
+
   it('resumes the exact pending tool call through Orchestrator with the selected grant scope', async () => {
     const calls: Array<{ method: string; payload: unknown }> = []
     const transport = new MockAuroraTransport({ fixtures: false })

@@ -361,7 +361,6 @@ export async function bootstrapAuroraTauriRuntime(
 export async function loadTauriRemoteAssistantTools(
   runtime: AuroraTauriRuntime,
 ): Promise<readonly ToolingProjectionToolInfo[]> {
-  if (!runtime.localAssistant) return [];
   try {
     const snapshot = await loadLightweightRemoteProjectionCatalog(
       runtime.client.tools,

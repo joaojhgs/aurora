@@ -786,7 +786,7 @@ export function serviceRoutingDraftChanges(row: ServiceRoutingRow, draft: Servic
   return changes
 }
 
-export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationError = null, onRefresh, onPreviewRow, onSaveRow }: ServiceRoutingViewProps) {
+export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationError = null, onRefresh, onPreviewRow, onSaveRow, sharingOnly = false }: ServiceRoutingViewProps) {
   const [drafts, setDrafts] = useState<Record<string, ServiceRoutingRowDraft>>({})
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
   const [reviews, setReviews] = useState<Record<string, ServiceRoutingReviewState | undefined>>({})
@@ -833,7 +833,9 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
       <CardHeader>
         <CardTitle id="service-routing-title" className="flex items-center gap-2"><Waypoints /> Service sharing</CardTitle>
         <CardDescription>
-          Choose what this device shares and where Aurora may send requests. Sharing choices do not grant access by themselves.
+          {sharingOnly
+            ? 'Choose which services this device makes available. Access is still limited to approved devices.'
+            : 'Choose what this device shares and where Aurora may send requests. Sharing choices do not grant access by themselves.'}
         </CardDescription>
         <CardAction><Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={snapshot.loadState === 'loading'}><RefreshCw data-icon="inline-start" /> Refresh</Button></CardAction>
       </CardHeader>
@@ -845,9 +847,9 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
           {snapshot.warnings.map((warning) => <p key={warning} className="text-xs text-muted-foreground">{warning}</p>)}
           {readOnly && snapshot.loadState !== 'loading' ? <p className="text-xs text-muted-foreground">Service sharing is read-only right now.</p> : null}
         </div>
-        <div className="hidden overflow-x-auto md:block">
+        <div className={sharingOnly ? 'overflow-x-auto' : 'hidden overflow-x-auto md:block'}>
           <Table>
-            <TableHeader><TableRow><TableHead>Service</TableHead><TableHead>Status</TableHead><TableHead>Shared</TableHead><TableHead>Send requests to</TableHead><TableHead>If unavailable</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Service</TableHead><TableHead>Status</TableHead><TableHead>Shared</TableHead>{sharingOnly ? null : <><TableHead>Send requests to</TableHead><TableHead>If unavailable</TableHead></>}<TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
             <TableBody>
               {snapshot.rows.map((row) => {
                 const draft = drafts[row.id] ?? serviceRoutingDraftFromRow(row)
@@ -856,14 +858,14 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
                 const expanded = expandedRowId === row.id
                 const disabled = readOnly || pending
                 const updateDraft = (patch: Partial<ServiceRoutingRowDraft>) => { invalidateReview(row.id); setDrafts((current) => ({ ...current, [row.id]: { ...draft, ...patch } })) }
-                return <ServiceRoutingTableRow key={row.id} row={row} draft={draft} knownPeers={snapshot.knownPeers} dirty={changes.length > 0} pending={pending} disabled={disabled} expanded={expanded} review={reviews[row.id]} onToggleExpanded={() => setExpandedRowId(expanded ? null : row.id)} onDraftChange={updateDraft} onReview={() => { void reviewRow(row, changes) }} onCancelReview={() => invalidateReview(row.id)} onReauthChange={(checked) => setReviews((current) => current[row.id] ? ({ ...current, [row.id]: { ...current[row.id]!, reauthConfirmed: checked } }) : current)} onConfirm={() => confirmRow(row)} />
+                return <ServiceRoutingTableRow key={row.id} row={row} draft={draft} knownPeers={snapshot.knownPeers} dirty={changes.length > 0} pending={pending} disabled={disabled} expanded={expanded} review={reviews[row.id]} sharingOnly={sharingOnly} onToggleExpanded={() => setExpandedRowId(expanded ? null : row.id)} onDraftChange={updateDraft} onReview={() => { void reviewRow(row, changes) }} onCancelReview={() => invalidateReview(row.id)} onReauthChange={(checked) => setReviews((current) => current[row.id] ? ({ ...current, [row.id]: { ...current[row.id]!, reauthConfirmed: checked } }) : current)} onConfirm={() => confirmRow(row)} />
               })}
-              {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">Loading service sharing through Aurora...</TableCell></TableRow> : null}
-              {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">No shareable services were found.</TableCell></TableRow> : null}
+              {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8 text-center text-sm text-muted-foreground">Loading service sharing through Aurora...</TableCell></TableRow> : null}
+              {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8 text-center text-sm text-muted-foreground">No shareable services were found.</TableCell></TableRow> : null}
             </TableBody>
           </Table>
         </div>
-        <div className="grid gap-3 md:hidden" aria-label="Mobile service policy cards">
+        <div className={sharingOnly ? 'hidden' : 'grid gap-3 md:hidden'} aria-label="Mobile service policy cards">
           {snapshot.rows.map((row) => {
             const draft = drafts[row.id] ?? serviceRoutingDraftFromRow(row)
             const changes = serviceRoutingDraftChanges(row, draft)
@@ -881,22 +883,21 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
   )
 }
 
-function ServiceRoutingTableRow({ row, draft, knownPeers: _knownPeers, dirty, pending, disabled, expanded, review, onToggleExpanded, onDraftChange, onReview, onCancelReview, onReauthChange, onConfirm }: { row: ServiceRoutingRow; draft: ServiceRoutingRowDraft; knownPeers: ServiceRoutingKnownPeer[]; dirty: boolean; pending: boolean; disabled: boolean; expanded: boolean; review: ServiceRoutingReviewState | undefined; onToggleExpanded: () => void; onDraftChange: (patch: Partial<ServiceRoutingRowDraft>) => void; onReview: () => void; onCancelReview: () => void; onReauthChange: (checked: boolean) => void; onConfirm: () => void }) {
+function ServiceRoutingTableRow({ row, draft, knownPeers: _knownPeers, dirty, pending, disabled, expanded, review, sharingOnly, onToggleExpanded, onDraftChange, onReview, onCancelReview, onReauthChange, onConfirm }: { row: ServiceRoutingRow; draft: ServiceRoutingRowDraft; knownPeers: ServiceRoutingKnownPeer[]; dirty: boolean; pending: boolean; disabled: boolean; expanded: boolean; review: ServiceRoutingReviewState | undefined; sharingOnly: boolean; onToggleExpanded: () => void; onDraftChange: (patch: Partial<ServiceRoutingRowDraft>) => void; onReview: () => void; onCancelReview: () => void; onReauthChange: (checked: boolean) => void; onConfirm: () => void }) {
   const selectedModeInvalid = draft.providerMode === 'selected' && draft.selectedProviderPeerIds.length === 0
   const maxInvalid = !validMaxConcurrency(draft.maxConcurrent)
   const detailsId = `desktop-${row.id}-details`
   return (
     <>
       <TableRow data-state={dirty ? 'selected' : undefined}>
-        <TableCell><button type="button" className="flex items-start gap-1.5 text-left" onClick={onToggleExpanded} aria-expanded={expanded} aria-controls={detailsId} aria-label={`Toggle service sharing and outbound routing for ${row.label}`}><ChevronDown className={`mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? '' : '-rotate-90'}`} /><span className="flex min-w-36 flex-col"><span className="text-sm font-medium">{row.label}</span><code className="truncate font-mono text-[10.5px] text-muted-foreground">{row.basePath.replace(/^services\./, '')}{row.registryVersion ? ` · v${row.registryVersion}` : ''}</code></span></button></TableCell>
+        <TableCell>{sharingOnly ? <span className="text-sm font-medium">{row.label}</span> : <button type="button" className="flex items-start gap-1.5 text-left" onClick={onToggleExpanded} aria-expanded={expanded} aria-controls={detailsId} aria-label={`Toggle service sharing and outbound routing for ${row.label}`}><ChevronDown className={`mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? '' : '-rotate-90'}`} /><span className="flex min-w-36 flex-col"><span className="text-sm font-medium">{row.label}</span><code className="truncate font-mono text-[10.5px] text-muted-foreground">{row.basePath.replace(/^services\./, '')}{row.registryVersion ? ` · v${row.registryVersion}` : ''}</code></span></button>}</TableCell>
         <TableCell><ServiceStatusBadge status={row.registryStatus} registered={row.registered} /></TableCell>
         <TableCell><Switch checked={draft.share} disabled={disabled} aria-label={`Share ${row.label} from this device`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} /></TableCell>
-        <TableCell><PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={disabled} ariaLabel={`Where Aurora sends ${row.label} requests`} onChange={(prefer) => onDraftChange({ prefer })} /></TableCell>
-        <TableCell><PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={disabled} ariaLabel={`What Aurora does when ${row.label} is unavailable`} onChange={(fallback) => onDraftChange({ fallback })} /></TableCell>
+        {sharingOnly ? null : <><TableCell><PolicySelect value={draft.prefer} options={SERVICE_ROUTING_PREFER_OPTIONS} disabled={disabled} ariaLabel={`Where Aurora sends ${row.label} requests`} onChange={(prefer) => onDraftChange({ prefer })} /></TableCell><TableCell><PolicySelect value={draft.fallback} options={SERVICE_ROUTING_FALLBACK_OPTIONS} disabled={disabled} ariaLabel={`What Aurora does when ${row.label} is unavailable`} onChange={(fallback) => onDraftChange({ fallback })} /></TableCell></>}
         <TableCell className="text-right"><Button type="button" size="sm" disabled={disabled || !dirty || selectedModeInvalid || maxInvalid} onClick={onReview}>{pending ? 'Saving…' : 'Review changes'}</Button></TableCell>
       </TableRow>
-      {review ? <TableRow><TableCell colSpan={6}><ChangeReview review={review} pending={pending} onCancel={onCancelReview} onReauthChange={onReauthChange} onConfirm={onConfirm} /></TableCell></TableRow> : null}
-      {expanded ? <TableRow id={detailsId} className="hover:bg-transparent"><TableCell colSpan={6} className="bg-muted/30" style={{ whiteSpace: 'normal' }}><div className="grid gap-5 py-2 lg:grid-cols-2">
+      {review ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6}><ChangeReview review={review} pending={pending} onCancel={onCancelReview} onReauthChange={onReauthChange} onConfirm={onConfirm} /></TableCell></TableRow> : null}
+      {!sharingOnly && expanded ? <TableRow id={detailsId} className="hover:bg-transparent"><TableCell colSpan={6} className="bg-muted/30" style={{ whiteSpace: 'normal' }}><div className="grid gap-5 py-2 lg:grid-cols-2">
         <section aria-labelledby={`${row.id}-sharing-heading`} className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-3">
           <div><h3 id={`${row.id}-sharing-heading`} className="text-sm font-semibold">Shared from this device</h3><p className="text-[11px] text-muted-foreground">Turn off features you do not want other approved devices to use.</p></div>
           <Label className="flex items-center justify-between gap-3 text-[12.5px] font-normal normal-case tracking-normal"><span>Share service</span><Switch checked={draft.share} disabled={disabled} aria-label={`Share ${row.label} service`} onCheckedChange={(checked) => onDraftChange({ share: Boolean(checked) })} /></Label>

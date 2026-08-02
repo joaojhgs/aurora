@@ -438,6 +438,9 @@ function sourceTypeForTool(tool: ToolApprovalCardModel): Exclude<ToolingSourceTy
 
 function sourceName(tool: ToolApprovalCardModel | undefined, type: Exclude<ToolingSourceType, 'blocked'>): string {
   if (!tool) return sourceSectionLabel(type)
+  if (type === 'mesh' && tool.shareGroupLabel) {
+    return `${tool.providerLabel || tool.providerPeerId || 'Approved device'} · ${tool.shareGroupLabel}`
+  }
   if (tool.shareGroupLabel) return tool.shareGroupLabel
   if (type === 'mesh') return tool.providerLabel || tool.providerPeerId || sourceSectionLabel(type)
   if (type === 'mcp') return tool.serviceInstanceId ?? tool.providerLabel

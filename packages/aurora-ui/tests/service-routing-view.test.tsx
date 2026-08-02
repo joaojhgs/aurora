@@ -4,7 +4,9 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuroraClient, MeshStatusResponse } from '@aurora/client'
 import {
+  LocalServiceRoutingResource,
   ServiceRoutingView,
+  buildLocalServiceRoutingSnapshot,
   buildServiceRoutingSnapshot,
   commitServiceRoutingChanges,
   previewServiceRoutingChanges,
@@ -18,6 +20,10 @@ import {
   type ServiceRoutingPreviewEvidence,
   type ServiceRoutingSnapshot,
 } from '../src/service-routing-view'
+import type {
+  LocalFeatureSharingPort,
+  LocalFeatureSharingSnapshot,
+} from '../src/local-feature-sharing'
 import type { RouteAvailability } from '../src/shell-data'
 import type { BrowserWebRtcSnapshot } from '../src/web-thin-runtime'
 
@@ -63,6 +69,17 @@ function previewEvidence(overrides: Partial<ServiceRoutingPreviewEvidence> = {})
     changedPaths: ['services.tts.mesh_sharing.share'],
     secretsRedacted: true,
     ...overrides,
+  }
+}
+
+function localSharingSnapshot(): LocalFeatureSharingSnapshot {
+  return {
+    features: [
+      { id: 'Native.GetDeviceStatus', label: 'Device status', description: 'Read device status.', enabled: true, available: true, requiresAuroraOpen: true, requiresLocalConfirmation: false },
+      { id: 'Native.StartVoice', label: 'Voice capture', description: 'Start voice capture.', enabled: true, available: true, requiresAuroraOpen: true, requiresLocalConfirmation: true },
+      { id: 'Native.Unavailable', label: 'Unavailable', description: 'Unavailable here.', enabled: false, available: false, requiresAuroraOpen: true, requiresLocalConfirmation: true },
+    ],
+    approvedDevices: [{ peerId: 'peer-home', peerLabel: 'Home Aurora', featureIds: ['Native.GetDeviceStatus'], expiresAtMs: null }],
   }
 }
 
@@ -122,6 +139,57 @@ function snapshotClient(metadata = metadataFields()): AuroraClient {
 }
 
 describe('Service sharing and outbound routing', () => {
+  it('projects only actually available local services into the canonical sharing table', () => {
+    const local = buildLocalServiceRoutingSnapshot(localSharingSnapshot())
+    expect(local.rows.map((candidate) => candidate.label)).toEqual(['Tools'])
+    expect(local.rows[0]?.exportPolicy.share).toBe(true)
+    expect(local.knownPeers).toEqual([{ peerId: 'peer-home', label: 'Home Aurora' }])
+    expect(JSON.stringify(local)).not.toContain('Orchestrator')
+    expect(JSON.stringify(local)).not.toContain('Gateway')
+    expect(JSON.stringify(local)).not.toContain('Native.Unavailable')
+  })
+
+  it('reuses the service table for a lightweight node and changes every available local tool', async () => {
+    const setFeatureEnabled = vi.fn(async () => undefined)
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      setFeatureEnabled,
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(<LocalServiceRoutingResource featureSharing={port} />)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Service sharing')
+    expect(container.textContent).toContain('Tools')
+    expect(container.textContent).not.toContain('Send requests to')
+    expect(container.querySelector('[aria-label="Mobile service policy cards"]')?.className).toContain('hidden')
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('[aria-label="Share Tools from this device"]')?.click()
+    })
+    await act(async () => buttonByText(container, 'Review changes').click())
+    const approval = Array.from(container.querySelectorAll<HTMLElement>('[role="checkbox"]'))
+      .find((checkbox) => checkbox.parentElement?.textContent?.includes('I approve these changes for this session'))!
+    await act(async () => approval.click())
+    await act(async () => {
+      buttonByText(container, 'Save changes').click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(setFeatureEnabled.mock.calls).toEqual([
+      ['Native.GetDeviceStatus', false],
+      ['Native.StartVoice', false],
+    ])
+    await act(async () => root.unmount())
+  })
+
   it('allows fragmented WebRTC registry snapshots to traverse native WebView IPC', () => {
     expect(SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS).toBe(60_000)
   })

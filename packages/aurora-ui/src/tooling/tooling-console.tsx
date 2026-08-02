@@ -91,10 +91,11 @@ export interface ToolingConsoleProps {
   sharingError?: string | null | undefined
   sharingMessage?: string | null | undefined
   sharingPendingKey?: string | null | undefined
+  sourceManagementEnabled?: boolean | undefined
   onMutateSharing?: ((mutation: ToolSharingMutation) => void) | undefined
   onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => void) | undefined
   onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => void) | undefined
-  onSetPolicyMode?: (policyMode: string) => void
+  onSetPolicyMode?: ((policyMode: string) => void) | undefined
   onUpsertSourcePolicy?: ((source: ToolingSourceModel, trustTier: string, includeFutureTools?: boolean) => void) | undefined
   onUpsertToolOverride?: ((tool: ToolApprovalCardModel, approvalMode: string) => void) | undefined
   onRevokeGrant?: ((grant: ReturnType<typeof buildGrantRows>[number]) => void) | undefined
@@ -138,6 +139,7 @@ export function ToolingConsole({
   sharingError = null,
   sharingMessage = null,
   sharingPendingKey = null,
+  sourceManagementEnabled = true,
   onMutateSharing,
   onTogglePlugin,
   onSavePluginConfig,
@@ -215,8 +217,10 @@ export function ToolingConsole({
       <PageHeader
         eyebrow={null}
         id="tool-approval-title"
-        title="Tools & Plugins"
-        description="Review tool sources, choose what needs approval, and add MCP servers or plugins."
+        title={sourceManagementEnabled ? 'Tools & Plugins' : 'Tools'}
+        description={sourceManagementEnabled
+          ? 'Review tool sources, choose what needs approval, and add MCP servers or plugins.'
+          : 'Review tools available on this device and from approved devices.'}
         actions={
           <div className="flex flex-wrap items-center gap-2" aria-label="Tools policy summary">
             {managementLoading ? (
@@ -227,7 +231,7 @@ export function ToolingConsole({
             ) : (
               <Badge variant="outline">Policy: <strong className="ml-1 font-semibold">{policyModeLabel(policy.mode)}</strong></Badge>
             )}
-            <Button variant="primary" icon={<Plug size={15} aria-hidden />} onClick={() => showWizard('mcp')} disabled={managementLoading}>Add MCP source</Button>
+            {sourceManagementEnabled ? <Button variant="primary" icon={<Plug size={15} aria-hidden />} onClick={() => showWizard('mcp')} disabled={managementLoading}>Add MCP source</Button> : null}
           </div>
         }
       />
@@ -276,12 +280,12 @@ export function ToolingConsole({
                   drawerOpen={sourceDrawerOpen}
                   onDrawerOpen={setSourceDrawerOpen}
                   onSelectSource={(source) => setSelectedSourceId(source.id)}
-                  onAddMcp={() => showWizard('mcp')}
+                  onAddMcp={sourceManagementEnabled ? () => showWizard('mcp') : undefined}
                 />
 
                 <main className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-auto" aria-label="Source detail">
                   {inventoryLoading ? <LoadingState /> : null}
-                  {!inventoryLoading && toolSources.length === 0 ? <EmptyCatalog onAddMcp={() => showWizard('mcp')} /> : null}
+                  {!inventoryLoading && toolSources.length === 0 ? <EmptyCatalog onAddMcp={sourceManagementEnabled ? () => showWizard('mcp') : undefined} /> : null}
                   {!inventoryLoading && selectedSource ? (
                     <>
                       <SourceOverview
@@ -323,7 +327,7 @@ export function ToolingConsole({
               </div>
             )
           },
-          {
+          ...(sourceManagementEnabled ? [{
             value: 'plugins',
             label: 'Plugins',
             content: (
@@ -373,11 +377,11 @@ export function ToolingConsole({
                 }}
               />
             )
-          }
+          }] : [])
         ]}
       />
 
-      {wizard === 'mcp' ? (
+      {sourceManagementEnabled && wizard === 'mcp' ? (
         <McpSourceModal
           canLaunchLocalCommands={surfaceProfile.supportsDesktopCommands}
           wizardStep={wizardStep}
@@ -575,7 +579,7 @@ function SourceRail({
   drawerOpen: boolean
   onDrawerOpen: (open: boolean) => void
   onSelectSource: (source: ToolingSourceModel) => void
-  onAddMcp: () => void
+  onAddMcp?: (() => void) | undefined
 }) {
   const visibleSources = sources.filter((source) => {
     const normalized = query.trim().toLowerCase()
@@ -614,7 +618,13 @@ function SourceRail({
       </label>
       {loading ? <p className="text-sm text-muted-foreground">Loading tools…</p> : null}
       <div className="flex flex-col gap-1" aria-label="Tool sources">
-        {!loading && visibleSources.length === 0 ? <p className="text-sm text-muted-foreground">No sources match this search.</p> : null}
+        {!loading && visibleSources.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {query.trim()
+              ? 'No sources match this search.'
+              : 'No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.'}
+          </p>
+        ) : null}
         {visibleSources.map((source) => (
           <button
             key={source.id}
@@ -628,13 +638,16 @@ function SourceRail({
           >
             <span className="flex flex-col">
               <strong className="font-medium">{productSafeSourceName(source.name)}</strong>
+              {source.providerLabel && source.providerLabel !== source.name ? (
+                <small className="text-xs text-muted-foreground">{productSafeSourceLabel(source.providerLabel)}</small>
+              ) : null}
               <small className="text-xs text-muted-foreground">{sourceSectionLabel(source.type)} · {source.toolCount} tools</small>
             </span>
             <TrustPill trust={source.effectiveTrust} />
           </button>
         ))}
       </div>
-      <Button variant="outline" icon={<Plug size={15} aria-hidden />} onClick={onAddMcp} disabled={loading}>Add MCP source</Button>
+      {onAddMcp ? <Button variant="outline" icon={<Plug size={15} aria-hidden />} onClick={onAddMcp} disabled={loading}>Add MCP source</Button> : null}
     </aside>
   )
 }
@@ -1732,8 +1745,8 @@ function LoadingState({
   return <Card title={title} icon={<RefreshCw size={18} aria-hidden />}><p className="text-sm text-muted-foreground" role="status">{detail}</p></Card>
 }
 
-function EmptyCatalog({ onAddMcp }: { onAddMcp: () => void }) {
-  return <Card title="No sources" icon={<Boxes size={18} aria-hidden />}><p className="text-sm text-muted-foreground">No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.</p><Button variant="primary" onClick={onAddMcp}>Connect your first MCP server</Button></Card>
+function EmptyCatalog({ onAddMcp }: { onAddMcp?: (() => void) | undefined }) {
+  return <Card title="No tools available" icon={<Boxes size={18} aria-hidden />}><p className="text-sm text-muted-foreground">No tools are available on this device or its approved devices right now.</p>{onAddMcp ? <Button variant="primary" onClick={onAddMcp}>Connect your first MCP server</Button> : null}</Card>
 }
 
 function TrustPill({ trust }: { trust: ToolingTrustState }) {
