@@ -58,6 +58,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(hostedPeerRunner).toContain(
       '--config tests/e2e/hosted_peer/playwright.config.ts',
     )
+    expect(hostedPeerRunner).toContain('pnpm --filter @aurora/client build')
     expect(hostedThinAlias).toContain(
       'exec "$ROOT/scripts/hosted_peer_e2e.sh" "$@"',
     )

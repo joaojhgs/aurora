@@ -56,6 +56,8 @@ WEB_PID=""
 
 mkdir -p "$ARTIFACT_DIR" "$DATA_DIR"
 
+pnpm --filter @aurora/client build
+
 cleanup() {
   local status=$?
   if [[ -n "$WEB_PID" ]]; then
